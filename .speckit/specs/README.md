@@ -97,4 +97,4 @@ Work through tasks in order. Mark `[/]` when starting, `[x]` when done.
 | Spec folder | `NNN-{kebab-name}` | `003-host-controls` |
 | Branch | `feat/NNN-{kebab-name}` | `feat/003-host-controls` |
 | Spec status | `draft` → `needs-clarification` → `approved` | — |
-| Commit | Conventional Commits | `feat(meeting): add host-only mute button` |
+| Commit | Conventional Commits | `feat(translationRoom): add host-only mute button` |

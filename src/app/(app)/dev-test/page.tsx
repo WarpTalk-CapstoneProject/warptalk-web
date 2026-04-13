@@ -13,22 +13,22 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { createHubConnection } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
-import { useMeetingStore } from "@/stores/meeting-store";
+import { useTranslationRoomStore } from "@/stores/translation-room-store";
 
 import { authService } from "@/services/auth.service";
-import { meetingService } from "@/services/meeting.service";
+import { translationRoomService } from "@/services/translationRoom.service";
 import { transcriptService } from "@/services/transcript.service";
 import { notificationService } from "@/services/notification.service";
 
 import type { AuthResponse } from "@/types/auth";
-import type { MeetingDto } from "@/types/meeting";
+import type { TranslationRoomDto } from "@/types/translationRoom";
 import type { TranscriptDto } from "@/types/transcript";
 import type { NotificationPreferenceDto } from "@/types/notification";
 import type {
   ParticipantInfoDto,
   TranscriptSegmentDto,
   ChatMessageDto,
-  MeetingStateDto,
+  TranslationRoomStateDto,
 } from "@/types/realtime";
 
 // ─── Result log entry ─────────────────────────
@@ -45,7 +45,7 @@ let logId = 0;
 
 export default function DevTestPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [meetingHub, setMeetingHub] =
+  const [translationRoomHub, setTranslationRoomHub] =
     useState<signalR.HubConnection | null>(null);
   const [notifHub, setNotifHub] =
     useState<signalR.HubConnection | null>(null);
@@ -54,11 +54,11 @@ export default function DevTestPage() {
   const [email, setEmail] = useState("test@warptalk.dev");
   const [password, setPassword] = useState("Test@123456");
   const [fullName, setFullName] = useState("Test User");
-  const [meetingId, setMeetingId] = useState("");
+  const [translationRoomId, setTranslationRoomId] = useState("");
   const [transcriptId, setTranscriptId] = useState("");
 
   const store = useAuthStore();
-  const meetingStore = useMeetingStore();
+  const translationRoomStore = useTranslationRoomStore();
 
   const log = useCallback(
     (
@@ -158,62 +158,62 @@ export default function DevTestPage() {
   };
 
   // ───────────────────────────── MEETINGS ─────────────────────────
-  const testCreateMeeting = async () => {
+  const testCreateTranslationRoom = async () => {
     try {
-      const { data } = await meetingService.create({
-        title: "Test Meeting " + Date.now(),
-        meetingType: "group",
+      const { data } = await translationRoomService.create({
+        title: "Test TranslationRoom " + Date.now(),
+        translationRoomType: "group",
         maxParticipants: 10,
         sourceLanguage: "vi",
         targetLanguages: "en",
       });
-      setMeetingId(data.id);
-      log("Meeting", "POST /meetings", "success", data);
+      setTranslationRoomId(data.id);
+      log("TranslationRoom", "POST /translationRooms", "success", data);
     } catch (e: unknown) {
-      log("Meeting", "POST /meetings", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
+      log("TranslationRoom", "POST /translationRooms", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
     }
   };
 
-  const testGetMeeting = async () => {
-    if (!meetingId) return log("Meeting", "GET /meetings/:id", "error", "No meeting ID");
+  const testGetTranslationRoom = async () => {
+    if (!translationRoomId) return log("TranslationRoom", "GET /translationRooms/:id", "error", "No translationRoom ID");
     try {
-      const { data } = await meetingService.get(meetingId);
-      log("Meeting", `GET /meetings/${meetingId}`, "success", data);
+      const { data } = await translationRoomService.get(translationRoomId);
+      log("TranslationRoom", `GET /translationRooms/${translationRoomId}`, "success", data);
     } catch (e: unknown) {
-      log("Meeting", "GET /meetings/:id", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
+      log("TranslationRoom", "GET /translationRooms/:id", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
     }
   };
 
-  const testJoinMeeting = async () => {
-    if (!meetingId) return log("Meeting", "JOIN", "error", "No meeting ID");
+  const testJoinTranslationRoom = async () => {
+    if (!translationRoomId) return log("TranslationRoom", "JOIN", "error", "No translationRoom ID");
     try {
-      const { data } = await meetingService.join(meetingId, {
+      const { data } = await translationRoomService.join(translationRoomId, {
         displayName: fullName,
         listenLanguage: "en",
         speakLanguage: "vi",
       });
-      log("Meeting", `POST /meetings/${meetingId}/join`, "success", data);
+      log("TranslationRoom", `POST /translationRooms/${translationRoomId}/join`, "success", data);
     } catch (e: unknown) {
-      log("Meeting", "JOIN", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
+      log("TranslationRoom", "JOIN", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
     }
   };
 
-  const testEndMeeting = async () => {
-    if (!meetingId) return log("Meeting", "END", "error", "No meeting ID");
+  const testEndTranslationRoom = async () => {
+    if (!translationRoomId) return log("TranslationRoom", "END", "error", "No translationRoom ID");
     try {
-      await meetingService.end(meetingId);
-      log("Meeting", `POST /meetings/${meetingId}/end`, "success");
+      await translationRoomService.end(translationRoomId);
+      log("TranslationRoom", `POST /translationRooms/${translationRoomId}/end`, "success");
     } catch (e: unknown) {
-      log("Meeting", "END", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
+      log("TranslationRoom", "END", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
     }
   };
 
   // ───────────────────────────── TRANSCRIPTS ──────────────────────
   const testStartTranscript = async () => {
-    if (!meetingId) return log("Transcript", "START", "error", "No meeting ID");
+    if (!translationRoomId) return log("Transcript", "START", "error", "No translationRoom ID");
     try {
       const { data } = await transcriptService.start({
-        meetingId,
+        translationRoomId,
         sourceLanguage: "vi",
       });
       setTranscriptId(data.id);
@@ -254,47 +254,47 @@ export default function DevTestPage() {
   };
 
   // ───────────────────────────── SIGNALR ──────────────────────────
-  const connectMeetingHub = async () => {
+  const connectTranslationRoomHub = async () => {
     try {
-      if (meetingHub) {
-        await meetingHub.stop();
-        log("SignalR", "MeetingHub", "info", "Disconnected previous connection");
+      if (translationRoomHub) {
+        await translationRoomHub.stop();
+        log("SignalR", "TranslationRoomHub", "info", "Disconnected previous connection");
       }
-      const conn = createHubConnection("/hubs/meeting");
+      const conn = createHubConnection("/hubs/translationRoom");
 
-      conn.on("MeetingStarted", (state: MeetingStateDto) => {
-        meetingStore.setMeetingState(state);
-        log("SignalR", "← MeetingStarted", "info", state);
+      conn.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => {
+        translationRoomStore.setTranslationRoomState(state);
+        log("SignalR", "← TranslationRoomStarted", "info", state);
       });
       conn.on("ParticipantJoined", (p: ParticipantInfoDto) => {
-        meetingStore.addParticipant(p);
+        translationRoomStore.addParticipant(p);
         log("SignalR", "← ParticipantJoined", "info", p);
       });
       conn.on("ParticipantLeft", (userId: string) => {
-        meetingStore.removeParticipant(userId);
+        translationRoomStore.removeParticipant(userId);
         log("SignalR", "← ParticipantLeft", "info", userId);
       });
       conn.on("TranscriptSegmentReceived", (seg: TranscriptSegmentDto) => {
-        meetingStore.addTranscriptSegment(seg);
+        translationRoomStore.addTranscriptSegment(seg);
         log("SignalR", "← TranscriptSegment", "info", seg);
       });
       conn.on("ChatMessageReceived", (msg: ChatMessageDto) => {
-        meetingStore.addChatMessage(msg);
+        translationRoomStore.addChatMessage(msg);
         log("SignalR", "← ChatMessage", "info", msg);
       });
-      conn.on("MeetingEnded", (meetingIdVal: string) => {
-        log("SignalR", "← MeetingEnded", "info", meetingIdVal);
+      conn.on("TranslationRoomEnded", (translationRoomIdVal: string) => {
+        log("SignalR", "← TranslationRoomEnded", "info", translationRoomIdVal);
       });
 
-      conn.onreconnecting(() => log("SignalR", "MeetingHub", "info", "Reconnecting..."));
-      conn.onreconnected(() => log("SignalR", "MeetingHub", "success", "Reconnected"));
-      conn.onclose(() => log("SignalR", "MeetingHub", "info", "Closed"));
+      conn.onreconnecting(() => log("SignalR", "TranslationRoomHub", "info", "Reconnecting..."));
+      conn.onreconnected(() => log("SignalR", "TranslationRoomHub", "success", "Reconnected"));
+      conn.onclose(() => log("SignalR", "TranslationRoomHub", "info", "Closed"));
 
       await conn.start();
-      setMeetingHub(conn);
-      log("SignalR", "MeetingHub Connect", "success", `State: ${conn.state}`);
+      setTranslationRoomHub(conn);
+      log("SignalR", "TranslationRoomHub Connect", "success", `State: ${conn.state}`);
     } catch (e: unknown) {
-      log("SignalR", "MeetingHub Connect", "error", String(e));
+      log("SignalR", "TranslationRoomHub Connect", "error", String(e));
     }
   };
 
@@ -320,21 +320,21 @@ export default function DevTestPage() {
     }
   };
 
-  const hubJoinMeeting = async () => {
-    if (!meetingHub || !meetingId)
-      return log("SignalR", "JoinMeeting", "error", "No hub or meeting ID");
+  const hubJoinTranslationRoom = async () => {
+    if (!translationRoomHub || !translationRoomId)
+      return log("SignalR", "JoinTranslationRoom", "error", "No hub or translationRoom ID");
     try {
-      await meetingHub.invoke("JoinMeeting", meetingId, "vi", "en");
-      log("SignalR", "→ JoinMeeting", "success", meetingId);
+      await translationRoomHub.invoke("JoinTranslationRoom", translationRoomId, "vi", "en");
+      log("SignalR", "→ JoinTranslationRoom", "success", translationRoomId);
     } catch (e: unknown) {
-      log("SignalR", "→ JoinMeeting", "error", String(e));
+      log("SignalR", "→ JoinTranslationRoom", "error", String(e));
     }
   };
 
   const hubSendChat = async () => {
-    if (!meetingHub || !meetingId) return;
+    if (!translationRoomHub || !translationRoomId) return;
     try {
-      await meetingHub.invoke("SendChatMessage", meetingId, "Hello from test page!");
+      await translationRoomHub.invoke("SendChatMessage", translationRoomId, "Hello from test page!");
       log("SignalR", "→ SendChatMessage", "success");
     } catch (e: unknown) {
       log("SignalR", "→ SendChatMessage", "error", String(e));
@@ -342,11 +342,11 @@ export default function DevTestPage() {
   };
 
   const hubToggleMute = async () => {
-    if (!meetingHub || !meetingId) return;
+    if (!translationRoomHub || !translationRoomId) return;
     try {
-      const newMuted = !meetingStore.isMuted;
-      await meetingHub.invoke("ToggleMute", meetingId, newMuted);
-      meetingStore.setMuted(newMuted);
+      const newMuted = !translationRoomStore.isMuted;
+      await translationRoomHub.invoke("ToggleMute", translationRoomId, newMuted);
+      translationRoomStore.setMuted(newMuted);
       log("SignalR", "→ ToggleMute", "success", { muted: newMuted });
     } catch (e: unknown) {
       log("SignalR", "→ ToggleMute", "error", String(e));
@@ -354,11 +354,11 @@ export default function DevTestPage() {
   };
 
   const disconnectAll = async () => {
-    if (meetingHub) await meetingHub.stop();
+    if (translationRoomHub) await translationRoomHub.stop();
     if (notifHub) await notifHub.stop();
-    setMeetingHub(null);
+    setTranslationRoomHub(null);
     setNotifHub(null);
-    meetingStore.reset();
+    translationRoomStore.reset();
     log("SignalR", "Disconnect All", "success");
   };
 
@@ -406,8 +406,8 @@ export default function DevTestPage() {
             <Input value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-44" />
           </div>
           <div className="space-y-1">
-            <Label>Meeting ID</Label>
-            <Input value={meetingId} onChange={(e) => setMeetingId(e.target.value)} className="w-72" placeholder="auto-filled on create" />
+            <Label>TranslationRoom ID</Label>
+            <Input value={translationRoomId} onChange={(e) => setTranslationRoomId(e.target.value)} className="w-72" placeholder="auto-filled on create" />
           </div>
           <div className="space-y-1">
             <Label>Transcript ID</Label>
@@ -431,14 +431,14 @@ export default function DevTestPage() {
           </CardContent>
         </Card>
 
-        {/* Meeting */}
+        {/* TranslationRoom */}
         <Card>
-          <CardHeader><CardTitle className="text-base">📹 Meeting Service</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">📹 TranslationRoom Service</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={testCreateMeeting}>Create</Button>
-            <Button size="sm" onClick={testGetMeeting}>Get</Button>
-            <Button size="sm" onClick={testJoinMeeting}>Join</Button>
-            <Button size="sm" variant="destructive" onClick={testEndMeeting}>End</Button>
+            <Button size="sm" onClick={testCreateTranslationRoom}>Create</Button>
+            <Button size="sm" onClick={testGetTranslationRoom}>Get</Button>
+            <Button size="sm" onClick={testJoinTranslationRoom}>Join</Button>
+            <Button size="sm" variant="destructive" onClick={testEndTranslationRoom}>End</Button>
           </CardContent>
         </Card>
 
@@ -465,25 +465,25 @@ export default function DevTestPage() {
           <CardHeader><CardTitle className="text-base">⚡ SignalR Hubs</CardTitle></CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={connectMeetingHub}>
-                Connect MeetingHub {meetingHub?.state === "Connected" ? "🟢" : "⚪"}
+              <Button size="sm" onClick={connectTranslationRoomHub}>
+                Connect TranslationRoomHub {translationRoomHub?.state === "Connected" ? "🟢" : "⚪"}
               </Button>
               <Button size="sm" onClick={connectNotifHub}>
                 Connect NotifHub {notifHub?.state === "Connected" ? "🟢" : "⚪"}
               </Button>
               <Separator orientation="vertical" className="h-8" />
-              <Button size="sm" variant="outline" onClick={hubJoinMeeting}>Hub: Join</Button>
+              <Button size="sm" variant="outline" onClick={hubJoinTranslationRoom}>Hub: Join</Button>
               <Button size="sm" variant="outline" onClick={hubSendChat}>Hub: Chat</Button>
               <Button size="sm" variant="outline" onClick={hubToggleMute}>
-                Hub: Mute ({meetingStore.isMuted ? "ON" : "OFF"})
+                Hub: Mute ({translationRoomStore.isMuted ? "ON" : "OFF"})
               </Button>
               <Separator orientation="vertical" className="h-8" />
               <Button size="sm" variant="secondary" onClick={testRawEndpoint}>Raw GET...</Button>
               <Button size="sm" variant="destructive" onClick={disconnectAll}>Disconnect All</Button>
             </div>
-            {meetingStore.participants.length > 0 && (
+            {translationRoomStore.participants.length > 0 && (
               <div className="mt-3 text-xs text-muted-foreground">
-                <strong>Participants:</strong> {meetingStore.participants.map((p) => p.displayName).join(", ")}
+                <strong>Participants:</strong> {translationRoomStore.participants.map((p) => p.displayName).join(", ")}
               </div>
             )}
           </CardContent>

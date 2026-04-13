@@ -87,7 +87,7 @@ All API calls must use predefined clients in `src/services`:
 
 ### Commit format — Conventional Commits:
 ```
-feat(meeting): add host control UI
+feat(translationRoom): add host control UI
 fix(auth): correct local storage token sync
 refactor(streaming): update SignalR hook implementation
 chore(deps): update zustand

@@ -10,11 +10,11 @@ const BASE_URL =
  * Gateway expects: ?access_token=<jwt>
  *
  * Hubs:
- *   /hubs/meeting   — MeetingHub
+ *   /hubs/translationRoom   — TranslationRoomHub
  *   /hubs/notification — NotificationHub
  */
 export function createHubConnection(
-  hubPath: "/hubs/meeting" | "/hubs/notification"
+  hubPath: "/hubs/translationRoom" | "/hubs/notification"
 ): signalR.HubConnection {
   const connection = new signalR.HubConnectionBuilder()
     .withUrl(`${BASE_URL}${hubPath}`, {

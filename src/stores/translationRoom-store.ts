@@ -1,21 +1,21 @@
 import { create } from "zustand";
 import type {
   ChatMessageDto,
-  MeetingStateDto,
+  TranslationRoomStateDto,
   ParticipantInfoDto,
   TranscriptSegmentDto,
 } from "@/types/realtime";
 
-interface MeetingStoreState {
-  // Current live meeting state
-  meetingState: MeetingStateDto | null;
+interface TranslationRoomStoreState {
+  // Current live translationRoom state
+  translationRoomState: TranslationRoomStateDto | null;
   participants: ParticipantInfoDto[];
   transcriptSegments: TranscriptSegmentDto[];
   chatMessages: ChatMessageDto[];
   isMuted: boolean;
 
   // Actions — called from SignalR event handlers
-  setMeetingState: (state: MeetingStateDto) => void;
+  setTranslationRoomState: (state: TranslationRoomStateDto) => void;
   setParticipants: (participants: ParticipantInfoDto[]) => void;
   addParticipant: (participant: ParticipantInfoDto) => void;
   removeParticipant: (userId: string) => void;
@@ -26,18 +26,18 @@ interface MeetingStoreState {
 }
 
 const initialState = {
-  meetingState: null,
+  translationRoomState: null,
   participants: [],
   transcriptSegments: [],
   chatMessages: [],
   isMuted: false,
 };
 
-export const useMeetingStore = create<MeetingStoreState>()((set) => ({
+export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set) => ({
   ...initialState,
 
-  setMeetingState: (meetingState) =>
-    set({ meetingState, participants: meetingState.participants }),
+  setTranslationRoomState: (translationRoomState) =>
+    set({ translationRoomState, participants: translationRoomState.participants }),
 
   setParticipants: (participants) => set({ participants }),
 

@@ -21,7 +21,7 @@ import { useState } from "react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Cuộc họp", href: "/meetings", icon: Video },
+  { name: "Cuộc họp", href: "/translationRooms", icon: Video },
   { name: "Bản ghi", href: "/transcripts", icon: FileText },
   { name: "Workspace", href: "/workspace", icon: Building2 },
   { name: "Gói dịch vụ", href: "/subscription", icon: CreditCard },

@@ -12,7 +12,7 @@ Frontend gọi tất cả qua **Gateway** (`NEXT_PUBLIC_API_URL`). Gateway dùng
 |---|---|---|---|
 | `/api/v1/auth/{endpoint}` | `auth-public-route` | AuthService `:5101` | `/api/auth/{endpoint}` |
 | `/api/v1/auth/{**catch-all}` | `auth-secure-route` (JWT) | AuthService `:5101` | `/api/auth/{**catch-all}` |
-| `/api/v1/meetings/{**catch-all}` | `meeting-route` | MeetingService `:5102` | `/api/v1/meetings/{**catch-all}` |
+| `/api/v1/translationRooms/{**catch-all}` | `translation-room-route` | TranslationRoomService `:5102` | `/api/v1/translationRooms/{**catch-all}` |
 | `/api/v1/transcripts/{**catch-all}` | `transcript-route` | TranscriptService `:5103` | `/api/v1/transcripts/{**catch-all}` |
 | `/api/v1/notifications/{**catch-all}` | `notification-route` | NotificationService `:5104` | `/api/v1/notifications/{**catch-all}` |
 
@@ -36,14 +36,14 @@ Frontend gọi tất cả qua **Gateway** (`NEXT_PUBLIC_API_URL`). Gateway dùng
 | `PUT` | `/api/v1/auth/me` | ✓ JWT | `UpdateProfileRequest` | `200` → `UserDto` | `400` → `ApiErrorResponse` |
 | `POST` | `/api/v1/auth/change-password` | ✓ JWT | `ChangePasswordRequest` | `204` No Content | `400` → `ApiErrorResponse` |
 
-### 2.2 Meeting Service
+### 2.2 TranslationRoom Service
 
 | Method | Gateway Endpoint | Auth | Request Body | Success Response |
 |---|---|---|---|---|
-| `POST` | `/api/v1/meetings` | ✓ JWT | `CreateMeetingRequest` | `200` → `MeetingDto` |
-| `GET` | `/api/v1/meetings/{id}` | ✓ JWT | — | `200` → `MeetingDto` |
-| `POST` | `/api/v1/meetings/{id}/join` | ✓ JWT | `JoinMeetingRequest` | `200` → `MeetingParticipantDto` |
-| `POST` | `/api/v1/meetings/{id}/end` | ✓ JWT | — | `204` No Content |
+| `POST` | `/api/v1/translationRooms` | ✓ JWT | `CreateTranslationRoomRequest` | `200` → `TranslationRoomDto` |
+| `GET` | `/api/v1/translationRooms/{id}` | ✓ JWT | — | `200` → `TranslationRoomDto` |
+| `POST` | `/api/v1/translationRooms/{id}/join` | ✓ JWT | `JoinTranslationRoomRequest` | `200` → `TranslationRoomParticipantDto` |
+| `POST` | `/api/v1/translationRooms/{id}/end` | ✓ JWT | — | `204` No Content |
 
 ### 2.3 Transcript Service
 
@@ -197,39 +197,39 @@ interface UserDto {
 
 ---
 
-### 3.3 Meeting DTOs
+### 3.3 TranslationRoom DTOs
 
-**Backend C# — `WarpTalk.MeetingService.Application.DTOs.MeetingDtos`:**
+**Backend C# — `WarpTalk.TranslationRoomService.Application.DTOs.TranslationRoomDtos`:**
 
 ```csharp
-// File: meeting/src/WarpTalk.MeetingService.Application/DTOs/MeetingDtos.cs
+// File: translationRoom/src/WarpTalk.TranslationRoomService.Application/DTOs/TranslationRoomDtos.cs
 
-public record CreateMeetingRequest(
+public record CreateTranslationRoomRequest(
     Guid? WorkspaceId,
     string Title,
     string? Description,
-    string MeetingType,        // "instant" | "scheduled"
+    string TranslationRoomType,        // "instant" | "scheduled"
     int MaxParticipants,
     string SourceLanguage,
     string TargetLanguages,
     DateTime? ScheduledAt
 );
 
-public record JoinMeetingRequest(
+public record JoinTranslationRoomRequest(
     string DisplayName,
     string ListenLanguage,
     string SpeakLanguage
 );
 
-public record MeetingDto(
+public record TranslationRoomDto(
     Guid Id,
     Guid WorkspaceId,
     Guid HostId,
     string Title,
     string? Description,
-    string MeetingCode,
+    string TranslationRoomCode,
     string Status,              // "scheduled" | "active" | "completed" | "cancelled"
-    string MeetingType,
+    string TranslationRoomType,
     int MaxParticipants,
     DateTime? ScheduledAt,
     DateTime? StartedAt,
@@ -237,9 +237,9 @@ public record MeetingDto(
     DateTime CreatedAt
 );
 
-public record MeetingParticipantDto(
+public record TranslationRoomParticipantDto(
     Guid Id,
-    Guid MeetingId,
+    Guid TranslationRoomId,
     Guid UserId,
     string DisplayName,
     string Role,                // "host" | "participant" | "interpreter"
@@ -253,32 +253,32 @@ public record MeetingParticipantDto(
 **Frontend TypeScript mapping:**
 
 ```typescript
-interface CreateMeetingRequest {
+interface CreateTranslationRoomRequest {
   workspaceId?: string;        // optional Guid
   title: string;
   description?: string;
-  meetingType: "instant" | "scheduled";
+  translationRoomType: "instant" | "scheduled";
   maxParticipants: number;
   sourceLanguage: string;      // e.g. "vi", "en"
   targetLanguages: string;     // comma-separated or JSON
   scheduledAt?: string;        // ISO DateTime
 }
 
-interface JoinMeetingRequest {
+interface JoinTranslationRoomRequest {
   displayName: string;
   listenLanguage: string;
   speakLanguage: string;
 }
 
-interface MeetingDto {
+interface TranslationRoomDto {
   id: string;
   workspaceId: string;
   hostId: string;
   title: string;
   description?: string;
-  meetingCode: string;         // unique join code
+  translationRoomCode: string;         // unique join code
   status: string;              // "scheduled" | "active" | "completed" | "cancelled"
-  meetingType: string;
+  translationRoomType: string;
   maxParticipants: number;
   scheduledAt?: string;
   startedAt?: string;
@@ -286,9 +286,9 @@ interface MeetingDto {
   createdAt: string;
 }
 
-interface MeetingParticipantDto {
+interface TranslationRoomParticipantDto {
   id: string;
-  meetingId: string;
+  translationRoomId: string;
   userId: string;
   displayName: string;
   role: string;                // "host" | "participant" | "interpreter"
@@ -309,7 +309,7 @@ interface MeetingParticipantDto {
 // File: transcript/src/WarpTalk.TranscriptService.Application/DTOs/TranscriptDtos.cs
 
 public record CreateTranscriptRequest(
-    Guid MeetingId,
+    Guid TranslationRoomId,
     string SourceLanguage
 );
 
@@ -325,7 +325,7 @@ public record ProcessAudioChunkRequest(
 
 public record TranscriptDto(
     Guid Id,
-    Guid MeetingId,
+    Guid TranslationRoomId,
     int Version,
     string Status,              // "recording" | "processing" | "completed" | "failed"
     string SourceLanguage,
@@ -341,7 +341,7 @@ public record TranscriptDto(
 
 ```typescript
 interface CreateTranscriptRequest {
-  meetingId: string;
+  translationRoomId: string;
   sourceLanguage: string;
 }
 
@@ -357,7 +357,7 @@ interface ProcessAudioChunkRequest {
 
 interface TranscriptDto {
   id: string;
-  meetingId: string;
+  translationRoomId: string;
   version: number;
   status: string;              // "recording" | "processing" | "completed" | "failed"
   sourceLanguage: string;
@@ -424,7 +424,7 @@ interface UpdateNotificationPreferenceRequest {
 ```csharp
 // File: gateway/src/WarpTalk.Gateway/Hubs/HubModels.cs
 
-// ── Meeting Hub DTOs ──────────────────────────────────────
+// ── TranslationRoom Hub DTOs ──────────────────────────────────────
 
 public record ParticipantInfoDto(
     Guid UserId,
@@ -453,9 +453,9 @@ public record ChatMessageDto(
     string Content,
     DateTime SentAt);
 
-public record MeetingStateDto(
-    Guid MeetingId,
-    string MeetingCode,
+public record TranslationRoomStateDto(
+    Guid TranslationRoomId,
+    string TranslationRoomCode,
     string Status,
     List<ParticipantInfoDto> Participants);
 
@@ -504,9 +504,9 @@ interface ChatMessageDto {
   sentAt: string;
 }
 
-interface MeetingStateDto {
-  meetingId: string;
-  meetingCode: string;
+interface TranslationRoomStateDto {
+  translationRoomId: string;
+  translationRoomCode: string;
   status: string;
   participants: ParticipantInfoDto[];
 }
@@ -551,14 +551,14 @@ interface ApiErrorResponse {
 | `USER_INACTIVE` | Auth | User bị vô hiệu hóa |
 | `USER_NOT_FOUND` | Auth | User không tồn tại |
 | `INVALID_PASSWORD` | Auth | Mật khẩu không đúng yêu cầu |
-| `MEETING_NOT_ACTIVE` | Meeting | Cuộc họp chưa/hết active |
+| `MEETING_NOT_ACTIVE` | TranslationRoom | Cuộc họp chưa/hết active |
 | `PREFERENCES_NOT_FOUND` | Notification | Chưa có preferences |
 
 ---
 
 ## 5. SignalR Realtime Hubs
 
-### 5.1 Meeting Hub — `/hubs/meeting`
+### 5.1 TranslationRoom Hub — `/hubs/translationRoom`
 
 Kết nối yêu cầu JWT qua query string: `?access_token=<jwt>`
 
@@ -566,12 +566,12 @@ Kết nối yêu cầu JWT qua query string: `?access_token=<jwt>`
 
 | Method | Params | Mô tả |
 |---|---|---|
-| `JoinMeeting` | `meetingId: string, displayName: string, speakLanguage: string, listenLanguage: string` | Tham gia phòng họp |
-| `LeaveMeeting` | `meetingId: string` | Rời phòng họp |
-| `ToggleMute` | `meetingId: string, isMuted: boolean` | Bật/tắt mic |
-| `SendTranscriptSegment` | `meetingId: string, segment: TranscriptSegmentDto` | Gửi transcript segment |
-| `SendChatMessage` | `meetingId: string, content: string` | Gửi tin nhắn chat |
-| `EndMeeting` | `meetingId: string` | Kết thúc cuộc họp (host only) |
+| `JoinTranslationRoom` | `translationRoomId: string, displayName: string, speakLanguage: string, listenLanguage: string` | Tham gia phòng họp |
+| `LeaveTranslationRoom` | `translationRoomId: string` | Rời phòng họp |
+| `ToggleMute` | `translationRoomId: string, isMuted: boolean` | Bật/tắt mic |
+| `SendTranscriptSegment` | `translationRoomId: string, segment: TranscriptSegmentDto` | Gửi transcript segment |
+| `SendChatMessage` | `translationRoomId: string, content: string` | Gửi tin nhắn chat |
+| `EndTranslationRoom` | `translationRoomId: string` | Kết thúc cuộc họp (host only) |
 
 **Server → Client (on):**
 
@@ -582,7 +582,7 @@ Kết nối yêu cầu JWT qua query string: `?access_token=<jwt>`
 | `ParticipantMuteChanged` | `userId: string, isMuted: boolean` | Đổi trạng thái mic |
 | `TranscriptSegmentReceived` | `TranscriptSegmentDto` | Nhận transcript realtime |
 | `ChatMessageReceived` | `ChatMessageDto` | Nhận tin nhắn chat |
-| `MeetingEnded` | `meetingId: string` | Cuộc họp đã kết thúc |
+| `TranslationRoomEnded` | `translationRoomId: string` | Cuộc họp đã kết thúc |
 
 ### 5.2 Notification Hub — `/hubs/notification`
 
@@ -652,7 +652,7 @@ Kết nối yêu cầu JWT qua query string. Tự động join group `user:{user
 | `updated_at` | `datetime` | ✗ | |
 | `deleted_at` | `datetime` | ✓ | Soft delete |
 
-### 6.3 Meeting (MeetingService)
+### 6.3 TranslationRoom (TranslationRoomService)
 
 | Column | Type | Nullable | Note |
 |---|---|---|---|
@@ -661,9 +661,9 @@ Kết nối yêu cầu JWT qua query string. Tự động join group `user:{user
 | `host_id` | `uuid` | ✗ | |
 | `title` | `string` | ✗ | |
 | `description` | `string` | ✓ | |
-| `meeting_code` | `string` | ✗ | unique join code |
+| `translation_room_code` | `string` | ✗ | unique join code |
 | `status` | `string` | ✗ | |
-| `meeting_type` | `string` | ✗ | "instant" / "scheduled" |
+| `translation_room_type` | `string` | ✗ | "instant" / "scheduled" |
 | `max_participants` | `int` | ✗ | |
 | `source_language` | `string` | ✗ | |
 | `target_languages` | `string` | ✗ | |
@@ -676,14 +676,14 @@ Kết nối yêu cầu JWT qua query string. Tự động join group `user:{user
 | `updated_at` | `datetime` | ✗ | |
 | `deleted_at` | `datetime` | ✓ | |
 
-**Relations:** MeetingParticipants, MeetingAudioRoutes, MeetingFeedbacks, MeetingRecordings, MeetingSummary
+**Relations:** TranslationRoomParticipants, TranslationRoomAudioRoutes, TranslationRoomFeedbacks, TranslationRoomRecordings, TranslationRoomSummary
 
 ### 6.4 Transcript (TranscriptService)
 
 | Column | Type | Nullable | Note |
 |---|---|---|---|
 | `id` | `uuid` | ✗ | PK |
-| `meeting_id` | `uuid` | ✗ | |
+| `translation_room_id` | `uuid` | ✗ | |
 | `version` | `int` | ✗ | |
 | `status` | `string` | ✗ | default: "recording" |
 | `source_language` | `string` | ✗ | |
@@ -730,7 +730,7 @@ Kết nối yêu cầu JWT qua query string. Tự động join group `user:{user
 | `/auth/google` | `/api/v1/auth/google-login` | **FIX** → rename |
 | `/auth/forgot-password` | *(not implemented on backend)* | **NOTE** → backend chưa có |
 | `/auth/reset-password` | *(not implemented on backend)* | **NOTE** → backend chưa có |
-| `/meetings` (no prefix) | `/api/v1/meetings` | **FIX** → thêm prefix |
+| `/translationRooms` (no prefix) | `/api/v1/translationRooms` | **FIX** → thêm prefix |
 | `/transcripts/search` | *(not implemented)* | **REMOVE** |
 | `/transcripts/{id}/export` | *(not implemented)* | **REMOVE** |
 | `/workspaces/*` | *(not implemented — chưa có controller)* | **NOTE** → backend chưa có |

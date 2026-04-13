@@ -15,13 +15,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "WarpTalk — AI-Powered Meeting Translation",
+    default: "WarpTalk — AI-Powered TranslationRoom Translation",
     template: "%s | WarpTalk",
   },
   description:
-    "Real-time multilingual meeting translation and transcription platform for global teams.",
+    "Real-time multilingual translationRoom translation and transcription platform for global teams.",
   keywords: [
-    "meeting translation",
+    "translationRoom translation",
     "real-time transcription",
     "multilingual",
     "AI",

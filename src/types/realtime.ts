@@ -3,7 +3,7 @@
  * Source: WarpTalk.Gateway.Hubs.HubModels
  */
 
-// ── Meeting Hub DTOs ──────────────────────────
+// ── TranslationRoom Hub DTOs ──────────────────────────
 
 export interface ParticipantInfoDto {
   userId: string;
@@ -35,9 +35,9 @@ export interface ChatMessageDto {
   sentAt: string;
 }
 
-export interface MeetingStateDto {
-  meetingId: string;
-  meetingCode: string;
+export interface TranslationRoomStateDto {
+  translationRoomId: string;
+  translationRoomCode: string;
   status: string;
   participants: ParticipantInfoDto[];
 }

@@ -9,7 +9,7 @@ export type TranscriptStatus = "recording" | "processing" | "completed" | "faile
 
 export interface TranscriptDto {
   id: string;
-  meetingId: string;
+  translationRoomId: string;
   version: number;
   status: TranscriptStatus;
   sourceLanguage: string;
@@ -23,7 +23,7 @@ export interface TranscriptDto {
 // ── Request DTOs ──────────────────────────────
 
 export interface CreateTranscriptRequest {
-  meetingId: string;
+  translationRoomId: string;
   sourceLanguage: string;
 }
 

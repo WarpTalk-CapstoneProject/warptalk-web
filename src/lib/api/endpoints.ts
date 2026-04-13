@@ -4,7 +4,7 @@
  *
  * Gateway routing:
  *   /api/v1/auth/*          → AuthService :5101  (transforms to /api/auth/*)
- *   /api/v1/meetings/*      → MeetingService :5102
+ *   /api/v1/translationRooms/*      → TranslationRoomService :5102
  *   /api/v1/transcripts/*   → TranscriptService :5103
  *   /api/v1/notifications/* → NotificationService :5104
  */
@@ -18,11 +18,11 @@ export const API = {
     me: "/auth/me",
     changePassword: "/auth/change-password",
   },
-  meetings: {
-    create: "/meetings",
-    get: (id: string) => `/meetings/${id}`,
-    join: (id: string) => `/meetings/${id}/join`,
-    end: (id: string) => `/meetings/${id}/end`,
+  translationRooms: {
+    create: "/translationRooms",
+    get: (id: string) => `/translationRooms/${id}`,
+    join: (id: string) => `/translationRooms/${id}/join`,
+    end: (id: string) => `/translationRooms/${id}/end`,
   },
   transcripts: {
     start: "/transcripts",
