@@ -61,6 +61,16 @@ Each update should explain:
 
 ---
 
+## 4. Architectural Guidelines
+
+When creating new features, adhere to the established project architecture:
+
+- **Route Groups & Roles**: We use Next.js routing (e.g., `admin/`, `workspace/`, `(app)/`) to enforce Role-based access control and separate Layouts/Sidebars. Always place new pages in the correct folder.
+- **AI Features**: Features utilizing AI (Summaries, Chat, Insights) should be clearly documented, outlining the data flow from UI -> Backend -> AI Worker.
+- **Component Structure**: Use `src/components/features/` for domain-specific logic (e.g., `ai-chat`, `meeting`, `transcript`) instead of putting everything in `ui/`.
+
+---
+
 ## Documentation Structure
 
 Use this structure:

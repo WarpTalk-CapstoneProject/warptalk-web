@@ -27,17 +27,22 @@ warptalk-web/
 ├── .gemini/               # Configuration and commands for the AI coding assistant
 ├── public/                # Static assets (images, icons, etc.)
 ├── src/
-│   ├── app/               # Next.js App Router (pages, layouts, globals.css)
+│   ├── app/               # Next.js App Router
+│   │   ├── admin/         # System Admin routes & layout
+│   │   ├── workspace/     # Workspace Admin routes & layout
+│   │   ├── (app)/         # Host/Participant routes & layout (AI Features, Meetings)
+│   │   └── join/          # Public participant join route
 │   ├── components/        # Reusable React components
-│   │   ├── landing/       # Components specific to the landing page (e.g., HeroSection, GlassOverlay)
-│   │   ├── layout/        # Shared layout components (headers, footers)
-│   │   └── ui/            # Generic/Shadcn UI components (buttons, inputs, etc.)
+│   │   ├── features/      # Feature-specific components (meeting, transcript, ai-chat)
+│   │   ├── landing/       # Components specific to the landing page
+│   │   ├── layout/        # Shared layout (AdminSidebar, HostSidebar, etc.)
+│   │   └── ui/            # Generic/Shadcn UI components
 │   ├── hooks/             # Custom React hooks
-│   ├── lib/               # Utility functions and configurations
-│   ├── services/          # API integrations and external services (e.g., API clients)
-│   ├── stores/            # Zustand global state stores
+│   ├── lib/               # Utility functions and API endpoints config
+│   ├── services/          # API integrations and external services
+│   ├── stores/            # Zustand global state stores (Auth, etc.)
 │   ├── types/             # TypeScript type definitions and interfaces
-│   └── middleware.ts      # Next.js middleware (e.g., for routing and authentication checks)
+│   └── middleware.ts      # Next.js middleware (Routing and Role-based Auth checks)
 ├── next.config.ts         # Next.js configuration
 ├── package.json           # Dependencies and project scripts
 ├── tailwind.config.ts     # Tailwind CSS configuration (if applicable)
