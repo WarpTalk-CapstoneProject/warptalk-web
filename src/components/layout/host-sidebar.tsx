@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Video,
+  LayoutGrid,
   FileText,
   MessageSquare,
   BotMessageSquare,
@@ -12,19 +13,18 @@ import {
   Mic2,
   Star,
   Settings,
-  Languages,
-  ChevronLeft,
+  Headset,
+  ExternalLink,
   LogOut,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Meetings", href: "/meetings", icon: Video },
+  { name: "Rooms", href: "/rooms", icon: LayoutGrid },
   { name: "History & Transcripts", href: "/history", icon: FileText },
 ];
 
@@ -40,115 +40,87 @@ const configNavigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
+type NavItem = {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+};
+
 export function HostSidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
   const logout = useAuthStore((s) => s.logout);
 
+  const renderNavItems = (items: NavItem[]) => {
+    return items.map((item) => {
+      const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          className={cn(
+            "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+            isActive
+              ? "bg-[#003476] text-white shadow-sm font-semibold"
+              : "text-[#000000] hover:bg-[#fdfcf6] hover:text-[#003476]"
+          )}
+        >
+          <item.icon className={cn("h-5 w-5", isActive ? "text-white" : "text-[#000000]")} />
+          <span>{item.name}</span>
+        </Link>
+      );
+    });
+  };
+
   return (
-    <aside
-      className={cn(
-        "flex h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
-      )}
-    >
-      <div className="flex h-16 items-center gap-2.5 border-b px-4">
-        <Languages className="h-7 w-7 shrink-0 text-primary" />
-        {!collapsed && (
-          <span className="text-lg font-bold tracking-tight">WarpTalk</span>
-        )}
+    <aside className="flex h-screen w-[220px] shrink-0 flex-col border-r border-slate-200 bg-white text-[#000000]">
+      {/* Logo */}
+      <div className="flex h-16 items-center gap-2.5 px-6 pt-4">
+        <Image 
+          src="/assets/logos/warptalk-logo-primary.jpg" 
+          alt="WarpTalk" 
+          width={140} 
+          height={36} 
+          className="object-contain"
+        />
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
-        {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-              )}
-              title={collapsed ? item.name : undefined}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
-          );
-        })}
-
-        <Separator className="my-3" />
-        {!collapsed && <div className="px-3 py-1 text-xs font-semibold text-muted-foreground uppercase">AI Features</div>}
+      {/* Nav */}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-6">
+        {renderNavItems(navigation)}
         
-        {aiNavigation.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-              )}
-              title={collapsed ? item.name : undefined}
-            >
-              <item.icon className="h-5 w-5 shrink-0 text-indigo-400" />
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
-          );
-        })}
-
-        <Separator className="my-3" />
+        <div className="my-4" />
+        <div className="px-3 mb-2 text-[10px] font-bold text-[#000000] uppercase tracking-wider">AI Features</div>
+        {renderNavItems(aiNavigation)}
         
-        {configNavigation.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-              )}
-              title={collapsed ? item.name : undefined}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
-          );
-        })}
+        <div className="my-4" />
+        <div className="px-3 mb-2 text-[10px] font-bold text-[#000000] uppercase tracking-wider">Configuration</div>
+        {renderNavItems(configNavigation)}
+
+        <div className="my-4 border-t border-slate-100" />
+        <button
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-all"
+        >
+          <LogOut className="h-5 w-5" />
+          <span>Sign Out</span>
+        </button>
       </nav>
 
-      <div className="border-t p-2 flex flex-col gap-2">
-        <Button
-          variant="ghost"
-          className={cn("w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100/10", collapsed && "justify-center px-0")}
-          onClick={logout}
-          title={collapsed ? "Sign Out" : undefined}
-        >
-          <LogOut className={cn("h-5 w-5", !collapsed && "mr-3")} />
-          {!collapsed && <span>Sign Out</span>}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="w-full"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          <ChevronLeft
-            className={cn(
-              "h-4 w-4 transition-transform",
-              collapsed && "rotate-180"
-            )}
-          />
-        </Button>
+      {/* Help Center Widget */}
+      <div className="p-3 mt-auto shrink-0">
+        <div className="rounded-xl border border-slate-100 bg-[#fdfcf6] p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Headset className="h-4 w-4 text-[#003476]" />
+            <span className="text-xs font-semibold text-[#003476]">Need help?</span>
+          </div>
+          <p className="text-[10px] text-[#e4eef9] mb-3 leading-relaxed">
+            View docs or contact support.
+          </p>
+          <Button variant="outline" className="w-full h-7 text-[10px] bg-white rounded-md gap-1.5 shadow-sm border-slate-200 text-[#003476]">
+            Open Help Center
+            <ExternalLink className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
     </aside>
   );

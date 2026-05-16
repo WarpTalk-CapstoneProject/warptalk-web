@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Key,
@@ -8,7 +9,6 @@ import {
   FileSignature,
   MessageCircleQuestion,
   Settings,
-  Languages,
   ChevronLeft,
   LogOut,
 } from "lucide-react";
@@ -44,10 +44,17 @@ export function ParticipantSidebar() {
         collapsed ? "w-16" : "w-64"
       )}
     >
-      <div className="flex h-16 items-center gap-2.5 border-b px-4">
-        <Languages className="h-7 w-7 shrink-0 text-primary" />
-        {!collapsed && (
-          <span className="text-lg font-bold tracking-tight">WarpTalk</span>
+      <div className="flex h-16 items-center justify-center gap-2.5 border-b px-4">
+        {!collapsed ? (
+          <Image 
+            src="/assets/logos/warptalk-logo-primary.jpg" 
+            alt="WarpTalk" 
+            width={120} 
+            height={32} 
+            className="object-contain"
+          />
+        ) : (
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xl">W</div>
         )}
       </div>
 

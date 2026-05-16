@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   LayoutDashboard,
   Building2,
@@ -9,13 +10,11 @@ import {
   CreditCard,
   Bot,
   Settings,
-  Languages,
   ChevronLeft,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -41,10 +40,17 @@ export function AdminSidebar() {
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2.5 border-b px-4">
-        <Languages className="h-7 w-7 shrink-0 text-primary" />
-        {!collapsed && (
-          <span className="text-lg font-bold tracking-tight">System Admin</span>
+      <div className="flex h-16 items-center justify-center gap-2.5 border-b px-4">
+        {!collapsed ? (
+          <Image 
+            src="/assets/logos/warptalk-logo-primary.jpg" 
+            alt="WarpTalk" 
+            width={120} 
+            height={32} 
+            className="object-contain"
+          />
+        ) : (
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xl">W</div>
         )}
       </div>
 
