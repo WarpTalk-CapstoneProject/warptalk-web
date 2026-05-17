@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import {
   BadgeCheck,
+  Check,
   Languages,
   LogOut,
   Mic,
   MicOff,
   MoreHorizontal,
+  RotateCcw,
   Shield,
   Sparkles,
   UserRoundX,
@@ -31,7 +33,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSpeechCapture } from "@/hooks/use-speech-capture";
 import { createHubConnection } from "@/lib/signalr";
-import { getLanguageName } from "@/lib/languages";
+import {
+  SUPPORTED_LANGUAGES,
+  getAvailableTargets,
+  getLanguageName,
+  getLanguageNativeName,
+  normalizeLanguageCode,
+  serializeTargetLanguages,
+} from "@/lib/languages";
 import { toast } from "sonner";
 import * as signalR from "@microsoft/signalr";
 import type { ParticipantInfoDto, TranscriptSegmentDto } from "@/types/realtime";
@@ -50,7 +59,21 @@ type TranslationTextDto = {
   targetLang: string;
 };
 
+type TranslationMode = "single" | "multi";
+
+type LanguagePolicy = {
+  sourceLanguage: string;
+  targetLanguages: string[];
+  mode: TranslationMode;
+};
+
 const CURRENT_USER_ID = "demo-host";
+
+const DEFAULT_LANGUAGE_POLICY: LanguagePolicy = {
+  sourceLanguage: "en",
+  targetLanguages: ["vi", "es", "ja"],
+  mode: "multi",
+};
 
 const MOCK_PARTICIPANTS: RoomParticipant[] = [
   {
@@ -119,7 +142,19 @@ function normalizeRealtimeParticipant(participant: ParticipantInfoDto): RoomPart
     status: "connected",
     source: "realtime",
     ...participant,
+    speakLanguage: normalizeLanguageCode(participant.speakLanguage),
+    listenLanguage: normalizeLanguageCode(participant.listenLanguage),
   };
+}
+
+function getSafeTargets(sourceLanguage: string, targets: string[], mode: TranslationMode) {
+  const normalizedSource = normalizeLanguageCode(sourceLanguage);
+  const allowedTargets = getAvailableTargets(normalizedSource).map((language) => language.code);
+  const uniqueTargets = Array.from(
+    new Set(targets.map(normalizeLanguageCode).filter((target) => allowedTargets.includes(target)))
+  );
+  const fallbackTarget = allowedTargets[0] ?? "en";
+  return (uniqueTargets.length > 0 ? uniqueTargets : [fallbackTarget]).slice(0, mode === "single" ? 1 : 3);
 }
 
 function ParticipantRow({
@@ -271,12 +306,146 @@ function ParticipantsPanel({
   );
 }
 
+function LanguageConfigurationPanel({
+  policy,
+  canManage,
+  participants,
+  onSourceChange,
+  onModeChange,
+  onToggleTarget,
+  onReset,
+}: {
+  policy: LanguagePolicy;
+  canManage: boolean;
+  participants: RoomParticipant[];
+  onSourceChange: (language: string) => void;
+  onModeChange: (mode: TranslationMode) => void;
+  onToggleTarget: (language: string) => void;
+  onReset: () => void;
+}) {
+  const targetOptions = getAvailableTargets(policy.sourceLanguage);
+  const serializedTargets = serializeTargetLanguages(policy.targetLanguages);
+
+  return (
+    <Card className="mb-4 border-[#e4eef9] bg-white shadow-sm">
+      <CardHeader className="border-b bg-[#fdfcf6] py-4">
+        <CardTitle className="flex items-center justify-between gap-3 text-base font-semibold">
+          <span className="flex items-center gap-2">
+            <Languages className="h-4 w-4 text-[#003476]" />
+            Language configuration
+          </span>
+          <Badge variant="outline" className="capitalize">
+            {policy.mode} mode
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 p-4">
+        <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <label className="space-y-1.5 text-sm font-medium">
+            Source language
+            <select
+              value={policy.sourceLanguage}
+              disabled={!canManage}
+              onChange={(event) => onSourceChange(event.target.value)}
+              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-[#003476] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {SUPPORTED_LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.name} ({language.nativeName})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant={policy.mode === "single" ? "default" : "outline"}
+                size="sm"
+                disabled={!canManage}
+                onClick={() => onModeChange("single")}
+              >
+                Single-language room
+              </Button>
+              <Button
+                type="button"
+                variant={policy.mode === "multi" ? "default" : "outline"}
+                size="sm"
+                disabled={!canManage}
+                onClick={() => onModeChange("multi")}
+              >
+                Multi-language room
+              </Button>
+              <Button type="button" variant="ghost" size="sm" disabled={!canManage} onClick={onReset}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Backend payload preview: sourceLanguage={policy.sourceLanguage}, targetLanguages={serializedTargets}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">Target translation languages</p>
+            <p className="text-xs text-muted-foreground">
+              {policy.mode === "single" ? "Choose one target" : "Choose up to three targets"}
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {targetOptions.map((language) => {
+              const selected = policy.targetLanguages.includes(language.code);
+              const disabled = !selected && (policy.mode === "single" || policy.targetLanguages.length >= 3);
+
+              return (
+                <button
+                  key={language.code}
+                  type="button"
+                  disabled={!canManage || disabled}
+                  onClick={() => onToggleTarget(language.code)}
+                  className={`flex min-h-14 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition ${
+                    selected
+                      ? "border-[#003476] bg-[#e4eef9] text-[#003476]"
+                      : "border-border bg-background text-foreground hover:bg-muted/40"
+                  } disabled:cursor-not-allowed disabled:opacity-45`}
+                >
+                  <span>
+                    <span className="block font-semibold">{language.name}</span>
+                    <span className="text-xs text-muted-foreground">{getLanguageNativeName(language.code)}</span>
+                  </span>
+                  {selected && <Check className="h-4 w-4" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-[#e4eef9] bg-[#fdfcf6] p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#003476]">Participant language preview</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {participants.slice(0, 3).map((participant) => (
+              <div key={participant.userId} className="rounded-md bg-white px-3 py-2 text-xs shadow-sm">
+                <p className="truncate font-semibold">{participant.displayName}</p>
+                <p className="mt-1 text-muted-foreground">{formatLanguagePair(participant)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function TranslationRoomPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id: roomId } = use(params);
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState<RoomParticipant[]>(MOCK_PARTICIPANTS);
   const [selectedParticipant, setSelectedParticipant] = useState<RoomParticipant | null>(null);
+  const [languagePolicy, setLanguagePolicy] = useState<LanguagePolicy>(DEFAULT_LANGUAGE_POLICY);
   const [segments, setSegments] = useState<TranscriptSegmentDto[]>([]);
   const connectionRef = useRef<signalR.HubConnection | null>(null);
 
@@ -288,7 +457,7 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
     onAudioChunk: (base64Audio, index) => {
       if (connectionRef.current?.state === signalR.HubConnectionState.Connected) {
         connectionRef.current
-          .invoke("SendAudioChunk", roomId, base64Audio, index, "auto")
+          .invoke("SendAudioChunk", roomId, base64Audio, index, languagePolicy.sourceLanguage)
           .catch((err) => console.error("Error sending audio chunk:", err));
       }
     },
@@ -355,7 +524,13 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
       .start()
       .then(() => {
         setIsConnected(true);
-        return connection.invoke("JoinTranslationRoom", roomId, "Demo Host", "en", "vi");
+        return connection.invoke(
+          "JoinTranslationRoom",
+          roomId,
+          "Demo Host",
+          languagePolicy.sourceLanguage,
+          languagePolicy.targetLanguages[0] ?? "vi"
+        );
       })
       .catch((err) => {
         console.error("SignalR Connection Error: ", err);
@@ -371,7 +546,74 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
         connection.stop();
       }
     };
-  }, [roomId]);
+  }, [languagePolicy.sourceLanguage, languagePolicy.targetLanguages, roomId]);
+
+  const updateCurrentParticipantLanguages = (policy: LanguagePolicy) => {
+    setParticipants((prev) =>
+      prev.map((participant) =>
+        participant.userId === CURRENT_USER_ID
+          ? {
+              ...participant,
+              speakLanguage: policy.sourceLanguage,
+              listenLanguage: policy.targetLanguages[0] ?? participant.listenLanguage,
+            }
+          : participant
+      )
+    );
+  };
+
+  const applyLanguagePolicy = (updater: (current: LanguagePolicy) => LanguagePolicy) => {
+    setLanguagePolicy((current) => {
+      const next = updater(current);
+      updateCurrentParticipantLanguages(next);
+      return next;
+    });
+  };
+
+  const handleSourceLanguageChange = (sourceLanguage: string) => {
+    applyLanguagePolicy((current) => {
+      const nextSource = normalizeLanguageCode(sourceLanguage);
+      const nextTargets = getSafeTargets(nextSource, current.targetLanguages, current.mode);
+      return { ...current, sourceLanguage: nextSource, targetLanguages: nextTargets };
+    });
+  };
+
+  const handleModeChange = (mode: TranslationMode) => {
+    applyLanguagePolicy((current) => ({
+      ...current,
+      mode,
+      targetLanguages: getSafeTargets(current.sourceLanguage, current.targetLanguages, mode),
+    }));
+  };
+
+  const handleToggleTargetLanguage = (targetLanguage: string) => {
+    applyLanguagePolicy((current) => {
+      const normalizedTarget = normalizeLanguageCode(targetLanguage);
+      const selected = current.targetLanguages.includes(normalizedTarget);
+      const withoutTarget = current.targetLanguages.filter((target) => target !== normalizedTarget);
+
+      if (selected) {
+        return {
+          ...current,
+          targetLanguages: getSafeTargets(current.sourceLanguage, withoutTarget, current.mode),
+        };
+      }
+
+      return {
+        ...current,
+        targetLanguages: getSafeTargets(
+          current.sourceLanguage,
+          current.mode === "single" ? [normalizedTarget] : [...current.targetLanguages, normalizedTarget],
+          current.mode
+        ),
+      };
+    });
+  };
+
+  const handleResetLanguagePolicy = () => {
+    setLanguagePolicy(DEFAULT_LANGUAGE_POLICY);
+    updateCurrentParticipantLanguages(DEFAULT_LANGUAGE_POLICY);
+  };
 
   const updateParticipantMute = (userId: string, isMuted: boolean) => {
     setParticipants((prev) =>
@@ -427,6 +669,10 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
           <Badge variant={isConnected ? "default" : "destructive"}>
             {isConnected ? "Connected" : "Preview"}
           </Badge>
+          <Badge variant="outline" className="gap-1">
+            <Languages className="h-3.5 w-3.5" />
+            {getLanguageName(languagePolicy.sourceLanguage)} {" -> "} {languagePolicy.targetLanguages.map(getLanguageName).join(", ")}
+          </Badge>
           <span className="font-mono text-sm text-muted-foreground">{roomId}</span>
         </div>
         <Button variant="outline" size="sm" onClick={handleLeave}>
@@ -446,6 +692,16 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
         />
 
         <section className="flex flex-1 flex-col overflow-hidden p-4 md:p-6">
+          <LanguageConfigurationPanel
+            policy={languagePolicy}
+            canManage={canManageParticipants}
+            participants={visibleParticipants}
+            onSourceChange={handleSourceLanguageChange}
+            onModeChange={handleModeChange}
+            onToggleTarget={handleToggleTargetLanguage}
+            onReset={handleResetLanguagePolicy}
+          />
+
           {selectedParticipant && (
             <Card className="mb-4 border-[#e4eef9] bg-[#fdfcf6]">
               <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
