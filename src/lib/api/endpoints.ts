@@ -22,7 +22,9 @@ export const API = {
     create: "/translationRooms",
     get: (id: string) => `/translationRooms/${id}`,
     join: (id: string) => `/translationRooms/${id}/join`,
+    start: (id: string) => `/translationRooms/${id}/start`,
     end: (id: string) => `/translationRooms/${id}/end`,
+    cancel: (id: string) => `/translationRooms/${id}/cancel`,
   },
   transcripts: {
     start: "/transcripts",

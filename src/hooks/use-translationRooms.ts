@@ -6,6 +6,7 @@ import type {
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
   JoinTranslationRoomRequest,
+  TranslationRoomDto,
 } from "@/types/translationRoom";
 
 const MEETING_KEY = ["translationRooms"] as const;
@@ -62,6 +63,21 @@ export function useJoinTranslationRoomByCode() {
   });
 }
 
+/** Start translationRoom mutation. WT-96 uses a typed mock adapter until the backend endpoint exists. */
+export function useStartTranslationRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: translationRoom } = await translationRoomService.start(id);
+      return translationRoom;
+    },
+    onSuccess: (translationRoom, id) => {
+      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    },
+  });
+}
+
 /** End translationRoom mutation */
 export function useEndTranslationRoom() {
   const queryClient = useQueryClient();
@@ -70,7 +86,31 @@ export function useEndTranslationRoom() {
       await translationRoomService.end(id);
     },
     onSuccess: (_data, id) => {
+      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], (current) =>
+        current
+          ? {
+              ...current,
+              status: "ended",
+              endedAt: current.endedAt ?? new Date().toISOString(),
+            }
+          : current
+      );
       queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, id] });
+    },
+  });
+}
+
+/** Cancel translationRoom mutation. WT-96 uses a typed mock adapter until the backend endpoint exists. */
+export function useCancelTranslationRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: translationRoom } = await translationRoomService.cancel(id);
+      return translationRoom;
+    },
+    onSuccess: (translationRoom, id) => {
+      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
   });
 }

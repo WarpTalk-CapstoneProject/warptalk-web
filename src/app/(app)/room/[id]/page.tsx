@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 import {
   BadgeCheck,
   Check,
+  CircleOff,
   Languages,
   LogOut,
   Mic,
   MicOff,
   MoreHorizontal,
+  Play,
   RotateCcw,
   Shield,
   Sparkles,
+  Square,
   UserRoundX,
   Users,
   Volume2,
@@ -31,6 +34,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  useCancelTranslationRoom,
+  useEndTranslationRoom,
+  useStartTranslationRoom,
+  useTranslationRoom,
+} from "@/hooks/use-translationRooms";
 import { useSpeechCapture } from "@/hooks/use-speech-capture";
 import { createHubConnection } from "@/lib/signalr";
 import {
@@ -44,6 +53,7 @@ import {
 import { toast } from "sonner";
 import * as signalR from "@microsoft/signalr";
 import type { ParticipantInfoDto, TranscriptSegmentDto } from "@/types/realtime";
+import type { TranslationRoomLifecycleAction, TranslationRoomStatus } from "@/types/translationRoom";
 
 type RoomParticipant = ParticipantInfoDto & {
   role?: "host" | "participant" | "interpreter";
@@ -66,6 +76,91 @@ type LanguagePolicy = {
   targetLanguages: string[];
   mode: TranslationMode;
 };
+
+const roomStatusCopy: Record<TranslationRoomStatus, { label: string; detail: string; className: string }> = {
+  scheduled: {
+    label: "Scheduled",
+    detail: "Room is planned and can be started or cancelled by the host.",
+    className: "border-[#e4eef9] bg-[#fdfcf6] text-[#003476]",
+  },
+  waiting: {
+    label: "Waiting",
+    detail: "Room is open for setup and waiting for the host to start.",
+    className: "border-[#e4eef9] bg-[#e4eef9] text-[#003476]",
+  },
+  active: {
+    label: "Active",
+    detail: "Room is active. Host can end the room for everyone.",
+    className: "border-[#003476] bg-[#003476] text-white",
+  },
+  in_progress: {
+    label: "Live",
+    detail: "Room is active. Host can end the room for everyone.",
+    className: "border-[#003476] bg-[#003476] text-white",
+  },
+  completed: {
+    label: "Completed",
+    detail: "Room has completed and lifecycle controls are locked.",
+    className: "border-[#e4eef9] bg-white text-black/70",
+  },
+  ended: {
+    label: "Ended",
+    detail: "Room has ended and lifecycle controls are locked.",
+    className: "border-[#e4eef9] bg-white text-black/70",
+  },
+  archived: {
+    label: "Archived",
+    detail: "Room is archived and cannot be changed here.",
+    className: "border-[#e4eef9] bg-[#e4eef9] text-black/65",
+  },
+  cancelled: {
+    label: "Cancelled",
+    detail: "Room was cancelled before it went live.",
+    className: "border-black/10 bg-black text-white",
+  },
+};
+
+const lifecycleActionCopy: Record<TranslationRoomLifecycleAction, { label: string; confirm: string; success: string }> = {
+  start: {
+    label: "Start room",
+    confirm: "Start this room and move participants into the live translation session?",
+    success: "Room started.",
+  },
+  end: {
+    label: "End room",
+    confirm: "End this room for everyone? Participants will no longer be able to continue translating here.",
+    success: "Room ended.",
+  },
+  cancel: {
+    label: "Cancel room",
+    confirm: "Cancel this scheduled or waiting room? Participants should treat it as unavailable.",
+    success: "Room cancelled.",
+  },
+};
+
+function normalizeRoomStatus(status?: string): TranslationRoomStatus {
+  if (status === "live") return "in_progress";
+  if (
+    status === "scheduled" ||
+    status === "waiting" ||
+    status === "active" ||
+    status === "in_progress" ||
+    status === "completed" ||
+    status === "ended" ||
+    status === "archived" ||
+    status === "cancelled"
+  ) {
+    return status;
+  }
+  return "waiting";
+}
+
+function getAllowedLifecycleActions(status: TranslationRoomStatus, canManage: boolean) {
+  if (!canManage) return [];
+  if (status === "scheduled" || status === "waiting") return ["start", "cancel"] as TranslationRoomLifecycleAction[];
+  if (status === "active" || status === "in_progress") return ["end"] as TranslationRoomLifecycleAction[];
+  return [];
+}
 
 const CURRENT_USER_ID = "demo-host";
 
@@ -306,6 +401,92 @@ function ParticipantsPanel({
   );
 }
 
+function LifecycleControlsPanel({
+  roomStatus,
+  canManage,
+  pendingAction,
+  workingAction,
+  onRequestAction,
+  onConfirmAction,
+  onDismissAction,
+}: {
+  roomStatus: TranslationRoomStatus;
+  canManage: boolean;
+  pendingAction: TranslationRoomLifecycleAction | null;
+  workingAction?: TranslationRoomLifecycleAction;
+  onRequestAction: (action: TranslationRoomLifecycleAction) => void;
+  onConfirmAction: () => void;
+  onDismissAction: () => void;
+}) {
+  const allowedActions = getAllowedLifecycleActions(roomStatus, canManage);
+  const copy = roomStatusCopy[roomStatus];
+
+  return (
+    <Card className="mb-4 border-[#e4eef9] bg-white shadow-sm">
+      <CardHeader className="border-b bg-[#fdfcf6] py-4">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base font-semibold">
+          <span className="flex items-center gap-2">
+            <Play className="h-4 w-4 text-[#003476]" />
+            Room lifecycle controls
+          </span>
+          <Badge variant="outline" className={copy.className}>
+            {copy.label}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 p-4">
+        <p className="text-sm text-muted-foreground">{copy.detail}</p>
+        {canManage ? (
+          <div className="flex flex-wrap gap-2">
+            {allowedActions.map((action) => {
+              const Icon = action === "start" ? Play : action === "end" ? Square : CircleOff;
+              const destructive = action === "end" || action === "cancel";
+              return (
+                <Button
+                  key={action}
+                  type="button"
+                  variant={destructive ? "destructive" : "default"}
+                  size="sm"
+                  disabled={Boolean(workingAction)}
+                  onClick={() => onRequestAction(action)}
+                >
+                  <Icon className="mr-2 h-4 w-4" />
+                  {workingAction === action ? "Working..." : lifecycleActionCopy[action].label}
+                </Button>
+              );
+            })}
+            {allowedActions.length === 0 && (
+              <p className="text-sm text-muted-foreground">No lifecycle action is available for this room state.</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Only the host can start, end, or cancel this room.</p>
+        )}
+
+        {pendingAction && (
+          <div className="rounded-lg border border-[#e4eef9] bg-[#fdfcf6] p-3">
+            <p className="text-sm font-semibold text-black">Confirm {lifecycleActionCopy[pendingAction].label.toLowerCase()}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{lifecycleActionCopy[pendingAction].confirm}</p>
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={Boolean(workingAction)} onClick={onDismissAction}>
+                Keep current state
+              </Button>
+              <Button
+                type="button"
+                variant={pendingAction === "start" ? "default" : "destructive"}
+                size="sm"
+                disabled={Boolean(workingAction)}
+                onClick={onConfirmAction}
+              >
+                {workingAction ? "Working..." : lifecycleActionCopy[pendingAction].label}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 function LanguageConfigurationPanel({
   policy,
   canManage,
@@ -446,11 +627,19 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
   const [participants, setParticipants] = useState<RoomParticipant[]>(MOCK_PARTICIPANTS);
   const [selectedParticipant, setSelectedParticipant] = useState<RoomParticipant | null>(null);
   const [languagePolicy, setLanguagePolicy] = useState<LanguagePolicy>(DEFAULT_LANGUAGE_POLICY);
+  const { data: room } = useTranslationRoom(roomId);
+  const startRoom = useStartTranslationRoom();
+  const endRoom = useEndTranslationRoom();
+  const cancelRoom = useCancelTranslationRoom();
+  const [roomStatusOverride, setRoomStatusOverride] = useState<TranslationRoomStatus | null>(null);
+  const [pendingLifecycleAction, setPendingLifecycleAction] = useState<TranslationRoomLifecycleAction | null>(null);
   const [segments, setSegments] = useState<TranscriptSegmentDto[]>([]);
   const connectionRef = useRef<signalR.HubConnection | null>(null);
 
   const canManageParticipants = true;
   const visibleParticipants = useMemo(() => participants, [participants]);
+  const roomStatus = roomStatusOverride ?? normalizeRoomStatus(room?.status);
+  const activeLifecycleMutation = startRoom.isPending ? "start" : endRoom.isPending ? "end" : cancelRoom.isPending ? "cancel" : undefined;
 
   const { isRecording, error, toggleRecording } = useSpeechCapture({
     chunkDurationMs: 1000,
@@ -468,6 +657,7 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
       toast.error(error);
     }
   }, [error]);
+
 
   useEffect(() => {
     const connection = createHubConnection("/hubs/translationRoom");
@@ -657,6 +847,36 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
     toast.info("Remove is reflected in UI while the backend host-remove endpoint is pending.");
   };
 
+  const handleLifecycleRequest = (action: TranslationRoomLifecycleAction) => {
+    if (!getAllowedLifecycleActions(roomStatus, canManageParticipants).includes(action)) {
+      toast.error("This lifecycle action is not available for the current room state.");
+      return;
+    }
+    setPendingLifecycleAction(action);
+  };
+
+  const handleConfirmLifecycleAction = async () => {
+    if (!pendingLifecycleAction) return;
+
+    try {
+      if (pendingLifecycleAction === "start") {
+        await startRoom.mutateAsync(roomId);
+        setRoomStatusOverride("in_progress");
+      } else if (pendingLifecycleAction === "end") {
+        await endRoom.mutateAsync(roomId);
+        setRoomStatusOverride("ended");
+      } else {
+        await cancelRoom.mutateAsync(roomId);
+        setRoomStatusOverride("cancelled");
+      }
+      toast.success(lifecycleActionCopy[pendingLifecycleAction].success);
+      setPendingLifecycleAction(null);
+    } catch (err) {
+      console.error("Room lifecycle action failed:", err);
+      toast.error("Could not update room lifecycle state.");
+    }
+  };
+
   const handleLeave = () => {
     router.push("/dashboard");
   };
@@ -692,6 +912,16 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
         />
 
         <section className="flex flex-1 flex-col overflow-hidden p-4 md:p-6">
+          <LifecycleControlsPanel
+            roomStatus={roomStatus}
+            canManage={canManageParticipants}
+            pendingAction={pendingLifecycleAction}
+            workingAction={activeLifecycleMutation}
+            onRequestAction={handleLifecycleRequest}
+            onConfirmAction={handleConfirmLifecycleAction}
+            onDismissAction={() => setPendingLifecycleAction(null)}
+          />
+
           <LanguageConfigurationPanel
             policy={languagePolicy}
             canManage={canManageParticipants}

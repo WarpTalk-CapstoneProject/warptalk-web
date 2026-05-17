@@ -15,6 +15,8 @@ export type TranslationRoomStatus =
   | "archived"
   | "cancelled";
 
+export type TranslationRoomLifecycleAction = "start" | "end" | "cancel";
+
 export interface TranslationRoomDto {
   id: string;
   workspaceId: string;

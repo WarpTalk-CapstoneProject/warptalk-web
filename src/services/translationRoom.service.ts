@@ -8,6 +8,7 @@ import type {
   TranslationRoomDto,
   TranslationRoomParticipantDto,
   TranslationRoomPreflightDto,
+  TranslationRoomStatus,
 } from "@/types/translationRoom";
 import { getAvailableTargets, normalizeLanguageCode, parseTargetLanguages } from "@/lib/languages";
 
@@ -33,6 +34,34 @@ function normalizeRoomCode(code: string) {
 
 function isGuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function lifecycleMockAdapter(
+  id: string,
+  status: TranslationRoomStatus
+): Promise<{ data: TranslationRoomDto }> {
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  const now = new Date().toISOString();
+
+  return {
+    data: {
+      id,
+      workspaceId: "mock-workspace",
+      hostId: "demo-host",
+      title: MOCK_ROOM.title,
+      description: "WT-96 lifecycle placeholder room.",
+      translationRoomCode: MOCK_ROOM.translationRoomCode,
+      status,
+      translationRoomType: "group",
+      maxParticipants: MOCK_ROOM.maxParticipants,
+      sourceLanguage: MOCK_ROOM.sourceLanguage,
+      targetLanguages: JSON.stringify(MOCK_ROOM.targetLanguages),
+      scheduledAt: now,
+      startedAt: status === "in_progress" ? now : undefined,
+      endedAt: status === "ended" ? now : undefined,
+      createdAt: now,
+    },
+  };
 }
 
 async function joinByCodeMockAdapter(
@@ -150,7 +179,17 @@ export const translationRoomService = {
     return { data: await joinByCodeMockAdapter({ ...data, translationRoomCode: codeOrId }) };
   },
 
+  /** Backend contract placeholder for WT-96: POST /translationRooms/{id}/start. */
+  start(id: string) {
+    return lifecycleMockAdapter(id, "in_progress");
+  },
+
   end(id: string) {
     return apiClient.post<void>(API.translationRooms.end(id));
+  },
+
+  /** Backend contract placeholder for WT-96: POST /translationRooms/{id}/cancel. */
+  cancel(id: string) {
+    return lifecycleMockAdapter(id, "cancelled");
   },
 };
