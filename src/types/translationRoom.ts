@@ -42,6 +42,9 @@ export interface TranslationRoomParticipantDto {
   listenLanguage: string;
   speakLanguage: string;
   status: "joined" | "connected" | "left" | "removed";
+  isMuted?: boolean;
+  isUsingVoiceClone?: boolean;
+  avatarUrl?: string;
   joinedAt?: string;
 }
 
