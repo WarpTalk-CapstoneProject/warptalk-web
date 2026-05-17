@@ -25,6 +25,7 @@ export const API = {
     start: (id: string) => `/translationRooms/${id}/start`,
     end: (id: string) => `/translationRooms/${id}/end`,
     cancel: (id: string) => `/translationRooms/${id}/cancel`,
+    feedback: (id: string) => `/translationRooms/${id}/feedback`,
   },
   transcripts: {
     start: "/transcripts",

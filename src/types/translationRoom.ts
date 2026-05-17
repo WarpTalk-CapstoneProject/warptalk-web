@@ -108,3 +108,32 @@ export interface JoinTranslationRoomResultDto {
   room?: TranslationRoomPreflightDto;
   participant?: TranslationRoomParticipantDto;
 }
+
+
+export interface TranslationRoomFeedbackDto {
+  id: string;
+  translationRoomId: string;
+  userId: string;
+  overallRating: number;
+  translationQuality?: number;
+  audioQuality?: number;
+  voiceCloneQuality?: number;
+  aiSummaryQuality?: number;
+  comments?: string;
+  communicationInsights?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface SubmitTranslationRoomFeedbackRequest {
+  overallRating: number;
+  translationQuality?: number;
+  audioQuality?: number;
+  voiceCloneQuality?: number;
+  aiSummaryQuality?: number;
+  comments?: string;
+}
+
+export interface TranslationRoomFeedbackStateDto {
+  hasSubmitted: boolean;
+  feedback?: TranslationRoomFeedbackDto;
+}

@@ -878,6 +878,11 @@ export default function TranslationRoomPage({ params }: { params: Promise<{ id: 
   };
 
   const handleLeave = () => {
+    if (roomStatus === "ended" || roomStatus === "archived" || roomStatus === "completed") {
+      router.push(`/feedback?roomId=${roomId}`);
+      return;
+    }
+
     router.push("/dashboard");
   };
 

@@ -36,7 +36,7 @@ const aiNavigation = [
 const configNavigation = [
   { name: "Terminology", href: "/terminology", icon: BookOpen },
   { name: "Voice Profiles", href: "/voice-profiles", icon: Mic2 },
-  { name: "Feedback", href: "/feedback", icon: Star },
+  { name: "Post-room Feedback", href: "/feedback", icon: Star },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

@@ -6,10 +6,14 @@ import type {
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
   JoinTranslationRoomRequest,
+  SubmitTranslationRoomFeedbackRequest,
+  TranslationRoomFeedbackDto,
+  TranslationRoomFeedbackStateDto,
   TranslationRoomDto,
 } from "@/types/translationRoom";
 
 const MEETING_KEY = ["translationRooms"] as const;
+const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
 
 /** Fetch a single translationRoom by ID */
 export function useTranslationRoom(id: string) {
@@ -111,6 +115,48 @@ export function useCancelTranslationRoom() {
     onSuccess: (translationRoom, id) => {
       queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    },
+  });
+}
+
+
+/** Fetch the current user's feedback submission state for one ended room.
+ * WT-98 backend gap: service uses a typed mock adapter until feedback endpoints exist.
+ */
+export function useTranslationRoomFeedbackState(roomId: string, userId: string) {
+  return useQuery({
+    queryKey: [...ROOM_FEEDBACK_KEY, roomId, userId],
+    queryFn: async () => {
+      const { data } = await translationRoomService.getFeedbackState(roomId, userId);
+      return data;
+    },
+    enabled: Boolean(roomId && userId),
+  });
+}
+
+/** Submit post-room feedback for the current user.
+ * WT-98 backend gap: service uses a typed mock adapter until POST /feedback exists.
+ */
+export function useSubmitTranslationRoomFeedback(roomId: string, userId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: SubmitTranslationRoomFeedbackRequest) => {
+      const { data: feedback } = await translationRoomService.submitFeedback(roomId, userId, data);
+      return feedback;
+    },
+    onSuccess: (feedback) => {
+      queryClient.setQueryData<TranslationRoomFeedbackStateDto>(
+        [...ROOM_FEEDBACK_KEY, roomId, userId],
+        {
+          hasSubmitted: true,
+          feedback,
+        }
+      );
+      queryClient.setQueryData<TranslationRoomFeedbackDto>(
+        [...ROOM_FEEDBACK_KEY, roomId, userId, "submission"],
+        feedback
+      );
     },
   });
 }
