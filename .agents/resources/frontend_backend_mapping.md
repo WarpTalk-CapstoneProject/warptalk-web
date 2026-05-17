@@ -41,9 +41,15 @@ Frontend gọi tất cả qua **Gateway** (`NEXT_PUBLIC_API_URL`). Gateway dùng
 | Method | Gateway Endpoint | Auth | Request Body | Success Response |
 |---|---|---|---|---|
 | `POST` | `/api/v1/translationRooms` | ✓ JWT | `CreateTranslationRoomRequest` | `200` → `TranslationRoomDto` |
+| `GET` | `/api/v1/translationRooms` | ✓ JWT | query: `workspaceId`, `status`, `cursor` | Proposed for WT-92/WT-106 → `TranslationRoomListResponse` |
 | `GET` | `/api/v1/translationRooms/{id}` | ✓ JWT | — | `200` → `TranslationRoomDto` |
 | `POST` | `/api/v1/translationRooms/{id}/join` | ✓ JWT | `JoinTranslationRoomRequest` | `200` → `TranslationRoomParticipantDto` |
+| `POST` | `/api/v1/translationRooms/join-by-code` | ✓ JWT | `JoinTranslationRoomByCodeRequest` | Proposed for WT-93/WT-106 → `JoinTranslationRoomResultDto` |
+| `POST` | `/api/v1/translationRooms/{id}/start` | ✓ JWT | — | Proposed for WT-96/WT-106 → `TranslationRoomDto` |
 | `POST` | `/api/v1/translationRooms/{id}/end` | ✓ JWT | — | `204` No Content |
+| `POST` | `/api/v1/translationRooms/{id}/cancel` | ✓ JWT | — | Proposed for WT-96/WT-106 → `TranslationRoomDto` |
+| `GET` | `/api/v1/translationRooms/{id}/feedback` | ✓ JWT | — | Proposed for WT-98 → `TranslationRoomFeedbackStateDto` |
+| `POST` | `/api/v1/translationRooms/{id}/feedback` | ✓ JWT | `SubmitTranslationRoomFeedbackRequest` | Proposed for WT-98 → `TranslationRoomFeedbackDto` |
 
 ### 2.3 Transcript Service
 
@@ -228,7 +234,7 @@ public record TranslationRoomDto(
     string Title,
     string? Description,
     string TranslationRoomCode,
-    string Status,              // "scheduled" | "active" | "completed" | "cancelled"
+    string Status,              // "scheduled" | "waiting" | "in_progress" | "ended" | "archived" | "cancelled"
     string TranslationRoomType,
     int MaxParticipants,
     DateTime? ScheduledAt,
@@ -277,7 +283,7 @@ interface TranslationRoomDto {
   title: string;
   description?: string;
   translationRoomCode: string;         // unique join code
-  status: string;              // "scheduled" | "active" | "completed" | "cancelled"
+  status: string;              // "scheduled" | "waiting" | "in_progress" | "ended" | "archived" | "cancelled"
   translationRoomType: string;
   maxParticipants: number;
   scheduledAt?: string;
@@ -296,6 +302,34 @@ interface TranslationRoomParticipantDto {
   speakLanguage: string;
   status: string;              // "joined" | "left" | "removed"
   joinedAt?: string;
+}
+
+interface TranslationRoomFeedbackDto {
+  id: string;
+  translationRoomId: string;
+  userId: string;
+  overallRating: number;
+  translationQuality?: number;
+  audioQuality?: number;
+  voiceCloneQuality?: number;
+  aiSummaryQuality?: number;
+  comments?: string;
+  communicationInsights?: Record<string, unknown>;
+  createdAt: string;
+}
+
+interface SubmitTranslationRoomFeedbackRequest {
+  overallRating: number;
+  translationQuality?: number;
+  audioQuality?: number;
+  voiceCloneQuality?: number;
+  aiSummaryQuality?: number;
+  comments?: string;
+}
+
+interface TranslationRoomFeedbackStateDto {
+  hasSubmitted: boolean;
+  feedback?: TranslationRoomFeedbackDto;
 }
 ```
 
@@ -368,6 +402,35 @@ interface TranscriptDto {
   finalizedAt?: string;
 }
 ```
+
+---
+
+### 3.4.1 WT-97 Room History & Artifacts Adapter
+
+Backend does not yet expose a dedicated room artifact endpoint, so the frontend uses a typed mock adapter in `src/services/roomHistory.service.ts`. The adapter mirrors these backend/schema sources and can be replaced by real API responses later.
+
+**Proposed endpoints:**
+
+| Method | Gateway Endpoint | Auth | Success Response |
+|---|---|---|---|
+| `GET` | `/api/v1/translationRooms/history?status=ended` | JWT | `RoomHistoryResponse` |
+| `GET` | `/api/v1/translationRooms/{id}/artifacts` | JWT | `RoomHistoryArtifact[]` |
+
+**Frontend mapping:**
+
+| Frontend UI Field | Backend/Schema Source | Notes |
+|---|---|---|
+| Room title/status/time/duration | `translation_room.translation_rooms` / `TranslationRoom` | Uses `title`, `status`, `started_at`, `ended_at`, `duration_seconds`. |
+| Host | `TranslationRoom.host_id` + auth user lookup | Mock adapter provides `hostName` until user lookup is available. |
+| Participants | `translation_room_participants` / `TranslationRoomParticipant` | Uses `display_name`, `role`, `listen_language`, `speak_language`. |
+| Language summary | `source_language`, `target_languages` | Frontend normalizes language labels via `src/lib/languages.ts`. |
+| Transcript | `transcript.transcripts` / `TranscriptDto` | Uses `translation_room_id`, `version`, `status`, `total_segments`, `total_duration_ms`, `finalized_at`. |
+| Transcript export | `transcript.transcript_exports` | Uses `format`, `file_url`, `included_languages`, `created_at`. |
+| Recording/audio/debug artifact | `translation_room_recordings` / `TranslationRoomRecording` | Uses `recording_type`, `file_url`, `file_format`, `file_size_bytes`, `duration_seconds`, `language`, `status`, `created_at`. |
+| AI summary export/card | `translation_room_summaries` / `TranslationRoomSummary` | Uses `summary`, `key_points`, `decisions`, `action_items`, `model_used`, `processing_time_ms`, `generated_at`. |
+| Retention/consent | room `settings` plus artifact metadata | `expires_at`, `retention_days`, `consent_required`, and `consent_status` are currently adapter fields and should become backend fields or computed response fields. |
+
+**Frontend TypeScript source:** `src/types/roomHistory.ts`
 
 ---
 
@@ -677,6 +740,28 @@ Kết nối yêu cầu JWT qua query string. Tự động join group `user:{user
 | `deleted_at` | `datetime` | ✓ | |
 
 **Relations:** TranslationRoomParticipants, TranslationRoomAudioRoutes, TranslationRoomFeedbacks, TranslationRoomRecordings, TranslationRoomSummary
+
+### 6.3.1 TranslationRoomFeedback (TranslationRoomService)
+
+WT-98 frontend maps the post-room feedback form to `translation_room.translation_room_feedback`.
+
+| Column | Type | Nullable | Note |
+|---|---|---|---|
+| `id` | `uuid` | ✗ | PK |
+| `translation_room_id` | `uuid` | ✗ | FK → TranslationRoom |
+| `user_id` | `uuid` | ✗ | External AuthService user id |
+| `overall_rating` | `int` | ✗ | Required 1-5 rating |
+| `translation_quality` | `int` | ✓ | Optional 1-5 rating |
+| `audio_quality` | `int` | ✓ | Optional 1-5 rating |
+| `voice_clone_quality` | `int` | ✓ | Optional 1-5 rating |
+| `ai_summary_quality` | `int` | ✓ | Optional 1-5 rating when summary exists |
+| `comments` | `text` | ✓ | Free-form comment |
+| `communication_insights` | `jsonb` | ✓ | Backend-defined insight payload |
+| `created_at` | `datetime` | ✗ | Submission time |
+
+Duplicate contract: unique index on `(translation_room_id, user_id)` prevents more than one submission per user per room.
+
+Backend gap as of WT-98: infrastructure schema has `ai_summary_quality`, but the current EF `TranslationRoomFeedback` entity does not expose `AiSummaryQuality`; reconcile before implementing the real endpoint.
 
 ### 6.4 Transcript (TranscriptService)
 

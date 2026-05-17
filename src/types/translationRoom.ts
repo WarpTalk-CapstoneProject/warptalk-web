@@ -8,9 +8,7 @@
 export type TranslationRoomStatus =
   | "scheduled"
   | "waiting"
-  | "active"
   | "in_progress"
-  | "completed"
   | "ended"
   | "archived"
   | "cancelled";
@@ -56,11 +54,23 @@ export interface CreateTranslationRoomRequest {
   workspaceId?: string;
   title: string;
   description?: string;
-  translationRoomType: "one_to_one" | "group" | "webinar" | "b2b_virtual_mic";
+  translationRoomType:
+    | "instant"
+    | "scheduled"
+    | "one_to_one"
+    | "group"
+    | "webinar"
+    | "b2b_virtual_mic";
   maxParticipants: number;
   sourceLanguage: string;
   targetLanguages: string;
   scheduledAt?: string;
+}
+
+export interface TranslationRoomListResponse {
+  rooms: TranslationRoomDto[];
+  source: "mock" | "api";
+  knownLimitations: string[];
 }
 
 export interface JoinTranslationRoomRequest {
@@ -108,7 +118,6 @@ export interface JoinTranslationRoomResultDto {
   room?: TranslationRoomPreflightDto;
   participant?: TranslationRoomParticipantDto;
 }
-
 
 export interface TranslationRoomFeedbackDto {
   id: string;

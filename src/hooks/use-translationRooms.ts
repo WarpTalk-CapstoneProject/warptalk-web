@@ -15,6 +15,19 @@ import type {
 const MEETING_KEY = ["translationRooms"] as const;
 const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
 
+/** List translation rooms for the Module 1 demo flow.
+ * WT-92/WT-106 backend gap: service currently returns a typed mock plus local demo cache until GET /translationRooms exists.
+ */
+export function useTranslationRooms() {
+  return useQuery({
+    queryKey: MEETING_KEY,
+    queryFn: async () => {
+      const { data } = await translationRoomService.list();
+      return data;
+    },
+  });
+}
+
 /** Fetch a single translationRoom by ID */
 export function useTranslationRoom(id: string) {
   return useQuery({
@@ -67,7 +80,9 @@ export function useJoinTranslationRoomByCode() {
   });
 }
 
-/** Start translationRoom mutation. WT-96 uses a typed mock adapter until the backend endpoint exists. */
+/** Start translationRoom mutation.
+ * WT-96 backend gap: service currently uses a typed mock adapter until POST /start exists.
+ */
 export function useStartTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -104,7 +119,9 @@ export function useEndTranslationRoom() {
   });
 }
 
-/** Cancel translationRoom mutation. WT-96 uses a typed mock adapter until the backend endpoint exists. */
+/** Cancel translationRoom mutation.
+ * WT-96 backend gap: service currently uses a typed mock adapter until POST /cancel exists.
+ */
 export function useCancelTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -118,7 +135,6 @@ export function useCancelTranslationRoom() {
     },
   });
 }
-
 
 /** Fetch the current user's feedback submission state for one ended room.
  * WT-98 backend gap: service uses a typed mock adapter until feedback endpoints exist.

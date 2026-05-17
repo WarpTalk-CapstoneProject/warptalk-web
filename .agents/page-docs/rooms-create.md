@@ -18,6 +18,10 @@ This document tracks the current behavior and maintenance notes for the host Cre
   - `Start Time *` supports direct text entry, browser datalist suggestions, and a scrollable 15-minute interval picker.
   - `Time Zone *` supports direct text entry and a datalist generated from the runtime world's IANA timezone list via `Intl.supportedValuesOf("timeZone")`.
 - Replaced fragile emoji flag rendering with a stable `US` language badge.
+- Added room-level language policy controls:
+  - `sourceLanguage` is selected from typed supported language config in `src/lib/languages.ts`.
+  - `targetLanguages` supports single-language mode with one target or multi-language mode with up to three targets.
+  - The summary shows the selected source, target count, and language mode.
 
 **Why it changed:**
 The schedule section needed to feel closer to the provided host design while becoming more practical for real meeting setup. Hosts should be able to either type quickly or choose from structured pickers without being locked into a static hard-coded field.
@@ -28,8 +32,12 @@ The Step 2 room setup layout needed to reduce wasted space and remove visual noi
 
 **How the page currently works:**
 - Step 1 captures meeting title, schedule mode, date, start time, timezone, and primary language.
+- Step 1 now labels that field as the room source language. It still writes to the existing local `primaryLanguage` form key, then maps to backend `sourceLanguage`.
 - Step 1 `Setup Summary` mirrors the current form state and formats ISO date values into readable text.
 - Step 2 captures room basics, access, language setup, and terminology files in one continuous form.
+- Step 2 language setup maps to backend create DTO fields:
+  - `sourceLanguage`: selected source language code, for example `en`.
+  - `targetLanguages`: comma-serialized target language codes, for example `es,vi,ja`, matching the backend string field.
 - The bottom action bar continues to handle navigation between Step 1 and Step 2.
 
 **Important UI behavior:**
@@ -42,12 +50,19 @@ The Step 2 room setup layout needed to reduce wasted space and remove visual noi
 - Step 2 no longer displays large numbered section badges. It uses compact section headers and light dividers.
 - Step 2 selection controls are visually square across visibility, join rule, and room permissions.
 - Clicking a Step 2 selection tile updates the shared form state and the room summary where applicable.
+- Single-language mode keeps one target language.
+- Multi-language mode allows up to three target languages and excludes the source language from selectable targets.
+- Supported languages are local typed config until a backend supported-languages endpoint exists.
+
+**Backend integration:**
+- The final `Create Room` action now builds `CreateTranslationRoomRequest` and calls `translationRoomService.create`, which maps to `POST /translationRooms`.
+- Successful creation routes back to `/rooms?created={room.id}` and the created room is stored in the Module 1 demo cache by `translationRoomService`.
 
 **Known limitations:**
 - The date picker is a lightweight month table; it does not yet support multi-month range selection.
 - Timezone values are display strings in the current form state; backend integration may prefer storing a normalized IANA timezone ID separately.
-- The schedule controls are still local demo state and are not yet connected to a backend create-room payload.
 - Step 2 still uses local demo data for terminology files and generated room code preview.
+- The backend create endpoint is used, but the backend room list endpoint is still missing, so `/rooms` reads created rooms from the local Module 1 demo cache until `GET /translationRooms` exists.
 
 **Testing checklist:**
 - [ ] `/rooms/create` renders Step 1 without a Checklist card.

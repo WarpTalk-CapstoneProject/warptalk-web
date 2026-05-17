@@ -13,7 +13,7 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { createHubConnection } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
-import { useTranslationRoomStore } from "@/stores/translation-room-store";
+import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 
 import { authService } from "@/services/auth.service";
 import { translationRoomService } from "@/services/translationRoom.service";

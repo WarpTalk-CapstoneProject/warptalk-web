@@ -1,13 +1,25 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { 
   ChevronRight, Calendar as CalendarIcon, Clock, Globe, 
   Check, CheckCircle2, Info, Search, Filter,
   FileText, Users, Lock, Upload,
   X
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useCreateTranslationRoom } from "@/hooks/use-translationRooms";
+import {
+  SUPPORTED_LANGUAGES,
+  getAvailableTargets,
+  getLanguageName,
+  getLanguageRegion,
+  serializeTargetLanguages,
+} from "@/lib/languages";
+import { useAuthStore } from "@/stores/auth-store";
+import type { CreateTranslationRoomRequest } from "@/types/translationRoom";
 
 type CreateRoomFormData = {
   meetingTitle: string;
@@ -16,6 +28,7 @@ type CreateRoomFormData = {
   startTime: string;
   timeZone: string;
   primaryLanguage: string;
+  translationMode: "single" | "multi";
   roomName: string;
   maxParticipants: number | string;
   hostNote: string;
@@ -36,6 +49,9 @@ const mockFiles = [
 ];
 
 export default function CreateRoomPage() {
+  const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const createRoom = useCreateTranslationRoom();
   const [step, setStep] = useState(1);
 
   // Form State
@@ -45,14 +61,15 @@ export default function CreateRoomPage() {
     date: "2026-05-22",
     startTime: "10:00 AM",
     timeZone: "(UTC-04:00) Eastern Time (US & Canada)",
-    primaryLanguage: "English (United States)",
+    primaryLanguage: "en",
+    translationMode: "multi",
     roomName: "Global Strategy Sync",
     maxParticipants: 50,
     hostNote: "",
     visibility: "Private",
     joinRule: "Invited users only",
     permissions: "Host only",
-    targetLanguages: ["Vietnamese", "Japanese", "German"]
+    targetLanguages: ["es", "vi", "ja"]
   });
 
   const updateForm: UpdateForm = (key, value) => {
@@ -61,6 +78,61 @@ export default function CreateRoomPage() {
 
   const handleNext = () => setStep(2);
   const handleBack = () => setStep(1);
+  const isParticipantOnly = user?.roles?.includes("participant") && !user?.roles?.includes("host");
+
+  const handleCreateRoom = async () => {
+    const title = (formData.roomName || formData.meetingTitle).trim();
+    const maxParticipants = Number(formData.maxParticipants);
+
+    if (!title) {
+      toast.error("Room name is required.");
+      return;
+    }
+
+    if (!Number.isFinite(maxParticipants) || maxParticipants < 2 || maxParticipants > 500) {
+      toast.error("Max participants must be between 2 and 500.");
+      return;
+    }
+
+    const request: CreateTranslationRoomRequest = {
+      title,
+      description: formData.hostNote.trim() || formData.meetingTitle.trim(),
+      translationRoomType: formData.scheduleMode === "now" ? "instant" : "scheduled",
+      maxParticipants,
+      sourceLanguage: formData.primaryLanguage,
+      targetLanguages: serializeTargetLanguages(formData.targetLanguages),
+      scheduledAt:
+        formData.scheduleMode === "later"
+          ? buildScheduledAt(formData.date, formData.startTime, formData.timeZone)
+          : undefined,
+    };
+
+    try {
+      const room = await createRoom.mutateAsync(request);
+      toast.success("Room created. Opening the Module 1 flow.");
+      router.push(`/rooms?created=${room.id}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not create the room.";
+      toast.error(message);
+    }
+  };
+
+  if (isParticipantOnly) {
+    return (
+      <div className="mx-auto flex min-h-[520px] w-full max-w-3xl items-center justify-center">
+        <div className="rounded-2xl border border-[#e4eef9] bg-[#fdfcf6] p-8 text-center shadow-sm">
+          <Lock className="mx-auto mb-4 h-8 w-8 text-[#003476]" />
+          <h1 className="text-2xl font-bold text-black">Host permission required</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Participants can join a room from the preflight screen, but only hosts can create or schedule rooms.
+          </p>
+          <Button onClick={() => router.push("/join")} className="mt-5 bg-[#003476] text-white hover:bg-[#003476]/90">
+            Go to join preflight
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-6 pb-24">
@@ -147,8 +219,12 @@ export default function CreateRoomPage() {
             Continue to Room Setup <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
         ) : (
-          <Button className="h-10 px-6 font-medium bg-[#003476] hover:bg-[#003476]/90 text-white">
-            Create Room <ChevronRight className="ml-2 h-4 w-4" />
+          <Button
+            onClick={handleCreateRoom}
+            disabled={createRoom.isPending}
+            className="h-10 px-6 font-medium bg-[#003476] hover:bg-[#003476]/90 text-white"
+          >
+            {createRoom.isPending ? "Creating..." : "Create Room"} <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
         )}
       </div>
@@ -188,6 +264,28 @@ function getSupportedTimeZones() {
   }
 
   return Intl.supportedValuesOf("timeZone");
+}
+
+function buildScheduledAt(dateValue: string, timeValue: string, timeZoneValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const match = timeValue.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!year || !month || !day || !match) return undefined;
+
+  const [, hourText, minuteText, meridiem] = match;
+  let hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (meridiem.toUpperCase() === "PM" && hour !== 12) hour += 12;
+  if (meridiem.toUpperCase() === "AM" && hour === 12) hour = 0;
+
+  const scheduled = new Date(year, month - 1, day, hour, minute);
+  if (Number.isNaN(scheduled.getTime())) return undefined;
+
+  const selectedZone = parseTimeZoneValue(timeZoneValue);
+  if (selectedZone !== Intl.DateTimeFormat().resolvedOptions().timeZone) {
+    return scheduled.toISOString();
+  }
+
+  return scheduled.toISOString();
 }
 
 function getTimeZoneOffset(timeZone: string) {
@@ -255,6 +353,7 @@ function Step1Form({ data, update }: { data: CreateRoomFormData; update: UpdateF
   const [timeZones, setTimeZones] = useState(() => fallbackTimeZones.map(formatTimeZone));
   const calendarDays = useMemo(() => getCalendarDays(data.date), [data.date]);
   const selectedTimeZone = parseTimeZoneValue(data.timeZone);
+  const languageTargets = getAvailableTargets(data.primaryLanguage).slice(0, 3);
 
   const loadWorldTimeZones = () => {
     if (timeZones.length === fallbackTimeZones.length) {
@@ -471,17 +570,30 @@ function Step1Form({ data, update }: { data: CreateRoomFormData; update: UpdateF
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#003476] text-sm font-bold text-white">3</div>
-          <h2 className="text-xl font-bold text-slate-900">Primary Language</h2>
+          <h2 className="text-xl font-bold text-slate-900">Language Policy</h2>
         </div>
         
         <div className="space-y-2 mb-4">
-          <label className="text-sm font-semibold text-slate-900">Primary Language *</label>
+          <label className="text-sm font-semibold text-slate-900">Source Language *</label>
           <div className="relative max-w-md">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded bg-[#fdfcf6] px-1.5 py-0.5 text-[10px] font-bold text-[#003476]">
-              US
+              {getLanguageRegion(data.primaryLanguage)}
             </span>
-            <select className="w-full appearance-none rounded-lg border border-slate-200 pl-10 pr-8 py-2.5 text-sm text-slate-900 outline-none bg-white">
-              <option>English (United States)</option>
+            <select
+              value={data.primaryLanguage}
+              onChange={(e) => {
+                const nextSource = e.target.value;
+                const nextTargets = getAvailableTargets(nextSource).slice(0, data.translationMode === "single" ? 1 : 3);
+                update("primaryLanguage", nextSource);
+                update("targetLanguages", nextTargets.map((language) => language.code));
+              }}
+              className="w-full appearance-none rounded-lg border border-slate-200 pl-10 pr-8 py-2.5 text-sm text-slate-900 outline-none bg-white"
+            >
+              {SUPPORTED_LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.name} ({language.nativeName})
+                </option>
+              ))}
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -491,7 +603,9 @@ function Step1Form({ data, update }: { data: CreateRoomFormData; update: UpdateF
 
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <Info className="h-4 w-4" />
-          <span>Target languages will be configured in Step 2.</span>
+          <span>
+            Default targets: {languageTargets.map((language) => language.name).join(", ")}. You can refine single or multi-language mode in Step 2.
+          </span>
         </div>
       </div>
     </>
@@ -529,10 +643,10 @@ function Step1Sidebar({ data }: { data: CreateRoomFormData }) {
           </div>
           <div className="h-px bg-slate-100"></div>
           <div>
-            <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5 mb-1"><Globe className="h-3 w-3"/> Primary Language</p>
+            <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5 mb-1"><Globe className="h-3 w-3"/> Source Language</p>
             <p className="text-sm font-semibold text-slate-900 mt-1 flex items-center gap-1.5">
-              <span className="rounded bg-[#fdfcf6] px-1.5 py-0.5 text-[10px] font-bold text-[#003476]">US</span>
-              {data.primaryLanguage}
+              <span className="rounded bg-[#fdfcf6] px-1.5 py-0.5 text-[10px] font-bold text-[#003476]">{getLanguageRegion(data.primaryLanguage)}</span>
+              {getLanguageName(data.primaryLanguage)}
             </p>
           </div>
         </div>
@@ -685,17 +799,26 @@ function Step2Form({ data, update }: { data: CreateRoomFormData; update: UpdateF
       <FormSection title="Languages" icon={<Globe className="h-4 w-4" />}>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-900">Primary Language *</label>
+            <label className="text-sm font-semibold text-slate-900">Source Language *</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded bg-[#fdfcf6] px-1.5 py-0.5 text-[10px] font-bold text-[#003476]">
-                US
+                {getLanguageRegion(data.primaryLanguage)}
               </span>
               <select
                 value={data.primaryLanguage}
-                onChange={(e) => update("primaryLanguage", e.target.value)}
+                onChange={(e) => {
+                  const nextSource = e.target.value;
+                  const nextTargets = getAvailableTargets(nextSource).slice(0, data.translationMode === "single" ? 1 : 3);
+                  update("primaryLanguage", nextSource);
+                  update("targetLanguages", nextTargets.map((language) => language.code));
+                }}
                 className="w-full appearance-none rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-8 text-sm text-slate-900 outline-none focus:border-[#003476] focus:ring-1 focus:ring-[#003476]"
               >
-                <option>English (United States)</option>
+                {SUPPORTED_LANGUAGES.map((language) => (
+                  <option key={language.code} value={language.code}>
+                    {language.name} ({language.nativeName})
+                  </option>
+                ))}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
                 <ChevronRight className="h-4 w-4 rotate-90" />
@@ -706,18 +829,85 @@ function Step2Form({ data, update }: { data: CreateRoomFormData; update: UpdateF
           <div className="space-y-1.5">
             <div className="flex items-end justify-between gap-3">
               <label className="text-sm font-semibold text-slate-900">Target Translation Languages *</label>
-              <span className="text-xs font-medium text-[#003476]">Up to 3 target languages</span>
+              <span className="text-xs font-medium text-[#003476]">
+                {data.translationMode === "single" ? "Single target" : "Up to 3 target languages"}
+              </span>
+            </div>
+            <div className="mb-2 grid grid-cols-2 gap-2">
+              <ChoiceTile
+                title="Single-language room"
+                description="One shared translation target"
+                selected={data.translationMode === "single"}
+                onClick={() => {
+                  update("translationMode", "single");
+                  update("targetLanguages", data.targetLanguages.slice(0, 1));
+                }}
+              />
+              <ChoiceTile
+                title="Multi-language room"
+                description="Participants can choose from targets"
+                selected={data.translationMode === "multi"}
+                onClick={() => update("translationMode", "multi")}
+              />
             </div>
             <div className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2">
               {data.targetLanguages.map((lang: string) => (
-                <span
+                <button
+                  type="button"
                   key={lang}
+                  onClick={() => {
+                    const nextTargets = data.targetLanguages.filter((language) => language !== lang);
+                    update("targetLanguages", nextTargets.length > 0 ? nextTargets : [lang]);
+                  }}
                   className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700"
                 >
-                  {lang} <X className="h-3 w-3 cursor-pointer text-slate-400 hover:text-slate-600" />
-                </span>
+                  {getLanguageName(lang)} <X className="h-3 w-3 cursor-pointer text-slate-400 hover:text-slate-600" />
+                </button>
               ))}
             </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {getAvailableTargets(data.primaryLanguage).map((language) => {
+                const selected = data.targetLanguages.includes(language.code);
+                const disabled =
+                  !selected &&
+                  (data.translationMode === "single" || data.targetLanguages.length >= 3);
+
+                return (
+                  <button
+                    key={language.code}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (selected) {
+                        const nextTargets = data.targetLanguages.filter((target) => target !== language.code);
+                        update("targetLanguages", nextTargets.length > 0 ? nextTargets : [language.code]);
+                        return;
+                      }
+                      update(
+                        "targetLanguages",
+                        data.translationMode === "single"
+                          ? [language.code]
+                          : [...data.targetLanguages, language.code].slice(0, 3)
+                      );
+                    }}
+                    className={`flex min-h-12 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ${
+                      selected
+                        ? "border-[#003476] bg-[#fdfcf6] text-[#003476] ring-1 ring-[#003476]"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-45"
+                    }`}
+                  >
+                    <span>
+                      <span className="block font-semibold">{language.name}</span>
+                      <span className="text-xs text-slate-500">{language.nativeName}</span>
+                    </span>
+                    {selected && <Check className="h-4 w-4" />}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-slate-500">
+              Backend payload: sourceLanguage={data.primaryLanguage}, targetLanguages={serializeTargetLanguages(data.targetLanguages)}
+            </p>
           </div>
         </div>
       </FormSection>
@@ -904,18 +1094,19 @@ function Step2Sidebar({ data }: { data: CreateRoomFormData }) {
           </div>
           <div className="h-px bg-slate-100"></div>
           <div>
-            <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5 mb-1"><Globe className="h-3 w-3"/> Primary Language</p>
-            <p className="text-sm font-semibold text-slate-900">{data.primaryLanguage}</p>
+            <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5 mb-1"><Globe className="h-3 w-3"/> Source Language</p>
+            <p className="text-sm font-semibold text-slate-900">{getLanguageName(data.primaryLanguage)}</p>
           </div>
           <div>
             <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5 mb-1"><Globe className="h-3 w-3"/> Target Languages ({data.targetLanguages.length})</p>
-            <div className="flex gap-1.5 mt-1">
+            <div className="flex flex-wrap gap-1.5 mt-1">
               {data.targetLanguages.map((language) => (
                 <span key={language} className="rounded bg-[#fdfcf6] px-1.5 py-0.5 text-xs font-medium text-[#003476]">
-                  {language}
+                  {getLanguageName(language)}
                 </span>
               ))}
             </div>
+            <p className="mt-2 text-xs text-slate-500 capitalize">{data.translationMode.replace("-", " ")} policy</p>
           </div>
           <div className="h-px bg-slate-100"></div>
           <div>

@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useTranslationRooms } from "@/hooks/use-translationRooms";
+import { getLanguageName, parseTargetLanguages } from "@/lib/languages";
 
 type ScheduleStatus = "upcoming" | "live" | "multiple" | "break" | "ended";
 
@@ -554,6 +556,7 @@ function todayValue() {
 }
 
 export default function RoomsPage() {
+  const roomList = useTranslationRooms();
   const [selectedDate, setSelectedDate] = useState("2025-04-19");
   const [selectedRoomIds, setSelectedRoomIds] = useState(() => availableRooms.map((room) => room.id));
   const [roomNames, setRoomNames] = useState(() =>
@@ -638,6 +641,13 @@ export default function RoomsPage() {
         <StatCard icon={<Calendar className="h-6 w-6" />} label="Scheduled Rooms" value="6" detail="Upcoming" />
         <StatCard icon={<Clock className="h-6 w-6" />} label="Ended Rooms" value="16" detail="Completed" />
       </div>
+
+      <DemoFlowRooms
+        rooms={roomList.data?.rooms ?? []}
+        isLoading={roomList.isLoading}
+        error={roomList.isError}
+        limitations={roomList.data?.knownLimitations ?? []}
+      />
 
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm xl:col-span-2">
@@ -889,6 +899,104 @@ export default function RoomsPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+function DemoFlowRooms({
+  rooms,
+  isLoading,
+  error,
+  limitations,
+}: {
+  rooms: Array<{
+    id: string;
+    title: string;
+    translationRoomCode: string;
+    status: string;
+    sourceLanguage?: string;
+    targetLanguages?: string;
+    maxParticipants: number;
+  }>;
+  isLoading: boolean;
+  error: boolean;
+  limitations: string[];
+}) {
+  return (
+    <section className="rounded-2xl border border-[#e4eef9] bg-[#fdfcf6] p-5 shadow-sm">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-[#003476]">WT-106 demo flow</p>
+          <h2 className="mt-1 text-lg font-bold text-black">Current translation rooms</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Rooms created through the real create API appear here from the typed demo cache until the backend list endpoint ships.
+          </p>
+        </div>
+        <Link href="/join">
+          <Button variant="outline" className="h-10 rounded-lg border-[#003476] bg-white text-[#003476] hover:bg-[#e4eef9]">
+            Join by code
+          </Button>
+        </Link>
+      </div>
+
+      {isLoading && <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading room list...</div>}
+      {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Could not load room list adapter.</div>}
+
+      {!isLoading && !error && rooms.length === 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          No rooms in the demo cache yet. Create a room to continue the flow.
+        </div>
+      )}
+
+      {!isLoading && !error && rooms.length > 0 && (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {rooms.slice(0, 4).map((room) => {
+            const targets = parseTargetLanguages(room.targetLanguages);
+            const joinHref = `/join?code=${encodeURIComponent(room.id)}`;
+
+            return (
+              <article key={room.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-bold text-black">{room.title}</h3>
+                    <p className="mt-1 text-xs text-slate-500">{room.translationRoomCode || room.id}</p>
+                  </div>
+                  <span className="rounded border border-[#e4eef9] bg-[#e4eef9] px-2 py-1 text-[10px] font-bold uppercase text-[#003476]">
+                    {room.status.replace("_", " ")}
+                  </span>
+                </div>
+                <p className="mt-3 text-xs text-slate-600">
+                  {getLanguageName(room.sourceLanguage || "en")} -&gt;{" "}
+                  {targets.length > 0 ? targets.map(getLanguageName).join(", ") : "Target pending"}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link href={`/room/${room.id}`}>
+                    <Button size="sm" className="h-8 rounded-lg bg-[#003476] text-white hover:bg-[#003476]/90">
+                      Detail / room
+                    </Button>
+                  </Link>
+                  <Link href={joinHref}>
+                    <Button size="sm" variant="outline" className="h-8 rounded-lg border-slate-200 bg-white">
+                      Join preflight
+                    </Button>
+                  </Link>
+                  {(room.status === "ended" || room.status === "archived") && (
+                    <Link href={`/feedback?roomId=${room.id}`}>
+                      <Button size="sm" variant="outline" className="h-8 rounded-lg border-slate-200 bg-white">
+                        Feedback
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {limitations.length > 0 && (
+        <p className="mt-3 text-xs text-slate-500">{limitations[0]}</p>
+      )}
+    </section>
   );
 }
 

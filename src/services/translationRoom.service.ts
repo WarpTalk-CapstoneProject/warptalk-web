@@ -8,18 +8,26 @@ import type {
   SubmitTranslationRoomFeedbackRequest,
   TranslationRoomFeedbackDto,
   TranslationRoomFeedbackStateDto,
-  TranslationRoomDto,
-  TranslationRoomParticipantDto,
   TranslationRoomPreflightDto,
+  TranslationRoomDto,
+  TranslationRoomListResponse,
+  TranslationRoomParticipantDto,
   TranslationRoomStatus,
 } from "@/types/translationRoom";
-import { getAvailableTargets, normalizeLanguageCode, parseTargetLanguages } from "@/lib/languages";
+import {
+  getAvailableTargets,
+  getLanguageName,
+  normalizeLanguageCode,
+  parseTargetLanguages,
+} from "@/lib/languages";
 
+const DEMO_ROOM_ID = "5fd7f8b8-0e55-47ac-9f9c-c27a9b4a8d2e";
 const FEEDBACK_DEMO_ROOM_ID = "wt-98-feedback-demo";
 const FEEDBACK_STORAGE_PREFIX = "warptalk.feedback";
+const ROOM_CACHE_KEY = "warptalk.translationRooms.demoCache";
 
 const MOCK_ROOM: TranslationRoomPreflightDto = {
-  id: "5fd7f8b8-0e55-47ac-9f9c-c27a9b4a8d2e",
+  id: DEMO_ROOM_ID,
   title: "Global Strategy Sync",
   translationRoomCode: "GSS-7X2Q",
   status: "in_progress",
@@ -32,6 +40,22 @@ const MOCK_ROOM: TranslationRoomPreflightDto = {
   defaultTargetLanguage: "es",
   translationMode: "multi",
   desktopAppRequired: true,
+};
+
+const MOCK_LIST_ROOM: TranslationRoomDto = {
+  id: DEMO_ROOM_ID,
+  workspaceId: "mock-workspace",
+  hostId: "mock-preview-host",
+  title: MOCK_ROOM.title,
+  description: "Demo-ready Module 1 room used while the backend list endpoint is pending.",
+  translationRoomCode: MOCK_ROOM.translationRoomCode,
+  status: "in_progress",
+  translationRoomType: "group",
+  maxParticipants: MOCK_ROOM.maxParticipants,
+  sourceLanguage: MOCK_ROOM.sourceLanguage,
+  targetLanguages: JSON.stringify(MOCK_ROOM.targetLanguages),
+  startedAt: "2026-05-16T12:00:00.000Z",
+  createdAt: "2026-05-16T11:55:00.000Z",
 };
 
 const MOCK_FEEDBACK_ROOM: TranslationRoomDto = {
@@ -52,6 +76,85 @@ const MOCK_FEEDBACK_ROOM: TranslationRoomDto = {
   createdAt: "2026-05-16T08:45:00.000Z",
 };
 
+function readCachedRooms(): TranslationRoomDto[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(ROOM_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as TranslationRoomDto[]) : [];
+  } catch {
+    window.localStorage.removeItem(ROOM_CACHE_KEY);
+    return [];
+  }
+}
+
+function cacheRoom(room: TranslationRoomDto) {
+  if (typeof window === "undefined") return;
+
+  const rooms = readCachedRooms().filter((item) => item.id !== room.id);
+  window.localStorage.setItem(ROOM_CACHE_KEY, JSON.stringify([room, ...rooms].slice(0, 12)));
+}
+
+function getMockRoomById(id: string) {
+  const cachedRoom = readCachedRooms().find((room) => room.id === id);
+  if (cachedRoom) return cachedRoom;
+  if (id === FEEDBACK_DEMO_ROOM_ID) return MOCK_FEEDBACK_ROOM;
+  if (id === DEMO_ROOM_ID) return MOCK_LIST_ROOM;
+  return undefined;
+}
+
+async function listRoomsMockAdapter(): Promise<{ data: TranslationRoomListResponse }> {
+  await new Promise((resolve) => setTimeout(resolve, 250));
+
+  return {
+    data: {
+      rooms: [...readCachedRooms(), MOCK_LIST_ROOM],
+      source: "mock",
+      knownLimitations: [
+        "TODO WT-106 backend contract: GET /translationRooms list endpoint is not implemented.",
+        "Local demo cache only includes rooms created in this browser plus the Global Strategy Sync sample.",
+      ],
+    },
+  };
+}
+
+async function lifecycleMockAdapter(
+  id: string,
+  status: TranslationRoomStatus
+): Promise<{ data: TranslationRoomDto }> {
+  const now = new Date().toISOString();
+  let room: TranslationRoomDto;
+
+  try {
+    room = (await translationRoomService.get(id)).data;
+  } catch {
+    room = {
+      id,
+      workspaceId: "mock-workspace",
+      hostId: "mock-preview-host",
+      title: MOCK_ROOM.title,
+      description: "WT-96 lifecycle placeholder room.",
+      translationRoomCode: MOCK_ROOM.translationRoomCode,
+      status: "scheduled",
+      translationRoomType: "group",
+      maxParticipants: MOCK_ROOM.maxParticipants,
+      sourceLanguage: MOCK_ROOM.sourceLanguage,
+      targetLanguages: JSON.stringify(MOCK_ROOM.targetLanguages),
+      scheduledAt: now,
+      createdAt: now,
+    };
+  }
+
+  return {
+    data: {
+      ...room,
+      status,
+      startedAt: status === "in_progress" ? room.startedAt ?? now : room.startedAt,
+      endedAt: status === "ended" ? now : room.endedAt,
+    },
+  };
+}
+
 function normalizeRoomCode(code: string) {
   return code.trim().toUpperCase().replace(/\s+/g, "");
 }
@@ -61,7 +164,7 @@ function isGuid(value: string) {
 }
 
 function feedbackStorageKey(roomId: string, userId: string) {
-  return FEEDBACK_STORAGE_PREFIX + "." + roomId + "." + userId;
+  return `${FEEDBACK_STORAGE_PREFIX}.${roomId}.${userId}`;
 }
 
 function readFeedbackMock(roomId: string, userId: string): TranslationRoomFeedbackDto | undefined {
@@ -78,10 +181,7 @@ function readFeedbackMock(roomId: string, userId: string): TranslationRoomFeedba
   }
 }
 
-async function feedbackStateMockAdapter(
-  roomId: string,
-  userId: string
-): Promise<{ data: TranslationRoomFeedbackStateDto }> {
+async function feedbackStateMockAdapter(roomId: string, userId: string): Promise<{ data: TranslationRoomFeedbackStateDto }> {
   await new Promise((resolve) => setTimeout(resolve, 350));
   const feedback = readFeedbackMock(roomId, userId);
 
@@ -132,34 +232,6 @@ async function submitFeedbackMockAdapter(
   return { data: feedback };
 }
 
-async function lifecycleMockAdapter(
-  id: string,
-  status: TranslationRoomStatus
-): Promise<{ data: TranslationRoomDto }> {
-  await new Promise((resolve) => setTimeout(resolve, 450));
-  const now = new Date().toISOString();
-
-  return {
-    data: {
-      id,
-      workspaceId: "mock-workspace",
-      hostId: "demo-host",
-      title: MOCK_ROOM.title,
-      description: "WT-96 lifecycle placeholder room.",
-      translationRoomCode: MOCK_ROOM.translationRoomCode,
-      status,
-      translationRoomType: "group",
-      maxParticipants: MOCK_ROOM.maxParticipants,
-      sourceLanguage: MOCK_ROOM.sourceLanguage,
-      targetLanguages: JSON.stringify(MOCK_ROOM.targetLanguages),
-      scheduledAt: now,
-      startedAt: status === "in_progress" ? now : undefined,
-      endedAt: status === "ended" ? now : undefined,
-      createdAt: now,
-    },
-  };
-}
-
 async function joinByCodeMockAdapter(
   request: JoinTranslationRoomByCodeRequest
 ): Promise<JoinTranslationRoomResultDto> {
@@ -179,11 +251,11 @@ async function joinByCodeMockAdapter(
       status: "room_full",
       message: "This meeting is full. Ask the host to raise the participant limit.",
     },
-    KICKED: {
+    "KICKED": {
       status: "kicked",
       message: "You were removed from this meeting and cannot rejoin.",
     },
-    REJECTED: {
+    "REJECTED": {
       status: "rejected",
       message: "The host rejected this join request.",
     },
@@ -223,12 +295,24 @@ async function joinByCodeMockAdapter(
 
 /** TranslationRoom service — maps to TranslationRoomsController endpoints */
 export const translationRoomService = {
-  create(data: CreateTranslationRoomRequest) {
-    return apiClient.post<TranslationRoomDto>(API.translationRooms.create, data);
+  async create(data: CreateTranslationRoomRequest) {
+    const response = await apiClient.post<TranslationRoomDto>(API.translationRooms.create, data);
+    cacheRoom(response.data);
+    return response;
+  },
+
+  /**
+   * Backend contract placeholder for WT-92/WT-106.
+   * Proposed real endpoint: GET /translationRooms?workspaceId=&status=&cursor=
+   * Should return current, scheduled, and ended rooms the authenticated user can access.
+   */
+  list() {
+    return listRoomsMockAdapter();
   },
 
   async get(id: string) {
-    if (id === FEEDBACK_DEMO_ROOM_ID) return { data: MOCK_FEEDBACK_ROOM };
+    const mockRoom = getMockRoomById(id);
+    if (mockRoom) return { data: mockRoom };
 
     return apiClient.get<TranslationRoomDto>(API.translationRooms.get(id));
   },
@@ -245,7 +329,6 @@ export const translationRoomService = {
         this.get(data.translationRoomCode.trim()),
         this.join(data.translationRoomCode.trim(), data),
       ]);
-      const targetLanguages = parseTargetLanguages(roomResponse.data.targetLanguages);
 
       return {
         data: {
@@ -262,11 +345,12 @@ export const translationRoomService = {
             keyTerms: [],
             sourceLanguage: normalizeLanguageCode(roomResponse.data.sourceLanguage ?? data.speakLanguage),
             targetLanguages:
-              targetLanguages.length > 0
-                ? targetLanguages
+              parseTargetLanguages(roomResponse.data.targetLanguages).length > 0
+                ? parseTargetLanguages(roomResponse.data.targetLanguages)
                 : getAvailableTargets(data.speakLanguage).slice(0, 1).map((language) => language.code),
             defaultTargetLanguage: normalizeLanguageCode(data.listenLanguage),
-            translationMode: targetLanguages.length > 1 ? "multi" : "single",
+            translationMode:
+              parseTargetLanguages(roomResponse.data.targetLanguages).length > 1 ? "multi" : "single",
             desktopAppRequired: true,
           },
           participant: participantResponse.data,
@@ -277,7 +361,11 @@ export const translationRoomService = {
     return { data: await joinByCodeMockAdapter({ ...data, translationRoomCode: codeOrId }) };
   },
 
-  /** Backend contract placeholder for WT-96: POST /translationRooms/{id}/start. */
+  /**
+   * Backend contract placeholder for WT-96.
+   * Proposed real endpoint: POST /translationRooms/{id}/start -> TranslationRoomDto
+   * Legal transition: waiting/scheduled -> in_progress.
+   */
   start(id: string) {
     return lifecycleMockAdapter(id, "in_progress");
   },
@@ -286,7 +374,11 @@ export const translationRoomService = {
     return apiClient.post<void>(API.translationRooms.end(id));
   },
 
-  /** Backend contract placeholder for WT-96: POST /translationRooms/{id}/cancel. */
+  /**
+   * Backend contract placeholder for WT-96.
+   * Proposed real endpoint: POST /translationRooms/{id}/cancel -> TranslationRoomDto
+   * Legal transition: scheduled/waiting -> cancelled.
+   */
   cancel(id: string) {
     return lifecycleMockAdapter(id, "cancelled");
   },
@@ -303,9 +395,22 @@ export const translationRoomService = {
   /**
    * Backend contract placeholder for WT-98.
    * Proposed real endpoint: POST /translationRooms/{id}/feedback -> TranslationRoomFeedbackDto
-   * Payload maps to translation_room.translation_room_feedback.
+   * Payload maps to translation_room.translation_room_feedback:
+   * overall_rating, translation_quality, audio_quality, voice_clone_quality,
+   * ai_summary_quality, comments, communication_insights.
    */
   submitFeedback(id: string, userId: string, data: SubmitTranslationRoomFeedbackRequest) {
     return submitFeedbackMockAdapter(id, userId, data);
+  },
+};
+
+export const supportedLanguageService = {
+  async list() {
+    return {
+      data: getAvailableTargets("auto").map((language) => ({
+        ...language,
+        label: `${getLanguageName(language.code)} (${language.nativeName})`,
+      })),
+    };
   },
 };
