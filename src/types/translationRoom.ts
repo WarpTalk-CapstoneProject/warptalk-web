@@ -5,7 +5,15 @@
 
 // ── Response DTOs ─────────────────────────────
 
-export type TranslationRoomStatus = "scheduled" | "active" | "completed" | "cancelled";
+export type TranslationRoomStatus =
+  | "scheduled"
+  | "waiting"
+  | "active"
+  | "in_progress"
+  | "completed"
+  | "ended"
+  | "archived"
+  | "cancelled";
 
 export interface TranslationRoomDto {
   id: string;
@@ -17,6 +25,8 @@ export interface TranslationRoomDto {
   status: TranslationRoomStatus;
   translationRoomType: string;
   maxParticipants: number;
+  sourceLanguage?: string;
+  targetLanguages?: string;
   scheduledAt?: string;
   startedAt?: string;
   endedAt?: string;
@@ -31,7 +41,7 @@ export interface TranslationRoomParticipantDto {
   role: "host" | "participant" | "interpreter";
   listenLanguage: string;
   speakLanguage: string;
-  status: "joined" | "left" | "removed";
+  status: "joined" | "connected" | "left" | "removed";
   joinedAt?: string;
 }
 
@@ -52,4 +62,44 @@ export interface JoinTranslationRoomRequest {
   displayName: string;
   listenLanguage: string;
   speakLanguage: string;
+}
+
+export type JoinTranslationRoomAccessStatus =
+  | "idle"
+  | "loading"
+  | "invalid_code"
+  | "room_unavailable"
+  | "room_full"
+  | "kicked"
+  | "rejected"
+  | "success";
+
+export interface JoinTranslationRoomByCodeRequest extends JoinTranslationRoomRequest {
+  translationRoomCode: string;
+  cameraEnabled: boolean;
+  microphoneEnabled: boolean;
+  speakerEnabled: boolean;
+}
+
+export interface TranslationRoomPreflightDto {
+  id: string;
+  title: string;
+  translationRoomCode: string;
+  status: TranslationRoomStatus;
+  maxParticipants: number;
+  currentParticipants: number;
+  topics: string[];
+  keyTerms: string[];
+  sourceLanguage: string;
+  targetLanguages: string[];
+  defaultTargetLanguage: string;
+  translationMode: "single" | "multi";
+  desktopAppRequired: boolean;
+}
+
+export interface JoinTranslationRoomResultDto {
+  status: JoinTranslationRoomAccessStatus;
+  message: string;
+  room?: TranslationRoomPreflightDto;
+  participant?: TranslationRoomParticipantDto;
 }

@@ -2,7 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translationRoom.service";
-import type { CreateTranslationRoomRequest, JoinTranslationRoomRequest } from "@/types/translationRoom";
+import type {
+  CreateTranslationRoomRequest,
+  JoinTranslationRoomByCodeRequest,
+  JoinTranslationRoomRequest,
+} from "@/types/translationRoom";
 
 const MEETING_KEY = ["translationRooms"] as const;
 
@@ -44,6 +48,16 @@ export function useJoinTranslationRoom() {
     }) => {
       const { data: participant } = await translationRoomService.join(id, data);
       return participant;
+    },
+  });
+}
+
+/** Join translationRoom by room code for the web preflight flow */
+export function useJoinTranslationRoomByCode() {
+  return useMutation({
+    mutationFn: async (data: JoinTranslationRoomByCodeRequest) => {
+      const { data: joinResult } = await translationRoomService.joinByCode(data);
+      return joinResult;
     },
   });
 }
