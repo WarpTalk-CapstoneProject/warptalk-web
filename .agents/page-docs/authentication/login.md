@@ -12,6 +12,7 @@ This document maintains the state, changes, and logic for the Login Page.
 
 - Rebuilt the login UI to match the attached reference layout: a large centered rounded container on a neutral gray page, a white form panel on the left, and a dark blue visual panel on the right.
 - Added a mockup-inspired right panel with layered gradients, animated glass ticket shards, a brand block, and bottom support/access copy.
+- Refined the reference match by reducing the page/card scale, tightening typography and control heights, and replacing solid CSS ticket blocks with an inline SVG glass scene using translucent gradients, white strokes, shine streaks, blur-like layered shadows, and fine texture noise.
 - Preserved the existing login behavior: the form posts to `API.auth.login`, stores tokens with `useAuthStore`, writes the `access_token` cookie, and redirects to `callbackUrl` or `/dashboard`.
 - Updated visible copy to English to align with the supplied design reference.
 
@@ -19,7 +20,7 @@ This document maintains the state, changes, and logic for the Login Page.
 
 - The form includes email and password fields with leading icons, password visibility toggle, remember-me checkbox, Google-style secondary action, register link, forgot-password link, footer copyright, and language selector affordance.
 - The right visual panel is displayed on large screens and hidden on smaller screens so the form remains usable and uncluttered on mobile.
-- The visual ticket shards use existing global `animate-float` and `animate-sweep` utility animations.
+- The glass-ticket scene uses inline SVG layers with existing global `animate-float` utility animation. The surrounding visual panel uses CSS radial gradients and subtle grain to emulate the blurred, glossy reference image.
 
 ## Known Limitations
 

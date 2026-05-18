@@ -12,7 +12,6 @@ import {
   Loader2,
   LockKeyhole,
   Mail,
-  Sparkles,
   UserRound,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -66,25 +65,125 @@ function GoogleMark() {
   );
 }
 
-function TicketShard({
-  className,
-  delay = "0s",
-}: {
-  className?: string;
-  delay?: string;
-}) {
+function GlassTicketScene() {
   return (
-    <div
-      className={`absolute overflow-hidden rounded-[2rem] border border-white/50 bg-[linear-gradient(135deg,rgba(255,255,255,0.75),rgba(99,132,255,0.82)_42%,rgba(184,80,255,0.55)_68%,rgba(47,79,255,0.88))] shadow-[0_0_28px_rgba(118,151,255,0.55),inset_0_0_18px_rgba(255,255,255,0.52)] motion-safe:animate-float ${className}`}
-      style={{
-        animationDelay: delay,
-        clipPath:
-          "polygon(12% 8%, 86% 8%, 94% 28%, 82% 39%, 98% 57%, 90% 83%, 62% 79%, 50% 96%, 31% 78%, 8% 84%, 4% 58%, 19% 43%, 4% 27%)",
-      }}
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 620 460"
+      className="absolute bottom-[-8px] right-[-34px] z-[1] h-[74%] w-[84%] overflow-visible"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_26%_22%,rgba(255,255,255,0.95),transparent_26%),radial-gradient(circle_at_72%_18%,rgba(96,219,255,0.6),transparent_24%),linear-gradient(120deg,transparent_28%,rgba(255,255,255,0.78)_44%,transparent_58%)]" />
-      <div className="absolute -inset-y-10 -left-1/2 w-1/2 rotate-12 bg-white/30 blur-xl animate-sweep" />
-    </div>
+      <defs>
+        <linearGradient id="ticketFillA" x1="76" x2="300" y1="76" y2="290">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.58" />
+          <stop offset="0.24" stopColor="#bde9ff" stopOpacity="0.7" />
+          <stop offset="0.52" stopColor="#437cff" stopOpacity="0.92" />
+          <stop offset="1" stopColor="#244cff" stopOpacity="0.82" />
+        </linearGradient>
+        <linearGradient id="ticketFillB" x1="330" x2="540" y1="20" y2="300">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.62" />
+          <stop offset="0.32" stopColor="#98e8ff" stopOpacity="0.75" />
+          <stop offset="0.68" stopColor="#315bff" stopOpacity="0.94" />
+          <stop offset="1" stopColor="#2846da" stopOpacity="0.86" />
+        </linearGradient>
+        <linearGradient id="shine" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="0.47" stopColor="#ffffff" stopOpacity="0.92" />
+          <stop offset="0.54" stopColor="#9ff7ff" stopOpacity="0.8" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id="whiteHotspot" cx="32%" cy="29%" r="34%">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.72" />
+          <stop offset="0.22" stopColor="#ffffff" stopOpacity="0.3" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      <g opacity="0.98">
+        <path
+          d="M96 214 L253 126 L308 176 L294 224 L354 257 L357 369 L292 337 L238 386 L190 316 L111 278 Z"
+          fill="#4d6dff"
+          opacity="0.28"
+          transform="translate(0 10)"
+        />
+        <path
+          d="M96 214 L253 126 L308 176 L294 224 L354 257 L357 369 L292 337 L238 386 L190 316 L111 278 Z"
+          fill="url(#ticketFillA)"
+          className="motion-safe:animate-float"
+          style={{ animationDuration: "7.5s" }}
+        />
+        <path
+          d="M96 214 L253 126 L308 176 L294 224 L354 257 L357 369 L292 337 L238 386 L190 316 L111 278 Z"
+          fill="none"
+          stroke="rgba(255,255,255,0.72)"
+          strokeWidth="3"
+        />
+        <path
+          d="M185 150 L238 386"
+          stroke="url(#shine)"
+          strokeLinecap="round"
+          strokeWidth="17"
+          opacity="0.64"
+        />
+        <ellipse cx="161" cy="237" fill="url(#whiteHotspot)" rx="57" ry="62" />
+      </g>
+
+      <g opacity="0.98">
+        <path
+          d="M342 68 L526 98 L534 173 L494 222 L520 292 L430 374 L384 278 L314 295 L328 202 L300 139 Z"
+          fill="#274eff"
+          opacity="0.3"
+          transform="translate(0 12)"
+        />
+        <path
+          d="M342 68 L526 98 L534 173 L494 222 L520 292 L430 374 L384 278 L314 295 L328 202 L300 139 Z"
+          fill="url(#ticketFillB)"
+          className="motion-safe:animate-float"
+          style={{ animationDelay: "-2.2s", animationDuration: "8.4s" }}
+        />
+        <path
+          d="M342 68 L526 98 L534 173 L494 222 L520 292 L430 374 L384 278 L314 295 L328 202 L300 139 Z"
+          fill="none"
+          stroke="rgba(255,255,255,0.76)"
+          strokeWidth="3.4"
+        />
+        <path
+          d="M494 98 L340 292"
+          stroke="url(#shine)"
+          strokeLinecap="round"
+          strokeWidth="20"
+          opacity="0.72"
+        />
+        <ellipse cx="394" cy="145" fill="url(#whiteHotspot)" rx="74" ry="78" />
+      </g>
+
+      <g opacity="0.82">
+        <path
+          d="M550 146 L635 182 L618 267 L652 315 L585 378 L522 334 L488 352 L510 248 L486 202 Z"
+          fill="#4d6dff"
+          opacity="0.24"
+          transform="translate(0 12)"
+        />
+        <path
+          d="M550 146 L635 182 L618 267 L652 315 L585 378 L522 334 L488 352 L510 248 L486 202 Z"
+          fill="url(#ticketFillA)"
+          className="motion-safe:animate-float"
+          style={{ animationDelay: "-3.6s", animationDuration: "8.8s" }}
+        />
+        <path
+          d="M550 146 L635 182 L618 267 L652 315 L585 378 L522 334 L488 352 L510 248 L486 202 Z"
+          fill="none"
+          stroke="rgba(255,255,255,0.64)"
+          strokeWidth="3"
+        />
+        <path
+          d="M620 170 L500 336"
+          stroke="url(#shine)"
+          strokeLinecap="round"
+          strokeWidth="17"
+          opacity="0.6"
+        />
+      </g>
+    </svg>
   );
 }
 
@@ -123,44 +222,44 @@ function LoginForm() {
   };
 
   return (
-    <main className="fixed inset-0 z-20 overflow-y-auto bg-[#d5d5d3] px-4 py-6 text-[#151324] sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <section className="grid w-full overflow-hidden rounded-[1.75rem] border border-white/80 bg-white shadow-[0_28px_90px_rgba(28,28,28,0.18)] lg:min-h-[36rem] lg:grid-cols-[1fr_1.04fr]">
-          <div className="relative flex min-h-[36rem] flex-col bg-white px-6 py-6 sm:px-10 lg:px-12">
+    <main className="fixed inset-0 z-20 overflow-y-auto bg-[#d2d2d0] px-4 py-6 text-[#151324] sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-full w-full max-w-[980px] items-center justify-center">
+        <section className="grid w-full overflow-hidden rounded-[1.1rem] border border-white/85 bg-white shadow-[0_26px_82px_rgba(25,25,30,0.2)] lg:min-h-[600px] lg:grid-cols-[1fr_1fr]">
+          <div className="relative flex min-h-[600px] flex-col bg-white px-6 py-6 sm:px-8 lg:px-[28px]">
             <div className="flex items-start justify-between gap-4">
               <Link
                 href="/"
                 aria-label="Go to WarpTalk home"
-                className="size-8 rounded-full bg-[#403a91] shadow-[0_12px_24px_rgba(64,58,145,0.24)] transition-transform hover:scale-105"
+                className="size-[27px] rounded-full bg-[#403a91] shadow-[0_12px_24px_rgba(64,58,145,0.22)] transition-transform hover:scale-105"
               />
-              <div className="flex items-center gap-3 text-[0.8rem] text-[#585666]">
+              <div className="flex items-center gap-3 text-[0.55rem] text-[#403d4b]">
                 <span className="hidden sm:inline">
                   Don&apos;t have an account?
                 </span>
                 <Link
                   href="/register"
-                  className="rounded-md border border-[#edeaf4] bg-white px-3 py-1.5 font-medium text-[#302d44] shadow-sm transition-colors hover:border-[#cbc5ef] hover:text-[#403a91]"
+                  className="rounded-[4px] border border-[#eeeaf3] bg-white px-2.5 py-1 font-medium text-[#332f42] shadow-[0_4px_10px_rgba(22,18,46,0.06)] transition-colors hover:border-[#cbc5ef] hover:text-[#403a91]"
                 >
                   Register
                 </Link>
               </div>
             </div>
 
-            <div className="mx-auto flex w-full max-w-[21rem] flex-1 flex-col justify-center py-7">
-              <div className="mb-5 flex justify-center">
-                <div className="grid size-16 place-items-center rounded-full bg-[#f6f5f8] shadow-[inset_0_0_0_10px_rgba(255,255,255,0.85),0_16px_32px_rgba(38,35,64,0.08)]">
+            <div className="mx-auto flex w-full max-w-[270px] flex-1 flex-col justify-center pb-10 pt-7">
+              <div className="mb-4 flex justify-center">
+                <div className="grid size-[54px] place-items-center rounded-full bg-[#f6f5f8] shadow-[inset_0_0_0_9px_rgba(255,255,255,0.9),0_15px_32px_rgba(38,35,64,0.07)]">
                   <UserRound
-                    className="h-7 w-7 text-[#242233]"
+                    className="h-[22px] w-[22px] text-[#242233]"
                     strokeWidth={1.7}
                   />
                 </div>
               </div>
 
-              <div className="mb-5 text-center">
-                <h1 className="text-[1.7rem] font-semibold leading-tight tracking-normal text-[#12101e]">
+              <div className="mb-[18px] text-center">
+                <h1 className="text-[1.08rem] font-semibold leading-tight tracking-normal text-[#12101e]">
                   Login to your account
                 </h1>
-                <p className="mt-1 text-sm text-[#777482]">
+                <p className="mt-1 text-[0.72rem] text-[#777482]">
                   Enter your details to login.
                 </p>
               </div>
@@ -168,36 +267,36 @@ function LoginForm() {
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 w-full gap-2 rounded-md border-[#eceaf0] bg-white text-[0.82rem] font-semibold text-[#1d1a2d] shadow-sm hover:bg-[#faf9fd]"
+                className="h-[28px] w-full gap-1.5 rounded-[4px] border-[#eceaf0] bg-white text-[0.62rem] font-semibold text-[#1d1a2d] shadow-[0_2px_7px_rgba(21,17,43,0.08)] hover:bg-[#faf9fd] [&_svg]:size-3"
               >
                 <GoogleMark />
                 Continue with Google
               </Button>
 
-              <div className="my-4 flex items-center gap-4">
+              <div className="my-[14px] flex items-center gap-4">
                 <div className="h-px flex-1 bg-[#eeedf2]" />
-                <span className="text-[0.68rem] font-medium uppercase text-[#aaa6b2]">
+                <span className="text-[0.5rem] font-medium uppercase text-[#aaa6b2]">
                   Or
                 </span>
                 <div className="h-px flex-1 bg-[#eeedf2]" />
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
-                <div className="space-y-2">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+                <div className="space-y-1.5">
                   <Label
                     htmlFor="email"
-                    className="text-[0.78rem] font-semibold text-[#292638]"
+                    className="text-[0.62rem] font-semibold text-[#292638]"
                   >
-                    Email Address
+                    Email Address*
                   </Label>
                   <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9a5b3]" />
+                    <Mail className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#a9a5b3]" />
                     <Input
                       id="email"
                       type="email"
                       placeholder="hello@example.com"
                       autoComplete="email"
-                      className="h-10 rounded-md border-[#e8e5ec] bg-white pl-9 text-sm shadow-sm placeholder:text-[#bbb6c2] focus-visible:border-[#655bc2] focus-visible:ring-[#655bc2]/15"
+                      className="h-[29px] rounded-[4px] border-[#e8e5ec] bg-white pl-8 text-[0.66rem] shadow-[0_2px_8px_rgba(25,20,50,0.04)] placeholder:text-[#bbb6c2] focus-visible:border-[#655bc2] focus-visible:ring-[#655bc2]/15"
                       aria-invalid={Boolean(errors.email)}
                       {...register("email")}
                     />
@@ -209,34 +308,34 @@ function LoginForm() {
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label
                     htmlFor="password"
-                    className="text-[0.78rem] font-semibold text-[#292638]"
+                    className="text-[0.62rem] font-semibold text-[#292638]"
                   >
-                    Password
+                    Password*
                   </Label>
                   <div className="relative">
-                    <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9a5b3]" />
+                    <LockKeyhole className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#a9a5b3]" />
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
                       placeholder="**********"
                       autoComplete="current-password"
-                      className="h-10 rounded-md border-[#e8e5ec] bg-white px-9 text-sm shadow-sm placeholder:text-[#bbb6c2] focus-visible:border-[#655bc2] focus-visible:ring-[#655bc2]/15"
+                      className="h-[29px] rounded-[4px] border-[#e8e5ec] bg-white px-8 text-[0.66rem] shadow-[0_2px_8px_rgba(25,20,50,0.04)] placeholder:text-[#bbb6c2] focus-visible:border-[#655bc2] focus-visible:ring-[#655bc2]/15"
                       aria-invalid={Boolean(errors.password)}
                       {...register("password")}
                     />
                     <button
                       type="button"
-                      className="absolute right-3 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center text-[#8d8999] transition-colors hover:text-[#403a91]"
+                      className="absolute right-2.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center text-[#8d8999] transition-colors hover:text-[#403a91]"
                       onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
+                        <EyeOff className="h-3.5 w-3.5" />
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-3.5 w-3.5" />
                       )}
                     </button>
                   </div>
@@ -247,14 +346,14 @@ function LoginForm() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between gap-4 pt-1">
-                  <label className="flex items-center gap-2 text-[0.78rem] font-medium text-[#5c5868]">
-                    <Checkbox className="size-3.5 rounded-[3px] border-[#dfdce5] data-checked:border-[#403a91] data-checked:bg-[#403a91]" />
+                <div className="flex items-center justify-between gap-4 pt-0.5">
+                  <label className="flex items-center gap-1.5 text-[0.62rem] font-medium text-[#5c5868]">
+                    <Checkbox className="size-3 rounded-[3px] border-[#dfdce5] data-checked:border-[#403a91] data-checked:bg-[#403a91]" />
                     Keep me logged in
                   </label>
                   <Link
                     href="/forgot-password"
-                    className="text-[0.78rem] font-medium text-[#4b465f] underline underline-offset-2 transition-colors hover:text-[#403a91]"
+                    className="text-[0.62rem] font-medium text-[#4b465f] underline underline-offset-2 transition-colors hover:text-[#403a91]"
                   >
                     Forgot password?
                   </Link>
@@ -262,7 +361,7 @@ function LoginForm() {
 
                 <Button
                   type="submit"
-                  className="mt-1 h-11 w-full rounded-md bg-[linear-gradient(180deg,#6d64bf,#463d97)] text-[0.84rem] font-semibold text-white shadow-[0_14px_24px_rgba(70,61,151,0.28)] transition-transform hover:translate-y-[-1px] hover:bg-[linear-gradient(180deg,#756bca,#4d43a4)]"
+                  className="mt-0.5 h-[31px] w-full rounded-[4px] bg-[linear-gradient(180deg,#645bc0,#403895)] text-[0.62rem] font-semibold text-white shadow-[0_14px_26px_rgba(70,61,151,0.24)] transition-transform hover:translate-y-[-1px] hover:bg-[linear-gradient(180deg,#7066cd,#4a40a2)]"
                   disabled={isSubmitting}
                 >
                   {isSubmitting && (
@@ -273,7 +372,7 @@ function LoginForm() {
               </form>
             </div>
 
-            <div className="flex items-center justify-between gap-4 text-[0.78rem] text-[#777482]">
+            <div className="flex items-center justify-between gap-4 text-[0.62rem] text-[#777482]">
               <span>(c) 2026 WarpTalk</span>
               <button
                 type="button"
@@ -287,42 +386,34 @@ function LoginForm() {
             </div>
           </div>
 
-          <aside className="relative hidden min-h-[36rem] overflow-hidden rounded-[1.5rem] border border-white/75 bg-[#24236f] p-8 text-white lg:flex lg:flex-col lg:justify-between">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_74%,rgba(118,145,255,0.55),transparent_26%),radial-gradient(circle_at_34%_78%,rgba(245,96,213,0.5),transparent_24%),linear-gradient(146deg,#2b2b82_0%,#4139a2_48%,#151449_100%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.16),transparent_27%,rgba(255,255,255,0.08)_60%,transparent_80%)] opacity-75" />
-            <div className="absolute -right-12 bottom-10 h-64 w-64 rounded-full bg-[#090827]/75 blur-sm" />
-            <div className="absolute bottom-[-10%] left-[-10%] h-64 w-64 rounded-full bg-[#604cf6]/40 blur-3xl" />
-
-            <TicketShard className="right-[6%] top-[34%] h-64 w-44 rotate-[10deg]" />
-            <TicketShard
-              className="right-[32%] top-[42%] h-56 w-40 rotate-[-28deg]"
-              delay="-1.8s"
-            />
-            <TicketShard
-              className="right-[-12%] top-[44%] h-60 w-40 rotate-[24deg]"
-              delay="-3.2s"
-            />
+          <aside className="relative hidden min-h-[590px] overflow-hidden rounded-[0.95rem] border border-white/75 bg-[#24236f] p-8 text-white lg:flex lg:flex-col lg:justify-between">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_64%,rgba(89,135,255,0.5),transparent_24%),radial-gradient(circle_at_37%_82%,rgba(234,88,212,0.52),transparent_25%),radial-gradient(circle_at_18%_18%,rgba(112,145,255,0.22),transparent_20%),linear-gradient(148deg,#282777_0%,#3e39a0_49%,#111241_100%)]" />
+            <div className="absolute inset-0 opacity-[0.14] [background-image:radial-gradient(rgba(255,255,255,0.5)_0.45px,transparent_0.45px)] [background-size:2.5px_2.5px]" />
+            <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.13),transparent_28%,rgba(255,255,255,0.06)_58%,transparent_82%)] opacity-80" />
+            <div className="absolute -right-12 bottom-8 z-[2] h-44 w-44 rounded-full bg-[#090827]/82 blur-[2px]" />
+            <div className="absolute bottom-[-16%] left-[-14%] z-0 h-72 w-72 rounded-full bg-[#3159ff]/46 blur-[34px]" />
+            <div className="absolute bottom-[4%] left-[8%] z-0 h-56 w-56 rounded-full bg-[#ff55dc]/28 blur-[42px]" />
+            <div className="absolute bottom-[8%] left-[-5%] z-[1] h-20 w-80 rotate-[-18deg] bg-[linear-gradient(90deg,transparent,rgba(91,152,255,0.62),rgba(255,108,226,0.45),transparent)] blur-[12px]" />
+            <GlassTicketScene />
 
             <div className="relative z-10">
-              <div className="mb-5 grid size-11 place-items-center rounded-xl bg-white/92 text-[#433c98] shadow-[0_16px_36px_rgba(255,255,255,0.18)]">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <h2 className="text-2xl font-extrabold tracking-normal">WARPTALK</h2>
-              <p className="mt-2 text-base font-medium text-white/82">
+              <div className="mb-5 size-8 rounded-[8px] bg-white/90 shadow-[0_16px_36px_rgba(255,255,255,0.16)]" />
+              <h2 className="text-[1.15rem] font-extrabold tracking-normal">WARPTALK</h2>
+              <p className="mt-2 text-[0.82rem] font-medium text-white/78">
                 Real-time conversations, translated with clarity.
               </p>
             </div>
 
-            <div className="relative z-10 grid grid-cols-2 gap-9 text-sm">
+            <div className="relative z-10 grid grid-cols-2 gap-8 text-[0.72rem]">
               <div>
                 <h3 className="font-semibold text-white">Get Access</h3>
-                <p className="mt-3 max-w-[12rem] leading-6 text-white/68">
+                <p className="mt-2.5 max-w-[10rem] leading-5 text-white/62">
                   Sign up at warptalk.app to start using the app.
                 </p>
               </div>
               <div className="border-l border-white/18 pl-8">
                 <h3 className="font-semibold text-white">Questions?</h3>
-                <p className="mt-3 max-w-[13rem] leading-6 text-white/68">
+                <p className="mt-2.5 max-w-[11rem] leading-5 text-white/62">
                   Reach us at support@warptalk.app or call +84 28 0000 404.
                 </p>
               </div>
