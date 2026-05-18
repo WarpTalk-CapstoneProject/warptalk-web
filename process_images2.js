@@ -1,6 +1,7 @@
-const Jimp = require('jimp');
-
 async function main() {
+  const jimpModule = await import('jimp');
+  const Jimp = jimpModule.default ?? jimpModule.Jimp ?? jimpModule;
+
   const imgA = await Jimp.read('./public/Image A.png');
   const imgB = await Jimp.read('./public/Image B.png');
 

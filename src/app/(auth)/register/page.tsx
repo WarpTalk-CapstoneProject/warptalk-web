@@ -44,6 +44,14 @@ const registerSchema = z
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
+function setAccessTokenCookie(accessToken: string, expiresAt: string) {
+  const expiresTime = new Date(expiresAt).getTime();
+  const currentTime = new Date().getTime();
+  const maxAge = Math.max(0, Math.floor((expiresTime - currentTime) / 1000));
+
+  globalThis.document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
@@ -68,10 +76,7 @@ export default function RegisterPage() {
       const { user, accessToken, refreshToken, expiresAt } = res.data;
 
       login(user, accessToken, refreshToken);
-      const maxAge = Math.floor(
-        (new Date(expiresAt).getTime() - Date.now()) / 1000
-      );
-      document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Đăng ký thành công!");
       router.push("/dashboard");
