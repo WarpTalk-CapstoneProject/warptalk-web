@@ -14,7 +14,6 @@ import {
   Mic,
   Settings,
   Speaker,
-  Tags,
   Users,
   Volume2,
   Waves,
@@ -35,9 +34,6 @@ import type {
   JoinTranslationRoomAccessStatus,
   JoinTranslationRoomResultDto,
 } from "@/types/translationRoom";
-
-const DEFAULT_ROOM_CODE = "GSS-7X2Q";
-const DEFAULT_ROOM_TITLE = "Global Strategy Sync";
 
 const statusCopy: Record<JoinTranslationRoomAccessStatus, { title: string; body: string }> = {
   idle: {
@@ -89,8 +85,8 @@ function JoinMeetingContent() {
   const joinByCode = useJoinTranslationRoomByCode();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const [displayName, setDisplayName] = useState(user?.fullName ?? user?.email?.split("@")[0] ?? "Trisha Nguyen");
-  const [roomCode, setRoomCode] = useState(searchParams.get("code") ?? DEFAULT_ROOM_CODE);
+  const [displayName, setDisplayName] = useState(user?.fullName ?? user?.email?.split("@")[0] ?? "");
+  const [roomCode, setRoomCode] = useState(searchParams.get("code") ?? "");
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
@@ -162,9 +158,9 @@ function JoinMeetingContent() {
       return;
     }
 
-    if (!/^[A-Z0-9]{3}-?[A-Z0-9]{4,6}$/i.test(normalizedRoomCode) && normalizedRoomCode.length !== 36) {
+    if (!/^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.test(normalizedRoomCode)) {
       setAccessStatus("invalid_code");
-      setAccessMessage("Enter a valid room code, for example GSS-7X2Q.");
+      setAccessMessage("Enter the room code provided by the host.");
       return;
     }
 
@@ -220,9 +216,12 @@ function JoinMeetingContent() {
   if (isPreparing) {
     return (
       <PreparingMeetingScreen
-        roomTitle={joiningRoom?.title ?? DEFAULT_ROOM_TITLE}
-        topics={joiningRoom?.topics ?? ["quarterly strategy", "regional expansion", "product roadmap"]}
-        keyTerms={joiningRoom?.keyTerms ?? ["APAC", "compliance", "revenue forecast", "investor update"]}
+        roomTitle={joiningRoom?.title ?? "Joining room"}
+        languageSummary={
+          joiningRoom
+            ? `${getLanguageName(joiningRoom.sourceLanguage)} -> ${joiningRoom.targetLanguages.map(getLanguageName).join(", ")}`
+            : ""
+        }
         onBack={() => {
           setAccessStatus("idle");
           setJoiningRoom(null);
@@ -309,8 +308,8 @@ function JoinMeetingContent() {
                   <Users className="size-6" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-black">{DEFAULT_ROOM_TITLE}</p>
-                  <p className="mt-1 text-sm text-black/60">Room Code: {normalizedRoomCode || DEFAULT_ROOM_CODE}</p>
+                  <p className="text-2xl font-bold text-black">Enter room code</p>
+                  <p className="mt-1 text-sm text-black/60">Use the code shared by the room host</p>
                 </div>
               </div>
 
@@ -323,7 +322,7 @@ function JoinMeetingContent() {
                   value={displayName}
                   onChange={(event) => setDisplayName(event.target.value)}
                   className="h-12 rounded-xl border-[#e4eef9] bg-white px-4 text-base shadow-sm"
-                  placeholder="Trisha Nguyen"
+                  placeholder="Your display name"
                 />
 
                 <label className="sr-only" htmlFor="room-code">
@@ -335,7 +334,7 @@ function JoinMeetingContent() {
                     value={roomCode}
                     onChange={(event) => setRoomCode(event.target.value)}
                     className="h-12 rounded-xl border-[#e4eef9] bg-white px-4 pr-12 text-base uppercase tracking-wide shadow-sm"
-                    placeholder="Room Code: GSS-7X2Q"
+                    placeholder="abc-defg-hij"
                   />
                   <button
                     type="button"
@@ -523,14 +522,12 @@ function DesktopTranslationCard({
 
 function PreparingMeetingScreen({
   roomTitle,
-  topics,
-  keyTerms,
+  languageSummary,
   onBack,
   onExit,
 }: {
   roomTitle: string;
-  topics: string[];
-  keyTerms: string[];
+  languageSummary: string;
   onBack: () => void;
   onExit: () => void;
 }) {
@@ -556,13 +553,10 @@ function PreparingMeetingScreen({
             Preparing meeting context...
           </LoadingLine>
           <LoadingLine icon={<Volume2 className="size-6" />}>
-            Topics: {topics.join(", ")}
-          </LoadingLine>
-          <LoadingLine icon={<Tags className="size-6" />}>
-            Key terms: {keyTerms.join(", ")}
+            Languages: {languageSummary || "Using room language policy"}
           </LoadingLine>
           <LoadingLine icon={<Waves className="size-6" />} muted>
-            AI is reviewing company materials and terminology...
+            Opening the meeting workspace...
           </LoadingLine>
         </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -32,10 +32,20 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+function getSafeCallbackUrl(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  return value;
+}
+
+function setAccessTokenCookie(accessToken: string, expiresAt: string) {
+  const maxAge = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+  document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
   const login = useAuthStore((s) => s.login);
 
   const [showPassword, setShowPassword] = useState(false);
@@ -48,6 +58,19 @@ function LoginForm() {
     resolver: zodResolver(loginSchema),
   });
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    const hasSensitiveParams = url.searchParams.has("email") || url.searchParams.has("password");
+
+    if (!hasSensitiveParams) return;
+
+    url.searchParams.delete("email");
+    url.searchParams.delete("password");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
   const onSubmit = async (data: LoginFormData) => {
     try {
       // Backend returns flat AuthResponse: { accessToken, refreshToken, expiresAt, user }
@@ -56,13 +79,10 @@ function LoginForm() {
 
       // Store tokens in Zustand + cookie for middleware
       login(user, accessToken, refreshToken);
-      const maxAge = Math.floor(
-        (new Date(expiresAt).getTime() - Date.now()) / 1000
-      );
-      document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Đăng nhập thành công!");
-      router.push(callbackUrl);
+      router.replace(callbackUrl);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(
@@ -79,7 +99,7 @@ function LoginForm() {
           Nhập email và mật khẩu để truy cập tài khoản
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form method="post" onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>

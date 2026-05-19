@@ -97,7 +97,7 @@ export interface EndedRoomHistoryItem {
   title: string;
   description?: string;
   translationRoomCode: string;
-  status: Extract<TranslationRoomStatus, "ended" | "archived">;
+  status: Extract<TranslationRoomStatus, "ended" | "cancelled">;
   startedAt: string;
   endedAt: string;
   durationSeconds: number;

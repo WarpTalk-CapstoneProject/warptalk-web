@@ -20,11 +20,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const isParticipantOnly = user?.roles?.includes("participant") && !user?.roles?.includes("host");
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-white text-slate-950">
       {isParticipantOnly ? <ParticipantSidebar /> : <HostSidebar />}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-white">
         <Topbar />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-white p-6">{children}</main>
       </div>
     </div>
   );

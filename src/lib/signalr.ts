@@ -3,18 +3,19 @@ import { useAuthStore } from "@/stores/auth-store";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
-  "http://localhost:5000";
+  process.env.NEXT_PUBLIC_SIGNALR_URL ||
+  "http://localhost:5200";
 
 /**
  * Create a SignalR hub connection with JWT auth via query string.
  * Gateway expects: ?access_token=<jwt>
  *
  * Hubs:
- *   /hubs/translationRoom   — TranslationRoomHub
- *   /hubs/notification — NotificationHub
+ *   /hubs/translation-room — TranslationRoomHub
+ *   /hubs/notification     — NotificationHub
  */
 export function createHubConnection(
-  hubPath: "/hubs/translationRoom" | "/hubs/notification"
+  hubPath: "/hubs/translation-room" | "/hubs/notification"
 ): signalR.HubConnection {
   const connection = new signalR.HubConnectionBuilder()
     .withUrl(`${BASE_URL}${hubPath}`, {

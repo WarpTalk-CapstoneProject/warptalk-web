@@ -5,24 +5,28 @@ import { translationRoomService } from "@/services/translationRoom.service";
 import type {
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
-  JoinTranslationRoomRequest,
   SubmitTranslationRoomFeedbackRequest,
   TranslationRoomFeedbackDto,
   TranslationRoomFeedbackStateDto,
   TranslationRoomDto,
+  TranslationRoomParticipantDto,
 } from "@/types/translationRoom";
 
 const MEETING_KEY = ["translationRooms"] as const;
 const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
 
-/** List translation rooms for the Module 1 demo flow.
- * WT-92/WT-106 backend gap: service currently returns a typed mock plus local demo cache until GET /translationRooms exists.
- */
-export function useTranslationRooms() {
+export function useTranslationRooms(params?: {
+  status?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}) {
   return useQuery({
-    queryKey: MEETING_KEY,
+    queryKey: [...MEETING_KEY, params],
     queryFn: async () => {
-      const { data } = await translationRoomService.list();
+      const { data } = await translationRoomService.list(params);
       return data;
     },
   });
@@ -54,22 +58,6 @@ export function useCreateTranslationRoom() {
   });
 }
 
-/** Join translationRoom mutation */
-export function useJoinTranslationRoom() {
-  return useMutation({
-    mutationFn: async ({
-      id,
-      data,
-    }: {
-      id: string;
-      data: JoinTranslationRoomRequest;
-    }) => {
-      const { data: participant } = await translationRoomService.join(id, data);
-      return participant;
-    },
-  });
-}
-
 /** Join translationRoom by room code for the web preflight flow */
 export function useJoinTranslationRoomByCode() {
   return useMutation({
@@ -80,9 +68,6 @@ export function useJoinTranslationRoomByCode() {
   });
 }
 
-/** Start translationRoom mutation.
- * WT-96 backend gap: service currently uses a typed mock adapter until POST /start exists.
- */
 export function useStartTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -119,9 +104,6 @@ export function useEndTranslationRoom() {
   });
 }
 
-/** Cancel translationRoom mutation.
- * WT-96 backend gap: service currently uses a typed mock adapter until POST /cancel exists.
- */
 export function useCancelTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -136,41 +118,110 @@ export function useCancelTranslationRoom() {
   });
 }
 
-/** Fetch the current user's feedback submission state for one ended room.
- * WT-98 backend gap: service uses a typed mock adapter until feedback endpoints exist.
- */
-export function useTranslationRoomFeedbackState(roomId: string, userId: string) {
+export function useTranslationRoomParticipants(roomId: string) {
   return useQuery({
-    queryKey: [...ROOM_FEEDBACK_KEY, roomId, userId],
+    queryKey: [...MEETING_KEY, roomId, "participants"],
     queryFn: async () => {
-      const { data } = await translationRoomService.getFeedbackState(roomId, userId);
+      const { data } = await translationRoomService.participants(roomId);
       return data;
     },
-    enabled: Boolean(roomId && userId),
+    enabled: Boolean(roomId),
   });
 }
 
-/** Submit post-room feedback for the current user.
- * WT-98 backend gap: service uses a typed mock adapter until POST /feedback exists.
- */
-export function useSubmitTranslationRoomFeedback(roomId: string, userId: string) {
+export function useUpdateParticipantAudio(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      participantId,
+      isTranslationAudioEnabled,
+    }: {
+      participantId: string;
+      isTranslationAudioEnabled: boolean;
+    }) => {
+      await translationRoomService.updateParticipantAudio(roomId, participantId, isTranslationAudioEnabled);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.setQueryData<TranslationRoomParticipantDto[]>([...MEETING_KEY, roomId, "participants"], (current) =>
+        current?.map((participant) =>
+          participant.id === variables.participantId
+            ? { ...participant, isTranslationAudioEnabled: variables.isTranslationAudioEnabled }
+            : participant
+        )
+      );
+    },
+  });
+}
+
+export function useAdmitParticipant(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (participantId: string) => {
+      await translationRoomService.admitParticipant(roomId, participantId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "participants"] });
+    },
+  });
+}
+
+export function useKickParticipant(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (participantId: string) => {
+      await translationRoomService.kickParticipant(roomId, participantId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "participants"] });
+    },
+  });
+}
+
+export function useLeaveTranslationRoom(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      await translationRoomService.leave(roomId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "participants"] });
+    },
+  });
+}
+
+export function useTranslationRoomFeedbackState(roomId: string) {
+  return useQuery({
+    queryKey: [...ROOM_FEEDBACK_KEY, roomId],
+    queryFn: async () => {
+      const { data } = await translationRoomService.getFeedbackState(roomId);
+      return data;
+    },
+    enabled: Boolean(roomId),
+  });
+}
+
+export function useSubmitTranslationRoomFeedback(roomId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (data: SubmitTranslationRoomFeedbackRequest) => {
-      const { data: feedback } = await translationRoomService.submitFeedback(roomId, userId, data);
+      const { data: feedback } = await translationRoomService.submitFeedback(roomId, data);
       return feedback;
     },
     onSuccess: (feedback) => {
       queryClient.setQueryData<TranslationRoomFeedbackStateDto>(
-        [...ROOM_FEEDBACK_KEY, roomId, userId],
+        [...ROOM_FEEDBACK_KEY, roomId],
         {
           hasSubmitted: true,
           feedback,
         }
       );
       queryClient.setQueryData<TranslationRoomFeedbackDto>(
-        [...ROOM_FEEDBACK_KEY, roomId, userId, "submission"],
+        [...ROOM_FEEDBACK_KEY, roomId, "submission"],
         feedback
       );
     },

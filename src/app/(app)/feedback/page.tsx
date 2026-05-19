@@ -17,7 +17,6 @@ import {
   useTranslationRoomFeedbackState,
 } from "@/hooks/use-translationRooms";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/stores/auth-store";
 import type { SubmitTranslationRoomFeedbackRequest, TranslationRoomStatus } from "@/types/translationRoom";
 
 type RatingField = {
@@ -69,7 +68,6 @@ function normalizeFeedbackRoomStatus(status?: string): TranslationRoomStatus {
     status === "waiting" ||
     status === "in_progress" ||
     status === "ended" ||
-    status === "archived" ||
     status === "cancelled"
   ) {
     return status;
@@ -79,7 +77,7 @@ function normalizeFeedbackRoomStatus(status?: string): TranslationRoomStatus {
 }
 
 function isFeedbackAvailable(status: TranslationRoomStatus) {
-  return status === "ended" || status === "archived";
+  return status === "ended";
 }
 
 function RatingButtons({
@@ -129,11 +127,9 @@ export default function FeedbackPage() {
 function FeedbackContent() {
   const searchParams = useSearchParams();
   const roomId = searchParams.get("roomId")?.trim() ?? "";
-  const user = useAuthStore((s) => s.user);
-  const userId = user?.id ?? "mock-preview-user";
   const { data: room, isLoading: isRoomLoading, isError: isRoomError } = useTranslationRoom(roomId);
-  const feedbackState = useTranslationRoomFeedbackState(roomId, userId);
-  const submitFeedback = useSubmitTranslationRoomFeedback(roomId, userId);
+  const feedbackState = useTranslationRoomFeedbackState(roomId);
+  const submitFeedback = useSubmitTranslationRoomFeedback(roomId);
   const [form, setForm] = useState<SubmitTranslationRoomFeedbackRequest>({
     overallRating: 0,
     translationQuality: undefined,
@@ -205,7 +201,7 @@ function FeedbackContent() {
             <div className="max-w-md space-y-2">
               <h2 className="text-lg font-semibold">Choose an ended room first</h2>
               <p className="text-sm text-muted-foreground">
-                WT-98 starts from a completed room, then opens this form for that room only.
+                Open feedback from a completed room so the form can validate room access and submission state.
               </p>
             </div>
             <Link
@@ -213,12 +209,6 @@ function FeedbackContent() {
               className="inline-flex h-8 items-center justify-center rounded-lg bg-[#003476] px-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#003476]/90"
             >
               View rooms
-            </Link>
-            <Link
-              href="/feedback?roomId=wt-98-feedback-demo"
-              className="inline-flex h-8 items-center justify-center rounded-lg border border-[#e4eef9] bg-white px-2.5 text-sm font-medium text-[#003476] shadow-sm transition-colors hover:bg-[#fdfcf6]"
-            >
-              Open post-room preview
             </Link>
           </CardContent>
         </Card>
@@ -279,7 +269,7 @@ function FeedbackContent() {
             <AlertCircle className="size-8 text-[#003476]" />
             <h2 className="text-lg font-semibold">Feedback is locked for this room state</h2>
             <p className="max-w-md text-sm text-muted-foreground">
-              Feedback opens only after the room reaches an ended or archived state. Current state is {roomStatus.replace("_", " ")}.
+              Feedback opens only after the room reaches an ended state. Current state is {roomStatus.replace("_", " ")}.
             </p>
           </CardContent>
         </Card>
@@ -319,7 +309,7 @@ function FeedbackContent() {
           <Star className="text-[#003476]" />
           <AlertTitle>After-session quality check</AlertTitle>
           <AlertDescription>
-            This is the participant/host submission step after a meeting ends. Feedback management and analytics are outside WT-98.
+            This is the participant/host submission step after a meeting ends.
           </AlertDescription>
         </Alert>
       )}
@@ -392,14 +382,14 @@ function FeedbackContent() {
         <aside className="space-y-4">
           <Card className="rounded-lg border-[#e4eef9] bg-[#fdfcf6]">
             <CardHeader>
-              <CardTitle className="text-base">WT-98 workflow</CardTitle>
+              <CardTitle className="text-base">Feedback workflow</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex gap-3">
                 <Clock className="mt-0.5 size-4 shrink-0 text-[#003476]" />
                 <div>
                   <p className="font-medium text-[#003476]">1. Room ends</p>
-                  <p className="text-muted-foreground">Only ended or archived rooms open this form.</p>
+                  <p className="text-muted-foreground">Only ended rooms open this form.</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -416,15 +406,6 @@ function FeedbackContent() {
                   <p className="text-muted-foreground">Admin feedback lists or analytics should be a separate dashboard ticket.</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-lg border-slate-200 bg-white">
-            <CardHeader>
-              <CardTitle className="text-base">Backend contract</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>Current UI uses a typed mock adapter because GET/POST feedback endpoints are not implemented yet.</p>
-              <p>Real backend should enforce ended/archived state and unique room/user submission.</p>
             </CardContent>
           </Card>
         </aside>
