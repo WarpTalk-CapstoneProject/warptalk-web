@@ -13,7 +13,7 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { createHubConnection } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
-import { useTranslationRoomStore } from "@/stores/translation-room-store";
+import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 
 import { authService } from "@/services/auth.service";
 import { translationRoomService } from "@/services/translationRoom.service";
@@ -165,34 +165,39 @@ export default function DevTestPage() {
         translationRoomType: "group",
         maxParticipants: 10,
         sourceLanguage: "vi",
-        targetLanguages: "en",
+        targetLanguages: ["en"],
       });
       setTranslationRoomId(data.id);
-      log("TranslationRoom", "POST /translationRooms", "success", data);
+      log("TranslationRoom", "POST /translation-rooms", "success", data);
     } catch (e: unknown) {
-      log("TranslationRoom", "POST /translationRooms", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
+      log("TranslationRoom", "POST /translation-rooms", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
     }
   };
 
   const testGetTranslationRoom = async () => {
-    if (!translationRoomId) return log("TranslationRoom", "GET /translationRooms/:id", "error", "No translationRoom ID");
+    if (!translationRoomId) return log("TranslationRoom", "GET /translation-rooms/:id", "error", "No translationRoom ID");
     try {
       const { data } = await translationRoomService.get(translationRoomId);
-      log("TranslationRoom", `GET /translationRooms/${translationRoomId}`, "success", data);
+      log("TranslationRoom", `GET /translation-rooms/${translationRoomId}`, "success", data);
     } catch (e: unknown) {
-      log("TranslationRoom", "GET /translationRooms/:id", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
+      log("TranslationRoom", "GET /translation-rooms/:id", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
     }
   };
 
   const testJoinTranslationRoom = async () => {
     if (!translationRoomId) return log("TranslationRoom", "JOIN", "error", "No translationRoom ID");
     try {
-      const { data } = await translationRoomService.join(translationRoomId, {
+      const room = (await translationRoomService.get(translationRoomId)).data;
+      const { data } = await translationRoomService.joinByCode({
+        translationRoomCode: room.translationRoomCode,
         displayName: fullName,
         listenLanguage: "en",
         speakLanguage: "vi",
+        cameraEnabled: true,
+        microphoneEnabled: true,
+        speakerEnabled: true,
       });
-      log("TranslationRoom", `POST /translationRooms/${translationRoomId}/join`, "success", data);
+      log("TranslationRoom", "POST /translation-rooms/join", "success", data);
     } catch (e: unknown) {
       log("TranslationRoom", "JOIN", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
     }
@@ -202,7 +207,7 @@ export default function DevTestPage() {
     if (!translationRoomId) return log("TranslationRoom", "END", "error", "No translationRoom ID");
     try {
       await translationRoomService.end(translationRoomId);
-      log("TranslationRoom", `POST /translationRooms/${translationRoomId}/end`, "success");
+      log("TranslationRoom", `POST /translation-rooms/${translationRoomId}/end`, "success");
     } catch (e: unknown) {
       log("TranslationRoom", "END", "error", (e as { response?: { data?: unknown } })?.response?.data ?? String(e));
     }
@@ -260,7 +265,7 @@ export default function DevTestPage() {
         await translationRoomHub.stop();
         log("SignalR", "TranslationRoomHub", "info", "Disconnected previous connection");
       }
-      const conn = createHubConnection("/hubs/translationRoom");
+      const conn = createHubConnection("/hubs/translation-room");
 
       conn.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => {
         translationRoomStore.setTranslationRoomState(state);

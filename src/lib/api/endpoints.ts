@@ -4,9 +4,10 @@
  *
  * Gateway routing:
  *   /api/v1/auth/*          → AuthService :5101  (transforms to /api/auth/*)
- *   /api/v1/translationRooms/*      → TranslationRoomService :5102
+ *   /api/v1/translation-rooms/*      → TranslationRoomService :5102
  *   /api/v1/transcripts/*   → TranscriptService :5103
  *   /api/v1/notifications/* → NotificationService :5104
+ *   /api/v1/meetings/*      → MeetingService :5105
  */
 export const API = {
   auth: {
@@ -19,18 +20,44 @@ export const API = {
     changePassword: "/auth/change-password",
   },
   translationRooms: {
-    create: "/translationRooms",
-    get: (id: string) => `/translationRooms/${id}`,
-    join: (id: string) => `/translationRooms/${id}/join`,
-    end: (id: string) => `/translationRooms/${id}/end`,
+    create: "/translation-rooms",
+    list: "/translation-rooms",
+    history: "/translation-rooms/history",
+    join: "/translation-rooms/join",
+    get: (id: string) => `/translation-rooms/${id}`,
+    participants: (id: string) => `/translation-rooms/${id}/participants`,
+    participantAudio: (id: string, participantId: string) =>
+      `/translation-rooms/${id}/participants/${participantId}/audio`,
+    admitParticipant: (id: string, participantId: string) =>
+      `/translation-rooms/${id}/participants/${participantId}/admit`,
+    kickParticipant: (id: string, participantId: string) =>
+      `/translation-rooms/${id}/participants/${participantId}/kick`,
+    leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
+    start: (id: string) => `/translation-rooms/${id}/start`,
+    end: (id: string) => `/translation-rooms/${id}/end`,
+    cancel: (id: string) => `/translation-rooms/${id}/cancel`,
+    artifacts: (id: string) => `/translation-rooms/${id}/artifacts`,
+    feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
+    feedback: (id: string) => `/translation-rooms/${id}/feedback`,
   },
   transcripts: {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,
+    byRoom: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}`,
+    segments: (id: string) => `/transcripts/${id}/segments`,
+    translations: (id: string) => `/transcripts/${id}/translations`,
+    exports: (id: string) => `/transcripts/${id}/exports`,
+    exportDownload: (id: string, exportId: string) => `/transcripts/${id}/exports/${exportId}/download`,
+    correctSegment: (id: string, segmentId: string) => `/transcripts/${id}/segments/${segmentId}/correct`,
+    corrections: (id: string, segmentId: string) => `/transcripts/${id}/segments/${segmentId}/corrections`,
     audio: (id: string) => `/transcripts/${id}/audio`,
     finalize: (id: string) => `/transcripts/${id}/finalize`,
   },
   notifications: {
     preferences: "/notifications/preferences",
+  },
+  meetings: {
+    join: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/join`,
+    triggerAi: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/trigger-ai`,
   },
 } as const;

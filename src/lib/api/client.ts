@@ -7,7 +7,7 @@ import type { AuthResponse } from "@/types/auth";
  * Used in Client Components with TanStack Query.
  */
 const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200/api/v1",
   headers: { "Content-Type": "application/json" },
   timeout: 30_000,
 });

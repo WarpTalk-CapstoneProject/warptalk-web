@@ -20,7 +20,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import apiClient from "@/lib/api/client";
-import { API } from "@/lib/api/endpoints";
 
 const forgotSchema = z.object({
   email: z.string().email("Email không hợp lệ"),
@@ -60,7 +59,7 @@ export default function ForgotPasswordPage() {
           Nhập email để nhận hướng dẫn đặt lại mật khẩu
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form method="post" onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>

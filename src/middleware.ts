@@ -8,51 +8,26 @@ const ADMIN_PREFIX = "/admin";
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("access_token")?.value;
+  const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
-  // Public routes — allow all
-  const isPublic = PUBLIC_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  );
-  const isAuth = AUTH_ROUTES.some((route) => pathname === route);
-
-  // If logged in and trying to access auth pages → redirect to dashboard
-  if (isAuth && token) {
+  if (token && isAuthRoute) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Public routes — skip auth
-  if (isPublic) {
-    return NextResponse.next();
-  }
-
-  // Protected routes — require token
-  if (!token) {
+  if (!token && !isPublicRoute) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Admin routes — check role from JWT
-  if (pathname.startsWith(ADMIN_PREFIX)) {
-    try {
-      const payload = JSON.parse(
-        Buffer.from(token.split(".")[1], "base64").toString()
-      );
-      const role =
-        payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ||
-        payload.role;
-
-      if (role !== "system_admin") {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-    } catch {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
+  if (pathname.startsWith(ADMIN_PREFIX) && token) {
+    return NextResponse.next();
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|fonts|images).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|fonts|images|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };

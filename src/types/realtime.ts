@@ -12,6 +12,10 @@ export interface ParticipantInfoDto {
   listenLanguage: string;
   isMuted: boolean;
   joinedAt: string;
+  role?: "host" | "participant" | "interpreter";
+  status?: "joined" | "connected" | "left" | "removed";
+  avatarUrl?: string;
+  isUsingVoiceClone?: boolean;
 }
 
 export interface TranscriptSegmentDto {
