@@ -4,6 +4,7 @@ import type {
   TranslationRoomStateDto,
   ParticipantInfoDto,
   TranscriptSegmentDto,
+  TranslationTextDto,
 } from "@/types/realtime";
 
 interface TranslationRoomStoreState {
@@ -21,6 +22,7 @@ interface TranslationRoomStoreState {
   removeParticipant: (userId: string) => void;
   updateParticipantMute: (userId: string, isMuted: boolean) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
+  addOrMergeTranslationText: (translation: TranslationTextDto) => void;
   addChatMessage: (message: ChatMessageDto) => void;
   setMuted: (muted: boolean) => void;
   reset: () => void;
@@ -66,7 +68,48 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
 
   addTranscriptSegment: (segment) =>
     set((s) => ({
-      transcriptSegments: [...s.transcriptSegments, segment],
+      transcriptSegments: s.transcriptSegments.some((existing) => existing.segmentId === segment.segmentId)
+        ? s.transcriptSegments.map((existing) =>
+            existing.segmentId === segment.segmentId
+              ? {
+                  ...segment,
+                  translatedText: existing.translatedText || segment.translatedText,
+                  targetLanguage: existing.targetLanguage || segment.targetLanguage,
+                }
+              : existing,
+          )
+        : [...s.transcriptSegments, segment],
+    })),
+
+  addOrMergeTranslationText: (translation) =>
+    set((s) => ({
+      transcriptSegments: s.transcriptSegments.some((segment) => segment.segmentId === translation.segmentId)
+        ? s.transcriptSegments.map((segment) =>
+            segment.segmentId === translation.segmentId
+              ? {
+                  ...segment,
+                  originalText: segment.originalText || translation.originalText,
+                  originalLanguage: segment.originalLanguage || translation.sourceLang,
+                  translatedText: translation.translatedText,
+                  targetLanguage: translation.targetLang,
+                }
+              : segment,
+          )
+        : [
+            ...s.transcriptSegments,
+            {
+              segmentId: translation.segmentId,
+              speakerId: translation.speakerId,
+              speakerName: "Speaker",
+              originalText: translation.originalText,
+              originalLanguage: translation.sourceLang,
+              translatedText: translation.translatedText,
+              targetLanguage: translation.targetLang,
+              confidence: 1,
+              startTimeMs: 0,
+              endTimeMs: 0,
+            },
+          ],
     })),
 
   addChatMessage: (message) =>

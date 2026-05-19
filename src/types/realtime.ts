@@ -31,6 +31,15 @@ export interface TranscriptSegmentDto {
   endTimeMs: number;
 }
 
+export interface TranslationTextDto {
+  segmentId: string;
+  speakerId: string;
+  originalText: string;
+  translatedText: string;
+  sourceLang: string;
+  targetLang: string;
+}
+
 export interface ChatMessageDto {
   messageId: string;
   senderId: string;

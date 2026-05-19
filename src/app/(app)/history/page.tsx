@@ -402,7 +402,7 @@ function TranscriptPanel({
               </Button>
             </div>
 
-            {(translationsBySegment[segment.id] ?? []).length > 0 && (
+            {(translationsBySegment[segment.id] ?? []).length > 0 ? (
               <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                 {translationsBySegment[segment.id].map((translation) => (
                   <div key={translation.id} className="rounded-lg bg-[#fdfcf6] px-3 py-2">
@@ -414,6 +414,10 @@ function TranscriptPanel({
                     <p className="text-sm text-slate-700">{translation.translatedText}</p>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="mt-3 border-t border-slate-100 pt-3 text-xs font-medium text-slate-400">
+                Translation not available yet.
               </div>
             )}
           </article>
