@@ -1,5 +1,43 @@
 # Landing Page Documentation
 
+## Aura AI Email Landing Page Experiment (Latest)
+
+**What changed:**
+Replaced the existing WarpTalk landing hero at `/` with an Aura AI-native email client landing page experiment. The page is implemented in the existing Next.js app using React, TypeScript, Tailwind CSS, `motion/react`, and `lucide-react`.
+
+**Why it changed:**
+The branch is being used to test a premium, cinematic, glassy landing page treatment with a fullscreen looping background video, shiny animated headline, macOS-style menu strip, realistic inbox mockup, liquid-glass cards, logo cloud, testimonials, pricing, and final CTA.
+
+**Files affected:**
+- `src/app/page.tsx` - complete Aura landing page implementation
+- `src/app/globals.css` - Inter import, brand color token, selection styling, shiny headline animation, liquid-glass utility, and custom pricing section CSS
+- `package.json` / `package-lock.json` - added `motion` and `@supabase/supabase-js` dependencies requested by the landing page test spec
+
+**How the page currently works:**
+- The root wrapper uses a dark `#0c0c0c` base with a fixed fullscreen CloudFront video behind all content.
+- Root-level SVG noise filter powers the animated "Revitalized" headline texture.
+- Navbar, hero, menu strip, inbox mockup, feature triage, logo cloud, testimonials, pricing, and final CTA are composed inside `src/app/page.tsx`.
+- Pricing uses local React state to toggle monthly/yearly prices.
+- Liquid-glass treatment is a shared CSS utility applied to triage cards, testimonials, and the final CTA.
+
+**Important UI behavior:**
+- Motion animations use `motion/react` and stagger key areas on initial render or when scrolled into view.
+- The inbox mockup keeps its desktop grid fidelity by allowing horizontal overflow on narrow screens rather than compressing the email client beyond readability.
+- Pricing cards become horizontal scroll-snap cards below 1024px.
+
+**Known limitations:**
+- This is a landing page experiment for "Aura"; copy and branding do not match WarpTalk production positioning.
+- The CloudFront video is remote. If the URL becomes unavailable, the page falls back visually to the dark background and overlay.
+- `@supabase/supabase-js` is installed per the requested stack but is not used by this static marketing page yet.
+
+**Testing checklist:**
+- [ ] Run `npm run lint`.
+- [ ] Run `npm run build`.
+- [ ] Open `http://localhost:3000/` and verify the video-backed cinematic page renders.
+- [ ] Check desktop sections: navbar, hero, menu bar, inbox mockup, triage, logo cloud, testimonials, pricing, final CTA.
+- [ ] Check pricing toggle updates Standard and Pro prices.
+- [ ] Check mobile layout for no incoherent text overlap.
+
 This document maintains the state, changes, and logic for the Landing Page.
 
 ---
