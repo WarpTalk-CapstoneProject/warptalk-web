@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,18 +29,20 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-function setAccessTokenCookie(accessToken: string, expiresAt: string) {
-  const expiresTime = new Date(expiresAt).getTime();
-  const currentTime = new Date().getTime();
-  const maxAge = Math.max(0, Math.floor((expiresTime - currentTime) / 1000));
+function getSafeCallbackUrl(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  return value;
+}
 
-  globalThis.document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+function setAccessTokenCookie(accessToken: string, expiresAt: string) {
+  const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -52,6 +54,17 @@ function LoginForm() {
     resolver: zodResolver(loginSchema),
   });
 
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const hasSensitiveParams = url.searchParams.has("email") || url.searchParams.has("password");
+
+    if (!hasSensitiveParams) return;
+
+    url.searchParams.delete("email");
+    url.searchParams.delete("password");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
   const onSubmit = async (data: LoginFormData) => {
     try {
       const res = await apiClient.post<AuthResponse>(API.auth.login, data);
@@ -61,7 +74,7 @@ function LoginForm() {
       setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Login successful!");
-      router.push(callbackUrl);
+      router.replace(callbackUrl);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(

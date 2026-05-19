@@ -9,9 +9,11 @@ export type TranslationRoomStatus =
   | "scheduled"
   | "waiting"
   | "in_progress"
+  | "paused"
   | "ended"
-  | "archived"
-  | "cancelled";
+  | "cancelled"
+  | "expired"
+  | "failed";
 
 export type TranslationRoomLifecycleAction = "start" | "end" | "cancel";
 
@@ -26,11 +28,17 @@ export interface TranslationRoomDto {
   translationRoomType: string;
   maxParticipants: number;
   sourceLanguage?: string;
-  targetLanguages?: string;
+  targetLanguages: string[];
   scheduledAt?: string;
   startedAt?: string;
   endedAt?: string;
+  durationSeconds?: number;
   createdAt: string;
+  settings?: {
+    requiresApproval: boolean;
+  };
+  participantCount?: number;
+  isHost?: boolean;
 }
 
 export interface TranslationRoomParticipantDto {
@@ -38,11 +46,11 @@ export interface TranslationRoomParticipantDto {
   translationRoomId: string;
   userId: string;
   displayName: string;
-  role: "host" | "participant" | "interpreter";
+  role: "host" | "participant" | "interpreter" | "HOST" | "PARTICIPANT" | "INTERPRETER";
   listenLanguage: string;
   speakLanguage: string;
-  status: "joined" | "connected" | "left" | "removed";
-  isMuted?: boolean;
+  status: "invited" | "waiting" | "joined" | "connected" | "disconnected" | "left" | "removed" | "kicked" | "rejected";
+  isTranslationAudioEnabled?: boolean;
   isUsingVoiceClone?: boolean;
   avatarUrl?: string;
   joinedAt?: string;
@@ -62,15 +70,19 @@ export interface CreateTranslationRoomRequest {
     | "webinar"
     | "b2b_virtual_mic";
   maxParticipants: number;
-  sourceLanguage: string;
-  targetLanguages: string;
+      sourceLanguage: string;
+  targetLanguages: string[];
+  settings?: {
+    requiresApproval: boolean;
+  };
   scheduledAt?: string;
 }
 
 export interface TranslationRoomListResponse {
   rooms: TranslationRoomDto[];
-  source: "mock" | "api";
-  knownLimitations: string[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface JoinTranslationRoomRequest {
@@ -145,4 +157,33 @@ export interface SubmitTranslationRoomFeedbackRequest {
 export interface TranslationRoomFeedbackStateDto {
   hasSubmitted: boolean;
   feedback?: TranslationRoomFeedbackDto;
+}
+
+export interface TranslationRoomArtifactDto {
+  id: string;
+  translationRoomId: string;
+  type: string;
+  title: string;
+  fileUrl?: string;
+  fileFormat?: string;
+  fileSizeBytes?: number;
+  containsRawAudio: boolean;
+  containsRawVideo: boolean;
+  consentRequired: boolean;
+  retentionUntil?: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface TranslationRoomHistoryItemDto {
+  room: TranslationRoomDto;
+  participants: TranslationRoomParticipantDto[];
+  artifacts: TranslationRoomArtifactDto[];
+}
+
+export interface TranslationRoomHistoryResponse {
+  rooms: TranslationRoomHistoryItemDto[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
