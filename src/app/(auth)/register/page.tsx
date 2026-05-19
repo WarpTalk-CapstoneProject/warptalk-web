@@ -1,44 +1,47 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  LockKeyhole,
+  Mail,
+  UserRound,
+} from "lucide-react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 
+import {
+  CinematicAuthShell,
+  GoogleMark,
+} from "@/components/auth/cinematic-auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useAuthStore } from "@/stores/auth-store";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
 const registerSchema = z
   .object({
-    fullName: z.string().min(1, "Vui lòng nhập họ tên"),
-    email: z.string().email("Email không hợp lệ"),
+    fullName: z.string().min(1, "Please enter your name"),
+    email: z.string().email("Invalid email address"),
     password: z
       .string()
-      .min(8, "Mật khẩu tối thiểu 8 ký tự")
-      .regex(/[A-Z]/, "Cần ít nhất 1 chữ hoa")
-      .regex(/[0-9]/, "Cần ít nhất 1 số")
-      .regex(/[^A-Za-z0-9]/, "Cần ít nhất 1 ký tự đặc biệt"),
+      .min(8, "Password must be at least 8 characters")
+      .regex(/[A-Z]/, "Password needs at least 1 uppercase letter")
+      .regex(/[0-9]/, "Password needs at least 1 number")
+      .regex(/[^A-Za-z0-9]/, "Password needs at least 1 special character"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Mật khẩu xác nhận không khớp",
+    message: "Passwords do not match",
     path: ["confirmPassword"],
   });
 
@@ -67,7 +70,6 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
-      // Backend RegisterRequest: { email, password, fullName }
       const res = await apiClient.post<AuthResponse>(API.auth.register, {
         email: data.email,
         password: data.password,
@@ -78,117 +80,169 @@ export default function RegisterPage() {
       login(user, accessToken, refreshToken);
       setAccessTokenCookie(accessToken, expiresAt);
 
-      toast.success("Đăng ký thành công!");
+      toast.success("Registration successful!");
       router.push("/dashboard");
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };
       };
       toast.error(
-        error?.response?.data?.error || "Đăng ký thất bại. Vui lòng thử lại."
+        error?.response?.data?.error ||
+          "Registration failed. Please try again."
       );
     }
   };
 
   return (
-    <Card>
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold">Tạo tài khoản</CardTitle>
-        <CardDescription>
-          Nhập thông tin để đăng ký tài khoản WarpTalk
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="fullName">Họ tên</Label>
+    <CinematicAuthShell
+      switchHref="/login"
+      switchLabel="Sign in"
+      switchText="Log in"
+    >
+      <div className="mb-5 text-center">
+        <h1 className="text-[1.9rem] font-extrabold leading-tight tracking-tight text-black">
+          Join WarpTalk
+        </h1>
+        <p className="mt-1 text-xs font-medium text-black/45">
+          Create your account to start translating.
+        </p>
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="mb-4 h-11 w-full gap-2 rounded-[7px] border-black/60 bg-white/30 text-sm font-medium text-black shadow-none hover:bg-white/60"
+      >
+        Sign up with
+        <GoogleMark />
+      </Button>
+
+      <div className="mb-4 flex items-center gap-4">
+        <div className="h-px flex-1 bg-black/25" />
+        <span className="text-[0.65rem] font-medium text-black/45">Or</span>
+        <div className="h-px flex-1 bg-black/25" />
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="fullName" className="sr-only">
+            Full name
+          </Label>
+          <div className="relative">
+            <UserRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
             <Input
               id="fullName"
-              placeholder="Nguyễn Văn A"
+              placeholder="Full name"
               autoComplete="name"
+              className="h-10 rounded-[7px] border-black/55 bg-white/45 pl-11 text-sm text-black shadow-none placeholder:text-black/45 focus-visible:border-black focus-visible:ring-black/10"
+              aria-invalid={Boolean(errors.fullName)}
               {...register("fullName")}
             />
-            {errors.fullName && (
-              <p className="text-sm text-destructive">
-                {errors.fullName.message}
-              </p>
-            )}
           </div>
+          {errors.fullName && (
+            <p className="text-xs font-medium text-destructive">
+              {errors.fullName.message}
+            </p>
+          )}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+        <div className="space-y-1">
+          <Label htmlFor="email" className="sr-only">
+            Email
+          </Label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
             <Input
               id="email"
               type="email"
-              placeholder="name@example.com"
+              placeholder="Email"
               autoComplete="email"
+              className="h-10 rounded-[7px] border-black/55 bg-white/45 pl-11 text-sm text-black shadow-none placeholder:text-black/45 focus-visible:border-black focus-visible:ring-black/10"
+              aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
-            )}
           </div>
+          {errors.email && (
+            <p className="text-xs font-medium text-destructive">
+              {errors.email.message}
+            </p>
+          )}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Mật khẩu</Label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                autoComplete="new-password"
-                {...register("password")}
-              />
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            {errors.password && (
-              <p className="text-sm text-destructive">
-                {errors.password.message}
-              </p>
-            )}
+        <div className="space-y-1">
+          <Label htmlFor="password" className="sr-only">
+            Password
+          </Label>
+          <div className="relative">
+            <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              autoComplete="new-password"
+              className="h-10 rounded-[7px] border-black/55 bg-white/45 px-11 text-sm text-black shadow-none placeholder:text-black/45 focus-visible:border-black focus-visible:ring-black/10"
+              aria-invalid={Boolean(errors.password)}
+              {...register("password")}
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-black/45 transition-colors hover:text-black"
+              onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
           </div>
+          {errors.password && (
+            <p className="text-xs font-medium text-destructive">
+              {errors.password.message}
+            </p>
+          )}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Xác nhận mật khẩu</Label>
+        <div className="space-y-1">
+          <Label htmlFor="confirmPassword" className="sr-only">
+            Confirm password
+          </Label>
+          <div className="relative">
+            <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" />
             <Input
               id="confirmPassword"
               type="password"
-              placeholder="••••••••"
+              placeholder="Confirm password"
               autoComplete="new-password"
+              className="h-10 rounded-[7px] border-black/55 bg-white/45 pl-11 text-sm text-black shadow-none placeholder:text-black/45 focus-visible:border-black focus-visible:ring-black/10"
+              aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            {errors.confirmPassword && (
-              <p className="text-sm text-destructive">
-                {errors.confirmPassword.message}
-              </p>
-            )}
           </div>
-        </CardContent>
+          {errors.confirmPassword && (
+            <p className="text-xs font-medium text-destructive">
+              {errors.confirmPassword.message}
+            </p>
+          )}
+        </div>
 
-        <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Đăng ký
-          </Button>
-          <p className="text-sm text-muted-foreground">
-            Đã có tài khoản?{" "}
-            <Link href="/login" className="text-primary hover:underline">
-              Đăng nhập
-            </Link>
-          </p>
-        </CardFooter>
+        <Button
+          type="submit"
+          className="mt-4 h-12 w-full rounded-2xl bg-[#3f3f3f] text-sm font-semibold text-white shadow-[0_18px_34px_rgba(0,0,0,0.16)] hover:bg-black"
+          disabled={isSubmitting}
+        >
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Create account
+        </Button>
       </form>
-    </Card>
+
+      <p className="mt-4 text-center text-xs font-medium text-black/55">
+        Already have an account?{" "}
+        <Link href="/login" className="font-semibold text-red-600 hover:text-red-700">
+          Login
+        </Link>
+      </p>
+    </CinematicAuthShell>
   );
 }
