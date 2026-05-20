@@ -19,6 +19,7 @@ This document maintains the state, changes, and logic for the Login Page.
 - Fixed the left visual card corner treatment by moving the diagonal `clip-path` from the whole `aside` to the internal media layer, preserving the rounded wrapper and bottom white padding.
 - Split the video crop behavior: the page background now focuses higher on the star field (`50% 44%`) with lower opacity to avoid enlarged rocky foreground artifacts, while the left panel keeps the lower crop for the visible person/landscape composition.
 - Added a bottom inset to the clipped media layer and increased the content bottom padding so the left video reads as an image inside the white frame instead of running flush to the bottom edge.
+- Replaced the sharp polygon media mask with an SVG `clipPath` path that rounds the top-right and bottom-right slanted video corners to better match the supplied reference.
 - Rebuilt the login UI to match the attached reference layout: a large centered rounded container on a neutral gray page, a white form panel on the left, and a dark blue visual panel on the right.
 - Added a mockup-inspired right panel with layered gradients, animated glass ticket shards, a brand block, and bottom support/access copy.
 - Refined the reference match by reducing the page/card scale, tightening typography and control heights, and replacing solid CSS ticket blocks with an inline SVG glass scene using translucent gradients, white strokes, shine streaks, blur-like layered shadows, and fine texture noise.
