@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, Globe2, Sparkles } from "lucide-react";
 
@@ -44,6 +44,11 @@ export function CinematicAuthShell({
   switchText: string;
 }) {
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const mediaClipId = `authMediaClip${useId().replace(/:/g, "")}`;
+  const mediaClipStyle = {
+    clipPath: `url(#${mediaClipId})`,
+    WebkitClipPath: `url(#${mediaClipId})`,
+  } satisfies CSSProperties;
   const pageVideoClassName = `absolute inset-0 z-0 h-full w-full object-cover object-[50%_44%] transition-opacity duration-700 ${
     isVideoReady ? "opacity-80" : "opacity-0"
   }`;
@@ -71,7 +76,21 @@ export function CinematicAuthShell({
       <div className="relative z-10 mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <section className="grid max-h-[calc(100dvh-3rem)] w-full overflow-y-auto rounded-[1.3rem] bg-white p-4 shadow-[0_30px_100px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.85)] lg:grid-cols-[1.03fr_0.97fr] lg:overflow-hidden">
           <aside className="relative hidden min-h-[36rem] overflow-hidden rounded-[1rem] text-white lg:block">
-            <div className="absolute inset-x-0 bottom-4 top-0 overflow-hidden rounded-[1rem] bg-[radial-gradient(circle_at_45%_22%,rgba(255,255,255,0.28),transparent_18%),radial-gradient(circle_at_38%_48%,rgba(255,255,255,0.14),transparent_12%),linear-gradient(145deg,#030303_0%,#151515_42%,#7a7a7a_51%,#1c1c1c_66%,#050505_100%)] [clip-path:polygon(0_0,92%_0,78%_100%,0_100%)]">
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute h-0 w-0"
+              focusable="false"
+            >
+              <defs>
+                <clipPath id={mediaClipId} clipPathUnits="objectBoundingBox">
+                  <path d="M 0.03 0 Q 0 0 0 0.04 L 0 0.96 Q 0 1 0.03 1 L 0.78 1 Q 0.805 1 0.812 0.965 L 0.935 0.035 Q 0.94 0 0.91 0 Z" />
+                </clipPath>
+              </defs>
+            </svg>
+            <div
+              className="absolute inset-x-0 bottom-4 top-0 overflow-hidden bg-[radial-gradient(circle_at_45%_22%,rgba(255,255,255,0.28),transparent_18%),radial-gradient(circle_at_38%_48%,rgba(255,255,255,0.14),transparent_12%),linear-gradient(145deg,#030303_0%,#151515_42%,#7a7a7a_51%,#1c1c1c_66%,#050505_100%)]"
+              style={mediaClipStyle}
+            >
               <video
                 autoPlay
                 loop

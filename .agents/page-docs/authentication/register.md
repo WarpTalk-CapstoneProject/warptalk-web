@@ -17,6 +17,7 @@ This document maintains the state, changes, and logic for the Register Page.
 - The shared shell now clips only the internal media layer so the left visual panel keeps its rounded wrapper and bottom white padding.
 - The page-level video uses a separate higher crop (`50% 44%`) and reduced opacity so the full-screen background emphasizes the star field rather than enlarged foreground rocks.
 - The clipped media layer now stops above the bottom edge with matching content padding, creating the same white frame spacing below the visual panel as the top and left edges.
+- The shared media mask now uses a curved SVG `clipPath` instead of a polygon so the slanted right-side video corners are rounded rather than sharp.
 - Added a Google-style sign-up button while preserving the existing email/password registration flow.
 - Updated validation and toast copy to English to match the new auth UI direction.
 
