@@ -1,10 +1,11 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Hls from "hls.js";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import type { Variants } from "motion/react";
 
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
@@ -16,8 +17,52 @@ const navLinks = [
   { label: "Contact", href: "#contact" },
 ];
 
-const badges = ["Live Runtime", "AI Insights", "Cloud Deploy"];
+const badges = ["Real-time Translation", "AI Summary Analysis", "Human Voice Cloning"];
 const logos = ["NOVA", "AXIS", "ORBIT", "PRISM", "LUMA", "ECHO"];
+const loaderWords = ["Design", "Create", "Inspire"];
+
+const pricingPlans = [
+  {
+    tier: "Free",
+    monthly: "Free",
+    yearly: "Free",
+    description: "For teams trying real-time interpretation across first conversations.",
+    features: [
+      "Up to 3 live translation rooms each month",
+      "Real-time captions for bilingual meetings",
+      "Basic transcript export",
+      "Web access for small teams",
+      "Community support",
+    ],
+  },
+  {
+    tier: "Standard",
+    monthly: "$9,99/m",
+    yearly: "$99,99/y",
+    description: "For growing global teams that need reliable AI summaries and history.",
+    features: [
+      "Up to 50 live translation rooms each month",
+      "AI meeting summary and action items",
+      "Speaker timeline and transcript search",
+      "Team collaboration up to 5 members",
+      "Priority web and mobile access",
+    ],
+  },
+  {
+    tier: "Pro",
+    monthly: "$19,99/m",
+    yearly: "$199,99/y",
+    description: "For operators using voice cloning and native-feeling interpretation at scale.",
+    features: [
+      "Unlimited live translation rooms",
+      "Human voice cloning for supported speakers",
+      "Advanced AI analysis and conversation insights",
+      "Unlimited team members",
+      "Brand and workspace customization",
+    ],
+    featured: true,
+  },
+];
 
 const containerVariants = {
   hidden: {},
@@ -27,16 +72,121 @@ const containerVariants = {
       delayChildren: 0.15,
     },
   },
-};
+} satisfies Variants;
 
 const itemVariants = {
   hidden: { opacity: 0, y: 24 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] as const },
   },
-};
+} satisfies Variants;
+
+function LoadingScreen({ onComplete }: { onComplete: () => void }) {
+  const [progress, setProgress] = useState(0);
+  const [wordIndex, setWordIndex] = useState(0);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setWordIndex((current) => {
+        if (current >= loaderWords.length - 1) {
+          window.clearInterval(interval);
+          return current;
+        }
+
+        return current + 1;
+      });
+    }, 900);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    let frame = 0;
+    let completeTimer = 0;
+    const start = performance.now();
+
+    const updateProgress = (now: number) => {
+      const elapsed = now - start;
+      const nextProgress = Math.min((elapsed / 2700) * 100, 100);
+      setProgress(nextProgress);
+
+      if (nextProgress < 100) {
+        frame = requestAnimationFrame(updateProgress);
+      } else {
+        completeTimer = window.setTimeout(() => {
+          onCompleteRef.current();
+        }, 400);
+      }
+    };
+
+    frame = requestAnimationFrame(updateProgress);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(completeTimer);
+    };
+  }, []);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[9999] bg-[#0a0a0a] text-[#f5f5f5]"
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+    >
+      <motion.div
+        className="absolute left-8 top-8 text-xs uppercase tracking-[0.3em] text-[#888888] md:left-12 md:top-12 md:text-sm"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.1 }}
+      >
+        Portfolio
+      </motion.div>
+
+      <div className="absolute inset-0 flex items-center justify-center">
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={wordIndex}
+            className="font-display text-4xl italic text-[#f5f5f5]/80 md:text-6xl lg:text-7xl"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+          >
+            {loaderWords[wordIndex]}
+          </motion.span>
+        </AnimatePresence>
+      </div>
+
+      <motion.div
+        className="font-display absolute bottom-8 right-8 text-6xl tabular-nums text-[#f5f5f5] md:bottom-12 md:right-12 md:text-8xl lg:text-9xl"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.1 }}
+      >
+        {Math.round(progress).toString().padStart(3, "0")}
+      </motion.div>
+
+      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#1f1f1f]/50">
+        <motion.div
+          className="h-full origin-left"
+          style={{
+            scaleX: progress / 100,
+            background: "linear-gradient(90deg, #89AACC 0%, #4E85BF 100%)",
+            boxShadow: "0 0 8px rgba(137, 170, 204, 0.35)",
+          }}
+          transition={{ duration: 0.1, ease: "linear" }}
+        />
+      </div>
+    </motion.div>
+  );
+}
 
 const VideoPlayer = memo(function VideoPlayer() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -121,6 +271,77 @@ function WarpTalkNavLogo() {
         className="absolute left-1/2 top-1/2 size-36 -translate-x-1/2 -translate-y-1/2 object-cover"
       />
     </span>
+  );
+}
+
+function PricingSection() {
+  const [yearly, setYearly] = useState(false);
+
+  return (
+    <section id="pricing" className="c3-pricing-section scroll-mt-28 bg-[#0c0c0c] text-white">
+      <svg aria-hidden="true" className="pointer-events-none absolute size-0">
+        <filter id="c3-noise">
+          <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" stitchTiles="stitch" />
+          <feComponentTransfer>
+            <feFuncA type="linear" slope="0.075" />
+          </feComponentTransfer>
+          <feComposite in2="SourceGraphic" operator="in" result="noise" />
+          <feBlend in="SourceGraphic" in2="noise" mode="overlay" />
+        </filter>
+      </svg>
+
+      <div className="c3-watermark-container">
+        <div className="c3-watermark-main">
+          <span className="c3-watermark-line-1">Translation</span>
+          <span className="c3-watermark-line-2">Native</span>
+        </div>
+      </div>
+
+      <div className="c3-grid">
+        {pricingPlans.map((plan) => (
+          <article className={plan.featured ? "c3-card c3-card-pro" : "c3-card"} key={plan.tier}>
+            <p className="c3-tier-small">{plan.tier}</p>
+            <h3 className="c3-tier-large">{yearly ? plan.yearly : plan.monthly}</h3>
+            <p className="c3-desc">{plan.description}</p>
+            <ul className="c3-list">
+              {plan.features.map((feature) => (
+                <li key={feature}>
+                  <span className="c3-check" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" className="size-3.5">
+                      <path
+                        d="M13.5 4.25 6.25 11.5 2.5 7.75"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+            <button type="button" className="c3-btn">
+              Choose Plan
+            </button>
+          </article>
+        ))}
+      </div>
+
+      <div className="c3-toggle-wrap">
+        <span className="text-sm font-medium text-white/70">Yearly</span>
+        <button
+          type="button"
+          className={yearly ? "c3-toggle active" : "c3-toggle"}
+          onClick={() => setYearly((current) => !current)}
+          aria-pressed={yearly}
+          aria-label="Toggle yearly pricing"
+        >
+          <span className="c3-toggle-knob" />
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -292,104 +513,118 @@ function LandingFooter() {
 }
 
 export default function HomePage() {
+  const [isLoading, setIsLoading] = useState(true);
+
   return (
     <>
-      <main className="relative min-h-screen overflow-hidden bg-[#000000] font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal text-white antialiased">
-        <VideoPlayer />
+      <AnimatePresence mode="wait">
+        {isLoading ? <LoadingScreen onComplete={() => setIsLoading(false)} /> : null}
+      </AnimatePresence>
 
-        <header className="fixed left-0 right-0 top-0 z-30 px-5 py-5 md:px-8 lg:px-12">
-          <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl border border-white/10 bg-black/35 px-4 py-3 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-            <Link href="/" className="flex items-center" aria-label="WarpTalk home">
-              <WarpTalkNavLogo />
-            </Link>
+      <div style={{ opacity: isLoading ? 0 : 1, transition: "opacity 0.5s ease-out" }}>
+        <main
+          id="about"
+          className="relative min-h-screen overflow-hidden bg-[#000000] scroll-mt-28 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal text-white antialiased"
+        >
+          <VideoPlayer />
 
-            <div className="hidden items-center gap-2 text-sm text-white/62 md:flex">
-              {navLinks.map((link) => (
-                <a
-                  key={link.label}
-                  href={link.href}
-                  className={
-                    link.active
-                      ? "rounded-full bg-gradient-to-r from-white/35 via-white/10 to-white/35 p-px text-white"
-                      : "px-4 py-2 transition-colors hover:text-white"
-                  }
-                >
-                  <span className={link.active ? "block rounded-full bg-black/75 px-4 py-2" : undefined}>
-                    {link.label}
-                  </span>
-                </a>
-              ))}
-            </div>
+          <header className="fixed left-0 right-0 top-0 z-30 px-5 py-5 md:px-8 lg:px-12">
+            <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl border border-white/10 bg-black/35 px-4 py-3 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+              <Link href="/" className="flex items-center" aria-label="WarpTalk home">
+                <WarpTalkNavLogo />
+              </Link>
 
-            <Link
-              href="/register"
-              className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
-            >
-              Get Started for Free
-            </Link>
-          </nav>
-        </header>
+              <div className="hidden items-center gap-2 text-sm text-white/62 md:flex">
+                {navLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    className={
+                      link.active
+                        ? "rounded-full bg-gradient-to-r from-white/35 via-white/10 to-white/35 p-px text-white"
+                        : "px-4 py-2 transition-colors hover:text-white"
+                    }
+                  >
+                    <span className={link.active ? "block rounded-full bg-black/75 px-4 py-2" : undefined}>
+                      {link.label}
+                    </span>
+                  </a>
+                ))}
+              </div>
 
-        <section className="relative z-10 flex min-h-screen items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="mx-auto flex w-full max-w-6xl flex-col items-center"
-          >
-            <motion.div variants={itemVariants} className="mb-7 flex flex-wrap justify-center gap-3">
-              {badges.map((badge) => (
-                <div
-                  key={badge}
-                  className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md"
-                >
-                  <BadgeIcon />
-                  <span>Integrated with</span>
-                  <span className="text-white">{badge}</span>
-                </div>
-              ))}
-            </motion.div>
-
-            <motion.h1
-              variants={itemVariants}
-              className="max-w-5xl text-[3.25rem] font-normal leading-[0.92] tracking-[-0.065em] text-white md:text-[5rem] lg:text-[6.1rem]"
-            >
-              Translation that feel native
-            </motion.h1>
-
-            <motion.p
-              variants={itemVariants}
-              className="mt-6 max-w-2xl text-base leading-7 text-white/58 md:text-lg"
-            >
-              Real-time interpretation global teams. Natural conversations. Zero language barriers
-            </motion.p>
-
-            <motion.div variants={itemVariants} className="mt-9 flex flex-wrap justify-center gap-4">
               <Link
-                href="/register"
-                className="rounded-xl border border-white/55 bg-black px-7 py-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-white hover:text-black"
+                href="/login"
+                className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
               >
                 Get Started for Free
               </Link>
-              <Link
-                href="/login"
-                className="rounded-xl border border-white/10 bg-white/[0.06] px-7 py-3 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white hover:text-black"
-              >
-                Let&apos;s Get Connected
-              </Link>
-            </motion.div>
-          </motion.div>
-        </section>
+            </nav>
+          </header>
 
-        <div className="absolute bottom-8 left-0 right-0 z-20 px-5 md:px-8 lg:px-12">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-5 text-white">
-            {logos.map((logo) => (
-              <PlaceholderLogo key={logo} label={logo} />
-            ))}
+          <section
+            id="features"
+            className="relative z-10 flex min-h-screen scroll-mt-28 items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12"
+          >
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="mx-auto flex w-full max-w-6xl flex-col items-center"
+            >
+              <motion.div variants={itemVariants} className="mb-7 flex flex-wrap justify-center gap-3">
+                {badges.map((badge) => (
+                  <div
+                    key={badge}
+                    className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md"
+                  >
+                    <BadgeIcon />
+                    <span>{badge}</span>
+                  </div>
+                ))}
+              </motion.div>
+
+              <motion.h1
+                variants={itemVariants}
+                className="max-w-5xl text-[3.25rem] font-normal leading-[0.92] tracking-[-0.065em] text-white md:text-[5rem] lg:text-[6.1rem]"
+              >
+                Translation that feel native
+              </motion.h1>
+
+              <motion.p
+                variants={itemVariants}
+                className="mt-6 max-w-2xl text-base leading-7 text-white/58 md:text-lg"
+              >
+                Real-time interpretation global teams. Natural conversations. Zero language barriers
+              </motion.p>
+
+              <motion.div variants={itemVariants} className="mt-9 flex flex-wrap justify-center gap-4">
+                <Link
+                  href="/login"
+                  className="rounded-xl border border-white/55 bg-black px-7 py-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-white hover:text-black"
+                >
+                  Get Started for Free
+                </Link>
+                <Link
+                  href="/login"
+                  className="rounded-xl border border-white/10 bg-white/[0.06] px-7 py-3 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white hover:text-black"
+                >
+                  Let&apos;s Get Connected
+                </Link>
+              </motion.div>
+            </motion.div>
+          </section>
+
+          <div className="absolute bottom-8 left-0 right-0 z-20 px-5 md:px-8 lg:px-12">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-5 text-white">
+              {logos.map((logo) => (
+                <PlaceholderLogo key={logo} label={logo} />
+              ))}
+            </div>
           </div>
-        </div>
-      </main>
-      <LandingFooter />
+        </main>
+        <PricingSection />
+        <LandingFooter />
+      </div>
     </>
   );
 }

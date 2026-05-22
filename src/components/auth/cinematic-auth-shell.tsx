@@ -3,6 +3,7 @@
 import type { InputHTMLAttributes, ReactNode } from "react";
 import Image from "next/image";
 import { motion } from "motion/react";
+import type { Variants } from "motion/react";
 
 import { cn } from "@/lib/utils";
 
@@ -18,16 +19,16 @@ const leftContainer = {
       delayChildren: 0.2,
     },
   },
-};
+} satisfies Variants;
 
 const leftItem = {
   hidden: { opacity: 0, y: 10 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: "easeOut" },
+    transition: { duration: 0.5, ease: "easeOut" as const },
   },
-};
+} satisfies Variants;
 
 export function GoogleMark({ className = "size-4" }: { className?: string }) {
   return (

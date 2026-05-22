@@ -12,6 +12,12 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 
 ### What Changed
 
+- Added a fullscreen pre-page loader before the landing content fades in:
+  - Top-left label: `Portfolio`
+  - Center word sequence: `Design` -> `Create` -> `Inspire`
+  - Bottom-right counter from `000` to `100`
+  - Bottom progress bar using a blue gradient fill
+  - Loader exits before the main landing page opacity fades in
 - Replaced the local MP4 background with a remote Mux HLS stream:
   - `https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8`
 - Added `hls.js` and a memoized `VideoPlayer` component.
@@ -23,11 +29,16 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
   - Nav links: `About`, `Feature`, `Pricing`, `Contact`
   - Active gradient-border `Feature`
   - Gradient CTA button
-  - Three glass integration badges
+  - Three glass product badges: `Real-time Translation`, `AI Summary Analysis`, `Human Voice Cloning`
   - Large animated headline: `Translation that feel native`
   - Product subtext: `Real-time interpretation global teams. Natural conversations. Zero language barriers`
-  - Primary and secondary CTA buttons
+  - Primary and secondary CTA buttons that route to `/login`
   - Static grayscale logo row at the bottom
+- Added a WarpTalk pricing section using the requested `c3` cinematic pricing card treatment:
+  - `Free`, `Standard`, and `Pro` cards
+  - WarpTalk-specific features for real-time translation, AI summaries, and voice cloning
+  - Yearly pricing toggle
+  - Large decorative `Translation / Native` watermark
 - Added a WarpTalk-branded footer section adapted from the requested Kresna footer reference:
   - White `section.footer-section` surface with two rounded cards
   - Left card uses the requested autoplaying video background with no overlay
@@ -52,10 +63,14 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
    - `bottom-[35vh]`
    - `opacity-100`
    - no dark overlay
-3. Fixed top glass navbar.
+3. Fixed top glass navbar with anchors for `#about`, `#features`, `#pricing`, and `#contact`.
 4. Centered hero content with staggered animation.
 5. Bottom static logo marquee row using placeholder SVG marks.
-6. Footer contact section (`#contact`) with:
+6. Pricing section (`#pricing`) with:
+   - Cinematic glass pricing cards
+   - Yearly toggle state
+   - WarpTalk pricing plan copy
+7. Footer contact section (`#contact`) with:
    - Video card
    - Navigation/company columns
    - Floating lucky badge
@@ -65,9 +80,13 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 ## Important UI Behavior
 
 - The background video is intentionally not darkened by overlays.
+- The loader keeps the landing content hidden until its counter finishes, then the page fades in.
 - The HLS stream requires browser/network access to `stream.mux.com`.
 - Badges, headline, subtext, and buttons animate in with a staggered fade-up sequence.
+- Any landing CTA related to getting started routes to `/login`.
 - Navbar links are hidden below the `md` breakpoint.
+- Landing anchors use scroll margin so the fixed navbar does not cover section starts.
+- The pricing yearly toggle only updates the displayed price text; it does not yet start checkout.
 - Footer social icons, footer nav links, and subscribe button use hover-only transitions.
 - Footer watermark viewBox is recalculated after fonts are ready and on resize.
 - Footer has `scroll-margin-top` so the fixed navbar does not cover it when users jump to `#contact`.
@@ -77,6 +96,7 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - The logo row uses placeholder SVG/text marks until official partner/customer logos exist.
 - The navbar logo is cropped from a square JPG asset; use a transparent horizontal logo asset if one becomes available.
 - HLS playback depends on remote Mux stream availability.
+- Pricing buttons are presentational and are not wired to a payment or plan selection flow.
 - Footer social links are visual placeholders and do not yet navigate to real WarpTalk social URLs.
 - Footer subscribe input is presentational and not wired to a mailing-list endpoint.
 
@@ -89,4 +109,7 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - [x] Verify staggered fade-up animation on badges, headline, subtext, and buttons.
 - [x] Verify bottom placeholder logo row is visible and low-opacity grayscale.
 - [x] Verify footer layout, video card, WarpTalk logo treatment, and watermark on desktop.
+- [x] Verify loader appears before the page and exits after the progress reaches 100.
+- [x] Verify all landing `Get Started` CTAs navigate to `/login`.
+- [x] Verify pricing cards render and yearly toggle updates prices.
 - [ ] Verify footer stacks cleanly below `860px` and subscribe row fits below `560px`.

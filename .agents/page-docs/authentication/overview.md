@@ -14,6 +14,7 @@ This document provides an overview of the authentication system, components, and
 - GitHub social auth has been removed from the auth UI.
 - `src/app/(auth)/layout.tsx` intentionally returns `children` directly so the shared shell can own the full viewport.
 - `src/app/globals.css` and `src/app/layout.tsx` apply the requested global black body background, white text, Inter font, and antialiasing so auth screens do not expose a light page background.
+- `src/components/auth/cinematic-auth-shell.tsx` has explicit `motion/react` variant typing so the shared auth shell passes production TypeScript builds with the current Motion package.
 - Authentication logic remains in each route page:
   - Login posts to `API.auth.login`.
   - Register posts to `API.auth.register`.
