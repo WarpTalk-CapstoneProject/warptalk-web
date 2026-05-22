@@ -46,9 +46,24 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
   - The small branch paths inherit scroll progress from the same story-board spine: each fork begins only when the live spine reaches its junction, grows with the continuing spine, and retracts when the user scrolls upward.
   - Branch tick marks and labels reveal after the branch path reaches them, keeping content such as `live`, `low latency`, `room signal`, `xin chao`, `hello`, `bonjour`, and `konnichiwa` tied to the motion sequence instead of appearing as static copy.
   - Branch diagrams reverse their reveal when they leave view on upward scrolling instead of staying as static lines.
+  - The trace lane is shifted farther left with a stronger stroke hierarchy: the main spine is thicker/brighter than the branch lines so users can distinguish the primary scroll path.
+  - Branch reveal ranges were tightened so the fork paths draw faster once the main spine reaches each junction.
+  - Step titles and index labels were compacted into a cleaner left-to-right editorial grid, with branch baselines routed below the large copy to avoid line/text collisions.
+  - Major step headings now reveal from the same branch progress as their SVG fork instead of using independent viewport entrance animation.
+  - The Feature story board was expanded into a taller single coordinate system so steps 03, 04, and the shared `System Signals` continuation have more even breathing room and are easier to read at 100% zoom.
+  - The lower memory fork and shared `System Signals` rail were shifted deeper in that same coordinate system so step 04 finishes in a readable lower viewport band before the five signal rows enter.
+  - The lower story-board scroll mapping now finishes the shared trace faster than the page translation near the System Signals handoff, and the signal list border waits for the rail reveal instead of flashing an empty frame first.
+  - The story-board end offset is tuned so the shared live trace reaches the System Signals rail while that block is still inside the readable viewport, keeping the rail and its rows in step with the scroll frame.
+  - Step 04 sits deeper in the lower reading band, and each System Signals row now waits for the live rail to pass its SVG dot before its copy and pattern reveal.
+  - The deepened 04 fork and the System Signals rail are re-gated from their measured positions on the longer shared spine so neither branch reveal nor row content gets ahead of the live trace.
+  - The pause branch was routed below the paragraph copy so the animated line no longer crosses through `The conversation keeps moving...`.
+  - Lower branch reveal ranges are gated at the measured fork thresholds of the shared spine, then draw quickly after the junction so 03, 04, and System Signals stay readable without letting side branches outrun the main line.
   - Smaller supporting diagrams such as the pause line and memory fan-out are drawn directly as animated SVG branches to keep the layout closer to the supplied editorial reference.
   - Includes the step copy: `Every voice leaves a trace`, `Meaning crosses over`, `The conversation keeps moving...`, `The room remembers`, and `Voice returns human`.
-  - Includes a `System Signals` sequence for `Capture`, `Understand`, `Translate`, `Speak`, and `Remember`, with a motion connector from the trace lane into the descending SVG rail and staggered row reveals.
+  - Includes a `System Signals` sequence for `Capture`, `Understand`, `Translate`, `Speak`, and `Remember`.
+  - The `System Signals` rail is the lower continuation of the same story-board SVG spine, and its dots plus 01-05 rows are mapped from that shared scroll progress.
+  - The step headings, System Signals intro, rail, dots, and rows are all progress-driven so they appear in sequence with the single trace instead of being present before the line reaches them.
+  - The lower board spacing gives the 04 memory branch, the System Signals rows, and `Voice returns human` separate reading beats while keeping one continuous SVG trace from the narrative spine into the signal rail.
 - Added a WarpTalk pricing section using the requested `c3` cinematic pricing card treatment:
   - `Free`, `Standard`, and `Pro` cards
   - WarpTalk-specific features for real-time translation, AI summaries, and voice cloning
@@ -115,7 +130,8 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - The opening `Feature` trace follows `scrollYProgress` directly inside the fixed desktop story board so the spine and branch connection points stay locked to the same visual coordinate system at 100% zoom.
 - The opening `Feature` branch diagrams live in the same SVG story board as the trace lane, keeping the small branches continuous while leaving the title blocks clear on desktop.
 - Branch progress is range-mapped from the shared spine path at the four fork junctions, so short horizontal lines stop at their endpoints while the spine keeps moving down to later forks.
-- The `System Signals` rail is a grid-level motion SVG with its own incoming connector; it draws downward first while row cards reveal with staggered motion beside it.
+- The `System Signals` rail is drawn as the lower tail of the same story-board SVG spine; its dots and row visibility are driven by the board scroll progress instead of standalone viewport animations.
+- The `System Signals` copy appears first, dots light in order, each row divider is an animated SVG path, and row content is gated until after its horizontal path has crossed the rail dot.
 - The pricing yearly toggle only updates the displayed price text; it does not yet start checkout.
 - Footer social icons, footer nav links, and subscribe button use hover-only transitions.
 - Footer watermark viewBox is recalculated after fonts are ready and on resize.
@@ -145,7 +161,7 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - [x] Verify the desktop `Meaning crosses over` branch remains horizontal with language labels on the crossing SVG line.
 - [x] Verify step headings sit closer to the shared spine and animated branch ingress paths lead into the compact diagrams.
 - [x] Verify branch diagrams retract when scrolled out of view upward.
-- [x] Verify `System Signals` receives an incoming SVG connector, draws a straight rail, and reveals five rows in order.
+- [x] Verify `System Signals` continues from the shared SVG spine, draws a straight rail, and reveals five rows in order.
 - [x] Verify the main trace remains visible through the lower `Voice returns human` and `When the room understands` Feature content.
 - [x] Verify footer layout, video card, WarpTalk logo treatment, and watermark on desktop.
 - [x] Verify loader appears before the page and exits after the progress reaches 100.

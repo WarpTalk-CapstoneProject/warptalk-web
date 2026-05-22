@@ -114,25 +114,6 @@ const itemVariants = {
   },
 } satisfies Variants;
 
-const signalListVariants = {
-  hidden: {},
-  visible: {
-    transition: {
-      delayChildren: 0.22,
-      staggerChildren: 0.16,
-    },
-  },
-} satisfies Variants;
-
-const signalRowVariants = {
-  hidden: { opacity: 0, x: 22 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.58, ease: [0.22, 1, 0.36, 1] as const },
-  },
-} satisfies Variants;
-
 function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   const [progress, setProgress] = useState(0);
   const [wordIndex, setWordIndex] = useState(0);
@@ -442,12 +423,12 @@ function FeatureStoryBoard() {
   const storyRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({
     target: storyRef,
-    offset: ["start 84%", "end 16%"],
+    offset: ["start 84%", "end 68%"],
   });
-  const driftProgress = useTransform(scrollYProgress, [0.197, 0.36], [0, 1]);
-  const crossingProgress = useTransform(scrollYProgress, [0.399, 0.58], [0, 1]);
-  const pauseProgress = useTransform(scrollYProgress, [0.623, 0.75], [0, 1]);
-  const memoryProgress = useTransform(scrollYProgress, [0.825, 1], [0, 1]);
+  const driftProgress = useTransform(scrollYProgress, [0.15, 0.24], [0, 1]);
+  const crossingProgress = useTransform(scrollYProgress, [0.322, 0.41], [0, 1]);
+  const pauseProgress = useTransform(scrollYProgress, [0.495, 0.56], [0, 1]);
+  const memoryProgress = useTransform(scrollYProgress, [0.636, 0.7], [0, 1]);
   const driftOpacity = useTransform(driftProgress, [0, 0.03], [0, 1]);
   const crossingOpacity = useTransform(crossingProgress, [0, 0.03], [0, 1]);
   const pauseOpacity = useTransform(pauseProgress, [0, 0.03], [0, 1]);
@@ -456,29 +437,72 @@ function FeatureStoryBoard() {
   const pauseNodeScale = useTransform(pauseProgress, [0.52, 0.62], [0, 1]);
   const memoryNodeOpacity = useTransform(memoryProgress, [0.18, 0.28], [0, 1]);
   const memoryNodeScale = useTransform(memoryProgress, [0.18, 0.28], [0, 1]);
+  const signalProgress = useTransform(scrollYProgress, [0.79, 1.035], [0, 1]);
+  const signalCopyOpacity = useTransform(signalProgress, [0.03, 0.18], [0, 1]);
+  const signalCopyY = useTransform(signalCopyOpacity, [0, 1], [18, 0]);
+  const signalDotProgress = [
+    useTransform(signalProgress, [0.08, 0.14], [0, 1]),
+    useTransform(signalProgress, [0.21, 0.27], [0, 1]),
+    useTransform(signalProgress, [0.34, 0.4], [0, 1]),
+    useTransform(signalProgress, [0.47, 0.53], [0, 1]),
+    useTransform(signalProgress, [0.6, 0.66], [0, 1]),
+  ];
+  const signalLineProgress = [
+    useTransform(signalProgress, [0.15, 0.27], [0, 1]),
+    useTransform(signalProgress, [0.28, 0.4], [0, 1]),
+    useTransform(signalProgress, [0.41, 0.53], [0, 1]),
+    useTransform(signalProgress, [0.54, 0.66], [0, 1]),
+    useTransform(signalProgress, [0.67, 0.79], [0, 1]),
+  ];
+  const signalRowOpacity = [
+    useTransform(signalProgress, [0.29, 0.36], [0, 1]),
+    useTransform(signalProgress, [0.42, 0.49], [0, 1]),
+    useTransform(signalProgress, [0.55, 0.62], [0, 1]),
+    useTransform(signalProgress, [0.68, 0.75], [0, 1]),
+    useTransform(signalProgress, [0.81, 0.88], [0, 1]),
+  ];
+  const signalRowY = [
+    useTransform(signalRowOpacity[0], [0, 1], [18, 0]),
+    useTransform(signalRowOpacity[1], [0, 1], [18, 0]),
+    useTransform(signalRowOpacity[2], [0, 1], [18, 0]),
+    useTransform(signalRowOpacity[3], [0, 1], [18, 0]),
+    useTransform(signalRowOpacity[4], [0, 1], [18, 0]),
+  ];
+  const stepOpacity = [
+    useTransform(driftProgress, [0.02, 0.16], [0, 1]),
+    useTransform(crossingProgress, [0.02, 0.16], [0, 1]),
+    useTransform(pauseProgress, [0.02, 0.16], [0, 1]),
+    useTransform(memoryProgress, [0.02, 0.16], [0, 1]),
+  ];
+  const stepY = [
+    useTransform(stepOpacity[0], [0, 1], [24, 0]),
+    useTransform(stepOpacity[1], [0, 1], [24, 0]),
+    useTransform(stepOpacity[2], [0, 1], [24, 0]),
+    useTransform(stepOpacity[3], [0, 1], [24, 0]),
+  ];
 
   return (
     <div ref={storyRef} className="feature-story-board">
       <motion.svg
         className="feature-story-map"
-        viewBox="0 0 1120 980"
+        viewBox="0 0 1120 2740"
         preserveAspectRatio="none"
         aria-hidden="true"
       >
         <path
           className="feature-story-spine-base"
-          d="M78 0 C 16 84 18 172 130 220 C 236 266 226 374 108 420 C -8 468 18 594 144 644 C 256 688 238 786 112 836 C 18 874 42 928 182 974"
+          d="M80 0 C 10 122 34 242 130 300 C 252 374 236 540 108 620 C 0 704 36 882 144 960 C 258 1064 248 1522 112 1650 C 54 1708 72 1774 164 1822 C 198 1848 218 1928 226 2006 C 232 2084 226 2158 226 2248 V2650"
         />
         <motion.path
           className="feature-story-spine-live"
-          d="M78 0 C 16 84 18 172 130 220 C 236 266 226 374 108 420 C -8 468 18 594 144 644 C 256 688 238 786 112 836 C 18 874 42 928 182 974"
+          d="M80 0 C 10 122 34 242 130 300 C 252 374 236 540 108 620 C 0 704 36 882 144 960 C 258 1064 248 1522 112 1650 C 54 1708 72 1774 164 1822 C 198 1848 218 1928 226 2006 C 232 2084 226 2158 226 2248 V2650"
           style={{ pathLength: scrollYProgress }}
         />
 
         <g>
           {[
-            "M130 220 C 188 220 216 244 296 244 H432 C 498 244 526 176 620 176 S 812 238 1094 206",
-            "M130 220 C 188 220 216 244 296 244 H432 C 512 244 548 298 640 252 S 830 222 1094 250",
+            "M130 300 C 180 336 240 390 360 390 H470 C 554 390 574 318 692 318 S 862 390 1094 358",
+            "M130 300 C 180 336 240 390 360 390 H470 C 556 390 590 444 682 404 S 868 358 1094 404",
           ].map((path, index) => (
             <motion.path
               className={index === 1 ? "feature-story-branch feature-story-dots" : "feature-story-branch"}
@@ -487,16 +511,16 @@ function FeatureStoryBoard() {
               style={{ pathLength: driftProgress, opacity: driftOpacity }}
             />
           ))}
-          <BranchLabel x={560} y={334} tickTop={270} tickBottom={300} label="live" progress={driftProgress} revealAt={0.58} />
-          <BranchLabel x={790} y={334} tickTop={270} tickBottom={300} label="low latency" progress={driftProgress} revealAt={0.74} />
-          <BranchLabel x={1004} y={334} tickTop={270} tickBottom={300} label="room signal" progress={driftProgress} revealAt={0.9} />
+          <BranchLabel x={586} y={484} tickTop={422} tickBottom={454} label="live" progress={driftProgress} revealAt={0.58} />
+          <BranchLabel x={820} y={484} tickTop={422} tickBottom={454} label="low latency" progress={driftProgress} revealAt={0.74} />
+          <BranchLabel x={1016} y={484} tickTop={422} tickBottom={454} label="room signal" progress={driftProgress} revealAt={0.9} />
         </g>
 
         <g>
           {[
-            "M108 420 C 184 420 220 458 306 458 H426 C 514 458 558 392 670 392 S 872 430 1094 400",
-            "M108 420 C 184 420 220 458 306 458 H426 C 514 458 572 510 674 476 S 862 436 1094 520",
-            "M108 420 C 184 420 220 458 306 458 H426 C 526 458 588 548 726 524 S 916 488 1094 456",
+            "M108 620 C 176 664 246 720 370 720 H488 C 572 720 620 638 730 638 S 914 692 1094 664",
+            "M108 620 C 176 664 246 720 370 720 H488 C 574 720 620 796 742 758 S 888 706 1094 776",
+            "M108 620 C 176 664 246 720 370 720 H488 C 590 720 658 830 780 800 S 950 734 1094 722",
           ].map((path, index) => (
             <motion.path
               className={index === 1 ? "feature-story-branch feature-story-dots" : "feature-story-branch"}
@@ -505,27 +529,27 @@ function FeatureStoryBoard() {
               style={{ pathLength: crossingProgress, opacity: crossingOpacity }}
             />
           ))}
-          <BranchLabel x={594} y={362} tickTop={382} tickBottom={434} label="xin chao" progress={crossingProgress} revealAt={0.48} />
-          <BranchLabel x={742} y={380} tickTop={398} tickBottom={450} label="hello" progress={crossingProgress} revealAt={0.62} />
-          <BranchLabel x={892} y={346} tickTop={364} tickBottom={416} label="bonjour" progress={crossingProgress} revealAt={0.76} />
-          <BranchLabel x={1014} y={540} tickTop={508} tickBottom={540} label="konnichiwa" progress={crossingProgress} revealAt={0.9} />
+          <BranchLabel x={594} y={652} tickTop={674} tickBottom={716} label="xin chao" progress={crossingProgress} revealAt={0.48} />
+          <BranchLabel x={756} y={686} tickTop={700} tickBottom={744} label="hello" progress={crossingProgress} revealAt={0.62} />
+          <BranchLabel x={908} y={628} tickTop={648} tickBottom={694} label="bonjour" progress={crossingProgress} revealAt={0.76} />
+          <BranchLabel x={1012} y={808} tickTop={780} tickBottom={808} label="konnichiwa" progress={crossingProgress} revealAt={0.9} />
         </g>
 
         <g>
           <motion.path
             className="feature-story-branch feature-story-dots"
-            d="M144 644 C 214 644 248 666 364 666 H560"
+            d="M144 960 C 216 1024 276 1140 430 1140 H560"
             style={{ pathLength: pauseProgress, opacity: pauseOpacity }}
           />
           <motion.path
             className="feature-story-branch"
-            d="M144 644 C 214 644 248 666 364 666 H560 C 574 666 582 666 594 666 H1094"
+            d="M144 960 C 216 1024 276 1140 430 1140 H560 C 574 1140 584 1140 596 1140 H1094"
             style={{ pathLength: pauseProgress, opacity: pauseOpacity }}
           />
           <motion.circle
             className="feature-story-node"
             cx="578"
-            cy="666"
+            cy="1140"
             r="3"
             style={{ opacity: pauseNodeOpacity, scale: pauseNodeScale }}
           />
@@ -534,44 +558,47 @@ function FeatureStoryBoard() {
         <g>
           <motion.path
             className="feature-story-branch"
-            d="M112 836 C 196 836 226 864 340 864 H438"
+            d="M112 1650 C 184 1714 250 1806 420 1806 H520"
             style={{ pathLength: memoryProgress, opacity: memoryOpacity }}
           />
-          {[
-            "M112 836 C 196 836 226 864 340 864 H438 C 548 864 586 760 712 760 H1000",
-            "M112 836 C 196 836 226 864 340 864 H438 C 554 864 590 818 712 818 H1000",
-            "M112 836 C 196 836 226 864 340 864 H438 C 554 864 590 876 712 876 H1000",
-            "M112 836 C 196 836 226 864 340 864 H438 C 548 864 586 934 712 934 H1000",
-          ].map((path, index) => (
-            <motion.path
-              className={index === 1 ? "feature-story-branch feature-story-dots" : "feature-story-branch"}
-              d={path}
-              key={path}
-              style={{ pathLength: memoryProgress, opacity: memoryOpacity }}
-            />
-          ))}
+          <motion.path
+            className="feature-story-branch"
+            d="M520 1806 C 624 1806 666 1728 810 1728 H1094"
+            style={{ pathLength: memoryProgress, opacity: memoryOpacity }}
+          />
           <motion.circle
             className="feature-story-node"
-            cx="438"
-            cy="864"
+            cx="520"
+            cy="1806"
             r="3"
             style={{ opacity: memoryNodeOpacity, scale: memoryNodeScale }}
           />
-          <BranchLabel x={1000} y={766} tickTop={760} tickBottom={760} label="decisions" progress={memoryProgress} revealAt={0.62} align="start" />
-          <BranchLabel x={1000} y={824} tickTop={818} tickBottom={818} label="questions" progress={memoryProgress} revealAt={0.72} align="start" />
-          <BranchLabel x={1000} y={882} tickTop={876} tickBottom={876} label="next steps" progress={memoryProgress} revealAt={0.82} align="start" />
-          <BranchLabel x={1000} y={940} tickTop={934} tickBottom={934} label="names" progress={memoryProgress} revealAt={0.92} align="start" />
+          <BranchLabel x={1010} y={1734} tickTop={1728} tickBottom={1728} label="memory signal" progress={memoryProgress} revealAt={0.72} align="start" />
         </g>
+
+        {[2254, 2346, 2438, 2530, 2622].map((point, index) => (
+          <g key={point}>
+            <motion.path
+              className="feature-story-signal-row-line"
+              d={`M214 ${point} H1094`}
+              style={{ pathLength: signalLineProgress[index], opacity: signalLineProgress[index] }}
+            />
+            <motion.circle
+              className="feature-story-signal-dot"
+              cx="226"
+              cy={point}
+              r="4.5"
+              style={{ opacity: signalDotProgress[index], scale: signalDotProgress[index] }}
+            />
+          </g>
+        ))}
       </motion.svg>
 
-      {featureSteps.map((step) => (
+      {featureSteps.map((step, index) => (
         <motion.article
           className={`feature-story-step feature-story-step-${step.number}`}
           key={step.number}
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ amount: 0.2 }}
-          transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
+          style={{ opacity: stepOpacity[index], y: stepY[index] }}
         >
           <div className="feature-story-index">
             <span>{step.number}</span>
@@ -584,6 +611,39 @@ function FeatureStoryBoard() {
       <span className="feature-story-watermark" aria-hidden="true">
         PAUSE
       </span>
+
+      <div className="feature-signal-stage">
+        <motion.aside
+          className="feature-signal-copy"
+          style={{ opacity: signalCopyOpacity, y: signalCopyY }}
+        >
+          <h3>System Signals</h3>
+          <p>Five core signals power every conversation across any language.</p>
+        </motion.aside>
+
+        <motion.div className="feature-signal-list" style={{ opacity: signalCopyOpacity }}>
+          {signalRows.map((row, index) => (
+            <motion.div
+              className="feature-signal-row"
+              key={row.number}
+              style={{
+                opacity: signalRowOpacity[index],
+                y: signalRowY[index],
+              }}
+            >
+              <span className="feature-signal-number">{row.number}</span>
+              <span className="feature-signal-label">
+                <small>{row.meta}</small>
+                <strong>{row.label}</strong>
+              </span>
+              <span className="feature-signal-pattern">
+                <FeaturePattern type={row.pattern} />
+              </span>
+              <span className="feature-signal-plus">+</span>
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
     </div>
   );
 }
@@ -600,108 +660,6 @@ function FeatureTraceSection() {
     <section ref={sectionRef} id="features" className="feature-trace-section scroll-mt-20">
       <div className="feature-trace-inner">
         <FeatureStoryBoard />
-
-        <div className="feature-signal-grid">
-          <motion.aside
-            className="feature-signal-copy"
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.35 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <h3>System Signals</h3>
-            <p>Five core signals power every conversation across any language.</p>
-          </motion.aside>
-
-          <motion.svg
-            className="feature-signal-connector"
-            viewBox="0 0 224 92"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ amount: 0.35 }}
-          >
-            <motion.path
-              d="M182 0 C 202 16 188 48 204 90"
-              variants={{
-                hidden: { pathLength: 0, opacity: 0 },
-                visible: {
-                  pathLength: 1,
-                  opacity: 1,
-                  transition: { duration: 0.82, ease: [0.22, 1, 0.36, 1] },
-                },
-              }}
-            />
-          </motion.svg>
-
-          <motion.svg
-            className="feature-signal-rail"
-            viewBox="0 0 24 500"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ amount: 0.35 }}
-          >
-            <path className="feature-signal-rail-guide" d="M12 0 V500" />
-            <motion.path
-              className="feature-signal-rail-live"
-              d="M12 0 V500"
-              variants={{
-                hidden: { pathLength: 0, opacity: 0 },
-                visible: {
-                  pathLength: 1,
-                  opacity: 1,
-                  transition: { duration: 1.18, ease: [0.22, 1, 0.36, 1] },
-                },
-              }}
-            />
-            {[56, 153, 250, 347, 444].map((point, index) => (
-              <motion.circle
-                className="feature-signal-rail-dot"
-                cx="12"
-                cy={point}
-                r="4.5"
-                key={point}
-                variants={{
-                  hidden: { opacity: 0, scale: 0 },
-                  visible: {
-                    opacity: 1,
-                    scale: 1,
-                    transition: { delay: 0.24 + index * 0.17, duration: 0.24, ease: [0.22, 1, 0.36, 1] },
-                  },
-                }}
-              />
-            ))}
-          </motion.svg>
-
-          <motion.div
-            className="feature-signal-list"
-            variants={signalListVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ amount: 0.35 }}
-          >
-            {signalRows.map((row) => (
-              <motion.div
-                className="feature-signal-row"
-                key={row.number}
-                variants={signalRowVariants}
-              >
-                <span className="feature-signal-number">{row.number}</span>
-                <span className="feature-signal-label">
-                  <small>{row.meta}</small>
-                  <strong>{row.label}</strong>
-                </span>
-                <span className="feature-signal-pattern">
-                  <FeaturePattern type={row.pattern} />
-                </span>
-                <span className="feature-signal-plus">+</span>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
 
         <div className="feature-human-row">
           <motion.div
