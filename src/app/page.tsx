@@ -4,8 +4,8 @@ import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Hls from "hls.js";
-import { AnimatePresence, motion, useScroll, useSpring } from "motion/react";
-import type { Variants } from "motion/react";
+import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
+import type { MotionValue, Variants } from "motion/react";
 
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
@@ -26,25 +26,21 @@ const featureSteps = [
     number: "01",
     kicker: "Signal Drift",
     title: "Every voice leaves a trace.",
-    markers: ["live", "low latency", "room signal"],
   },
   {
     number: "02",
     kicker: "Language Crossing",
     title: "Meaning crosses over.",
-    markers: ["xin chao", "hello", "bonjour", "konnichiwa"],
   },
   {
     number: "03",
     kicker: "The Pause",
     title: "The conversation keeps moving while the signal changes form.",
-    compact: true,
   },
   {
     number: "04",
     kicker: "Memory Bloom",
     title: "The room remembers.",
-    markers: ["decisions", "questions", "next steps", "names"],
   },
 ];
 
@@ -115,6 +111,25 @@ const itemVariants = {
     opacity: 1,
     y: 0,
     transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] as const },
+  },
+} satisfies Variants;
+
+const signalListVariants = {
+  hidden: {},
+  visible: {
+    transition: {
+      delayChildren: 0.22,
+      staggerChildren: 0.16,
+    },
+  },
+} satisfies Variants;
+
+const signalRowVariants = {
+  hidden: { opacity: 0, x: 22 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.58, ease: [0.22, 1, 0.36, 1] as const },
   },
 } satisfies Variants;
 
@@ -223,20 +238,38 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-const VideoPlayer = memo(function VideoPlayer() {
+const VideoPlayer = memo(function VideoPlayer({ onReady }: { onReady: () => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const onReadyRef = useRef(onReady);
+
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     let hls: Hls | null = null;
+    let fallbackTimer = 0;
+    let hasReportedReady = false;
+
+    const reportReady = () => {
+      if (hasReportedReady) return;
+      hasReportedReady = true;
+      onReadyRef.current();
+    };
+
+    video.addEventListener("loadeddata", reportReady);
+    video.addEventListener("canplay", reportReady);
+    fallbackTimer = window.setTimeout(reportReady, 9000);
 
     if (Hls.isSupported()) {
       hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
       });
+      hls.on(Hls.Events.MANIFEST_PARSED, reportReady);
       hls.loadSource(VIDEO_SRC);
       hls.attachMedia(video);
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -248,6 +281,9 @@ const VideoPlayer = memo(function VideoPlayer() {
     });
 
     return () => {
+      window.clearTimeout(fallbackTimer);
+      video.removeEventListener("loadeddata", reportReady);
+      video.removeEventListener("canplay", reportReady);
       if (hls) {
         hls.destroy();
       }
@@ -357,66 +393,213 @@ function FeaturePattern({ type }: { type: string }) {
   );
 }
 
+function BranchLabel({
+  x,
+  y,
+  tickTop,
+  tickBottom,
+  label,
+  progress,
+  revealAt,
+  align = "middle",
+}: {
+  x: number;
+  y: number;
+  tickTop: number;
+  tickBottom: number;
+  label: string;
+  progress: MotionValue<number>;
+  revealAt: number;
+  align?: "middle" | "start";
+}) {
+  const labelOpacity = useTransform(progress, [Math.max(0, revealAt - 0.12), revealAt], [0, 1]);
+  const tickLength = useTransform(progress, [Math.max(0, revealAt - 0.2), revealAt], [0, 1]);
+  const nodeScale = useTransform(progress, [Math.max(0, revealAt - 0.08), revealAt], [0, 1]);
+
+  return (
+    <motion.g className="feature-branch-label" style={{ opacity: labelOpacity }}>
+      <motion.line
+        x1={x}
+        y1={tickTop}
+        x2={x}
+        y2={tickBottom}
+        style={{ pathLength: tickLength }}
+      />
+      <motion.circle
+        cx={x}
+        cy={tickBottom}
+        r="2.4"
+        style={{ scale: nodeScale }}
+      />
+      <text className={align === "start" ? "feature-branch-label-start" : undefined} x={x} y={y}>
+        {label}
+      </text>
+    </motion.g>
+  );
+}
+
+function FeatureStoryBoard() {
+  const storyRef = useRef<HTMLDivElement | null>(null);
+  const { scrollYProgress } = useScroll({
+    target: storyRef,
+    offset: ["start 84%", "end 16%"],
+  });
+  const driftProgress = useTransform(scrollYProgress, [0.197, 0.36], [0, 1]);
+  const crossingProgress = useTransform(scrollYProgress, [0.399, 0.58], [0, 1]);
+  const pauseProgress = useTransform(scrollYProgress, [0.623, 0.75], [0, 1]);
+  const memoryProgress = useTransform(scrollYProgress, [0.825, 1], [0, 1]);
+  const driftOpacity = useTransform(driftProgress, [0, 0.03], [0, 1]);
+  const crossingOpacity = useTransform(crossingProgress, [0, 0.03], [0, 1]);
+  const pauseOpacity = useTransform(pauseProgress, [0, 0.03], [0, 1]);
+  const memoryOpacity = useTransform(memoryProgress, [0, 0.03], [0, 1]);
+  const pauseNodeOpacity = useTransform(pauseProgress, [0.52, 0.62], [0, 1]);
+  const pauseNodeScale = useTransform(pauseProgress, [0.52, 0.62], [0, 1]);
+  const memoryNodeOpacity = useTransform(memoryProgress, [0.18, 0.28], [0, 1]);
+  const memoryNodeScale = useTransform(memoryProgress, [0.18, 0.28], [0, 1]);
+
+  return (
+    <div ref={storyRef} className="feature-story-board">
+      <motion.svg
+        className="feature-story-map"
+        viewBox="0 0 1120 980"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path
+          className="feature-story-spine-base"
+          d="M78 0 C 16 84 18 172 130 220 C 236 266 226 374 108 420 C -8 468 18 594 144 644 C 256 688 238 786 112 836 C 18 874 42 928 182 974"
+        />
+        <motion.path
+          className="feature-story-spine-live"
+          d="M78 0 C 16 84 18 172 130 220 C 236 266 226 374 108 420 C -8 468 18 594 144 644 C 256 688 238 786 112 836 C 18 874 42 928 182 974"
+          style={{ pathLength: scrollYProgress }}
+        />
+
+        <g>
+          {[
+            "M130 220 C 188 220 216 244 296 244 H432 C 498 244 526 176 620 176 S 812 238 1094 206",
+            "M130 220 C 188 220 216 244 296 244 H432 C 512 244 548 298 640 252 S 830 222 1094 250",
+          ].map((path, index) => (
+            <motion.path
+              className={index === 1 ? "feature-story-branch feature-story-dots" : "feature-story-branch"}
+              d={path}
+              key={path}
+              style={{ pathLength: driftProgress, opacity: driftOpacity }}
+            />
+          ))}
+          <BranchLabel x={560} y={334} tickTop={270} tickBottom={300} label="live" progress={driftProgress} revealAt={0.58} />
+          <BranchLabel x={790} y={334} tickTop={270} tickBottom={300} label="low latency" progress={driftProgress} revealAt={0.74} />
+          <BranchLabel x={1004} y={334} tickTop={270} tickBottom={300} label="room signal" progress={driftProgress} revealAt={0.9} />
+        </g>
+
+        <g>
+          {[
+            "M108 420 C 184 420 220 458 306 458 H426 C 514 458 558 392 670 392 S 872 430 1094 400",
+            "M108 420 C 184 420 220 458 306 458 H426 C 514 458 572 510 674 476 S 862 436 1094 520",
+            "M108 420 C 184 420 220 458 306 458 H426 C 526 458 588 548 726 524 S 916 488 1094 456",
+          ].map((path, index) => (
+            <motion.path
+              className={index === 1 ? "feature-story-branch feature-story-dots" : "feature-story-branch"}
+              d={path}
+              key={path}
+              style={{ pathLength: crossingProgress, opacity: crossingOpacity }}
+            />
+          ))}
+          <BranchLabel x={594} y={362} tickTop={382} tickBottom={434} label="xin chao" progress={crossingProgress} revealAt={0.48} />
+          <BranchLabel x={742} y={380} tickTop={398} tickBottom={450} label="hello" progress={crossingProgress} revealAt={0.62} />
+          <BranchLabel x={892} y={346} tickTop={364} tickBottom={416} label="bonjour" progress={crossingProgress} revealAt={0.76} />
+          <BranchLabel x={1014} y={540} tickTop={508} tickBottom={540} label="konnichiwa" progress={crossingProgress} revealAt={0.9} />
+        </g>
+
+        <g>
+          <motion.path
+            className="feature-story-branch feature-story-dots"
+            d="M144 644 C 214 644 248 666 364 666 H560"
+            style={{ pathLength: pauseProgress, opacity: pauseOpacity }}
+          />
+          <motion.path
+            className="feature-story-branch"
+            d="M144 644 C 214 644 248 666 364 666 H560 C 574 666 582 666 594 666 H1094"
+            style={{ pathLength: pauseProgress, opacity: pauseOpacity }}
+          />
+          <motion.circle
+            className="feature-story-node"
+            cx="578"
+            cy="666"
+            r="3"
+            style={{ opacity: pauseNodeOpacity, scale: pauseNodeScale }}
+          />
+        </g>
+
+        <g>
+          <motion.path
+            className="feature-story-branch"
+            d="M112 836 C 196 836 226 864 340 864 H438"
+            style={{ pathLength: memoryProgress, opacity: memoryOpacity }}
+          />
+          {[
+            "M112 836 C 196 836 226 864 340 864 H438 C 548 864 586 760 712 760 H1000",
+            "M112 836 C 196 836 226 864 340 864 H438 C 554 864 590 818 712 818 H1000",
+            "M112 836 C 196 836 226 864 340 864 H438 C 554 864 590 876 712 876 H1000",
+            "M112 836 C 196 836 226 864 340 864 H438 C 548 864 586 934 712 934 H1000",
+          ].map((path, index) => (
+            <motion.path
+              className={index === 1 ? "feature-story-branch feature-story-dots" : "feature-story-branch"}
+              d={path}
+              key={path}
+              style={{ pathLength: memoryProgress, opacity: memoryOpacity }}
+            />
+          ))}
+          <motion.circle
+            className="feature-story-node"
+            cx="438"
+            cy="864"
+            r="3"
+            style={{ opacity: memoryNodeOpacity, scale: memoryNodeScale }}
+          />
+          <BranchLabel x={1000} y={766} tickTop={760} tickBottom={760} label="decisions" progress={memoryProgress} revealAt={0.62} align="start" />
+          <BranchLabel x={1000} y={824} tickTop={818} tickBottom={818} label="questions" progress={memoryProgress} revealAt={0.72} align="start" />
+          <BranchLabel x={1000} y={882} tickTop={876} tickBottom={876} label="next steps" progress={memoryProgress} revealAt={0.82} align="start" />
+          <BranchLabel x={1000} y={940} tickTop={934} tickBottom={934} label="names" progress={memoryProgress} revealAt={0.92} align="start" />
+        </g>
+      </motion.svg>
+
+      {featureSteps.map((step) => (
+        <motion.article
+          className={`feature-story-step feature-story-step-${step.number}`}
+          key={step.number}
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ amount: 0.2 }}
+          transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="feature-story-index">
+            <span>{step.number}</span>
+            <small>{step.kicker}</small>
+          </div>
+          <h2>{step.title}</h2>
+        </motion.article>
+      ))}
+
+      <span className="feature-story-watermark" aria-hidden="true">
+        PAUSE
+      </span>
+    </div>
+  );
+}
+
 function FeatureTraceSection() {
   const sectionRef = useRef<HTMLElement | null>(null);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
-    offset: ["start 72%", "end 24%"],
+    offset: ["start 76%", "end 18%"],
   });
-  const pathLength = useSpring(scrollYProgress, {
-    stiffness: 80,
-    damping: 24,
-    mass: 0.35,
-  });
+  const pathLength = scrollYProgress;
 
   return (
     <section ref={sectionRef} id="features" className="feature-trace-section scroll-mt-20">
-      <div className="feature-trace-bg" aria-hidden="true">
-        <svg className="feature-trace-svg" viewBox="0 0 1200 1900" preserveAspectRatio="none">
-          <path
-            className="feature-trace-path-base"
-            d="M112 0 C 32 90 40 190 148 230 C 260 272 236 390 124 426 C 6 465 25 600 150 654 C 262 702 244 840 126 884 C 10 928 38 1068 152 1110 C 276 1156 260 1300 136 1345 C 24 1386 36 1518 170 1566 C 318 1620 428 1512 562 1548 C 724 1592 772 1690 930 1656 C 1040 1632 1100 1712 1190 1690"
-          />
-          <motion.path
-            className="feature-trace-path-live"
-            d="M112 0 C 32 90 40 190 148 230 C 260 272 236 390 124 426 C 6 465 25 600 150 654 C 262 702 244 840 126 884 C 10 928 38 1068 152 1110 C 276 1156 260 1300 136 1345 C 24 1386 36 1518 170 1566 C 318 1620 428 1512 562 1548 C 724 1592 772 1690 930 1656 C 1040 1632 1100 1712 1190 1690"
-            style={{ pathLength }}
-          />
-          <motion.circle className="feature-trace-orb" cx="112" cy="0" r="12" style={{ pathLength }} />
-        </svg>
-      </div>
-
       <div className="feature-trace-inner">
-        <div className="feature-trace-top">
-          {featureSteps.map((step) => (
-            <motion.article
-              className={step.compact ? "feature-step feature-step-compact" : "feature-step"}
-              key={step.number}
-              initial={{ opacity: 0, y: 36 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.35 }}
-              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div className="feature-step-index">
-                <span>{step.number}</span>
-                <small>{step.kicker}</small>
-              </div>
-              <div className="feature-step-content">
-                <h2>{step.title}</h2>
-                {step.markers ? (
-                  <div className="feature-step-markers">
-                    {step.markers.map((marker) => (
-                      <span key={marker}>{marker}</span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </motion.article>
-          ))}
-          <span className="feature-pause-watermark" aria-hidden="true">
-            PAUSE
-          </span>
-        </div>
+        <FeatureStoryBoard />
 
         <div className="feature-signal-grid">
           <motion.aside
@@ -430,15 +613,81 @@ function FeatureTraceSection() {
             <p>Five core signals power every conversation across any language.</p>
           </motion.aside>
 
-          <div className="feature-signal-list">
+          <motion.svg
+            className="feature-signal-connector"
+            viewBox="0 0 224 92"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ amount: 0.35 }}
+          >
+            <motion.path
+              d="M182 0 C 202 16 188 48 204 90"
+              variants={{
+                hidden: { pathLength: 0, opacity: 0 },
+                visible: {
+                  pathLength: 1,
+                  opacity: 1,
+                  transition: { duration: 0.82, ease: [0.22, 1, 0.36, 1] },
+                },
+              }}
+            />
+          </motion.svg>
+
+          <motion.svg
+            className="feature-signal-rail"
+            viewBox="0 0 24 500"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ amount: 0.35 }}
+          >
+            <path className="feature-signal-rail-guide" d="M12 0 V500" />
+            <motion.path
+              className="feature-signal-rail-live"
+              d="M12 0 V500"
+              variants={{
+                hidden: { pathLength: 0, opacity: 0 },
+                visible: {
+                  pathLength: 1,
+                  opacity: 1,
+                  transition: { duration: 1.18, ease: [0.22, 1, 0.36, 1] },
+                },
+              }}
+            />
+            {[56, 153, 250, 347, 444].map((point, index) => (
+              <motion.circle
+                className="feature-signal-rail-dot"
+                cx="12"
+                cy={point}
+                r="4.5"
+                key={point}
+                variants={{
+                  hidden: { opacity: 0, scale: 0 },
+                  visible: {
+                    opacity: 1,
+                    scale: 1,
+                    transition: { delay: 0.24 + index * 0.17, duration: 0.24, ease: [0.22, 1, 0.36, 1] },
+                  },
+                }}
+              />
+            ))}
+          </motion.svg>
+
+          <motion.div
+            className="feature-signal-list"
+            variants={signalListVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ amount: 0.35 }}
+          >
             {signalRows.map((row) => (
               <motion.div
                 className="feature-signal-row"
                 key={row.number}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.25 }}
-                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                variants={signalRowVariants}
               >
                 <span className="feature-signal-number">{row.number}</span>
                 <span className="feature-signal-label">
@@ -451,7 +700,7 @@ function FeatureTraceSection() {
                 <span className="feature-signal-plus">+</span>
               </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
 
         <div className="feature-human-row">
@@ -746,8 +995,73 @@ function LandingFooter() {
 }
 
 export default function HomePage() {
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaderFinished, setHasLoaderFinished] = useState(false);
+  const [hasShellLoaded, setHasShellLoaded] = useState(false);
+  const [hasHeroVideoLoaded, setHasHeroVideoLoaded] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const isLoading = !hasLoaderFinished || !hasShellLoaded || !hasHeroVideoLoaded;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function markShellReady() {
+      if (document.readyState !== "complete") {
+        await new Promise<void>((resolve) => {
+          window.addEventListener("load", () => resolve(), { once: true });
+        });
+      }
+
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      if (!cancelled) {
+        setHasShellLoaded(true);
+      }
+    }
+
+    markShellReady();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading) return;
+
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body.style.overflow;
+    const htmlOverscroll = document.documentElement.style.overscrollBehavior;
+    const bodyOverscroll = document.body.style.overscrollBehavior;
+    const bodyPosition = document.body.style.position;
+    const bodyInset = document.body.style.inset;
+    const bodyWidth = document.body.style.width;
+    const preventScroll = (event: Event) => event.preventDefault();
+
+    window.scrollTo(0, 0);
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
+    document.body.style.overscrollBehavior = "none";
+    document.body.style.position = "fixed";
+    document.body.style.inset = "0";
+    document.body.style.width = "100%";
+    window.addEventListener("wheel", preventScroll, { passive: false });
+    window.addEventListener("touchmove", preventScroll, { passive: false });
+
+    return () => {
+      document.documentElement.style.overflow = htmlOverflow;
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overscrollBehavior = htmlOverscroll;
+      document.body.style.overscrollBehavior = bodyOverscroll;
+      document.body.style.position = bodyPosition;
+      document.body.style.inset = bodyInset;
+      document.body.style.width = bodyWidth;
+      window.removeEventListener("wheel", preventScroll);
+      window.removeEventListener("touchmove", preventScroll);
+    };
+  }, [isLoading]);
 
   function handleNavClick(event: MouseEvent<HTMLAnchorElement>, sectionId: string) {
     event.preventDefault();
@@ -759,7 +1073,7 @@ export default function HomePage() {
   return (
     <>
       <AnimatePresence mode="wait">
-        {isLoading ? <LoadingScreen onComplete={() => setIsLoading(false)} /> : null}
+        {isLoading ? <LoadingScreen onComplete={() => setHasLoaderFinished(true)} /> : null}
       </AnimatePresence>
 
       <div style={{ opacity: isLoading ? 0 : 1, transition: "opacity 0.5s ease-out" }}>
@@ -767,7 +1081,7 @@ export default function HomePage() {
           id="about"
           className="relative min-h-screen overflow-hidden bg-[#000000] scroll-mt-20 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal text-white antialiased"
         >
-          <VideoPlayer />
+          <VideoPlayer onReady={() => setHasHeroVideoLoaded(true)} />
 
           <header className="fixed left-0 right-0 top-0 z-30 px-5 py-5 md:px-8 lg:px-12">
             <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl border border-white/10 bg-black/35 px-4 py-3 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">

@@ -18,6 +18,7 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
   - Bottom-right counter from `000` to `100`
   - Bottom progress bar using a blue gradient fill
   - Loader exits before the main landing page opacity fades in
+  - Loader locks page scrolling while visible and waits for the document shell/fonts plus the hero video readiness gate before it releases the landing page
 - Replaced the local MP4 background with a remote Mux HLS stream:
   - `https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8`
 - Added `hls.js` and a memoized `VideoPlayer` component.
@@ -39,9 +40,15 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - Added a dedicated `Feature` storytelling section based on the supplied layout reference:
   - The nav `Feature` anchor now scrolls to this section instead of the hero.
   - The section inverts the reference layout for the dark landing page: black background, white text, white/cyan SVG motion lines.
-  - A scroll-linked `motion/react` SVG path animates through the section, inspired by the Lusion-style scroll trace effect.
+  - The four opening narrative steps now use one desktop SVG story board so the main trace, branch ingress lines, branch labels, and copy share a fixed coordinate system instead of relying on stacked per-step SVG overlays.
+  - A scroll-linked `motion/react` spine animates through that board, inspired by the Lusion-style scroll trace effect.
+  - Narrative steps sit close to the shared trace while compact SVG branches enter the wave, crossing, pause, and memory diagrams from continuous connection points below each title.
+  - The small branch paths inherit scroll progress from the same story-board spine: each fork begins only when the live spine reaches its junction, grows with the continuing spine, and retracts when the user scrolls upward.
+  - Branch tick marks and labels reveal after the branch path reaches them, keeping content such as `live`, `low latency`, `room signal`, `xin chao`, `hello`, `bonjour`, and `konnichiwa` tied to the motion sequence instead of appearing as static copy.
+  - Branch diagrams reverse their reveal when they leave view on upward scrolling instead of staying as static lines.
+  - Smaller supporting diagrams such as the pause line and memory fan-out are drawn directly as animated SVG branches to keep the layout closer to the supplied editorial reference.
   - Includes the step copy: `Every voice leaves a trace`, `Meaning crosses over`, `The conversation keeps moving...`, `The room remembers`, and `Voice returns human`.
-  - Includes a `System Signals` list for `Capture`, `Understand`, `Translate`, `Speak`, and `Remember`.
+  - Includes a `System Signals` sequence for `Capture`, `Understand`, `Translate`, `Speak`, and `Remember`, with a motion connector from the trace lane into the descending SVG rail and staggered row reveals.
 - Added a WarpTalk pricing section using the requested `c3` cinematic pricing card treatment:
   - `Free`, `Standard`, and `Pro` cards
   - WarpTalk-specific features for real-time translation, AI summaries, and voice cloning
@@ -96,14 +103,19 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 
 - The background video is intentionally not darkened by overlays.
 - The hero video is full-screen behind the entire first viewport instead of only occupying the upper band.
-- The loader keeps the landing content hidden until its counter finishes, then the page fades in.
+- The loader keeps the landing content hidden until its counter finishes and required landing readiness gates complete, then the page fades in.
+- While the loader is active, the document/body scrolling surfaces are locked so refresh and wheel gestures cannot skip into the landing page early.
 - The HLS stream requires browser/network access to `stream.mux.com`.
 - Badges, headline, subtext, and buttons animate in with a staggered fade-up sequence.
 - Any landing CTA related to getting started routes to `/login`.
 - Navbar links are hidden below the `md` breakpoint.
 - Landing anchors use an 80px scroll margin so the fixed navbar does not cover section starts while pricing/footer still fit in the viewport.
 - Nav items are not active on initial hero view. Clicking `About`, `Feature`, `Pricing`, or `Contact` sets the active item and moves a shared layout pill between links.
-- The `Feature` section uses `useScroll` and a spring-smoothed `pathLength` value to draw the main SVG trace and waveform as the user scrolls.
+- The `Feature` section uses `useScroll` path progress to draw the shared story-board spine and the lower waveform as the user scrolls.
+- The opening `Feature` trace follows `scrollYProgress` directly inside the fixed desktop story board so the spine and branch connection points stay locked to the same visual coordinate system at 100% zoom.
+- The opening `Feature` branch diagrams live in the same SVG story board as the trace lane, keeping the small branches continuous while leaving the title blocks clear on desktop.
+- Branch progress is range-mapped from the shared spine path at the four fork junctions, so short horizontal lines stop at their endpoints while the spine keeps moving down to later forks.
+- The `System Signals` rail is a grid-level motion SVG with its own incoming connector; it draws downward first while row cards reveal with staggered motion beside it.
 - The pricing yearly toggle only updates the displayed price text; it does not yet start checkout.
 - Footer social icons, footer nav links, and subscribe button use hover-only transitions.
 - Footer watermark viewBox is recalculated after fonts are ready and on resize.
@@ -129,8 +141,15 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - [x] Verify bottom placeholder logo row is visible and low-opacity grayscale.
 - [x] Verify `Feature` nav scrolls to the new trace section and activates the moving nav pill.
 - [x] Verify feature section uses black background, white content, SVG trace path, and five system signal rows.
+- [x] Verify the desktop story board keeps branch connectors and title copy aligned without crossing the main Feature step glyphs.
+- [x] Verify the desktop `Meaning crosses over` branch remains horizontal with language labels on the crossing SVG line.
+- [x] Verify step headings sit closer to the shared spine and animated branch ingress paths lead into the compact diagrams.
+- [x] Verify branch diagrams retract when scrolled out of view upward.
+- [x] Verify `System Signals` receives an incoming SVG connector, draws a straight rail, and reveals five rows in order.
+- [x] Verify the main trace remains visible through the lower `Voice returns human` and `When the room understands` Feature content.
 - [x] Verify footer layout, video card, WarpTalk logo treatment, and watermark on desktop.
 - [x] Verify loader appears before the page and exits after the progress reaches 100.
+- [x] Verify loader locks page scrolling while visible and waits for the landing readiness gate.
 - [x] Verify all landing `Get Started` CTAs navigate to `/login`.
 - [x] Verify pricing cards render and yearly toggle updates prices.
 - [x] Verify hero video fills the full viewport.
