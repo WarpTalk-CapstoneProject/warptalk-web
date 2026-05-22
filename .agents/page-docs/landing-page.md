@@ -28,11 +28,19 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
   - Product subtext: `Real-time interpretation global teams. Natural conversations. Zero language barriers`
   - Primary and secondary CTA buttons
   - Static grayscale logo row at the bottom
+- Added a WarpTalk-branded footer section adapted from the requested Kresna footer reference:
+  - White `section.footer-section` surface with two rounded cards
+  - Left card uses the requested autoplaying video background with no overlay
+  - Left card uses the local WarpTalk icon and `WarpTalk` wordmark instead of the Kresna mark
+  - Right card contains navigation/company links, floating lucky badge, copyright, and subscribe form
+  - Faded SVG `WarpTalk` watermark uses the same getBBox-based viewBox fitting behavior as the requested HTML reference
+- Added Google Font imports for `DM Sans` and `Caveat` to support the footer typography.
 - Uses `motion/react` staggered fade-in-up animations for the hero content.
 
 ### Files Affected
 
 - `src/app/page.tsx`
+- `src/app/globals.css`
 - `package.json`
 - `package-lock.json`
 
@@ -47,6 +55,12 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 3. Fixed top glass navbar.
 4. Centered hero content with staggered animation.
 5. Bottom static logo marquee row using placeholder SVG marks.
+6. Footer contact section (`#contact`) with:
+   - Video card
+   - Navigation/company columns
+   - Floating lucky badge
+   - Subscribe form
+   - Faded WarpTalk watermark
 
 ## Important UI Behavior
 
@@ -54,12 +68,17 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - The HLS stream requires browser/network access to `stream.mux.com`.
 - Badges, headline, subtext, and buttons animate in with a staggered fade-up sequence.
 - Navbar links are hidden below the `md` breakpoint.
+- Footer social icons, footer nav links, and subscribe button use hover-only transitions.
+- Footer watermark viewBox is recalculated after fonts are ready and on resize.
+- Footer has `scroll-margin-top` so the fixed navbar does not cover it when users jump to `#contact`.
 
 ## Known Limitations
 
 - The logo row uses placeholder SVG/text marks until official partner/customer logos exist.
 - The navbar logo is cropped from a square JPG asset; use a transparent horizontal logo asset if one becomes available.
 - HLS playback depends on remote Mux stream availability.
+- Footer social links are visual placeholders and do not yet navigate to real WarpTalk social URLs.
+- Footer subscribe input is presentational and not wired to a mailing-list endpoint.
 
 ## Testing Checklist
 
@@ -68,4 +87,6 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - [x] Verify navbar glass blur, WarpTalk logo, and active `Feature` gradient border.
 - [x] Verify headline and subtext match the requested WarpTalk copy.
 - [x] Verify staggered fade-up animation on badges, headline, subtext, and buttons.
-- [ ] Verify bottom placeholder logo row is visible and low-opacity grayscale.
+- [x] Verify bottom placeholder logo row is visible and low-opacity grayscale.
+- [x] Verify footer layout, video card, WarpTalk logo treatment, and watermark on desktop.
+- [ ] Verify footer stacks cleanly below `860px` and subscribe row fits below `560px`.
