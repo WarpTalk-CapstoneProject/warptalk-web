@@ -4,7 +4,7 @@ import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Hls from "hls.js";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useScroll, useSpring } from "motion/react";
 import type { Variants } from "motion/react";
 
 const VIDEO_SRC =
@@ -20,6 +20,41 @@ const navLinks = [
 const badges = ["Real-time Translation", "AI Summary Analysis", "Human Voice Cloning"];
 const logos = ["NOVA", "AXIS", "ORBIT", "PRISM", "LUMA", "ECHO"];
 const loaderWords = ["Translation", "Clone Voice", "AI"];
+
+const featureSteps = [
+  {
+    number: "01",
+    kicker: "Signal Drift",
+    title: "Every voice leaves a trace.",
+    markers: ["live", "low latency", "room signal"],
+  },
+  {
+    number: "02",
+    kicker: "Language Crossing",
+    title: "Meaning crosses over.",
+    markers: ["xin chao", "hello", "bonjour", "konnichiwa"],
+  },
+  {
+    number: "03",
+    kicker: "The Pause",
+    title: "The conversation keeps moving while the signal changes form.",
+    compact: true,
+  },
+  {
+    number: "04",
+    kicker: "Memory Bloom",
+    title: "The room remembers.",
+    markers: ["decisions", "questions", "next steps", "names"],
+  },
+];
+
+const signalRows = [
+  { number: "01", meta: "Capture / STT / Audio", label: "Capture", pattern: "wave" },
+  { number: "02", meta: "Understand / Context / Memory", label: "Understand", pattern: "ring" },
+  { number: "03", meta: "Translate / AI / Language", label: "Translate", pattern: "sine" },
+  { number: "04", meta: "Speak / TTS / Voice", label: "Speak", pattern: "orb" },
+  { number: "05", meta: "Remember / Transcript / Assistant", label: "Remember", pattern: "arc" },
+];
 
 const pricingPlans = [
   {
@@ -271,6 +306,204 @@ function WarpTalkNavLogo() {
         className="absolute left-1/2 top-1/2 size-32 -translate-x-1/2 -translate-y-1/2 object-cover"
       />
     </span>
+  );
+}
+
+function FeaturePattern({ type }: { type: string }) {
+  if (type === "ring") {
+    return (
+      <svg viewBox="0 0 120 44" aria-hidden="true">
+        <ellipse cx="60" cy="22" rx="34" ry="10" />
+        <ellipse cx="60" cy="22" rx="22" ry="6" />
+        <path d="M24 22c18-18 54-18 72 0M24 22c18 18 54 18 72 0" />
+      </svg>
+    );
+  }
+
+  if (type === "sine") {
+    return (
+      <svg viewBox="0 0 120 44" aria-hidden="true">
+        <path d="M8 22c8-18 16-18 24 0s16 18 24 0 16-18 24 0 16 18 32 0" />
+        <path d="M8 30c8-8 16-8 24 0s16 8 24 0 16-8 24 0 16 8 32 0" />
+      </svg>
+    );
+  }
+
+  if (type === "orb") {
+    return (
+      <svg viewBox="0 0 120 44" aria-hidden="true">
+        <circle cx="60" cy="22" r="16" />
+        <circle cx="60" cy="22" r="26" />
+        <path d="M36 22c12-12 36-12 48 0M36 22c12 12 36 12 48 0" />
+      </svg>
+    );
+  }
+
+  if (type === "arc") {
+    return (
+      <svg viewBox="0 0 120 44" aria-hidden="true">
+        <path d="M20 36c6-28 74-28 80 0" />
+        <path d="M30 36c5-18 55-18 60 0" />
+        <path d="M40 36c4-9 36-9 40 0" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 120 44" aria-hidden="true">
+      <path d="M8 22h10m6 0h4m6 0h18m6 0h4m6 0h8m8 0h28" />
+      <path d="M74 12v20M80 16v12M86 8v28M92 14v16M98 18v8" />
+    </svg>
+  );
+}
+
+function FeatureTraceSection() {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start 72%", "end 24%"],
+  });
+  const pathLength = useSpring(scrollYProgress, {
+    stiffness: 80,
+    damping: 24,
+    mass: 0.35,
+  });
+
+  return (
+    <section ref={sectionRef} id="features" className="feature-trace-section scroll-mt-20">
+      <div className="feature-trace-bg" aria-hidden="true">
+        <svg className="feature-trace-svg" viewBox="0 0 1200 1900" preserveAspectRatio="none">
+          <path
+            className="feature-trace-path-base"
+            d="M112 0 C 32 90 40 190 148 230 C 260 272 236 390 124 426 C 6 465 25 600 150 654 C 262 702 244 840 126 884 C 10 928 38 1068 152 1110 C 276 1156 260 1300 136 1345 C 24 1386 36 1518 170 1566 C 318 1620 428 1512 562 1548 C 724 1592 772 1690 930 1656 C 1040 1632 1100 1712 1190 1690"
+          />
+          <motion.path
+            className="feature-trace-path-live"
+            d="M112 0 C 32 90 40 190 148 230 C 260 272 236 390 124 426 C 6 465 25 600 150 654 C 262 702 244 840 126 884 C 10 928 38 1068 152 1110 C 276 1156 260 1300 136 1345 C 24 1386 36 1518 170 1566 C 318 1620 428 1512 562 1548 C 724 1592 772 1690 930 1656 C 1040 1632 1100 1712 1190 1690"
+            style={{ pathLength }}
+          />
+          <motion.circle className="feature-trace-orb" cx="112" cy="0" r="12" style={{ pathLength }} />
+        </svg>
+      </div>
+
+      <div className="feature-trace-inner">
+        <div className="feature-trace-top">
+          {featureSteps.map((step) => (
+            <motion.article
+              className={step.compact ? "feature-step feature-step-compact" : "feature-step"}
+              key={step.number}
+              initial={{ opacity: 0, y: 36 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.35 }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="feature-step-index">
+                <span>{step.number}</span>
+                <small>{step.kicker}</small>
+              </div>
+              <div className="feature-step-content">
+                <h2>{step.title}</h2>
+                {step.markers ? (
+                  <div className="feature-step-markers">
+                    {step.markers.map((marker) => (
+                      <span key={marker}>{marker}</span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </motion.article>
+          ))}
+          <span className="feature-pause-watermark" aria-hidden="true">
+            PAUSE
+          </span>
+        </div>
+
+        <div className="feature-signal-grid">
+          <motion.aside
+            className="feature-signal-copy"
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.35 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <h3>System Signals</h3>
+            <p>Five core signals power every conversation across any language.</p>
+          </motion.aside>
+
+          <div className="feature-signal-list">
+            {signalRows.map((row) => (
+              <motion.div
+                className="feature-signal-row"
+                key={row.number}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.25 }}
+                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <span className="feature-signal-number">{row.number}</span>
+                <span className="feature-signal-label">
+                  <small>{row.meta}</small>
+                  <strong>{row.label}</strong>
+                </span>
+                <span className="feature-signal-pattern">
+                  <FeaturePattern type={row.pattern} />
+                </span>
+                <span className="feature-signal-plus">+</span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        <div className="feature-human-row">
+          <motion.div
+            className="feature-human-title"
+            initial={{ opacity: 0, y: 36 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.35 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <h2>
+              Voice
+              <br />
+              returns
+              <br />
+              human.
+            </h2>
+          </motion.div>
+          <div className="feature-wave-panel">
+            <div className="feature-wave-labels">
+              <span>tone</span>
+              <span>intent</span>
+              <span>pace</span>
+              <span>native flow</span>
+            </div>
+            <svg viewBox="0 0 900 220" aria-hidden="true">
+              <path className="feature-wave-base" d="M0 130 C 90 78 150 78 238 132 S 384 182 470 110 650 58 752 126 850 172 900 122" />
+              <motion.path
+                className="feature-wave-live"
+                d="M0 130 C 90 78 150 78 238 132 S 384 182 470 110 650 58 752 126 850 172 900 122"
+                style={{ pathLength }}
+              />
+              <path className="feature-wave-dots" d="M410 126 C 500 86 600 88 690 132 S 825 176 900 126" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="feature-understand-row">
+          <div>
+            <h2>When the room understands.</h2>
+            <p>No switching tabs. No waiting for summaries. The conversation stays alive.</p>
+          </div>
+          <div className="feature-language-line">
+            <span>hello</span>
+            <span>xin chao</span>
+            <span>bonjour</span>
+            <span>meaning preserved</span>
+            <span>voice returned</span>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -581,8 +814,7 @@ export default function HomePage() {
           </header>
 
           <section
-            id="features"
-            className="relative z-10 flex min-h-screen scroll-mt-20 items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12"
+            className="relative z-10 flex min-h-screen items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12"
           >
             <motion.div
               variants={containerVariants}
@@ -641,6 +873,7 @@ export default function HomePage() {
             </div>
           </div>
         </main>
+        <FeatureTraceSection />
         <PricingSection />
         <LandingFooter />
       </div>

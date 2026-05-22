@@ -36,6 +36,12 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
   - Product subtext: `Real-time interpretation global teams. Natural conversations. Zero language barriers`
   - Primary and secondary CTA buttons that route to `/login`
   - Static grayscale logo row at the bottom
+- Added a dedicated `Feature` storytelling section based on the supplied layout reference:
+  - The nav `Feature` anchor now scrolls to this section instead of the hero.
+  - The section inverts the reference layout for the dark landing page: black background, white text, white/cyan SVG motion lines.
+  - A scroll-linked `motion/react` SVG path animates through the section, inspired by the Lusion-style scroll trace effect.
+  - Includes the step copy: `Every voice leaves a trace`, `Meaning crosses over`, `The conversation keeps moving...`, `The room remembers`, and `Voice returns human`.
+  - Includes a `System Signals` list for `Capture`, `Understand`, `Translate`, `Speak`, and `Remember`.
 - Added a WarpTalk pricing section using the requested `c3` cinematic pricing card treatment:
   - `Free`, `Standard`, and `Pro` cards
   - WarpTalk-specific features for real-time translation, AI summaries, and voice cloning
@@ -70,11 +76,16 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 3. Fixed top glass navbar with anchors for `#about`, `#features`, `#pricing`, and `#contact`.
 4. Centered hero content with staggered animation.
 5. Bottom static logo marquee row using placeholder SVG marks.
-6. Pricing section (`#pricing`) with:
+6. Feature trace section (`#features`) with:
+   - Scroll-linked SVG path drawing
+   - Four narrative steps
+   - Five system signal rows
+   - Final waveform and room-understanding copy
+7. Pricing section (`#pricing`) with:
    - Cinematic glass pricing cards
    - Yearly toggle state
    - WarpTalk pricing plan copy
-7. Footer contact section (`#contact`) with:
+8. Footer contact section (`#contact`) with:
    - Video card
    - Navigation/company columns
    - Floating lucky badge
@@ -92,6 +103,7 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - Navbar links are hidden below the `md` breakpoint.
 - Landing anchors use an 80px scroll margin so the fixed navbar does not cover section starts while pricing/footer still fit in the viewport.
 - Nav items are not active on initial hero view. Clicking `About`, `Feature`, `Pricing`, or `Contact` sets the active item and moves a shared layout pill between links.
+- The `Feature` section uses `useScroll` and a spring-smoothed `pathLength` value to draw the main SVG trace and waveform as the user scrolls.
 - The pricing yearly toggle only updates the displayed price text; it does not yet start checkout.
 - Footer social icons, footer nav links, and subscribe button use hover-only transitions.
 - Footer watermark viewBox is recalculated after fonts are ready and on resize.
@@ -115,6 +127,8 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - [x] Verify headline and subtext match the requested WarpTalk copy.
 - [x] Verify staggered fade-up animation on badges, headline, subtext, and buttons.
 - [x] Verify bottom placeholder logo row is visible and low-opacity grayscale.
+- [x] Verify `Feature` nav scrolls to the new trace section and activates the moving nav pill.
+- [x] Verify feature section uses black background, white content, SVG trace path, and five system signal rows.
 - [x] Verify footer layout, video card, WarpTalk logo treatment, and watermark on desktop.
 - [x] Verify loader appears before the page and exits after the progress reaches 100.
 - [x] Verify all landing `Get Started` CTAs navigate to `/login`.
