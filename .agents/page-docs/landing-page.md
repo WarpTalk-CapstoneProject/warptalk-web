@@ -13,8 +13,8 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 ### What Changed
 
 - Added a fullscreen pre-page loader before the landing content fades in:
-  - Top-left label: `Portfolio`
-  - Center word sequence: `Design` -> `Create` -> `Inspire`
+  - Top-left label: `WalpTalk`
+  - Center word sequence: `Translation` -> `Clone Voice` -> `AI`
   - Bottom-right counter from `000` to `100`
   - Bottom progress bar using a blue gradient fill
   - Loader exits before the main landing page opacity fades in
@@ -27,7 +27,9 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
   - Fixed blurred glass navbar
   - WarpTalk navbar logo image from `public/assets/logos/warptalk-logo-darkmode.jpg`
   - Nav links: `About`, `Feature`, `Pricing`, `Contact`
-  - Active gradient-border `Feature`
+  - Rounded WarpTalk logo container
+  - No default active nav item on initial hero view
+  - Smooth moving `motion/react` active pill after clicking a nav item
   - Gradient CTA button
   - Three glass product badges: `Real-time Translation`, `AI Summary Analysis`, `Human Voice Cloning`
   - Large animated headline: `Translation that feel native`
@@ -39,12 +41,14 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
   - WarpTalk-specific features for real-time translation, AI summaries, and voice cloning
   - Yearly pricing toggle
   - Large decorative `Translation / Native` watermark
+  - Compact desktop sizing so the watermark and pricing cards fit in one viewport below the navbar.
 - Added a WarpTalk-branded footer section adapted from the requested Kresna footer reference:
   - White `section.footer-section` surface with two rounded cards
   - Left card uses the requested autoplaying video background with no overlay
   - Left card uses the local WarpTalk icon and `WarpTalk` wordmark instead of the Kresna mark
   - Right card contains navigation/company links, floating lucky badge, copyright, and subscribe form
   - Faded SVG `WarpTalk` watermark uses the same getBBox-based viewBox fitting behavior as the requested HTML reference
+  - Compact desktop spacing so the footer card content and watermark fit in one viewport below the navbar.
 - Added Google Font imports for `DM Sans` and `Caveat` to support the footer typography.
 - Uses `motion/react` staggered fade-in-up animations for the hero content.
 
@@ -59,8 +63,8 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 
 1. Root black hero surface.
 2. Absolute HLS video container:
-   - `h-[80vh]`
-   - `bottom-[35vh]`
+   - `inset-0`
+   - fills the full hero viewport
    - `opacity-100`
    - no dark overlay
 3. Fixed top glass navbar with anchors for `#about`, `#features`, `#pricing`, and `#contact`.
@@ -80,12 +84,14 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 ## Important UI Behavior
 
 - The background video is intentionally not darkened by overlays.
+- The hero video is full-screen behind the entire first viewport instead of only occupying the upper band.
 - The loader keeps the landing content hidden until its counter finishes, then the page fades in.
 - The HLS stream requires browser/network access to `stream.mux.com`.
 - Badges, headline, subtext, and buttons animate in with a staggered fade-up sequence.
 - Any landing CTA related to getting started routes to `/login`.
 - Navbar links are hidden below the `md` breakpoint.
-- Landing anchors use scroll margin so the fixed navbar does not cover section starts.
+- Landing anchors use an 80px scroll margin so the fixed navbar does not cover section starts while pricing/footer still fit in the viewport.
+- Nav items are not active on initial hero view. Clicking `About`, `Feature`, `Pricing`, or `Contact` sets the active item and moves a shared layout pill between links.
 - The pricing yearly toggle only updates the displayed price text; it does not yet start checkout.
 - Footer social icons, footer nav links, and subscribe button use hover-only transitions.
 - Footer watermark viewBox is recalculated after fonts are ready and on resize.
@@ -104,7 +110,8 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 
 - [x] Run ESLint on `src/app/page.tsx`.
 - [x] Open `/` and verify the Mux HLS background video plays.
-- [x] Verify navbar glass blur, WarpTalk logo, and active `Feature` gradient border.
+- [x] Verify navbar glass blur and rounded WarpTalk logo container.
+- [x] Verify navbar starts with no active item and the active pill moves after clicking nav links.
 - [x] Verify headline and subtext match the requested WarpTalk copy.
 - [x] Verify staggered fade-up animation on badges, headline, subtext, and buttons.
 - [x] Verify bottom placeholder logo row is visible and low-opacity grayscale.
@@ -112,4 +119,7 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - [x] Verify loader appears before the page and exits after the progress reaches 100.
 - [x] Verify all landing `Get Started` CTAs navigate to `/login`.
 - [x] Verify pricing cards render and yearly toggle updates prices.
+- [x] Verify hero video fills the full viewport.
+- [x] Verify pricing watermark/cards fit within the viewport after clicking `Pricing`.
+- [x] Verify footer wrapper/watermark fit within the viewport after clicking `Contact`.
 - [ ] Verify footer stacks cleanly below `860px` and subscribe row fits below `560px`.

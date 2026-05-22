@@ -223,10 +223,12 @@
 
 .c3-pricing-section {
   position: relative;
-  padding: 40px 20px 80px;
+  min-height: 100vh;
+  padding: 72px 20px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   overflow-x: hidden;
 }
 
@@ -235,14 +237,14 @@
   width: 100%;
   max-width: 1100px;
   text-align: center;
-  margin-top: 40px;
+  margin-top: 0;
   z-index: 2;
 }
 
 .c3-watermark-main {
-  font-size: 9rem;
+  font-size: clamp(4rem, 6.4vw, 5.6rem);
   font-weight: 800;
-  line-height: 0.9;
+  line-height: 0.82;
   letter-spacing: -0.05em;
   filter: url(#c3-noise);
   display: flex;
@@ -267,9 +269,9 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
   width: 100%;
-  max-width: 1100px;
-  margin-top: 60px;
-  transform: translateX(20px);
+  max-width: 1040px;
+  margin-top: 24px;
+  transform: none;
   position: relative;
   z-index: 3;
 }
@@ -278,9 +280,9 @@
   background: linear-gradient(135deg, rgba(0,0,0,0.7), rgba(0,0,0,0.4));
   backdrop-filter: blur(14px) brightness(0.91);
   border: 1px solid rgba(255,255,255,1);
-  border-radius: 44px;
-  padding: 50px 24px;
-  min-height: 580px;
+  border-radius: 28px;
+  padding: 22px 20px;
+  min-height: 340px;
   display: flex;
   flex-direction: column;
   transition: all 0.6s cubic-bezier(.22,1,.36,1);
@@ -308,13 +310,13 @@
 }
 
 .c3-tier-small {
-  font-size: 1.1rem;
+  font-size: 0.9rem;
   font-weight: 400;
   color: rgba(255,255,255,0.6);
 }
 
 .c3-tier-large {
-  font-size: 2.8rem;
+  font-size: 2rem;
   font-weight: 500;
   letter-spacing: -0.02em;
   color: #fff;
@@ -322,27 +324,27 @@
 }
 
 .c3-desc {
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   color: rgba(255,255,255,0.45);
-  min-height: 3.2em;
-  margin-top: 16px;
-  margin-bottom: 40px;
+  min-height: 2.8em;
+  margin-top: 10px;
+  margin-bottom: 18px;
   line-height: 1.5;
 }
 
 .c3-list li {
   display:flex;
   align-items:flex-start;
-  gap: 14px;
-  font-size: 0.92rem;
-  color: rgba(255,255,255,0.8);
-  margin-bottom: 18px;
-  line-height: 1.4;
+  gap: 10px;
+  font-size: 0.76rem;
+  color: rgba(255,255,255,0.78);
+  margin-bottom: 7px;
+  line-height: 1.25;
 }
 
 .c3-check {
-  width:28px;
-  height:28px;
+  width:20px;
+  height:20px;
   border-radius:50%;
   background: rgba(255,255,255,0.15);
   display:inline-flex;
@@ -354,7 +356,7 @@
 .c3-btn {
   background:#fff;
   color:#000;
-  padding: 10px 32px;
+  padding: 8px 24px;
   border-radius: 100px;
   font-weight:600;
   font-size: 0.88rem;
@@ -377,9 +379,9 @@
   justify-content:flex-end;
   gap:12px;
   width:100%;
-  max-width:1100px;
-  margin-top:32px;
-  padding-right:20px;
+  max-width:1040px;
+  margin-top:16px;
+  padding-right:0;
 }
 
 .c3-toggle {
@@ -415,6 +417,12 @@
 }
 
 @media (max-width:1024px) {
+  .c3-pricing-section {
+    min-height: auto;
+    padding: 80px 20px;
+    justify-content: flex-start;
+  }
+
   .c3-watermark-main {
     font-size: 3.5rem;
     filter:none;
@@ -465,15 +473,19 @@
   background: #ffffff;
   color: #2d3148;
   font-family: 'DM Sans', sans-serif;
-  padding: 48px 24px;
-  scroll-margin-top: 112px;
+  min-height: 100vh;
+  padding: 104px 24px 20px;
+  scroll-margin-top: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .footer-wrapper {
-  max-width: 1150px;
+  max-width: 1060px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 320px 1fr;
   gap: 16px;
   align-items: stretch;
   position: relative;
@@ -482,9 +494,9 @@
 
 .footer-left {
   position: relative;
-  min-height: 340px;
+  min-height: 300px;
   border-radius: 28px;
-  padding: 32px;
+  padding: 26px;
   overflow: hidden;
   box-shadow: 0 12px 40px rgba(21, 76, 189, 0.25);
   background: #1e4fc0;
@@ -542,7 +554,7 @@
 
 .footer-logo-name {
   font-family: 'DM Sans', sans-serif;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.02em;
@@ -550,13 +562,13 @@
 
 .footer-tagline-container {
   margin-top: auto;
-  margin-bottom: 28px;
+  margin-bottom: 22px;
   position: relative;
   z-index: 1;
 }
 
 .footer-tagline {
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 400;
   color: #ffffff;
   line-height: 1.45;
@@ -615,7 +627,7 @@
 .footer-right {
   background: #f0f1f5;
   border-radius: 28px;
-  padding: 40px;
+  padding: 30px 34px;
   overflow: visible;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
   display: flex;
@@ -626,7 +638,7 @@
 
 .footer-lucky-graphic {
   position: absolute;
-  top: -36px;
+  top: -24px;
   right: 40px;
   z-index: 10;
   display: flex;
@@ -636,9 +648,9 @@
 }
 
 .lucky-cube {
-  width: 96px;
-  height: 96px;
-  border-radius: 22px;
+  width: 78px;
+  height: 78px;
+  border-radius: 20px;
   transform: rotate(-10deg);
   background: linear-gradient(135deg, #5b9ffb 0%, #1e5dd7 55%, #1448be 100%);
   box-shadow:
@@ -681,7 +693,7 @@
 
 .lucky-text {
   font-family: 'Caveat', cursive;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: #9ca3af;
   white-space: nowrap;
@@ -689,17 +701,17 @@
 
 .footer-nav-cols {
   display: flex;
-  gap: 72px;
+  gap: 64px;
   padding-top: 8px;
 }
 
 .footer-col-title {
   font-family: 'Caveat', cursive;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   font-style: italic;
   color: #9ca3af;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .footer-col a {
@@ -708,7 +720,7 @@
   font-size: 14px;
   font-weight: 600;
   color: #111827;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   text-decoration: none;
   transition: color 0.2s;
 }
@@ -721,7 +733,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  margin-top: 48px;
+  margin-top: 34px;
 }
 
 .footer-copyright {
@@ -734,7 +746,7 @@
 .footer-cta-mini {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .footer-cta-mini h4 {
@@ -798,8 +810,8 @@
 }
 
 .footer-watermark {
-  max-width: 1150px;
-  margin: -60px auto 0;
+  max-width: 920px;
+  margin: -54px auto 0;
   pointer-events: none;
   user-select: none;
   position: relative;
@@ -822,6 +834,12 @@
 }
 
 @media (max-width: 860px) {
+  .footer-section {
+    min-height: auto;
+    padding: 80px 16px 48px;
+    justify-content: flex-start;
+  }
+
   .footer-wrapper {
     grid-template-columns: 1fr;
   }

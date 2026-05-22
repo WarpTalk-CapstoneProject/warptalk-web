@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Hls from "hls.js";
@@ -11,15 +11,15 @@ const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
 const navLinks = [
-  { label: "About", href: "#about" },
-  { label: "Feature", href: "#features", active: true },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Contact", href: "#contact" },
+  { id: "about", label: "About", href: "#about" },
+  { id: "features", label: "Feature", href: "#features" },
+  { id: "pricing", label: "Pricing", href: "#pricing" },
+  { id: "contact", label: "Contact", href: "#contact" },
 ];
 
 const badges = ["Real-time Translation", "AI Summary Analysis", "Human Voice Cloning"];
 const logos = ["NOVA", "AXIS", "ORBIT", "PRISM", "LUMA", "ECHO"];
-const loaderWords = ["Design", "Create", "Inspire"];
+const loaderWords = ["Translation", "Clone Voice", "AI"];
 
 const pricingPlans = [
   {
@@ -146,7 +146,7 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.1 }}
       >
-        Portfolio
+        WalpTalk
       </motion.div>
 
       <div className="absolute inset-0 flex items-center justify-center">
@@ -223,7 +223,7 @@ const VideoPlayer = memo(function VideoPlayer() {
   }, []);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-[35vh] h-[80vh] overflow-hidden">
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <video
         ref={videoRef}
         autoPlay
@@ -261,14 +261,14 @@ function PlaceholderLogo({ label }: { label: string }) {
 
 function WarpTalkNavLogo() {
   return (
-    <span className="relative block h-10 w-36 overflow-hidden" aria-label="WarpTalk">
+    <span className="relative block h-9 w-32 overflow-hidden" aria-label="WarpTalk">
       <Image
         src="/assets/logos/warptalk-logo-darkmode.jpg"
         alt="WarpTalk"
         width={144}
         height={144}
         priority
-        className="absolute left-1/2 top-1/2 size-36 -translate-x-1/2 -translate-y-1/2 object-cover"
+        className="absolute left-1/2 top-1/2 size-32 -translate-x-1/2 -translate-y-1/2 object-cover"
       />
     </span>
   );
@@ -278,7 +278,7 @@ function PricingSection() {
   const [yearly, setYearly] = useState(false);
 
   return (
-    <section id="pricing" className="c3-pricing-section scroll-mt-28 bg-[#0c0c0c] text-white">
+    <section id="pricing" className="c3-pricing-section scroll-mt-20 bg-[#0c0c0c] text-white">
       <svg aria-hidden="true" className="pointer-events-none absolute size-0">
         <filter id="c3-noise">
           <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" stitchTiles="stitch" />
@@ -514,6 +514,14 @@ function LandingFooter() {
 
 export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  function handleNavClick(event: MouseEvent<HTMLAnchorElement>, sectionId: string) {
+    event.preventDefault();
+    setActiveSection(sectionId);
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.history.pushState(null, "", `#${sectionId}`);
+  }
 
   return (
     <>
@@ -524,13 +532,17 @@ export default function HomePage() {
       <div style={{ opacity: isLoading ? 0 : 1, transition: "opacity 0.5s ease-out" }}>
         <main
           id="about"
-          className="relative min-h-screen overflow-hidden bg-[#000000] scroll-mt-28 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal text-white antialiased"
+          className="relative min-h-screen overflow-hidden bg-[#000000] scroll-mt-20 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal text-white antialiased"
         >
           <VideoPlayer />
 
           <header className="fixed left-0 right-0 top-0 z-30 px-5 py-5 md:px-8 lg:px-12">
             <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl border border-white/10 bg-black/35 px-4 py-3 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-              <Link href="/" className="flex items-center" aria-label="WarpTalk home">
+              <Link
+                href="/"
+                className="flex items-center rounded-full border border-white/10 bg-black/70 px-4 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors hover:bg-black/90"
+                aria-label="WarpTalk home"
+              >
                 <WarpTalkNavLogo />
               </Link>
 
@@ -539,13 +551,20 @@ export default function HomePage() {
                   <a
                     key={link.label}
                     href={link.href}
-                    className={
-                      link.active
-                        ? "rounded-full bg-gradient-to-r from-white/35 via-white/10 to-white/35 p-px text-white"
-                        : "px-4 py-2 transition-colors hover:text-white"
-                    }
+                    onClick={(event) => handleNavClick(event, link.id)}
+                    className="relative rounded-full px-4 py-2 transition-colors hover:text-white"
                   >
-                    <span className={link.active ? "block rounded-full bg-black/75 px-4 py-2" : undefined}>
+                    {activeSection === link.id ? (
+                      <motion.span
+                        layoutId="landing-nav-active"
+                        className="absolute inset-0 rounded-full border border-white/35 bg-black/65 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+                        transition={{ type: "spring", stiffness: 360, damping: 34 }}
+                      />
+                    ) : null}
+                    <span
+                      data-nav-active={activeSection === link.id ? "true" : undefined}
+                      className={activeSection === link.id ? "relative z-10 text-white" : "relative z-10"}
+                    >
                       {link.label}
                     </span>
                   </a>
@@ -563,7 +582,7 @@ export default function HomePage() {
 
           <section
             id="features"
-            className="relative z-10 flex min-h-screen scroll-mt-28 items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12"
+            className="relative z-10 flex min-h-screen scroll-mt-20 items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12"
           >
             <motion.div
               variants={containerVariants}
