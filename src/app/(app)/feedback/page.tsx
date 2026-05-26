@@ -1,425 +1,278 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { AlertCircle, CheckCircle2, Clock, Loader2, MessageSquareText, Send, Star } from "lucide-react";
+import {
+  CheckCircle2,
+  MessageSquareText,
+  Send,
+  Sparkles,
+  Star,
+  ThumbsUp,
+  TrendingUp,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
-  useSubmitTranslationRoomFeedback,
-  useTranslationRoom,
-  useTranslationRoomFeedbackState,
-} from "@/hooks/use-translationRooms";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { SubmitTranslationRoomFeedbackRequest, TranslationRoomStatus } from "@/types/translationRoom";
 
-type RatingField = {
-  key: keyof Omit<SubmitTranslationRoomFeedbackRequest, "comments">;
-  label: string;
-  helper: string;
-  required?: boolean;
-};
-
-const ratingFields: RatingField[] = [
+const ratingFields = [
   {
-    key: "overallRating",
-    label: "Overall rating",
-    helper: "Your overall room experience.",
-    required: true,
+    key: "overall",
+    label: "Overall experience",
+    helper: "Room flow, reliability, and comfort.",
   },
   {
-    key: "translationQuality",
+    key: "translation",
     label: "Translation quality",
     helper: "Accuracy, timing, and wording.",
   },
   {
-    key: "audioQuality",
-    label: "Audio quality",
-    helper: "Clarity, delay, and stability.",
+    key: "audio",
+    label: "Audio clarity",
+    helper: "Delay, stability, and speaker separation.",
   },
   {
-    key: "voiceCloneQuality",
-    label: "Voice clone quality",
-    helper: "Naturalness and speaker match.",
+    key: "summary",
+    label: "AI summary",
+    helper: "Usefulness of notes and action items.",
+  },
+] as const;
+
+const recentFeedback = [
+  {
+    room: "Board sync with Hanoi team",
+    score: "4.8",
+    note: "Summary captured follow-ups cleanly.",
+    status: "Reviewed",
   },
   {
-    key: "aiSummaryQuality",
-    label: "AI summary quality",
-    helper: "Only rate this if a summary was generated.",
+    room: "Partner onboarding call",
+    score: "4.5",
+    note: "Audio was clear after the first minute.",
+    status: "Queued",
+  },
+  {
+    room: "Support escalation review",
+    score: "4.2",
+    note: "Speaker labels need a second pass.",
+    status: "Open",
   },
 ];
 
-const pageCopy = {
-  title: "Post-room feedback",
-  subtitle: "A one-time quality form shown after a translation room has ended.",
-};
-
-function normalizeFeedbackRoomStatus(status?: string): TranslationRoomStatus {
-  if (status === "active" || status === "live") return "in_progress";
-  if (status === "completed") return "ended";
-  if (
-    status === "scheduled" ||
-    status === "waiting" ||
-    status === "in_progress" ||
-    status === "ended" ||
-    status === "cancelled"
-  ) {
-    return status;
-  }
-
-  return "scheduled";
-}
-
-function isFeedbackAvailable(status: TranslationRoomStatus) {
-  return status === "ended";
-}
-
-function RatingButtons({
-  value,
-  onChange,
-  disabled,
-}: {
-  value?: number;
-  onChange: (value?: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {[1, 2, 3, 4, 5].map((rating) => {
-        const selected = value === rating;
-
-        return (
-          <button
-            key={rating}
-            type="button"
-            disabled={disabled}
-            aria-pressed={selected}
-            onClick={() => onChange(selected ? undefined : rating)}
-            className={cn(
-              "inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-semibold transition-all disabled:pointer-events-none disabled:opacity-50",
-              selected
-                ? "border-[#003476] bg-[#003476] text-white shadow-sm"
-                : "border-[#e4eef9] bg-white text-black hover:bg-[#fdfcf6] hover:text-[#003476]"
-            )}
-          >
-            {rating}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+type RatingKey = (typeof ratingFields)[number]["key"];
 
 export default function FeedbackPage() {
-  return (
-    <Suspense fallback={<FeedbackLoading />}>
-      <FeedbackContent />
-    </Suspense>
-  );
-}
-
-function FeedbackContent() {
-  const searchParams = useSearchParams();
-  const roomId = searchParams.get("roomId")?.trim() ?? "";
-  const { data: room, isLoading: isRoomLoading, isError: isRoomError } = useTranslationRoom(roomId);
-  const feedbackState = useTranslationRoomFeedbackState(roomId);
-  const submitFeedback = useSubmitTranslationRoomFeedback(roomId);
-  const [form, setForm] = useState<SubmitTranslationRoomFeedbackRequest>({
-    overallRating: 0,
-    translationQuality: undefined,
-    audioQuality: undefined,
-    voiceCloneQuality: undefined,
-    aiSummaryQuality: undefined,
-    comments: "",
+  const [ratings, setRatings] = useState<Record<RatingKey, number>>({
+    overall: 0,
+    translation: 0,
+    audio: 0,
+    summary: 0,
   });
-  const [submittedFeedbackId, setSubmittedFeedbackId] = useState<string | null>(null);
+  const [comments, setComments] = useState("");
+  const [submitted, setSubmitted] = useState(false);
 
-  const roomStatus = normalizeFeedbackRoomStatus(room?.status);
-  const canSubmit = Boolean(roomId && room && isFeedbackAvailable(roomStatus) && !feedbackState.data?.hasSubmitted);
-  const hasSubmitted = Boolean(feedbackState.data?.hasSubmitted || submittedFeedbackId);
+  const averageScore = useMemo(() => {
+    const selected = Object.values(ratings).filter(Boolean);
+    if (!selected.length) return "0.0";
+    return (selected.reduce((sum, score) => sum + score, 0) / selected.length).toFixed(1);
+  }, [ratings]);
 
-  const scoreSummary = useMemo(() => {
-    const values = ratingFields
-      .map((field) => form[field.key])
-      .filter((value): value is number => typeof value === "number" && value > 0);
-    if (values.length === 0) return "No score selected";
+  const completion = Object.values(ratings).filter(Boolean).length;
 
-    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-    return `${average.toFixed(1)} average across ${values.length} score${values.length === 1 ? "" : "s"}`;
-  }, [form]);
-
-  const updateRating = (key: RatingField["key"], value?: number) => {
-    setForm((current) => ({
+  function updateRating(key: RatingKey, value: number) {
+    setRatings((current) => ({
       ...current,
-      [key]: value ?? (key === "overallRating" ? 0 : undefined),
+      [key]: current[key] === value ? 0 : value,
     }));
-  };
+    setSubmitted(false);
+  }
 
-  const handleSubmit = async () => {
-    if (!canSubmit) {
-      toast.error("Feedback is only available after a room has ended.");
+  function submitPreview() {
+    if (!ratings.overall) {
+      toast.error("Select an overall score before submitting.");
       return;
     }
 
-    if (!form.overallRating) {
-      toast.error("Select an overall rating before submitting.");
-      return;
-    }
-
-    try {
-      const feedback = await submitFeedback.mutateAsync({
-        ...form,
-        comments: form.comments?.trim() || undefined,
-      });
-      setSubmittedFeedbackId(feedback.id);
-      toast.success("Feedback submitted.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not submit feedback.";
-      toast.error(message);
-    }
-  };
-
-  if (!roomId) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{pageCopy.title}</h1>
-          <p className="text-muted-foreground">{pageCopy.subtitle}</p>
-        </div>
-
-        <Card className="rounded-lg border-[#e4eef9]">
-          <CardContent className="flex min-h-[320px] flex-col items-center justify-center gap-4 text-center">
-            <div className="flex size-12 items-center justify-center rounded-lg bg-[#e4eef9] text-[#003476]">
-              <MessageSquareText className="size-6" />
-            </div>
-            <div className="max-w-md space-y-2">
-              <h2 className="text-lg font-semibold">Choose an ended room first</h2>
-              <p className="text-sm text-muted-foreground">
-                Open feedback from a completed room so the form can validate room access and submission state.
-              </p>
-            </div>
-            <Link
-              href="/rooms"
-              className="inline-flex h-8 items-center justify-center rounded-lg bg-[#003476] px-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#003476]/90"
-            >
-              View rooms
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isRoomLoading || feedbackState.isLoading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{pageCopy.title}</h1>
-          <p className="text-muted-foreground">Loading room status and submission state.</p>
-        </div>
-        <Card className="rounded-lg border-[#e4eef9]">
-          <CardContent className="flex min-h-[320px] items-center justify-center gap-3 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Loading feedback flow...
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isRoomError || !room) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{pageCopy.title}</h1>
-          <p className="text-muted-foreground">We could not load this room.</p>
-        </div>
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertTitle>Room unavailable</AlertTitle>
-          <AlertDescription>
-            Check that the room exists and that your account can access it before submitting feedback.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
-  if (!isFeedbackAvailable(roomStatus)) {
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{pageCopy.title}</h1>
-            <p className="text-muted-foreground">{room.title}</p>
-          </div>
-          <Badge variant="outline" className="border-[#e4eef9] bg-[#fdfcf6] text-[#003476] capitalize">
-            {roomStatus.replace("_", " ")}
-          </Badge>
-        </div>
-
-        <Card className="rounded-lg border-[#e4eef9]">
-          <CardContent className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-center">
-            <AlertCircle className="size-8 text-[#003476]" />
-            <h2 className="text-lg font-semibold">Feedback is locked for this room state</h2>
-            <p className="max-w-md text-sm text-muted-foreground">
-              Feedback opens only after the room reaches an ended state. Current state is {roomStatus.replace("_", " ")}.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    setSubmitted(true);
+    toast.success("Preview feedback captured.");
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{pageCopy.title}</h1>
-          <p className="text-muted-foreground">
-            Submit quality feedback for the ended room: <span className="font-medium text-foreground">{room.title}</span>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-primary">
+            <MessageSquareText className="h-4 w-4" />
+            Quality review
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">Post-room feedback</h1>
+          <p className="max-w-2xl text-muted-foreground">
+            Collect structured ratings after translation rooms and route quality issues for review.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-[#e4eef9] bg-[#fdfcf6] text-[#003476]">
-            {room.translationRoomCode}
-          </Badge>
-          <Badge variant="outline" className="border-slate-200 bg-white text-slate-700 capitalize">
-            {roomStatus}
-          </Badge>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/history" className={cn(buttonVariants({ variant: "outline" }))}>
+            View history
+          </Link>
+          <Button onClick={submitPreview}>
+            <Send className="mr-2 h-4 w-4" />
+            Submit preview
+          </Button>
         </div>
       </div>
 
-      {hasSubmitted ? (
-        <Alert className="border-[#e4eef9] bg-[#fdfcf6] text-[#003476]">
-          <CheckCircle2 />
-          <AlertTitle>Feedback already submitted</AlertTitle>
-          <AlertDescription>
-            Duplicate submission is disabled for this room. Thanks for closing the loop.
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <Alert className="border-[#e4eef9] bg-[#fdfcf6]">
-          <Star className="text-[#003476]" />
-          <AlertTitle>After-session quality check</AlertTitle>
-          <AlertDescription>
-            This is the participant/host submission step after a meeting ends.
-          </AlertDescription>
-        </Alert>
-      )}
+      <div className="grid gap-4 md:grid-cols-3">
+        <MetricCard icon={<Star />} label="Average score" value={averageScore} detail="Live form estimate" />
+        <MetricCard icon={<CheckCircle2 />} label="Fields completed" value={`${completion}/4`} detail="Overall score is required" />
+        <MetricCard icon={<TrendingUp />} label="Review queue" value="3" detail="Preview feedback items" />
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Card className="rounded-lg border-[#e4eef9]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-lg">One-time feedback form</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {ratingFields.map((field) => (
-              <div key={field.key} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[220px_minmax(0,1fr)]">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold">{field.label}</p>
-                    {field.required && (
-                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                        Required
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{field.helper}</p>
-                </div>
-                <RatingButtons
-                  value={form[field.key]}
-                  disabled={hasSubmitted || submitFeedback.isPending}
-                  onChange={(value) => updateRating(field.key, value)}
-                />
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle>Room quality form</CardTitle>
+                <CardDescription>Shadcn feedback surface for an ended room.</CardDescription>
               </div>
-            ))}
-
-            <div className="space-y-2">
-              <label className="text-sm font-semibold" htmlFor="feedback-comments">
-                Comments
-              </label>
-              <Textarea
-                id="feedback-comments"
-                value={form.comments}
-                disabled={hasSubmitted || submitFeedback.isPending}
-                onChange={(event) => setForm((current) => ({ ...current, comments: event.target.value }))}
-                placeholder="What should the team improve for future translated rooms?"
-                className="min-h-28 bg-white"
-              />
+              <Badge variant={submitted ? "default" : "secondary"}>
+                {submitted ? "Captured" : "Draft"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              {ratingFields.map((field) => (
+                <div key={field.key} className="rounded-lg border bg-background p-4">
+                  <div className="mb-3">
+                    <Label className="text-sm font-semibold">{field.label}</Label>
+                    <p className="text-sm text-muted-foreground">{field.helper}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <button
+                        key={score}
+                        type="button"
+                        aria-pressed={ratings[field.key] === score}
+                        onClick={() => updateRating(field.key, score)}
+                        className={cn(
+                          "flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-semibold transition-colors",
+                          ratings[field.key] === score
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card hover:bg-muted"
+                        )}
+                      >
+                        {score}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {submitFeedback.isError && (
-              <Alert variant="destructive">
-                <AlertCircle />
-                <AlertTitle>Submission failed</AlertTitle>
-                <AlertDescription>
-                  {submitFeedback.error instanceof Error ? submitFeedback.error.message : "Please try again."}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-              <p className="text-sm text-muted-foreground">{scoreSummary}</p>
-              <Button
-                onClick={handleSubmit}
-                disabled={!canSubmit || hasSubmitted || submitFeedback.isPending}
-                className="bg-[#003476] text-white hover:bg-[#003476]/90"
-              >
-                {submitFeedback.isPending && <Loader2 className="animate-spin" />}
-                {submitFeedback.isPending ? "Submitting..." : hasSubmitted ? "Submitted" : "Submit feedback"}
-              </Button>
+            <div className="grid gap-2">
+              <Label htmlFor="feedback-comments">Host notes</Label>
+              <Textarea
+                id="feedback-comments"
+                value={comments}
+                onChange={(event) => {
+                  setComments(event.target.value);
+                  setSubmitted(false);
+                }}
+                placeholder="Add translation quality notes, missed terms, or follow-up requests."
+                className="min-h-32"
+              />
             </div>
           </CardContent>
         </Card>
 
-        <aside className="space-y-4">
-          <Card className="rounded-lg border-[#e4eef9] bg-[#fdfcf6]">
+        <div className="space-y-4">
+          <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle className="text-base">Feedback workflow</CardTitle>
+              <CardTitle>Operational signal</CardTitle>
+              <CardDescription>What the quality team sees first.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex gap-3">
-                <Clock className="mt-0.5 size-4 shrink-0 text-[#003476]" />
-                <div>
-                  <p className="font-medium text-[#003476]">1. Room ends</p>
-                  <p className="text-muted-foreground">Only ended rooms open this form.</p>
+            <CardContent className="space-y-3">
+              <div className="rounded-lg border bg-muted/40 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Recommended action
                 </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Prioritize sessions below 4.3 or notes that mention terminology drift.
+                </p>
               </div>
-              <div className="flex gap-3">
-                <Send className="mt-0.5 size-4 shrink-0 text-[#003476]" />
-                <div>
-                  <p className="font-medium text-[#003476]">2. User submits once</p>
-                  <p className="text-muted-foreground">Ratings map to translation_room_feedback and duplicate submit is disabled.</p>
+              <div className="rounded-lg border bg-background p-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <ThumbsUp className="h-4 w-4 text-primary" />
+                  Current sentiment
                 </div>
-              </div>
-              <div className="flex gap-3">
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#003476]" />
-                <div>
-                  <p className="font-medium text-[#003476]">3. Stored for later review</p>
-                  <p className="text-muted-foreground">Admin feedback lists or analytics should be a separate dashboard ticket.</p>
-                </div>
+                <p className="mt-2 text-2xl font-bold">{averageScore}/5</p>
+                <p className="text-sm text-muted-foreground">Based on selected preview ratings.</p>
               </div>
             </CardContent>
           </Card>
-        </aside>
+
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Recent feedback</CardTitle>
+              <CardDescription>Sample queue for review.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentFeedback.map((item) => (
+                <div key={item.room} className="rounded-lg border bg-background p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{item.room}</p>
+                      <p className="text-sm text-muted-foreground">{item.note}</p>
+                    </div>
+                    <Badge variant="outline">{item.status}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold">{item.score}/5</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
 }
 
-function FeedbackLoading() {
+function MetricCard({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+}) {
   return (
-    <Card className="rounded-lg border-[#e4eef9]">
-      <CardContent className="flex min-h-[320px] items-center justify-center gap-3 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        Loading feedback flow...
+    <Card className="shadow-sm">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-5 [&_svg]:w-5">
+            {icon}
+          </div>
+          <Badge variant="outline">{detail}</Badge>
+        </div>
+        <p className="mt-4 text-sm text-muted-foreground">{label}</p>
+        <p className="text-3xl font-bold tracking-tight">{value}</p>
       </CardContent>
     </Card>
   );

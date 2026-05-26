@@ -19,7 +19,7 @@ import { useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 
 const navigation = [
-  { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Workspaces", href: "/admin/workspaces", icon: Building2 },
   { name: "Users", href: "/admin/users", icon: Users },
   { name: "Plans & Subscriptions", href: "/admin/plans", icon: CreditCard },

@@ -1,230 +1,297 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { AlertCircle, Calendar, Clock, Globe, Plus, Search, Users } from "lucide-react";
+import { CalendarClock, Clock3, Globe2, LayoutGrid, Plus, Search, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
-import { getLanguageName } from "@/lib/languages";
+import { cn } from "@/lib/utils";
 import type { TranslationRoomDto, TranslationRoomStatus } from "@/types/translationRoom";
 
-const statusOptions: Array<{ value: string; label: string }> = [
-  { value: "", label: "All" },
-  { value: "SCHEDULED,WAITING", label: "Upcoming" },
-  { value: "IN_PROGRESS,PAUSED", label: "Active" },
-  { value: "ENDED,CANCELLED", label: "Completed" },
+const demoRooms: TranslationRoomDto[] = [
+  {
+    id: "preview-investor-qa",
+    workspaceId: "preview",
+    hostId: "host",
+    title: "Investor Q&A Translation",
+    description: "Live multilingual room for product due diligence.",
+    translationRoomCode: "WARP-241",
+    status: "in_progress",
+    translationRoomType: "instant",
+    maxParticipants: 24,
+    sourceLanguage: "en-US",
+    targetLanguages: ["vi-VN", "ja-JP"],
+    startedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    participantCount: 18,
+    isHost: true,
+  },
+  {
+    id: "preview-partner-sync",
+    workspaceId: "preview",
+    hostId: "host",
+    title: "Partner Sync Room",
+    description: "Scheduled interpretation room for APAC stakeholders.",
+    translationRoomCode: "SYNC-882",
+    status: "scheduled",
+    translationRoomType: "scheduled",
+    maxParticipants: 12,
+    sourceLanguage: "vi-VN",
+    targetLanguages: ["en-US"],
+    scheduledAt: new Date(Date.now() + 1000 * 60 * 55).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    participantCount: 7,
+    isHost: true,
+  },
+  {
+    id: "preview-onboarding",
+    workspaceId: "preview",
+    hostId: "host",
+    title: "Customer Onboarding",
+    description: "Waiting room for enterprise onboarding and support.",
+    translationRoomCode: "CUST-104",
+    status: "waiting",
+    translationRoomType: "group",
+    maxParticipants: 16,
+    sourceLanguage: "en-US",
+    targetLanguages: ["ko-KR", "vi-VN"],
+    scheduledAt: new Date(Date.now() + 1000 * 60 * 130).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+    participantCount: 9,
+    isHost: true,
+  },
+  {
+    id: "preview-board-review",
+    workspaceId: "preview",
+    hostId: "host",
+    title: "Board Review Translation",
+    description: "Completed session with transcript artifacts ready.",
+    translationRoomCode: "BORD-778",
+    status: "ended",
+    translationRoomType: "group",
+    maxParticipants: 20,
+    sourceLanguage: "en-US",
+    targetLanguages: ["vi-VN"],
+    endedAt: new Date(Date.now() - 1000 * 60 * 85).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+    participantCount: 14,
+    isHost: true,
+  },
 ];
 
-const statusLabels: Record<TranslationRoomStatus, string> = {
-  scheduled: "Scheduled",
-  waiting: "Waiting",
-  in_progress: "Active",
-  paused: "Paused",
-  ended: "Ended",
-  cancelled: "Cancelled",
-  expired: "Expired",
-  failed: "Failed",
+const statusStyles: Record<TranslationRoomStatus, string> = {
+  scheduled: "bg-blue-50 text-blue-700 border-blue-200",
+  waiting: "bg-amber-50 text-amber-700 border-amber-200",
+  in_progress: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  paused: "bg-muted text-muted-foreground border-border",
+  ended: "bg-secondary text-secondary-foreground border-border",
+  cancelled: "bg-destructive/10 text-destructive border-destructive/20",
+  expired: "bg-muted text-muted-foreground border-border",
+  failed: "bg-destructive/10 text-destructive border-destructive/20",
 };
 
-const statusStyles: Record<TranslationRoomStatus, string> = {
-  scheduled: "border-[#003476]/15 bg-[#e4eef9] text-[#003476]",
-  waiting: "border-amber-200 bg-amber-50 text-amber-700",
-  in_progress: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  paused: "border-slate-200 bg-slate-50 text-slate-700",
-  ended: "border-slate-200 bg-white text-slate-600",
-  cancelled: "border-rose-200 bg-rose-50 text-rose-700",
-  expired: "border-slate-200 bg-slate-50 text-slate-500",
-  failed: "border-rose-200 bg-rose-50 text-rose-700",
-};
+function languageName(code?: string) {
+  const labels: Record<string, string> = {
+    "en-US": "English",
+    "vi-VN": "Vietnamese",
+    "ja-JP": "Japanese",
+    "ko-KR": "Korean",
+  };
+  return labels[code ?? ""] ?? code ?? "Unknown";
+}
 
 function formatDate(value?: string) {
   if (!value) return "No schedule";
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
-    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
 }
 
-function formatLanguages(room: TranslationRoomDto) {
-  const targets = room.targetLanguages.map(getLanguageName).join(", ");
-  return `${getLanguageName(room.sourceLanguage ?? "en")} -> ${targets || "No target"}`;
+function getRoomTime(room: TranslationRoomDto) {
+  return room.scheduledAt ?? room.startedAt ?? room.endedAt ?? room.createdAt;
 }
 
-function getRoomTime(room: TranslationRoomDto) {
-  return room.scheduledAt ?? room.startedAt ?? room.createdAt;
+function formatLanguages(room: TranslationRoomDto) {
+  return `${languageName(room.sourceLanguage)} -> ${room.targetLanguages.map(languageName).join(", ")}`;
+}
+
+function matchesStatus(room: TranslationRoomDto, tab: string) {
+  if (tab === "all") return true;
+  if (tab === "upcoming") return room.status === "scheduled" || room.status === "waiting";
+  if (tab === "active") return room.status === "in_progress" || room.status === "paused";
+  if (tab === "completed") return room.status === "ended" || room.status === "cancelled";
+  return true;
 }
 
 export default function RoomsPage() {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const roomList = useTranslationRooms({
-    status: status || undefined,
-    search: search.trim() || undefined,
-    pageSize: 100,
-  });
+  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState("all");
+  const roomList = useTranslationRooms({ pageSize: 100 });
 
-  const rooms = useMemo(() => roomList.data?.rooms ?? [], [roomList.data?.rooms]);
-  const activeCount = useMemo(
-    () => rooms.filter((room) => room.status === "in_progress" || room.status === "paused").length,
-    [rooms]
-  );
-  const upcomingCount = useMemo(
-    () => rooms.filter((room) => room.status === "scheduled" || room.status === "waiting").length,
-    [rooms]
-  );
+  const rooms = useMemo(() => {
+    const apiRooms = roomList.data?.rooms ?? [];
+    return apiRooms.length > 0 ? apiRooms : demoRooms;
+  }, [roomList.data?.rooms]);
+
+  const filteredRooms = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return rooms.filter((room) => {
+      const matchesQuery =
+        !needle ||
+        [room.title, room.description, room.translationRoomCode, room.status, room.sourceLanguage, ...room.targetLanguages]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(needle));
+      return matchesQuery && matchesStatus(room, tab);
+    });
+  }, [query, rooms, tab]);
+
+  const activeCount = rooms.filter((room) => room.status === "in_progress" || room.status === "paused").length;
+  const upcomingCount = rooms.filter((room) => room.status === "scheduled" || room.status === "waiting").length;
+  const participantCount = rooms.reduce((total, room) => total + (room.participantCount ?? 0), 0);
 
   return (
-    <div className="mx-auto w-full max-w-[1320px] space-y-6 pb-16">
-      <div className="flex flex-col gap-4 rounded-2xl border border-[#e4eef9] bg-white p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-[#003476]">Translation rooms</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Room operations</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Manage rooms backed by the TranslationRoom API. Empty states reflect live data from the current workspace.
+          <div className="mb-2 inline-flex items-center gap-2 rounded-md border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            <LayoutGrid className="h-3.5 w-3.5 text-primary" />
+            Rooms
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Room operations</h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Shadcn-style room list with preview data while backend room APIs are unavailable.
           </p>
         </div>
-        <Link
-          href="/rooms/create"
-          className="inline-flex h-10 items-center justify-center rounded-md bg-[#003476] px-4 text-sm font-semibold text-white hover:bg-[#003476]/90"
-        >
+        <Link href="/rooms/create" className={cn(buttonVariants(), "h-9")}>
           <Plus className="mr-2 h-4 w-4" />
           Create room
         </Link>
-      </div>
+      </section>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <MetricCard icon={<Calendar className="h-4 w-4" />} label="Total rooms" value={roomList.data?.total ?? rooms.length} />
-        <MetricCard icon={<Clock className="h-4 w-4" />} label="Upcoming" value={upcomingCount} />
-        <MetricCard icon={<Users className="h-4 w-4" />} label="Active" value={activeCount} />
-      </div>
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard icon={<CalendarClock />} label="Upcoming" value={String(upcomingCount)} detail="Scheduled or waiting" />
+        <StatCard icon={<Users />} label="Participants" value={String(participantCount)} detail="Across visible rooms" />
+        <StatCard icon={<Clock3 />} label="Active" value={String(activeCount)} detail="Live or paused now" />
+      </section>
 
-      <div className="rounded-2xl border border-[#e4eef9] bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-[#e4eef9] p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full lg:max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search title, description, or code"
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#003476] focus:ring-1 focus:ring-[#003476]"
-            />
+      <Card className="shadow-sm">
+        <CardHeader className="gap-4 border-b lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <CardTitle>Translation rooms</CardTitle>
+            <CardDescription>Filter, scan, and open room workspaces.</CardDescription>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {statusOptions.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => setStatus(option.value)}
-                className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                  status === option.value
-                    ? "border-[#003476] bg-[#003476] text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-[#003476]/40"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {roomList.isLoading && <StateRow title="Loading rooms..." description="Fetching rooms from the TranslationRoom service." />}
-
-        {roomList.isError && (
-          <StateRow
-            icon={<AlertCircle className="h-5 w-5" />}
-            title="Could not load rooms"
-            description="Check your session and the TranslationRoom service connection."
-          />
-        )}
-
-        {!roomList.isLoading && !roomList.isError && rooms.length === 0 && (
-          <div className="flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
-            <Calendar className="h-10 w-10 text-[#003476]" />
-            <h2 className="mt-4 text-xl font-bold text-slate-950">No rooms found</h2>
-            <p className="mt-2 max-w-md text-sm text-slate-600">
-              Create a translation room or adjust your filters to see existing scheduled, active, or completed rooms.
-            </p>
-            <Link
-              href="/rooms/create"
-              className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-[#003476] px-4 text-sm font-semibold text-white hover:bg-[#003476]/90"
-            >
-              Create room
-            </Link>
-          </div>
-        )}
-
-        {rooms.length > 0 && (
-          <div className="divide-y divide-[#e4eef9]">
-            {rooms.map((room) => (
-              <Link
-                key={room.id}
-                href={`/room/${room.id}`}
-                className="grid gap-4 p-4 transition hover:bg-[#fdfcf6]/60 lg:grid-cols-[minmax(0,1.5fr)_180px_220px_140px]"
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-base font-bold text-slate-950">{room.title}</h2>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${statusStyles[room.status]}`}>
-                      {statusLabels[room.status]}
-                    </span>
-                  </div>
-                  {room.description && <p className="mt-1 line-clamp-2 text-sm text-slate-600">{room.description}</p>}
-                  <p className="mt-2 font-mono text-xs font-semibold uppercase tracking-wide text-[#003476]">
-                    {room.translationRoomCode}
-                  </p>
-                </div>
-                <InfoLine icon={<Clock className="h-4 w-4" />} label={formatDate(getRoomTime(room))} />
-                <InfoLine icon={<Globe className="h-4 w-4" />} label={formatLanguages(room)} />
-                <InfoLine
-                  icon={<Users className="h-4 w-4" />}
-                  label={`${room.participantCount ?? 0}/${room.maxParticipants} participants`}
+          <CardAction className="static col-auto row-auto self-auto justify-self-auto">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search rooms..."
+                  className="h-8 w-full pl-8 sm:w-[260px]"
                 />
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
+              </div>
+              <Tabs value={tab} onValueChange={setTab}>
+                <TabsList>
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+                  <TabsTrigger value="active">Active</TabsTrigger>
+                  <TabsTrigger value="completed">Completed</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-4">Room</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Languages</TableHead>
+                <TableHead>Time</TableHead>
+                <TableHead className="text-right pr-4">Participants</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRooms.map((room) => (
+                <TableRow key={room.id}>
+                  <TableCell className="pl-4">
+                    <Link href={`/room/${room.id}`} className="group block">
+                      <div className="font-medium group-hover:text-primary">{room.title}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{room.translationRoomCode}</div>
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={cn("capitalize", statusStyles[room.status])} variant="outline">
+                      {room.status.replace(/_/g, " ")}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Globe2 className="h-4 w-4" />
+                      <span className="max-w-[220px] truncate">{formatLanguages(room)}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(getRoomTime(room))}</TableCell>
+                  <TableCell className="text-right pr-4">
+                    {room.participantCount ?? 0}/{room.maxParticipants}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {filteredRooms.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                    No rooms match your filters.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function MetricCard({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
+function StatCard({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) {
   return (
-    <div className="rounded-2xl border border-[#e4eef9] bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e4eef9] text-[#003476]">{icon}</span>
-        {label}
-      </div>
-      <p className="mt-3 text-2xl font-bold text-slate-950">{value}</p>
-    </div>
-  );
-}
-
-function InfoLine({ icon, label }: { icon: ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-      <span className="text-[#003476]">{icon}</span>
-      <span className="min-w-0 truncate">{label}</span>
-    </div>
-  );
-}
-
-function StateRow({
-  icon,
-  title,
-  description,
-}: {
-  icon?: ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center text-slate-600">
-      {icon}
-      <p className="mt-3 text-base font-bold text-slate-950">{title}</p>
-      <p className="mt-1 text-sm">{description}</p>
-    </div>
+    <Card className="shadow-sm">
+      <CardHeader>
+        <CardDescription className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-4 [&_svg]:w-4">
+            {icon}
+          </span>
+          {label}
+        </CardDescription>
+        <CardTitle className="text-2xl font-semibold">{value}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
   );
 }
