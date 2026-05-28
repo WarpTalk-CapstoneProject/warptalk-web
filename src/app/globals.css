@@ -230,7 +230,7 @@
     radial-gradient(680px circle at 20% 72%, rgba(255, 255, 255, 0.06), transparent 50%),
     #000000;
   color: #ffffff;
-  padding: 120px 24px 110px;
+  padding: 96px 24px 110px;
 }
 
 .feature-trace-section::before {
@@ -259,9 +259,11 @@
 
 .feature-story-map {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: -42px;
   z-index: 1;
-  width: 100%;
+  width: calc(100% + 42px);
   height: 100%;
   overflow: visible;
 }
@@ -275,8 +277,8 @@
 }
 
 .feature-story-spine-base {
-  stroke: rgba(255, 255, 255, 0.16);
-  stroke-width: 2;
+  stroke: rgba(255, 255, 255, 0.055);
+  stroke-width: 1.45;
 }
 
 .feature-story-spine-live {
@@ -287,8 +289,12 @@
 
 .feature-story-branch {
   stroke: rgba(255, 255, 255, 0.68);
-  stroke-width: 1.85;
+  stroke-width: 1.72;
   filter: drop-shadow(0 0 10px rgba(164, 244, 253, 0.14));
+}
+
+.feature-story-child-branch {
+  stroke-linecap: butt;
 }
 
 .feature-story-dots {
@@ -355,6 +361,7 @@
   line-height: 0.95;
   letter-spacing: -0.05em;
   text-wrap: balance;
+  text-shadow: 0 0 18px #000000, 0 0 42px #000000;
 }
 
 .feature-story-index {
@@ -362,8 +369,14 @@
   display: grid;
   gap: 8px;
   width: 104px;
+  z-index: 4;
+  padding: 10px 12px;
+  margin: -10px 0 0 -12px;
+  border-radius: 16px;
+  background: radial-gradient(118px circle at 50% 50%, #000000 0%, rgba(0, 0, 0, 0.94) 45%, rgba(0, 0, 0, 0.72) 68%, transparent 100%);
   color: rgba(255, 255, 255, 0.72);
   text-transform: uppercase;
+  text-shadow: 0 0 14px #000000;
 }
 
 .feature-story-index span {
@@ -389,8 +402,8 @@
 }
 
 .feature-story-step-02 .feature-story-index {
-  top: 626px;
-  left: 78px;
+  top: 610px;
+  left: 22px;
 }
 
 .feature-story-step-02 h2 {
@@ -399,8 +412,8 @@
 }
 
 .feature-story-step-03 .feature-story-index {
-  top: 990px;
-  left: 124px;
+  top: 970px;
+  left: 42px;
 }
 
 .feature-story-step-03 h2 {
@@ -413,8 +426,8 @@
 }
 
 .feature-story-step-04 .feature-story-index {
-  top: 1694px;
-  left: 82px;
+  top: 1668px;
+  left: 20px;
 }
 
 .feature-story-step-04 h2 {
@@ -453,6 +466,7 @@
 .feature-signal-copy {
   position: relative;
   min-height: 460px;
+  margin-top: -332px;
   padding: 18px 18px 0 0;
 }
 

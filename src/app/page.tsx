@@ -419,47 +419,78 @@ function BranchLabel({
   );
 }
 
+function BranchTextLabel({
+  x,
+  y,
+  label,
+  progress,
+  revealAt,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  progress: MotionValue<number>;
+  revealAt: number;
+}) {
+  const labelOpacity = useTransform(progress, [Math.max(0, revealAt - 0.1), revealAt], [0, 1]);
+
+  return (
+    <motion.text className="feature-branch-label-start" x={x} y={y} style={{ opacity: labelOpacity }}>
+      {label}
+    </motion.text>
+  );
+}
+
 function FeatureStoryBoard() {
   const storyRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({
     target: storyRef,
-    offset: ["start 84%", "end 68%"],
+    offset: ["start 92%", "end 72%"],
   });
-  const driftProgress = useTransform(scrollYProgress, [0.15, 0.24], [0, 1]);
-  const crossingProgress = useTransform(scrollYProgress, [0.322, 0.41], [0, 1]);
-  const pauseProgress = useTransform(scrollYProgress, [0.495, 0.56], [0, 1]);
-  const memoryProgress = useTransform(scrollYProgress, [0.636, 0.7], [0, 1]);
-  const driftOpacity = useTransform(driftProgress, [0, 0.03], [0, 1]);
-  const crossingOpacity = useTransform(crossingProgress, [0, 0.03], [0, 1]);
-  const pauseOpacity = useTransform(pauseProgress, [0, 0.03], [0, 1]);
-  const memoryOpacity = useTransform(memoryProgress, [0, 0.03], [0, 1]);
-  const pauseNodeOpacity = useTransform(pauseProgress, [0.52, 0.62], [0, 1]);
-  const pauseNodeScale = useTransform(pauseProgress, [0.52, 0.62], [0, 1]);
-  const memoryNodeOpacity = useTransform(memoryProgress, [0.18, 0.28], [0, 1]);
-  const memoryNodeScale = useTransform(memoryProgress, [0.18, 0.28], [0, 1]);
-  const signalProgress = useTransform(scrollYProgress, [0.79, 1.035], [0, 1]);
-  const signalCopyOpacity = useTransform(signalProgress, [0.03, 0.18], [0, 1]);
+  const spineProgress = useTransform(scrollYProgress, [0, 0.94], [0, 1]);
+  const driftProgress = useTransform(spineProgress, [0.118, 0.218], [0, 1]);
+  const crossingProgress = useTransform(spineProgress, [0.252, 0.38], [0, 1]);
+  const pauseProgress = useTransform(spineProgress, [0.387, 0.524], [0, 1]);
+  const memoryProgress = useTransform(spineProgress, [0.639, 0.768], [0, 1]);
+  const driftOpacity = useTransform(driftProgress, [0.04, 0.14], [0, 1]);
+  const crossingOpacity = useTransform(crossingProgress, [0.04, 0.14], [0, 1]);
+  const pauseOpacity = useTransform(pauseProgress, [0.04, 0.14], [0, 1]);
+  const memoryOpacity = useTransform(memoryProgress, [0.04, 0.14], [0, 1]);
+  const driftTrunkProgress = useTransform(driftProgress, [0, 0.42], [0, 1]);
+  const driftForkProgress = useTransform(driftProgress, [0.42, 1], [0, 1]);
+  const driftForkOpacity = useTransform(driftForkProgress, [0.04, 0.12], [0, 1]);
+  const crossingTrunkProgress = useTransform(crossingProgress, [0, 0.38], [0, 1]);
+  const crossingForkProgress = useTransform(crossingProgress, [0.38, 1], [0, 1]);
+  const crossingForkOpacity = useTransform(crossingForkProgress, [0.04, 0.12], [0, 1]);
+  const pauseTrunkProgress = useTransform(pauseProgress, [0, 0.58], [0, 1]);
+  const pauseForkProgress = useTransform(pauseProgress, [0.58, 1], [0, 1]);
+  const pauseForkOpacity = useTransform(pauseForkProgress, [0.04, 0.12], [0, 1]);
+  const memoryTrunkProgress = useTransform(memoryProgress, [0, 0.46], [0, 1]);
+  const memoryForkProgress = useTransform(memoryProgress, [0.46, 1], [0, 1]);
+  const memoryForkOpacity = useTransform(memoryForkProgress, [0.04, 0.12], [0, 1]);
+  const signalProgress = useTransform(spineProgress, [0.8, 1.015], [0, 1]);
+  const signalCopyOpacity = useTransform(signalProgress, [0, 0.08], [0, 1]);
   const signalCopyY = useTransform(signalCopyOpacity, [0, 1], [18, 0]);
   const signalDotProgress = [
-    useTransform(signalProgress, [0.08, 0.14], [0, 1]),
-    useTransform(signalProgress, [0.21, 0.27], [0, 1]),
-    useTransform(signalProgress, [0.34, 0.4], [0, 1]),
-    useTransform(signalProgress, [0.47, 0.53], [0, 1]),
-    useTransform(signalProgress, [0.6, 0.66], [0, 1]),
+    useTransform(signalProgress, [0.08, 0.12], [0, 1]),
+    useTransform(signalProgress, [0.13, 0.17], [0, 1]),
+    useTransform(signalProgress, [0.18, 0.22], [0, 1]),
+    useTransform(signalProgress, [0.23, 0.27], [0, 1]),
+    useTransform(signalProgress, [0.28, 0.32], [0, 1]),
   ];
   const signalLineProgress = [
-    useTransform(signalProgress, [0.15, 0.27], [0, 1]),
-    useTransform(signalProgress, [0.28, 0.4], [0, 1]),
-    useTransform(signalProgress, [0.41, 0.53], [0, 1]),
-    useTransform(signalProgress, [0.54, 0.66], [0, 1]),
-    useTransform(signalProgress, [0.67, 0.79], [0, 1]),
+    useTransform(signalProgress, [0.2, 0.34], [0, 1]),
+    useTransform(signalProgress, [0.36, 0.5], [0, 1]),
+    useTransform(signalProgress, [0.52, 0.66], [0, 1]),
+    useTransform(signalProgress, [0.68, 0.82], [0, 1]),
+    useTransform(signalProgress, [0.84, 0.96], [0, 1]),
   ];
   const signalRowOpacity = [
-    useTransform(signalProgress, [0.29, 0.36], [0, 1]),
-    useTransform(signalProgress, [0.42, 0.49], [0, 1]),
-    useTransform(signalProgress, [0.55, 0.62], [0, 1]),
-    useTransform(signalProgress, [0.68, 0.75], [0, 1]),
-    useTransform(signalProgress, [0.81, 0.88], [0, 1]),
+    useTransform(signalProgress, [0.2, 0.26], [0, 1]),
+    useTransform(signalProgress, [0.36, 0.42], [0, 1]),
+    useTransform(signalProgress, [0.52, 0.58], [0, 1]),
+    useTransform(signalProgress, [0.68, 0.74], [0, 1]),
+    useTransform(signalProgress, [0.84, 0.9], [0, 1]),
   ];
   const signalRowY = [
     useTransform(signalRowOpacity[0], [0, 1], [18, 0]),
@@ -469,10 +500,10 @@ function FeatureStoryBoard() {
     useTransform(signalRowOpacity[4], [0, 1], [18, 0]),
   ];
   const stepOpacity = [
-    useTransform(driftProgress, [0.02, 0.16], [0, 1]),
-    useTransform(crossingProgress, [0.02, 0.16], [0, 1]),
-    useTransform(pauseProgress, [0.02, 0.16], [0, 1]),
-    useTransform(memoryProgress, [0.02, 0.16], [0, 1]),
+    useTransform(driftProgress, [0.06, 0.2], [0, 1]),
+    useTransform(crossingProgress, [0.06, 0.2], [0, 1]),
+    useTransform(pauseProgress, [0.06, 0.2], [0, 1]),
+    useTransform(memoryProgress, [0.06, 0.2], [0, 1]),
   ];
   const stepY = [
     useTransform(stepOpacity[0], [0, 1], [24, 0]),
@@ -496,62 +527,73 @@ function FeatureStoryBoard() {
         <motion.path
           className="feature-story-spine-live"
           d="M80 0 C 10 122 34 242 130 300 C 252 374 236 540 108 620 C 0 704 36 882 144 960 C 258 1064 248 1522 112 1650 C 54 1708 72 1774 164 1822 C 198 1848 218 1928 226 2006 C 232 2084 226 2158 226 2248 V2650"
-          style={{ pathLength: scrollYProgress }}
+          style={{ pathLength: spineProgress }}
         />
 
         <g>
+          <motion.path
+            className="feature-story-branch"
+            d="M130 300 C 180 336 240 390 360 390 H470"
+            style={{ pathLength: driftTrunkProgress, opacity: driftOpacity }}
+          />
           {[
-            "M130 300 C 180 336 240 390 360 390 H470 C 554 390 574 318 692 318 S 862 390 1094 358",
-            "M130 300 C 180 336 240 390 360 390 H470 C 556 390 590 444 682 404 S 868 358 1094 404",
+            "M470 390 C 554 390 574 318 692 318 S 862 390 1094 358",
+            "M470 390 C 556 390 590 444 682 404 S 868 358 1094 404",
           ].map((path, index) => (
             <motion.path
-              className={index === 1 ? "feature-story-branch feature-story-dots" : "feature-story-branch"}
+              className={
+                index === 1
+                  ? "feature-story-branch feature-story-child-branch feature-story-dots"
+                  : "feature-story-branch feature-story-child-branch"
+              }
               d={path}
               key={path}
-              style={{ pathLength: driftProgress, opacity: driftOpacity }}
+              style={{ pathLength: driftForkProgress, opacity: driftForkOpacity }}
             />
           ))}
-          <BranchLabel x={586} y={484} tickTop={422} tickBottom={454} label="live" progress={driftProgress} revealAt={0.58} />
-          <BranchLabel x={820} y={484} tickTop={422} tickBottom={454} label="low latency" progress={driftProgress} revealAt={0.74} />
-          <BranchLabel x={1016} y={484} tickTop={422} tickBottom={454} label="room signal" progress={driftProgress} revealAt={0.9} />
+          <BranchLabel x={586} y={484} tickTop={372} tickBottom={454} label="live" progress={driftForkProgress} revealAt={0.28} />
+          <BranchLabel x={820} y={484} tickTop={368} tickBottom={454} label="low latency" progress={driftForkProgress} revealAt={0.58} />
+          <BranchLabel x={1016} y={484} tickTop={372} tickBottom={454} label="room signal" progress={driftForkProgress} revealAt={0.86} />
         </g>
 
         <g>
+          <motion.path
+            className="feature-story-branch"
+            d="M108 620 C 176 664 246 720 370 720 H488"
+            style={{ pathLength: crossingTrunkProgress, opacity: crossingOpacity }}
+          />
           {[
-            "M108 620 C 176 664 246 720 370 720 H488 C 572 720 620 638 730 638 S 914 692 1094 664",
-            "M108 620 C 176 664 246 720 370 720 H488 C 574 720 620 796 742 758 S 888 706 1094 776",
-            "M108 620 C 176 664 246 720 370 720 H488 C 590 720 658 830 780 800 S 950 734 1094 722",
+            "M488 720 C 572 720 620 638 730 638 S 914 692 1094 664",
+            "M488 720 C 574 720 620 796 742 758 S 888 706 1094 776",
+            "M488 720 C 590 720 658 830 780 800 S 950 734 1094 722",
           ].map((path, index) => (
             <motion.path
-              className={index === 1 ? "feature-story-branch feature-story-dots" : "feature-story-branch"}
+              className={
+                index === 1
+                  ? "feature-story-branch feature-story-child-branch feature-story-dots"
+                  : "feature-story-branch feature-story-child-branch"
+              }
               d={path}
               key={path}
-              style={{ pathLength: crossingProgress, opacity: crossingOpacity }}
+              style={{ pathLength: crossingForkProgress, opacity: crossingForkOpacity }}
             />
           ))}
-          <BranchLabel x={594} y={652} tickTop={674} tickBottom={716} label="xin chao" progress={crossingProgress} revealAt={0.48} />
-          <BranchLabel x={756} y={686} tickTop={700} tickBottom={744} label="hello" progress={crossingProgress} revealAt={0.62} />
-          <BranchLabel x={908} y={628} tickTop={648} tickBottom={694} label="bonjour" progress={crossingProgress} revealAt={0.76} />
-          <BranchLabel x={1012} y={808} tickTop={780} tickBottom={808} label="konnichiwa" progress={crossingProgress} revealAt={0.9} />
+          <BranchLabel x={594} y={652} tickTop={646} tickBottom={696} label="xin chao" progress={crossingForkProgress} revealAt={0.24} />
+          <BranchLabel x={756} y={686} tickTop={668} tickBottom={730} label="hello" progress={crossingForkProgress} revealAt={0.46} />
+          <BranchLabel x={908} y={628} tickTop={626} tickBottom={682} label="bonjour" progress={crossingForkProgress} revealAt={0.66} />
+          <BranchLabel x={1012} y={808} tickTop={742} tickBottom={800} label="konnichiwa" progress={crossingForkProgress} revealAt={0.84} />
         </g>
 
         <g>
           <motion.path
             className="feature-story-branch feature-story-dots"
             d="M144 960 C 216 1024 276 1140 430 1140 H560"
-            style={{ pathLength: pauseProgress, opacity: pauseOpacity }}
+            style={{ pathLength: pauseTrunkProgress, opacity: pauseOpacity }}
           />
           <motion.path
-            className="feature-story-branch"
-            d="M144 960 C 216 1024 276 1140 430 1140 H560 C 574 1140 584 1140 596 1140 H1094"
-            style={{ pathLength: pauseProgress, opacity: pauseOpacity }}
-          />
-          <motion.circle
-            className="feature-story-node"
-            cx="578"
-            cy="1140"
-            r="3"
-            style={{ opacity: pauseNodeOpacity, scale: pauseNodeScale }}
+            className="feature-story-branch feature-story-child-branch"
+            d="M560 1140 C 574 1140 584 1140 596 1140 H1094"
+            style={{ pathLength: pauseForkProgress, opacity: pauseForkOpacity }}
           />
         </g>
 
@@ -559,21 +601,25 @@ function FeatureStoryBoard() {
           <motion.path
             className="feature-story-branch"
             d="M112 1650 C 184 1714 250 1806 420 1806 H520"
-            style={{ pathLength: memoryProgress, opacity: memoryOpacity }}
+            style={{ pathLength: memoryTrunkProgress, opacity: memoryOpacity }}
           />
-          <motion.path
-            className="feature-story-branch"
-            d="M520 1806 C 624 1806 666 1728 810 1728 H1094"
-            style={{ pathLength: memoryProgress, opacity: memoryOpacity }}
-          />
-          <motion.circle
-            className="feature-story-node"
-            cx="520"
-            cy="1806"
-            r="3"
-            style={{ opacity: memoryNodeOpacity, scale: memoryNodeScale }}
-          />
-          <BranchLabel x={1010} y={1734} tickTop={1728} tickBottom={1728} label="memory signal" progress={memoryProgress} revealAt={0.72} align="start" />
+          {[
+            "M520 1806 C 620 1806 652 1662 810 1662 H1094",
+            "M520 1806 C 632 1806 666 1708 810 1708 H1094",
+            "M520 1806 C 646 1806 682 1754 810 1754 H1094",
+            "M520 1806 C 666 1806 702 1800 810 1800 H1094",
+          ].map((path) => (
+            <motion.path
+              className="feature-story-branch feature-story-child-branch"
+              d={path}
+              key={path}
+              style={{ pathLength: memoryForkProgress, opacity: memoryForkOpacity }}
+            />
+          ))}
+          <BranchTextLabel x={982} y={1662} label="decisions" progress={memoryForkProgress} revealAt={0.54} />
+          <BranchTextLabel x={982} y={1708} label="questions" progress={memoryForkProgress} revealAt={0.62} />
+          <BranchTextLabel x={982} y={1754} label="next steps" progress={memoryForkProgress} revealAt={0.7} />
+          <BranchTextLabel x={982} y={1800} label="names" progress={memoryForkProgress} revealAt={0.78} />
         </g>
 
         {[2254, 2346, 2438, 2530, 2622].map((point, index) => (
