@@ -173,35 +173,35 @@ export default function RoomsPage() {
   const participantCount = rooms.reduce((total, room) => total + (room.participantCount ?? 0), 0);
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-2.5">
+      <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-md border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          <div className="mb-1.5 inline-flex h-6 items-center gap-2 rounded-md border bg-background px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             <LayoutGrid className="h-3.5 w-3.5 text-primary" />
             Rooms
           </div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Room operations</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <h1 className="text-xl font-semibold tracking-tight text-white xl:text-2xl">Room operations</h1>
+          <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
             Shadcn-style room list with preview data while backend room APIs are unavailable.
           </p>
         </div>
-        <Link href="/rooms/create" className={cn(buttonVariants(), "h-9")}>
-          <Plus className="mr-2 h-4 w-4" />
+        <Link href="/rooms/create" className={cn(buttonVariants(), "h-8 px-3 text-xs")}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
           Create room
         </Link>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-2.5 md:grid-cols-3">
         <StatCard icon={<CalendarClock />} label="Upcoming" value={String(upcomingCount)} detail="Scheduled or waiting" />
         <StatCard icon={<Users />} label="Participants" value={String(participantCount)} detail="Across visible rooms" />
         <StatCard icon={<Clock3 />} label="Active" value={String(activeCount)} detail="Live or paused now" />
       </section>
 
-      <Card className="shadow-sm">
-        <CardHeader className="gap-4 border-b lg:flex-row lg:items-center lg:justify-between">
+      <Card className="shadow-sm" size="sm">
+        <CardHeader className="gap-3 border-b lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle>Translation rooms</CardTitle>
-            <CardDescription>Filter, scan, and open room workspaces.</CardDescription>
+            <CardTitle className="text-sm">Translation rooms</CardTitle>
+            <CardDescription className="text-xs">Filter, scan, and open room workspaces.</CardDescription>
           </div>
           <CardAction className="static col-auto row-auto self-auto justify-self-auto">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -226,38 +226,38 @@ export default function RoomsPage() {
           </CardAction>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table className="table-fixed text-xs">
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">Room</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Languages</TableHead>
-                <TableHead>Time</TableHead>
-                <TableHead className="text-right pr-4">Participants</TableHead>
+                <TableHead className="h-8 w-[28%] pl-3 text-white/58">Room</TableHead>
+                <TableHead className="h-8 w-[14%] text-white/58">Status</TableHead>
+                <TableHead className="h-8 w-[30%] text-white/58">Languages</TableHead>
+                <TableHead className="h-8 w-[16%] text-white/58">Time</TableHead>
+                <TableHead className="h-8 w-[12%] pr-3 text-right text-white/58">Participants</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredRooms.map((room) => (
                 <TableRow key={room.id}>
-                  <TableCell className="pl-4">
+                  <TableCell className="py-1.5 pl-3">
                     <Link href={`/room/${room.id}`} className="group block">
-                      <div className="font-medium group-hover:text-primary">{room.title}</div>
+                      <div className="truncate font-medium group-hover:text-primary">{room.title}</div>
                       <div className="mt-1 text-xs text-muted-foreground">{room.translationRoomCode}</div>
                     </Link>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-1.5">
                     <Badge className={cn("capitalize", statusStyles[room.status])} variant="outline">
                       {room.status.replace(/_/g, " ")}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-1.5">
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Globe2 className="h-4 w-4" />
-                      <span className="max-w-[220px] truncate">{formatLanguages(room)}</span>
+                      <Globe2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{formatLanguages(room)}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(getRoomTime(room))}</TableCell>
-                  <TableCell className="text-right pr-4">
+                  <TableCell className="truncate py-1.5 text-muted-foreground">{formatDate(getRoomTime(room))}</TableCell>
+                  <TableCell className="py-1.5 pr-3 text-right">
                     {room.participantCount ?? 0}/{room.maxParticipants}
                   </TableCell>
                 </TableRow>
@@ -279,9 +279,9 @@ export default function RoomsPage() {
 
 function StatCard({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) {
   return (
-    <Card className="shadow-sm">
-      <CardHeader>
-        <CardDescription className="flex items-center gap-2">
+    <Card className="min-h-[82px] shadow-sm" size="sm">
+      <CardHeader className="pb-0">
+        <CardDescription className="flex items-center gap-2 text-xs">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-4 [&_svg]:w-4">
             {icon}
           </span>
@@ -289,8 +289,8 @@ function StatCard({ icon, label, value, detail }: { icon: ReactNode; label: stri
         </CardDescription>
         <CardTitle className="text-2xl font-semibold">{value}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">{detail}</p>
+      <CardContent className="pt-0">
+        <p className="truncate text-xs text-muted-foreground">{detail}</p>
       </CardContent>
     </Card>
   );

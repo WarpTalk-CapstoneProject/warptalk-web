@@ -112,50 +112,50 @@ export default function HistoryPage() {
   const selectedRoom = filteredRows.find((room) => room.id === selectedId) ?? filteredRows[0] ?? historyRows[0];
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-2.5">
+      <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-md border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          <div className="mb-1.5 inline-flex h-6 items-center gap-2 rounded-md border bg-background px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             <Archive className="h-3.5 w-3.5 text-primary" />
             History
           </div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">History & Transcripts</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <h1 className="text-xl font-semibold tracking-tight text-white xl:text-2xl">History & Transcripts</h1>
+          <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
             Review completed translation rooms, transcript previews, AI summaries, and retained artifacts.
           </p>
         </div>
-        <div className="relative w-full lg:w-[320px]">
+        <div className="relative w-full lg:w-[280px]">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search history..." className="pl-8" />
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-2.5 md:grid-cols-3">
         <StatCard icon={<FileText />} label="Transcript exports" value="12" />
         <StatCard icon={<Timer />} label="Translated time" value="136m" />
         <StatCard icon={<Users />} label="Participants" value="33" />
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <Card className="shadow-sm">
+      <div className="grid gap-2.5 xl:grid-cols-[310px_minmax(0,1fr)]">
+        <Card className="shadow-sm" size="sm">
           <CardHeader>
-            <CardTitle>Ended rooms</CardTitle>
-            <CardDescription>{filteredRows.length} retained sessions</CardDescription>
+            <CardTitle className="text-sm">Ended rooms</CardTitle>
+            <CardDescription className="text-xs">{filteredRows.length} retained sessions</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-1.5">
             {filteredRows.map((room) => (
               <button
                 key={room.id}
                 type="button"
                 onClick={() => setSelectedId(room.id)}
                 className={cn(
-                  "w-full rounded-lg border bg-background p-3 text-left transition hover:bg-muted/50",
+                  "w-full rounded-lg border bg-background p-2.5 text-left transition hover:bg-muted/50",
                   selectedRoom?.id === room.id && "border-primary ring-2 ring-primary/15"
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-medium">{room.title}</p>
+                    <p className="truncate text-sm font-medium">{room.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{room.endedAt}</p>
                   </div>
                   <Badge variant={room.status === "ready" ? "default" : "secondary"}>{normalizeStatus(room.status)}</Badge>
@@ -166,12 +166,12 @@ export default function HistoryPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card className="shadow-sm" size="sm">
           <CardHeader className="border-b">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <CardTitle>{selectedRoom.title}</CardTitle>
-                <CardDescription>{selectedRoom.summary}</CardDescription>
+                <CardTitle className="text-sm">{selectedRoom.title}</CardTitle>
+                <CardDescription className="text-xs">{selectedRoom.summary}</CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">{selectedRoom.code}</Badge>
@@ -179,28 +179,28 @@ export default function HistoryPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-4">
+          <CardContent className="pt-3">
             <Tabs defaultValue="transcript">
               <TabsList>
                 <TabsTrigger value="transcript">Transcript</TabsTrigger>
                 <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
                 <TabsTrigger value="participants">Details</TabsTrigger>
               </TabsList>
-              <TabsContent value="transcript" className="mt-4 space-y-3">
+              <TabsContent value="transcript" className="mt-3 space-y-2">
                 {transcriptPreview.map((item) => (
-                  <div key={`${item.time}-${item.speaker}`} className="rounded-lg border bg-background p-4">
+                  <div key={`${item.time}-${item.speaker}`} className="rounded-lg border bg-background p-3">
                     <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <Badge variant="outline">{item.time}</Badge>
                       <span>{item.speaker}</span>
                     </div>
                     <p className="text-sm">{item.text}</p>
-                    <p className="mt-3 rounded-md bg-muted p-3 text-sm text-muted-foreground">{item.translation}</p>
+                    <p className="mt-2 rounded-md bg-muted p-2.5 text-xs text-muted-foreground">{item.translation}</p>
                   </div>
                 ))}
               </TabsContent>
-              <TabsContent value="artifacts" className="mt-4 grid gap-3 md:grid-cols-2">
+              <TabsContent value="artifacts" className="mt-3 grid gap-2.5 md:grid-cols-2">
                 {selectedRoom.artifacts.map((artifact) => (
-                  <div key={artifact} className="flex items-center justify-between rounded-lg border bg-background p-3">
+                  <div key={artifact} className="flex items-center justify-between rounded-lg border bg-background p-2.5">
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-primary" />
                       <span className="text-sm font-medium">{artifact}</span>
@@ -211,7 +211,7 @@ export default function HistoryPage() {
                   </div>
                 ))}
               </TabsContent>
-              <TabsContent value="participants" className="mt-4 grid gap-3 md:grid-cols-3">
+              <TabsContent value="participants" className="mt-3 grid gap-2.5 md:grid-cols-3">
                 <Detail icon={<Users />} label="Participants" value={String(selectedRoom.participants)} />
                 <Detail icon={<Languages />} label="Languages" value={selectedRoom.languages} />
                 <Detail icon={<Timer />} label="Duration" value={selectedRoom.duration} />
@@ -226,9 +226,9 @@ export default function HistoryPage() {
 
 function StatCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <Card className="shadow-sm">
+    <Card className="min-h-[82px] shadow-sm" size="sm">
       <CardHeader>
-        <CardDescription className="flex items-center gap-2">
+        <CardDescription className="flex items-center gap-2 text-xs">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-4 [&_svg]:w-4">
             {icon}
           </span>
@@ -242,8 +242,8 @@ function StatCard({ icon, label, value }: { icon: ReactNode; label: string; valu
 
 function Detail({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-lg border bg-background p-4">
-      <span className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-4 [&_svg]:w-4">
+    <div className="rounded-lg border bg-background p-3">
+      <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-4 [&_svg]:w-4">
         {icon}
       </span>
       <p className="text-xs font-medium text-muted-foreground">{label}</p>

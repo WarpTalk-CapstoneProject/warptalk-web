@@ -6,14 +6,23 @@ This document tracks the shadcn conversion for dashboard-adjacent internal pages
 
 - `/ai-summaries`
 - `/ai-chat`
+- `/rooms`
+- `/history`
+- `/terminology`
+- `/feedback`
 - `/workspace`
 - `/admin`
 - `/dev-test`
 
 ## Current Behavior
 
+- `/rooms`, `/history`, `/ai-summaries`, `/ai-chat`, `/terminology`, and `/feedback` now inherit the dark glassmorphism host shell used by dashboard-adjacent pages.
+- The shared shell applies scoped glass styling to shadcn cards, tables, tabs, inputs, and textareas without changing landing or auth pages.
+- `/rooms` and `/history` now use `/dashboard` as the density baseline, with compact headings, metric cards, table rows, and reduced section spacing for 100% desktop zoom.
 - `/ai-summaries` now renders a shadcn summary review page with metric cards, generated-summary cards, action items, and model notes.
 - `/ai-chat` now renders a shadcn assistant workspace with prompt chips, conversation cards, and a chat input preview.
+- `/terminology` now exists as a shadcn/glass preview page for glossary terms and language consistency workflows.
+- Host sidebar sign out clears local auth state and redirects to `/login`.
 - `/workspace` now renders inside a shadcn-style workspace shell with usage metrics, quota table, and department activity cards.
 - `/admin` now renders inside a shadcn-style admin shell with platform metrics, service health tabs, and audit events.
 - `/dev-test` has been simplified from backend-heavy API calls into a shadcn preview API lab with mock endpoint actions, payload setup, and result logs.
@@ -22,6 +31,13 @@ This document tracks the shadcn conversion for dashboard-adjacent internal pages
 
 - `src/app/(app)/ai-summaries/page.tsx`
 - `src/app/(app)/ai-chat/page.tsx`
+- `src/app/(app)/rooms/page.tsx`
+- `src/app/(app)/history/page.tsx`
+- `src/app/(app)/feedback/page.tsx`
+- `src/app/(app)/terminology/page.tsx`
+- `src/app/(app)/layout.tsx`
+- `src/app/globals.css`
+- `src/components/layout/host-sidebar.tsx`
 - `src/app/workspace/page.tsx`
 - `src/app/workspace/layout.tsx`
 - `src/app/admin/page.tsx`
@@ -49,9 +65,11 @@ Not adopted:
 
 ## Testing Checklist
 
+- [ ] `/rooms`, `/history`, `/ai-summaries`, `/ai-chat`, `/terminology`, and `/feedback` render inside the dark glass host shell.
 - [ ] `/ai-summaries` renders with summary cards and metrics.
 - [ ] `/ai-chat` accepts local input and appends preview messages.
+- [ ] Sidebar Sign out redirects to `/login`.
 - [ ] `/workspace` renders with its workspace sidebar and active dashboard item.
 - [ ] `/admin` renders with its admin sidebar and active dashboard item.
 - [ ] `/dev-test` can add and clear preview logs.
-- [ ] Command search includes dashboard, rooms, create room, history, AI pages, feedback, join, workspace, admin, and dev test.
+- [ ] Command search includes dashboard, rooms, create room, history, AI pages, terminology, feedback, workspace, admin, and dev test.
