@@ -16,8 +16,8 @@ This document tracks the shadcn conversion for dashboard-adjacent internal pages
 
 ## Current Behavior
 
-- `/rooms`, `/history`, `/ai-summaries`, `/ai-chat`, `/terminology`, and `/feedback` now inherit the dark glassmorphism host shell used by dashboard-adjacent pages.
-- The shared shell applies scoped glass styling to shadcn cards, tables, tabs, inputs, and textareas without changing landing or auth pages.
+- `/rooms`, `/history`, `/ai-summaries`, `/ai-chat`, `/terminology`, and `/feedback` now inherit the light monochrome frosted-glass host shell used by `/dashboard`.
+- The shared shell applies scoped frosted-white styling to shadcn cards, tables, tabs, inputs, and textareas without changing landing or auth pages.
 - `/rooms` and `/history` now use `/dashboard` as the density baseline, with compact headings, metric cards, table rows, and reduced section spacing for 100% desktop zoom.
 - `/ai-summaries` now renders a shadcn summary review page with metric cards, generated-summary cards, action items, and model notes.
 - `/ai-chat` now renders a shadcn assistant workspace with prompt chips, conversation cards, and a chat input preview.

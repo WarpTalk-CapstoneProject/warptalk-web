@@ -17,8 +17,8 @@ This document tracks the host dashboard at `/dashboard`.
 - Added recent rooms and recent history panels backed by existing WarpTalk hooks.
 - Rewrote dashboard action copy to remove broken text encoding.
 - Follow-up pass converted the related internal dashboard routes to the same shadcn visual language: `/rooms`, `/rooms/create`, `/history`, `/ai-summaries`, `/ai-chat`, `/feedback`, `/workspace`, `/admin`, and `/dev-test`.
-- Rebuilt `/dashboard` as a standalone dark glassmorphism dashboard inspired by the provided reference image.
-- Added a route-specific dark shell so `/dashboard` can own the full viewport, including the sidebar and header, without the default light app topbar/sidebar.
+- Rebuilt `/dashboard` through the shared host glassmorphism shell inspired by the provided reference images.
+- The route-specific standalone shell was removed so `/dashboard` can share the same sidebar and topbar instance as the other host routes.
 - Replaced `dashboard-light-rays.jpg` with the user's new particle-light background image and kept it as the only dashboard background image.
 - Reworked the dashboard content into a compact glass sidebar, low-height glass header, shadcn-style metric cards, room overview table, operational signal cards, language mix, and recent history cards.
 - Tightened the dashboard density after review: removed the oversized crypto-style hero treatment, reduced card heights, reduced shell padding, and aligned spacing closer to the compact `/rooms` operations layout.
@@ -27,12 +27,21 @@ This document tracks the host dashboard at `/dashboard`.
 - Added GSAP-powered sidebar navigation motion. The active glass card is a single moving layer behind the menu item, so the indicator and card slides smoothly between Dashboard, Rooms, History, and the other dashboard links without delaying navigation.
 - Added `gsap` as a dashboard UI motion dependency.
 - Replaced the dashboard background layer with the motion video as the primary full-viewport background.
-- Removed the static nebula image background from `/dashboard`; `dashboard-glass-motion.mp4` now renders without blur or mix-blend as the main background layer.
+- Removed the static nebula image background from `/dashboard`; `dashboard-user-motion.mp4` now renders without blur or mix-blend as the main background layer.
+- Replaced `dashboard-user-motion.mp4` with the latest user-provided video and added a comfort overlay: video opacity is reduced to 75%, a `bg-black/35` layer with `backdrop-blur-[2px]` sits above it, and stronger dark gradients preserve content readability.
+- Reworked `/dashboard` into a light monochrome frosted-glass dashboard inspired by the provided iDraft reference: bright motion-video background, white floating sidebar, black active nav pill, light acrylic topbar, white frosted content cards, and one black contrast metric card.
+- Added `/assets/backgrounds/dashboard-light-motion.mp4` as the dashboard-specific bright motion background.
+- Rebuilt the dashboard shell into the requested three-layer composition: full-screen video background, one large transparent rounded glass frame wrapping the dashboard, then opaque frosted sidebar/topbar/content cards inside that frame.
+- Adjusted the dashboard sidebar and topbar closer to the iDraft reference: narrower floating white sidebar, larger brand area, black pill active navigation, and a top header row with greeting plus Create/search/bell/avatar controls.
 - Reduced the dark overlay/video opacity so the nebula image remains visibly present behind the glass UI.
 - Compressed the dashboard for 100% desktop zoom: smaller topbar, tighter shell padding, lower metric cards, denser table rows, fixed/truncated table columns, no recent-history card row, and hidden dashboard overflow to avoid visible vertical or horizontal scrollbars.
 - Made the large empty glass areas more transparent while keeping smaller content cards readable: the global dark overlays, sidebar shell, main shell, top search, and host chip now use lower fill opacity and lighter blur so the nebula background can show through more naturally.
-- Added a standalone dashboard sidebar Sign out action that clears preview auth state and redirects to `/login`.
-- Matched the standalone dashboard sidebar sizing to the shared host shell: 248px sidebar, 52px brand row aligned to the topbar, 32px logo, and compact 30px navigation rows.
+- Sidebar Sign out is handled by the shared `HostSidebar` and clears preview auth state before redirecting to `/login`.
+- Removed the sidebar help/preview notice card so the menu remains compact.
+- Replaced the duplicate standalone dashboard sidebar implementation with the shared `HostSidebar` component so `/dashboard` and inner dashboard pages use the same menu sizing, active state, hover color, sign out behavior, and animation timing.
+- Removed the `/dashboard` layout bypass so the shared sidebar remains mounted when navigating between `/dashboard`, `/rooms`, `/history`, and other host pages.
+- Reduced `/dashboard/page.tsx` to dashboard content only; background video, outer glass frame, sidebar, and topbar are now owned by `src/app/(app)/layout.tsx`.
+- Dashboard sidebar sizing now comes from the shared host shell: 190px floating panel, 78px brand row, 32px logo, and compact 30px navigation rows.
 - Removed `Join Room` from the dashboard sidebar because room joining is handled through the Rooms area.
 - Removed the 360ms delayed sidebar navigation handoff so page changes from `/dashboard` feel immediate instead of stalled.
 - Updated the structural glass shells to match the user's generator.ui.glass reference: menu shell, content shell, and topbar shell now use transparent `rgba(143,143,143,0)` fill, `backdrop-blur-0`, `backdrop-saturate-200`, 12px radius, and `rgba(255,255,255,0.125)` borders.
@@ -53,6 +62,8 @@ The provided `shadcn-dashboard-landing-template` includes useful dashboard patte
 - `public/assets/backgrounds/dashboard-light-rays.jpg`
 - `public/assets/backgrounds/dashboard-nebula.png`
 - `public/assets/backgrounds/dashboard-glass-motion.mp4`
+- `public/assets/backgrounds/dashboard-user-motion.mp4`
+- `public/assets/backgrounds/dashboard-light-motion.mp4`
 - `package.json`
 - `package-lock.json`
 - `.agents/page-docs/dashboard.md`
@@ -88,16 +99,23 @@ Not adopted directly:
 ## Important UI Behavior
 
 - `/dashboard` can be opened directly during frontend review because `DISABLE_AUTH_GUARD` is temporarily enabled in middleware.
-- `/dashboard` bypasses the shared app shell and renders its own full-viewport dark shell from `src/app/(app)/layout.tsx`.
+- `/dashboard` uses the shared app shell from `src/app/(app)/layout.tsx` so sidebar, topbar, background, and outer glass frame stay consistent across host routes.
 - The page intentionally follows the compact rhythm of `/rooms`: small topbar, dense sidebar rows, 4-column metric cards, and table-first dashboard content instead of a large hero dashboard.
 - The dashboard is optimized to fit a standard 100% desktop viewport without visible page scrolling; lower-priority history cards are intentionally omitted from this screen to keep the operational table and signal panels in view.
 - Sidebar menu rows are intentionally compact with tight group spacing to avoid a vertical nav scrollbar. The selected row uses a 40px in-row glass highlight, 8px radius, compact icon/text sizing, subtle backdrop blur, internal reflective highlight layers, and a slim glowing vertical white indicator on the right edge.
 - Sidebar and topbar horizontal dividers are intentionally aligned at 52px so `/dashboard` and the other host pages feel like one consistent shell.
 - Dashboard sidebar Sign out mirrors the shared host sidebar behavior and returns the user to `/login`.
 - Dashboard sidebar navigation uses regular Next links with only immediate active-state feedback; it no longer holds routing for the GSAP highlight animation.
-- The selected sidebar state is rendered as one absolutely positioned glass card. GSAP animates its x/y/width/height when a menu link is clicked, with `power3.out` easing and a reduced-motion fallback.
-- The dashboard background stack now uses `/assets/backgrounds/dashboard-glass-motion.mp4` as the primary full-screen background, followed by subtle readability overlays and the glassmorphism dashboard content.
-- The video is intentionally unblurred and no longer uses `mix-blend-screen`, because it is the main background rather than a secondary overlay.
+- The selected sidebar state is rendered as one absolutely positioned glass card. GSAP animates its x/y/width/height when a menu link is clicked, with `power2.inOut` easing and a reduced-motion fallback.
+- Active sidebar links keep white text on hover so the black selected pill never hides the label.
+- Sidebar active-pill motion now follows the shared host sidebar timing: `0.82s`, `power2.inOut`, and `force3D`, which makes the selection movement slower and easier to track.
+- Active-pill placement is immediate only on first mount and resize. Route changes animate to the next item instead of forcing an instant jump, which preserves the visible slide-down effect.
+- Sidebar labels/icons no longer use `mix-blend-difference`. The sidebar computes which menu row is actually covered by the moving active-pill and only that row becomes white, keeping all inactive rows readable.
+- Dashboard density was compacted for 100% browser zoom while restoring a more template-like sidebar scale: smaller shell padding, 184px sidebar, larger rounded active pill, smaller topbar, lower metric cards, tighter table rows, and smaller support panels.
+- The shared host layout no longer wraps dashboard content in a separate frosted white shell. The dashboard now follows the reference hierarchy more closely: one outer glass frame, one sidebar card, and individual content cards placed directly on the frame.
+- The dashboard background stack now uses `/assets/backgrounds/dashboard-light-motion.mp4` as the primary full-screen background, followed by a light comfort blur/white overlay, readability gradients, and the frosted-glass dashboard content.
+- The dashboard is currently a light monochrome glass design. Menu and topbar use white acrylic surfaces, active navigation uses a black pill, and dashboard cards use frosted white surfaces with a black featured metric card for contrast.
+- The dashboard structure intentionally mirrors the reference hierarchy: background video -> outer transparent glass frame -> inner frosted sidebar/top header/cards -> content.
 - Large structural containers intentionally use clearer glass than content cards. Metric cards, room table, and signal panels keep stronger contrast; sidebar/main empty space stays more transparent so the background remains visible.
 - Structural shells and content cards are intentionally separated: menu/topbar/content shells use zero-blur transparent glass, while smaller dashboard data cards keep stronger `GlassPanel` contrast for readability.
 - Current glass presets are separated by role: menu/topbar use the 10px blur preset, content data cards use the 15px blur preset, and the content shell remains a transparent structural frame.
@@ -116,7 +134,7 @@ Not adopted directly:
 
 ## Testing Checklist
 
-- [ ] `/dashboard` renders inside its standalone dark glass shell.
+- [ ] `/dashboard` renders inside the shared light frosted host shell.
 - [ ] The nebula image is visible behind the dashboard.
 - [ ] The blurred video overlay plays behind the glass UI without reducing readability.
 - [ ] Metric cards render with empty API results.

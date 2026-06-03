@@ -8,14 +8,21 @@ The app layout shell defines the shared navigation and header surfaces used acro
 
 - The root app font stack uses Inter for the main UI and JetBrains Mono for monospace content through Next.js font variables.
 - Authentication route guarding is temporarily disabled in `src/middleware.ts` so frontend pages can be reviewed directly while backend/auth is not available.
-- The host app shell now uses the same dark shadcn glassmorphism direction as the dashboard: full-screen motion video background, translucent sidebar, glass topbar, and scoped glass styling for shadcn cards, inputs, tabs, and tables.
+- The host app shell now uses the same light monochrome frosted-glass direction as the dashboard: bright full-screen motion video background, floating white sidebar, acrylic topbar, and scoped frosted styling for shadcn cards, inputs, tabs, and tables.
+- Shared host pages now use the same three-layer shell as `/dashboard`: background video, large transparent rounded glass frame, then inner frosted sidebar/topbar/content surfaces.
 - The topbar shows a glass sidebar trigger, separator, pathname breadcrumbs, command search (`Ctrl+K`), quick action icons for help, notifications, and theme, plus a compact Host profile control.
-- `/dashboard` is now a special route that bypasses the default host sidebar/topbar and renders a standalone dark glassmorphism dashboard shell.
+- `/dashboard` now uses the shared host sidebar/topbar shell instead of bypassing the app layout, so navigation state and active-pill motion stay mounted while switching between dashboard pages.
 - Role sidebars use the WarpTalk primary logo when expanded and a compact `W` badge when collapsed.
-- The host sidebar is a fixed-width dark glass navigation surface with Workspace, AI, and Configuration groups, sign out, and a frontend preview notice.
-- Host sidebar sizing is aligned with the 52px topbar: 248px width, 52px brand row, 32px logo, and compact 30px navigation rows.
-- Shared host structural shells follow the zero-blur transparent glass reference: sidebar, topbar, and content shell use transparent `rgba(143,143,143,0)` fill, `backdrop-blur-0`, `backdrop-saturate-200`, and `rgba(255,255,255,0.125)` borders.
-- Shared host menu and topbar use the updated glass preset with `backdrop-blur-[10px]`, `backdrop-saturate-200`, `rgba(143,143,143,0.1)` fill, and `rgba(255,255,255,0.125)` borders.
+- The host sidebar is a fixed-width light frosted navigation surface with Workspace, AI, and Configuration groups, a black active pill, and sign out.
+- Host sidebar sizing follows the iDraft-style reference: 190px floating panel, taller brand row, black active pill, and compact 30px navigation rows.
+- The shared host sidebar active state is one GSAP-positioned black pill layer that slides between menu rows on click, with active text pinned to white on hover for readability.
+- Active-pill motion now uses a slower `0.82s` `power2.inOut` curve so the selected state moves visibly and consistently instead of snapping too quickly.
+- Sidebar menu labels/icons no longer use `mix-blend-difference` because it made inactive labels unreadable on the light sidebar. The active text state is now driven by measured overlap with the moving black pill.
+- The host shell is compact at normal 100% browser zoom while keeping the sidebar legible: smaller outer padding, 184px sidebar, 54px topbar, 32px navigation rows, and reduced content spacing.
+- The sidebar help/preview notice card was removed from both the standalone dashboard sidebar and the shared host sidebar.
+- The right-side host content shell card was removed to reduce nested glass layers. Content now sits directly inside the outer glass frame, matching the reference hierarchy: background -> outer glass frame -> sidebar card + floating content cards.
+- Shared host pages use `/assets/backgrounds/dashboard-light-motion.mp4` as the full-screen motion video background, matching `/dashboard`.
+- The shared motion video background uses a light comfort layer above the video (`bg-white/45` plus `backdrop-blur-[3px]`) so movement is less distracting and text remains readable.
 - Sign out clears the preview auth store and routes the user back to `/login`.
 - The host sidebar keeps room creation as an in-page action instead of a dedicated navigation item; `/rooms/create` remains reachable from the `Create room` button and command search.
 - Admin and workspace layouts now share the same muted content background, sticky topbar, and padded content wrapper used by the host dashboard shell.
@@ -40,7 +47,9 @@ The app layout shell defines the shared navigation and header surfaces used acro
 
 ## Important UI Notes
 
-- The host sidebar intentionally uses the dashboard glass treatment instead of the former light shadcn sidebar tokens, so internal host routes visually match `/dashboard`.
+- The host sidebar intentionally uses the dashboard light frosted treatment instead of the former dark glass treatment, so internal host routes visually match `/dashboard`.
+- `/dashboard` now imports and renders the same `HostSidebar` component as the other host pages, preventing sidebar drift between dashboard and inner routes.
+- The dashboard route no longer renders its own duplicate background/sidebar/topbar shell; its page component now owns content only.
 - Breadcrumb labels are derived from the current pathname. This keeps the header generic, but route-specific custom labels may need a mapping if future pages need friendlier names.
 - Command search is frontend-only and navigates between available local app pages.
 - The `.glass-dashboard-scope` class in `globals.css` scopes glass styling to authenticated host pages so landing and auth pages stay unchanged.

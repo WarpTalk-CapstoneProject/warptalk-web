@@ -6,9 +6,8 @@ import {
   Bell,
   BotMessageSquare,
   Building2,
-  ChevronRight,
-  CircleHelp,
   BookOpen,
+  CircleHelp,
   FileText,
   LayoutDashboard,
   LayoutGrid,
@@ -32,9 +31,7 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
-import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -74,22 +71,14 @@ const searchItems: Array<{
 function Breadcrumbs() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
+  const current = segments.at(-1);
+  const label = current ? routeLabels[current] ?? current : "Dashboard";
 
   return (
-    <nav className="flex min-w-0 items-center gap-1 text-sm">
-      <span className="font-medium text-white/58">WarpTalk</span>
-      {segments.map((segment, index) => {
-        const isLast = index === segments.length - 1;
-        return (
-          <span key={`${segment}-${index}`} className="flex min-w-0 items-center gap-1">
-            <ChevronRight className="h-4 w-4 shrink-0 text-white/28" />
-            <span className={cn("truncate", isLast ? "font-medium text-white" : "text-white/52")}>
-              {routeLabels[segment] ?? segment}
-            </span>
-          </span>
-        );
-      })}
-    </nav>
+    <div className="min-w-0">
+      <h1 className="truncate text-xl font-semibold tracking-tight text-neutral-950">{label}</h1>
+      <p className="text-[11px] text-neutral-500">WarpTalk workspace</p>
+    </div>
   );
 }
 
@@ -98,11 +87,11 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="hidden h-8 w-full max-w-[280px] items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.035] px-3 text-sm text-white/48 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl transition hover:bg-white/[0.06] hover:text-white/72 md:flex"
+      className="hidden h-7 w-full max-w-[240px] items-center gap-1.5 rounded-full border border-white/65 bg-white/72 px-2.5 text-xs text-neutral-500 shadow-[0_10px_20px_rgba(0,0,0,0.055)] backdrop-blur-[24px] transition hover:bg-white hover:text-neutral-950 md:flex"
     >
-      <Search className="h-3.5 w-3.5" />
+      <Search className="h-3 w-3" />
       <span className="flex-1 text-left">Search pages...</span>
-      <kbd className="rounded border border-white/10 bg-white/8 px-1.5 font-mono text-[10px] text-white/42">Ctrl K</kbd>
+      <kbd className="rounded-full border border-neutral-950/10 bg-neutral-950/5 px-1.5 font-mono text-[9px] text-neutral-500">Ctrl K</kbd>
     </button>
   );
 }
@@ -113,7 +102,7 @@ function IconButton({ children, label }: { children: ReactNode; label: string })
       type="button"
       aria-label={label}
       title={label}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/58 transition hover:bg-white/8 hover:text-white"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-neutral-950 shadow-[0_10px_20px_rgba(0,0,0,0.055)] transition hover:bg-white hover:text-neutral-950"
     >
       {children}
     </button>
@@ -151,35 +140,34 @@ export function Topbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 flex h-[52px] shrink-0 items-center gap-2 border-b border-white/[0.125] bg-[rgba(143,143,143,0.1)] px-4 text-white backdrop-blur-[10px] backdrop-saturate-200 lg:px-5">
+      <header className="sticky top-0 z-20 flex h-[54px] shrink-0 items-center gap-1.5 bg-transparent px-1 text-neutral-950">
         <button
           type="button"
           aria-label="Toggle sidebar"
           title="Sidebar"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/58 transition hover:bg-white/8 hover:text-white"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-neutral-950 shadow-[0_10px_20px_rgba(0,0,0,0.055)] transition hover:bg-white hover:text-neutral-950"
         >
-          <PanelLeft className="h-4 w-4" />
+          <PanelLeft className="h-3.5 w-3.5" />
         </button>
-        <Separator orientation="vertical" className="mx-1 h-4 bg-white/12" />
         <div className="min-w-0 flex-1">
           <Breadcrumbs />
         </div>
         <SearchTrigger onClick={() => setSearchOpen(true)} />
         <div className="ml-auto flex items-center gap-1">
           <IconButton label="Help">
-            <CircleHelp className="h-4 w-4" />
+            <CircleHelp className="h-3.5 w-3.5" />
           </IconButton>
           <IconButton label="Notifications">
-            <Bell className="h-4 w-4" />
+            <Bell className="h-3.5 w-3.5" />
           </IconButton>
           <IconButton label="Theme">
-            <Moon className="h-4 w-4" />
+            <Moon className="h-3.5 w-3.5" />
           </IconButton>
-          <div className="ml-2 flex h-8 items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.035] px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
-            <Avatar className="h-6 w-6">
-              <AvatarFallback className="bg-white text-xs text-black">H</AvatarFallback>
+          <div className="ml-1.5 flex h-7 items-center gap-1.5 rounded-full border border-white/65 bg-white/72 px-1.5 text-neutral-950 shadow-[0_10px_20px_rgba(0,0,0,0.055)] backdrop-blur-[24px]">
+            <Avatar className="h-5 w-5">
+              <AvatarFallback className="bg-neutral-950 text-[10px] text-white">H</AvatarFallback>
             </Avatar>
-            <span className="hidden text-sm font-medium sm:inline">Host</span>
+            <span className="hidden text-xs font-medium sm:inline">Host</span>
           </div>
         </div>
       </header>

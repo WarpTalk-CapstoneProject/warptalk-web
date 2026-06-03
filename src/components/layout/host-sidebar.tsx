@@ -1,12 +1,13 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import gsap from "gsap";
 import {
   BotMessageSquare,
   BookOpen,
   FileText,
-  Headphones,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
@@ -63,6 +64,81 @@ export function HostSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((state) => state.logout);
+  const allItems = navGroups.flatMap((group) => group.items);
+  const activeHref = allItems.find((item) => isActivePath(pathname, item.href))?.href ?? "/dashboard";
+  const [pillHref, setPillHref] = useState(activeHref);
+  const navRef = useRef<HTMLDivElement | null>(null);
+  const activeCardRef = useRef<HTMLDivElement | null>(null);
+  const itemRefs = useRef(new Map<string, HTMLAnchorElement>());
+  const hasPlacedActiveCardRef = useRef(false);
+  const pillHrefRef = useRef<string | null>(activeHref);
+
+  const updatePillTextTarget = useCallback((href: string | null) => {
+    if (pillHrefRef.current === href) return;
+
+    pillHrefRef.current = href;
+    setPillHref(href ?? "");
+  }, []);
+
+  const animateTo = useCallback((href: string, immediate = false) => {
+    const nav = navRef.current;
+    const card = activeCardRef.current;
+    const target = itemRefs.current.get(href);
+    if (!nav || !card || !target) return;
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const shouldPlaceImmediately = immediate || prefersReducedMotion;
+    const navRect = nav.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+
+    gsap.killTweensOf(card);
+    gsap.to(card, {
+      x: targetRect.left - navRect.left,
+      y: targetRect.top - navRect.top,
+      width: targetRect.width,
+      height: targetRect.height,
+      opacity: 1,
+      duration: shouldPlaceImmediately ? 0 : 0.82,
+      ease: "power2.inOut",
+      force3D: true,
+      onUpdate: () => {
+        const cardRect = card.getBoundingClientRect();
+        let coveredHref: string | null = null;
+
+        for (const [itemHref, itemNode] of itemRefs.current) {
+          const itemRect = itemNode.getBoundingClientRect();
+          const verticalOverlap = Math.max(0, Math.min(cardRect.bottom, itemRect.bottom) - Math.max(cardRect.top, itemRect.top));
+          const horizontalOverlap = Math.max(0, Math.min(cardRect.right, itemRect.right) - Math.max(cardRect.left, itemRect.left));
+          const verticalRatio = verticalOverlap / itemRect.height;
+          const horizontalRatio = horizontalOverlap / itemRect.width;
+
+          if (verticalRatio > 0.48 && horizontalRatio > 0.48) {
+            coveredHref = itemHref;
+            break;
+          }
+        }
+
+        updatePillTextTarget(coveredHref);
+      },
+      onComplete: () => updatePillTextTarget(href),
+    });
+  }, [updatePillTextTarget]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (!hasPlacedActiveCardRef.current) updatePillTextTarget(activeHref);
+      animateTo(activeHref, !hasPlacedActiveCardRef.current);
+      hasPlacedActiveCardRef.current = true;
+    });
+
+    const handleResize = () => animateTo(activeHref, true);
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [activeHref, animateTo, updatePillTextTarget]);
 
   const handleSignOut = () => {
     logout();
@@ -70,75 +146,80 @@ export function HostSidebar() {
   };
 
   return (
-    <aside className="hidden h-full w-[248px] shrink-0 overflow-hidden rounded-xl border border-white/[0.125] bg-[rgba(143,143,143,0.1)] text-white backdrop-blur-[10px] backdrop-saturate-200 md:flex md:flex-col">
-      <div className="flex h-[52px] items-center border-b border-white/[0.12] px-3">
+    <aside className="hidden h-full w-[184px] shrink-0 overflow-hidden rounded-[30px] border border-white/65 bg-white/72 text-neutral-950 shadow-[0_22px_64px_rgba(0,0,0,0.08)] backdrop-blur-[28px] backdrop-saturate-150 md:flex md:flex-col">
+      <div className="flex h-[70px] items-center px-5">
         <Link
           href="/dashboard"
-          className="flex min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 text-white transition hover:bg-white/[0.045]"
+          className="flex min-w-0 items-center gap-2.5 rounded-xl px-1 py-1 text-neutral-950 transition hover:bg-neutral-950/5"
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.12] bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-neutral-950">
             <Sparkles className="h-3.5 w-3.5" />
           </div>
           <div className="grid min-w-0 flex-1 text-left leading-tight">
-            <span className="truncate text-sm font-semibold">WarpTalk</span>
-            <span className="truncate text-[11px] text-white/52">Host Dashboard</span>
+            <span className="truncate text-base font-semibold tracking-tight">WarpTalk</span>
+            <span className="sr-only">Host Dashboard</span>
           </div>
         </Link>
       </div>
 
-      <div className="flex-1 overflow-hidden px-2 py-1.5">
-        {navGroups.map((group) => (
-          <div key={group.label} className="pb-2">
-            <div className="px-2 pb-0.5 text-[10.5px] font-semibold text-white/44">{group.label}</div>
-            <div className="space-y-1">
-              {group.items.map((item) => {
-                const active = isActivePath(pathname, item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "relative flex h-[30px] items-center gap-2 rounded-lg px-2.5 text-xs font-medium transition",
-                      active
-                        ? "border border-white/[0.16] bg-[linear-gradient(105deg,rgba(255,255,255,0.15),rgba(255,255,255,0.045)_46%,rgba(255,255,255,0.12))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24),inset_0_0_18px_rgba(255,255,255,0.035)] backdrop-blur-md"
-                        : "text-white/58 hover:bg-white/[0.045] hover:text-white/86"
-                    )}
-                  >
-                    <item.icon className={cn("h-3.5 w-3.5 shrink-0", active && "h-[15px] w-[15px]")} />
-                    <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                    {item.badge ? (
-                      <span
-                        className={cn(
-                          "rounded-md px-1.5 py-0.5 text-[10px] font-medium",
-                          active ? "bg-white/15 text-white" : "bg-white/10 text-white/58"
-                        )}
-                      >
-                        {item.badge}
-                      </span>
-                    ) : null}
-                    {active ? <span className="absolute right-2 h-4 w-0.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.55)]" /> : null}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="border-t border-white/[0.12] p-2.5">
-        <div className="mb-2 rounded-lg border border-white/[0.14] bg-white/[0.04] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-xl">
-          <div className="mb-1.5 flex items-center gap-2 text-xs font-medium">
-            <Headphones className="h-4 w-4 text-cyan-200" />
-            Need help?
-          </div>
-          <p className="text-[10px] leading-relaxed text-white/48">
-            Frontend preview mode is enabled. Review screens without backend auth.
-          </p>
+      <nav ref={navRef} className="relative flex-1 overflow-hidden px-3 py-1">
+        <div
+          ref={activeCardRef}
+          className="pointer-events-none absolute left-0 top-0 z-0 overflow-hidden rounded-[18px] bg-neutral-950 opacity-0 shadow-[0_12px_28px_rgba(0,0,0,0.2)] will-change-transform"
+          aria-hidden="true"
+        >
+          <span className="absolute inset-px rounded-[17px] border border-white/10" />
         </div>
+
+        <div className="relative z-10 space-y-2">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{group.label}</div>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const routeActive = item.href === activeHref;
+                  const visuallyActive = item.href === pillHref;
+                  return (
+                    <Link
+                      key={item.href}
+                      ref={(node) => {
+                        if (node) itemRefs.current.set(item.href, node);
+                        else itemRefs.current.delete(item.href);
+                      }}
+                      href={item.href}
+                      aria-current={routeActive ? "page" : undefined}
+                      className={cn(
+                        "relative flex h-[32px] items-center gap-2 rounded-[18px] px-2.5 text-[13px] font-medium text-neutral-600 transition-colors duration-200 hover:bg-neutral-950/5 hover:text-neutral-950",
+                        routeActive && "font-semibold",
+                        visuallyActive && "text-white hover:text-white"
+                      )}
+                    >
+                      <item.icon className={cn("h-4 w-4 shrink-0 transition-all duration-200", routeActive && "h-[17px] w-[17px]")} />
+                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                      {item.badge ? (
+                        <span
+                          className={cn(
+                            "rounded-md bg-neutral-950/8 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500 transition-colors duration-200",
+                            visuallyActive && "bg-white/15 text-white"
+                          )}
+                        >
+                          {item.badge}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </nav>
+
+      <div className="border-t border-neutral-950/8 p-3">
         <button
           type="button"
           onClick={handleSignOut}
-          className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-xs font-medium text-white/58 transition hover:bg-red-500/10 hover:text-red-200"
+          className="flex h-8 w-full items-center gap-2 rounded-[18px] px-2.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-950/5 hover:text-neutral-950"
         >
           <LogOut className="h-4 w-4" />
           Sign out
