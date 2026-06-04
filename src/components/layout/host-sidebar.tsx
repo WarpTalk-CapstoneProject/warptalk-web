@@ -66,12 +66,12 @@ export function HostSidebar() {
   const logout = useAuthStore((state) => state.logout);
   const allItems = navGroups.flatMap((group) => group.items);
   const activeHref = allItems.find((item) => isActivePath(pathname, item.href))?.href ?? "/dashboard";
-  const [pillHref, setPillHref] = useState(activeHref);
+  const [pillHref, setPillHref] = useState("");
   const navRef = useRef<HTMLDivElement | null>(null);
   const activeCardRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef(new Map<string, HTMLAnchorElement>());
   const hasPlacedActiveCardRef = useRef(false);
-  const pillHrefRef = useRef<string | null>(activeHref);
+  const pillHrefRef = useRef<string | null>(null);
 
   const updatePillTextTarget = useCallback((href: string | null) => {
     if (pillHrefRef.current === href) return;
@@ -84,7 +84,10 @@ export function HostSidebar() {
     const nav = navRef.current;
     const card = activeCardRef.current;
     const target = itemRefs.current.get(href);
-    if (!nav || !card || !target) return;
+    if (!nav || !card || !target) {
+      updatePillTextTarget(null);
+      return;
+    }
 
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const shouldPlaceImmediately = immediate || prefersReducedMotion;
@@ -126,7 +129,6 @@ export function HostSidebar() {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      if (!hasPlacedActiveCardRef.current) updatePillTextTarget(activeHref);
       animateTo(activeHref, !hasPlacedActiveCardRef.current);
       hasPlacedActiveCardRef.current = true;
     });

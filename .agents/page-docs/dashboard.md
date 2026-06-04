@@ -60,15 +60,13 @@ The provided `shadcn-dashboard-landing-template` includes useful dashboard patte
 - `src/app/(app)/layout.tsx`
 - `src/components/layout/host-sidebar.tsx`
 - `src/components/layout/topbar.tsx`
-- `public/assets/backgrounds/dashboard-light-rays.jpg`
 - `public/assets/backgrounds/dashboard-nebula.png`
-- `public/assets/backgrounds/dashboard-glass-motion.mp4`
-- `public/assets/backgrounds/dashboard-user-motion.mp4`
 - `public/assets/backgrounds/dashboard-light-motion.mp4`
 - `package.json`
 - `package-lock.json`
 - `.agents/page-docs/dashboard.md`
 - `.agents/page-docs/dashboard-inner-pages.md`
+- Historical dashboard video assets `dashboard-glass-motion.mp4` and `dashboard-user-motion.mp4` were removed after the dashboard shell standardized on `dashboard-light-motion.mp4`.
 
 ## Current Data Flow
 
