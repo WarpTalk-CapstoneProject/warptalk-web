@@ -1,197 +1,174 @@
 # Landing Page Documentation
 
-## Aura AI Email Landing Page Experiment (Latest)
+## Current Route
 
-**What changed:**
-Replaced the existing WarpTalk landing hero at `/` with an Aura AI-native email client landing page experiment. The page is implemented in the existing Next.js app using React, TypeScript, Tailwind CSS, `motion/react`, and `lucide-react`.
+- Route: `/`
+- Source: `src/app/page.tsx`
+- Theme direction: dark WarpTalk SaaS hero adapted from the previous `Synapse Dark Hero` layout.
 
-**Why it changed:**
-The branch is being used to test a premium, cinematic, glassy landing page treatment with a fullscreen looping background video, shiny animated headline, macOS-style menu strip, realistic inbox mockup, liquid-glass cards, logo cloud, testimonials, pricing, and final CTA.
+## Latest Changes
 
-**Files affected:**
-- `src/app/page.tsx` - complete Aura landing page implementation
-- `src/app/globals.css` - Inter import, brand color token, selection styling, shiny headline animation, liquid-glass utility, and custom pricing section CSS
-- `package.json` / `package-lock.json` - added `motion` and `@supabase/supabase-js` dependencies requested by the landing page test spec
+The landing page was rebuilt from the previous local-video liquid-glass hero into a dark SaaS hero design, then localized back to WarpTalk copy and branding.
 
-**How the page currently works:**
-- The root wrapper uses a dark `#0c0c0c` base with a fixed fullscreen CloudFront video behind all content.
-- Root-level SVG noise filter powers the animated "Revitalized" headline texture.
-- Navbar, hero, menu strip, inbox mockup, feature triage, logo cloud, testimonials, pricing, and final CTA are composed inside `src/app/page.tsx`.
-- Pricing uses local React state to toggle monthly/yearly prices.
-- Liquid-glass treatment is a shared CSS utility applied to triage cards, testimonials, and the final CTA.
+### What Changed
 
-**Important UI behavior:**
-- Motion animations use `motion/react` and stagger key areas on initial render or when scrolled into view.
-- The inbox mockup keeps its desktop grid fidelity by allowing horizontal overflow on narrow screens rather than compressing the email client beyond readability.
-- Pricing cards become horizontal scroll-snap cards below 1024px.
+- Added a fullscreen pre-page loader before the landing content fades in:
+  - Top-left label: `WalpTalk`
+  - Center word sequence: `Translation` -> `Clone Voice` -> `AI`
+  - Bottom-right counter from `000` to `100`
+  - Bottom progress bar using a blue gradient fill
+  - Loader exits before the main landing page opacity fades in
+  - Loader locks page scrolling while visible and waits for the document shell/fonts plus the hero video readiness gate before it releases the landing page
+- Replaced the local MP4 background with a remote Mux HLS stream:
+  - `https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8`
+- Added `hls.js` and a memoized `VideoPlayer` component.
+- `VideoPlayer` attaches HLS to the video element when supported and falls back to native HLS playback where available.
+- `VideoPlayer` performs cleanup on unmount by destroying the HLS instance, pausing the video, removing the `src`, and reloading the element.
+- Rebuilt the page structure:
+  - Fixed blurred glass navbar
+  - WarpTalk navbar logo image from `public/assets/logos/warptalk-logo-darkmode.jpg`
+  - Nav links: `About`, `Feature`, `Pricing`, `Contact`
+  - Rounded WarpTalk logo container
+  - No default active nav item on initial hero view
+  - Smooth moving `motion/react` active pill after clicking a nav item
+  - Gradient CTA button
+  - Three glass product badges: `Real-time Translation`, `AI Summary Analysis`, `Human Voice Cloning`
+  - Large animated headline: `Translation that feel native`
+  - Product subtext: `Real-time interpretation global teams. Natural conversations. Zero language barriers`
+  - Primary and secondary CTA buttons that route to `/login`
+  - Static grayscale logo row at the bottom
+- Added a dedicated `Feature` storytelling section based on the supplied layout reference:
+  - The nav `Feature` anchor now scrolls to this section instead of the hero.
+  - The section inverts the reference layout for the dark landing page: black background, white text, white/cyan SVG motion lines.
+  - The four opening narrative steps now use one desktop SVG story board so the main trace, branch ingress lines, branch labels, and copy share a fixed coordinate system instead of relying on stacked per-step SVG overlays.
+  - A scroll-linked `motion/react` spine animates through that board, inspired by the Lusion-style scroll trace effect.
+  - Narrative steps sit close to the shared trace while compact SVG branches enter the wave, crossing, pause, and memory diagrams from continuous connection points below each title.
+  - The small branch paths inherit scroll progress from the same story-board spine: each fork begins only when the live spine reaches its junction, grows with the continuing spine, and retracts when the user scrolls upward.
+  - Branch tick marks and labels reveal after the branch path reaches them, keeping content such as `live`, `low latency`, `room signal`, `xin chao`, `hello`, `bonjour`, and `konnichiwa` tied to the motion sequence instead of appearing as static copy.
+  - Branch diagrams reverse their reveal when they leave view on upward scrolling instead of staying as static lines.
+  - The trace lane is shifted farther left with a stronger stroke hierarchy: the main spine is thicker/brighter than the branch lines so users can distinguish the primary scroll path.
+  - Branch reveal ranges were tightened so the fork paths draw faster once the main spine reaches each junction.
+  - Step titles and index labels were compacted into a cleaner left-to-right editorial grid, with branch baselines routed below the large copy to avoid line/text collisions.
+  - Major step headings now reveal from the same branch progress as their SVG fork instead of using independent viewport entrance animation.
+  - The Feature story board was expanded into a taller single coordinate system so steps 03, 04, and the shared `System Signals` continuation have more even breathing room and are easier to read at 100% zoom.
+  - The lower memory fork and shared `System Signals` rail were shifted deeper in that same coordinate system so step 04 finishes in a readable lower viewport band before the five signal rows enter.
+  - The lower story-board scroll mapping now finishes the shared trace faster than the page translation near the System Signals handoff, and the signal list border waits for the rail reveal instead of flashing an empty frame first.
+  - The story-board end offset is tuned so the shared live trace reaches the System Signals rail while that block is still inside the readable viewport, keeping the rail and its rows in step with the scroll frame.
+  - Step 04 sits deeper in the lower reading band, and each System Signals row now waits for the live rail to pass its SVG dot before its copy and pattern reveal.
+  - The deepened 04 fork and the System Signals rail are re-gated from their measured positions on the longer shared spine so neither branch reveal nor row content gets ahead of the live trace.
+  - The pause branch was routed below the paragraph copy so the animated line no longer crosses through `The conversation keeps moving...`.
+  - Lower branch reveal ranges are gated at the measured fork thresholds of the shared spine, then draw quickly after the junction so 03, 04, and System Signals stay readable without letting side branches outrun the main line.
+  - Smaller supporting diagrams such as the pause line and memory fan-out are drawn directly as animated SVG branches to keep the layout closer to the supplied editorial reference.
+  - Includes the step copy: `Every voice leaves a trace`, `Meaning crosses over`, `The conversation keeps moving...`, `The room remembers`, and `Voice returns human`.
+  - Includes a `System Signals` sequence for `Capture`, `Understand`, `Translate`, `Speak`, and `Remember`.
+  - The `System Signals` rail is the lower continuation of the same story-board SVG spine, and its dots plus 01-05 rows are mapped from that shared scroll progress.
+  - The step headings, System Signals intro, rail, dots, and rows are all progress-driven so they appear in sequence with the single trace instead of being present before the line reaches them.
+  - The lower board spacing gives the 04 memory branch, the System Signals rows, and `Voice returns human` separate reading beats while keeping one continuous SVG trace from the narrative spine into the signal rail.
+- Added a WarpTalk pricing section using the requested `c3` cinematic pricing card treatment:
+  - `Free`, `Standard`, and `Pro` cards
+  - WarpTalk-specific features for real-time translation, AI summaries, and voice cloning
+  - Yearly pricing toggle
+  - Large decorative `Translation / Native` watermark
+  - Compact desktop sizing so the watermark and pricing cards fit in one viewport below the navbar.
+- Added a WarpTalk-branded footer section adapted from the requested Kresna footer reference:
+  - White `section.footer-section` surface with two rounded cards
+  - Left card uses the requested autoplaying video background with no overlay
+  - Left card uses the local WarpTalk icon and `WarpTalk` wordmark instead of the Kresna mark
+  - Right card contains navigation/company links, floating lucky badge, copyright, and subscribe form
+  - Faded SVG `WarpTalk` watermark uses the same getBBox-based viewBox fitting behavior as the requested HTML reference
+  - Compact desktop spacing so the footer card content and watermark fit in one viewport below the navbar.
+- Added Google Font imports for `DM Sans` and `Caveat` to support the footer typography.
+- Uses `motion/react` staggered fade-in-up animations for the hero content.
 
-**Known limitations:**
-- This is a landing page experiment for "Aura"; copy and branding do not match WarpTalk production positioning.
-- The CloudFront video is remote. If the URL becomes unavailable, the page falls back visually to the dark background and overlay.
-- `@supabase/supabase-js` is installed per the requested stack but is not used by this static marketing page yet.
+### Files Affected
 
-**Testing checklist:**
-- [ ] Run `npm run lint`.
-- [ ] Run `npm run build`.
-- [ ] Open `http://localhost:3000/` and verify the video-backed cinematic page renders.
-- [ ] Check desktop sections: navbar, hero, menu bar, inbox mockup, triage, logo cloud, testimonials, pricing, final CTA.
-- [ ] Check pricing toggle updates Standard and Pro prices.
-- [ ] Check mobile layout for no incoherent text overlap.
+- `src/app/page.tsx`
+- `src/app/globals.css`
+- `package.json`
+- `package-lock.json`
 
-This document maintains the state, changes, and logic for the Landing Page.
+## Current UI Structure
 
----
+1. Root black hero surface.
+2. Absolute HLS video container:
+   - `inset-0`
+   - fills the full hero viewport
+   - `opacity-100`
+   - no dark overlay
+3. Fixed top glass navbar with anchors for `#about`, `#features`, `#pricing`, and `#contact`.
+4. Centered hero content with staggered animation.
+5. Bottom static logo marquee row using placeholder SVG marks.
+6. Feature trace section (`#features`) with:
+   - Scroll-linked SVG path drawing
+   - Four narrative steps
+   - Five system signal rows
+   - Final waveform and room-understanding copy
+7. Pricing section (`#pricing`) with:
+   - Cinematic glass pricing cards
+   - Yearly toggle state
+   - WarpTalk pricing plan copy
+8. Footer contact section (`#contact`) with:
+   - Video card
+   - Navigation/company columns
+   - Floating lucky badge
+   - Subscribe form
+   - Faded WarpTalk watermark
 
-## GlassOverlay — Full-Screen Coverage + Hover Effect (Latest)
+## Important UI Behavior
 
-**What changed:**
-Extended GlassOverlay to cover the **full hero section** (100vw × 100dvh) using Next.js `<Image fill>` + `object-cover`.
-Removed all width-constraining classes (`w-[80vw]`, `max-w-[1400px]`, etc.).
-The interaction zone also became `absolute inset-0`, matching the full hero bounds.
-The cursor-reactive water-surface hover effect (SVG displacement + depression shadow + bubbles) is fully preserved and now operates across the entire viewport.
+- The background video is intentionally not darkened by overlays.
+- The hero video is full-screen behind the entire first viewport instead of only occupying the upper band.
+- The loader keeps the landing content hidden until its counter finishes and required landing readiness gates complete, then the page fades in.
+- While the loader is active, the document/body scrolling surfaces are locked so refresh and wheel gestures cannot skip into the landing page early.
+- The HLS stream requires browser/network access to `stream.mux.com`.
+- Badges, headline, subtext, and buttons animate in with a staggered fade-up sequence.
+- Any landing CTA related to getting started routes to `/login`.
+- Navbar links are hidden below the `md` breakpoint.
+- Landing anchors use an 80px scroll margin so the fixed navbar does not cover section starts while pricing/footer still fit in the viewport.
+- Nav items are not active on initial hero view. Clicking `About`, `Feature`, `Pricing`, or `Contact` sets the active item and moves a shared layout pill between links.
+- The `Feature` section uses `useScroll` path progress to draw the shared story-board spine and the lower waveform as the user scrolls.
+- The opening `Feature` trace follows `scrollYProgress` directly inside the fixed desktop story board so the spine and branch connection points stay locked to the same visual coordinate system at 100% zoom.
+- The opening `Feature` branch diagrams live in the same SVG story board as the trace lane, keeping the small branches continuous while leaving the title blocks clear on desktop.
+- Branch progress is range-mapped from the shared spine path at the four fork junctions, so short horizontal lines stop at their endpoints while the spine keeps moving down to later forks.
+- The `System Signals` rail is drawn as the lower tail of the same story-board SVG spine; its dots and row visibility are driven by the board scroll progress instead of standalone viewport animations.
+- The `System Signals` copy appears first, dots light in order, each row divider is an animated SVG path, and row content is gated until after its horizontal path has crossed the rail dot.
+- The pricing yearly toggle only updates the displayed price text; it does not yet start checkout.
+- Footer social icons, footer nav links, and subscribe button use hover-only transitions.
+- Footer watermark viewBox is recalculated after fonts are ready and on resize.
+- Footer has `scroll-margin-top` so the fixed navbar does not cover it when users jump to `#contact`.
 
-**Why it changed:**
-The previous layout left visible white bands on left/right edges and did not cover the full hero height on short viewports. The image asset (image-b.png) looks best when it spans edge-to-edge as a full-bleed background layer under the text content.
+## Known Limitations
 
-**Files affected:**
-- `src/components/landing/GlassOverlay.tsx` — full-screen layout rewrite
+- The logo row uses placeholder SVG/text marks until official partner/customer logos exist.
+- The navbar logo is cropped from a square JPG asset; use a transparent horizontal logo asset if one becomes available.
+- HLS playback depends on remote Mux stream availability.
+- Pricing buttons are presentational and are not wired to a payment or plan selection flow.
+- Footer social links are visual placeholders and do not yet navigate to real WarpTalk social URLs.
+- Footer subscribe input is presentational and not wired to a mailing-list endpoint.
 
-**How full-screen scaling works:**
+## Testing Checklist
 
-| Technique | Details |
-|-----------|---------|
-| `<Image fill>` | Next.js `fill` prop makes the `<img>` absolutely-positioned, matching its parent's bounding box |
-| `object-cover` | Crops the image to fill the box while preserving aspect ratio — no distortion, no letterboxing |
-| Parent `absolute inset-0` | The image container and interaction zone both use `absolute inset-0` to exactly match the hero section's `relative` bounds |
-| `sizes="100vw"` | Informs Next.js optimizer to generate the right srcset for a full-viewport image |
-
-**How hover effects stay functional:**
-- Mouse position is still computed as `(clientX - rect.left) / rect.width` — the larger rect simply maps to the full viewport now
-- Bubble `x/y` coordinates are still stored as `%` values relative to the wrapper, so they automatically position correctly at any screen size
-- SVG filter region expanded to `-20% / +140%` to prevent clipping at viewport edges when `scale` is non-zero
-- All RAF lerp logic and turbulence anchoring unchanged
-
-**Known limitations:**
-- `object-cover` will crop the image's top/bottom on ultra-wide screens (e.g. 21:9). This is intentional — the alternative (`object-contain`) would leave blank bars.
-- The displacement filter at full-screen scale may be slightly heavier on GPU than the previous centred-crop version. `MAX_DISPLACEMENT` (12px) is kept conservative.
-
-**Testing checklist:**
-- [ ] Image covers full hero (no white bands left/right or top/bottom)
-- [ ] Aspect ratio not distorted at 375px / 768px / 1280px / 1920px / 2560px widths
-- [ ] Mouse-over triggers ripple distortion and depression shadow
-- [ ] Bubbles spawn and rise from cursor position
-- [ ] Mouse-leave fades all effects smoothly
-- [ ] "Start translating now" CTA button remains clickable (z-20 layer unblocked)
-- [ ] HeroSection.tsx unchanged
-
----
-
-## GlassOverlay — Cursor-Reactive Water-Surface Hover Effect (Previous)
-
-**What changed:**
-Removed the `motion-safe:animate-[float_6s_ease-in-out_infinite]` floating animation from the GlassOverlay component and replaced it with an interactive water-surface hover effect driven entirely by CSS + JavaScript (no Three.js / WebGL).
-
-**Why it changed:**
-The floating animation was a passive visual. The new hover interaction makes the hero feel alive and tactile — responding directly to cursor position.
-
-**Files affected:**
-- `src/components/landing/GlassOverlay.tsx` — complete rewrite of animation/interaction logic
-- `src/app/globals.css` — `@keyframes float` and `.animate-float` remain but are no longer used by GlassOverlay (kept for other potential usages)
-
-**How it works:**
-
-| Layer | Technique | Purpose |
-|-------|-----------|---------|
-| **SVG Displacement** | `feTurbulence` + `feDisplacementMap` SVG filter | Warps image pixels locally to simulate water surface depression |
-| **Depression Shadow** | Radial gradient `<div>` overlay | Dark ellipse centered at cursor simulates the shadow ring of a real indent |
-| **Bubble Particles** | Timed DOM `<span>` elements + CSS `@keyframes` | Rising glossy circles mimic air bubbles released by surface contact |
-
-**Key implementation details:**
-- `feDisplacementMap.scale` is mutated imperatively via a `ref` (not React state) inside a `requestAnimationFrame` loop — zero re-renders per frame.
-- Displacement is lerped toward `MAX_DISPLACEMENT` (12px) on hover and back to 0 on leave using a configurable `LERP_FACTOR` (0.08).
-- `feTurbulence.baseFrequency` is shifted with cursor `(nx, ny)` so the ripple pattern *originates at the cursor*, not at a fixed grid. This is the key trick for the "water indent at cursor" illusion.
-- The SVG `seed` attribute is randomly varied (~12% of mouse-move events) for an organic, non-repeating texture.
-- Bubbles are spawned every 300ms via `setInterval`, capped at 8 concurrent, with slight `x/y` jitter. They are removed via `setTimeout` after `mouseLeave`.
-- `pointer-events-none` on the outer div, `pointer-events-auto` only on the image wrapper — hero CTA button (z-20) remains fully clickable.
-
-**Important UI Behavior:**
-- Image is completely static (no transform, no translation) by default.
-- The image is never rotated or treated as a 3D object.
-- Effect fades out smoothly on mouse-leave via the RAF lerp loop.
-- Bubble animation uses inline `<style>` scoped to the component render tree, not global CSS.
-- `mix-blend-multiply` is preserved at the outer shell level for consistent rendering with the halftone background.
-
-**Known Limitations:**
-- SVG filter performance on very large viewports may cause slight lag on lower-end GPUs. `MAX_DISPLACEMENT` is kept at 12px to minimise filter area workload.
-- The `seed` state change triggers a minor React re-render (~12% of mouse-move events). This is acceptable as it only re-renders the SVG defs, not the image.
-- The effect is desktop-only (hover). No touch interaction is currently implemented.
-
-**Testing checklist:**
-- [ ] Image renders statically without any floating on load
-- [ ] Mouse over image → subtle ripple distortion appears at cursor
-- [ ] Radial dark shadow tracks cursor smoothly
-- [ ] Small bubbles rise from hover area and fade out
-- [ ] Mouse leave → all effects fade/clear smoothly
-- [ ] Hero "Start translating now" button is still clickable (not blocked by overlay)
-- [ ] Layout unchanged at sm / md / lg / xl breakpoints
-- [ ] `mix-blend-multiply` compositing with halftone background unchanged
-
-**Notes for future maintainers:**
-- To increase ripple intensity: raise `MAX_DISPLACEMENT` (try 16–20).
-- To add mobile support: implement `touchmove` handlers using the same `handleMouseMove` logic with `Touch.clientX/Y`.
-- The `@keyframes float` rule in `globals.css` is still present but unused by GlassOverlay. It can be safely removed if no other component uses `.animate-float`.
-
----
-
-## Hero Section Update (Previous)
-
-**What changed:**
-Refactored the Hero Section visuals to use the provided source assets directly as background and foreground models. Updated the implementation of `HalftoneBackground` and `GlassOverlay` components to exactly match the target layout aesthetics while ensuring a premium, monochrome feel. 
-
-**Why it changed:**
-The components needed to perfectly reflect the target design composition, isolating models from their background without reinterpreting them into abstract shapes.
-
-**Files affected:**
-- `src/components/landing/HeroSection.tsx`
-- `src/components/landing/HalftoneBackground.tsx`
-- `src/components/landing/GlassOverlay.tsx`
-
-**How it works:**
-- **HalftoneBackground:** Renders `image-a.png` directly with `object-contain` (not `object-cover`) to preserve the full source composition including side models. `opacity-[0.38]` is used instead of `0.15` to keep the dot field crisp and visible. The harmful radial gradient mask has been completely removed — it was systematically erasing the side models because they live at the outer edges of the image. `mix-blend-multiply` is applied only once at the container level.
-- **GlassOverlay:** Scaled up significantly: `w-[85vw] max-w-[1400px]` on desktop to ensure the glass form overlaps the center of Image A. `mix-blend-multiply` is applied only at the top container level, not stacked on inner divs and the `<Image>` itself.
-- **HeroSection:** `className` constraint removed from `HalftoneBackground` prop — the `150vw/120vw` override was forcing `absolute inset-0` to stretch past the component's natural bounds incorrectly. The component now fills the `absolute inset-0` naturally.
-
-**Root causes of the 30% zoom dependency:**
-- At 30% zoom, the browser renders `100vw` as only 30% of the physical screen. So a `140vw` wrapper appeared as `140% × 30% = 42%` of actual screen — looking correct only because of the zoom compensation.
-- At 100% zoom, `140vw` only reaches 140% of the viewport, which was not enough for Image B's long horizontal form to span edge-to-edge.
-
-**UX scale correction — models scaled DOWN for comfortable viewing:**
-- Previous attempt pushed vw values to 200–260vw which made Image B dominate the entire viewport, overwhelming text and removing breathing room.
-- Final balanced values:
-  - Image A: `w-[110vw] → w-[130vw]`, `max-w-[2400px]`, `opacity-[0.35]` — subtle left/right wave presence
-  - Image B: `w-[80vw] → w-[100vw]`, `max-w-[1400px]`, `opacity-[0.9]` — glass form occupies ~80–100% of viewport width, stays as focal centerpiece without overwhelming
-- HeroSection: `justify-center` restored. Content div uses `-mt-[8vh]` to shift text slightly upward relative to center so the glass model has visual breathing room below.
-
-**Important UI Behavior:**
-- The background and overlay both maintain their original visual proportions without stretching.
-- The checkerboard previews are completely neutralized via CSS (`filter: brightness(1.08) contrast(1.15)`) + `mix-blend-multiply`.
-- The hero is fully responsive and feels like an unconstrained, premium landing page environment.
-- Animations automatically disable for users who prefer reduced motion.
-
-**Known Limitations:**
-- Generating halftone dots on the client side requires pixel iteration; it's optimized by only running once per mount.
-- Image assets (A and B) should be kept at reasonable resolutions to avoid memory bottlenecks during canvas sampling.
-
-## Bug Fixes (Hydration & Static Assets)
-
-**What changed:**
-- Renamed image assets from `Image A.png`/`Image B.png` to `image-a.png`/`image-b.png` and updated their references.
-- Updated `middleware.ts` config matcher to allow static image files through without an authentication redirect.
-- Added `suppressHydrationWarning` to the `<body>` element in `src/app/layout.tsx`.
-- Added `h-auto` class to `GlassOverlay` to fix Next.js image aspect ratio warnings.
-
-**Why it changed:**
-- Next.js and browser environments can fail to resolve assets with spaces if they are not heavily URL-encoded.
-- The `middleware.ts` was previously intercepting `.png` files that were placed in the root of `/public` and redirecting them to `/login`.
-- The user had a browser extension (like ColorZilla) injecting `cz-shortcut-listen="true"` into the body tag before React hydrated, causing a Hydration Mismatch error.
-- Next.js requires explicit `height: auto` (or `h-auto` in Tailwind) when an image's width is controlled by CSS to maintain its original aspect ratio.
+- [x] Run ESLint on `src/app/page.tsx`.
+- [x] Open `/` and verify the Mux HLS background video plays.
+- [x] Verify navbar glass blur and rounded WarpTalk logo container.
+- [x] Verify navbar starts with no active item and the active pill moves after clicking nav links.
+- [x] Verify headline and subtext match the requested WarpTalk copy.
+- [x] Verify staggered fade-up animation on badges, headline, subtext, and buttons.
+- [x] Verify bottom placeholder logo row is visible and low-opacity grayscale.
+- [x] Verify `Feature` nav scrolls to the new trace section and activates the moving nav pill.
+- [x] Verify feature section uses black background, white content, SVG trace path, and five system signal rows.
+- [x] Verify the desktop story board keeps branch connectors and title copy aligned without crossing the main Feature step glyphs.
+- [x] Verify the desktop `Meaning crosses over` branch remains horizontal with language labels on the crossing SVG line.
+- [x] Verify step headings sit closer to the shared spine and animated branch ingress paths lead into the compact diagrams.
+- [x] Verify branch diagrams retract when scrolled out of view upward.
+- [x] Verify `System Signals` continues from the shared SVG spine, draws a straight rail, and reveals five rows in order.
+- [x] Verify the main trace remains visible through the lower `Voice returns human` and `When the room understands` Feature content.
+- [x] Verify footer layout, video card, WarpTalk logo treatment, and watermark on desktop.
+- [x] Verify loader appears before the page and exits after the progress reaches 100.
+- [x] Verify loader locks page scrolling while visible and waits for the landing readiness gate.
+- [x] Verify all landing `Get Started` CTAs navigate to `/login`.
+- [x] Verify pricing cards render and yearly toggle updates prices.
+- [x] Verify hero video fills the full viewport.
+- [x] Verify pricing watermark/cards fit within the viewport after clicking `Pricing`.
+- [x] Verify footer wrapper/watermark fit within the viewport after clicking `Contact`.
+- [ ] Verify footer stacks cleanly below `860px` and subscribe row fits below `560px`.
