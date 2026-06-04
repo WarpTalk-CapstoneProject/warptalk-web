@@ -19,13 +19,19 @@ import {
   Captions,
   Clock,
   Copy,
+  FileText,
   Loader2,
   Link2,
   LogOut,
   Mic,
   MicOff,
+  MoreVertical,
   PhoneOff,
   Radio,
+  ScreenShare,
+  Settings,
+  Share2,
+  Sparkles,
   UserCheck,
   UserMinus,
   Users,
@@ -90,9 +96,10 @@ export default function RoomDetailPage() {
   const addTranscriptSegment = useTranslationRoomStore((state) => state.addTranscriptSegment);
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
 
-  const room = roomQuery.data;
+  const isPreviewRoom = roomId.startsWith("preview-");
+  const room = roomQuery.data ?? (isPreviewRoom ? getPreviewLiveRoom(roomId) : undefined);
   const refetchRoom = roomQuery.refetch;
-  const apiParticipants = participantsQuery.data ?? [];
+  const apiParticipants = participantsQuery.data ?? (isPreviewRoom ? getPreviewLiveParticipants(roomId) : []);
   const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id));
   const participants = liveParticipants.length ? mergeParticipants(apiParticipants, liveParticipants) : apiParticipants;
   const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
@@ -224,11 +231,11 @@ export default function RoomDetailPage() {
     }
   }
 
-  if (roomQuery.isLoading) {
+  if (roomQuery.isLoading && !isPreviewRoom) {
     return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
   }
 
-  if (roomQuery.isError || !room) {
+  if ((roomQuery.isError && !isPreviewRoom) || !room) {
     return (
       <StatePanel
         icon={<AlertCircle className="h-8 w-8" />}
@@ -239,21 +246,31 @@ export default function RoomDetailPage() {
   }
 
   return (
-    <div className="h-screen min-h-0 overflow-hidden bg-[#202124] text-white">
-      <div className="relative flex h-full min-h-0 flex-col">
-        <LiveKitRoom
-          audio
-          video
-          token={meetingSession?.token}
-          serverUrl={LIVEKIT_SERVER_URL}
-          connect={Boolean(meetingSession?.token)}
-          data-lk-theme="default"
-          className="relative flex min-h-0 flex-1 flex-col"
-        >
-          <main className="relative flex min-h-0 flex-1 p-2 sm:p-3">
-            <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-2xl bg-[#2b2c2f] shadow-2xl sm:rounded-3xl">
-              <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-wrap gap-2">
-                {participants.slice(0, 6).map((participant) => (
+    <div className="h-screen min-h-0 overflow-hidden bg-[#111111] p-3 text-white">
+      <LiveKitRoom
+        audio
+        video
+        token={meetingSession?.token}
+        serverUrl={LIVEKIT_SERVER_URL}
+        connect={Boolean(meetingSession?.token)}
+        data-lk-theme="default"
+        className="h-full"
+      >
+        <main className="grid h-full min-h-0 grid-rows-[64px_minmax(0,1fr)_72px] gap-3">
+          <MeetingTopBar
+            room={room}
+            isHost={isHost}
+            activeCount={activeCount}
+            sourceLanguage={sourceLanguage}
+            targetLanguage={targetLanguage}
+            onCopyText={copyText}
+            joinLink={joinLink}
+          />
+
+          <section className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="relative min-h-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#191919] shadow-2xl">
+              <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap gap-2">
+                {participants.slice(0, 5).map((participant) => (
                   <ParticipantPill key={participant.id} participant={participant} />
                 ))}
               </div>
@@ -266,66 +283,232 @@ export default function RoomDetailPage() {
               />
               <RoomAudioRenderer />
 
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent px-4 pb-5 pt-20">
-                <CaptionWindow latestSegment={latestSegment} />
+              <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-5 pb-5 pt-24">
+                <CaptionWindow latestSegment={latestSegment ?? getPreviewTranscriptSegment()} />
               </div>
-
-              <FloatingMeetControls
-                isHost={isHost}
-                roomCode={room.translationRoomCode}
-                joinLink={joinLink}
-                activeCount={activeCount}
-                meetingEnabled={Boolean(meetingSession?.token)}
-                onCopyText={copyText}
-                onExit={handleExit}
-                onToggleParticipants={() => setIsParticipantPanelOpen((current) => !current)}
-              />
             </div>
 
-          {isParticipantPanelOpen && (
-            <aside className="absolute bottom-5 right-5 top-5 z-40 w-[380px] max-w-[calc(100vw-2rem)] rounded-3xl bg-white text-slate-950 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                <div>
-                  <h2 className="text-base font-bold">People</h2>
-                  <p className="text-sm text-slate-500">{activeCount} in room</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsParticipantPanelOpen(false)}
-                  className="grid h-9 w-9 place-items-center rounded-full hover:bg-slate-100"
-                  aria-label="Close participants"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+            <MeetingSidePanel
+              roomId={roomId}
+              room={room}
+              isHost={isHost}
+              participants={participants}
+              participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
+              participantsError={participantsQuery.isError && !isPreviewRoom}
+              activeCount={activeCount}
+              segments={liveSegments.length ? liveSegments : getPreviewTranscriptSegments()}
+            />
+          </section>
 
-              {participantsQuery.isError && <div className="p-5 text-sm text-rose-600">Could not load participant controls.</div>}
-
-              {!participantsQuery.isLoading && !participantsQuery.isError && participants.length === 0 && (
-                <div className="p-5 text-sm text-slate-600">No participants have joined yet.</div>
-              )}
-
-              <div className="max-h-[calc(100%-72px)] overflow-y-auto p-3">
-                {participants.map((participant) => (
-                  <ParticipantRow
-                    key={participant.id}
-                    participant={participant}
-                    isHost={isHost}
-                    roomId={roomId}
-                    isRoomHost={participant.userId === room.hostId}
-                  />
-                ))}
-              </div>
-            </aside>
-          )}
+          <MeetingControlBar
+            isHost={isHost}
+            activeCount={activeCount}
+            meetingEnabled={Boolean(meetingSession?.token)}
+            roomCode={room.translationRoomCode}
+            joinLink={joinLink}
+            onCopyText={copyText}
+            onExit={handleExit}
+            onToggleParticipants={() => setIsParticipantPanelOpen((current) => !current)}
+          />
         </main>
-        </LiveKitRoom>
-      </div>
+
+        {isParticipantPanelOpen ? (
+          <div className="absolute bottom-24 right-6 top-24 z-40 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[28px] border border-white/10 bg-[#f7f7f7] text-neutral-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
+              <div>
+                <h2 className="text-base font-bold">People</h2>
+                <p className="text-sm text-neutral-500">{activeCount} in room</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsParticipantPanelOpen(false)}
+                className="grid h-9 w-9 place-items-center rounded-full hover:bg-neutral-100"
+                aria-label="Close participants"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[calc(100%-72px)] overflow-y-auto p-3">
+              {participants.map((participant) => (
+                <ParticipantRow
+                  key={participant.id}
+                  participant={participant}
+                  isHost={isHost}
+                  roomId={roomId}
+                  isRoomHost={participant.userId === room.hostId}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </LiveKitRoom>
     </div>
   );
 }
 
-function FloatingMeetControls({
+function MeetingTopBar({
+  room,
+  isHost,
+  activeCount,
+  sourceLanguage,
+  targetLanguage,
+  joinLink,
+  onCopyText,
+}: {
+  room: TranslationRoomDto;
+  isHost: boolean;
+  activeCount: number;
+  sourceLanguage: string;
+  targetLanguage: string;
+  joinLink: string;
+  onCopyText: (value: string, label: string) => void;
+}) {
+  return (
+    <header className="flex min-h-0 items-center justify-between gap-3 rounded-[28px] border border-white/10 bg-[#1b1b1b] px-4 shadow-xl">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-neutral-950">
+          <Radio className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate text-base font-semibold">{room.title}</h1>
+            <span className="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              Live
+            </span>
+            {isHost ? <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold">Host</span> : null}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-white/55">
+            {room.translationRoomCode} · {activeCount}/{room.maxParticipants} participants · {getLanguageName(sourceLanguage)} to {getLanguageName(targetLanguage)}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onCopyText(joinLink, "Invite link")}
+          className="hidden h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-neutral-950 transition hover:bg-white/90 md:flex"
+        >
+          <Share2 className="h-4 w-4" />
+          Invite
+        </button>
+        <button type="button" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15" aria-label="Meeting settings">
+          <Settings className="h-4 w-4" />
+        </button>
+        <button type="button" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15" aria-label="More actions">
+          <MoreVertical className="h-4 w-4" />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function MeetingSidePanel({
+  roomId,
+  room,
+  isHost,
+  participants,
+  participantsLoading,
+  participantsError,
+  activeCount,
+  segments,
+}: {
+  roomId: string;
+  room: TranslationRoomDto;
+  isHost: boolean;
+  participants: TranslationRoomParticipantDto[];
+  participantsLoading: boolean;
+  participantsError: boolean;
+  activeCount: number;
+  segments: TranscriptSegmentDto[];
+}) {
+  return (
+    <aside className="hidden min-h-0 grid-rows-[1fr_220px] gap-3 xl:grid">
+      <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] border border-white/10 bg-[#f7f7f7] text-neutral-950 shadow-2xl">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold">Live transcript</h2>
+              <p className="text-xs text-neutral-500">Original and translated captions</p>
+            </div>
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-neutral-950 text-white">
+              <Captions className="h-4 w-4" />
+            </span>
+          </div>
+        </div>
+
+        <div className="min-h-0 space-y-3 overflow-y-auto p-3">
+          {segments.map((segment) => (
+            <TranscriptBubble key={segment.segmentId} segment={segment} />
+          ))}
+        </div>
+      </section>
+
+      <section className="grid min-h-0 grid-cols-2 gap-3">
+        <div className="rounded-[28px] border border-white/10 bg-[#f7f7f7] p-4 text-neutral-950 shadow-2xl">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-bold">AI notes</h2>
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <ul className="space-y-2 text-xs text-neutral-600">
+            <li>• Confirm investor rollout risks.</li>
+            <li>• Follow up terminology cleanup.</li>
+            <li>• Export transcript after meeting ends.</li>
+          </ul>
+        </div>
+
+        <div className="rounded-[28px] border border-white/10 bg-[#f7f7f7] p-4 text-neutral-950 shadow-2xl">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-bold">People</h2>
+            <span className="rounded-full bg-neutral-950 px-2 py-0.5 text-xs font-bold text-white">{activeCount}</span>
+          </div>
+          {participantsLoading ? <p className="text-xs text-neutral-500">Loading participants...</p> : null}
+          {participantsError ? <p className="text-xs text-red-600">Could not load participant controls.</p> : null}
+          <div className="space-y-2">
+            {participants.slice(0, 3).map((participant) => (
+              <div key={participant.id} className="flex items-center gap-2">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-neutral-950 text-xs font-bold text-white">
+                  {initials(participant.displayName)}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold">{participant.displayName}</p>
+                  <p className="text-[11px] capitalize text-neutral-500">{participant.role.toString().toLowerCase()}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {isHost ? (
+            <div className="mt-3 border-t border-neutral-200 pt-3 text-[11px] text-neutral-500">
+              Host controls are available in the people drawer.
+            </div>
+          ) : null}
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-neutral-500">
+            <FileText className="h-3.5 w-3.5" />
+            {room.translationRoomCode} · {roomId}
+          </div>
+        </div>
+      </section>
+    </aside>
+  );
+}
+
+function TranscriptBubble({ segment }: { segment: TranscriptSegmentDto }) {
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+      <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-neutral-500">
+        <span className="font-semibold text-neutral-900">{segment.speakerName || "Speaker"}</span>
+        <span>
+          {getLanguageName(segment.originalLanguage)}
+          {segment.targetLanguage ? ` -> ${getLanguageName(segment.targetLanguage)}` : ""}
+        </span>
+      </div>
+      <p className="text-sm leading-5 text-neutral-800">{segment.originalText}</p>
+      {segment.translatedText ? <p className="mt-2 text-sm font-semibold leading-5 text-neutral-950">{segment.translatedText}</p> : null}
+    </div>
+  );
+}
+
+function MeetingControlBar({
   isHost,
   roomCode,
   joinLink,
@@ -345,57 +528,44 @@ function FloatingMeetControls({
   onToggleParticipants: () => void;
 }) {
   return (
-    <div className="group absolute left-1/2 top-5 z-30 -translate-x-1/2">
-      <button
-        type="button"
-        className="grid h-14 w-14 place-items-center rounded-2xl bg-[#303134]/95 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur transition duration-200 group-hover:scale-95 group-focus-within:scale-95"
-        aria-label="Meeting controls"
-        title="Meeting controls"
-      >
-        <Captions className="h-6 w-6 text-[#8ab4f8]" />
-      </button>
+    <footer className="grid min-h-0 grid-cols-[1fr_auto_1fr] items-center rounded-[28px] border border-white/10 bg-[#1b1b1b] px-4 shadow-xl">
+      <div className="hidden items-center gap-2 text-xs text-white/50 md:flex">
+        <Clock className="h-4 w-4" />
+        00:24:16
+      </div>
 
-      <div className="pointer-events-none absolute left-1/2 top-0 flex -translate-x-1/2 -translate-y-2 scale-95 items-center gap-2 rounded-3xl bg-[#303134]/95 p-2 opacity-0 shadow-2xl ring-1 ring-white/10 backdrop-blur transition duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100">
-        <MeetControl
-          label="Copy invite"
-          icon={<Link2 className="h-5 w-5" />}
-          onClick={() => onCopyText(joinLink, "Invite link")}
-        />
-        <MeetControl
-          label="Copy code"
-          icon={<Copy className="h-5 w-5" />}
-          onClick={() => onCopyText(roomCode, "Room code")}
-        />
-        <MeetControl
-          label="Captions"
-          active
-          icon={<Captions className="h-5 w-5" />}
-          onClick={() => undefined}
-        />
+      <div className="flex items-center justify-center gap-2">
+        <MeetControl label="Copy invite" icon={<Link2 className="h-5 w-5" />} onClick={() => onCopyText(joinLink, "Invite link")} />
+        <MeetControl label="Copy code" icon={<Copy className="h-5 w-5" />} onClick={() => onCopyText(roomCode, "Room code")} />
+        <MeetControl label="Captions" active icon={<Captions className="h-5 w-5" />} onClick={() => undefined} />
         <LiveKitTrackControls enabled={meetingEnabled} />
+        <MeetControl label="Share screen" icon={<ScreenShare className="h-5 w-5" />} onClick={() => undefined} />
         <button
           type="button"
           onClick={onExit}
-          className="grid h-11 w-14 place-items-center rounded-2xl bg-[#ea4335] text-white hover:bg-[#d93025]"
+          className="grid h-12 w-14 place-items-center rounded-full bg-red-600 text-white transition hover:bg-red-500"
           aria-label={isHost ? "End room" : "Leave room"}
           title={isHost ? "End room" : "Leave room"}
         >
           {isHost ? <PhoneOff className="h-5 w-5" /> : <LogOut className="h-5 w-5" />}
         </button>
+      </div>
+
+      <div className="flex justify-end">
         <button
           type="button"
           onClick={onToggleParticipants}
-          className="relative grid h-11 w-11 place-items-center rounded-2xl bg-[#3c4043] text-white hover:bg-[#4a4d51]"
+          className="relative grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15"
           aria-label="People"
           title="People"
         >
           <Users className="h-5 w-5" />
-          <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#8ab4f8] px-1 text-xs font-bold text-[#202124]">
+          <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-xs font-bold text-neutral-950">
             {activeCount}
           </span>
         </button>
       </div>
-    </div>
+    </footer>
   );
 }
 
@@ -603,6 +773,128 @@ function dedupeSegments(segments: TranscriptSegmentDto[]) {
     map.set(segment.segmentId, segment);
   }
   return Array.from(map.values()).sort((a, b) => a.startTimeMs - b.startTimeMs);
+}
+
+function getPreviewLiveRoom(id: string): TranslationRoomDto {
+  const now = new Date();
+  return {
+    id,
+    workspaceId: "workspace-preview",
+    hostId: "host-preview",
+    title: id.includes("partner") ? "Partner Sync Room" : "Investor Q&A Translation",
+    description: "Preview meeting surface for live translation, captions, and AI notes.",
+    translationRoomCode: id.includes("partner") ? "SYNC-882" : "WARP-241",
+    status: "in_progress",
+    translationRoomType: "scheduled",
+    maxParticipants: 24,
+    sourceLanguage: "en-US",
+    targetLanguages: ["vi-VN", "ja-JP"],
+    scheduledAt: now.toISOString(),
+    startedAt: now.toISOString(),
+    createdAt: now.toISOString(),
+    settings: { requiresApproval: true },
+    participantCount: 4,
+    isHost: true,
+  };
+}
+
+function getPreviewLiveParticipants(roomId: string): TranslationRoomParticipantDto[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: `${roomId}-host`,
+      translationRoomId: roomId,
+      userId: "host-preview",
+      displayName: "Host",
+      role: "host",
+      listenLanguage: "vi-VN",
+      speakLanguage: "en-US",
+      status: "connected",
+      isTranslationAudioEnabled: true,
+      joinedAt: now,
+    },
+    {
+      id: `${roomId}-investor`,
+      translationRoomId: roomId,
+      userId: "participant-investor",
+      displayName: "Mika Tanaka",
+      role: "participant",
+      listenLanguage: "ja-JP",
+      speakLanguage: "en-US",
+      status: "connected",
+      isTranslationAudioEnabled: true,
+      joinedAt: now,
+    },
+    {
+      id: `${roomId}-ops`,
+      translationRoomId: roomId,
+      userId: "participant-ops",
+      displayName: "Nguyen Linh",
+      role: "participant",
+      listenLanguage: "vi-VN",
+      speakLanguage: "vi-VN",
+      status: "connected",
+      isTranslationAudioEnabled: true,
+      joinedAt: now,
+    },
+    {
+      id: `${roomId}-interpreter`,
+      translationRoomId: roomId,
+      userId: "interpreter-preview",
+      displayName: "Interpreter Bot",
+      role: "interpreter",
+      listenLanguage: "en-US",
+      speakLanguage: "ja-JP",
+      status: "connected",
+      isTranslationAudioEnabled: true,
+      joinedAt: now,
+    },
+  ];
+}
+
+function getPreviewTranscriptSegment() {
+  return getPreviewTranscriptSegments().at(-1);
+}
+
+function getPreviewTranscriptSegments(): TranscriptSegmentDto[] {
+  return [
+    {
+      segmentId: "preview-segment-1",
+      speakerId: "host-preview",
+      speakerName: "Host",
+      originalText: "Let us start with the rollout risks and align on the terminology cleanup plan.",
+      originalLanguage: "en-US",
+      translatedText: "Chúng ta bắt đầu với các rủi ro triển khai và thống nhất kế hoạch làm sạch thuật ngữ.",
+      targetLanguage: "vi-VN",
+      confidence: 0.93,
+      startTimeMs: 1000,
+      endTimeMs: 5400,
+    },
+    {
+      segmentId: "preview-segment-2",
+      speakerId: "participant-investor",
+      speakerName: "Mika Tanaka",
+      originalText: "The Japanese team needs the glossary before the next review session.",
+      originalLanguage: "en-US",
+      translatedText: "チームは次回のレビュー前に用語集が必要です。",
+      targetLanguage: "ja-JP",
+      confidence: 0.9,
+      startTimeMs: 6200,
+      endTimeMs: 10400,
+    },
+    {
+      segmentId: "preview-segment-3",
+      speakerId: "participant-ops",
+      speakerName: "Nguyen Linh",
+      originalText: "We will attach the product terms and meeting notes after this call.",
+      originalLanguage: "en-US",
+      translatedText: "Chúng tôi sẽ đính kèm thuật ngữ sản phẩm và ghi chú cuộc họp sau cuộc gọi này.",
+      targetLanguage: "vi-VN",
+      confidence: 0.95,
+      startTimeMs: 11200,
+      endTimeMs: 15800,
+    },
+  ];
 }
 
 function initials(value: string) {
