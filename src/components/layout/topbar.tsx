@@ -21,6 +21,7 @@ import {
   Sparkles,
   Star,
   TestTube2,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -37,6 +38,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
+  host: "Host",
+  participant: "Participant",
   rooms: "Rooms",
   create: "Create Room",
   history: "History",
@@ -58,7 +61,10 @@ const searchItems: Array<{
   icon: LucideIcon;
   shortcut?: string;
 }> = [
-  { title: "Dashboard", url: "/dashboard", group: "Workspace", icon: LayoutDashboard, shortcut: "D" },
+  { title: "Host Dashboard", url: "/host/dashboard", group: "Host", icon: LayoutDashboard, shortcut: "D" },
+  { title: "Participant Dashboard", url: "/participant/dashboard", group: "Participant", icon: Users },
+  { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: Building2 },
+  { title: "Internal Dashboard", url: "/internal/dashboard", group: "Internal", icon: ServerCog },
   { title: "Rooms", url: "/rooms", group: "Workspace", icon: LayoutGrid, shortcut: "R" },
   { title: "Create Room", url: "/rooms/create", group: "Workspace", icon: Plus, shortcut: "N" },
   { title: "History & Transcripts", url: "/history", group: "Workspace", icon: FileText, shortcut: "H" },
@@ -68,8 +74,8 @@ const searchItems: Array<{
   { title: "Voice Profiles", url: "/voice-profiles", group: "Configuration", icon: Mic2 },
   { title: "Post-room Feedback", url: "/feedback", group: "Operations", icon: Star },
   { title: "Settings", url: "/settings", group: "Configuration", icon: Settings },
-  { title: "Workspace", url: "/workspace", group: "Administration", icon: Building2 },
-  { title: "Admin", url: "/admin", group: "Administration", icon: ServerCog },
+  { title: "Workspace", url: "/workspace/dashboard", group: "Administration", icon: Building2 },
+  { title: "Internal Admin", url: "/internal/dashboard", group: "Administration", icon: ServerCog },
   { title: "Dev Test", url: "/dev-test", group: "Developer", icon: TestTube2 },
 ];
 
@@ -116,6 +122,7 @@ function IconButton({ children, label }: { children: ReactNode; label: string })
 
 export function Topbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
   const groupedItems = useMemo(
     () =>
@@ -142,6 +149,15 @@ export function Topbar() {
     router.push(url);
     setSearchOpen(false);
   };
+
+  const roleLabel = pathname.startsWith("/participant")
+    ? "Participant"
+    : pathname.startsWith("/workspace")
+      ? "Workspace"
+      : pathname.startsWith("/internal")
+        ? "Internal"
+        : "Host";
+  const roleInitial = roleLabel.slice(0, 1);
 
   return (
     <>
@@ -170,9 +186,9 @@ export function Topbar() {
           </IconButton>
           <div className="dashboard-glass-surface ml-1.5 flex h-9 items-center gap-2 rounded-full px-2 text-neutral-950">
             <Avatar className="relative z-[2] h-6 w-6">
-              <AvatarFallback className="bg-neutral-950 text-xs text-white">H</AvatarFallback>
+              <AvatarFallback className="bg-neutral-950 text-xs text-white">{roleInitial}</AvatarFallback>
             </Avatar>
-            <span className="relative z-[2] hidden text-sm font-medium sm:inline">Host</span>
+            <span className="relative z-[2] hidden text-sm font-medium sm:inline">{roleLabel}</span>
           </div>
         </div>
       </header>

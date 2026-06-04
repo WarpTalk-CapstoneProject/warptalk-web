@@ -60,7 +60,7 @@ export default function RegisterPage() {
       setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Registration successful!");
-      router.replace("/dashboard");
+      router.replace("/host/dashboard");
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };

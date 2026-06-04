@@ -1,8 +1,34 @@
 const baseUrl = process.env.WARPTALK_BASE_URL ?? "http://localhost:3000";
 
 const expectedOkRoutes = [
-  "/dashboard",
+  "/host/dashboard",
+  "/participant/dashboard",
+  "/participant/meetings",
+  "/participant/summaries",
+  "/participant/ai-chat",
+  "/participant/settings",
+  "/workspace/dashboard",
+  "/workspace/members",
+  "/workspace/rooms",
+  "/workspace/artifacts",
+  "/workspace/terminology",
+  "/workspace/billing",
+  "/workspace/settings",
+  "/internal/dashboard",
+  "/internal/workspaces",
+  "/internal/users",
+  "/internal/plans",
+  "/internal/ai-ops",
+  "/internal/support",
+  "/internal/settings",
+  "/join?code=WARP-241",
   "/rooms",
+  "/rooms/create",
+  "/rooms/preview-investor-qa",
+  "/rooms/preview-investor-qa/setup",
+  "/rooms/preview-investor-qa/waiting",
+  "/rooms/preview-investor-qa/ended",
+  "/rooms/preview-investor-qa/artifacts",
   "/history",
   "/ai-summaries",
   "/ai-chat",
@@ -12,10 +38,16 @@ const expectedOkRoutes = [
   "/settings",
 ];
 
+const expectedRedirectRoutes = [
+  "/dashboard",
+  "/workspace",
+  "/admin",
+];
+
 const expectedNotFoundRoutes = [
   "/this-route-does-not-exist",
   "/dashboard/unknown-page",
-  "/rooms/not-real",
+  "/rooms/not-real/unknown-page",
 ];
 
 async function checkRoute(route, expectedStatus) {
@@ -34,6 +66,17 @@ async function main() {
 
   for (const route of expectedOkRoutes) {
     await checkRoute(route, 200);
+  }
+
+  for (const route of expectedRedirectRoutes) {
+    const response = await fetch(`${baseUrl}${route}`, { redirect: "manual" });
+    const passed = response.status === 307 || response.status === 308;
+    const mark = passed ? "PASS" : "FAIL";
+    console.log(`${mark} ${route} expected redirect, got ${response.status}`);
+
+    if (!passed) {
+      throw new Error(`${route} expected redirect, got ${response.status}`);
+    }
   }
 
   for (const route of expectedNotFoundRoutes) {

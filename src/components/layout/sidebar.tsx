@@ -20,10 +20,10 @@ import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
 
 const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/host/dashboard", icon: LayoutDashboard },
   { name: "Cuộc họp", href: "/rooms", icon: Video },
   { name: "Bản ghi", href: "/transcripts", icon: FileText },
-  { name: "Workspace", href: "/workspace", icon: Building2 },
+  { name: "Workspace", href: "/workspace/dashboard", icon: Building2 },
   { name: "Gói dịch vụ", href: "/subscription", icon: CreditCard },
 ];
 
@@ -33,7 +33,7 @@ const secondaryNav = [
 ];
 
 const adminNav = [
-  { name: "Quản trị", href: "/admin", icon: Shield },
+  { name: "Quản trị", href: "/internal/dashboard", icon: Shield },
 ];
 
 export function Sidebar() {

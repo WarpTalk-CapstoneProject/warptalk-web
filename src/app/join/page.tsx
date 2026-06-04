@@ -86,45 +86,61 @@ function JoinMeetingContent() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+    <main className="glass-dashboard-scope relative min-h-screen overflow-hidden bg-white p-3 text-neutral-950">
+      <video
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-100 saturate-0 brightness-[1.04] contrast-105"
+        src="/assets/backgrounds/dashboard-light-motion.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden="true"
+      />
+      <div className="absolute inset-0 bg-white/20" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_10%,rgba(255,255,255,0.48),transparent_24%),radial-gradient(circle_at_62%_0%,rgba(255,255,255,0.38),transparent_26%),radial-gradient(circle_at_6%_100%,rgba(255,255,255,0.3),transparent_30%)]" />
+
+      <div className="dashboard-glass-frame relative z-10 mx-auto flex min-h-[calc(100vh-1.5rem)] max-w-7xl flex-col gap-4 rounded-[32px] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/dashboard" className={cn(buttonVariants({ variant: "ghost" }))}>
+          <Link href="/participant/dashboard" className={cn(buttonVariants({ variant: "outline" }), "rounded-full bg-white")}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to dashboard
+            Participant dashboard
           </Link>
-          <Badge variant="outline" className="bg-background">
-            Preview join flow
-          </Badge>
+          <Badge variant="outline" className="bg-white">Preview join flow</Badge>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-          <Card className="overflow-hidden shadow-sm">
-            <div className="relative min-h-[460px] bg-neutral-950">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.14),transparent_26%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(2,6,23,1))]" />
-              <div className="absolute inset-6 flex flex-col justify-between rounded-lg border border-white/10 bg-white/[0.03] p-6 text-white">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm text-white/60">Camera preview</p>
-                    <h1 className="mt-1 text-3xl font-bold tracking-tight">Join translation room</h1>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
+          <Card className="dashboard-glass-surface overflow-hidden">
+            <CardHeader>
+              <CardTitle>Join translation room</CardTitle>
+              <CardDescription>Use the invite code, confirm language routing, and run a quick device check.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-3">
+                <PreviewTile icon={<Users />} label="Display name" value={displayName || "Not set"} />
+                <PreviewTile icon={<ShieldCheck />} label="Room code" value={normalizedCode || "Required"} />
+                <PreviewTile icon={<Globe2 />} label="Languages" value={`${speakLanguage} to ${listenLanguage}`} />
+              </div>
+              <div className="mt-4 rounded-[28px] border bg-white p-4">
+                <div className="flex min-h-[260px] flex-col justify-between rounded-[24px] bg-neutral-950 p-5 text-white">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-white/55">Camera preview</p>
+                      <h2 className="mt-1 text-2xl font-semibold">Ready room check</h2>
+                    </div>
+                    <div className="flex gap-2">
+                      <DevicePill active={cameraEnabled} icon={<Camera />} label="Camera" />
+                      <DevicePill active={microphoneEnabled} icon={<Mic />} label="Mic" />
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <DevicePill active={cameraEnabled} icon={<Camera />} label="Camera" />
-                    <DevicePill active={microphoneEnabled} icon={<Mic />} label="Mic" />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <PreviewTile icon={<Users />} label="Display name" value={displayName || "Not set"} />
-                  <PreviewTile icon={<ShieldCheck />} label="Room code" value={normalizedCode || "Required"} />
-                  <PreviewTile icon={<Globe2 />} label="Languages" value={`${speakLanguage} to ${listenLanguage}`} />
+                  <p className="max-w-lg text-sm text-white/60">This preview keeps participant join consistent with the white shadcn dashboard shell.</p>
                 </div>
               </div>
-            </div>
+            </CardContent>
           </Card>
 
           <div className="space-y-4">
-            <Card className="shadow-sm">
+            <Card className="dashboard-glass-surface">
               <CardHeader>
                 <CardTitle>Preflight settings</CardTitle>
                 <CardDescription>Configure room access before opening the meeting surface.</CardDescription>
@@ -174,7 +190,7 @@ function JoinMeetingContent() {
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm">
+            <Card className="dashboard-glass-surface">
               <CardHeader>
                 <CardTitle>Device checks</CardTitle>
                 <CardDescription>Frontend-only toggles for the join screen.</CardDescription>
@@ -186,7 +202,7 @@ function JoinMeetingContent() {
               </CardContent>
             </Card>
 
-            <Card className={cn("shadow-sm", status === "ready" ? "border-primary/30 bg-primary/5" : "")}>
+            <Card className={cn("dashboard-glass-surface", status === "ready" ? "border-neutral-950/20 bg-white" : "")}>
               <CardContent className="space-y-3 p-5">
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -201,10 +217,10 @@ function JoinMeetingContent() {
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Button onClick={handleJoin} disabled={!canJoin}>
-                    Join preview
+                    Save join preview
                   </Button>
-                  <Button variant="outline" onClick={() => router.push("/dashboard")}>
-                    Dashboard
+                  <Button variant="outline" onClick={() => router.push(`/rooms/preview-investor-qa/setup`)}>
+                    Continue setup
                   </Button>
                 </div>
               </CardContent>
@@ -262,12 +278,12 @@ function DevicePill({ active, icon, label }: { active: boolean; icon: ReactNode;
 
 function PreviewTile({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/10 p-4">
-      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white/80 [&_svg]:h-4 [&_svg]:w-4">
+    <div className="rounded-2xl border bg-white p-4">
+      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-950 text-white [&_svg]:h-4 [&_svg]:w-4">
         {icon}
       </div>
-      <p className="text-xs text-white/60">{label}</p>
-      <p className="mt-1 truncate font-medium">{value}</p>
+      <p className="text-xs text-neutral-500">{label}</p>
+      <p className="mt-1 truncate font-medium text-neutral-950">{value}</p>
     </div>
   );
 }

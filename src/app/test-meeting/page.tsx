@@ -37,7 +37,7 @@ export default function TestMeetingPage() {
       const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200/api/v1").replace(/\/+$/, "");
       
           // Use the hardcoded long-lived root token to bypass all authentication errors
-          let currentToken = jwtToken;
+          const currentToken = jwtToken;
 
 
       const res = await fetch(`${baseUrl}/meetings/rooms/${roomId}/join`, {

@@ -11,13 +11,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const pathname = usePathname();
   const isMeetingSurface = pathname.startsWith("/room/");
+  const isParticipantPath = pathname.startsWith("/participant");
 
   if (isMeetingSurface) {
     return <main className="min-h-screen overflow-hidden bg-white">{children}</main>;
   }
 
   // Default to Host sidebar if role is not strictly participant-only
-  const isParticipantOnly = user?.roles?.includes("participant") && !user?.roles?.includes("host");
+  const isParticipantOnly = isParticipantPath || (user?.roles?.includes("participant") && !user?.roles?.includes("host"));
 
   return (
     <div className="glass-dashboard-scope relative h-screen overflow-hidden bg-white text-neutral-950">

@@ -1,232 +1,176 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import {
-  Calendar,
-  Check,
-  Copy,
-  Globe2,
-  Link2,
-  Lock,
-  Settings2,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { CalendarClock, Check, Languages, Link2, Settings2, Users } from "lucide-react";
 import { toast } from "sonner";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 const languageOptions = [
-  { code: "en-US", label: "English" },
   { code: "vi-VN", label: "Vietnamese" },
+  { code: "en-US", label: "English" },
   { code: "ja-JP", label: "Japanese" },
-  { code: "ko-KR", label: "Korean" },
 ];
 
-const accessOptions = ["Anyone with link", "Workspace only", "Host approval"];
-
-function todayValue() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function timeValue() {
+function defaultStartTime() {
   const date = new Date(Date.now() + 1000 * 60 * 30);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 16);
 }
 
 export default function CreateRoomPage() {
   const [title, setTitle] = useState("Investor Q&A Translation");
-  const [description, setDescription] = useState("Live translated room for customer, investor, or partner conversations.");
-  const [sourceLanguage, setSourceLanguage] = useState("en-US");
-  const [targetLanguage, setTargetLanguage] = useState("vi-VN");
-  const [date, setDate] = useState(todayValue());
-  const [time, setTime] = useState(timeValue());
   const [capacity, setCapacity] = useState("24");
-  const [access, setAccess] = useState(accessOptions[0]);
-  const [recording, setRecording] = useState(true);
-  const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [transcriptLanguage, setTranscriptLanguage] = useState("en-US");
+  const [displayLanguage, setDisplayLanguage] = useState("vi-VN");
+  const [selectedLanguages, setSelectedLanguages] = useState(["vi-VN", "en-US"]);
+  const [startAt, setStartAt] = useState(defaultStartTime());
+  const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
 
-  const joinLink = useMemo(() => {
-    if (!createdCode) return "";
-    if (typeof window === "undefined") return `/join?code=${createdCode}`;
-    return `${window.location.origin}/join?code=${createdCode}`;
-  }, [createdCode]);
+  const selectedLabels = useMemo(
+    () => selectedLanguages.map((code) => languageOptions.find((language) => language.code === code)?.label ?? code).join(", "),
+    [selectedLanguages]
+  );
 
-  const createPreviewRoom = () => {
-    const code = `WT-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random()
-      .toString(36)
-      .slice(2, 5)
-      .toUpperCase()}`;
-    setCreatedCode(code);
-    toast.success("Preview room created.");
-  };
+  function toggleLanguage(code: string) {
+    setSelectedLanguages((current) => {
+      if (current.includes(code)) return current.filter((item) => item !== code);
+      return [...current, code];
+    });
+  }
 
-  const copyLink = async () => {
-    if (!joinLink) return;
-    await navigator.clipboard.writeText(joinLink);
-    toast.success("Join link copied.");
-  };
+  function createPreviewRoom() {
+    if (!title.trim()) {
+      toast.error("Room name is required.");
+      return;
+    }
+    if (selectedLanguages.length === 0) {
+      toast.error("Choose at least one meeting language.");
+      return;
+    }
+
+    setCreatedRoomId("preview-investor-qa");
+    toast.success("Preview room created. Continue to room setup.");
+  }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-md border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              Create room
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Create translated room</h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              Shadcn-style room setup for frontend review while backend creation is offline.
-            </p>
-          </div>
-          <Button onClick={createPreviewRoom}>Create preview room</Button>
+    <div className="mx-auto grid max-w-6xl gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="grid gap-4">
+        <div>
+          <p className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-500 shadow-sm">
+            <CalendarClock className="h-3.5 w-3.5" />
+            Simple create room
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">Create room</h1>
+          <p className="text-sm text-neutral-500">Only collect the essentials here. Invite, context documents, and room policies are configured in setup.</p>
         </div>
 
-        <Card className="shadow-sm">
+        <Card>
           <CardHeader>
-            <CardTitle>Room details</CardTitle>
-            <CardDescription>Set the visible room name, description, capacity, and schedule.</CardDescription>
+            <CardTitle>Core room information</CardTitle>
+            <CardDescription>Name, participant count, languages, transcript language, and start time.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Room title">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+              <Field label="Room name">
                 <Input value={title} onChange={(event) => setTitle(event.target.value)} />
               </Field>
-              <Field label="Capacity">
-                <Input type="number" value={capacity} onChange={(event) => setCapacity(event.target.value)} />
-              </Field>
-            </div>
-            <Field label="Description">
-              <Textarea value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24" />
-            </Field>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Date">
-                <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-              </Field>
-              <Field label="Start time">
-                <Input type="time" value={time} onChange={(event) => setTime(event.target.value)} />
-              </Field>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Translation settings</CardTitle>
-            <CardDescription>Configure language direction and room permissions.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Source language">
-                <Select value={sourceLanguage} onValueChange={(value) => value && setSourceLanguage(value)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {languageOptions.map((language) => (
-                      <SelectItem key={language.code} value={language.code}>
-                        {language.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Target language">
-                <Select value={targetLanguage} onValueChange={(value) => value && setTargetLanguage(value)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {languageOptions.map((language) => (
-                      <SelectItem key={language.code} value={language.code}>
-                        {language.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <Field label="Participant limit">
+                <Input type="number" min={1} max={500} value={capacity} onChange={(event) => setCapacity(event.target.value)} />
               </Field>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
-              {accessOptions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setAccess(option)}
-                  className={cn(
-                    "flex min-h-24 flex-col items-start justify-between rounded-lg border bg-background p-4 text-left text-sm transition hover:bg-muted/60",
-                    access === option && "border-primary ring-2 ring-primary/15"
-                  )}
-                >
-                  <span className="font-medium">{option}</span>
-                  {access === option ? <Check className="h-4 w-4 text-primary" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border bg-background p-4">
-              <div>
-                <p className="font-medium">Retain transcript artifacts</p>
-                <p className="text-sm text-muted-foreground">Generate transcript and summary artifacts after the room ends.</p>
+            <Field label="Languages used in meeting">
+              <div className="grid gap-2 sm:grid-cols-3">
+                {languageOptions.map((language) => {
+                  const active = selectedLanguages.includes(language.code);
+                  return (
+                    <button
+                      key={language.code}
+                      type="button"
+                      onClick={() => toggleLanguage(language.code)}
+                      className={cn(
+                        "flex h-12 items-center justify-between rounded-2xl border bg-white px-4 text-sm font-medium transition hover:bg-neutral-50",
+                        active && "border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-900"
+                      )}
+                    >
+                      {language.label}
+                      {active ? <Check className="h-4 w-4" /> : null}
+                    </button>
+                  );
+                })}
               </div>
-              <Switch checked={recording} onCheckedChange={setRecording} />
+            </Field>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Main transcript language">
+                <Select value={transcriptLanguage} onValueChange={(value) => value && setTranscriptLanguage(value)}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {languageOptions.map((language) => <SelectItem key={language.code} value={language.code}>{language.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Default translation display">
+                <Select value={displayLanguage} onValueChange={(value) => value && setDisplayLanguage(value)}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {languageOptions.map((language) => <SelectItem key={language.code} value={language.code}>{language.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            <Field label="Start time">
+              <Input type="datetime-local" value={startAt} onChange={(event) => setStartAt(event.target.value)} />
+            </Field>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={createPreviewRoom} className="rounded-full bg-neutral-950 text-white hover:bg-neutral-800">
+                Create preview room
+              </Button>
+              <Link href="/rooms" className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-white px-3 text-sm font-medium transition hover:bg-muted">
+                Back to rooms
+              </Link>
             </div>
           </CardContent>
         </Card>
       </section>
 
-      <aside className="space-y-4">
-        <Card className="shadow-sm">
+      <aside className="grid content-start gap-4">
+        <Card>
           <CardHeader>
-            <CardTitle>Setup summary</CardTitle>
-            <CardDescription>Preview of the room before sharing.</CardDescription>
+            <CardTitle>Room summary</CardTitle>
+            <CardDescription>Preview before moving into setup.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <SummaryRow icon={<Globe2 />} label="Languages" value={`${sourceLanguage} -> ${targetLanguage}`} />
-            <SummaryRow icon={<Users />} label="Capacity" value={`${capacity || "0"} participants`} />
-            <SummaryRow icon={<Calendar />} label="Schedule" value={`${date} at ${time}`} />
-            <SummaryRow icon={<Settings2 />} label="Access" value={access} />
+          <CardContent className="grid gap-4">
+            <SummaryRow icon={<Users />} label="Participants" value={`${capacity || "0"} max`} />
+            <SummaryRow icon={<Languages />} label="Languages" value={selectedLabels || "No language selected"} />
+            <SummaryRow icon={<Settings2 />} label="Transcript" value={transcriptLanguage} />
+            <SummaryRow icon={<CalendarClock />} label="Starts" value={startAt.replace("T", " ")} />
           </CardContent>
         </Card>
 
-        {createdCode ? (
-          <Card className="border-primary/20 bg-primary/5 shadow-sm">
+        {createdRoomId ? (
+          <Card className="border-neutral-950/15 bg-white">
             <CardHeader>
-              <CardTitle>Preview room ready</CardTitle>
-              <CardDescription>Share this frontend-only room code for UI testing.</CardDescription>
+              <CardTitle>Next step: setup</CardTitle>
+              <CardDescription>Add invite, context documents, and meeting policies after creation.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="rounded-lg border bg-background p-3">
-                <p className="text-xs font-medium text-muted-foreground">Room code</p>
-                <p className="mt-1 font-mono text-xl font-bold">{createdCode}</p>
-              </div>
-              <Button className="w-full" onClick={copyLink}>
-                <Copy className="mr-2 h-4 w-4" />
-                Copy join link
-              </Button>
-              <Link
-                href={`/join?code=${createdCode}`}
-                className={cn(buttonVariants({ variant: "outline" }), "w-full bg-background")}
-              >
+            <CardContent className="grid gap-2">
+              <Link href={`/rooms/${createdRoomId}/setup`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Continue to setup
+              </Link>
+              <Link href={`/join?code=WARP-241`} className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-white px-3 text-sm font-medium transition hover:bg-muted">
                 <Link2 className="mr-2 h-4 w-4" />
-                Open join page
+                Preview invite link
               </Link>
             </CardContent>
           </Card>
@@ -248,12 +192,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function SummaryRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="flex gap-3">
-      <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-4 [&_svg]:w-4">
-        {icon}
-      </span>
+      <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-950 text-white [&_svg]:h-4 [&_svg]:w-4">{icon}</span>
       <div>
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium">{value}</p>
+        <p className="text-xs font-medium text-neutral-500">{label}</p>
+        <p className="text-sm font-medium text-neutral-950">{value}</p>
       </div>
     </div>
   );
