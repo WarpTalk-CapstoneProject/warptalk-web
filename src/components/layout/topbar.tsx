@@ -76,8 +76,8 @@ function Breadcrumbs() {
 
   return (
     <div className="min-w-0">
-      <h1 className="truncate text-xl font-semibold tracking-tight text-neutral-950">{label}</h1>
-      <p className="text-[11px] text-neutral-500">WarpTalk workspace</p>
+      <h1 className="truncate text-2xl font-semibold tracking-tight text-neutral-950">{label}</h1>
+      <p className="text-xs text-neutral-500">WarpTalk workspace</p>
     </div>
   );
 }
@@ -87,11 +87,11 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="hidden h-7 w-full max-w-[240px] items-center gap-1.5 rounded-full border border-white/65 bg-white/72 px-2.5 text-xs text-neutral-500 shadow-[0_10px_20px_rgba(0,0,0,0.055)] backdrop-blur-[24px] transition hover:bg-white hover:text-neutral-950 md:flex"
+      className="dashboard-glass-surface hidden h-9 w-full max-w-[330px] items-center gap-2 rounded-full px-3 text-sm text-neutral-600 transition hover:text-neutral-950 md:flex"
     >
-      <Search className="h-3 w-3" />
-      <span className="flex-1 text-left">Search pages...</span>
-      <kbd className="rounded-full border border-neutral-950/10 bg-neutral-950/5 px-1.5 font-mono text-[9px] text-neutral-500">Ctrl K</kbd>
+      <Search className="relative z-[2] h-4 w-4" />
+      <span className="relative z-[2] flex-1 text-left">Search pages...</span>
+      <kbd className="relative z-[2] rounded-full border border-neutral-950/10 bg-neutral-950/5 px-1.5 font-mono text-[10px] text-neutral-500">Ctrl K</kbd>
     </button>
   );
 }
@@ -102,7 +102,7 @@ function IconButton({ children, label }: { children: ReactNode; label: string })
       type="button"
       aria-label={label}
       title={label}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-neutral-950 shadow-[0_10px_20px_rgba(0,0,0,0.055)] transition hover:bg-white hover:text-neutral-950"
+      className="dashboard-glass-surface inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-950 transition hover:text-neutral-950"
     >
       {children}
     </button>
@@ -140,14 +140,14 @@ export function Topbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 flex h-[54px] shrink-0 items-center gap-1.5 bg-transparent px-1 text-neutral-950">
+      <header className="sticky top-0 z-20 flex h-[70px] shrink-0 items-center gap-2 bg-transparent px-1 text-neutral-950">
         <button
           type="button"
           aria-label="Toggle sidebar"
           title="Sidebar"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-neutral-950 shadow-[0_10px_20px_rgba(0,0,0,0.055)] transition hover:bg-white hover:text-neutral-950"
+          className="dashboard-glass-surface inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-950 transition hover:text-neutral-950"
         >
-          <PanelLeft className="h-3.5 w-3.5" />
+          <PanelLeft className="relative z-[2] h-4 w-4" />
         </button>
         <div className="min-w-0 flex-1">
           <Breadcrumbs />
@@ -155,19 +155,19 @@ export function Topbar() {
         <SearchTrigger onClick={() => setSearchOpen(true)} />
         <div className="ml-auto flex items-center gap-1">
           <IconButton label="Help">
-            <CircleHelp className="h-3.5 w-3.5" />
+            <CircleHelp className="relative z-[2] h-4 w-4" />
           </IconButton>
           <IconButton label="Notifications">
-            <Bell className="h-3.5 w-3.5" />
+            <Bell className="relative z-[2] h-4 w-4" />
           </IconButton>
           <IconButton label="Theme">
-            <Moon className="h-3.5 w-3.5" />
+            <Moon className="relative z-[2] h-4 w-4" />
           </IconButton>
-          <div className="ml-1.5 flex h-7 items-center gap-1.5 rounded-full border border-white/65 bg-white/72 px-1.5 text-neutral-950 shadow-[0_10px_20px_rgba(0,0,0,0.055)] backdrop-blur-[24px]">
-            <Avatar className="h-5 w-5">
-              <AvatarFallback className="bg-neutral-950 text-[10px] text-white">H</AvatarFallback>
+          <div className="dashboard-glass-surface ml-1.5 flex h-9 items-center gap-2 rounded-full px-2 text-neutral-950">
+            <Avatar className="relative z-[2] h-6 w-6">
+              <AvatarFallback className="bg-neutral-950 text-xs text-white">H</AvatarFallback>
             </Avatar>
-            <span className="hidden text-xs font-medium sm:inline">Host</span>
+            <span className="relative z-[2] hidden text-sm font-medium sm:inline">Host</span>
           </div>
         </div>
       </header>

@@ -21,8 +21,11 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - The host shell is compact at normal 100% browser zoom while keeping the sidebar legible: smaller outer padding, 184px sidebar, 54px topbar, 32px navigation rows, and reduced content spacing.
 - The sidebar help/preview notice card was removed from both the standalone dashboard sidebar and the shared host sidebar.
 - The right-side host content shell card was removed to reduce nested glass layers. Content now sits directly inside the outer glass frame, matching the reference hierarchy: background -> outer glass frame -> sidebar card + floating content cards.
+- The outer dashboard frame now uses the requested transparent glass preset: `rgba(255,255,255,0.05)`, 8px blur, 0.3 white border, inset highlights, and top/left edge shine pseudo-elements.
+- Sidebar, topbar controls, and dashboard content cards now use the requested frosted surface preset: `rgba(255,255,255,0.23)`, 6px blur, white border, inset glow, and edge shine pseudo-elements.
 - Shared host pages use `/assets/backgrounds/dashboard-light-motion.mp4` as the full-screen motion video background, matching `/dashboard`.
-- The shared motion video background uses a light comfort layer above the video (`bg-white/45` plus `backdrop-blur-[3px]`) so movement is less distracting and text remains readable.
+- The shared motion video background now keeps the provided light/white direction: full brightness grayscale video, light white overlay gradients, and no dark neutral wash.
+- Host glass variables now use a readable white acrylic direction: structural frame around `rgba(255,255,255,0.18)`, sidebar/topbar/content surfaces around `rgba(255,255,255,0.9)`, and shadcn card/input scopes around `0.9`.
 - Sign out clears the preview auth store and routes the user back to `/login`.
 - The host sidebar keeps room creation as an in-page action instead of a dedicated navigation item; `/rooms/create` remains reachable from the `Create room` button and command search.
 - Admin and workspace layouts now share the same muted content background, sticky topbar, and padded content wrapper used by the host dashboard shell.

@@ -47,6 +47,7 @@ This document tracks the host dashboard at `/dashboard`.
 - Updated the structural glass shells to match the user's generator.ui.glass reference: menu shell, content shell, and topbar shell now use transparent `rgba(143,143,143,0)` fill, `backdrop-blur-0`, `backdrop-saturate-200`, 12px radius, and `rgba(255,255,255,0.125)` borders.
 - Updated menu and topbar glass to the newer reference preset: `backdrop-blur-[10px]`, `backdrop-saturate-200`, `rgba(143,143,143,0.1)` fill, 12px radius, and `rgba(255,255,255,0.125)` borders.
 - Updated dashboard content cards to the user's content-card glass preset: `backdrop-blur-[15px]`, `backdrop-saturate-200`, `rgba(143,143,143,0.15)` fill, 12px radius, and `rgba(255,255,255,0.125)` borders.
+- Restored the requested light dashboard direction after review: removed the dark gray video wash, kept the provided white motion background bright, made sidebar/topbar controls white, and changed dashboard content cards back to readable white/black surfaces instead of transparent panels.
 
 ## Why It Changed
 
@@ -112,9 +113,12 @@ Not adopted directly:
 - Active-pill placement is immediate only on first mount and resize. Route changes animate to the next item instead of forcing an instant jump, which preserves the visible slide-down effect.
 - Sidebar labels/icons no longer use `mix-blend-difference`. The sidebar computes which menu row is actually covered by the moving active-pill and only that row becomes white, keeping all inactive rows readable.
 - Dashboard density was compacted for 100% browser zoom while restoring a more template-like sidebar scale: smaller shell padding, 184px sidebar, larger rounded active pill, smaller topbar, lower metric cards, tighter table rows, and smaller support panels.
+- The dashboard intro copy block (`Workspace operations`, `WarpTalk Dashboard`, and the long monitor description) was removed to reclaim vertical space and reduce unnecessary content before the cards.
+- The dashboard page now uses a full-height two-row grid: metric cards on top and the room/operations grid below, so the content follows the template-style card composition and has less reason to produce vertical scrolling.
+- Dashboard card glass now uses the shared frosted surface preset instead of custom per-card white/blur utilities.
 - The shared host layout no longer wraps dashboard content in a separate frosted white shell. The dashboard now follows the reference hierarchy more closely: one outer glass frame, one sidebar card, and individual content cards placed directly on the frame.
-- The dashboard background stack now uses `/assets/backgrounds/dashboard-light-motion.mp4` as the primary full-screen background, followed by a light comfort blur/white overlay, readability gradients, and the frosted-glass dashboard content.
-- The dashboard is currently a light monochrome glass design. Menu and topbar use white acrylic surfaces, active navigation uses a black pill, and dashboard cards use frosted white surfaces with a black featured metric card for contrast.
+- The dashboard background stack now uses `/assets/backgrounds/dashboard-light-motion.mp4` as the primary full-screen background at full light brightness, followed by subtle white readability gradients, then white acrylic dashboard surfaces.
+- The dashboard is currently a light monochrome dashboard. Menu and topbar controls use white surfaces, active navigation uses a black pill, content cards use white surfaces, and the featured metric card uses a dedicated dark glass surface for contrast.
 - The dashboard structure intentionally mirrors the reference hierarchy: background video -> outer transparent glass frame -> inner frosted sidebar/top header/cards -> content.
 - Large structural containers intentionally use clearer glass than content cards. Metric cards, room table, and signal panels keep stronger contrast; sidebar/main empty space stays more transparent so the background remains visible.
 - Structural shells and content cards are intentionally separated: menu/topbar/content shells use zero-blur transparent glass, while smaller dashboard data cards keep stronger `GlassPanel` contrast for readability.

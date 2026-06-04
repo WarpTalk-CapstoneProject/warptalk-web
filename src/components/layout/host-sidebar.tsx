@@ -146,7 +146,7 @@ export function HostSidebar() {
   };
 
   return (
-    <aside className="hidden h-full w-[184px] shrink-0 overflow-hidden rounded-[30px] border border-white/65 bg-white/72 text-neutral-950 shadow-[0_22px_64px_rgba(0,0,0,0.08)] backdrop-blur-[28px] backdrop-saturate-150 md:flex md:flex-col">
+    <aside className="dashboard-glass-surface relative z-[2] hidden h-full w-[196px] shrink-0 rounded-[30px] text-neutral-950 md:flex md:flex-col">
       <div className="flex h-[70px] items-center px-5">
         <Link
           href="/dashboard"
