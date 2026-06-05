@@ -27,6 +27,7 @@ const expectedOkRoutes = [
   "/rooms/preview-investor-qa",
   "/rooms/preview-investor-qa/setup",
   "/rooms/preview-investor-qa/waiting",
+  "/room/preview-investor-qa",
   "/rooms/preview-investor-qa/ended",
   "/rooms/preview-investor-qa/artifacts",
   "/history",

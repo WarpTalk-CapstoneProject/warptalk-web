@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -23,10 +23,12 @@ import {
   Loader2,
   Link2,
   LogOut,
+  MessageSquare,
   Mic,
   MicOff,
   MoreVertical,
   PhoneOff,
+  Play,
   Radio,
   ScreenShare,
   Settings,
@@ -68,6 +70,7 @@ function isInstantRoom(room: TranslationRoomDto) {
 }
 
 const LIVEKIT_SERVER_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "ws://localhost:7880";
+type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
 
 export default function RoomDetailPage() {
   const params = useParams<{ id: string }>();
@@ -84,9 +87,19 @@ export default function RoomDetailPage() {
   const autoStartedRef = useRef(false);
   const meetingJoinedRef = useRef(false);
   const aiTriggeredRef = useRef(false);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
   const [isParticipantPanelOpen, setIsParticipantPanelOpen] = useState(false);
   const [meetingSession, setMeetingSession] = useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
+  const [warptalkStarted, setWarptalkStarted] = useState(false);
+  const [sidePanelMode, setSidePanelMode] = useState<"transcript" | "chat" | "notes" | "people">("transcript");
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [localMediaError, setLocalMediaError] = useState<string | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [meetingLayout, setMeetingLayout] = useState<MeetingLayoutMode>("auto");
 
   const liveParticipants = useTranslationRoomStore((state) => state.participants);
   const transcriptSegments = useTranslationRoomStore((state) => state.transcriptSegments);
@@ -210,6 +223,53 @@ export default function RoomDetailPage() {
     targetLanguage,
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function startLocalMedia() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setLocalMediaError("This browser does not support camera and microphone access.");
+        return;
+      }
+
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+      setLocalStream(null);
+
+      if (!cameraEnabled && !microphoneEnabled) {
+        setLocalMediaError(null);
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: cameraEnabled ? true : false,
+          audio: microphoneEnabled ? { echoCancellation: true, noiseSuppression: true } : false,
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        localStreamRef.current = stream;
+        setLocalStream(stream);
+        setLocalMediaError(null);
+      } catch (error) {
+        if (cancelled) return;
+        setLocalMediaError(error instanceof Error ? error.message : "Unable to access camera or microphone.");
+      }
+    }
+
+    void startLocalMedia();
+
+    return () => {
+      cancelled = true;
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+    };
+  }, [cameraEnabled, microphoneEnabled]);
+
   async function copyText(value: string, label: string) {
     if (!value) return;
     await navigator.clipboard?.writeText(value);
@@ -231,8 +291,41 @@ export default function RoomDetailPage() {
     }
   }
 
+  async function handleToggleScreenShare() {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+      setScreenStream(null);
+      toast.success("Screen sharing stopped.");
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      toast.error("This browser does not support screen sharing.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      screenStreamRef.current = stream;
+      setScreenStream(stream);
+      stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+        screenStreamRef.current = null;
+        setScreenStream(null);
+      });
+      toast.success("Screen sharing started.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not start screen sharing.");
+    }
+  }
+
   if (roomQuery.isLoading && !isPreviewRoom) {
     return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
+  }
+
+  function handleStartWarptalk() {
+    setWarptalkStarted(true);
+    toast.success("WarpTalk realtime translation started.");
   }
 
   if ((roomQuery.isError && !isPreviewRoom) || !room) {
@@ -256,17 +349,7 @@ export default function RoomDetailPage() {
         data-lk-theme="default"
         className="h-full"
       >
-        <main className="grid h-full min-h-0 grid-rows-[64px_minmax(0,1fr)_72px] gap-3">
-          <MeetingTopBar
-            room={room}
-            isHost={isHost}
-            activeCount={activeCount}
-            sourceLanguage={sourceLanguage}
-            targetLanguage={targetLanguage}
-            onCopyText={copyText}
-            joinLink={joinLink}
-          />
-
+        <main className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_82px] gap-3">
           <section className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
             <div className="relative min-h-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#191919] shadow-2xl">
               <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap gap-2">
@@ -279,12 +362,18 @@ export default function RoomDetailPage() {
                 fallbackName={user?.fullName || user?.email || room.title}
                 isJoining={isMeetingJoining}
                 error={meetingError}
+                localStream={localStream}
+                localMediaError={localMediaError}
+                cameraEnabled={cameraEnabled}
+                participants={participants}
+                screenStream={screenStream}
+                layoutMode={meetingLayout}
                 onRetry={retryMeetingConnection}
               />
               <RoomAudioRenderer />
 
               <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-5 pb-5 pt-24">
-                <CaptionWindow latestSegment={latestSegment ?? getPreviewTranscriptSegment()} />
+                <CaptionWindow latestSegment={warptalkStarted ? latestSegment ?? getPreviewTranscriptSegment() : undefined} warptalkStarted={warptalkStarted} />
               </div>
             </div>
 
@@ -292,22 +381,39 @@ export default function RoomDetailPage() {
               roomId={roomId}
               room={room}
               isHost={isHost}
+              mode={sidePanelMode}
+              onModeChange={setSidePanelMode}
               participants={participants}
               participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
               participantsError={participantsQuery.isError && !isPreviewRoom}
               activeCount={activeCount}
-              segments={liveSegments.length ? liveSegments : getPreviewTranscriptSegments()}
+              segments={warptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
             />
           </section>
 
           <MeetingControlBar
+            room={room}
             isHost={isHost}
+            sourceLanguage={sourceLanguage}
+            targetLanguage={targetLanguage}
             activeCount={activeCount}
             meetingEnabled={Boolean(meetingSession?.token)}
+            cameraEnabled={cameraEnabled}
+            microphoneEnabled={microphoneEnabled}
+            isScreenSharing={Boolean(screenStream)}
+            layoutMode={meetingLayout}
             roomCode={room.translationRoomCode}
             joinLink={joinLink}
+            warptalkStarted={warptalkStarted}
+            panelMode={sidePanelMode}
             onCopyText={copyText}
             onExit={handleExit}
+            onStartWarptalk={handleStartWarptalk}
+            onToggleCamera={() => setCameraEnabled((current) => !current)}
+            onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
+            onToggleScreenShare={handleToggleScreenShare}
+            onLayoutChange={setMeetingLayout}
+            onPanelModeChange={setSidePanelMode}
             onToggleParticipants={() => setIsParticipantPanelOpen((current) => !current)}
           />
         </main>
@@ -346,6 +452,8 @@ export default function RoomDetailPage() {
   );
 }
 
+// Kept temporarily while the meeting footer owns the active layout.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function MeetingTopBar({
   room,
   isHost,
@@ -407,6 +515,8 @@ function MeetingSidePanel({
   roomId,
   room,
   isHost,
+  mode,
+  onModeChange,
   participants,
   participantsLoading,
   participantsError,
@@ -416,6 +526,8 @@ function MeetingSidePanel({
   roomId: string;
   room: TranslationRoomDto;
   isHost: boolean;
+  mode: "transcript" | "chat" | "notes" | "people";
+  onModeChange: (mode: "transcript" | "chat" | "notes" | "people") => void;
   participants: TranslationRoomParticipantDto[];
   participantsLoading: boolean;
   participantsError: boolean;
@@ -423,28 +535,47 @@ function MeetingSidePanel({
   segments: TranscriptSegmentDto[];
 }) {
   return (
-    <aside className="hidden min-h-0 grid-rows-[1fr_220px] gap-3 xl:grid">
+    <aside className="hidden min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3 xl:grid">
+      <div className="flex items-center gap-2 rounded-[24px] border border-white/10 bg-[#1b1b1b] p-2 shadow-xl">
+        <PanelModeButton active={mode === "transcript"} icon={<Captions />} label="Transcript" onClick={() => onModeChange("transcript")} />
+        <PanelModeButton active={mode === "chat"} icon={<MessageSquare />} label="Chat" onClick={() => onModeChange("chat")} />
+        <PanelModeButton active={mode === "notes"} icon={<Sparkles />} label="Notes" onClick={() => onModeChange("notes")} />
+        <PanelModeButton active={mode === "people"} icon={<Users />} label="People" onClick={() => onModeChange("people")} />
+      </div>
       <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] border border-white/10 bg-[#f7f7f7] text-neutral-950 shadow-2xl">
         <div className="border-b border-neutral-200 px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold">Live transcript</h2>
-              <p className="text-xs text-neutral-500">Original and translated captions</p>
+              <h2 className="text-sm font-bold">{panelTitle(mode)}</h2>
+              <p className="text-xs text-neutral-500">{panelDescription(mode)}</p>
             </div>
             <span className="grid h-9 w-9 place-items-center rounded-full bg-neutral-950 text-white">
-              <Captions className="h-4 w-4" />
+              {panelIcon(mode)}
             </span>
           </div>
         </div>
 
         <div className="min-h-0 space-y-3 overflow-y-auto p-3">
-          {segments.map((segment) => (
-            <TranscriptBubble key={segment.segmentId} segment={segment} />
-          ))}
+          {mode === "transcript" ? (
+            segments.length ? segments.map((segment) => <TranscriptBubble key={segment.segmentId} segment={segment} />) : <EmptyPanel text="Start WarpTalk realtime translation to show live transcript here." />
+          ) : null}
+          {mode === "chat" ? <MeetingChat /> : null}
+          {mode === "notes" ? <AiNotesPanel /> : null}
+          {mode === "people" ? (
+            <PeoplePanel
+              roomId={roomId}
+              room={room}
+              isHost={isHost}
+              participants={participants}
+              participantsLoading={participantsLoading}
+              participantsError={participantsError}
+              activeCount={activeCount}
+            />
+          ) : null}
         </div>
       </section>
 
-      <section className="grid min-h-0 grid-cols-2 gap-3">
+      {false ? <section className="grid min-h-0 grid-cols-2 gap-3">
         <div className="rounded-[28px] border border-white/10 bg-[#f7f7f7] p-4 text-neutral-950 shadow-2xl">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-bold">AI notes</h2>
@@ -487,7 +618,7 @@ function MeetingSidePanel({
             {room.translationRoomCode} · {roomId}
           </div>
         </div>
-      </section>
+      </section> : null}
     </aside>
   );
 }
@@ -508,38 +639,263 @@ function TranscriptBubble({ segment }: { segment: TranscriptSegmentDto }) {
   );
 }
 
-function MeetingControlBar({
+function PanelModeButton({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-9 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-2 text-xs font-semibold transition ${
+        active ? "bg-white text-neutral-950" : "text-white/60 hover:bg-white/10 hover:text-white"
+      } [&_svg]:h-4 [&_svg]:w-4`}
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+function panelTitle(mode: "transcript" | "chat" | "notes" | "people") {
+  if (mode === "chat") return "Meeting chat";
+  if (mode === "notes") return "AI notes";
+  if (mode === "people") return "People";
+  return "Live transcript";
+}
+
+function panelDescription(mode: "transcript" | "chat" | "notes" | "people") {
+  if (mode === "chat") return "Messages between participants";
+  if (mode === "notes") return "Realtime AI draft notes";
+  if (mode === "people") return "Participants and host controls";
+  return "Original and translated captions";
+}
+
+function panelIcon(mode: "transcript" | "chat" | "notes" | "people") {
+  if (mode === "chat") return <MessageSquare className="h-4 w-4" />;
+  if (mode === "notes") return <Sparkles className="h-4 w-4" />;
+  if (mode === "people") return <Users className="h-4 w-4" />;
+  return <Captions className="h-4 w-4" />;
+}
+
+function EmptyPanel({ text }: { text: string }) {
+  return (
+    <div className="grid min-h-[260px] place-items-center rounded-2xl border border-dashed border-neutral-200 bg-white/70 p-6 text-center text-sm text-neutral-500">
+      {text}
+    </div>
+  );
+}
+
+function MeetingChat() {
+  const [draftMessage, setDraftMessage] = useState("");
+  const [messages, setMessages] = useState([
+    { from: "Host", body: "We will start WarpTalk translation after everyone confirms audio.", mine: false },
+    { from: "Mika Tanaka", body: "Audio is clear on my side.", mine: false },
+    { from: "You", body: "Thanks. Starting translation in a moment.", mine: true },
+  ]);
+
+  function sendMessage() {
+    const text = draftMessage.trim();
+    if (!text) return;
+    setMessages((current) => [...current, { from: "You", body: text, mine: true }]);
+    setDraftMessage("");
+  }
+
+  return (
+    <div className="flex min-h-[360px] flex-col gap-3">
+      <div className="flex-1 space-y-3 overflow-y-auto">
+        {messages.map((message) => (
+          <div key={`${message.from}-${message.body}`} className={`flex ${message.mine ? "justify-end" : "justify-start"}`}>
+            <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm ${message.mine ? "bg-neutral-950 text-white" : "border bg-white text-neutral-950"}`}>
+              <p className={`mb-1 text-[11px] font-semibold ${message.mine ? "text-white/60" : "text-neutral-500"}`}>{message.from}</p>
+              <p>{message.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <form
+        className="flex h-11 items-center gap-2 rounded-full border bg-white px-4 text-sm text-neutral-950"
+        onSubmit={(event) => {
+          event.preventDefault();
+          sendMessage();
+        }}
+      >
+        <MessageSquare className="h-4 w-4" />
+        <input
+          value={draftMessage}
+          onChange={(event) => setDraftMessage(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-neutral-400"
+          placeholder="Type a message..."
+        />
+        <button type="submit" className="rounded-full bg-neutral-950 px-3 py-1 text-xs font-semibold text-white">
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function AiNotesPanel() {
+  return (
+    <ul className="space-y-3 text-sm text-neutral-700">
+      <li className="rounded-2xl border bg-white p-3">Confirm investor rollout risks.</li>
+      <li className="rounded-2xl border bg-white p-3">Follow up terminology cleanup.</li>
+      <li className="rounded-2xl border bg-white p-3">Export transcript after meeting ends.</li>
+    </ul>
+  );
+}
+
+function PeoplePanel({
+  roomId,
+  room,
   isHost,
+  participants,
+  participantsLoading,
+  participantsError,
+  activeCount,
+}: {
+  roomId: string;
+  room: TranslationRoomDto;
+  isHost: boolean;
+  participants: TranslationRoomParticipantDto[];
+  participantsLoading: boolean;
+  participantsError: boolean;
+  activeCount: number;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between rounded-2xl border bg-white p-3 text-sm">
+        <span className="font-semibold">Active participants</span>
+        <span className="rounded-full bg-neutral-950 px-2 py-0.5 text-xs font-bold text-white">{activeCount}</span>
+      </div>
+      {participantsLoading ? <p className="text-xs text-neutral-500">Loading participants...</p> : null}
+      {participantsError ? <p className="text-xs text-red-600">Could not load participant controls.</p> : null}
+      {participants.map((participant) => (
+        <ParticipantRow
+          key={participant.id}
+          participant={participant}
+          isHost={isHost}
+          roomId={roomId}
+          isRoomHost={participant.userId === room.hostId}
+        />
+      ))}
+      <div className="flex items-center gap-2 rounded-2xl border bg-white p-3 text-[11px] text-neutral-500">
+        <FileText className="h-3.5 w-3.5" />
+        {room.translationRoomCode} - {roomId}
+      </div>
+    </div>
+  );
+}
+
+function MeetingControlBar({
+  room,
+  isHost,
+  sourceLanguage,
+  targetLanguage,
   roomCode,
   joinLink,
   activeCount,
   meetingEnabled,
+  cameraEnabled,
+  microphoneEnabled,
+  isScreenSharing,
+  layoutMode,
+  warptalkStarted,
+  panelMode,
   onCopyText,
   onExit,
+  onStartWarptalk,
+  onToggleCamera,
+  onToggleMicrophone,
+  onToggleScreenShare,
+  onLayoutChange,
+  onPanelModeChange,
   onToggleParticipants,
 }: {
+  room: TranslationRoomDto;
   isHost: boolean;
+  sourceLanguage: string;
+  targetLanguage: string;
   roomCode: string;
   joinLink: string;
   activeCount: number;
   meetingEnabled: boolean;
+  cameraEnabled: boolean;
+  microphoneEnabled: boolean;
+  isScreenSharing: boolean;
+  layoutMode: MeetingLayoutMode;
+  warptalkStarted: boolean;
+  panelMode: "transcript" | "chat" | "notes" | "people";
   onCopyText: (value: string, label: string) => void;
   onExit: () => void;
+  onStartWarptalk: () => void;
+  onToggleCamera: () => void;
+  onToggleMicrophone: () => void;
+  onToggleScreenShare: () => void;
+  onLayoutChange: (layout: MeetingLayoutMode) => void;
+  onPanelModeChange: (mode: "transcript" | "chat" | "notes" | "people") => void;
   onToggleParticipants: () => void;
 }) {
+  const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
+
   return (
-    <footer className="grid min-h-0 grid-cols-[1fr_auto_1fr] items-center rounded-[28px] border border-white/10 bg-[#1b1b1b] px-4 shadow-xl">
-      <div className="hidden items-center gap-2 text-xs text-white/50 md:flex">
-        <Clock className="h-4 w-4" />
-        00:24:16
+    <footer className="grid min-h-0 grid-cols-[minmax(260px,1fr)_auto_minmax(260px,1fr)] items-center gap-3 rounded-[28px] border border-white/10 bg-[#1b1b1b] px-4 shadow-xl">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-neutral-950">
+          <Radio className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate text-sm font-semibold">{room.title}</h1>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${warptalkStarted ? "bg-red-500 text-white" : "bg-white/10 text-white/70"}`}>
+              {warptalkStarted ? "Live" : "Ready"}
+            </span>
+            {isHost ? <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold">Host</span> : null}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-white/55">
+            {roomCode} - {activeCount}/{room.maxParticipants} participants - {getLanguageName(sourceLanguage)} to {getLanguageName(targetLanguage)}
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center justify-center gap-2">
+        {isHost ? (
+          <button
+            type="button"
+            onClick={onStartWarptalk}
+            disabled={warptalkStarted}
+            className={`flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
+              warptalkStarted ? "bg-emerald-500/20 text-emerald-200" : "bg-white text-neutral-950 hover:bg-white/90"
+            }`}
+          >
+            <Play className="h-4 w-4" />
+            {warptalkStarted ? "WarpTalk on" : "Start WarpTalk"}
+          </button>
+        ) : null}
         <MeetControl label="Copy invite" icon={<Link2 className="h-5 w-5" />} onClick={() => onCopyText(joinLink, "Invite link")} />
         <MeetControl label="Copy code" icon={<Copy className="h-5 w-5" />} onClick={() => onCopyText(roomCode, "Room code")} />
-        <MeetControl label="Captions" active icon={<Captions className="h-5 w-5" />} onClick={() => undefined} />
-        <LiveKitTrackControls enabled={meetingEnabled} />
-        <MeetControl label="Share screen" icon={<ScreenShare className="h-5 w-5" />} onClick={() => undefined} />
+        <MeetControl label="Transcript" active={panelMode === "transcript"} icon={<Captions className="h-5 w-5" />} onClick={() => onPanelModeChange("transcript")} />
+        <MeetControl label="Chat" active={panelMode === "chat"} icon={<MessageSquare className="h-5 w-5" />} onClick={() => onPanelModeChange("chat")} />
+        <LiveKitTrackControls
+          enabled={meetingEnabled}
+          cameraEnabled={cameraEnabled}
+          microphoneEnabled={microphoneEnabled}
+          onToggleCamera={onToggleCamera}
+          onToggleMicrophone={onToggleMicrophone}
+        />
+        <MeetControl
+          label={isScreenSharing ? "Stop presenting" : "Present now"}
+          active={isScreenSharing}
+          icon={<ScreenShare className="h-5 w-5" />}
+          onClick={onToggleScreenShare}
+        />
         <button
           type="button"
           onClick={onExit}
@@ -551,10 +907,41 @@ function MeetingControlBar({
         </button>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
         <button
           type="button"
-          onClick={onToggleParticipants}
+          onClick={() => onCopyText(joinLink, "Invite link")}
+          className="hidden h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-neutral-950 transition hover:bg-white/90 2xl:flex"
+        >
+          <Share2 className="h-4 w-4" />
+          Invite
+        </button>
+        <MeetControl label="Notes" active={panelMode === "notes"} icon={<Sparkles className="h-5 w-5" />} onClick={() => onPanelModeChange("notes")} />
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsLayoutMenuOpen((current) => !current)}
+            className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15"
+            aria-label="Layout options"
+            title="Layout options"
+          >
+            <MoreVertical className="h-5 w-5" />
+          </button>
+          {isLayoutMenuOpen ? (
+            <div className="absolute bottom-14 right-0 z-50 w-52 rounded-2xl border border-white/10 bg-[#252525] p-2 text-sm text-white shadow-2xl">
+              <LayoutOption label="Auto" value="auto" active={layoutMode === "auto"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
+              <LayoutOption label="Grid" value="grid" active={layoutMode === "grid"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
+              <LayoutOption label="Spotlight" value="spotlight" active={layoutMode === "spotlight"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
+              <LayoutOption label="Presentation sidebar" value="sidebar" active={layoutMode === "sidebar"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
+            </div>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            onPanelModeChange("people");
+            onToggleParticipants();
+          }}
           className="relative grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15"
           aria-label="People"
           title="People"
@@ -569,13 +956,13 @@ function MeetingControlBar({
   );
 }
 
-function CaptionWindow({ latestSegment }: { latestSegment?: TranscriptSegmentDto }) {
+function CaptionWindow({ latestSegment, warptalkStarted }: { latestSegment?: TranscriptSegmentDto; warptalkStarted: boolean }) {
   if (!latestSegment) {
     return (
       <div className="mx-auto max-w-3xl rounded-2xl bg-black/45 px-5 py-4 text-center backdrop-blur">
         <div className="flex items-center justify-center gap-2 text-sm font-medium text-white/70">
           <Radio className="h-4 w-4" />
-          Transcript will appear here when real audio is received.
+          {warptalkStarted ? "Transcript will appear here when real audio is received." : "WarpTalk realtime translation is ready. Host must press Start WarpTalk."}
         </div>
       </div>
     );
@@ -596,18 +983,60 @@ function CaptionWindow({ latestSegment }: { latestSegment?: TranscriptSegmentDto
   );
 }
 
+function LayoutOption({
+  label,
+  value,
+  active,
+  onSelect,
+  close,
+}: {
+  label: string;
+  value: MeetingLayoutMode;
+  active: boolean;
+  onSelect: (layout: MeetingLayoutMode) => void;
+  close: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onSelect(value);
+        close();
+      }}
+      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition ${active ? "bg-white text-neutral-950" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
+    >
+      {label}
+      {active ? <span className="h-2 w-2 rounded-full bg-neutral-950" /> : null}
+    </button>
+  );
+}
+
 function LiveKitMeetingStage({
   fallbackName,
   isJoining,
   error,
+  localStream,
+  localMediaError,
+  cameraEnabled,
+  participants,
+  screenStream,
+  layoutMode,
   onRetry,
 }: {
   fallbackName: string;
   isJoining: boolean;
   error: string | null;
+  localStream: MediaStream | null;
+  localMediaError: string | null;
+  cameraEnabled: boolean;
+  participants: TranslationRoomParticipantDto[];
+  screenStream: MediaStream | null;
+  layoutMode: MeetingLayoutMode;
   onRetry: () => void;
 }) {
   const connectionState = useConnectionState();
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
   const tracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
@@ -616,6 +1045,16 @@ function LiveKitMeetingStage({
     { onlySubscribed: false }
   );
   const hasTracks = tracks.length > 0;
+
+  useEffect(() => {
+    if (!localVideoRef.current) return;
+    localVideoRef.current.srcObject = localStream;
+  }, [localStream]);
+
+  useEffect(() => {
+    if (!screenVideoRef.current) return;
+    screenVideoRef.current.srcObject = screenStream;
+  }, [screenStream]);
 
   if (hasTracks) {
     return (
@@ -630,6 +1069,74 @@ function LiveKitMeetingStage({
     );
   }
 
+  const localTile = (
+    <MeetingPreviewTile
+      name={fallbackName}
+      stream={localStream}
+      videoRef={localVideoRef}
+      cameraEnabled={cameraEnabled}
+      muted={false}
+      featured
+    />
+  );
+  const participantTiles = participants.filter((participant) => participant.displayName !== fallbackName).slice(0, 24);
+  const effectiveLayout: Exclude<MeetingLayoutMode, "auto"> = layoutMode === "auto" ? (screenStream ? "sidebar" : participantTiles.length > 5 ? "grid" : "spotlight") : layoutMode;
+
+  if (screenStream && effectiveLayout === "sidebar") {
+    return (
+      <div className="grid h-full min-h-0 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="relative min-h-0 overflow-hidden rounded-[24px] border border-white/10 bg-black">
+          <video ref={screenVideoRef} className="h-full w-full object-contain" autoPlay muted playsInline />
+          <div className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
+            You are presenting
+          </div>
+        </div>
+        <div className="grid min-h-0 gap-3 overflow-hidden">
+          {localTile}
+          {participantTiles.slice(0, 3).map((participant) => <ParticipantGridTile key={participant.id} participant={participant} />)}
+        </div>
+        <ConnectionBadge state={connectionState} />
+      </div>
+    );
+  }
+
+  if (screenStream) {
+    return (
+      <div className="relative h-full w-full overflow-hidden p-3">
+        <div className="h-full overflow-hidden rounded-[24px] border border-white/10 bg-black">
+          <video ref={screenVideoRef} className="h-full w-full object-contain" autoPlay muted playsInline />
+        </div>
+        <ConnectionBadge state={connectionState} />
+      </div>
+    );
+  }
+
+  if (cameraEnabled && localStream?.getVideoTracks().length && effectiveLayout === "spotlight") {
+    return (
+      <div className="grid h-full min-h-0 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_240px]">
+        {localTile}
+        <div className="grid min-h-0 gap-3 overflow-hidden">
+          {participantTiles.slice(0, 3).map((participant) => <ParticipantGridTile key={participant.id} participant={participant} />)}
+        </div>
+        <ConnectionBadge state={connectionState} />
+        <LocalMediaError error={localMediaError} />
+      </div>
+    );
+  }
+
+  if (effectiveLayout === "grid" || effectiveLayout === "sidebar") {
+    return (
+      <div className="relative h-full min-h-0 p-3">
+        <div className={`grid h-full min-h-0 gap-3 ${gridClassName(participantTiles.length + 1)}`}>
+          {localTile}
+          {participantTiles.map((participant) => <ParticipantGridTile key={participant.id} participant={participant} />)}
+        </div>
+        <ConnectionBadge state={connectionState} />
+        <LocalMediaError error={localMediaError} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-full flex-col items-center justify-center px-6 py-20">
       <div className="grid h-24 w-24 place-items-center rounded-full bg-[#3c4043] text-4xl font-semibold text-white shadow-lg">
@@ -638,7 +1145,7 @@ function LiveKitMeetingStage({
       <p className="mt-4 max-w-xl truncate text-center text-lg font-medium text-white">{fallbackName}</p>
       <p className="mt-1 flex items-center gap-2 text-sm text-white/55">
         {isJoining && <Loader2 className="h-4 w-4 animate-spin" />}
-        {error || liveKitStateLabel(connectionState)}
+        {localMediaError || error || liveKitStateLabel(connectionState)}
       </p>
       {error && (
         <button
@@ -668,12 +1175,111 @@ function liveKitStateLabel(state: ConnectionState) {
   return "Waiting for LiveKit";
 }
 
-function LiveKitTrackControls({ enabled }: { enabled: boolean }) {
+function gridClassName(count: number) {
+  if (count <= 1) return "grid-cols-1";
+  if (count <= 4) return "grid-cols-2";
+  if (count <= 9) return "grid-cols-3";
+  if (count <= 16) return "grid-cols-4";
+  return "grid-cols-5";
+}
+
+function MeetingPreviewTile({
+  name,
+  stream,
+  videoRef,
+  cameraEnabled,
+  muted,
+  featured,
+}: {
+  name: string;
+  stream: MediaStream | null;
+  videoRef: RefObject<HTMLVideoElement | null>;
+  cameraEnabled: boolean;
+  muted: boolean;
+  featured?: boolean;
+}) {
+  const hasVideo = cameraEnabled && Boolean(stream?.getVideoTracks().length);
+
+  return (
+    <div className="relative min-h-0 overflow-hidden rounded-[24px] border border-white/10 bg-[#24272a]">
+      {hasVideo ? (
+        <video ref={videoRef} className="h-full w-full object-cover" autoPlay muted playsInline />
+      ) : (
+        <div className="grid h-full min-h-[160px] place-items-center">
+          <div className={`${featured ? "h-28 w-28 text-5xl" : "h-16 w-16 text-2xl"} grid place-items-center rounded-full bg-[#1b5fa7] font-semibold text-white`}>
+            {initials(name) || "H"}
+          </div>
+        </div>
+      )}
+      <TileLabel name={name} muted={muted} />
+    </div>
+  );
+}
+
+function ParticipantGridTile({ participant }: { participant: TranslationRoomParticipantDto }) {
+  const muted = participant.isTranslationAudioEnabled === false;
+  return (
+    <div className="relative min-h-[128px] overflow-hidden rounded-[24px] border border-white/10 bg-[#303336]">
+      <div className="grid h-full place-items-center">
+        <div className="grid h-16 w-16 place-items-center rounded-full bg-[#3c4043] text-2xl font-semibold text-white">
+          {initials(participant.displayName)}
+        </div>
+      </div>
+      <TileLabel name={participant.displayName} muted={muted} />
+    </div>
+  );
+}
+
+function TileLabel({ name, muted }: { name: string; muted: boolean }) {
+  return (
+    <>
+      <div className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-full bg-black/45 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
+        {name}
+      </div>
+      <div className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+        {muted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+      </div>
+    </>
+  );
+}
+
+function LocalMediaError({ error }: { error: string | null }) {
+  if (!error) return null;
+  return (
+    <div className="absolute bottom-5 left-5 right-5 rounded-2xl border border-red-500/30 bg-red-500/15 px-4 py-3 text-sm text-red-100 backdrop-blur">
+      {error}
+    </div>
+  );
+}
+
+function LiveKitTrackControls({
+  enabled,
+  cameraEnabled,
+  microphoneEnabled,
+  onToggleCamera,
+  onToggleMicrophone,
+}: {
+  enabled: boolean;
+  cameraEnabled: boolean;
+  microphoneEnabled: boolean;
+  onToggleCamera: () => void;
+  onToggleMicrophone: () => void;
+}) {
   if (!enabled) {
     return (
       <>
-        <MeetControl label="Microphone" disabled icon={<Mic className="h-5 w-5" />} onClick={() => undefined} />
-        <MeetControl label="Camera" disabled icon={<VideoIcon />} onClick={() => undefined} />
+        <MeetControl
+          label={microphoneEnabled ? "Mute microphone" : "Unmute microphone"}
+          active={microphoneEnabled}
+          icon={microphoneEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+          onClick={onToggleMicrophone}
+        />
+        <MeetControl
+          label={cameraEnabled ? "Turn camera off" : "Turn camera on"}
+          active={cameraEnabled}
+          icon={cameraEnabled ? <VideoIcon /> : <VideoOffIcon />}
+          onClick={onToggleCamera}
+        />
       </>
     );
   }
@@ -696,6 +1302,15 @@ function VideoIcon() {
   return (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M4 7.75A2.75 2.75 0 0 1 6.75 5h7.5A2.75 2.75 0 0 1 17 7.75v.85l2.45-1.63A1 1 0 0 1 21 7.8v8.4a1 1 0 0 1-1.55.83L17 15.4v.85A2.75 2.75 0 0 1 14.25 19h-7.5A2.75 2.75 0 0 1 4 16.25v-8.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function VideoOffIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 7.75A2.75 2.75 0 0 1 6.75 5h7.5A2.75 2.75 0 0 1 17 7.75v.85l2.45-1.63A1 1 0 0 1 21 7.8v8.4a1 1 0 0 1-1.55.83L17 15.4v.85A2.75 2.75 0 0 1 14.25 19h-7.5A2.75 2.75 0 0 1 4 16.25v-8.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

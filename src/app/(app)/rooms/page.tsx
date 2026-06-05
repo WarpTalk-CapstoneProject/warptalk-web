@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import gsap from "gsap";
 import { motion } from "motion/react";
-import { ArrowLeft, CalendarDays, FileText, Languages, Mail, Paperclip, Plus, Settings2, UploadCloud, Video, X } from "lucide-react";
+import { ArrowLeft, FileText, Languages, Mail, Paperclip, Plus, Settings2, UploadCloud, Video, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -169,6 +169,7 @@ export default function RoomsPage() {
   const [calendarStart, setCalendarStart] = useState(defaultCalendarStart);
   const [scheduleSize, setScheduleSize] = useState<ScheduleSize>(15);
   const [selectedScheduleDay, setSelectedScheduleDay] = useState<Date | null>(null);
+  const [roomTimeOverrides, setRoomTimeOverrides] = useState<Record<string, string>>({});
   const asideRef = useRef<HTMLElement | null>(null);
   const roomList = useTranslationRooms({ pageSize: 100 });
 
@@ -177,7 +178,6 @@ export default function RoomsPage() {
     return apiRooms.length > 0 ? apiRooms : demoRooms;
   }, [roomList.data?.rooms]);
 
-  const scheduledRooms = rooms.filter((room) => room.status === "scheduled" || room.status === "waiting");
   const activeRooms = rooms.filter((room) => room.status === "in_progress" || room.status === "paused");
   const endedRooms = rooms.filter((room) => room.status === "ended" || room.status === "cancelled");
   const needsSetup = rooms.filter((room) => room.status === "scheduled" || room.status === "waiting");
@@ -231,7 +231,12 @@ export default function RoomsPage() {
 
             <TabsContent value="calendar" className="m-0">
               {selectedScheduleDay ? (
-                <DaySchedule rooms={rooms} day={selectedScheduleDay} />
+                <DaySchedule
+                  rooms={rooms}
+                  day={selectedScheduleDay}
+                  roomTimeOverrides={roomTimeOverrides}
+                  onRoomTimeChange={(roomId, nextValue) => setRoomTimeOverrides((current) => ({ ...current, [roomId]: nextValue }))}
+                />
               ) : (
                 <RoomCalendar rooms={rooms} days={calendarDays} scheduleSize={scheduleSize} onSelectDay={setSelectedScheduleDay} />
               )}
@@ -249,7 +254,7 @@ export default function RoomsPage() {
       </Card>
 
       <aside ref={asideRef} className={cn("grid min-h-0 gap-3 content-start", tab === "setup" && "overflow-hidden")}>
-        <StatCard icon={<CalendarDays />} label="Scheduled" value={String(scheduledRooms.length)} />
+        <VietnamTimeGlassCard />
         <StatCard icon={<Video />} label="Meeting now" value={String(activeRooms.length)} />
         <StatCard icon={<FileText />} label="Completed" value={String(endedRooms.length)} />
         <Card className="rounded-[24px] bg-white/88">
@@ -426,11 +431,40 @@ function sameCalendarDay(first: Date, second: Date) {
   return first.toDateString() === second.toDateString();
 }
 
-function DaySchedule({ rooms, day }: { rooms: TranslationRoomDto[]; day: Date }) {
-  const dayRooms = rooms
-    .filter((room) => sameCalendarDay(new Date(roomDateValue(room)), day))
-    .sort((first, second) => new Date(roomDateValue(first)).getTime() - new Date(roomDateValue(second)).getTime());
+function DaySchedule({
+  rooms,
+  day,
+  roomTimeOverrides,
+  onRoomTimeChange,
+}: {
+  rooms: TranslationRoomDto[];
+  day: Date;
+  roomTimeOverrides: Record<string, string>;
+  onRoomTimeChange: (roomId: string, nextValue: string) => void;
+}) {
+  const [draggingRoomId, setDraggingRoomId] = useState<string | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const hourHeight = 80;
+  const meetingCardHeight = 44;
   const hours = Array.from({ length: 24 }, (_, index) => index);
+  const dayRooms = rooms
+    .map((room) => ({ room, value: roomTimeOverrides[room.id] ?? roomDateValue(room) }))
+    .filter(({ value }) => sameCalendarDay(new Date(value), day))
+    .sort((first, second) => new Date(first.value).getTime() - new Date(second.value).getTime());
+
+  function updateDroppedRoomTime(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const roomId = event.dataTransfer.getData("text/plain");
+    if (!roomId || !gridRef.current) return;
+
+    const rect = gridRef.current.getBoundingClientRect();
+    const y = Math.min(Math.max(event.clientY - rect.top + gridRef.current.scrollTop, 0), hourHeight * 24 - 1);
+    const totalMinutes = Math.min(23 * 60 + 45, Math.max(0, Math.round(((y / hourHeight) * 60) / 15) * 15));
+    const nextDate = new Date(day);
+    nextDate.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+    onRoomTimeChange(roomId, nextDate.toISOString());
+    setDraggingRoomId(null);
+  }
 
   return (
     <div className="overflow-hidden rounded-[24px] border bg-white/86 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
@@ -444,30 +478,64 @@ function DaySchedule({ rooms, day }: { rooms: TranslationRoomDto[]; day: Date })
         <Badge variant="outline">{dayRooms.length} meetings</Badge>
       </div>
 
-      <div className="max-h-[520px] overflow-y-auto">
+      <div
+        ref={gridRef}
+        className="max-h-[calc(100vh-250px)] min-h-[560px] overflow-y-auto"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={updateDroppedRoomTime}
+      >
         {hours.map((hour) => {
-          const hourRooms = dayRooms.filter((room) => new Date(roomDateValue(room)).getHours() === hour);
+          const hourRooms = dayRooms.filter(({ value }) => new Date(value).getHours() === hour);
           return (
-            <div key={hour} className="grid min-h-[52px] grid-cols-[68px_minmax(0,1fr)] border-b last:border-b-0">
+            <div key={hour} className="grid min-h-[80px] grid-cols-[68px_minmax(0,1fr)] border-b last:border-b-0">
               <div className="border-r px-3 py-2 text-[11px] font-medium text-neutral-400">
                 {String(hour).padStart(2, "0")}:00
               </div>
-              <div className="grid gap-2 px-3 py-2">
-                {hourRooms.map((room) => (
+              <div className="relative px-3 py-2">
+                {[15, 30, 45].map((minute) => (
+                  <div
+                    key={minute}
+                    className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-neutral-200/80"
+                    style={{ top: `${(minute / 60) * hourHeight}px` }}
+                  />
+                ))}
+                {hourRooms.map(({ room, value }, index) => {
+                  const minute = new Date(value).getMinutes();
+                  const sameSlotIndex = hourRooms
+                    .slice(0, index)
+                    .filter(({ value: previousValue }) => new Date(previousValue).getMinutes() === minute).length;
+                  const top = Math.min(hourHeight - meetingCardHeight - 4, (minute / 60) * (hourHeight - meetingCardHeight)) + sameSlotIndex * 4;
+
+                  return (
                   <Link
                     key={room.id}
                     href={`/rooms/${room.id}`}
-                    className="flex items-center justify-between gap-3 rounded-xl bg-neutral-950 px-3 py-2 text-white shadow-sm transition hover:bg-neutral-800"
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("text/plain", room.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      setDraggingRoomId(room.id);
+                    }}
+                    onDragEnd={() => setDraggingRoomId(null)}
+                    onClick={(event) => {
+                      if (draggingRoomId === room.id) event.preventDefault();
+                    }}
+                    className={cn(
+                      "absolute left-3 right-3 z-10 flex h-11 cursor-grab items-center justify-between gap-3 rounded-xl bg-neutral-950 px-3 text-white shadow-sm transition hover:bg-neutral-800 active:cursor-grabbing",
+                      draggingRoomId === room.id && "opacity-60"
+                    )}
+                    style={{ top }}
                   >
                     <div className="min-w-0">
                       <p className="truncate text-xs font-semibold">{room.title}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-white/60">{formatTime(roomDateValue(room))} - {formatLanguages(room)}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-white/60">{formatTime(value)} - {formatLanguages(room)}</p>
                     </div>
                     <Badge variant="outline" className="shrink-0 border-white/15 bg-white/10 text-[10px] text-white">
                       {room.status.replace(/_/g, " ")}
                     </Badge>
                   </Link>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -673,6 +741,116 @@ function RoomTable({ rooms }: { rooms: TranslationRoomDto[] }) {
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+type TimeTheme = "morning" | "afternoon" | "night";
+
+const timeThemeStyles: Record<TimeTheme, { background: string; glow: string; text: string; accent: string }> = {
+  morning: {
+    background: "linear-gradient(135deg, rgba(255,247,210,0.92), rgba(255,215,74,0.48) 45%, rgba(255,255,255,0.74))",
+    glow: "rgba(250, 204, 21, 0.78)",
+    text: "text-neutral-950",
+    accent: "bg-yellow-300",
+  },
+  afternoon: {
+    background: "linear-gradient(135deg, rgba(255,237,213,0.94), rgba(249,115,22,0.44) 48%, rgba(255,255,255,0.74))",
+    glow: "rgba(249, 115, 22, 0.72)",
+    text: "text-neutral-950",
+    accent: "bg-orange-400",
+  },
+  night: {
+    background: "linear-gradient(135deg, rgba(20,20,24,0.96), rgba(64,64,72,0.74) 52%, rgba(15,15,18,0.92))",
+    glow: "rgba(148, 163, 184, 0.54)",
+    text: "text-white",
+    accent: "bg-slate-300",
+  },
+};
+
+function getVietnamClockSnapshot() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const hour = Number(value("hour"));
+  const minute = value("minute");
+  const second = value("second");
+  const normalizedHour = hour === 24 ? 0 : hour;
+  const hour12 = normalizedHour % 12 || 12;
+  const theme: TimeTheme = normalizedHour >= 5 && normalizedHour < 12 ? "morning" : normalizedHour >= 12 && normalizedHour < 18 ? "afternoon" : "night";
+
+  return {
+    hour: String(hour12).padStart(2, "0"),
+    minute,
+    second,
+    period: normalizedHour >= 12 ? "PM" : "AM",
+    theme,
+  };
+}
+
+function VietnamTimeGlassCard() {
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const glowRef = useRef<HTMLDivElement | null>(null);
+  const digitsRef = useRef<HTMLDivElement | null>(null);
+  const [clock, setClock] = useState(() => getVietnamClockSnapshot());
+  const themeStyle = timeThemeStyles[clock.theme];
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(getVietnamClockSnapshot()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!cardRef.current || !glowRef.current) return;
+    gsap.to(cardRef.current, {
+      background: themeStyle.background,
+      duration: 0.75,
+      ease: "power2.out",
+    });
+    gsap.to(glowRef.current, {
+      backgroundColor: themeStyle.glow,
+      duration: 0.75,
+      ease: "power2.out",
+    });
+  }, [clock.theme, themeStyle.background, themeStyle.glow]);
+
+  useEffect(() => {
+    if (!digitsRef.current) return;
+    gsap.fromTo(
+      digitsRef.current,
+      { y: -3, opacity: 0.82 },
+      { y: 0, opacity: 1, duration: 0.28, ease: "power2.out" }
+    );
+  }, [clock.hour, clock.minute]);
+
+  return (
+    <Card className={cn("relative overflow-hidden rounded-[24px] border-white/60 shadow-sm", themeStyle.text)} ref={cardRef}>
+      <CardContent className="relative z-10 grid min-h-[132px] grid-cols-[42px_minmax(0,1fr)] gap-3 p-4">
+        <div className="flex flex-col items-center justify-between rounded-[18px] bg-black/12 p-1.5 backdrop-blur-md">
+          <span ref={glowRef} className={cn("h-6 w-6 rounded-full border border-white/50 shadow-[0_0_18px_rgba(255,255,255,0.45)]", themeStyle.accent)} />
+          <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white">{clock.second}</span>
+        </div>
+
+        <div className="flex min-w-0 items-center">
+          <div className="flex items-end gap-2">
+            <div ref={digitsRef} className="font-mono text-[38px] font-semibold leading-none tracking-[0.02em] tabular-nums sm:text-[42px]">
+              {clock.hour}:{clock.minute}
+            </div>
+            <div className="pb-1 text-xs font-semibold leading-tight opacity-65">
+              <div>{clock.period}</div>
+              <div>ICT</div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.78),transparent_30%),linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)]" />
+      <div className="absolute -right-10 top-4 h-20 w-24 rounded-full bg-white/35 blur-xl" />
+    </Card>
   );
 }
 
