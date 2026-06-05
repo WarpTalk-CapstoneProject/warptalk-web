@@ -157,6 +157,13 @@ function buildCalendarDays(startValue: string, size: ScheduleSize) {
   });
 }
 
+function toDateQueryValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function RoomsPage() {
   const [tab, setTab] = useState("calendar");
   const [calendarStart, setCalendarStart] = useState(defaultCalendarStart);
@@ -175,6 +182,9 @@ export default function RoomsPage() {
   const endedRooms = rooms.filter((room) => room.status === "ended" || room.status === "cancelled");
   const needsSetup = rooms.filter((room) => room.status === "scheduled" || room.status === "waiting");
   const calendarDays = useMemo(() => buildCalendarDays(calendarStart, scheduleSize), [calendarStart, scheduleSize]);
+  const createRoomHref = selectedScheduleDay
+    ? `/rooms/create?date=${toDateQueryValue(selectedScheduleDay)}`
+    : "/rooms/create";
 
   useEffect(() => {
     if (!asideRef.current) return;
@@ -212,7 +222,7 @@ export default function RoomsPage() {
                     onScheduleSizeChange={setScheduleSize}
                   />
                 )}
-                <Link href="/rooms/create" className={cn(buttonVariants(), "h-9 rounded-full bg-neutral-950 px-4 text-white hover:bg-neutral-800")}>
+                <Link href={createRoomHref} className={cn(buttonVariants(), "h-9 rounded-full bg-neutral-950 px-4 text-white hover:bg-neutral-800")}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create room
                 </Link>

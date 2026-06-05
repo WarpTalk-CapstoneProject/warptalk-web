@@ -209,7 +209,7 @@ export default function RoomSetupPage({ params }: { params: { id: string } }) {
           </div>
         </header>
 
-        <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
           <section className="grid min-h-0 grid-rows-[minmax(0,1fr)_116px] gap-3">
             <div className="relative overflow-hidden rounded-[30px] bg-neutral-950 shadow-sm">
               {cameraEnabled ? (
@@ -265,7 +265,7 @@ export default function RoomSetupPage({ params }: { params: { id: string } }) {
               <DeviceSelect label="Camera" value={selectedCameraId} devices={cameraDevices} fallback="Default camera" onChange={setSelectedCameraId} />
               <DeviceSelect label="Microphone" value={selectedMicrophoneId} devices={microphoneDevices} fallback="Default microphone" onChange={setSelectedMicrophoneId} />
               <DeviceSelect label="Speaker" value={selectedSpeakerId} devices={speakerDevices} fallback="Default speaker" onChange={setSelectedSpeakerId} disabled={speakerDevices.length === 0} />
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 <Toggle icon={<Camera />} label="Camera" checked={cameraEnabled} onCheckedChange={updateCameraEnabled} />
                 <Toggle icon={<Mic />} label="Mic" checked={microphoneEnabled} onCheckedChange={updateMicrophoneEnabled} />
                 <Toggle icon={<Headphones />} label="Speaker" checked={speakerEnabled} onCheckedChange={setSpeakerEnabled} />
@@ -274,7 +274,7 @@ export default function RoomSetupPage({ params }: { params: { id: string } }) {
             </Panel>
 
             <Panel title="Host policy">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 <Toggle icon={<MonitorSpeaker />} label="Record" checked={recordingEnabled} onCheckedChange={setRecordingEnabled} />
                 <Toggle icon={<ShieldCheck />} label="AI summary" checked={summaryEnabled} onCheckedChange={setSummaryEnabled} />
                 <Toggle icon={<ShieldCheck />} label="Waiting" checked={waitingRoomEnabled} onCheckedChange={setWaitingRoomEnabled} />
@@ -326,7 +326,7 @@ function DeviceSelect({
         }}
         disabled={disabled}
       >
-        <SelectTrigger className="h-9 bg-white">
+        <SelectTrigger className="h-9 w-full min-w-0 bg-white [&>span]:truncate">
           <SelectValue placeholder={fallback} />
         </SelectTrigger>
         <SelectContent>
@@ -344,12 +344,12 @@ function DeviceSelect({
 
 function Toggle({ icon, label, checked, onCheckedChange }: { icon: ReactNode; label: string; checked: boolean; onCheckedChange: (checked: boolean) => void }) {
   return (
-    <div className="flex h-10 items-center justify-between rounded-2xl border bg-white px-2.5">
-      <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
+    <div className="flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-2xl border bg-white px-2.5">
+      <span className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-neutral-950 [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
         <span className="truncate">{label}</span>
       </span>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch className="shrink-0" checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }
