@@ -313,7 +313,7 @@ function PlaceholderLogo({ label }: { label: string }) {
 
 function WarpTalkNavLogo() {
   return (
-    <span className="relative block h-9 w-32 overflow-hidden" aria-label="WarpTalk">
+    <span className="relative block h-9 w-32 overflow-hidden bg-black" aria-label="WarpTalk">
       <Image
         src="/assets/logos/warptalk-logo-darkmode.jpg"
         alt="WarpTalk"
@@ -1091,7 +1091,7 @@ export default function HomePage() {
             <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl border border-white/10 bg-black/35 px-4 py-3 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
               <Link
                 href="/"
-                className="flex items-center rounded-full border border-white/10 bg-black/70 px-4 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors hover:bg-black/90"
+                className="flex items-center rounded-full border border-black bg-black px-4 py-2 transition-colors hover:bg-black"
                 aria-label="WarpTalk home"
               >
                 <WarpTalkNavLogo />
