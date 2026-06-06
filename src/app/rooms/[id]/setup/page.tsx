@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   Camera,
@@ -32,7 +33,9 @@ type SinkVideoElement = HTMLVideoElement & {
   setSinkId?: (sinkId: string) => Promise<void>;
 };
 
-export default function RoomSetupPage({ params }: { params: { id: string } }) {
+export default function RoomSetupPage() {
+  const params = useParams<{ id: string }>();
+  const roomId = params.id;
   const videoRef = useRef<SinkVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -191,19 +194,19 @@ export default function RoomSetupPage({ params }: { params: { id: string } }) {
       <div className="relative z-10 grid h-full grid-rows-[52px_minmax(0,1fr)] gap-3">
         <header className="flex items-center justify-between gap-3 rounded-[28px] border border-white/70 bg-white/72 px-3 py-2 shadow-sm backdrop-blur-xl">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href={`/rooms/${params.id}`} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm transition hover:bg-neutral-50">
+            <Link href={`/rooms/${roomId}`} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm transition hover:bg-neutral-50">
               <ArrowLeft className="h-4 w-4" />
             </Link>
             <div className="min-w-0">
               <h1 className="truncate text-xl font-semibold tracking-tight">Meeting setup</h1>
-              <p className="truncate text-xs text-neutral-500">{params.id} - camera, audio, language, and host policy check</p>
+              <p className="truncate text-xs text-neutral-500">{roomId} - camera, audio, language, and host policy check</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Link href={`/rooms/${params.id}/waiting`} className={cn(buttonVariants({ variant: "outline" }), "h-9 rounded-full bg-white px-4")}>
+            <Link href={`/rooms/${roomId}/waiting`} className={cn(buttonVariants({ variant: "outline" }), "h-9 rounded-full bg-white px-4")}>
               Waiting room
             </Link>
-            <Link href={`/room/${params.id}`} className={cn(buttonVariants(), "h-9 rounded-full bg-neutral-950 px-5 text-white hover:bg-neutral-800")}>
+            <Link href={`/room/${roomId}`} className={cn(buttonVariants(), "h-9 rounded-full bg-neutral-950 px-5 text-white hover:bg-neutral-800")}>
               Start meeting
             </Link>
           </div>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } 
 import Link from "next/link";
 import gsap from "gsap";
 import { motion } from "motion/react";
-import { ArrowLeft, FileText, Languages, Mail, Paperclip, Plus, Settings2, UploadCloud, Video, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, FileText, Languages, Mail, Paperclip, Plus, Settings2, UploadCloud, Video, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -201,7 +201,7 @@ export default function RoomsPage() {
     <div className={cn("grid h-full min-h-0 gap-3 transition-[grid-template-columns] duration-500 ease-out", tab === "setup" ? "xl:grid-cols-[minmax(0,1fr)_0px]" : "xl:grid-cols-[minmax(0,1fr)_292px]")}>
       <Card className="min-h-0 overflow-hidden rounded-[28px] bg-white/88 shadow-sm">
         <CardContent className="h-full p-3">
-          <Tabs value={tab} onValueChange={setTab}>
+          <Tabs value={tab} onValueChange={setTab} className="flex h-full min-h-0 flex-col">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <RoomTabPill value={tab} onValueChange={setTab} />
               <div className="flex items-center gap-2">
@@ -229,7 +229,7 @@ export default function RoomsPage() {
               </div>
             </div>
 
-            <TabsContent value="calendar" className="m-0">
+            <TabsContent value="calendar" className="m-0 min-h-0 flex-1">
               {selectedScheduleDay ? (
                 <DaySchedule
                   rooms={rooms}
@@ -246,7 +246,7 @@ export default function RoomsPage() {
               <RoomSetupBoard rooms={needsSetup} />
             </TabsContent>
 
-            <TabsContent value="rooms" className="m-0 rounded-[22px] border bg-white/72">
+            <TabsContent value="rooms" className="m-0 min-h-0 flex-1 overflow-hidden rounded-[22px] border bg-white/72">
               <RoomTable rooms={rooms} />
             </TabsContent>
           </Tabs>
@@ -467,7 +467,7 @@ function DaySchedule({
   }
 
   return (
-    <div className="overflow-hidden rounded-[24px] border bg-white/86 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border bg-white/86 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-neutral-950">
@@ -480,7 +480,7 @@ function DaySchedule({
 
       <div
         ref={gridRef}
-        className="max-h-[calc(100vh-250px)] min-h-[560px] overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
         onDragOver={(event) => event.preventDefault()}
         onDrop={updateDroppedRoomTime}
       >
@@ -708,40 +708,131 @@ function ChipList({ items, onRemove, emptyLabel }: { items: string[]; onRemove: 
 }
 
 function RoomTable({ rooms }: { rooms: TranslationRoomDto[] }) {
+  const pageSize = 8;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(rooms.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * pageSize;
+  const pageRooms = rooms.slice(pageStart, pageStart + pageSize);
+  const visiblePages = getVisiblePages(safeCurrentPage, totalPages);
+
   return (
-    <Table className="text-xs">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Room</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Languages</TableHead>
-          <TableHead>Time</TableHead>
-          <TableHead className="text-right">Participants</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rooms.map((room) => (
-          <TableRow key={room.id}>
-            <TableCell>
-              <Link href={`/rooms/${room.id}`} className="font-medium hover:underline">{room.title}</Link>
-              <p className="text-xs text-neutral-500">{room.translationRoomCode}</p>
-            </TableCell>
-            <TableCell>
-              <Badge className={cn("capitalize", statusStyles[room.status])} variant="outline">{room.status.replace(/_/g, " ")}</Badge>
-            </TableCell>
-            <TableCell>
-              <span className="flex items-center gap-2 text-neutral-500">
-                <Languages className="h-3.5 w-3.5" />
-                {formatLanguages(room)}
-              </span>
-            </TableCell>
-            <TableCell className="text-neutral-500">{formatTime(room.scheduledAt ?? room.startedAt ?? room.endedAt ?? room.createdAt)}</TableCell>
-            <TableCell className="text-right">{room.participantCount ?? 0}/{room.maxParticipants}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div className="flex h-full min-h-[420px] flex-col">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <Table className="text-xs">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-14 text-center">No.</TableHead>
+              <TableHead>Room</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Languages</TableHead>
+              <TableHead>Time</TableHead>
+              <TableHead className="text-right">Participants</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pageRooms.map((room, index) => (
+              <TableRow key={room.id}>
+                <TableCell className="text-center text-neutral-400">{pageStart + index + 1}</TableCell>
+                <TableCell>
+                  <Link href={`/rooms/${room.id}`} className="font-medium hover:underline">{room.title}</Link>
+                  <p className="text-xs text-neutral-500">{room.translationRoomCode}</p>
+                </TableCell>
+                <TableCell>
+                  <Badge className={cn("capitalize", statusStyles[room.status])} variant="outline">{room.status.replace(/_/g, " ")}</Badge>
+                </TableCell>
+                <TableCell>
+                  <span className="flex items-center gap-2 text-neutral-500">
+                    <Languages className="h-3.5 w-3.5" />
+                    {formatLanguages(room)}
+                  </span>
+                </TableCell>
+                <TableCell className="text-neutral-500">{formatTime(room.scheduledAt ?? room.startedAt ?? room.endedAt ?? room.createdAt)}</TableCell>
+                <TableCell className="text-right">{room.participantCount ?? 0}/{room.maxParticipants}</TableCell>
+              </TableRow>
+            ))}
+            {pageRooms.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-48 text-center text-neutral-400">No meetings available.</TableCell>
+              </TableRow>
+            ) : null}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t bg-white/80 px-4 py-3">
+        <p className="text-xs text-neutral-500">
+          Showing {rooms.length === 0 ? 0 : pageStart + 1}-{Math.min(pageStart + pageSize, rooms.length)} of {rooms.length} meetings
+        </p>
+        <div className="flex items-center gap-1">
+          <PaginationButton
+            label="Previous page"
+            disabled={safeCurrentPage === 1}
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </PaginationButton>
+          {visiblePages.map((page, index) =>
+            page === "ellipsis" ? (
+              <span key={`ellipsis-${index}`} className="grid h-8 w-8 place-items-center text-xs text-neutral-400">...</span>
+            ) : (
+              <button
+                key={page}
+                type="button"
+                onClick={() => setCurrentPage(page)}
+                className={cn(
+                  "h-8 min-w-8 rounded-full px-2 text-xs font-semibold transition",
+                  safeCurrentPage === page ? "bg-neutral-950 text-white" : "border bg-white text-neutral-600 hover:bg-neutral-100"
+                )}
+                aria-current={safeCurrentPage === page ? "page" : undefined}
+              >
+                {page}
+              </button>
+            )
+          )}
+          <PaginationButton
+            label="Next page"
+            disabled={safeCurrentPage === totalPages}
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </PaginationButton>
+        </div>
+      </div>
+    </div>
   );
+}
+
+function PaginationButton({
+  children,
+  label,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="grid h-8 w-8 place-items-center rounded-full border bg-white text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-35"
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </button>
+  );
+}
+
+function getVisiblePages(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
+  if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1);
+  if (currentPage <= 3) return [1, 2, 3, 4, "ellipsis", totalPages];
+  if (currentPage >= totalPages - 2) return [1, "ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  return [1, "ellipsis", currentPage - 1, currentPage, currentPage + 1, "ellipsis", totalPages];
 }
 
 type TimeTheme = "morning" | "afternoon" | "night";
@@ -830,21 +921,19 @@ function VietnamTimeGlassCard() {
 
   return (
     <Card className={cn("relative overflow-hidden rounded-[24px] border-white/60 shadow-sm", themeStyle.text)} ref={cardRef}>
-      <CardContent className="relative z-10 grid min-h-[132px] grid-cols-[42px_minmax(0,1fr)] gap-3 p-4">
-        <div className="flex flex-col items-center justify-between rounded-[18px] bg-black/12 p-1.5 backdrop-blur-md">
+      <CardContent className="relative z-10 flex min-h-[132px] items-center justify-center px-5 py-4">
+        <div className="absolute bottom-4 left-5 top-4 flex w-[42px] flex-col items-center justify-between rounded-[18px] bg-black/12 p-1.5 backdrop-blur-md">
           <span ref={glowRef} className={cn("h-6 w-6 rounded-full border border-white/50 shadow-[0_0_18px_rgba(255,255,255,0.45)]", themeStyle.accent)} />
           <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white">{clock.second}</span>
         </div>
 
-        <div className="flex min-w-0 items-center">
-          <div className="flex items-end gap-2">
-            <div ref={digitsRef} className="font-mono text-[38px] font-semibold leading-none tracking-[0.02em] tabular-nums sm:text-[42px]">
-              {clock.hour}:{clock.minute}
-            </div>
-            <div className="pb-1 text-xs font-semibold leading-tight opacity-65">
-              <div>{clock.period}</div>
-              <div>ICT</div>
-            </div>
+        <div className="flex items-center justify-center gap-3 pl-10">
+          <div ref={digitsRef} className="font-mono text-[38px] font-semibold leading-none tracking-[0.02em] tabular-nums sm:text-[42px]">
+            {clock.hour}:{clock.minute}
+          </div>
+          <div className="flex flex-col justify-center text-xs font-semibold leading-[1.15] opacity-65">
+            <span>{clock.period}</span>
+            <span>ICT</span>
           </div>
         </div>
       </CardContent>

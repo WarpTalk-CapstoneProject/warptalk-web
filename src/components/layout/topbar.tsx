@@ -83,12 +83,13 @@ function Breadcrumbs() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
   const current = segments.at(-1);
-  const label = current ? routeLabels[current] ?? current : "Dashboard";
+  const isRoomInformationPage = /^\/rooms\/[^/]+$/.test(pathname);
+  const label = isRoomInformationPage ? "Information Room" : current ? routeLabels[current] ?? current : "Dashboard";
 
   return (
     <div className="min-w-0">
       <h1 className="truncate text-2xl font-semibold tracking-tight text-neutral-950">{label}</h1>
-      <p className="text-xs text-neutral-500">WarpTalk workspace</p>
+      {!isRoomInformationPage ? <p className="text-xs text-neutral-500">WarpTalk workspace</p> : null}
     </div>
   );
 }

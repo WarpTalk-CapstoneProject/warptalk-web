@@ -11,7 +11,9 @@ const participants = [
   { name: "Yuki Tanaka", language: "Japanese to English", status: "Ready" },
 ];
 
-export default function WaitingRoomPage({ params }: { params: { id: string } }) {
+export default async function WaitingRoomPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: roomId } = await params;
+
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Card>
@@ -49,8 +51,8 @@ export default function WaitingRoomPage({ params }: { params: { id: string } }) 
             <CardDescription>Move from waiting room into the live surface.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
-            <Link href={`/room/${params.id}`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Start meeting</Link>
-            <Link href={`/rooms/${params.id}/setup`} className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-background px-3 text-sm font-medium transition hover:bg-muted">Back to setup</Link>
+            <Link href={`/room/${roomId}`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Start meeting</Link>
+            <Link href={`/rooms/${roomId}/setup`} className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-background px-3 text-sm font-medium transition hover:bg-muted">Back to setup</Link>
           </CardContent>
         </Card>
 

@@ -10,7 +10,9 @@ const jobs = [
   { label: "Artifact permissions", status: "Ready", icon: FileText },
 ];
 
-export default function RoomEndedPage({ params }: { params: { id: string } }) {
+export default async function RoomEndedPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: roomId } = await params;
+
   return (
     <div className="mx-auto grid max-w-5xl gap-4">
       <Card>
@@ -30,7 +32,7 @@ export default function RoomEndedPage({ params }: { params: { id: string } }) {
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Link href={`/rooms/${params.id}/artifacts`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Open artifacts</Link>
+        <Link href={`/rooms/${roomId}/artifacts`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Open artifacts</Link>
         <Link href="/feedback" className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-background px-3 text-sm font-medium transition hover:bg-muted"><Star className="mr-2 h-4 w-4" />Submit feedback</Link>
         <Link href="/history" className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-background px-3 text-sm font-medium transition hover:bg-muted">View history</Link>
       </div>
