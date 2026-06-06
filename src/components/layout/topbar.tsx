@@ -11,6 +11,8 @@ import {
   FileText,
   LayoutDashboard,
   LayoutGrid,
+  LogOut,
+  MessageCircle,
   Mic2,
   Moon,
   PanelLeft,
@@ -21,9 +23,11 @@ import {
   Sparkles,
   Star,
   TestTube2,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Command,
   CommandDialog,
@@ -35,11 +39,20 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuthStore } from "@/stores/auth-store";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
   host: "Host",
   participant: "Participant",
+  profile: "Profile",
   rooms: "Rooms",
   create: "Create Room",
   history: "History",
@@ -124,6 +137,7 @@ function IconButton({ children, label }: { children: ReactNode; label: string })
 export function Topbar() {
   const router = useRouter();
   const pathname = usePathname();
+  const logout = useAuthStore((state) => state.logout);
   const [searchOpen, setSearchOpen] = useState(false);
   const groupedItems = useMemo(
     () =>
@@ -159,6 +173,18 @@ export function Topbar() {
         ? "Internal"
         : "Host";
   const roleInitial = roleLabel.slice(0, 1);
+  const profileHref = pathname.startsWith("/participant")
+    ? "/participant/profile"
+    : pathname.startsWith("/workspace")
+      ? "/workspace/profile"
+      : pathname.startsWith("/internal")
+        ? "/internal/profile"
+        : "/host/profile";
+
+  const handleSignOut = () => {
+    logout();
+    router.replace("/login");
+  };
 
   return (
     <>
@@ -185,12 +211,52 @@ export function Topbar() {
           <IconButton label="Theme">
             <Moon className="relative z-[2] h-4 w-4" />
           </IconButton>
-          <div className="dashboard-glass-surface ml-1.5 flex h-9 items-center gap-2 rounded-full px-2 text-neutral-950">
-            <Avatar className="relative z-[2] h-6 w-6">
-              <AvatarFallback className="bg-neutral-950 text-xs text-white">{roleInitial}</AvatarFallback>
-            </Avatar>
-            <span className="relative z-[2] hidden text-sm font-medium sm:inline">{roleLabel}</span>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="dashboard-glass-surface ml-1.5 flex h-9 items-center gap-2 rounded-full px-2 text-neutral-950 outline-none transition hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-neutral-950/20"
+              aria-label="Open account menu"
+            >
+              <Avatar className="relative z-[2] h-6 w-6">
+                <AvatarFallback className="bg-neutral-950 text-xs text-white">{roleInitial}</AvatarFallback>
+              </Avatar>
+              <span className="relative z-[2] hidden text-sm font-medium sm:inline">{roleLabel}</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={10}
+              className="w-56 rounded-2xl border border-neutral-200/80 bg-white p-2 text-neutral-950 shadow-[0_18px_48px_rgba(15,15,15,0.14)]"
+            >
+              <DropdownMenuItem
+                onClick={() => router.push(profileHref)}
+                className="h-11 cursor-pointer gap-3 rounded-xl bg-neutral-100 px-3 text-sm font-medium focus:bg-neutral-200"
+              >
+                <UserRound className="h-4 w-4" />
+                <span>Profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => toast.info("Community is coming soon.")}
+                className="h-11 cursor-pointer gap-3 rounded-xl px-3 text-sm font-medium focus:bg-neutral-100"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>Community</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => toast.info("Help Center is coming soon.")}
+                className="h-11 cursor-pointer gap-3 rounded-xl px-3 text-sm font-medium focus:bg-neutral-100"
+              >
+                <CircleHelp className="h-4 w-4" />
+                <span>Help Center</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="my-2 bg-neutral-200" />
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="h-11 cursor-pointer gap-3 rounded-xl px-3 text-sm font-medium focus:bg-neutral-100"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign Out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 

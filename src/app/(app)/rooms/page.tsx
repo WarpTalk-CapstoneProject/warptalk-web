@@ -764,7 +764,7 @@ function RoomTable({ rooms }: { rooms: TranslationRoomDto[] }) {
         <p className="text-xs text-neutral-500">
           Showing {rooms.length === 0 ? 0 : pageStart + 1}-{Math.min(pageStart + pageSize, rooms.length)} of {rooms.length} meetings
         </p>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 rounded-2xl border border-neutral-200/80 bg-white p-1.5 shadow-[0_10px_28px_rgba(15,15,15,0.08)]">
           <PaginationButton
             label="Previous page"
             disabled={safeCurrentPage === 1}
@@ -774,15 +774,17 @@ function RoomTable({ rooms }: { rooms: TranslationRoomDto[] }) {
           </PaginationButton>
           {visiblePages.map((page, index) =>
             page === "ellipsis" ? (
-              <span key={`ellipsis-${index}`} className="grid h-8 w-8 place-items-center text-xs text-neutral-400">...</span>
+              <span key={`ellipsis-${index}`} className="grid h-9 w-9 place-items-center text-xs text-neutral-400">...</span>
             ) : (
               <button
                 key={page}
                 type="button"
                 onClick={() => setCurrentPage(page)}
                 className={cn(
-                  "h-8 min-w-8 rounded-full px-2 text-xs font-semibold transition",
-                  safeCurrentPage === page ? "bg-neutral-950 text-white" : "border bg-white text-neutral-600 hover:bg-neutral-100"
+                  "grid h-9 min-w-9 place-items-center rounded-xl px-2 text-xs font-semibold transition-all duration-200",
+                  safeCurrentPage === page
+                    ? "bg-neutral-950 text-white shadow-[0_8px_18px_rgba(0,0,0,0.22)]"
+                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-950"
                 )}
                 aria-current={safeCurrentPage === page ? "page" : undefined}
               >
@@ -819,7 +821,7 @@ function PaginationButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="grid h-8 w-8 place-items-center rounded-full border bg-white text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-35"
+      className="grid h-9 w-9 place-items-center rounded-xl bg-white text-neutral-600 transition-all duration-200 hover:bg-neutral-100 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-35"
       aria-label={label}
       title={label}
     >
