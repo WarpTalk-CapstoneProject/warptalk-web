@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
-import { LogOut, Sparkles, type LucideIcon } from "lucide-react";
+import { LogOut, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 
 export type RoleSidebarGroup = {
   label: string;
@@ -121,15 +122,10 @@ export function RoleSidebar({ homeHref, srLabel, groups }: RoleSidebarProps) {
       <div className="flex h-[70px] items-center px-5">
         <Link
           href={homeHref}
-          className="flex min-w-0 items-center gap-2.5 rounded-xl px-1 py-1 text-neutral-950 transition hover:bg-neutral-950/5"
+          className="flex min-w-0 items-center rounded-xl px-1 py-1 text-neutral-950 transition hover:opacity-75"
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-neutral-950">
-            <Sparkles className="h-3.5 w-3.5" />
-          </div>
-          <div className="grid min-w-0 flex-1 text-left leading-tight">
-            <span className="truncate text-base font-semibold tracking-tight">WarpTalk</span>
-            <span className="sr-only">{srLabel}</span>
-          </div>
+          <WarpTalkBrand />
+          <span className="sr-only">{srLabel}</span>
         </Link>
       </div>
 

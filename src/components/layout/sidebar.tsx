@@ -11,13 +11,13 @@ import {
   Bell,
   Settings,
   Shield,
-  Languages,
   ChevronLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
+import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 
 const navigation = [
   { name: "Dashboard", href: "/host/dashboard", icon: LayoutDashboard },
@@ -48,11 +48,8 @@ export function Sidebar() {
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2.5 border-b px-4">
-        <Languages className="h-7 w-7 shrink-0 text-primary" />
-        {!collapsed && (
-          <span className="text-lg font-bold tracking-tight">WarpTalk</span>
-        )}
+      <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "px-4")}>
+        <WarpTalkBrand compact={collapsed} />
       </div>
 
       {/* Nav */}
