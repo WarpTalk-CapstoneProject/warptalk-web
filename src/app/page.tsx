@@ -1140,7 +1140,10 @@ export default function HomePage() {
               animate="visible"
               className="mx-auto flex w-full max-w-6xl flex-col items-center"
             >
-              <motion.div variants={itemVariants} className="mb-7 flex flex-wrap justify-center gap-3">
+              <motion.div
+                variants={itemVariants}
+                className="relative top-[clamp(-8rem,-12vh,-5rem)] mb-7 flex flex-wrap justify-center gap-3"
+              >
                 {badges.map((badge) => (
                   <div
                     key={badge}
