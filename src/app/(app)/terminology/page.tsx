@@ -45,17 +45,7 @@ const terms = [
 export default function TerminologyPage() {
   return (
     <div className="flex flex-col gap-5">
-      <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.045] px-2.5 py-1 text-xs font-medium text-white/64">
-            <BookOpen className="h-3.5 w-3.5 text-cyan-200" />
-            Configuration
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">Terminology</h1>
-          <p className="max-w-2xl text-sm text-white/56">
-            Manage glossary terms that keep live translation, transcripts, and AI summaries consistent across rooms.
-          </p>
-        </div>
+      <section className="flex justify-end">
         <Button>
           <Plus className="mr-2 h-4 w-4" />
           Add term

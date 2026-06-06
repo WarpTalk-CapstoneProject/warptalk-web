@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Archive, Download, FileText, Languages, Search, Timer, Users } from "lucide-react";
+import { Download, FileText, Languages, Search, Timer, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,17 +113,7 @@ export default function HistoryPage() {
 
   return (
     <div className="flex flex-col gap-2.5">
-      <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="mb-1.5 inline-flex h-6 items-center gap-2 rounded-md border bg-background px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            <Archive className="h-3.5 w-3.5 text-primary" />
-            History
-          </div>
-          <h1 className="text-xl font-semibold tracking-tight text-white xl:text-2xl">History & Transcripts</h1>
-          <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
-            Review completed translation rooms, transcript previews, AI summaries, and retained artifacts.
-          </p>
-        </div>
+      <section className="flex justify-end">
         <div className="relative w-full lg:w-[280px]">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search history..." className="pl-8" />

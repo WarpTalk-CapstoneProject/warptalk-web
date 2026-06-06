@@ -1,16 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import Link from "next/link";
 import {
-  CheckCircle2,
-  MessageSquareText,
   Send,
   Sparkles,
-  Star,
   ThumbsUp,
-  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -89,8 +84,6 @@ export default function FeedbackPage() {
     return (selected.reduce((sum, score) => sum + score, 0) / selected.length).toFixed(1);
   }, [ratings]);
 
-  const completion = Object.values(ratings).filter(Boolean).length;
-
   function updateRating(key: RatingKey, value: number) {
     setRatings((current) => ({
       ...current,
@@ -111,32 +104,14 @@ export default function FeedbackPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-primary">
-            <MessageSquareText className="h-4 w-4" />
-            Quality review
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight">Post-room feedback</h1>
-          <p className="max-w-2xl text-muted-foreground">
-            Collect structured ratings after translation rooms and route quality issues for review.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/history" className={cn(buttonVariants({ variant: "outline" }))}>
-            View history
-          </Link>
-          <Button onClick={submitPreview}>
-            <Send className="mr-2 h-4 w-4" />
-            Submit preview
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard icon={<Star />} label="Average score" value={averageScore} detail="Live form estimate" />
-        <MetricCard icon={<CheckCircle2 />} label="Fields completed" value={`${completion}/4`} detail="Overall score is required" />
-        <MetricCard icon={<TrendingUp />} label="Review queue" value="3" detail="Preview feedback items" />
+      <div className="flex flex-wrap justify-end gap-2">
+        <Link href="/history" className={cn(buttonVariants({ variant: "outline" }))}>
+          View history
+        </Link>
+        <Button onClick={submitPreview}>
+          <Send className="mr-2 h-4 w-4" />
+          Submit preview
+        </Button>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
@@ -248,32 +223,5 @@ export default function FeedbackPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <Card className="shadow-sm">
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-5 [&_svg]:w-5">
-            {icon}
-          </div>
-          <Badge variant="outline">{detail}</Badge>
-        </div>
-        <p className="mt-4 text-sm text-muted-foreground">{label}</p>
-        <p className="text-3xl font-bold tracking-tight">{value}</p>
-      </CardContent>
-    </Card>
   );
 }

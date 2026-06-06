@@ -20,17 +20,7 @@ const previewProfiles = [
 export default function VoiceProfilesPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-neutral-950/8 bg-white px-3 py-1 text-xs font-medium text-neutral-600 shadow-sm">
-            <Mic2 className="h-3.5 w-3.5" />
-            Voice configuration
-          </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">Voice Profiles</h1>
-          <p className="max-w-2xl text-sm text-neutral-600">
-            Preview voice settings for translated speech and speaker consistency.
-          </p>
-        </div>
+      <section className="flex justify-end">
         <Button className="w-fit rounded-full bg-neutral-950 px-5 text-white hover:bg-neutral-800">
           Create profile
         </Button>
