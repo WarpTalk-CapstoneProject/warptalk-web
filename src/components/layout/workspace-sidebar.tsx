@@ -1,6 +1,16 @@
 "use client";
 
-import { BookOpen, CreditCard, FileText, LayoutDashboard, LineChart, Settings, Users } from "lucide-react";
+import {
+  BookOpen,
+  Bot,
+  CreditCard,
+  FileText,
+  LayoutDashboard,
+  LineChart,
+  Settings,
+  SlidersHorizontal,
+  Users,
+} from "lucide-react";
 
 import { RoleSidebar, type RoleSidebarGroup } from "@/components/layout/role-sidebar";
 
@@ -12,11 +22,13 @@ const navGroups: RoleSidebarGroup[] = [
       { title: "Members", href: "/workspace/members", icon: Users },
       { title: "Rooms", href: "/workspace/rooms", icon: LineChart },
       { title: "Artifacts", href: "/workspace/artifacts", icon: FileText },
+      { title: "AI Chat", href: "/workspace/ai-chat", icon: Bot },
     ],
   },
   {
     label: "Governance",
     items: [
+      { title: "Meeting Setup", href: "/workspace/meeting-settings", icon: SlidersHorizontal },
       { title: "Terminology", href: "/workspace/terminology", icon: BookOpen },
       { title: "Billing", href: "/workspace/billing", icon: CreditCard },
       { title: "Settings", href: "/workspace/settings", icon: Settings },
