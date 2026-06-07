@@ -1,13 +1,36 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import Link from "next/link";
-import { ChevronDown, Globe2, Sparkles } from "lucide-react";
+import type { InputHTMLAttributes, ReactNode } from "react";
+import Image from "next/image";
+import { motion } from "motion/react";
+import type { Variants } from "motion/react";
+
+import { cn } from "@/lib/utils";
 
 const AUTH_VIDEO_URL =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260419_064822_f120e48a-d545-45dd-a02d-facb07829888.mp4";
+  "/assets/videos/auth-investor-deck.mp4";
 
-export function GoogleMark({ className = "h-4 w-4" }: { className?: string }) {
+const leftContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.15,
+      delayChildren: 0.2,
+    },
+  },
+} satisfies Variants;
+
+const leftItem = {
+  hidden: { opacity: 0, y: 10 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: "easeOut" as const },
+  },
+} satisfies Variants;
+
+export function GoogleMark({ className = "size-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
       <path
@@ -30,121 +53,146 @@ export function GoogleMark({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-export function CinematicAuthShell({
-  children,
-  eyebrow = "Selected Works",
-  switchLabel,
-  switchHref,
-  switchText,
-}: {
-  children: ReactNode;
-  eyebrow?: string;
-  switchLabel: string;
-  switchHref: string;
-  switchText: string;
-}) {
-  const [isVideoReady, setIsVideoReady] = useState(false);
-  const pageVideoClassName = `absolute inset-0 z-0 h-full w-full object-cover object-[50%_44%] transition-opacity duration-700 ${
-    isVideoReady ? "opacity-80" : "opacity-0"
-  }`;
-  const panelVideoClassName = `h-full w-full object-cover object-[50%_76%] transition-opacity duration-700 ${
-    isVideoReady ? "opacity-100" : "opacity-0"
-  }`;
-
+export function GoogleAuthIcon({ className = "size-4" }: { className?: string }) {
   return (
-    <main className="fixed inset-0 z-20 overflow-hidden bg-black px-4 py-6 text-[#111] sm:px-6 lg:px-8">
-      <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_14%,rgba(255,255,255,0.2),transparent_22%),radial-gradient(circle_at_38%_70%,rgba(255,255,255,0.18),transparent_11%),linear-gradient(120deg,#030303_0%,#111_34%,#5f5f5f_47%,#181818_60%,#050505_100%)]" />
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        onCanPlay={() => setIsVideoReady(true)}
-        onLoadedData={() => setIsVideoReady(true)}
-        className={pageVideoClassName}
-      >
-        <source src={AUTH_VIDEO_URL} type="video/mp4" />
-      </video>
-      <div className="absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.08),transparent_30%),linear-gradient(90deg,rgba(0,0,0,0.16),rgba(0,0,0,0.04)_45%,rgba(0,0,0,0.2))]" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+      <path
+        fill="currentColor"
+        d="M21.35 11.1H12v2.9h5.35c-.25 1.45-1.61 4.26-5.35 4.26A6.15 6.15 0 0 1 5.85 12 6.15 6.15 0 0 1 12 5.74c1.84 0 3.08.78 3.79 1.46l2.58-2.49C16.72 3.17 14.58 2.25 12 2.25A9.75 9.75 0 1 0 12 21.75c5.62 0 9.35-3.95 9.35-9.51 0-.64-.07-1.13-.15-1.14h.15Z"
+      />
+    </svg>
+  );
+}
 
-      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <section className="grid max-h-[calc(100dvh-3rem)] w-full overflow-y-auto rounded-[1.3rem] bg-white p-4 shadow-[0_30px_100px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.85)] lg:grid-cols-[1.03fr_0.97fr] lg:overflow-hidden">
-          <aside className="relative hidden min-h-[36rem] overflow-hidden rounded-[1rem] text-white lg:block">
-            <div className="absolute inset-x-0 bottom-4 top-0 overflow-hidden rounded-[1rem] bg-[radial-gradient(circle_at_45%_22%,rgba(255,255,255,0.28),transparent_18%),radial-gradient(circle_at_38%_48%,rgba(255,255,255,0.14),transparent_12%),linear-gradient(145deg,#030303_0%,#151515_42%,#7a7a7a_51%,#1c1c1c_66%,#050505_100%)] [clip-path:polygon(0_0,92%_0,78%_100%,0_100%)]">
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="auto"
-                onCanPlay={() => setIsVideoReady(true)}
-                onLoadedData={() => setIsVideoReady(true)}
-                className={panelVideoClassName}
-              >
-                <source src={AUTH_VIDEO_URL} type="video/mp4" />
-              </video>
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.02),rgba(0,0,0,0.22)),radial-gradient(circle_at_50%_36%,rgba(255,255,255,0.12),transparent_34%)]" />
-              <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/35 to-transparent" />
+export function CinematicAuthShell({ children }: { children: ReactNode }) {
+  return (
+    <main className="flex min-h-screen w-full bg-black p-2 text-white selection:bg-white/30 transition-all duration-500 lg:h-screen lg:overflow-hidden lg:p-4">
+      <section className="relative hidden h-full w-[52%] flex-col items-center justify-end overflow-hidden rounded-3xl px-12 pb-32 shadow-2xl lg:flex">
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 h-full w-full object-cover"
+        >
+          <source src={AUTH_VIDEO_URL} type="video/mp4" />
+        </video>
+
+        <motion.div
+          variants={leftContainer}
+          initial="hidden"
+          animate="visible"
+          className="z-10 flex w-full max-w-xs flex-col items-center text-center"
+        >
+          <motion.div variants={leftItem} className="flex flex-col items-center gap-6">
+            <div className="grid size-28 place-items-center overflow-hidden rounded-3xl bg-black/55 shadow-2xl shadow-black/40">
+              <Image
+                src="/assets/logos/warptalk-icon-1k.jpg"
+                alt="WarpTalk"
+                width={112}
+                height={112}
+                className="size-28 scale-[3.15] object-cover invert mix-blend-screen"
+                priority
+              />
             </div>
+            <h2 className="text-5xl font-semibold lowercase tracking-tight text-white drop-shadow-[0_2px_24px_rgba(255,255,255,0.28)]">
+              warptalk
+            </h2>
+          </motion.div>
+        </motion.div>
+      </section>
 
-            <div className="relative z-10 flex h-full flex-col justify-between p-7 pb-20 pr-24">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold tracking-tight">{eyebrow}</p>
-                <div className="flex items-center gap-4 text-xs">
-                  <Link href={switchHref} className="text-white/85 hover:text-white">
-                    {switchLabel}
-                  </Link>
-                  <Link
-                    href={switchHref}
-                    className="rounded-full border border-white/70 px-4 py-2 text-white transition-colors hover:bg-white hover:text-black"
-                  >
-                    {switchText}
-                  </Link>
-                </div>
-              </div>
-
-              <div className="max-w-sm pb-5">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-white/80 backdrop-blur-md">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  WarpTalk cinematic access
-                </div>
-                <h2 className="text-4xl font-semibold leading-[0.95] tracking-tight">
-                  Step into real-time translation.
-                </h2>
-                <p className="mt-4 text-sm leading-6 text-white/70">
-                  A premium authentication experience with motion, depth, and a
-                  calm glass interface for global teams.
-                </p>
-              </div>
-            </div>
-          </aside>
-
-          <div className="relative flex min-h-[36rem] flex-col rounded-[0.95rem] bg-white px-6 py-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9)] sm:px-10 lg:rounded-l-none lg:px-14">
-            <div className="flex items-center justify-between gap-4">
-              <Link
-                href="/"
-                className="text-sm font-bold uppercase tracking-wide text-black/70"
-              >
-                WarpTalk
-              </Link>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-full border border-black/20 px-3 py-1 text-[0.72rem] font-medium text-black/70"
-                aria-label="Language selector"
-              >
-                <Globe2 className="h-3.5 w-3.5" />
-                EN
-                <ChevronDown className="h-3 w-3" />
-              </button>
-            </div>
-
-            <div className="mx-auto flex w-full max-w-[21rem] flex-1 flex-col justify-center py-8">
-              {children}
-            </div>
-          </div>
-        </section>
-      </div>
+      <section className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-12 sm:px-12 lg:overflow-hidden lg:px-16 lg:py-6 xl:px-24">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="w-full max-w-xl space-y-8 sm:space-y-10 lg:space-y-6"
+        >
+          {children}
+        </motion.div>
+      </section>
     </main>
+  );
+}
+
+export function StepItem({
+  number,
+  text,
+  active = false,
+}: {
+  number: number;
+  text: string;
+  active?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium",
+        active
+          ? "border border-white bg-white text-black"
+          : "border-none bg-brand-gray text-white"
+      )}
+    >
+      <span
+        className={cn(
+          "grid size-7 place-items-center rounded-full text-xs",
+          active ? "bg-black text-white" : "bg-white/10 text-white/40"
+        )}
+      >
+        {number}
+      </span>
+      {text}
+    </div>
+  );
+}
+
+export function SocialButton({
+  icon,
+  label,
+  className,
+}: {
+  icon: ReactNode;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-black text-sm font-medium text-white transition-colors hover:bg-white/5",
+        className
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+export function InputGroup({
+  label,
+  placeholder,
+  type,
+  className,
+  ...props
+}: {
+  label: string;
+  placeholder: string;
+  type: string;
+} & InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <label className="block space-y-2">
+      <span className="text-sm font-medium text-white">{label}</span>
+      <input
+        type={type}
+        placeholder={placeholder}
+        className={cn(
+          "h-11 w-full rounded-xl border-none bg-brand-gray px-4 text-white outline-none placeholder:text-white/20 focus:ring-2 focus:ring-white/20",
+          className
+        )}
+        {...props}
+      />
+    </label>
   );
 }
