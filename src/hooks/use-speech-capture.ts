@@ -14,7 +14,6 @@ export function useSpeechCapture({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunkIndexRef = useRef(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // We use standard MediaRecorder. For cross-browser compatibility, we try to use a format
   // that soundfile on the Python backend might be able to decode, or we rely on the
