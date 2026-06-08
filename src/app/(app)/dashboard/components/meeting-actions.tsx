@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Link as LinkIcon, Plus, Video } from "lucide-react";
+import { ArrowRight, LinkSimple as LinkIcon, Plus, VideoCamera } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,7 +36,7 @@ export function MeetingActions() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Video className="h-5 w-5" />
+              <VideoCamera weight="light" className="h-5 w-5" />
             </span>
             Start a translation room
           </CardTitle>
@@ -46,7 +46,7 @@ export function MeetingActions() {
         </CardHeader>
         <CardContent>
           <Button className="h-9" onClick={() => router.push("/rooms/create")}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus weight="light" className="mr-2 h-4 w-4" />
             Create room
           </Button>
         </CardContent>
@@ -56,8 +56,8 @@ export function MeetingActions() {
         <div className="absolute bottom-0 right-0 h-28 w-28 translate-x-10 translate-y-10 rounded-full bg-muted blur-2xl" />
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg border bg-background text-primary">
-              <LinkIcon className="h-5 w-5" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg border  text-primary">
+              <LinkIcon weight="light" className="h-5 w-5" />
             </span>
             Join by room code
           </CardTitle>
@@ -72,11 +72,11 @@ export function MeetingActions() {
               placeholder="Enter meeting code"
               value={joinCode}
               onChange={(event) => setJoinCode(event.target.value)}
-              className="bg-background"
+              className=""
             />
             <Button type="submit" variant="secondary">
               Continue
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight weight="light" className="ml-2 h-4 w-4" />
             </Button>
           </form>
         </CardContent>

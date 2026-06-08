@@ -1,12 +1,12 @@
-import { Download, FileText, ListChecks, MessageSquareText, ScrollText } from "lucide-react";
+import { Download, FileText, ListChecks, ChatCircleText, Scroll } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const artifacts = [
-  { title: "Final transcript", detail: "124 segments - English, Vietnamese, Japanese", icon: ScrollText },
-  { title: "AI meeting summary", detail: "Key points, risks, follow-ups", icon: MessageSquareText },
+  { title: "Final transcript", detail: "124 segments - English, Vietnamese, Japanese", icon: Scroll },
+  { title: "AI meeting summary", detail: "Key points, risks, follow-ups", icon: ChatCircleText },
   { title: "Action items", detail: "6 tasks extracted from transcript", icon: ListChecks },
   { title: "Export package", detail: "PDF, DOCX, VTT preview", icon: FileText },
 ];
@@ -63,7 +63,7 @@ export default function RoomArtifactsPage() {
             {["PDF summary", "DOCX report", "VTT captions", "Transcript TXT"].map((item) => (
               <Button key={item} variant="outline" className="justify-between rounded-full">
                 {item}
-                <Download className="h-4 w-4" />
+                <Download weight="light" className="h-4 w-4" />
               </Button>
             ))}
           </CardContent>

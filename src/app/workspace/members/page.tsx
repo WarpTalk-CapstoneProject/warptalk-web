@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MailPlus, Search, ShieldCheck, Trash2, UserCheck, Users } from "lucide-react";
+import { EnvelopeSimple, MagnifyingGlass, ShieldCheck, Trash, UserCheck, Users } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -84,7 +84,7 @@ export default function WorkspaceMembersPage() {
       <section className="grid gap-3 md:grid-cols-3">
         <StatCard icon={UserCheck} label="Active members" value={activeMembers} />
         <StatCard icon={ShieldCheck} label="Meeting hosts" value={hosts} />
-        <StatCard icon={MailPlus} label="Pending invites" value={pending} />
+        <StatCard icon={EnvelopeSimple} label="Pending invites" value={pending} />
       </section>
 
       <Card className="rounded-3xl border-white/70 bg-white/88 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
@@ -105,7 +105,7 @@ export default function WorkspaceMembersPage() {
               </SelectContent>
             </Select>
             <Button onClick={inviteMember} className="h-10 rounded-xl bg-neutral-950 px-5 text-white hover:bg-neutral-800">
-              <MailPlus /> Send invitation
+              <EnvelopeSimple weight="light" /> Send invitation
             </Button>
           </div>
         </CardHeader>
@@ -118,8 +118,8 @@ export default function WorkspaceMembersPage() {
             <p className="text-xs text-muted-foreground">Role changes apply to dashboard and meeting permissions.</p>
           </div>
           <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search members..." className="h-9 rounded-xl bg-white pl-9" />
+            <MagnifyingGlass weight="light" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="MagnifyingGlass members..." className="h-9 rounded-xl bg-white pl-9" />
           </div>
         </CardHeader>
         <CardContent className="max-h-[430px] overflow-y-auto p-0">
@@ -150,7 +150,7 @@ export default function WorkspaceMembersPage() {
                 onClick={() => removeMember(member.id)}
                 title="Remove member"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash weight="light" className="h-4 w-4" />
               </Button>
             </div>
           ))}

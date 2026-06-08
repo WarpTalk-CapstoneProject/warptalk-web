@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarClock, Clock3, FileText, Headphones, Languages, MessageSquareText } from "lucide-react";
+import { Calendar, Clock, FileText, Headphones, Translate, ChatCircleText } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,9 +28,9 @@ export default function ParticipantDashboardPage() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <Metric icon={<CalendarClock />} label="Upcoming invites" value="2" />
-        <Metric icon={<FileText />} label="Shared artifacts" value="8" />
-        <Metric icon={<Languages />} label="Default language" value="VI -> EN" />
+        <Metric icon={<Calendar weight="light" />} label="Upcoming invites" value="2" />
+        <Metric icon={<FileText weight="light" />} label="Shared artifacts" value="8" />
+        <Metric icon={<Translate weight="light" />} label="Default language" value="VI -> EN" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -46,7 +46,7 @@ export default function ParticipantDashboardPage() {
                   <p className="font-medium">{meeting.title}</p>
                   <p className="text-sm text-neutral-500">{meeting.code} - {meeting.time} - {meeting.language}</p>
                 </div>
-                <Link href={`/rooms/${meeting.code.toLowerCase()}/setup`} className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-background px-3 text-sm font-medium transition hover:bg-muted">Setup</Link>
+                <Link href={`/rooms/${meeting.code.toLowerCase()}/setup`} className="inline-flex h-8 items-center justify-center rounded-full border border-border  px-3 text-sm font-medium transition hover:bg-muted">Setup</Link>
               </div>
             ))}
           </CardContent>
@@ -58,9 +58,9 @@ export default function ParticipantDashboardPage() {
             <CardDescription>Device and language checks before joining.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <Readiness icon={<Headphones />} label="Speaker" value="Ready" />
-            <Readiness icon={<MessageSquareText />} label="Captions" value="Translated" />
-            <Readiness icon={<Clock3 />} label="Last setup" value="2 hours ago" />
+            <Readiness icon={<Headphones weight="light" />} label="Speaker" value="Ready" />
+            <Readiness icon={<ChatCircleText weight="light" />} label="Captions" value="Translated" />
+            <Readiness icon={<Clock weight="light" />} label="Last setup" value="2 hours ago" />
           </CardContent>
         </Card>
       </div>

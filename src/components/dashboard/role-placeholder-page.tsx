@@ -1,4 +1,4 @@
-import { ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { ArrowUpRight, CheckCircle } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +40,7 @@ export function RolePlaceholderPage({
         <CardContent className="grid gap-3 md:grid-cols-2">
           {items.map((item) => (
             <div key={item} className="flex items-start gap-3 rounded-2xl border bg-white p-4">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 text-neutral-950" />
+              <CheckCircle weight="light" className="mt-0.5 h-4 w-4 text-neutral-950" />
               <p className="text-sm text-neutral-600">{item}</p>
             </div>
           ))}
@@ -49,7 +49,7 @@ export function RolePlaceholderPage({
 
       <Link href={backHref} className="inline-flex h-8 w-fit items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">
         {backLabel}
-        <ArrowUpRight className="ml-2 h-4 w-4" />
+        <ArrowUpRight weight="light" className="ml-2 h-4 w-4" />
       </Link>
     </div>
   );

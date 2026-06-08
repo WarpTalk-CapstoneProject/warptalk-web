@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import gsap from "gsap";
-import { CalendarClock, CheckCircle2, ChevronDown, Clock3, Copy, Languages, RotateCcw, Settings2, Users, X, XCircle } from "lucide-react";
+import { Calendar, CheckCircle, CaretDown, Clock, Copy, Translate, ArrowCounterClockwise, SlidersHorizontal, Users, X, XCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -163,7 +163,7 @@ function CreateRoomContent() {
               />
               <Field label="Participant limit">
                 <div className="flex min-h-11 items-center gap-3 rounded-2xl border bg-white px-3">
-                  <Users className="h-4 w-4 text-neutral-400" />
+                  <Users weight="light" className="h-4 w-4 text-neutral-400" />
                   <Input
                     type="number"
                     min={1}
@@ -211,7 +211,7 @@ function CreateRoomContent() {
                 aria-label="Back to rooms"
                 title="Back to rooms"
               >
-                <RotateCcw className="h-4 w-4" />
+                <ArrowCounterClockwise weight="light" className="h-4 w-4" />
               </Link>
             )}
           </CardContent>
@@ -226,28 +226,28 @@ function CreateRoomContent() {
           </CardHeader>
           <CardContent className="grid gap-4">
             <SummaryRow
-              icon={<Users />}
+              icon={<Users weight="light" />}
               label="Participants"
               value={`${capacity || "0"} max`}
               valid={validation.capacity}
               touched={touched.capacity}
             />
             <SummaryRow
-              icon={<Languages />}
-              label="Languages"
+              icon={<Translate weight="light" />}
+              label="Translate"
               value={selectedLabels || "No language selected"}
               valid={validation.languages}
               touched={touched.languages}
             />
             <SummaryRow
-              icon={<Settings2 />}
+              icon={<SlidersHorizontal weight="light" />}
               label="Language route"
               value={selectedLabels || "Not configured"}
               valid={validation.languages}
               touched={touched.languages}
             />
             <SummaryRow
-              icon={<CalendarClock />}
+              icon={<Calendar weight="light" />}
               label="Starts"
               value={startAt ? startAt.replace("T", " ") : "Choose date and time"}
               valid={validation.startAt}
@@ -256,7 +256,7 @@ function CreateRoomContent() {
             {createdRoomId ? (
               <div ref={completionRef} className="grid gap-2 border-t pt-4 opacity-0">
                 <Link href={`/rooms/${createdRoomId}/setup`} className="inline-flex h-9 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">
-                  <Settings2 className="mr-2 h-4 w-4" />
+                  <SlidersHorizontal weight="light" className="mr-2 h-4 w-4" />
                   Continue to setup
                 </Link>
                 <button
@@ -264,7 +264,7 @@ function CreateRoomContent() {
                   onClick={copyInviteLink}
                   className="inline-flex h-9 items-center justify-center rounded-full border border-border bg-white px-3 text-sm font-medium transition hover:bg-muted"
                 >
-                  <Copy className="mr-2 h-4 w-4" />
+                  <Copy weight="light" className="mr-2 h-4 w-4" />
                   Copy invite link
                 </button>
               </div>
@@ -290,7 +290,7 @@ function LanguageMultiSelect({ selected, onChange }: { selected: string[]; onCha
     .filter(Boolean) as typeof languageOptions;
 
   return (
-    <Field label="Languages used in meeting">
+    <Field label="Translate used in meeting">
       <Popover>
         <PopoverTrigger className="flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl border bg-white px-3 py-2 text-left text-sm transition hover:bg-neutral-50">
           <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
@@ -306,7 +306,7 @@ function LanguageMultiSelect({ selected, onChange }: { selected: string[]; onCha
                     }}
                     className="text-white/70 hover:text-white"
                   >
-                    <X className="h-3 w-3" />
+                    <X weight="light" className="h-3 w-3" />
                   </button>
                 </span>
               ))
@@ -319,7 +319,7 @@ function LanguageMultiSelect({ selected, onChange }: { selected: string[]; onCha
               </span>
             ) : null}
           </div>
-          <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400" />
+          <CaretDown weight="light" className="h-4 w-4 shrink-0 text-neutral-400" />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl bg-white p-2 shadow-xl">
           <Command>
@@ -373,11 +373,11 @@ function StartTimePicker({ startAt, onChange }: { startAt: string; onChange: (va
           <div className="min-w-0">
             <p className={cn("truncate text-lg font-semibold", hasStartAt ? "text-neutral-950" : "text-neutral-400")}>{dateLabel}</p>
             <p className="mt-1 flex items-center gap-2 text-sm text-neutral-500">
-              <Clock3 className="h-4 w-4" />
+              <Clock weight="light" className="h-4 w-4" />
               {timeLabel}
             </p>
           </div>
-          <CalendarClock className="h-5 w-5 shrink-0 text-neutral-400" />
+          <Calendar weight="light" className="h-5 w-5 shrink-0 text-neutral-400" />
           <Input
             type="datetime-local"
             value={startAt}
@@ -396,7 +396,7 @@ function SchedulePopover({ startAt }: { startAt: string }) {
   return (
     <Popover>
       <PopoverTrigger className="flex h-12 w-12 items-center justify-center rounded-full border bg-white text-neutral-950 shadow-sm transition hover:bg-neutral-50">
-        <CalendarClock className="h-4 w-4" />
+        <Calendar weight="light" className="h-4 w-4" />
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={10} className="w-[680px] max-w-[calc(100vw-2rem)] rounded-[24px] bg-white p-0 shadow-2xl">
         <DaySchedulePreview startAt={startAt} />
@@ -478,9 +478,9 @@ function SummaryRow({
   touched: boolean;
 }) {
   const statusIcon = !touched ? null : valid ? (
-    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+    <CheckCircle weight="light" className="h-4 w-4 text-emerald-600" />
   ) : (
-    <XCircle className="h-4 w-4 text-red-500" />
+    <XCircle weight="light" className="h-4 w-4 text-red-500" />
   );
 
   return (

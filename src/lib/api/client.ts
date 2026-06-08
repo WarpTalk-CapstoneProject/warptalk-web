@@ -81,9 +81,17 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     } catch (refreshError) {
       processQueue(refreshError, null);
-      useAuthStore.getState().logout();
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
+      
+      const isAxiosError = axios.isAxiosError(refreshError);
+      const isAuthError = isAxiosError && refreshError.response && refreshError.response.status >= 400 && refreshError.response.status < 500;
+
+      // Only log out if the server explicitly rejected the refresh token
+      // Do not log out on network errors or 5xx server errors
+      if (isAuthError) {
+        useAuthStore.getState().logout();
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+        }
       }
       return Promise.reject(refreshError);
     } finally {

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpen, CheckCircle2, Languages, Plus, Search } from "lucide-react";
+import { BookOpen, CheckCircle, Translate, Plus, MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,15 +47,15 @@ export default function TerminologyPage() {
     <div className="flex flex-col gap-5">
       <section className="flex justify-end">
         <Button>
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus weight="light" className="mr-2 h-4 w-4" />
           Add term
         </Button>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <Metric icon={<BookOpen />} label="Glossary terms" value="124" detail="Preview workspace" />
-        <Metric icon={<Languages />} label="Languages" value="4" detail="Configured targets" />
-        <Metric icon={<CheckCircle2 />} label="Approved" value="89" detail="Ready for rooms" />
+        <Metric icon={<BookOpen weight="light" />} label="Glossary terms" value="124" detail="Preview workspace" />
+        <Metric icon={<Translate weight="light" />} label="Translate" value="4" detail="Configured targets" />
+        <Metric icon={<CheckCircle weight="light" />} label="Approved" value="89" detail="Ready for rooms" />
       </section>
 
       <Card>
@@ -65,8 +65,8 @@ export default function TerminologyPage() {
             <CardDescription>Scan and review terms before they are used in a live room.</CardDescription>
           </div>
           <div className="relative w-full lg:w-[280px]">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/42" />
-            <Input placeholder="Search terms..." className="pl-8" />
+            <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/42" />
+            <Input placeholder="MagnifyingGlass terms..." className="pl-8" />
           </div>
         </CardHeader>
         <CardContent className="grid gap-3 pt-4">

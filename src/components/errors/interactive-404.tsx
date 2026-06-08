@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, type PointerEvent } from "react";
 import gsap from "gsap";
-import { ArrowUpRight, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowUpRight, ArrowCounterClockwise, Sparkle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -254,7 +254,7 @@ export function Interactive404({ mode = "not-found", onRetry }: Interactive404Pr
 
         <header className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between px-5 py-4 sm:px-8">
           <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full text-white transition hover:bg-white/10">
-            <Sparkles className="h-4 w-4" />
+            <Sparkle weight="light" className="h-4 w-4" />
             <span className="sr-only">WarpTalk home</span>
           </Link>
           <nav className="hidden items-center gap-5 text-[11px] text-white/65 md:flex">
@@ -262,7 +262,7 @@ export function Interactive404({ mode = "not-found", onRetry }: Interactive404Pr
             <Link href="/rooms" className="transition hover:text-white">Rooms</Link>
             <Link href="/history" className="transition hover:text-white">History</Link>
             <Link href="/login" className="rounded-full bg-white px-4 py-2 font-medium text-black transition hover:bg-white/90">
-              Contact us <ArrowUpRight className="ml-1 inline h-3 w-3" />
+              Contact us <ArrowUpRight weight="light" className="ml-1 inline h-3 w-3" />
             </Link>
           </nav>
         </header>
@@ -297,7 +297,7 @@ export function Interactive404({ mode = "not-found", onRetry }: Interactive404Pr
               href="/host/dashboard"
               className="inline-flex h-11 items-center justify-center rounded-full bg-[#6c76ff] px-6 text-sm font-medium text-white shadow-[0_16px_36px_rgba(108,118,255,0.28)] transition hover:bg-[#7b84ff]"
             >
-              {copy.primary} <ArrowUpRight className="ml-2 h-4 w-4" />
+              {copy.primary} <ArrowUpRight weight="light" className="ml-2 h-4 w-4" />
             </Link>
             {onRetry ? (
               <Button
@@ -306,7 +306,7 @@ export function Interactive404({ mode = "not-found", onRetry }: Interactive404Pr
                 onClick={onRetry}
                 className="h-11 rounded-full border-white/15 bg-white/5 px-5 text-white hover:bg-white/10 hover:text-white"
               >
-                <RotateCcw className="mr-2 h-4 w-4" />
+                <ArrowCounterClockwise weight="light" className="mr-2 h-4 w-4" />
                 Try again
               </Button>
             ) : null}

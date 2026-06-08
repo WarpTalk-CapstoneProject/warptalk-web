@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { BookOpen, Check, FileText, Languages, Plus, Save, Shield, Trash2, Upload, WalletCards } from "lucide-react";
+import { BookOpen, Check, FileText, Translate, Plus, FloppyDisk, Shield, Trash, Upload, Wallet } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -42,28 +42,28 @@ export default function WorkspaceMeetingSettingsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Meeting configuration</h1>
           <p className="text-sm text-muted-foreground">Workspace defaults used by Hosts when creating and running every meeting.</p>
         </div>
-        <Button onClick={() => toast.success("Workspace meeting defaults saved.")} className="rounded-full bg-neutral-950 text-white hover:bg-neutral-800"><Save /> Save defaults</Button>
+        <Button onClick={() => toast.success("Workspace meeting defaults saved.")} className="rounded-full bg-neutral-950 text-white hover:bg-neutral-800"><FloppyDisk weight="light" /> FloppyDisk defaults</Button>
       </div>
 
       <section className="grid gap-3 lg:grid-cols-3">
-        <SettingSummary icon={Languages} title="Languages" value={`${languages.length} enabled`} />
+        <SettingSummary icon={Translate} title="Translate" value={`${languages.length} enabled`} />
         <SettingSummary icon={FileText} title="Company context" value={`${documents.length} documents`} />
-        <SettingSummary icon={WalletCards} title="Meeting credit limit" value={`${creditLimit} credits`} />
+        <SettingSummary icon={Wallet} title="Meeting credit limit" value={`${creditLimit} credits`} />
       </section>
 
       <section className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
         <div className="space-y-3">
           <Card className="rounded-3xl border-white/70 bg-white/88 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Languages className="h-5 w-5" />Language policy</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Translate weight="light" className="h-5 w-5" />Language policy</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="mb-2 text-sm font-medium">Languages available when Hosts create rooms</p>
+                <p className="mb-2 text-sm font-medium">Translate available when Hosts create rooms</p>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {languageOptions.map((language) => {
                     const selected = languages.includes(language);
                     return (
                       <button key={language} onClick={() => toggleLanguage(language)} className={`flex items-center justify-between rounded-2xl border p-3 text-left text-sm transition ${selected ? "border-neutral-950 bg-neutral-950 text-white" : "bg-white hover:border-neutral-400"}`}>
-                        {language}{selected && <Check className="h-4 w-4" />}
+                        {language}{selected && <Check weight="light" className="h-4 w-4" />}
                       </button>
                     );
                   })}
@@ -79,12 +79,12 @@ export default function WorkspaceMeetingSettingsPage() {
           </Card>
 
           <Card className="rounded-3xl border-white/70 bg-white/88">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Shield className="h-5 w-5" />Meeting & AI policy</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Shield weight="light" className="h-5 w-5" />Meeting & AI policy</CardTitle></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
               <PolicyToggle label="Record meetings" detail="Allow Hosts to record workspace sessions." defaultChecked />
               <PolicyToggle label="Generate AI summary" detail="Create summary and action items after meetings." defaultChecked />
               <PolicyToggle label="Participant approval" detail="Require Host approval before joining." defaultChecked />
-              <PolicyToggle label="Save translated audio" detail="Retain translated voice with artifacts." />
+              <PolicyToggle label="FloppyDisk translated audio" detail="Retain translated voice with artifacts." />
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Maximum AI credits per meeting</label>
                 <Input value={creditLimit} onChange={(event) => setCreditLimit(event.target.value.replace(/\D/g, ""))} className="mt-2 h-10 rounded-xl bg-white" inputMode="numeric" />
@@ -96,22 +96,22 @@ export default function WorkspaceMeetingSettingsPage() {
 
         <Card className="min-h-0 overflow-hidden rounded-3xl border-white/70 bg-white/88 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
           <CardHeader className="flex-row items-center justify-between space-y-0 border-b">
-            <div><CardTitle className="flex items-center gap-2 text-base"><BookOpen className="h-5 w-5" />Company context library</CardTitle><p className="text-xs text-muted-foreground">Files are indexed for translation and AI analysis.</p></div>
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => fileInput.current?.click()}><Upload /> Upload</Button>
+            <div><CardTitle className="flex items-center gap-2 text-base"><BookOpen weight="light" className="h-5 w-5" />Company context library</CardTitle><p className="text-xs text-muted-foreground">Files are indexed for translation and AI analysis.</p></div>
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => fileInput.current?.click()}><Upload weight="light" /> Upload</Button>
             <input ref={fileInput} type="file" multiple accept=".pdf,.doc,.docx,.csv,.txt" className="hidden" onChange={(event) => addDocuments(event.target.files)} />
           </CardHeader>
           <CardContent className="space-y-2 p-4">
             {documents.map((document, index) => (
               <div key={`${document.name}-${index}`} className="flex items-center justify-between rounded-2xl border bg-white p-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-white"><FileText className="h-4 w-4" /></span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-white"><FileText weight="light" className="h-4 w-4" /></span>
                   <div className="min-w-0"><p className="truncate text-sm font-medium">{document.name}</p><p className="text-xs text-muted-foreground">{document.size} · Ready for AI context</p></div>
                 </div>
-                <Button variant="ghost" size="icon-sm" onClick={() => setDocuments((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 /></Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => setDocuments((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash weight="light" /></Button>
               </div>
             ))}
             <button onClick={() => fileInput.current?.click()} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed p-4 text-sm text-muted-foreground transition hover:border-neutral-400 hover:text-neutral-950">
-              <Plus className="h-4 w-4" /> Add glossary, policy, product, or speaker context
+              <Plus weight="light" className="h-4 w-4" /> Add glossary, policy, product, or speaker context
             </button>
             <div className="rounded-2xl bg-neutral-950 p-4 text-white">
               <p className="text-sm font-medium">Database behavior</p>
@@ -124,7 +124,7 @@ export default function WorkspaceMeetingSettingsPage() {
   );
 }
 
-function SettingSummary({ icon: Icon, title, value }: { icon: typeof Languages; title: string; value: string }) {
+function SettingSummary({ icon: Icon, title, value }: { icon: typeof Translate; title: string; value: string }) {
   return <Card className="rounded-3xl border-white/70 bg-white/88"><CardContent className="flex items-center gap-3 p-4"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-950 text-white"><Icon className="h-5 w-5" /></span><div><p className="text-xs text-muted-foreground">{title}</p><p className="text-lg font-semibold">{value}</p></div></CardContent></Card>;
 }
 

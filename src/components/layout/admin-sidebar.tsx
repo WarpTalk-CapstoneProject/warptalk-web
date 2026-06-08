@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Building2, CreditCard, LayoutDashboard, Settings, Users } from "lucide-react";
+import { Robot, Buildings, CreditCard, SquaresFour, GearSix, Users } from "@phosphor-icons/react/dist/ssr";
 
 import { RoleSidebar, type RoleSidebarGroup } from "@/components/layout/role-sidebar";
 
@@ -8,8 +8,8 @@ const navGroups: RoleSidebarGroup[] = [
   {
     label: "Internal",
     items: [
-      { title: "Dashboard", href: "/internal/dashboard", icon: LayoutDashboard },
-      { title: "Workspaces", href: "/internal/workspaces", icon: Building2 },
+      { title: "Dashboard", href: "/internal/dashboard", icon: SquaresFour },
+      { title: "Workspaces", href: "/internal/workspaces", icon: Buildings },
       { title: "Users", href: "/internal/users", icon: Users },
     ],
   },
@@ -17,9 +17,9 @@ const navGroups: RoleSidebarGroup[] = [
     label: "Operations",
     items: [
       { title: "Plans", href: "/internal/plans", icon: CreditCard },
-      { title: "AI Ops", href: "/internal/ai-ops", icon: Bot },
+      { title: "AI Ops", href: "/internal/ai-ops", icon: Robot },
       { title: "Support", href: "/internal/support", icon: Users },
-      { title: "Settings", href: "/internal/settings", icon: Settings },
+      { title: "GearSix", href: "/internal/settings", icon: GearSix },
     ],
   },
 ];

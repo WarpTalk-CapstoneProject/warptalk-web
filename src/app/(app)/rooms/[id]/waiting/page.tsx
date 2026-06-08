@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Clock3, Copy, ShieldCheck, UserCheck, Users } from "lucide-react";
+import { Clock, Copy, ShieldCheck, UserCheck, Users } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,7 +52,7 @@ export default async function WaitingRoomPage({ params }: { params: Promise<{ id
           </CardHeader>
           <CardContent className="grid gap-2">
             <Link href={`/room/${roomId}`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Start meeting</Link>
-            <Link href={`/rooms/${roomId}/setup`} className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-background px-3 text-sm font-medium transition hover:bg-muted">Back to setup</Link>
+            <Link href={`/rooms/${roomId}/setup`} className="inline-flex h-8 items-center justify-center rounded-full border border-border  px-3 text-sm font-medium transition hover:bg-muted">Back to setup</Link>
           </CardContent>
         </Card>
 
@@ -61,11 +61,11 @@ export default async function WaitingRoomPage({ params }: { params: Promise<{ id
             <CardTitle>Room signals</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
-            <Signal icon={<Users />} label="Participants" value="3 ready" />
-            <Signal icon={<Clock3 />} label="Scheduled" value="Now" />
-            <Signal icon={<UserCheck />} label="Approval" value="Required" />
-            <Signal icon={<Copy />} label="Invite" value="/join?code=WARP-241" />
-            <Signal icon={<ShieldCheck />} label="Backend" value="Preview fallback" />
+            <Signal icon={<Users weight="light" />} label="Participants" value="3 ready" />
+            <Signal icon={<Clock weight="light" />} label="Scheduled" value="Now" />
+            <Signal icon={<UserCheck weight="light" />} label="Approval" value="Required" />
+            <Signal icon={<Copy weight="light" />} label="Invite" value="/join?code=WARP-241" />
+            <Signal icon={<ShieldCheck weight="light" />} label="Backend" value="Preview fallback" />
           </CardContent>
         </Card>
       </div>

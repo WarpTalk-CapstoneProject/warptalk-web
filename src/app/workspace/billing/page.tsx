@@ -1,12 +1,12 @@
-import { ArrowDownToLine, Bot, Coins, CreditCard, Languages, Users } from "lucide-react";
+import { Download, Robot, Coins, CreditCard, Translate, Users } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const costs = [
-  { name: "Realtime translation", value: 6218, percent: 62, icon: Languages },
-  { name: "AI summaries", value: 2062, percent: 21, icon: Bot },
+  { name: "Realtime translation", value: 6218, percent: 62, icon: Translate },
+  { name: "AI summaries", value: 2062, percent: 21, icon: Robot },
   { name: "AI workspace chat", value: 1740, percent: 17, icon: Coins },
 ];
 
@@ -24,7 +24,7 @@ export default function WorkspaceBillingPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Billing & AI usage</h1>
           <p className="text-sm text-muted-foreground">Monitor Enterprise seats, AI credits, translation cost, and invoices.</p>
         </div>
-        <Button variant="outline" className="rounded-full"><ArrowDownToLine /> Export usage</Button>
+        <Button variant="outline" className="rounded-full"><Download weight="light" /> Export usage</Button>
       </div>
 
       <section className="grid gap-3 md:grid-cols-3">

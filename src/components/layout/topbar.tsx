@@ -1,32 +1,9 @@
 "use client";
+import type { IconProps } from "@phosphor-icons/react";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Bell,
-  BotMessageSquare,
-  Building2,
-  BookOpen,
-  CircleHelp,
-  FileText,
-  LayoutDashboard,
-  LayoutGrid,
-  LogOut,
-  MessageCircle,
-  Mic2,
-  Moon,
-  PanelLeft,
-  Plus,
-  Search,
-  ServerCog,
-  Settings,
-  Sparkles,
-  Star,
-  TestTube2,
-  UserRound,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { Bell, Buildings, BookOpen, Question, FileText, SquaresFour, SignOut, ChatCircle, Microphone, Moon, SidebarSimple, Plus, MagnifyingGlass, HardDrives, GearSix, Sparkle, Star, Flask, User, Users } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   Command,
@@ -61,7 +38,7 @@ const routeLabels: Record<string, string> = {
   feedback: "Feedback",
   terminology: "Terminology",
   "voice-profiles": "Voice Profiles",
-  settings: "Settings",
+  settings: "GearSix",
   workspace: "Workspace",
   admin: "Admin",
   "dev-test": "Dev Test",
@@ -71,25 +48,25 @@ const searchItems: Array<{
   title: string;
   url: string;
   group: string;
-  icon: LucideIcon;
+  icon: React.ElementType;
   shortcut?: string;
 }> = [
-  { title: "Host Dashboard", url: "/host/dashboard", group: "Host", icon: LayoutDashboard, shortcut: "D" },
+  { title: "Host Dashboard", url: "/host/dashboard", group: "Host", icon: SquaresFour, shortcut: "D" },
   { title: "Participant Dashboard", url: "/participant/dashboard", group: "Participant", icon: Users },
-  { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: Building2 },
-  { title: "Internal Dashboard", url: "/internal/dashboard", group: "Internal", icon: ServerCog },
-  { title: "Rooms", url: "/rooms", group: "Workspace", icon: LayoutGrid, shortcut: "R" },
+  { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: Buildings },
+  { title: "Internal Dashboard", url: "/internal/dashboard", group: "Internal", icon: HardDrives },
+  { title: "Rooms", url: "/rooms", group: "Workspace", icon: SquaresFour, shortcut: "R" },
   { title: "Create Room", url: "/rooms/create", group: "Workspace", icon: Plus, shortcut: "N" },
   { title: "History & Transcripts", url: "/history", group: "Workspace", icon: FileText, shortcut: "H" },
-  { title: "AI Summaries", url: "/ai-summaries", group: "AI", icon: Sparkles },
-  { title: "Chat with AI", url: "/ai-chat", group: "AI", icon: BotMessageSquare },
+  { title: "AI Summaries", url: "/ai-summaries", group: "AI", icon: Sparkle },
+  { title: "Chat with AI", url: "/ai-chat", group: "AI", icon: Question },
   { title: "Terminology", url: "/terminology", group: "Configuration", icon: BookOpen },
-  { title: "Voice Profiles", url: "/voice-profiles", group: "Configuration", icon: Mic2 },
+  { title: "Voice Profiles", url: "/voice-profiles", group: "Configuration", icon: Microphone },
   { title: "Post-room Feedback", url: "/feedback", group: "Operations", icon: Star },
-  { title: "Settings", url: "/settings", group: "Configuration", icon: Settings },
-  { title: "Workspace", url: "/workspace/dashboard", group: "Administration", icon: Building2 },
-  { title: "Internal Admin", url: "/internal/dashboard", group: "Administration", icon: ServerCog },
-  { title: "Dev Test", url: "/dev-test", group: "Developer", icon: TestTube2 },
+  { title: "GearSix", url: "/settings", group: "Configuration", icon: GearSix },
+  { title: "Workspace", url: "/workspace/dashboard", group: "Administration", icon: Buildings },
+  { title: "Internal Admin", url: "/internal/dashboard", group: "Administration", icon: HardDrives },
+  { title: "Dev Test", url: "/dev-test", group: "Developer", icon: Flask },
 ];
 
 function Breadcrumbs() {
@@ -101,8 +78,8 @@ function Breadcrumbs() {
 
   return (
     <div className="min-w-0">
-      <h1 className="truncate text-2xl font-semibold tracking-tight text-neutral-950">{label}</h1>
-      {!isRoomInformationPage ? <p className="text-xs text-neutral-500">WarpTalk workspace</p> : null}
+      <h1 className="truncate text-[16px] font-semibold tracking-tight text-foreground">{label}</h1>
+      {!isRoomInformationPage ? <p className="text-[13px] text-muted-foreground">WarpTalk workspace</p> : null}
     </div>
   );
 }
@@ -112,11 +89,11 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="dashboard-glass-surface hidden h-9 w-full max-w-[330px] items-center gap-2 rounded-full px-3 text-sm text-neutral-600 transition hover:text-neutral-950 md:flex"
+      className="hidden h-8 w-full max-w-[330px] items-center gap-2 rounded-md bg-muted/50 border border-border px-3 text-[13px] text-muted-foreground transition hover:bg-muted md:flex"
     >
-      <Search className="relative z-[2] h-4 w-4" />
-      <span className="relative z-[2] flex-1 text-left">Search pages...</span>
-      <kbd className="relative z-[2] rounded-full border border-neutral-950/10 bg-neutral-950/5 px-1.5 font-mono text-[10px] text-neutral-500">Ctrl K</kbd>
+      <MagnifyingGlass weight="light" className="h-3.5 w-3.5" />
+      <span className="flex-1 text-left">MagnifyingGlass pages...</span>
+      <kbd className="rounded-sm bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">Ctrl K</kbd>
     </button>
   );
 }
@@ -127,7 +104,7 @@ function IconButton({ children, label }: { children: ReactNode; label: string })
       type="button"
       aria-label={label}
       title={label}
-      className="dashboard-glass-surface inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-950 transition hover:text-neutral-950"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
     >
       {children}
     </button>
@@ -188,14 +165,14 @@ export function Topbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 flex h-[70px] shrink-0 items-center gap-2 bg-transparent px-1 text-neutral-950">
+      <header className="sticky top-0 z-20 flex h-[63px] shrink-0 items-center gap-4 border-b border-border bg-background px-4">
         <button
           type="button"
           aria-label="Toggle sidebar"
           title="Sidebar"
-          className="dashboard-glass-surface inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-950 transition hover:text-neutral-950"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
         >
-          <PanelLeft className="relative z-[2] h-4 w-4" />
+          <SidebarSimple weight="light" className="h-4 w-4" />
         </button>
         <div className="min-w-0 flex-1">
           <Breadcrumbs />
@@ -203,56 +180,56 @@ export function Topbar() {
         <SearchTrigger onClick={() => setSearchOpen(true)} />
         <div className="ml-auto flex items-center gap-1">
           <IconButton label="Help">
-            <CircleHelp className="relative z-[2] h-4 w-4" />
+            <Question weight="light" className="h-4 w-4" />
           </IconButton>
           <IconButton label="Notifications">
-            <Bell className="relative z-[2] h-4 w-4" />
+            <Bell weight="light" className="h-4 w-4" />
           </IconButton>
           <IconButton label="Theme">
-            <Moon className="relative z-[2] h-4 w-4" />
+            <Moon weight="light" className="h-4 w-4" />
           </IconButton>
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="dashboard-glass-surface ml-1.5 flex h-9 items-center gap-2 rounded-full px-2 text-neutral-950 outline-none transition hover:bg-white/80 focus-visible:ring-2 focus-visible:ring-neutral-950/20"
+              className="ml-2 flex h-8 items-center gap-2 rounded-md bg-muted/50 px-2 text-foreground outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Open account menu"
             >
-              <Avatar className="relative z-[2] h-6 w-6">
-                <AvatarFallback className="bg-neutral-950 text-xs text-white">{roleInitial}</AvatarFallback>
+              <Avatar className="h-5 w-5">
+                <AvatarFallback className="bg-primary text-[10px] text-primary-foreground">{roleInitial}</AvatarFallback>
               </Avatar>
-              <span className="relative z-[2] hidden text-sm font-medium sm:inline">{roleLabel}</span>
+              <span className="hidden text-[13px] font-medium sm:inline">{roleLabel}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
               sideOffset={10}
-              className="w-56 rounded-2xl border border-neutral-200/80 bg-white p-2 text-neutral-950 shadow-[0_18px_48px_rgba(15,15,15,0.14)]"
+              className="w-56 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-sm"
             >
               <DropdownMenuItem
                 onClick={() => router.push(profileHref)}
-                className="h-11 cursor-pointer gap-3 rounded-xl bg-neutral-100 px-3 text-sm font-medium focus:bg-neutral-200"
+                className="h-8 cursor-pointer gap-2 rounded-md px-2 text-[13px] focus:bg-muted"
               >
-                <UserRound className="h-4 w-4" />
+                <User weight="light" className="h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => toast.info("Community is coming soon.")}
-                className="h-11 cursor-pointer gap-3 rounded-xl px-3 text-sm font-medium focus:bg-neutral-100"
+                className="h-8 cursor-pointer gap-2 rounded-md px-2 text-[13px] focus:bg-muted"
               >
-                <MessageCircle className="h-4 w-4" />
+                <ChatCircle weight="light" className="h-4 w-4" />
                 <span>Community</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => toast.info("Help Center is coming soon.")}
-                className="h-11 cursor-pointer gap-3 rounded-xl px-3 text-sm font-medium focus:bg-neutral-100"
+                className="h-8 cursor-pointer gap-2 rounded-md px-2 text-[13px] focus:bg-muted"
               >
-                <CircleHelp className="h-4 w-4" />
+                <Question weight="light" className="h-4 w-4" />
                 <span>Help Center</span>
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="my-2 bg-neutral-200" />
+              <DropdownMenuSeparator className="my-1 bg-border" />
               <DropdownMenuItem
                 onClick={handleSignOut}
-                className="h-11 cursor-pointer gap-3 rounded-xl px-3 text-sm font-medium focus:bg-neutral-100"
+                className="h-8 cursor-pointer gap-2 rounded-md px-2 text-[13px] focus:bg-muted"
               >
-                <LogOut className="h-4 w-4" />
+                <SignOut weight="light" className="h-4 w-4" />
                 <span>Sign Out</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -262,7 +239,7 @@ export function Topbar() {
 
       <CommandDialog open={searchOpen} onOpenChange={setSearchOpen} className="max-w-[640px]">
         <Command className="rounded-xl">
-          <CommandInput placeholder="Search WarpTalk pages..." autoFocus />
+          <CommandInput placeholder="MagnifyingGlass WarpTalk pages..." autoFocus />
           <CommandList>
             <CommandEmpty>No page found.</CommandEmpty>
             {Object.entries(groupedItems).map(([group, items]) => (

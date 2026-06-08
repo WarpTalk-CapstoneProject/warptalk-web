@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, Bot, Database, Globe2, ServerCog, ShieldCheck, UsersRound } from "lucide-react";
+import { Warning, Robot, Database, Globe, HardDrives, ShieldCheck, Users } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +25,7 @@ export default function InternalDashboardPage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-primary">
-            <ServerCog className="h-4 w-4" />
+            <HardDrives weight="light" className="h-4 w-4" />
             WarpTalk internal
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Internal dashboard</h1>
@@ -37,10 +37,10 @@ export default function InternalDashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={<Globe2 />} label="Workspaces" value="124" detail="8 trial accounts" />
-        <MetricCard icon={<UsersRound />} label="Active users" value="1,024" detail="Last 24 hours" />
-        <MetricCard icon={<Database />} label="Stored artifacts" value="42.8k" detail="Transcripts and summaries" />
-        <MetricCard icon={<AlertTriangle />} label="Open alerts" value="1" detail="Realtime latency" />
+        <MetricCard icon={<Globe weight="light" />} label="Workspaces" value="124" detail="8 trial accounts" />
+        <MetricCard icon={<Users weight="light" />} label="Active users" value="1,024" detail="Last 24 hours" />
+        <MetricCard icon={<Database weight="light" />} label="Stored artifacts" value="42.8k" detail="Transcripts and summaries" />
+        <MetricCard icon={<Warning weight="light" />} label="Open alerts" value="1" detail="Realtime latency" />
       </div>
 
       <Tabs defaultValue="services" className="space-y-4">
@@ -129,7 +129,7 @@ function MetricCard({ icon, label, value, detail }: { icon: ReactNode; label: st
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-5 [&_svg]:w-5">
             {icon}
           </div>
-          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+          <ShieldCheck weight="light" className="h-4 w-4 text-muted-foreground" />
         </div>
         <p className="mt-4 text-sm text-muted-foreground">{label}</p>
         <p className="text-3xl font-bold tracking-tight">{value}</p>
@@ -142,7 +142,7 @@ function MetricCard({ icon, label, value, detail }: { icon: ReactNode; label: st
 function PipelineCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border bg-background p-4">
-      <Bot className="mb-3 h-5 w-5 text-muted-foreground" />
+      <Robot weight="light" className="mb-3 h-5 w-5 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="text-2xl font-semibold">{value}</p>
     </div>

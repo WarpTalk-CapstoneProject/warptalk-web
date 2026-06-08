@@ -2,17 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Video,
-  FileText,
-  Building2,
-  CreditCard,
-  Bell,
-  Settings,
-  Shield,
-  ChevronLeft,
-} from "lucide-react";
+import { SquaresFour, VideoCamera, FileText, Buildings, CreditCard, Bell, GearSix, Shield, CaretLeft } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -20,16 +10,16 @@ import { useState } from "react";
 import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 
 const navigation = [
-  { name: "Dashboard", href: "/host/dashboard", icon: LayoutDashboard },
-  { name: "Cuộc họp", href: "/rooms", icon: Video },
+  { name: "Dashboard", href: "/host/dashboard", icon: SquaresFour },
+  { name: "Cuộc họp", href: "/rooms", icon: VideoCamera },
   { name: "Bản ghi", href: "/transcripts", icon: FileText },
-  { name: "Workspace", href: "/workspace/dashboard", icon: Building2 },
+  { name: "Workspace", href: "/workspace/dashboard", icon: Buildings },
   { name: "Gói dịch vụ", href: "/subscription", icon: CreditCard },
 ];
 
 const secondaryNav = [
   { name: "Thông báo", href: "/notifications", icon: Bell },
-  { name: "Cài đặt", href: "/settings", icon: Settings },
+  { name: "Cài đặt", href: "/settings", icon: GearSix },
 ];
 
 const adminNav = [
@@ -130,7 +120,7 @@ export function Sidebar() {
           className="w-full"
           onClick={() => setCollapsed(!collapsed)}
         >
-          <ChevronLeft
+          <CaretLeft weight="light"
             className={cn(
               "h-4 w-4 transition-transform",
               collapsed && "rotate-180"

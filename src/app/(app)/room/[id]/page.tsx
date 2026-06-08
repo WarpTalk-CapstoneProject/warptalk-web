@@ -15,32 +15,24 @@ import {
 import "@livekit/components-styles";
 import { ConnectionState, Track } from "livekit-client";
 import {
-  AlertCircle,
-  Captions,
-  Clock,
+  WarningCircle,
+  ClosedCaptioning,
   Copy,
-  FileText,
-  Loader2,
-  Link2,
-  LogOut,
-  MessageSquare,
-  Mic,
-  MicOff,
-  MoreVertical,
-  PhoneOff,
+  SpinnerGap,
+  Microphone,
+  MicrophoneSlash,
   Play,
-  Radio,
-  ScreenShare,
-  Settings,
-  Share2,
-  Sparkles,
+  Broadcast,
+  Screencast,
   UserCheck,
   UserMinus,
-  Users,
-  X,
-} from "lucide-react";
+  Layout,
+  VideoCamera,
+  VideoCameraSlash,
+  CheckCircle,
+  Stop,
+} from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { useJoinMeeting, useTriggerMeetingAi } from "@/hooks/use-meeting";
 import {
   useAdmitParticipant,
@@ -89,7 +81,7 @@ export default function RoomDetailPage() {
   const aiTriggeredRef = useRef(false);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  const [isParticipantPanelOpen, setIsParticipantPanelOpen] = useState(false);
+  
   const [meetingSession, setMeetingSession] = useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [warptalkStarted, setWarptalkStarted] = useState(false);
@@ -278,6 +270,11 @@ export default function RoomDetailPage() {
 
   async function handleExit() {
     try {
+      if (isPreviewRoom) {
+        toast.success("Preview room ended.");
+        router.push("/rooms");
+        return;
+      }
       if (isHost && room?.status !== "ended" && room?.status !== "cancelled") {
         await endRoom.mutateAsync(roomId);
         toast.success("Room ended.");
@@ -319,19 +316,24 @@ export default function RoomDetailPage() {
     }
   }
 
-  if (roomQuery.isLoading && !isPreviewRoom) {
-    return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
-  }
-
   function handleStartWarptalk() {
     setWarptalkStarted(true);
     toast.success("WarpTalk realtime translation started.");
   }
 
+  function handleStopWarptalk() {
+    setWarptalkStarted(false);
+    toast.success("WarpTalk realtime translation stopped.");
+  }
+
+  if (roomQuery.isLoading && !isPreviewRoom) {
+    return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
+  }
+
   if ((roomQuery.isError && !isPreviewRoom) || !room) {
     return (
       <StatePanel
-        icon={<AlertCircle className="h-8 w-8" />}
+        icon={<WarningCircle className="h-8 w-8" />}
         title="Room unavailable"
         description="The room does not exist or your account cannot access it."
       />
@@ -339,25 +341,30 @@ export default function RoomDetailPage() {
   }
 
   return (
-    <div className="h-screen min-h-0 overflow-hidden bg-[#111111] p-3 text-white">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-ink font-sans selection:bg-surface-3">
       <LiveKitRoom
-        audio
-        video
+        video={cameraEnabled}
+        audio={microphoneEnabled}
         token={meetingSession?.token}
-        serverUrl={LIVEKIT_SERVER_URL}
+        serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
         connect={Boolean(meetingSession?.token)}
         data-lk-theme="default"
-        className="h-full"
+        className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
-        <main className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_82px] gap-3">
-          <section className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <div className="relative min-h-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#191919] shadow-2xl">
-              <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap gap-2">
-                {participants.slice(0, 5).map((participant) => (
-                  <ParticipantPill key={participant.id} participant={participant} />
-                ))}
-              </div>
+        <MeetingTopBar 
+          room={room} 
+          isHost={isHost} 
+          sourceLanguage={sourceLanguage}
+          targetLanguage={targetLanguage}
+          onExit={handleExit}
+          warptalkStarted={warptalkStarted}
+          onStartWarptalk={handleStartWarptalk}
+          onStopWarptalk={handleStopWarptalk}
+        />
 
+        <main className="flex min-h-0 flex-1 gap-4 p-4 pt-0">
+          <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface-1 shadow-sm">
+            <div className="relative flex-1 min-h-0 w-full">
               <LiveKitMeetingStage
                 fallbackName={user?.fullName || user?.email || room.title}
                 isJoining={isMeetingJoining}
@@ -372,139 +379,103 @@ export default function RoomDetailPage() {
               />
               <RoomAudioRenderer />
 
-              <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-5 pb-5 pt-24">
-                <CaptionWindow latestSegment={warptalkStarted ? latestSegment ?? getPreviewTranscriptSegment() : undefined} warptalkStarted={warptalkStarted} />
+              {/* Floating Control Bar */}
+              <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity hover:opacity-100">
+                <MeetingControlBar
+                  room={room}
+                  roomCode={room.translationRoomCode}
+                  meetingEnabled={Boolean(meetingSession?.token)}
+                  cameraEnabled={cameraEnabled}
+                  microphoneEnabled={microphoneEnabled}
+                  isScreenSharing={Boolean(screenStream)}
+                  layoutMode={meetingLayout}
+                  onCopyText={copyText}
+                  onToggleCamera={() => setCameraEnabled((current) => !current)}
+                  onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
+                  onToggleScreenShare={handleToggleScreenShare}
+                  onLayoutChange={setMeetingLayout}
+                />
               </div>
             </div>
-
-            <MeetingSidePanel
-              roomId={roomId}
-              room={room}
-              isHost={isHost}
-              mode={sidePanelMode}
-              onModeChange={setSidePanelMode}
-              participants={participants}
-              participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
-              participantsError={participantsQuery.isError && !isPreviewRoom}
-              activeCount={activeCount}
-              segments={warptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
-            />
           </section>
 
-          <MeetingControlBar
+          <MeetingSidePanel
+            roomId={roomId}
             room={room}
             isHost={isHost}
-            sourceLanguage={sourceLanguage}
-            targetLanguage={targetLanguage}
+            mode={sidePanelMode}
+            onModeChange={setSidePanelMode}
+            participants={participants}
+            participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
+            participantsError={participantsQuery.isError && !isPreviewRoom}
             activeCount={activeCount}
-            meetingEnabled={Boolean(meetingSession?.token)}
-            cameraEnabled={cameraEnabled}
-            microphoneEnabled={microphoneEnabled}
-            isScreenSharing={Boolean(screenStream)}
-            layoutMode={meetingLayout}
-            roomCode={room.translationRoomCode}
-            joinLink={joinLink}
-            warptalkStarted={warptalkStarted}
-            panelMode={sidePanelMode}
+            segments={warptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
             onCopyText={copyText}
-            onExit={handleExit}
-            onStartWarptalk={handleStartWarptalk}
-            onToggleCamera={() => setCameraEnabled((current) => !current)}
-            onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
-            onToggleScreenShare={handleToggleScreenShare}
-            onLayoutChange={setMeetingLayout}
-            onPanelModeChange={setSidePanelMode}
-            onToggleParticipants={() => setIsParticipantPanelOpen((current) => !current)}
+            joinLink={joinLink}
           />
         </main>
-
-        {isParticipantPanelOpen ? (
-          <div className="absolute bottom-24 right-6 top-24 z-40 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[28px] border border-white/10 bg-[#f7f7f7] text-neutral-950 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
-              <div>
-                <h2 className="text-base font-bold">People</h2>
-                <p className="text-sm text-neutral-500">{activeCount} in room</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsParticipantPanelOpen(false)}
-                className="grid h-9 w-9 place-items-center rounded-full hover:bg-neutral-100"
-                aria-label="Close participants"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="max-h-[calc(100%-72px)] overflow-y-auto p-3">
-              {participants.map((participant) => (
-                <ParticipantRow
-                  key={participant.id}
-                  participant={participant}
-                  isHost={isHost}
-                  roomId={roomId}
-                  isRoomHost={participant.userId === room.hostId}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
       </LiveKitRoom>
     </div>
   );
 }
 
-// Kept temporarily while the meeting footer owns the active layout.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function MeetingTopBar({
   room,
   isHost,
-  activeCount,
   sourceLanguage,
   targetLanguage,
-  joinLink,
-  onCopyText,
+  onExit,
+  warptalkStarted,
+  onStartWarptalk,
+  onStopWarptalk,
 }: {
   room: TranslationRoomDto;
   isHost: boolean;
-  activeCount: number;
   sourceLanguage: string;
   targetLanguage: string;
-  joinLink: string;
-  onCopyText: (value: string, label: string) => void;
+  onExit: () => void;
+  warptalkStarted: boolean;
+  onStartWarptalk: () => void;
+  onStopWarptalk: () => void;
 }) {
   return (
-    <header className="flex min-h-0 items-center justify-between gap-3 rounded-[28px] border border-white/10 bg-[#1b1b1b] px-4 shadow-xl">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-neutral-950">
-          <Radio className="h-5 w-5" />
+    <header className="flex h-[52px] shrink-0 items-center justify-between px-6">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 text-[13px] font-medium text-ink">
+          <Broadcast className="h-4 w-4 text-ink-subtle" />
+          <span className="max-w-[200px] truncate">{room.title}</span>
+          <span className="text-ink-tertiary">/</span>
+          <span className="text-ink-subtle">{getLanguageName(sourceLanguage)} to {getLanguageName(targetLanguage)}</span>
         </div>
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="truncate text-base font-semibold">{room.title}</h1>
-            <span className="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-              Live
-            </span>
-            {isHost ? <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold">Host</span> : null}
-          </div>
-          <p className="mt-0.5 truncate text-xs text-white/55">
-            {room.translationRoomCode} · {activeCount}/{room.maxParticipants} participants · {getLanguageName(sourceLanguage)} to {getLanguageName(targetLanguage)}
-          </p>
+        <div className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${warptalkStarted ? "bg-red-50 text-red-600" : "bg-surface-2 text-ink-subtle"}`}>
+          <div className={`h-1.5 w-1.5 rounded-full ${warptalkStarted ? "bg-destructive" : "bg-slate-400"}`} />
+          {warptalkStarted ? "Live Translation" : "Translation Ready"}
         </div>
+        {isHost ? <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle border border-border">Host</span> : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        {isHost && (
+          <button
+            type="button"
+            onClick={warptalkStarted ? onStopWarptalk : onStartWarptalk}
+            className={`flex h-7 items-center gap-1.5 rounded-[6px] px-3 text-[13px] font-medium transition-colors shadow-sm ${
+              warptalkStarted
+                ? "bg-surface-3 text-ink hover:bg-surface-4"
+                : "bg-primary text-white hover:bg-primary-hover"
+            }`}
+          >
+            {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
+            {warptalkStarted ? "Stop Translation" : "Start WarpTalk"}
+          </button>
+        )}
+        <div className="h-4 w-[1px] bg-surface-3 mx-1" />
         <button
           type="button"
-          onClick={() => onCopyText(joinLink, "Invite link")}
-          className="hidden h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-neutral-950 transition hover:bg-white/90 md:flex"
+          onClick={onExit}
+          className="flex h-7 items-center gap-1.5 rounded-[6px] px-3 text-[13px] font-medium text-destructive transition-colors hover:bg-destructive/10"
         >
-          <Share2 className="h-4 w-4" />
-          Invite
-        </button>
-        <button type="button" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15" aria-label="Meeting settings">
-          <Settings className="h-4 w-4" />
-        </button>
-        <button type="button" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15" aria-label="More actions">
-          <MoreVertical className="h-4 w-4" />
+          {isHost ? "End Meeting" : "Leave"}
         </button>
       </div>
     </header>
@@ -522,6 +493,8 @@ function MeetingSidePanel({
   participantsError,
   activeCount,
   segments,
+  onCopyText,
+  joinLink,
 }: {
   roomId: string;
   room: TranslationRoomDto;
@@ -533,162 +506,99 @@ function MeetingSidePanel({
   participantsError: boolean;
   activeCount: number;
   segments: TranscriptSegmentDto[];
+  onCopyText: (value: string, label: string) => void;
+  joinLink: string;
 }) {
   return (
-    <aside className="hidden min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3 xl:grid">
-      <div className="flex items-center gap-2 rounded-[24px] border border-white/10 bg-[#1b1b1b] p-2 shadow-xl">
-        <PanelModeButton active={mode === "transcript"} icon={<Captions />} label="Transcript" onClick={() => onModeChange("transcript")} />
-        <PanelModeButton active={mode === "chat"} icon={<MessageSquare />} label="Chat" onClick={() => onModeChange("chat")} />
-        <PanelModeButton active={mode === "notes"} icon={<Sparkles />} label="Notes" onClick={() => onModeChange("notes")} />
-        <PanelModeButton active={mode === "people"} icon={<Users />} label="People" onClick={() => onModeChange("people")} />
-      </div>
-      <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] border border-white/10 bg-[#f7f7f7] text-neutral-950 shadow-2xl">
-        <div className="border-b border-neutral-200 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-bold">{panelTitle(mode)}</h2>
-              <p className="text-xs text-neutral-500">{panelDescription(mode)}</p>
-            </div>
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-neutral-950 text-white">
-              {panelIcon(mode)}
-            </span>
-          </div>
+    <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden xl:flex hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-1 rounded-2xl border border-border shadow-sm">
+        <div className="flex items-center gap-4 px-4 pt-3 pb-2 shrink-0 border-b border-border">
+          <TabButton active={mode === "transcript"} label="Transcript" onClick={() => onModeChange("transcript")} />
+          <TabButton active={mode === "chat"} label="Chat" onClick={() => onModeChange("chat")} />
+          <TabButton active={mode === "notes"} label="Notes" onClick={() => onModeChange("notes")} />
+          <TabButton active={mode === "people"} label="People" badge={activeCount} onClick={() => onModeChange("people")} />
         </div>
 
-        <div className="min-h-0 space-y-3 overflow-y-auto p-3">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
           {mode === "transcript" ? (
-            segments.length ? segments.map((segment) => <TranscriptBubble key={segment.segmentId} segment={segment} />) : <EmptyPanel text="Start WarpTalk realtime translation to show live transcript here." />
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {segments.length ? segments.map((segment) => <TranscriptBubble key={segment.segmentId} segment={segment} />) : <EmptyPanel text="Start WarpTalk to see live translation here." />}
+            </div>
           ) : null}
           {mode === "chat" ? <MeetingChat /> : null}
-          {mode === "notes" ? <AiNotesPanel /> : null}
-          {mode === "people" ? (
-            <PeoplePanel
-              roomId={roomId}
-              room={room}
-              isHost={isHost}
-              participants={participants}
-              participantsLoading={participantsLoading}
-              participantsError={participantsError}
-              activeCount={activeCount}
-            />
-          ) : null}
-        </div>
-      </section>
-
-      {false ? <section className="grid min-h-0 grid-cols-2 gap-3">
-        <div className="rounded-[28px] border border-white/10 bg-[#f7f7f7] p-4 text-neutral-950 shadow-2xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold">AI notes</h2>
-            <Sparkles className="h-4 w-4" />
-          </div>
-          <ul className="space-y-2 text-xs text-neutral-600">
-            <li>• Confirm investor rollout risks.</li>
-            <li>• Follow up terminology cleanup.</li>
-            <li>• Export transcript after meeting ends.</li>
-          </ul>
-        </div>
-
-        <div className="rounded-[28px] border border-white/10 bg-[#f7f7f7] p-4 text-neutral-950 shadow-2xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold">People</h2>
-            <span className="rounded-full bg-neutral-950 px-2 py-0.5 text-xs font-bold text-white">{activeCount}</span>
-          </div>
-          {participantsLoading ? <p className="text-xs text-neutral-500">Loading participants...</p> : null}
-          {participantsError ? <p className="text-xs text-red-600">Could not load participant controls.</p> : null}
-          <div className="space-y-2">
-            {participants.slice(0, 3).map((participant) => (
-              <div key={participant.id} className="flex items-center gap-2">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-neutral-950 text-xs font-bold text-white">
-                  {initials(participant.displayName)}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold">{participant.displayName}</p>
-                  <p className="text-[11px] capitalize text-neutral-500">{participant.role.toString().toLowerCase()}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          {isHost ? (
-            <div className="mt-3 border-t border-neutral-200 pt-3 text-[11px] text-neutral-500">
-              Host controls are available in the people drawer.
+          {mode === "notes" ? (
+            <div className="flex-1 overflow-y-auto p-4">
+              <AiNotesPanel />
             </div>
           ) : null}
-          <div className="mt-3 flex items-center gap-2 text-[11px] text-neutral-500">
-            <FileText className="h-3.5 w-3.5" />
-            {room.translationRoomCode} · {roomId}
-          </div>
+          {mode === "people" ? (
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex flex-col gap-2 rounded-lg border border-border bg-canvas p-3">
+                <p className="text-[12px] font-medium text-ink-subtle">Room Code</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-semibold tracking-wide text-ink">{room.translationRoomCode}</span>
+                  <button onClick={() => onCopyText(joinLink, "Invite link")} className="text-[12px] font-medium text-primary hover:text-primary-hover">Copy Link</button>
+                </div>
+              </div>
+              <PeoplePanel
+                roomId={roomId}
+                room={room}
+                isHost={isHost}
+                participants={participants}
+                participantsLoading={participantsLoading}
+                participantsError={participantsError}
+                activeCount={activeCount}
+              />
+            </div>
+          ) : null}
         </div>
-      </section> : null}
+      </div>
     </aside>
+  );
+}
+
+function TabButton({ active, label, badge, onClick }: { active: boolean; label: string; badge?: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative flex items-center gap-1.5 pb-2.5 text-[13px] font-medium outline-none transition-colors ${
+        active ? "text-ink" : "text-ink-subtle hover:text-ink"
+      }`}
+    >
+      {label}
+      {badge !== undefined && (
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-2 px-1 text-[10px] font-semibold text-ink-muted">
+          {badge}
+        </span>
+      )}
+      {active && <div className="absolute inset-x-0 bottom-0 h-0.5 rounded-t-full bg-ink" />}
+    </button>
   );
 }
 
 function TranscriptBubble({ segment }: { segment: TranscriptSegmentDto }) {
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
-      <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-neutral-500">
-        <span className="font-semibold text-neutral-900">{segment.speakerName || "Speaker"}</span>
-        <span>
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-medium text-ink">{segment.speakerName || "Speaker"}</span>
+        <span className="text-[11px] text-ink-subtle">
           {getLanguageName(segment.originalLanguage)}
           {segment.targetLanguage ? ` -> ${getLanguageName(segment.targetLanguage)}` : ""}
         </span>
       </div>
-      <p className="text-sm leading-5 text-neutral-800">{segment.originalText}</p>
-      {segment.translatedText ? <p className="mt-2 text-sm font-semibold leading-5 text-neutral-950">{segment.translatedText}</p> : null}
+      <div className="rounded-lg border border-border bg-surface-1 p-3 shadow-sm">
+        <p className="text-[13px] leading-relaxed text-ink-muted">{segment.originalText}</p>
+        {segment.translatedText ? <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-ink">{segment.translatedText}</p> : null}
+      </div>
     </div>
   );
 }
 
-function PanelModeButton({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex h-9 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-2 text-xs font-semibold transition ${
-        active ? "bg-white text-neutral-950" : "text-white/60 hover:bg-white/10 hover:text-white"
-      } [&_svg]:h-4 [&_svg]:w-4`}
-    >
-      {icon}
-      <span className="truncate">{label}</span>
-    </button>
-  );
-}
-
-function panelTitle(mode: "transcript" | "chat" | "notes" | "people") {
-  if (mode === "chat") return "Meeting chat";
-  if (mode === "notes") return "AI notes";
-  if (mode === "people") return "People";
-  return "Live transcript";
-}
-
-function panelDescription(mode: "transcript" | "chat" | "notes" | "people") {
-  if (mode === "chat") return "Messages between participants";
-  if (mode === "notes") return "Realtime AI draft notes";
-  if (mode === "people") return "Participants and host controls";
-  return "Original and translated captions";
-}
-
-function panelIcon(mode: "transcript" | "chat" | "notes" | "people") {
-  if (mode === "chat") return <MessageSquare className="h-4 w-4" />;
-  if (mode === "notes") return <Sparkles className="h-4 w-4" />;
-  if (mode === "people") return <Users className="h-4 w-4" />;
-  return <Captions className="h-4 w-4" />;
-}
-
 function EmptyPanel({ text }: { text: string }) {
   return (
-    <div className="grid min-h-[260px] place-items-center rounded-2xl border border-dashed border-neutral-200 bg-white/70 p-6 text-center text-sm text-neutral-500">
-      {text}
+    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+      <ClosedCaptioning className="h-8 w-8 text-ink-tertiary" weight="light" />
+      <p className="text-[13px] text-ink-subtle max-w-[200px]">{text}</p>
     </div>
   );
 }
@@ -709,45 +619,52 @@ function MeetingChat() {
   }
 
   return (
-    <div className="flex min-h-[360px] flex-col gap-3">
-      <div className="flex-1 space-y-3 overflow-y-auto">
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message) => (
           <div key={`${message.from}-${message.body}`} className={`flex ${message.mine ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm ${message.mine ? "bg-neutral-950 text-white" : "border bg-white text-neutral-950"}`}>
-              <p className={`mb-1 text-[11px] font-semibold ${message.mine ? "text-white/60" : "text-neutral-500"}`}>{message.from}</p>
-              <p>{message.body}</p>
+            <div className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] shadow-sm ${message.mine ? "bg-ink text-white" : "border border-border bg-surface-1 text-ink"}`}>
+              <p className={`mb-0.5 text-[11px] font-medium ${message.mine ? "text-ink-tertiary" : "text-ink-subtle"}`}>{message.from}</p>
+              <p className="leading-relaxed">{message.body}</p>
             </div>
           </div>
         ))}
       </div>
-      <form
-        className="flex h-11 items-center gap-2 rounded-full border bg-white px-4 text-sm text-neutral-950"
-        onSubmit={(event) => {
-          event.preventDefault();
-          sendMessage();
-        }}
-      >
-        <MessageSquare className="h-4 w-4" />
-        <input
-          value={draftMessage}
-          onChange={(event) => setDraftMessage(event.target.value)}
-          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-neutral-400"
-          placeholder="Type a message..."
-        />
-        <button type="submit" className="rounded-full bg-neutral-950 px-3 py-1 text-xs font-semibold text-white">
-          Send
-        </button>
-      </form>
+      <div className="p-3 bg-transparent">
+        <form
+          className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface-1 px-3 transition-colors focus-within:border-hairline-strong focus-within:shadow-sm"
+          onSubmit={(event) => {
+            event.preventDefault();
+            sendMessage();
+          }}
+        >
+          <input
+            value={draftMessage}
+            onChange={(event) => setDraftMessage(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-subtle"
+            placeholder="Write a message..."
+          />
+        </form>
+      </div>
     </div>
   );
 }
 
 function AiNotesPanel() {
   return (
-    <ul className="space-y-3 text-sm text-neutral-700">
-      <li className="rounded-2xl border bg-white p-3">Confirm investor rollout risks.</li>
-      <li className="rounded-2xl border bg-white p-3">Follow up terminology cleanup.</li>
-      <li className="rounded-2xl border bg-white p-3">Export transcript after meeting ends.</li>
+    <ul className="space-y-3">
+      <li className="flex gap-3 items-start">
+        <CheckCircle className="h-4 w-4 text-ink-subtle mt-0.5 shrink-0" />
+        <span className="text-[13px] leading-relaxed text-ink">Confirm investor rollout risks.</span>
+      </li>
+      <li className="flex gap-3 items-start">
+        <CheckCircle className="h-4 w-4 text-ink-subtle mt-0.5 shrink-0" />
+        <span className="text-[13px] leading-relaxed text-ink">Follow up terminology cleanup.</span>
+      </li>
+      <li className="flex gap-3 items-start">
+        <CheckCircle className="h-4 w-4 text-ink-subtle mt-0.5 shrink-0" />
+        <span className="text-[13px] leading-relaxed text-ink">Export transcript after meeting ends.</span>
+      </li>
     </ul>
   );
 }
@@ -759,7 +676,6 @@ function PeoplePanel({
   participants,
   participantsLoading,
   participantsError,
-  activeCount,
 }: {
   roomId: string;
   room: TranslationRoomDto;
@@ -770,13 +686,9 @@ function PeoplePanel({
   activeCount: number;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-2xl border bg-white p-3 text-sm">
-        <span className="font-semibold">Active participants</span>
-        <span className="rounded-full bg-neutral-950 px-2 py-0.5 text-xs font-bold text-white">{activeCount}</span>
-      </div>
-      {participantsLoading ? <p className="text-xs text-neutral-500">Loading participants...</p> : null}
-      {participantsError ? <p className="text-xs text-red-600">Could not load participant controls.</p> : null}
+    <div className="space-y-1">
+      {participantsLoading ? <p className="text-[13px] text-ink-subtle">Loading participants...</p> : null}
+      {participantsError ? <p className="text-[13px] text-red-600">Could not load participant controls.</p> : null}
       {participants.map((participant) => (
         <ParticipantRow
           key={participant.id}
@@ -786,199 +698,80 @@ function PeoplePanel({
           isRoomHost={participant.userId === room.hostId}
         />
       ))}
-      <div className="flex items-center gap-2 rounded-2xl border bg-white p-3 text-[11px] text-neutral-500">
-        <FileText className="h-3.5 w-3.5" />
-        {room.translationRoomCode} - {roomId}
-      </div>
     </div>
   );
 }
 
 function MeetingControlBar({
-  room,
-  isHost,
-  sourceLanguage,
-  targetLanguage,
-  roomCode,
-  joinLink,
-  activeCount,
   meetingEnabled,
   cameraEnabled,
   microphoneEnabled,
   isScreenSharing,
   layoutMode,
-  warptalkStarted,
-  panelMode,
   onCopyText,
-  onExit,
-  onStartWarptalk,
+  roomCode,
   onToggleCamera,
   onToggleMicrophone,
   onToggleScreenShare,
   onLayoutChange,
-  onPanelModeChange,
-  onToggleParticipants,
 }: {
   room: TranslationRoomDto;
-  isHost: boolean;
-  sourceLanguage: string;
-  targetLanguage: string;
-  roomCode: string;
-  joinLink: string;
-  activeCount: number;
   meetingEnabled: boolean;
   cameraEnabled: boolean;
   microphoneEnabled: boolean;
   isScreenSharing: boolean;
   layoutMode: MeetingLayoutMode;
-  warptalkStarted: boolean;
-  panelMode: "transcript" | "chat" | "notes" | "people";
+  roomCode: string;
   onCopyText: (value: string, label: string) => void;
-  onExit: () => void;
-  onStartWarptalk: () => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
   onToggleScreenShare: () => void;
   onLayoutChange: (layout: MeetingLayoutMode) => void;
-  onPanelModeChange: (mode: "transcript" | "chat" | "notes" | "people") => void;
-  onToggleParticipants: () => void;
 }) {
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
 
   return (
-    <footer className="grid min-h-0 grid-cols-[minmax(260px,1fr)_auto_minmax(260px,1fr)] items-center gap-3 rounded-[28px] border border-white/10 bg-[#1b1b1b] px-4 shadow-xl">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-neutral-950">
-          <Radio className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="truncate text-sm font-semibold">{room.title}</h1>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${warptalkStarted ? "bg-red-500 text-white" : "bg-white/10 text-white/70"}`}>
-              {warptalkStarted ? "Live" : "Ready"}
-            </span>
-            {isHost ? <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold">Host</span> : null}
-          </div>
-          <p className="mt-0.5 truncate text-xs text-white/55">
-            {roomCode} - {activeCount}/{room.maxParticipants} participants - {getLanguageName(sourceLanguage)} to {getLanguageName(targetLanguage)}
-          </p>
-        </div>
-      </div>
+    <div className="flex h-12 items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2 shadow-sm backdrop-blur-xl">
+      <LiveKitTrackControls
+        enabled={meetingEnabled}
+        cameraEnabled={cameraEnabled}
+        microphoneEnabled={microphoneEnabled}
+        onToggleCamera={onToggleCamera}
+        onToggleMicrophone={onToggleMicrophone}
+      />
+      
+      <div className="h-6 w-[1px] bg-surface-3 mx-1" />
 
-      <div className="flex items-center justify-center gap-2">
-        {isHost ? (
-          <button
-            type="button"
-            onClick={onStartWarptalk}
-            disabled={warptalkStarted}
-            className={`flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
-              warptalkStarted ? "bg-emerald-500/20 text-emerald-200" : "bg-white text-neutral-950 hover:bg-white/90"
-            }`}
-          >
-            <Play className="h-4 w-4" />
-            {warptalkStarted ? "WarpTalk on" : "Start WarpTalk"}
-          </button>
-        ) : null}
-        <MeetControl label="Copy invite" icon={<Link2 className="h-5 w-5" />} onClick={() => onCopyText(joinLink, "Invite link")} />
-        <MeetControl label="Copy code" icon={<Copy className="h-5 w-5" />} onClick={() => onCopyText(roomCode, "Room code")} />
-        <MeetControl label="Transcript" active={panelMode === "transcript"} icon={<Captions className="h-5 w-5" />} onClick={() => onPanelModeChange("transcript")} />
-        <MeetControl label="Chat" active={panelMode === "chat"} icon={<MessageSquare className="h-5 w-5" />} onClick={() => onPanelModeChange("chat")} />
-        <LiveKitTrackControls
-          enabled={meetingEnabled}
-          cameraEnabled={cameraEnabled}
-          microphoneEnabled={microphoneEnabled}
-          onToggleCamera={onToggleCamera}
-          onToggleMicrophone={onToggleMicrophone}
-        />
+      <MeetControl
+        label={isScreenSharing ? "Stop presenting" : "Present now"}
+        active={isScreenSharing}
+        icon={<Screencast className="h-[18px] w-[18px]" />}
+        onClick={onToggleScreenShare}
+      />
+      
+      <div className="h-6 w-[1px] bg-surface-3 mx-1" />
+      
+      <MeetControl 
+        label="Copy room code" 
+        icon={<Copy className="h-[18px] w-[18px]" />} 
+        onClick={() => onCopyText(roomCode, "Room code")} 
+      />
+
+      <div className="relative">
         <MeetControl
-          label={isScreenSharing ? "Stop presenting" : "Present now"}
-          active={isScreenSharing}
-          icon={<ScreenShare className="h-5 w-5" />}
-          onClick={onToggleScreenShare}
+          label="Layout options"
+          icon={<Layout className="h-[18px] w-[18px]" />}
+          onClick={() => setIsLayoutMenuOpen((current) => !current)}
         />
-        <button
-          type="button"
-          onClick={onExit}
-          className="grid h-12 w-14 place-items-center rounded-full bg-red-600 text-white transition hover:bg-red-500"
-          aria-label={isHost ? "End room" : "Leave room"}
-          title={isHost ? "End room" : "Leave room"}
-        >
-          {isHost ? <PhoneOff className="h-5 w-5" /> : <LogOut className="h-5 w-5" />}
-        </button>
+        {isLayoutMenuOpen ? (
+          <div className="absolute bottom-14 right-0 z-50 w-44 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg">
+            <LayoutOption label="Auto" value="auto" active={layoutMode === "auto"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
+            <LayoutOption label="Grid" value="grid" active={layoutMode === "grid"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
+            <LayoutOption label="Spotlight" value="spotlight" active={layoutMode === "spotlight"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
+            <LayoutOption label="Sidebar" value="sidebar" active={layoutMode === "sidebar"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
+          </div>
+        ) : null}
       </div>
-
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => onCopyText(joinLink, "Invite link")}
-          className="hidden h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-neutral-950 transition hover:bg-white/90 2xl:flex"
-        >
-          <Share2 className="h-4 w-4" />
-          Invite
-        </button>
-        <MeetControl label="Notes" active={panelMode === "notes"} icon={<Sparkles className="h-5 w-5" />} onClick={() => onPanelModeChange("notes")} />
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsLayoutMenuOpen((current) => !current)}
-            className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15"
-            aria-label="Layout options"
-            title="Layout options"
-          >
-            <MoreVertical className="h-5 w-5" />
-          </button>
-          {isLayoutMenuOpen ? (
-            <div className="absolute bottom-14 right-0 z-50 w-52 rounded-2xl border border-white/10 bg-[#252525] p-2 text-sm text-white shadow-2xl">
-              <LayoutOption label="Auto" value="auto" active={layoutMode === "auto"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-              <LayoutOption label="Grid" value="grid" active={layoutMode === "grid"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-              <LayoutOption label="Spotlight" value="spotlight" active={layoutMode === "spotlight"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-              <LayoutOption label="Presentation sidebar" value="sidebar" active={layoutMode === "sidebar"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-            </div>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            onPanelModeChange("people");
-            onToggleParticipants();
-          }}
-          className="relative grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15"
-          aria-label="People"
-          title="People"
-        >
-          <Users className="h-5 w-5" />
-          <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-xs font-bold text-neutral-950">
-            {activeCount}
-          </span>
-        </button>
-      </div>
-    </footer>
-  );
-}
-
-function CaptionWindow({ latestSegment, warptalkStarted }: { latestSegment?: TranscriptSegmentDto; warptalkStarted: boolean }) {
-  if (!latestSegment) {
-    return (
-      <div className="mx-auto max-w-3xl rounded-2xl bg-black/45 px-5 py-4 text-center backdrop-blur">
-        <div className="flex items-center justify-center gap-2 text-sm font-medium text-white/70">
-          <Radio className="h-4 w-4" />
-          {warptalkStarted ? "Transcript will appear here when real audio is received." : "WarpTalk realtime translation is ready. Host must press Start WarpTalk."}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto max-w-4xl rounded-2xl bg-black/60 px-5 py-4 backdrop-blur">
-      <div className="mb-2 flex items-center justify-between gap-3 text-xs text-white/60">
-        <span className="font-semibold text-white/80">{latestSegment.speakerName || "Speaker"}</span>
-        <span>
-          {getLanguageName(latestSegment.originalLanguage)}
-          {latestSegment.targetLanguage ? ` -> ${getLanguageName(latestSegment.targetLanguage)}` : ""}
-        </span>
-      </div>
-      <p className="text-lg leading-8 text-white">{latestSegment.originalText}</p>
-      {latestSegment.translatedText && <p className="mt-2 text-2xl font-semibold leading-9 text-[#8ab4f8]">{latestSegment.translatedText}</p>}
     </div>
   );
 }
@@ -1003,10 +796,10 @@ function LayoutOption({
         onSelect(value);
         close();
       }}
-      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition ${active ? "bg-white text-neutral-950" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
+      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
     >
       {label}
-      {active ? <span className="h-2 w-2 rounded-full bg-neutral-950" /> : null}
+      {active ? <CheckCircle className="h-3.5 w-3.5 text-ink" weight="fill" /> : null}
     </button>
   );
 }
@@ -1039,12 +832,12 @@ function LiveKitMeetingStage({
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
   const tracks = useTracks(
     [
-      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.Camera, withPlaceholder: false },
       { source: Track.Source.ScreenShare, withPlaceholder: false },
     ],
     { onlySubscribed: false }
   );
-  const hasTracks = tracks.length > 0;
+  const hasTracks = connectionState === ConnectionState.Connected && tracks.length > 0;
 
   useEffect(() => {
     if (!localVideoRef.current) return;
@@ -1058,10 +851,10 @@ function LiveKitMeetingStage({
 
   if (hasTracks) {
     return (
-      <div className="h-full w-full p-3 sm:p-4">
+      <div className="relative h-full w-full p-2 bg-surface-1">
         <div className={`grid h-full gap-3 ${tracks.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
           <TrackLoop tracks={tracks}>
-            <ParticipantTile className="overflow-hidden rounded-2xl bg-[#202124] [&_.lk-participant-name]:text-white" />
+            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur" />
           </TrackLoop>
         </div>
         <ConnectionBadge state={connectionState} />
@@ -1084,10 +877,10 @@ function LiveKitMeetingStage({
 
   if (screenStream && effectiveLayout === "sidebar") {
     return (
-      <div className="grid h-full min-h-0 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-        <div className="relative min-h-0 overflow-hidden rounded-[24px] border border-white/10 bg-black">
+      <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_260px] bg-surface-1">
+        <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-1">
           <video ref={screenVideoRef} className="h-full w-full object-contain" autoPlay muted playsInline />
-          <div className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
+          <div className="absolute left-4 top-4 rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur">
             You are presenting
           </div>
         </div>
@@ -1102,8 +895,8 @@ function LiveKitMeetingStage({
 
   if (screenStream) {
     return (
-      <div className="relative h-full w-full overflow-hidden p-3">
-        <div className="h-full overflow-hidden rounded-[24px] border border-white/10 bg-black">
+      <div className="relative h-full w-full overflow-hidden p-2 bg-surface-1">
+        <div className="h-full overflow-hidden rounded-xl border border-border bg-surface-1">
           <video ref={screenVideoRef} className="h-full w-full object-contain" autoPlay muted playsInline />
         </div>
         <ConnectionBadge state={connectionState} />
@@ -1111,9 +904,9 @@ function LiveKitMeetingStage({
     );
   }
 
-  if (cameraEnabled && localStream?.getVideoTracks().length && effectiveLayout === "spotlight") {
+  if (effectiveLayout === "spotlight") {
     return (
-      <div className="grid h-full min-h-0 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_240px]">
+      <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_240px] bg-surface-1">
         {localTile}
         <div className="grid min-h-0 gap-3 overflow-hidden">
           {participantTiles.slice(0, 3).map((participant) => <ParticipantGridTile key={participant.id} participant={participant} />)}
@@ -1126,7 +919,7 @@ function LiveKitMeetingStage({
 
   if (effectiveLayout === "grid" || effectiveLayout === "sidebar") {
     return (
-      <div className="relative h-full min-h-0 p-3">
+      <div className="relative h-full min-h-0 p-2 bg-surface-1">
         <div className={`grid h-full min-h-0 gap-3 ${gridClassName(participantTiles.length + 1)}`}>
           {localTile}
           {participantTiles.map((participant) => <ParticipantGridTile key={participant.id} participant={participant} />)}
@@ -1138,22 +931,22 @@ function LiveKitMeetingStage({
   }
 
   return (
-    <div className="flex w-full flex-col items-center justify-center px-6 py-20">
-      <div className="grid h-24 w-24 place-items-center rounded-full bg-[#3c4043] text-4xl font-semibold text-white shadow-lg">
+    <div className="flex w-full flex-col items-center justify-center px-6 py-20 bg-surface-2">
+      <div className="grid h-20 w-20 place-items-center rounded-full bg-surface-3 text-2xl font-medium text-ink-muted shadow-sm">
         {initials(fallbackName)}
       </div>
-      <p className="mt-4 max-w-xl truncate text-center text-lg font-medium text-white">{fallbackName}</p>
-      <p className="mt-1 flex items-center gap-2 text-sm text-white/55">
-        {isJoining && <Loader2 className="h-4 w-4 animate-spin" />}
+      <p className="mt-4 max-w-xl truncate text-center text-[15px] font-medium text-ink">{fallbackName}</p>
+      <p className="mt-1 flex items-center gap-2 text-[13px] text-ink-subtle">
+        {isJoining && <SpinnerGap className="h-3.5 w-3.5 animate-spin" />}
         {localMediaError || error || liveKitStateLabel(connectionState)}
       </p>
       {error && (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-4 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+          className="mt-4 rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-canvas shadow-sm"
         >
-          Retry meeting connection
+          Retry connection
         </button>
       )}
     </div>
@@ -1162,15 +955,15 @@ function LiveKitMeetingStage({
 
 function ConnectionBadge({ state }: { state: ConnectionState }) {
   return (
-    <div className="absolute right-4 top-4 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur">
+    <div className="absolute right-4 top-4 rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink-muted shadow-sm backdrop-blur">
       {liveKitStateLabel(state)}
     </div>
   );
 }
 
 function liveKitStateLabel(state: ConnectionState) {
-  if (state === ConnectionState.Connected) return "Meeting connected";
-  if (state === ConnectionState.Connecting) return "Connecting to LiveKit";
+  if (state === ConnectionState.Connected) return "Connected";
+  if (state === ConnectionState.Connecting) return "Connecting";
   if (state === ConnectionState.Reconnecting) return "Reconnecting";
   return "Waiting for LiveKit";
 }
@@ -1201,12 +994,12 @@ function MeetingPreviewTile({
   const hasVideo = cameraEnabled && Boolean(stream?.getVideoTracks().length);
 
   return (
-    <div className="relative min-h-0 overflow-hidden rounded-[24px] border border-white/10 bg-[#24272a]">
+    <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-3">
       {hasVideo ? (
-        <video ref={videoRef} className="h-full w-full object-cover" autoPlay muted playsInline />
+        <video ref={videoRef} className="h-full w-full object-cover -scale-x-100" autoPlay muted playsInline />
       ) : (
         <div className="grid h-full min-h-[160px] place-items-center">
-          <div className={`${featured ? "h-28 w-28 text-5xl" : "h-16 w-16 text-2xl"} grid place-items-center rounded-full bg-[#1b5fa7] font-semibold text-white`}>
+          <div className={`${featured ? "h-24 w-24 text-3xl" : "h-14 w-14 text-xl"} grid place-items-center rounded-full bg-slate-300 font-medium text-ink shadow-sm`}>
             {initials(name) || "H"}
           </div>
         </div>
@@ -1219,9 +1012,9 @@ function MeetingPreviewTile({
 function ParticipantGridTile({ participant }: { participant: TranslationRoomParticipantDto }) {
   const muted = participant.isTranslationAudioEnabled === false;
   return (
-    <div className="relative min-h-[128px] overflow-hidden rounded-[24px] border border-white/10 bg-[#303336]">
+    <div className="relative min-h-[128px] overflow-hidden rounded-xl border border-border bg-surface-3">
       <div className="grid h-full place-items-center">
-        <div className="grid h-16 w-16 place-items-center rounded-full bg-[#3c4043] text-2xl font-semibold text-white">
+        <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-300 text-xl font-medium text-ink shadow-sm">
           {initials(participant.displayName)}
         </div>
       </div>
@@ -1233,11 +1026,11 @@ function ParticipantGridTile({ participant }: { participant: TranslationRoomPart
 function TileLabel({ name, muted }: { name: string; muted: boolean }) {
   return (
     <>
-      <div className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-full bg-black/45 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
+      <div className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur">
         {name}
       </div>
-      <div className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
-        {muted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+      <div className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 text-ink shadow-sm backdrop-blur">
+        {muted ? <MicrophoneSlash className="h-3.5 w-3.5" /> : <Microphone className="h-3.5 w-3.5" />}
       </div>
     </>
   );
@@ -1246,7 +1039,7 @@ function TileLabel({ name, muted }: { name: string; muted: boolean }) {
 function LocalMediaError({ error }: { error: string | null }) {
   if (!error) return null;
   return (
-    <div className="absolute bottom-5 left-5 right-5 rounded-2xl border border-red-500/30 bg-red-500/15 px-4 py-3 text-sm text-red-100 backdrop-blur">
+    <div className="absolute bottom-5 left-5 right-5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 shadow-sm backdrop-blur">
       {error}
     </div>
   );
@@ -1270,14 +1063,14 @@ function LiveKitTrackControls({
       <>
         <MeetControl
           label={microphoneEnabled ? "Mute microphone" : "Unmute microphone"}
-          active={microphoneEnabled}
-          icon={microphoneEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+          active={!microphoneEnabled}
+          icon={microphoneEnabled ? <Microphone className="h-[18px] w-[18px]" /> : <MicrophoneSlash className="h-[18px] w-[18px]" />}
           onClick={onToggleMicrophone}
         />
         <MeetControl
           label={cameraEnabled ? "Turn camera off" : "Turn camera on"}
-          active={cameraEnabled}
-          icon={cameraEnabled ? <VideoIcon /> : <VideoOffIcon />}
+          active={!cameraEnabled}
+          icon={cameraEnabled ? <VideoCamera className="h-[18px] w-[18px]" /> : <VideoCameraSlash className="h-[18px] w-[18px]" />}
           onClick={onToggleCamera}
         />
       </>
@@ -1288,30 +1081,13 @@ function LiveKitTrackControls({
     <>
       <TrackToggle
         source={Track.Source.Microphone}
-        className="grid h-11 w-11 place-items-center rounded-full bg-[#3c4043] text-white hover:bg-[#4a4d51] data-[lk-enabled=true]:bg-[#8ab4f8] data-[lk-enabled=true]:text-[#202124]"
+        className="grid h-8 w-8 place-items-center rounded-md text-ink-muted hover:bg-surface-2 data-[lk-enabled=false]:bg-red-50 data-[lk-enabled=false]:text-red-600"
       />
       <TrackToggle
         source={Track.Source.Camera}
-        className="grid h-11 w-11 place-items-center rounded-full bg-[#3c4043] text-white hover:bg-[#4a4d51] data-[lk-enabled=true]:bg-[#8ab4f8] data-[lk-enabled=true]:text-[#202124]"
+        className="grid h-8 w-8 place-items-center rounded-md text-ink-muted hover:bg-surface-2 data-[lk-enabled=false]:bg-red-50 data-[lk-enabled=false]:text-red-600"
       />
     </>
-  );
-}
-
-function VideoIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 7.75A2.75 2.75 0 0 1 6.75 5h7.5A2.75 2.75 0 0 1 17 7.75v.85l2.45-1.63A1 1 0 0 1 21 7.8v8.4a1 1 0 0 1-1.55.83L17 15.4v.85A2.75 2.75 0 0 1 14.25 19h-7.5A2.75 2.75 0 0 1 4 16.25v-8.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function VideoOffIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 7.75A2.75 2.75 0 0 1 6.75 5h7.5A2.75 2.75 0 0 1 17 7.75v.85l2.45-1.63A1 1 0 0 1 21 7.8v8.4a1 1 0 0 1-1.55.83L17 15.4v.85A2.75 2.75 0 0 1 14.25 19h-7.5A2.75 2.75 0 0 1 4 16.25v-8.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
   );
 }
 
@@ -1333,11 +1109,12 @@ function MeetControl({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`grid h-11 w-11 place-items-center rounded-full ${
+      className={`grid h-8 w-8 place-items-center rounded-md transition-colors ${
         disabled
-          ? "cursor-not-allowed bg-[#3c4043] text-white/35"
-          :
-        active ? "bg-[#8ab4f8] text-[#202124]" : "bg-[#3c4043] text-white hover:bg-[#4a4d51]"
+          ? "cursor-not-allowed bg-canvas text-ink-tertiary"
+          : active
+          ? "bg-surface-2 text-primary"
+          : "bg-transparent text-ink-muted hover:bg-surface-2"
       }`}
       aria-label={label}
       title={label}
@@ -1347,11 +1124,16 @@ function MeetControl({
   );
 }
 
-function ParticipantPill({ participant }: { participant: TranslationRoomParticipantDto }) {
+
+
+function StatePanel({ title, description, icon }: { title: string; description: string; icon?: ReactNode }) {
   return (
-    <div className="flex items-center gap-2 rounded-full bg-black/35 py-1 pl-1 pr-3 text-sm text-white backdrop-blur">
-      <span className="grid h-7 w-7 place-items-center rounded-full bg-[#3c4043] text-xs font-bold">{initials(participant.displayName)}</span>
-      <span className="max-w-[140px] truncate">{participant.displayName}</span>
+    <div className="flex h-full items-center justify-center bg-canvas text-ink">
+      <div className="flex flex-col items-center gap-3 text-center">
+        {icon || <SpinnerGap className="h-8 w-8 animate-spin text-ink-subtle" />}
+        <h1 className="text-[15px] font-medium">{title}</h1>
+        <p className="text-[13px] text-ink-subtle max-w-sm">{description}</p>
+      </div>
     </div>
   );
 }
@@ -1561,61 +1343,38 @@ function ParticipantRow({
   }
 
   return (
-    <div className="rounded-2xl p-3 hover:bg-slate-50">
-      <div className="flex items-center gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#e8f0fe] text-sm font-bold text-[#174ea6]">
+    <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-canvas">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-sm bg-primary/10 text-[10px] font-bold text-primary">
           {initials(participant.displayName)}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-950">{participant.displayName}</p>
-          <p className="mt-0.5 text-xs capitalize text-slate-500">
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium text-ink">{participant.displayName}</p>
+          <p className="truncate text-[11px] text-ink-subtle capitalize">
             {participant.role.toString().toLowerCase()} · {participant.status.replace("_", " ")}
           </p>
         </div>
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600">
-          {audioEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-        </span>
       </div>
 
-      {canManage && (
-        <div className="mt-3 flex flex-wrap gap-2 pl-[52px]">
-          {participant.status === "waiting" && (
-            <Button size="sm" variant="outline" onClick={() => runAction("admit")}>
-              <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-              Admit
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => runAction("audio")}>
-            {audioEnabled ? <MicOff className="mr-1.5 h-3.5 w-3.5" /> : <Mic className="mr-1.5 h-3.5 w-3.5" />}
-            {audioEnabled ? "Mute route" : "Unmute route"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => runAction("kick")}>
-            <UserMinus className="mr-1.5 h-3.5 w-3.5" />
-            Remove
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatePanel({
-  icon,
-  title,
-  description,
-}: {
-  icon?: ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="mx-auto grid min-h-[520px] w-full max-w-3xl place-items-center">
-      <div className="rounded-2xl border border-[#dbe7f4] bg-white p-8 text-center shadow-sm">
-        <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-[#e4eef9] text-[#003476]">
-          {icon ?? <Clock className="h-7 w-7" />}
-        </div>
-        <h1 className="text-2xl font-bold text-slate-950">{title}</h1>
-        <p className="mt-2 text-sm text-slate-600">{description}</p>
+      <div className="flex shrink-0 items-center gap-1">
+        <span className="grid h-6 w-6 place-items-center rounded-sm bg-canvas text-ink-subtle">
+          {audioEnabled ? <Microphone className="h-3.5 w-3.5" /> : <MicrophoneSlash className="h-3.5 w-3.5" />}
+        </span>
+        {canManage && (
+          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            {participant.status === "waiting" && (
+              <button onClick={() => runAction("admit")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted" title="Admit">
+                <UserCheck className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button onClick={() => runAction("audio")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted" title="Toggle audio">
+              {audioEnabled ? <MicrophoneSlash className="h-3.5 w-3.5" /> : <Microphone className="h-3.5 w-3.5" />}
+            </button>
+            <button onClick={() => runAction("kick")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-red-50 text-red-600" title="Remove">
+              <UserMinus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

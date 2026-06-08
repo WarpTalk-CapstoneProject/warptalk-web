@@ -4,18 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ArrowLeft,
-  Camera,
-  CheckCircle2,
-  Globe2,
-  Headphones,
-  Mic,
-  MonitorSpeaker,
-  ShieldCheck,
-  Users,
-  Video,
-} from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle, Globe, Headphones, Microphone, Monitor, ShieldCheck, Users, VideoCamera } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -86,27 +75,14 @@ function JoinMeetingContent() {
   }
 
   return (
-    <main className="glass-dashboard-scope relative min-h-screen overflow-hidden bg-white p-3 text-neutral-950">
-      <video
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-100 saturate-0 brightness-[1.04] contrast-105"
-        src="/assets/backgrounds/dashboard-light-motion.mp4"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        aria-hidden="true"
-      />
-      <div className="absolute inset-0 bg-white/20" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_10%,rgba(255,255,255,0.48),transparent_24%),radial-gradient(circle_at_62%_0%,rgba(255,255,255,0.38),transparent_26%),radial-gradient(circle_at_6%_100%,rgba(255,255,255,0.3),transparent_30%)]" />
-
-      <div className="dashboard-glass-frame relative z-10 mx-auto flex min-h-[calc(100vh-1.5rem)] max-w-7xl flex-col gap-4 rounded-[32px] p-4">
+    <main className="relative min-h-screen overflow-hidden bg-canvas p-4 text-ink flex flex-col">
+      <div className="relative z-10 mx-auto flex w-full flex-1 max-w-7xl flex-col gap-6 py-6 sm:py-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/participant/dashboard" className={cn(buttonVariants({ variant: "outline" }), "rounded-full bg-white")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Link href="/participant/dashboard" className={cn(buttonVariants({ variant: "outline" }), "rounded-full bg-surface-1")}>
+            <ArrowLeft weight="light" className="mr-2 h-4 w-4" />
             Participant dashboard
           </Link>
-          <Badge variant="outline" className="bg-white">Preview join flow</Badge>
+          <Badge variant="outline" className="bg-surface-1">Preview join flow</Badge>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
@@ -117,11 +93,11 @@ function JoinMeetingContent() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-3 md:grid-cols-3">
-                <PreviewTile icon={<Users />} label="Display name" value={displayName || "Not set"} />
-                <PreviewTile icon={<ShieldCheck />} label="Room code" value={normalizedCode || "Required"} />
-                <PreviewTile icon={<Globe2 />} label="Languages" value={`${speakLanguage} to ${listenLanguage}`} />
+                <PreviewTile icon={<Users weight="light" />} label="Display name" value={displayName || "Not set"} />
+                <PreviewTile icon={<ShieldCheck weight="light" />} label="Room code" value={normalizedCode || "Required"} />
+                <PreviewTile icon={<Globe weight="light" />} label="Languages" value={`${speakLanguage} to ${listenLanguage}`} />
               </div>
-              <div className="mt-4 rounded-[28px] border bg-white p-4">
+              <div className="mt-4 rounded-[28px] border border-border bg-surface-2 p-4">
                 <div className="flex min-h-[260px] flex-col justify-between rounded-[24px] bg-neutral-950 p-5 text-white">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -129,8 +105,8 @@ function JoinMeetingContent() {
                       <h2 className="mt-1 text-2xl font-semibold">Ready room check</h2>
                     </div>
                     <div className="flex gap-2">
-                      <DevicePill active={cameraEnabled} icon={<Camera />} label="Camera" />
-                      <DevicePill active={microphoneEnabled} icon={<Mic />} label="Mic" />
+                      <DevicePill active={cameraEnabled} icon={<Camera weight="light" />} label="Camera" />
+                      <DevicePill active={microphoneEnabled} icon={<Microphone weight="light" />} label="Microphone" />
                     </div>
                   </div>
                   <p className="max-w-lg text-sm text-white/60">This preview keeps participant join consistent with the white shadcn dashboard shell.</p>
@@ -196,17 +172,17 @@ function JoinMeetingContent() {
                 <CardDescription>Frontend-only toggles for the join screen.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <DeviceRow icon={<Video />} label="Camera" checked={cameraEnabled} onCheckedChange={setCameraEnabled} />
-                <DeviceRow icon={<Mic />} label="Microphone" checked={microphoneEnabled} onCheckedChange={setMicrophoneEnabled} />
-                <DeviceRow icon={<Headphones />} label="Speaker" checked={speakerEnabled} onCheckedChange={setSpeakerEnabled} />
+                <DeviceRow icon={<VideoCamera weight="light" />} label="Camera" checked={cameraEnabled} onCheckedChange={setCameraEnabled} />
+                <DeviceRow icon={<Microphone weight="light" />} label="Microphone" checked={microphoneEnabled} onCheckedChange={setMicrophoneEnabled} />
+                <DeviceRow icon={<Headphones weight="light" />} label="Speaker" checked={speakerEnabled} onCheckedChange={setSpeakerEnabled} />
               </CardContent>
             </Card>
 
-            <Card className={cn("dashboard-glass-surface", status === "ready" ? "border-neutral-950/20 bg-white" : "")}>
+            <Card className={cn("bg-surface-1", status === "ready" ? "border-primary/50 bg-surface-2" : "")}>
               <CardContent className="space-y-3 p-5">
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <CheckCircle2 className="h-5 w-5" />
+                    <CheckCircle weight="light" className="h-5 w-5" />
                   </div>
                   <div>
                     <p className="font-medium">{status === "ready" ? "Ready to enter" : "Waiting for room details"}</p>
@@ -278,8 +254,8 @@ function DevicePill({ active, icon, label }: { active: boolean; icon: ReactNode;
 
 function PreviewTile({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4">
-      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-950 text-white [&_svg]:h-4 [&_svg]:w-4">
+    <div className="rounded-[12px] border border-border bg-surface-1 p-4">
+      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-ink [&_svg]:h-4 [&_svg]:w-4">
         {icon}
       </div>
       <p className="text-xs text-neutral-500">{label}</p>
@@ -293,7 +269,7 @@ function JoinLoading() {
     <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
       <Card className="w-full max-w-sm shadow-sm">
         <CardContent className="flex items-center gap-3 p-5 text-sm text-muted-foreground">
-          <MonitorSpeaker className="h-4 w-4 animate-pulse" />
+          <Monitor weight="light" className="h-4 w-4 animate-pulse" />
           Preparing join page...
         </CardContent>
       </Card>

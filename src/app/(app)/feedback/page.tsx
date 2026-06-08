@@ -2,11 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  Send,
-  Sparkles,
-  ThumbsUp,
-} from "lucide-react";
+import { PaperPlaneRight, Sparkle, ThumbsUp } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -109,7 +105,7 @@ export default function FeedbackPage() {
           View history
         </Link>
         <Button onClick={submitPreview}>
-          <Send className="mr-2 h-4 w-4" />
+          <PaperPlaneRight weight="light" className="mr-2 h-4 w-4" />
           Submit preview
         </Button>
       </div>
@@ -130,7 +126,7 @@ export default function FeedbackPage() {
           <CardContent className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               {ratingFields.map((field) => (
-                <div key={field.key} className="rounded-lg border bg-background p-4">
+                <div key={field.key} className="rounded-lg border  p-4">
                   <div className="mb-3">
                     <Label className="text-sm font-semibold">{field.label}</Label>
                     <p className="text-sm text-muted-foreground">{field.helper}</p>
@@ -182,16 +178,16 @@ export default function FeedbackPage() {
             <CardContent className="space-y-3">
               <div className="rounded-lg border bg-muted/40 p-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Sparkles className="h-4 w-4 text-primary" />
+                  <Sparkle weight="light" className="h-4 w-4 text-primary" />
                   Recommended action
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Prioritize sessions below 4.3 or notes that mention terminology drift.
                 </p>
               </div>
-              <div className="rounded-lg border bg-background p-4">
+              <div className="rounded-lg border  p-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <ThumbsUp className="h-4 w-4 text-primary" />
+                  <ThumbsUp weight="light" className="h-4 w-4 text-primary" />
                   Current sentiment
                 </div>
                 <p className="mt-2 text-2xl font-bold">{averageScore}/5</p>
@@ -207,7 +203,7 @@ export default function FeedbackPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {recentFeedback.map((item) => (
-                <div key={item.room} className="rounded-lg border bg-background p-3">
+                <div key={item.room} className="rounded-lg border  p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium">{item.room}</p>

@@ -1,16 +1,6 @@
 "use client";
 
-import {
-  BookOpen,
-  Bot,
-  CreditCard,
-  FileText,
-  LayoutDashboard,
-  LineChart,
-  Settings,
-  SlidersHorizontal,
-  Users,
-} from "lucide-react";
+import { BookOpen, Robot, CreditCard, FileText, SquaresFour, ChartLineUp, GearSix, SlidersHorizontal, Users } from "@phosphor-icons/react/dist/ssr";
 
 import { RoleSidebar, type RoleSidebarGroup } from "@/components/layout/role-sidebar";
 
@@ -18,11 +8,11 @@ const navGroups: RoleSidebarGroup[] = [
   {
     label: "Workspace",
     items: [
-      { title: "Dashboard", href: "/workspace/dashboard", icon: LayoutDashboard },
+      { title: "Dashboard", href: "/workspace/dashboard", icon: SquaresFour },
       { title: "Members", href: "/workspace/members", icon: Users },
-      { title: "Rooms", href: "/workspace/rooms", icon: LineChart },
+      { title: "Rooms", href: "/workspace/rooms", icon: ChartLineUp },
       { title: "Artifacts", href: "/workspace/artifacts", icon: FileText },
-      { title: "AI Chat", href: "/workspace/ai-chat", icon: Bot },
+      { title: "AI Chat", href: "/workspace/ai-chat", icon: Robot },
     ],
   },
   {
@@ -31,7 +21,7 @@ const navGroups: RoleSidebarGroup[] = [
       { title: "Meeting Setup", href: "/workspace/meeting-settings", icon: SlidersHorizontal },
       { title: "Terminology", href: "/workspace/terminology", icon: BookOpen },
       { title: "Billing", href: "/workspace/billing", icon: CreditCard },
-      { title: "Settings", href: "/workspace/settings", icon: Settings },
+      { title: "GearSix", href: "/workspace/settings", icon: GearSix },
     ],
   },
 ];

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ExternalLink, Filter, Languages, Search, Video } from "lucide-react";
+import { CaretLeft, CaretRight, ArrowSquareOut, Funnel, Translate, MagnifyingGlass, VideoCamera } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -60,11 +60,11 @@ export default function WorkspaceRoomsPage() {
           </div>
           <div className="flex items-center gap-2">
             <div className="relative w-56">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Search rooms..." className="h-9 rounded-xl bg-white pl-9" />
+              <MagnifyingGlass weight="light" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="MagnifyingGlass rooms..." className="h-9 rounded-xl bg-white pl-9" />
             </div>
             <Select value={department} onValueChange={(value) => { setDepartment(value ?? "All"); setPage(1); }}>
-              <SelectTrigger className="h-9 w-40 rounded-xl bg-white"><Filter /><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-40 rounded-xl bg-white"><Funnel weight="light" /><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="All">All departments</SelectItem>{departments.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={status} onValueChange={(value) => { setStatus(value ?? "All"); setPage(1); }}>
@@ -77,7 +77,7 @@ export default function WorkspaceRoomsPage() {
         </CardHeader>
         <CardContent className="flex h-[calc(100%-69px)] flex-col p-0">
           <div className="grid grid-cols-[52px_minmax(210px,1.2fr)_150px_minmax(210px,1fr)_145px_90px_42px] gap-3 border-b px-4 py-2 text-xs font-medium text-muted-foreground">
-            <span>No.</span><span>Room</span><span>Status</span><span>Languages</span><span>Starts</span><span>People</span><span />
+            <span>No.</span><span>Room</span><span>Status</span><span>Translate</span><span>Starts</span><span>People</span><span />
           </div>
           <div className="flex-1">
             {rows.map((room, index) => (
@@ -85,7 +85,7 @@ export default function WorkspaceRoomsPage() {
                 <span className="text-sm text-muted-foreground">{(page - 1) * pageSize + index + 1}</span>
                 <div className="min-w-0"><p className="truncate text-sm font-medium">{room.name}</p><p className="text-xs text-muted-foreground">{room.id} · {room.department}</p></div>
                 <Badge variant="outline" className={`w-fit rounded-full ${statusStyles[room.status]}`}>{room.status}</Badge>
-                <p className="flex min-w-0 items-center gap-2 truncate text-sm text-muted-foreground"><Languages className="h-4 w-4 shrink-0" />{room.languages}</p>
+                <p className="flex min-w-0 items-center gap-2 truncate text-sm text-muted-foreground"><Translate weight="light" className="h-4 w-4 shrink-0" />{room.languages}</p>
                 <div><p className="text-sm">{room.startsAt}</p><p className="text-xs text-muted-foreground">{room.host}</p></div>
                 <span className="text-sm">{room.participants}</span>
                 <Link
@@ -93,7 +93,7 @@ export default function WorkspaceRoomsPage() {
                   className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
                   title="Open room information"
                 >
-                  <ExternalLink />
+                  <ArrowSquareOut weight="light" />
                 </Link>
               </div>
             ))}
@@ -102,11 +102,11 @@ export default function WorkspaceRoomsPage() {
           <div className="flex items-center justify-between border-t px-4 py-3">
             <p className="text-xs text-muted-foreground">Showing {rows.length ? (page - 1) * pageSize + 1 : 0}-{Math.min(page * pageSize, filtered.length)} of {filtered.length}</p>
             <div className="flex items-center gap-1 rounded-2xl border bg-white p-1">
-              <Button variant="ghost" size="icon-sm" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft /></Button>
+              <Button variant="ghost" size="icon-sm" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><CaretLeft weight="light" /></Button>
               {Array.from({ length: totalPages }, (_, index) => index + 1).map((item) => (
                 <Button key={item} size="icon-sm" variant={item === page ? "default" : "ghost"} className={item === page ? "rounded-lg bg-neutral-950 text-white" : "rounded-lg"} onClick={() => setPage(item)}>{item}</Button>
               ))}
-              <Button variant="ghost" size="icon-sm" disabled={page === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}><ChevronRight /></Button>
+              <Button variant="ghost" size="icon-sm" disabled={page === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}><CaretRight weight="light" /></Button>
             </div>
           </div>
         </CardContent>
@@ -120,7 +120,7 @@ function Summary({ label, value }: { label: string; value: number }) {
     <Card className="rounded-3xl border-white/70 bg-white/88">
       <CardContent className="flex items-center justify-between p-4">
         <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-2xl font-semibold">{value}</p></div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-950 text-white"><Video className="h-4 w-4" /></div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-950 text-white"><VideoCamera weight="light" className="h-4 w-4" /></div>
       </CardContent>
     </Card>
   );

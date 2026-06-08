@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Download, FileText, Languages, Search, Timer, Users } from "lucide-react";
+import { Download, FileText, Translate, MagnifyingGlass, Timer, Users } from "@phosphor-icons/react/dist/ssr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,15 +115,15 @@ export default function HistoryPage() {
     <div className="flex flex-col gap-2.5">
       <section className="flex justify-end">
         <div className="relative w-full lg:w-[280px]">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search history..." className="pl-8" />
+          <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="MagnifyingGlass history..." className="pl-8" />
         </div>
       </section>
 
       <section className="grid gap-2.5 md:grid-cols-3">
-        <StatCard icon={<FileText />} label="Transcript exports" value="12" />
-        <StatCard icon={<Timer />} label="Translated time" value="136m" />
-        <StatCard icon={<Users />} label="Participants" value="33" />
+        <StatCard icon={<FileText weight="light" />} label="Transcript exports" value="12" />
+        <StatCard icon={<Timer weight="light" />} label="Translated time" value="136m" />
+        <StatCard icon={<Users weight="light" />} label="Participants" value="33" />
       </section>
 
       <div className="grid gap-2.5 xl:grid-cols-[310px_minmax(0,1fr)]">
@@ -139,7 +139,7 @@ export default function HistoryPage() {
                 type="button"
                 onClick={() => setSelectedId(room.id)}
                 className={cn(
-                  "w-full rounded-lg border bg-background p-2.5 text-left transition hover:bg-muted/50",
+                  "w-full rounded-lg border  p-2.5 text-left transition hover:bg-muted/50",
                   selectedRoom?.id === room.id && "border-primary ring-2 ring-primary/15"
                 )}
               >
@@ -178,7 +178,7 @@ export default function HistoryPage() {
               </TabsList>
               <TabsContent value="transcript" className="mt-3 space-y-2">
                 {transcriptPreview.map((item) => (
-                  <div key={`${item.time}-${item.speaker}`} className="rounded-lg border bg-background p-3">
+                  <div key={`${item.time}-${item.speaker}`} className="rounded-lg border  p-3">
                     <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <Badge variant="outline">{item.time}</Badge>
                       <span>{item.speaker}</span>
@@ -190,21 +190,21 @@ export default function HistoryPage() {
               </TabsContent>
               <TabsContent value="artifacts" className="mt-3 grid gap-2.5 md:grid-cols-2">
                 {selectedRoom.artifacts.map((artifact) => (
-                  <div key={artifact} className="flex items-center justify-between rounded-lg border bg-background p-2.5">
+                  <div key={artifact} className="flex items-center justify-between rounded-lg border  p-2.5">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-primary" />
+                      <FileText weight="light" className="h-4 w-4 text-primary" />
                       <span className="text-sm font-medium">{artifact}</span>
                     </div>
                     <Button size="icon-sm" variant="ghost" title="Download">
-                      <Download className="h-4 w-4" />
+                      <Download weight="light" className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
               </TabsContent>
               <TabsContent value="participants" className="mt-3 grid gap-2.5 md:grid-cols-3">
-                <Detail icon={<Users />} label="Participants" value={String(selectedRoom.participants)} />
-                <Detail icon={<Languages />} label="Languages" value={selectedRoom.languages} />
-                <Detail icon={<Timer />} label="Duration" value={selectedRoom.duration} />
+                <Detail icon={<Users weight="light" />} label="Participants" value={String(selectedRoom.participants)} />
+                <Detail icon={<Translate weight="light" />} label="Translate" value={selectedRoom.languages} />
+                <Detail icon={<Timer weight="light" />} label="Duration" value={selectedRoom.duration} />
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -232,7 +232,7 @@ function StatCard({ icon, label, value }: { icon: ReactNode; label: string; valu
 
 function Detail({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-lg border bg-background p-3">
+    <div className="rounded-lg border  p-3">
       <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-4 [&_svg]:w-4">
         {icon}
       </span>

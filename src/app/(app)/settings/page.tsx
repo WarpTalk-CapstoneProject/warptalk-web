@@ -1,4 +1,4 @@
-import { Bell, KeyRound, Palette, ShieldCheck } from "lucide-react";
+import { Bell, Key, Palette, ShieldCheck } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ const settingsSections = [
     status: "Active",
   },
   {
-    icon: KeyRound,
+    icon: Key,
     title: "API readiness",
     description: "Track backend-dependent settings that will be enabled after service integration.",
     status: "Waiting",

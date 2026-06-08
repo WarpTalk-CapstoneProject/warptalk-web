@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Bot, FileText, MessageSquarePlus, MoreHorizontal, Paperclip, Search, Send, Trash2 } from "lucide-react";
+import { Robot, FileText, ChatCircleText, DotsThree, Paperclip, MagnifyingGlass, PaperPlaneRight, Trash } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -67,11 +67,11 @@ export default function WorkspaceAiChatPage() {
         <CardHeader className="border-b p-4">
           <div className="flex items-center justify-between">
             <div><CardTitle className="text-base">Workspace AI</CardTitle><p className="text-xs text-muted-foreground">Manager conversations</p></div>
-            <Button size="icon-sm" className="rounded-full bg-neutral-950 text-white" onClick={createConversation}><MessageSquarePlus /></Button>
+            <Button size="icon-sm" className="rounded-full bg-neutral-950 text-white" onClick={createConversation}><ChatCircleText weight="light" /></Button>
           </div>
           <div className="relative pt-2">
-            <Search className="absolute left-3 top-[calc(50%+4px)] h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations..." className="h-9 rounded-xl bg-white pl-9" />
+            <MagnifyingGlass weight="light" className="absolute left-3 top-[calc(50%+4px)] h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="MagnifyingGlass conversations..." className="h-9 rounded-xl bg-white pl-9" />
           </div>
         </CardHeader>
         <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
@@ -81,7 +81,7 @@ export default function WorkspaceAiChatPage() {
                 <p className="truncate text-sm font-medium">{conversation.title}</p>
                 <p className={`truncate text-xs ${activeId === conversation.id ? "text-white/60" : "text-muted-foreground"}`}>{conversation.context}</p>
               </button>
-              <Button variant="ghost" size="icon-sm" className={activeId === conversation.id ? "text-white hover:bg-white/10 hover:text-white" : ""} onClick={() => removeConversation(conversation.id)} title="Delete conversation"><Trash2 /></Button>
+              <Button variant="ghost" size="icon-sm" className={activeId === conversation.id ? "text-white hover:bg-white/10 hover:text-white" : ""} onClick={() => removeConversation(conversation.id)} title="Delete conversation"><Trash weight="light" /></Button>
             </div>
           ))}
         </CardContent>
@@ -92,23 +92,23 @@ export default function WorkspaceAiChatPage() {
           <>
             <CardHeader className="flex-row items-center justify-between space-y-0 border-b px-5 py-3">
               <div><CardTitle className="text-base">{active.title}</CardTitle><p className="text-xs text-muted-foreground">Context: {active.context}</p></div>
-              <Button variant="ghost" size="icon-sm"><MoreHorizontal /></Button>
+              <Button variant="ghost" size="icon-sm"><DotsThree weight="light" /></Button>
             </CardHeader>
             <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
               {active.messages.map((item, index) => (
                 <div key={`${item.role}-${index}`} className={`flex items-start gap-2 ${item.role === "user" ? "justify-end" : ""}`}>
-                  {item.role === "assistant" && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white"><Bot className="h-4 w-4" /></span>}
+                  {item.role === "assistant" && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white"><Robot weight="light" className="h-4 w-4" /></span>}
                   <div className={`max-w-[76%] rounded-2xl px-4 py-3 text-sm leading-6 ${item.role === "user" ? "bg-neutral-950 text-white" : "border bg-white"}`}>{item.text}</div>
                 </div>
               ))}
             </CardContent>
             <div className="border-t p-4">
-              <div className="mb-2 flex items-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs text-muted-foreground"><FileText className="h-4 w-4" />{active.context} transcript attached</div>
+              <div className="mb-2 flex items-center gap-2 rounded-xl bg-neutral-100 px-3 py-2 text-xs text-muted-foreground"><FileText weight="light" className="h-4 w-4" />{active.context} transcript attached</div>
               <div className="flex items-center gap-2 rounded-2xl border bg-white p-2">
-                <Button variant="ghost" size="icon-sm" onClick={() => fileInput.current?.click()}><Paperclip /></Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => fileInput.current?.click()}><Paperclip weight="light" /></Button>
                 <input ref={fileInput} type="file" className="hidden" accept=".pdf,.txt,.doc,.docx,image/*,audio/*" onChange={(event) => event.target.files?.[0] && toast.success(`${event.target.files[0].name} attached to this conversation.`)} />
                 <Input value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => event.key === "Enter" && sendMessage()} placeholder="Ask about meetings, transcripts, costs, or teams..." className="h-9 flex-1 border-0 shadow-none focus-visible:ring-0" />
-                <Button size="icon-sm" className="rounded-xl bg-neutral-950 text-white" onClick={sendMessage}><Send /></Button>
+                <Button size="icon-sm" className="rounded-xl bg-neutral-950 text-white" onClick={sendMessage}><PaperPlaneRight weight="light" /></Button>
               </div>
             </div>
           </>

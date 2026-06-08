@@ -3,22 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import {
-  Bot,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ChevronRight,
-  Download,
-  FileText,
-  Filter,
-  Languages,
-  ListChecks,
-  RotateCcw,
-  Search,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { Robot, CalendarDots, Check, CheckCircle, CaretRight, Download, FileText, Funnel, Translate, ListChecks, ArrowCounterClockwise, MagnifyingGlass, Sparkle, Users } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -315,11 +300,11 @@ export default function AiSummariesPage() {
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
       <div className="flex min-w-0 items-center gap-2">
         <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search meetings, groups, hosts..."
+            placeholder="MagnifyingGlass meetings, groups, hosts..."
             className="h-9 pl-8"
           />
         </div>
@@ -327,7 +312,7 @@ export default function AiSummariesPage() {
           value={department}
           onChange={(event) => setDepartment(event.target.value)}
           className="h-9 rounded-lg border bg-white px-3 text-xs outline-none"
-          aria-label="Filter by department"
+          aria-label="Funnel by department"
         >
           {["All departments", "Executive", "Sales", "Legal", "Support"].map((item) => (
             <option key={item}>{item}</option>
@@ -337,14 +322,14 @@ export default function AiSummariesPage() {
           value={status}
           onChange={(event) => setStatus(event.target.value)}
           className="h-9 rounded-lg border bg-white px-3 text-xs outline-none"
-          aria-label="Filter by status"
+          aria-label="Funnel by status"
         >
           {["All statuses", "Processing", "Draft", "Review needed", "Final"].map((item) => (
             <option key={item}>{item}</option>
           ))}
         </select>
         <Button size="icon" variant="outline" title="More filters">
-          <Filter className="h-4 w-4" />
+          <Funnel weight="light" className="h-4 w-4" />
         </Button>
       </div>
 
@@ -357,7 +342,7 @@ export default function AiSummariesPage() {
                 {filteredMeetings.length} available
               </p>
             </div>
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <CalendarDots weight="light" className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {Object.entries(groupedMeetings).map(([dateLabel, records]) => (
@@ -424,7 +409,7 @@ export default function AiSummariesPage() {
                 disabled={selectedMeeting.status === "Processing"}
                 className="rounded-full"
               >
-                <Check className="h-3.5 w-3.5" />
+                <Check weight="light" className="h-3.5 w-3.5" />
                 Approve final
               </Button>
             </div>
@@ -495,10 +480,10 @@ export default function AiSummariesPage() {
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             <div className="grid grid-cols-2 gap-2">
-              <InspectorValue icon={<Users />} label="Participants" value={String(selectedMeeting.participants)} />
-              <InspectorValue icon={<Languages />} label="Languages" value={String(selectedMeeting.languages.length)} />
-              <InspectorValue icon={<FileText />} label="Files" value={String(selectedMeeting.files.length)} />
-              <InspectorValue icon={<RotateCcw />} label="Revision" value={`v${selectedMeeting.revision}`} />
+              <InspectorValue icon={<Users weight="light" />} label="Participants" value={String(selectedMeeting.participants)} />
+              <InspectorValue icon={<Translate weight="light" />} label="Translate" value={String(selectedMeeting.languages.length)} />
+              <InspectorValue icon={<FileText weight="light" />} label="Files" value={String(selectedMeeting.files.length)} />
+              <InspectorValue icon={<ArrowCounterClockwise weight="light" />} label="Revision" value={`v${selectedMeeting.revision}`} />
             </div>
 
             <div className="rounded-xl border p-3">
@@ -524,7 +509,7 @@ export default function AiSummariesPage() {
                   "mt-3 w-full justify-center rounded-full"
                 )}
               >
-                <Bot className="h-3.5 w-3.5" />
+                <Robot weight="light" className="h-3.5 w-3.5" />
                 Open in AI Chat
               </Link>
             </div>
@@ -546,7 +531,7 @@ export default function AiSummariesPage() {
                     }
                   >
                     {item}
-                    <Download className="h-3.5 w-3.5" />
+                    <Download weight="light" className="h-3.5 w-3.5" />
                   </Button>
                 ))}
               </div>
@@ -567,19 +552,19 @@ function Overview({
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <OverviewSection title="AI summary" icon={<Sparkles />} onOpen={() => onOpenTab("summary")}>
+      <OverviewSection title="AI summary" icon={<Sparkle weight="light" />} onOpen={() => onOpenTab("summary")}>
         <p className="text-xs leading-relaxed text-muted-foreground">{meeting.summary}</p>
       </OverviewSection>
-      <OverviewSection title="Transcript health" icon={<FileText />} onOpen={() => onOpenTab("transcript")}>
+      <OverviewSection title="Transcript health" icon={<FileText weight="light" />} onOpen={() => onOpenTab("transcript")}>
         <p className="text-2xl font-semibold">{meeting.segments.length}</p>
         <p className="text-xs text-muted-foreground">
           {meeting.segments.filter((segment) => segment.needsReview).length} segments need review
         </p>
       </OverviewSection>
-      <OverviewSection title="Decisions" icon={<CheckCircle2 />} onOpen={() => onOpenTab("summary")}>
+      <OverviewSection title="Decisions" icon={<CheckCircle weight="light" />} onOpen={() => onOpenTab("summary")}>
         <List values={meeting.decisions} empty="No decisions generated." />
       </OverviewSection>
-      <OverviewSection title="Action items" icon={<ListChecks />} onOpen={() => onOpenTab("actions")}>
+      <OverviewSection title="Action items" icon={<ListChecks weight="light" />} onOpen={() => onOpenTab("actions")}>
         <List values={meeting.actionItems} empty="No action items generated." />
       </OverviewSection>
     </div>
@@ -613,11 +598,11 @@ function TranscriptEditor({
         </p>
         <div className="flex gap-1.5">
           <Button size="sm" variant="outline" onClick={onExport}>
-            <Download className="h-3.5 w-3.5" />
+            <Download weight="light" className="h-3.5 w-3.5" />
             Export
           </Button>
           <Button size="sm" onClick={onSave}>
-            <Check className="h-3.5 w-3.5" />
+            <Check weight="light" className="h-3.5 w-3.5" />
             Save draft
           </Button>
         </div>
@@ -733,7 +718,7 @@ function FilesPanel({
         <div key={file.name} className="flex items-center justify-between gap-3 rounded-xl border p-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100">
-              <FileText className="h-4 w-4" />
+              <FileText weight="light" className="h-4 w-4" />
             </span>
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold">{file.name}</p>
@@ -743,7 +728,7 @@ function FilesPanel({
             </div>
           </div>
           <Button size="icon-sm" variant="ghost" onClick={() => onDownload(file.name)} title="Download file">
-            <Download className="h-4 w-4" />
+            <Download weight="light" className="h-4 w-4" />
           </Button>
         </div>
       ))}
@@ -818,7 +803,7 @@ function OverviewSection({
           </span>
           {title}
         </span>
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <CaretRight weight="light" className="h-4 w-4 text-muted-foreground" />
       </div>
       {children}
     </button>
@@ -884,7 +869,7 @@ function List({ values, empty }: { values: string[]; empty: string }) {
     <ul className="space-y-1.5">
       {values.slice(0, 3).map((value) => (
         <li key={value} className="flex gap-2 text-xs text-muted-foreground">
-          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-neutral-950" />
+          <Check weight="light" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-neutral-950" />
           {value}
         </li>
       ))}

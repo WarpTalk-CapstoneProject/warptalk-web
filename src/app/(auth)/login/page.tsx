@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeClosed, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -124,7 +124,7 @@ function LoginForm() {
                 onClick={() => setShowPassword((value) => !value)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? <EyeOff /> : <Eye />}
+                {showPassword ? <EyeClosed weight="light" /> : <Eye weight="light" />}
               </button>
             </span>
           </label>
@@ -148,7 +148,7 @@ function LoginForm() {
           className="mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-white font-semibold text-black transition hover:bg-white/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
           disabled={isSubmitting}
         >
-          {isSubmitting ? <Loader2 className="animate-spin" /> : "Log In"}
+          {isSubmitting ? <Spinner weight="light" className="animate-spin" /> : "Log In"}
         </button>
       </form>
 
@@ -176,7 +176,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="fixed inset-0 z-20 grid place-items-center bg-black">
-          <Loader2 className="animate-spin text-white" />
+          <Spinner weight="light" className="animate-spin text-white" />
         </div>
       }
     >

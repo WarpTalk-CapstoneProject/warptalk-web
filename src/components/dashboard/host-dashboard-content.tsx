@@ -1,27 +1,10 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
-import {
-  CalendarClock,
-  Clock3,
-  FileText,
-  Languages,
-  LayoutGrid,
-  Search,
-  Users,
-  Video,
-} from "lucide-react";
+import { Calendar, Clock, FileText, Translate, SquaresFour, MagnifyingGlass, Users, VideoCamera } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { cn } from "@/lib/utils";
@@ -124,13 +107,6 @@ const demoHistory = [
   },
 ];
 
-const languageMix = [
-  { label: "Vietnamese", value: 42, color: "bg-neutral-950" },
-  { label: "English", value: 28, color: "bg-neutral-500" },
-  { label: "Japanese", value: 18, color: "bg-neutral-300" },
-  { label: "Korean", value: 12, color: "bg-neutral-700" },
-];
-
 function formatDateTime(value?: string) {
   if (!value) return "No schedule";
 
@@ -167,15 +143,15 @@ function formatLanguages(room: Pick<TranslationRoomDto, "sourceLanguage" | "targ
 function statusTone(status: TranslationRoomDto["status"]) {
   switch (status) {
     case "in_progress":
-      return "border-neutral-950 bg-neutral-950 text-white";
+      return "border-emerald-500/20 text-emerald-500";
     case "scheduled":
-      return "border-neutral-950/15 bg-white text-neutral-900";
+      return "border-blue-500/20 text-blue-500";
     case "waiting":
-      return "border-neutral-950/15 bg-neutral-100 text-neutral-900";
+      return "border-amber-500/20 text-amber-500";
     case "ended":
-      return "border-neutral-950/10 bg-white text-neutral-500";
+      return "border-border text-muted-foreground";
     default:
-      return "border-neutral-950/10 bg-white text-neutral-500";
+      return "border-border text-muted-foreground";
   }
 }
 
@@ -222,221 +198,95 @@ export default function DashboardPage() {
     rooms.reduce((total, room) => total + (room.participantCount ?? 0), 0) +
     historyRows.reduce((total, room) => total + room.participantCount, 0);
   const translatedMinutes = Math.round(historyRows.reduce((total, room) => total + room.durationSeconds, 0) / 60);
-  const readyArtifacts = historyRows.reduce((total, room) => total + room.artifacts, 0);
 
   const metrics = [
     {
       label: "Total rooms",
       value: rooms.length,
-      helper: "Available room records",
-      meta: `${upcomingRooms.length} upcoming`,
-      icon: LayoutGrid,
+    },
+    {
+      label: "Upcoming",
+      value: upcomingRooms.length,
     },
     {
       label: "Live sessions",
       value: activeRooms.length,
-      helper: "Active or paused now",
-      meta: activeRooms.length > 0 ? "Live" : "Idle",
-      icon: Video,
     },
     {
       label: "Participants",
       value: totalParticipants,
-      helper: "Across current and ended rooms",
-      meta: `${rooms.length} rooms`,
-      icon: Users,
     },
     {
       label: "Translated time",
       value: `${translatedMinutes}m`,
-      helper: "Ended room duration",
-      meta: `${readyArtifacts} files`,
-      icon: Clock3,
     },
   ];
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2">
-      <section className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+    <div className="flex h-full flex-col min-h-0 bg-background text-foreground max-w-[1200px] mx-auto w-full">
+      {/* Top Header Metrics (Card-less) */}
+      <section className="flex items-center gap-12 border-b border-border pb-6 pt-2">
         {metrics.map((metric) => (
-          <MetricCard key={metric.label} {...metric} />
+          <div key={metric.label}>
+            <p className="text-[13px] text-muted-foreground">{metric.label}</p>
+            <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">{metric.value}</p>
+          </div>
         ))}
       </section>
 
-      <section className="grid min-h-0 gap-2 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <GlassPanel className="min-h-0 overflow-hidden p-0">
-          <div className="flex items-center justify-between gap-2 border-b border-neutral-950/8 px-3 py-2">
-            <div>
-              <h2 className="text-[13px] font-semibold">Translation rooms</h2>
-              <p className="text-[11px] text-neutral-500">Filter, scan, and open room workspaces.</p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <div className="hidden w-[200px] items-center rounded-full border border-neutral-950/8 bg-white px-2.5 shadow-[0_10px_24px_rgba(0,0,0,0.05)] md:flex">
-                <Search className="h-3 w-3 text-neutral-500" />
+      {/* Main Content layout (Single Column) */}
+      <section className="flex flex-1 min-h-0 pt-6">
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[14px] font-semibold text-foreground">Translation rooms</h2>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center rounded-md border border-border bg-muted/50 px-2.5 h-8">
+                <MagnifyingGlass weight="light" className="h-3.5 w-3.5 text-muted-foreground" />
                 <Input
-                  aria-label="Search rooms"
-                  placeholder="Search rooms..."
-                  className="h-7 border-0 bg-transparent text-[11px] text-neutral-950 placeholder:text-neutral-400 focus-visible:ring-0"
+                  aria-label="MagnifyingGlass rooms"
+                  placeholder="MagnifyingGlass..."
+                  className="h-full border-0 bg-transparent text-[13px] px-2 text-foreground placeholder:text-muted-foreground focus-visible:ring-0 shadow-none w-[160px]"
                 />
               </div>
-              <Badge className="h-7 bg-neutral-950 px-2 text-[10px] text-white hover:bg-neutral-950">All</Badge>
             </div>
           </div>
 
-          <Table className="table-fixed text-[11px]">
-            <TableHeader>
-              <TableRow className="border-neutral-950/8 hover:bg-transparent">
-                <TableHead className="h-7 w-[28%] px-3 text-neutral-500">Room</TableHead>
-                <TableHead className="h-7 w-[14%] text-neutral-500">Status</TableHead>
-                <TableHead className="h-7 w-[30%] text-neutral-500">Languages</TableHead>
-                <TableHead className="h-7 w-[16%] text-neutral-500">Time</TableHead>
-                <TableHead className="h-7 w-[12%] pr-3 text-right text-neutral-500">Participants</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <div className="flex-1 overflow-y-auto pr-4">
+            {/* Table Header pseudo-list */}
+            <div className="flex items-center border-b border-border py-2 text-[12px] font-medium text-muted-foreground">
+              <div className="w-[30%]">Room</div>
+              <div className="w-[15%]">Status</div>
+              <div className="w-[30%]">Translate</div>
+              <div className="w-[15%]">Time</div>
+              <div className="w-[10%] text-right">Participants</div>
+            </div>
+
+            {/* List Rows */}
+            <div className="flex flex-col">
               {rooms.map((room) => (
-                <TableRow key={room.id} className="border-neutral-950/8 hover:bg-neutral-50">
-                  <TableCell className="px-3 py-1">
-                    <div>
-                      <p className="truncate font-medium text-neutral-950">{room.title}</p>
-                      <p className="truncate text-[10px] text-neutral-500">{room.translationRoomCode}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-1">
-                    <Badge variant="outline" className={cn("h-5 px-1.5 text-[9px] font-normal", statusTone(room.status))}>
-                      {statusLabel(room.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-1 text-neutral-600">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <Languages className="h-3 w-3 shrink-0 text-neutral-400" />
-                      <span className="truncate">{formatLanguages(room)}</span>
-                    </span>
-                  </TableCell>
-                  <TableCell className="truncate py-1 text-neutral-600">{formatDateTime(getRoomTime(room))}</TableCell>
-                  <TableCell className="py-1 pr-3 text-right text-neutral-950">
-                    {room.participantCount ?? 0}/{room.maxParticipants}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </GlassPanel>
-
-        <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden">
-          <GlassPanel className="p-2.5">
-            <div className="mb-2.5 flex items-center justify-between">
-              <div>
-                <h2 className="text-[13px] font-semibold">Operational focus</h2>
-                <p className="text-[11px] text-neutral-500">What needs attention next</p>
-              </div>
-              <CalendarClock className="h-3.5 w-3.5 text-neutral-950" />
-            </div>
-            <div className="grid gap-1.5">
-              <SignalRow icon={<CalendarClock />} label="Upcoming rooms" value={String(upcomingRooms.length)} />
-              <SignalRow icon={<Clock3 />} label="Translated time" value={`${translatedMinutes}m`} />
-              <SignalRow icon={<FileText />} label="Ready artifacts" value={String(readyArtifacts)} />
-            </div>
-          </GlassPanel>
-
-          <GlassPanel className="min-h-0 overflow-hidden p-2.5">
-            <div className="mb-2.5">
-              <h2 className="text-[13px] font-semibold">Language mix</h2>
-              <p className="text-[11px] text-neutral-500">Session share by target language</p>
-            </div>
-            <div className="space-y-1.5">
-              {languageMix.map((item) => (
-                <div key={item.label}>
-                  <div className="mb-1 flex items-center justify-between text-[11px]">
-                    <span className="text-neutral-700">{item.label}</span>
-                    <span className="text-neutral-500">{item.value}%</span>
+                <div key={room.id} className="flex items-center border-b border-border/50 py-3 text-[13px] hover:bg-muted/30 transition-colors group cursor-pointer">
+                  <div className="w-[30%] pr-4">
+                    <p className="truncate font-medium text-foreground group-hover:text-primary transition-colors">{room.title}</p>
+                    <p className="truncate text-[12px] text-muted-foreground mt-0.5">{room.translationRoomCode}</p>
                   </div>
-                  <div className="h-1 rounded-full bg-neutral-950/10">
-                    <div className={cn("h-full rounded-full", item.color)} style={{ width: `${item.value}%` }} />
+                  <div className="w-[15%]">
+                    <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium bg-transparent", statusTone(room.status))}>
+                      {statusLabel(room.status)}
+                    </span>
+                  </div>
+                  <div className="w-[30%] text-muted-foreground pr-4">
+                    <span className="truncate">{formatLanguages(room)}</span>
+                  </div>
+                  <div className="w-[15%] truncate text-muted-foreground text-[12px]">{formatDateTime(getRoomTime(room))}</div>
+                  <div className="w-[10%] text-right text-muted-foreground">
+                    {room.participantCount ?? 0}/{room.maxParticipants}
                   </div>
                 </div>
               ))}
             </div>
-          </GlassPanel>
+          </div>
         </div>
       </section>
-    </div>
-  );
-}
-
-function GlassPanel({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={cn(
-        "dashboard-glass-surface rounded-[20px] p-3 text-neutral-950",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  helper,
-  meta,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  helper: string;
-  meta: string;
-  icon: typeof LayoutGrid;
-}) {
-  const featured = label === "Total rooms";
-
-  return (
-    <GlassPanel
-      className={cn(
-        "min-h-[72px] p-2.5",
-        featured && "dashboard-glass-dark text-white"
-      )}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-xl shadow-[0_10px_18px_rgba(0,0,0,0.12)]",
-              featured ? "bg-white text-neutral-950" : "bg-neutral-950 text-white"
-            )}
-          >
-            <Icon className="h-3 w-3" />
-          </span>
-          <p className={cn("text-[11px]", featured ? "text-white/70" : "text-neutral-600")}>{label}</p>
-        </div>
-        <Badge
-          variant="outline"
-          className={cn(
-            "h-5 px-1.5 text-[9px] font-normal",
-            featured ? "border-white/10 bg-white/10 text-white/70" : "border-neutral-950/10 bg-white text-neutral-600"
-          )}
-        >
-          {meta}
-        </Badge>
-      </div>
-      <p className="mt-1.5 text-xl font-semibold tracking-tight">{value}</p>
-      <p className={cn("mt-1 truncate text-[11px]", featured ? "text-white/55" : "text-neutral-500")}>{helper}</p>
-    </GlassPanel>
-  );
-}
-
-function SignalRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl bg-white px-2.5 py-1.5 shadow-[0_8px_18px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)]">
-      <span className="inline-flex items-center gap-2 text-[11px] text-neutral-700">
-        <span className="flex h-6 w-6 items-center justify-center rounded-xl bg-neutral-950 text-white [&_svg]:h-3 [&_svg]:w-3">
-          {icon}
-        </span>
-        {label}
-      </span>
-      <span className="text-[11px] font-semibold text-neutral-950">{value}</span>
     </div>
   );
 }

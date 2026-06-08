@@ -2,17 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  Activity,
-  Bug,
-  CheckCircle2,
-  ClipboardList,
-  DatabaseZap,
-  Radio,
-  RefreshCcw,
-  TerminalSquare,
-  Timer,
-} from "lucide-react";
+import { Waveform, Bug, CheckCircle, ClipboardText, Database, Broadcast, ArrowsClockwise, Terminal, Timer } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,7 +132,7 @@ export default function DevTestPage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-primary">
-            <Bug className="h-4 w-4" />
+            <Bug weight="light" className="h-4 w-4" />
             Developer console
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Dev test lab</h1>
@@ -152,20 +142,20 @@ export default function DevTestPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={clearLogs}>
-            <RefreshCcw className="mr-2 h-4 w-4" />
+            <ArrowsClockwise weight="light" className="mr-2 h-4 w-4" />
             Clear logs
           </Button>
           <Button onClick={() => simulate("Health", "Run preview diagnostics")}>
-            <Activity className="mr-2 h-4 w-4" />
+            <Waveform weight="light" className="mr-2 h-4 w-4" />
             Run diagnostics
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard icon={<CheckCircle2 />} label="Successful checks" value={String(health.successCount)} detail={`${health.total} total logs`} />
-        <MetricCard icon={<Timer />} label="Last run" value={health.lastRun} detail="Local browser time" />
-        <MetricCard icon={<Radio />} label="Realtime mode" value="Mock" detail="SignalR preview" />
+        <MetricCard icon={<CheckCircle weight="light" />} label="Successful checks" value={String(health.successCount)} detail={`${health.total} total logs`} />
+        <MetricCard icon={<Timer weight="light" />} label="Last run" value={health.lastRun} detail="Local browser time" />
+        <MetricCard icon={<Broadcast weight="light" />} label="Realtime mode" value="Mock" detail="SignalR preview" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
@@ -201,10 +191,10 @@ export default function DevTestPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {endpointGroups.map((group) => (
-                  <div key={group.section} className="rounded-lg border bg-background p-4">
+                  <div key={group.section} className="rounded-lg border  p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <DatabaseZap className="h-4 w-4 text-primary" />
+                        <Database weight="light" className="h-4 w-4 text-primary" />
                         <p className="font-medium">{group.section}</p>
                       </div>
                       <Badge variant="outline">{group.endpoints.length} routes</Badge>
@@ -217,7 +207,7 @@ export default function DevTestPage() {
                           className="justify-start bg-card font-mono text-xs"
                           onClick={() => simulate(group.section, endpoint)}
                         >
-                          <TerminalSquare className="mr-2 h-4 w-4" />
+                          <Terminal weight="light" className="mr-2 h-4 w-4" />
                           {endpoint}
                         </Button>
                       ))}
@@ -300,7 +290,7 @@ function MetricCard({
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:h-5 [&_svg]:w-5">
             {icon}
           </div>
-          <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          <ClipboardText weight="light" className="h-4 w-4 text-muted-foreground" />
         </div>
         <p className="mt-4 text-sm text-muted-foreground">{label}</p>
         <p className="text-3xl font-bold tracking-tight">{value}</p>

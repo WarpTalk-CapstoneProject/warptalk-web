@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { CheckCircle2, FileText, MessageSquareText, RotateCw, Star } from "lucide-react";
+import { CheckCircle, FileText, ChatCircleText, ArrowClockwise, Star } from "@phosphor-icons/react/dist/ssr";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const jobs = [
-  { label: "Transcript finalizing", status: "Completed", icon: CheckCircle2 },
-  { label: "AI summary generating", status: "Processing", icon: RotateCw },
-  { label: "Action items extraction", status: "Queued", icon: MessageSquareText },
+  { label: "Transcript finalizing", status: "Completed", icon: CheckCircle },
+  { label: "AI summary generating", status: "Processing", icon: ArrowClockwise },
+  { label: "Action items extraction", status: "Queued", icon: ChatCircleText },
   { label: "Artifact permissions", status: "Ready", icon: FileText },
 ];
 
@@ -33,8 +33,8 @@ export default async function RoomEndedPage({ params }: { params: Promise<{ id: 
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Link href={`/rooms/${roomId}/artifacts`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Open artifacts</Link>
-        <Link href="/feedback" className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-background px-3 text-sm font-medium transition hover:bg-muted"><Star className="mr-2 h-4 w-4" />Submit feedback</Link>
-        <Link href="/history" className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-background px-3 text-sm font-medium transition hover:bg-muted">View history</Link>
+        <Link href="/feedback" className="inline-flex h-8 items-center justify-center rounded-full border border-border  px-3 text-sm font-medium transition hover:bg-muted"><Star weight="light" className="mr-2 h-4 w-4" />Submit feedback</Link>
+        <Link href="/history" className="inline-flex h-8 items-center justify-center rounded-full border border-border  px-3 text-sm font-medium transition hover:bg-muted">View history</Link>
       </div>
     </div>
   );

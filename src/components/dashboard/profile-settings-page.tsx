@@ -1,24 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent } from "react";
-import {
-  Bell,
-  BriefcaseBusiness,
-  Camera,
-  Check,
-  Globe2,
-  ImagePlus,
-  Languages,
-  Mail,
-  MapPin,
-  Pencil,
-  Phone,
-  RotateCcw,
-  ShieldCheck,
-  UserRound,
-  X,
-  ZoomIn,
-} from "lucide-react";
+import { Bell, Briefcase, Camera, Check, Globe, ImageSquare, Translate, Envelope, MapPin, Pencil, Phone, ArrowCounterClockwise, ShieldCheck, User, X, MagnifyingGlassPlus } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -494,7 +477,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
             onPointerDown={(event) => event.stopPropagation()}
             onClick={() => coverUploadRef.current?.click()}
           >
-            <ImagePlus />
+            <ImageSquare weight="light" />
             Change cover
           </Button>
           {editing ? (
@@ -518,15 +501,15 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
                   aria-label="Change profile photo"
                   title="Change profile photo"
                 >
-                  <Camera className="h-3.5 w-3.5" />
+                  <Camera weight="light" className="h-3.5 w-3.5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-44 rounded-xl p-1.5">
                   <DropdownMenuItem className="cursor-pointer rounded-lg" onClick={() => uploadRef.current?.click()}>
-                    <ImagePlus />
+                    <ImageSquare weight="light" />
                     Upload photo
                   </DropdownMenuItem>
                   <DropdownMenuItem className="cursor-pointer rounded-lg" onClick={() => void startCamera()}>
-                    <Camera />
+                    <Camera weight="light" />
                     Take photo
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -539,7 +522,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
             <h2 className="truncate text-2xl font-semibold tracking-tight">{draft.fullName}</h2>
             <p className="text-sm font-medium text-neutral-600">{draft.title}</p>
             <p className="mt-1 flex items-center gap-1.5 text-xs text-neutral-500">
-              <MapPin className="h-3.5 w-3.5" />
+              <MapPin weight="light" className="h-3.5 w-3.5" />
               {draft.location}
             </p>
           </div>
@@ -548,17 +531,17 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
             {editing ? (
               <>
                 <Button variant="outline" className="rounded-full px-4" onClick={handleCancel}>
-                  <X />
+                  <X weight="light" />
                   Cancel
                 </Button>
                 <Button className="rounded-full bg-neutral-950 px-4 text-white hover:bg-neutral-800" onClick={handleSave}>
-                  <Check />
+                  <Check weight="light" />
                   Save changes
                 </Button>
               </>
             ) : (
               <Button className="rounded-full bg-neutral-950 px-4 text-white hover:bg-neutral-800" onClick={() => setEditing(true)}>
-                <Pencil />
+                <Pencil weight="light" />
                 Edit profile
               </Button>
             )}
@@ -570,7 +553,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
         <section className="min-h-0 min-w-0 rounded-[24px] border border-white/80 bg-white p-4 shadow-[0_16px_45px_rgba(15,15,15,0.07)]">
           <div className="mb-3 flex items-center gap-3">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-neutral-950 text-white">
-              <UserRound className="h-4 w-4" />
+              <User weight="light" className="h-4 w-4" />
             </span>
             <div>
               <h3 className="font-semibold">Personal information</h3>
@@ -579,12 +562,12 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <ProfileField label="Display name" icon={<UserRound />} value={draft.fullName} disabled={!editing} onChange={(value) => updateDraft("fullName", value)} />
-            <ProfileField label="Email address" icon={<Mail />} value={draft.email} disabled={!editing} onChange={(value) => updateDraft("email", value)} />
-            <ProfileField label="Job title" icon={<BriefcaseBusiness />} value={draft.title} disabled={!editing} onChange={(value) => updateDraft("title", value)} />
-            <ProfileField label="Phone number" icon={<Phone />} value={draft.phone} placeholder="+84 000 000 000" disabled={!editing} onChange={(value) => updateDraft("phone", value)} />
+            <ProfileField label="Display name" icon={<User weight="light" />} value={draft.fullName} disabled={!editing} onChange={(value) => updateDraft("fullName", value)} />
+            <ProfileField label="Email address" icon={<Envelope weight="light" />} value={draft.email} disabled={!editing} onChange={(value) => updateDraft("email", value)} />
+            <ProfileField label="Job title" icon={<Briefcase weight="light" />} value={draft.title} disabled={!editing} onChange={(value) => updateDraft("title", value)} />
+            <ProfileField label="Phone number" icon={<Phone weight="light" />} value={draft.phone} placeholder="+84 000 000 000" disabled={!editing} onChange={(value) => updateDraft("phone", value)} />
             <div className="md:col-span-2">
-              <ProfileField label="Location" icon={<MapPin />} value={draft.location} disabled={!editing} onChange={(value) => updateDraft("location", value)} />
+              <ProfileField label="Location" icon={<MapPin weight="light" />} value={draft.location} disabled={!editing} onChange={(value) => updateDraft("location", value)} />
             </div>
           </div>
         </section>
@@ -593,7 +576,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
           <section className="min-w-0 rounded-[24px] border border-white/80 bg-white p-4 shadow-[0_16px_45px_rgba(15,15,15,0.07)]">
             <div className="mb-3 flex items-center gap-3">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-neutral-950 text-white">
-                <Globe2 className="h-4 w-4" />
+                <Globe weight="light" className="h-4 w-4" />
               </span>
               <div>
                 <h3 className="font-semibold">Language & region</h3>
@@ -603,7 +586,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs text-neutral-600">
-                  <Languages className="h-3.5 w-3.5" />
+                  <Translate weight="light" className="h-3.5 w-3.5" />
                   Preferred language
                 </Label>
                 <Select value={draft.preferredLanguage} onValueChange={(value) => updateDraft("preferredLanguage", String(value))} disabled={!editing}>
@@ -637,7 +620,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
           <section className="min-h-0 min-w-0 rounded-[24px] border border-white/80 bg-white p-4 shadow-[0_16px_45px_rgba(15,15,15,0.07)]">
             <div className="mb-3 flex items-center gap-3">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-neutral-950 text-white">
-                <Bell className="h-4 w-4" />
+                <Bell weight="light" className="h-4 w-4" />
               </span>
               <div>
                 <h3 className="font-semibold">Notifications</h3>
@@ -645,7 +628,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
               </div>
             </div>
             <PreferenceRow
-              icon={<ShieldCheck />}
+              icon={<ShieldCheck weight="light" />}
               label="Meeting activity"
               description="Invites, starts, and participant requests."
               checked={draft.meetingAlerts}
@@ -653,7 +636,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
               onCheckedChange={(checked) => updateDraft("meetingAlerts", checked)}
             />
             <PreferenceRow
-              icon={<BriefcaseBusiness />}
+              icon={<Briefcase weight="light" />}
               label="Artifacts ready"
               description="Transcript and AI summary notifications."
               checked={draft.artifactAlerts}
@@ -676,7 +659,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
                 <div className="space-y-3">
                   <p>{cameraError}</p>
                   <Button type="button" variant="secondary" className="rounded-full" onClick={() => void startCamera()}>
-                    <RotateCcw />
+                    <ArrowCounterClockwise weight="light" />
                     Try again
                   </Button>
                 </div>
@@ -713,7 +696,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
               onClick={captureAvatar}
               disabled={Boolean(cameraError) || !cameraReady}
             >
-              <Camera />
+              <Camera weight="light" />
               Capture photo
             </Button>
           </DialogFooter>
@@ -761,7 +744,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
             </div>
 
             <div className="flex w-full items-center gap-3">
-              <ZoomIn className="h-4 w-4 shrink-0 text-neutral-500" />
+              <MagnifyingGlassPlus weight="light" className="h-4 w-4 shrink-0 text-neutral-500" />
               <input
                 type="range"
                 min="1"
@@ -784,7 +767,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
                 aria-label="Reset crop"
                 title="Reset crop"
               >
-                <RotateCcw />
+                <ArrowCounterClockwise weight="light" />
               </Button>
             </div>
           </div>
@@ -799,7 +782,7 @@ export function ProfileSettingsPage({ role }: { role: ProfileRole }) {
               onClick={applyAvatarCrop}
               disabled={!imageSize.width}
             >
-              <Check />
+              <Check weight="light" />
               Use photo
             </Button>
           </DialogFooter>

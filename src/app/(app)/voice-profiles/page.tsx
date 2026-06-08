@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AudioLines, Mic2, Radio, UserRoundCheck } from "lucide-react";
+import { Waveform, Microphone, Broadcast, UserCheck } from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,9 +27,9 @@ export default function VoiceProfilesPage() {
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <Metric icon={<Mic2 />} label="Profiles" value="3" />
-        <Metric icon={<Radio />} label="Room usage" value="12" />
-        <Metric icon={<UserRoundCheck />} label="Ready voices" value="1" />
+        <Metric icon={<Microphone weight="light" />} label="Profiles" value="3" />
+        <Metric icon={<Broadcast weight="light" />} label="Room usage" value="12" />
+        <Metric icon={<UserCheck weight="light" />} label="Ready voices" value="1" />
       </section>
 
       <Card className="min-h-0 flex-1 rounded-[24px]">
@@ -47,7 +47,7 @@ export default function VoiceProfilesPage() {
             >
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-950 text-white">
-                  <AudioLines className="h-4 w-4" />
+                  <Waveform weight="light" className="h-4 w-4" />
                 </span>
                 <div>
                   <p className="font-medium text-neutral-950">{profile.name}</p>

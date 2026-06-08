@@ -2,26 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
-import {
-  Bot,
-  Clock3,
-  Copy,
-  Eye,
-  EyeOff,
-  FileText,
-  ImageIcon,
-  MessageSquareText,
-  Mic,
-  MoreHorizontal,
-  Plus,
-  Reply,
-  Search,
-  Send,
-  Sparkles,
-  Trash2,
-  User,
-  X,
-} from "lucide-react";
+import { Robot, Clock, Copy, Eye, EyeClosed, FileText, ImageIcon, ChatCircleText, Microphone, DotsThree, Plus, ArrowUUpLeft, MagnifyingGlass, PaperPlaneRight, Sparkle, Trash, User, X } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -166,7 +147,7 @@ export default function AiChatPage() {
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const [showHidden, setShowHidden] = useState(false);
-  const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
+  const [replyTarget, setArrowUUpLeftTarget] = useState<ChatMessage | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const messageViewportRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -306,7 +287,7 @@ export default function AiChatPage() {
       )
     );
     setDraft("");
-    setReplyTarget(null);
+    setArrowUUpLeftTarget(null);
     setPendingFiles([]);
     [imageInputRef, documentInputRef, audioInputRef].forEach((ref) => {
       if (ref.current) ref.current.value = "";
@@ -331,7 +312,7 @@ export default function AiChatPage() {
     setConversations((current) => [conversation, ...current]);
     setActiveId(id);
     setDraft("");
-    setReplyTarget(null);
+    setArrowUUpLeftTarget(null);
     setPendingFiles([]);
     setQuery("");
   }
@@ -372,7 +353,7 @@ export default function AiChatPage() {
     }
 
     setDraft("");
-    setReplyTarget(null);
+    setArrowUUpLeftTarget(null);
     setPendingFiles([]);
     toast.success(`Deleted "${deletedConversation.title}".`);
   }
@@ -455,12 +436,12 @@ export default function AiChatPage() {
   }
 
   function replyToMessage(message: ChatMessage) {
-    setReplyTarget(message);
+    setArrowUUpLeftTarget(message);
     setDraft("");
   }
 
   function askAboutMessage(message: ChatMessage) {
-    setReplyTarget(message);
+    setArrowUUpLeftTarget(message);
     setDraft(`Explain this in more detail: "${message.content}"`);
   }
 
@@ -480,7 +461,7 @@ export default function AiChatPage() {
         };
       })
     );
-    setReplyTarget(null);
+    setArrowUUpLeftTarget(null);
     toast.success("Message deleted.");
   }
 
@@ -508,14 +489,14 @@ export default function AiChatPage() {
                   />
                 }
               >
-                <MoreHorizontal className="h-4 w-4" />
+                <DotsThree weight="light" className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem
                   variant="destructive"
                   onClick={() => deleteConversation()}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash weight="light" className="h-4 w-4" />
                   Delete conversation
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -538,7 +519,7 @@ export default function AiChatPage() {
               >
                 {message.role === "assistant" ? (
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white">
-                    <Sparkles className="h-4 w-4" />
+                    <Sparkle weight="light" className="h-4 w-4" />
                   </span>
                 ) : null}
                 <div className="max-w-[76%]">
@@ -560,7 +541,7 @@ export default function AiChatPage() {
                         )}
                       >
                         <p className="mb-0.5 font-medium">
-                          Replying to {message.replyTo.role === "user" ? "you" : "WarpTalk AI"}
+                          ArrowUUpLefting to {message.replyTo.role === "user" ? "you" : "WarpTalk AI"}
                         </p>
                         <p className="line-clamp-2">{message.replyTo.content}</p>
                       </div>
@@ -577,11 +558,11 @@ export default function AiChatPage() {
                             )}
                           >
                             {attachment.type.startsWith("image/") ? (
-                              <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+                              <ImageIcon weight="light" className="h-3.5 w-3.5 shrink-0" />
                             ) : attachment.type.startsWith("audio/") ? (
-                              <Mic className="h-3.5 w-3.5 shrink-0" />
+                              <Microphone weight="light" className="h-3.5 w-3.5 shrink-0" />
                             ) : (
-                              <FileText className="h-3.5 w-3.5 shrink-0" />
+                              <FileText weight="light" className="h-3.5 w-3.5 shrink-0" />
                             )}
                             <span className="truncate">{attachment.name}</span>
                           </div>
@@ -599,32 +580,32 @@ export default function AiChatPage() {
                       title="Copy message"
                       onClick={() => void copyMessage(message)}
                     >
-                      <Copy />
+                      <Copy weight="light" />
                     </MessageAction>
                     <MessageAction
-                      title="Reply to message"
+                      title="ArrowUUpLeft to message"
                       onClick={() => replyToMessage(message)}
                     >
-                      <Reply />
+                      <ArrowUUpLeft weight="light" />
                     </MessageAction>
                     <MessageAction
                       title="Ask a follow-up"
                       onClick={() => askAboutMessage(message)}
                     >
-                      <Sparkles />
+                      <Sparkle weight="light" />
                     </MessageAction>
                     <MessageAction
                       title="Delete message"
                       onClick={() => deleteMessage(index)}
                       destructive
                     >
-                      <Trash2 />
+                      <Trash weight="light" />
                     </MessageAction>
                   </div>
                 </div>
                 {message.role === "user" ? (
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-700">
-                    <User className="h-4 w-4" />
+                    <User weight="light" className="h-4 w-4" />
                   </span>
                 ) : null}
               </div>
@@ -636,7 +617,7 @@ export default function AiChatPage() {
               <div className="mb-2 flex items-start justify-between gap-3 rounded-xl border bg-neutral-50 px-3 py-2">
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold text-neutral-700">
-                    Replying to {replyTarget.role === "user" ? "your message" : "WarpTalk AI"}
+                    ArrowUUpLefting to {replyTarget.role === "user" ? "your message" : "WarpTalk AI"}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {replyTarget.content}
@@ -645,10 +626,10 @@ export default function AiChatPage() {
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  onClick={() => setReplyTarget(null)}
+                  onClick={() => setArrowUUpLeftTarget(null)}
                   title="Cancel reply"
                 >
-                  <X />
+                  <X weight="light" />
                 </Button>
               </div>
             ) : null}
@@ -660,11 +641,11 @@ export default function AiChatPage() {
                     className="flex max-w-[220px] items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-[11px]"
                   >
                     {file.type.startsWith("image/") ? (
-                      <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+                      <ImageIcon weight="light" className="h-3.5 w-3.5 shrink-0" />
                     ) : file.type.startsWith("audio/") ? (
-                      <Mic className="h-3.5 w-3.5 shrink-0" />
+                      <Microphone weight="light" className="h-3.5 w-3.5 shrink-0" />
                     ) : (
-                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                      <FileText weight="light" className="h-3.5 w-3.5 shrink-0" />
                     )}
                     <span className="truncate">{file.name}</span>
                     <button
@@ -673,7 +654,7 @@ export default function AiChatPage() {
                       className="ml-0.5 shrink-0 rounded-full text-muted-foreground transition hover:text-foreground"
                       aria-label={`Remove ${file.name}`}
                     >
-                      <X className="h-3 w-3" />
+                      <X weight="light" className="h-3 w-3" />
                     </button>
                   </div>
                 ))}
@@ -711,7 +692,7 @@ export default function AiChatPage() {
                 title="Attach images"
                 className="shrink-0 rounded-lg"
               >
-                <ImageIcon className="h-4 w-4" />
+                <ImageIcon weight="light" className="h-4 w-4" />
               </Button>
               <Button
                 size="icon-sm"
@@ -720,7 +701,7 @@ export default function AiChatPage() {
                 title="Attach documents or PDF"
                 className="shrink-0 rounded-lg"
               >
-                <FileText className="h-4 w-4" />
+                <FileText weight="light" className="h-4 w-4" />
               </Button>
               <Button
                 size="icon-sm"
@@ -729,7 +710,7 @@ export default function AiChatPage() {
                 title="Attach voice or audio"
                 className="shrink-0 rounded-lg"
               >
-                <Mic className="h-4 w-4" />
+                <Microphone weight="light" className="h-4 w-4" />
               </Button>
               <Input
                 value={draft}
@@ -744,10 +725,10 @@ export default function AiChatPage() {
                 size="icon"
                 onClick={sendMessage}
                 disabled={!draft.trim() && pendingFiles.length === 0}
-                title="Send message"
+                title="PaperPlaneRight message"
                 className="shrink-0 rounded-xl"
               >
-                <Send className="h-4 w-4" />
+                <PaperPlaneRight weight="light" className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -776,9 +757,9 @@ export default function AiChatPage() {
                   className="relative rounded-full"
                 >
                   {showHidden ? (
-                    <Eye className="h-4 w-4" />
+                    <Eye weight="light" className="h-4 w-4" />
                   ) : (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeClosed weight="light" className="h-4 w-4" />
                   )}
                   {!showHidden ? (
                     <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-neutral-950 px-1 text-[9px] text-white">
@@ -793,16 +774,16 @@ export default function AiChatPage() {
                 title="New conversation"
                 className="rounded-full"
               >
-                <Plus className="h-4 w-4" />
+                <Plus weight="light" className="h-4 w-4" />
               </Button>
             </div>
           </div>
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search conversations..."
+              placeholder="MagnifyingGlass conversations..."
               className="h-9 pl-8 text-xs"
             />
           </div>
@@ -833,7 +814,7 @@ export default function AiChatPage() {
                         : "bg-neutral-100 text-neutral-700"
                     )}
                   >
-                    <MessageSquareText className="h-3.5 w-3.5" />
+                    <ChatCircleText weight="light" className="h-3.5 w-3.5" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
@@ -878,7 +859,7 @@ export default function AiChatPage() {
                       />
                     }
                   >
-                    <MoreHorizontal className="h-4 w-4" />
+                    <DotsThree weight="light" className="h-4 w-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-44">
                     <DropdownMenuItem
@@ -887,9 +868,9 @@ export default function AiChatPage() {
                       }
                     >
                       {conversation.hidden ? (
-                        <Eye className="h-4 w-4" />
+                        <Eye weight="light" className="h-4 w-4" />
                       ) : (
-                        <EyeOff className="h-4 w-4" />
+                        <EyeClosed weight="light" className="h-4 w-4" />
                       )}
                       {conversation.hidden ? "Restore conversation" : "Hide conversation"}
                     </DropdownMenuItem>
@@ -897,7 +878,7 @@ export default function AiChatPage() {
                       variant="destructive"
                       onClick={() => deleteConversation(conversation.id)}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash weight="light" className="h-4 w-4" />
                       Delete conversation
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -906,7 +887,7 @@ export default function AiChatPage() {
             ))}
             {filteredConversations.length === 0 ? (
               <div className="flex flex-col items-center px-4 py-10 text-center text-muted-foreground">
-                <Bot className="mb-2 h-5 w-5" />
+                <Robot weight="light" className="mb-2 h-5 w-5" />
                 <p className="text-xs font-medium">
                   {showHidden ? "No hidden conversations" : "No conversations found"}
                 </p>
@@ -916,7 +897,7 @@ export default function AiChatPage() {
         </CardContent>
 
         <div className="flex h-11 shrink-0 items-center gap-2 border-t px-3 text-[11px] text-muted-foreground">
-          <Clock3 className="h-3.5 w-3.5" />
+          <Clock weight="light" className="h-3.5 w-3.5" />
           Conversations are saved on this device
         </div>
       </Card>

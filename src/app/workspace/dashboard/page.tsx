@@ -1,23 +1,14 @@
 import Link from "next/link";
-import {
-  ArrowUpRight,
-  Bot,
-  CalendarDays,
-  Coins,
-  CreditCard,
-  DollarSign,
-  Users,
-  Video,
-} from "lucide-react";
+import { ArrowUpRight, Robot, CalendarDots, Coins, CreditCard, CurrencyDollar, Users, VideoCamera } from "@phosphor-icons/react/dist/ssr";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { aiCreditUsage, workspaceRooms } from "@/lib/workspace-preview";
 
 const metrics = [
-  { label: "Monthly revenue", value: "$42,680", detail: "+12.4% from May", icon: DollarSign },
+  { label: "Monthly revenue", value: "$42,680", detail: "+12.4% from May", icon: CurrencyDollar },
   { label: "AI credits remaining", value: "32,480", detail: "68% of monthly quota", icon: Coins },
   { label: "Workspace members", value: "128 / 160", detail: "14 invitations pending", icon: Users },
-  { label: "Meetings this month", value: "84", detail: "9 currently active", icon: Video },
+  { label: "Meetings this month", value: "84", detail: "9 currently active", icon: VideoCamera },
 ];
 
 const billingRows = [
@@ -84,7 +75,7 @@ export default function WorkspaceDashboardPage() {
                 </div>
               </div>
               <div className="space-y-3 rounded-2xl bg-neutral-950 p-4 text-white">
-                <Bot className="h-5 w-5" />
+                <Robot weight="light" className="h-5 w-5" />
                 <div>
                   <p className="text-xs text-white/60">Credits consumed</p>
                   <p className="text-3xl font-semibold">17,520</p>
@@ -101,7 +92,7 @@ export default function WorkspaceDashboardPage() {
         <Card className="rounded-3xl border-white/70 bg-white/86 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
             <CardTitle className="text-base">Billing snapshot</CardTitle>
-            <CreditCard className="h-5 w-5" />
+            <CreditCard weight="light" className="h-5 w-5" />
           </CardHeader>
           <CardContent className="space-y-3">
             {billingRows.map((row) => (
@@ -128,7 +119,7 @@ export default function WorkspaceDashboardPage() {
               <CardTitle className="text-base">Meeting activity</CardTitle>
               <p className="text-xs text-muted-foreground">Live and upcoming workspace sessions.</p>
             </div>
-            <Link href="/workspace/rooms" className="inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-[0.8rem] font-medium transition hover:bg-neutral-100">All rooms <ArrowUpRight className="h-3.5 w-3.5" /></Link>
+            <Link href="/workspace/rooms" className="inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-[0.8rem] font-medium transition hover:bg-neutral-100">All rooms <ArrowUpRight weight="light" className="h-3.5 w-3.5" /></Link>
           </CardHeader>
           <CardContent className="grid gap-2 pb-3 md:grid-cols-3">
             {workspaceRooms.slice(0, 3).map((room) => (
@@ -138,7 +129,7 @@ export default function WorkspaceDashboardPage() {
                   <span className="text-[11px] text-muted-foreground">{room.participants}</span>
                 </div>
                 <p className="mt-2 truncate text-sm font-semibold">{room.name}</p>
-                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="h-3 w-3" />{room.startsAt}</p>
+                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDots weight="light" className="h-3 w-3" />{room.startsAt}</p>
               </Link>
             ))}
           </CardContent>
@@ -155,7 +146,7 @@ export default function WorkspaceDashboardPage() {
               <p className="mt-1 text-xs text-white/60">128 of 160 assigned</p>
             </div>
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-neutral-950">
-              <Users className="h-6 w-6" />
+              <Users weight="light" className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
@@ -187,7 +178,7 @@ function MetricCard({
           <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${emphasized ? "bg-white text-neutral-950" : "bg-neutral-950 text-white"}`}>
             <Icon className="h-4 w-4" />
           </div>
-          <ArrowUpRight className={`h-4 w-4 ${emphasized ? "text-white/55" : "text-muted-foreground"}`} />
+          <ArrowUpRight weight="light" className={`h-4 w-4 ${emphasized ? "text-white/55" : "text-muted-foreground"}`} />
         </div>
         <p className={`mt-3 text-xs ${emphasized ? "text-white/60" : "text-muted-foreground"}`}>{label}</p>
         <p className="mt-0.5 text-2xl font-semibold tracking-tight">{value}</p>
