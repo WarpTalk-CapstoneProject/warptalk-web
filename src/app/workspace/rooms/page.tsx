@@ -37,23 +37,20 @@ export default function WorkspaceRoomsPage() {
   const rows = filtered.slice((Math.min(page, totalPages) - 1) * pageSize, Math.min(page, totalPages) * pageSize);
 
   return (
-    <div className="flex min-h-full flex-col gap-3 pb-2">
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden pb-1">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Workspace rooms</h1>
-          <p className="text-sm text-muted-foreground">Company-wide meeting visibility using the same room records as the Host workspace.</p>
-        </div>
+        <div />
         <Link href="/rooms/create" className={buttonVariants({ className: "rounded-full bg-neutral-950 text-white hover:bg-neutral-800" })}>Create room</Link>
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-2 sm:grid-cols-3">
         <Summary label="Meeting now" value={workspaceRooms.filter((room) => room.status === "In progress").length} />
         <Summary label="Upcoming" value={workspaceRooms.filter((room) => room.status === "Scheduled").length} />
         <Summary label="Setup required" value={workspaceRooms.filter((room) => room.status === "Setup needed").length} />
       </section>
 
       <Card className="min-h-0 flex-1 overflow-hidden rounded-3xl border-white/70 bg-white/88 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-        <CardHeader className="flex-row items-center justify-between space-y-0 border-b py-3">
+        <CardHeader className="flex-row items-center justify-between space-y-0 border-b px-4 py-2.5">
           <div>
             <CardTitle className="text-base">All meetings</CardTitle>
             <p className="text-xs text-muted-foreground">{filtered.length} rooms visible to workspace managers.</p>
@@ -81,7 +78,7 @@ export default function WorkspaceRoomsPage() {
           </div>
           <div className="flex-1">
             {rows.map((room, index) => (
-              <div key={room.id} className="grid grid-cols-[52px_minmax(210px,1.2fr)_150px_minmax(210px,1fr)_145px_90px_42px] items-center gap-3 border-b px-4 py-3">
+              <div key={room.id} className="grid grid-cols-[52px_minmax(210px,1.2fr)_150px_minmax(210px,1fr)_145px_90px_42px] items-center gap-3 border-b px-4 py-2.5">
                 <span className="text-sm text-muted-foreground">{(page - 1) * pageSize + index + 1}</span>
                 <div className="min-w-0"><p className="truncate text-sm font-medium">{room.name}</p><p className="text-xs text-muted-foreground">{room.id} · {room.department}</p></div>
                 <Badge variant="outline" className={`w-fit rounded-full ${statusStyles[room.status]}`}>{room.status}</Badge>
@@ -99,7 +96,7 @@ export default function WorkspaceRoomsPage() {
             ))}
             {rows.length === 0 && <div className="p-16 text-center text-sm text-muted-foreground">No meetings match the selected filters.</div>}
           </div>
-          <div className="flex items-center justify-between border-t px-4 py-3">
+          <div className="flex items-center justify-between border-t px-4 py-2.5">
             <p className="text-xs text-muted-foreground">Showing {rows.length ? (page - 1) * pageSize + 1 : 0}-{Math.min(page * pageSize, filtered.length)} of {filtered.length}</p>
             <div className="flex items-center gap-1 rounded-2xl border bg-white p-1">
               <Button variant="ghost" size="icon-sm" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft /></Button>
@@ -118,7 +115,7 @@ export default function WorkspaceRoomsPage() {
 function Summary({ label, value }: { label: string; value: number }) {
   return (
     <Card className="rounded-3xl border-white/70 bg-white/88">
-      <CardContent className="flex items-center justify-between p-4">
+      <CardContent className="flex items-center justify-between p-3">
         <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-2xl font-semibold">{value}</p></div>
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-950 text-white"><Video className="h-4 w-4" /></div>
       </CardContent>

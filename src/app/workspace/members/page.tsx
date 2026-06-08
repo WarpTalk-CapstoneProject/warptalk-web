@@ -72,23 +72,19 @@ export default function WorkspaceMembersPage() {
   const pending = members.filter((member) => member.status === "Invited").length;
 
   return (
-    <div className="flex min-h-full flex-col gap-3 pb-2">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Members & access</h1>
-          <p className="text-sm text-muted-foreground">Invite Enterprise members and control who can host or manage the workspace.</p>
-        </div>
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden pb-1">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Badge variant="outline" className="rounded-full bg-white px-3 py-1.5">{members.length} / {seatLimit} seats</Badge>
       </div>
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="grid gap-2 md:grid-cols-3">
         <StatCard icon={UserCheck} label="Active members" value={activeMembers} />
         <StatCard icon={ShieldCheck} label="Meeting hosts" value={hosts} />
         <StatCard icon={MailPlus} label="Pending invites" value={pending} />
       </section>
 
       <Card className="rounded-3xl border-white/70 bg-white/88 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-        <CardHeader className="pb-3">
+        <CardHeader className="px-4 py-3">
           <CardTitle className="text-base">Invite a workspace member</CardTitle>
           <div className="flex flex-col gap-2 pt-2 md:flex-row">
             <Input
@@ -96,15 +92,15 @@ export default function WorkspaceMembersPage() {
               onChange={(event) => setInviteEmail(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && inviteMember()}
               placeholder="name@company.com"
-              className="h-10 flex-1 rounded-xl bg-white"
+              className="h-9 flex-1 rounded-xl bg-white"
             />
             <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as WorkspaceMemberRole)}>
-              <SelectTrigger className="h-10 w-full rounded-xl bg-white md:w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full rounded-xl bg-white md:w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {roles.filter((role) => role !== "Owner").map((role) => <SelectItem key={role} value={role}>{role}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button onClick={inviteMember} className="h-10 rounded-xl bg-neutral-950 px-5 text-white hover:bg-neutral-800">
+            <Button onClick={inviteMember} className="h-9 rounded-xl bg-neutral-950 px-4 text-white hover:bg-neutral-800">
               <MailPlus /> Send invitation
             </Button>
           </div>
@@ -112,7 +108,7 @@ export default function WorkspaceMembersPage() {
       </Card>
 
       <Card className="min-h-0 flex-1 overflow-hidden rounded-3xl border-white/70 bg-white/88 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-        <CardHeader className="flex-row items-center justify-between space-y-0 border-b py-3">
+        <CardHeader className="flex-row items-center justify-between space-y-0 border-b px-4 py-2.5">
           <div>
             <CardTitle className="text-base">Workspace directory</CardTitle>
             <p className="text-xs text-muted-foreground">Role changes apply to dashboard and meeting permissions.</p>
@@ -122,9 +118,9 @@ export default function WorkspaceMembersPage() {
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search members..." className="h-9 rounded-xl bg-white pl-9" />
           </div>
         </CardHeader>
-        <CardContent className="max-h-[430px] overflow-y-auto p-0">
+        <CardContent className="max-h-[360px] overflow-y-auto p-0">
           {visibleMembers.map((member) => (
-            <div key={member.id} className="grid grid-cols-[minmax(220px,1.3fr)_minmax(130px,.65fr)_150px_115px_40px] items-center gap-3 border-b px-4 py-3 last:border-b-0">
+            <div key={member.id} className="grid grid-cols-[minmax(220px,1.3fr)_minmax(130px,.65fr)_150px_115px_40px] items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar className="h-9 w-9 border">
                   <AvatarFallback className="bg-neutral-950 text-xs text-white">{initials(member.name)}</AvatarFallback>
@@ -164,8 +160,8 @@ export default function WorkspaceMembersPage() {
 function StatCard({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: number }) {
   return (
     <Card className="rounded-3xl border-white/70 bg-white/88">
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-950 text-white"><Icon className="h-5 w-5" /></div>
+      <CardContent className="flex items-center gap-3 p-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-950 text-white"><Icon className="h-4 w-4" /></div>
         <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-2xl font-semibold">{value}</p></div>
       </CardContent>
     </Card>
