@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeClosed, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -29,8 +29,8 @@ const registerSchema = z.object({
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
-function setAccessTokenCookie(accessToken: string, expiresAt: string) {
-  const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+function setAccessTokenCookie(accessToken: string) {
+  const maxAge = 7 * 24 * 60 * 60; // 7 days
   document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
@@ -60,7 +60,7 @@ export default function RegisterPage() {
       setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Registration successful!");
-      router.replace("/dashboard");
+      router.replace("/host/dashboard");
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };
@@ -144,7 +144,7 @@ export default function RegisterPage() {
                 onClick={() => setShowPassword((value) => !value)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? <EyeOff /> : <Eye />}
+                {showPassword ? <EyeClosed weight="light" /> : <Eye weight="light" />}
               </button>
             </span>
           </label>
@@ -159,7 +159,7 @@ export default function RegisterPage() {
           className="mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-white font-semibold text-black transition hover:bg-white/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
           disabled={isSubmitting}
         >
-          {isSubmitting ? <Loader2 className="animate-spin" /> : "Create Account"}
+          {isSubmitting ? <Spinner weight="light" className="animate-spin" /> : "Create Account"}
         </button>
       </form>
 

@@ -1,53 +1,261 @@
 "use client";
+import type { IconProps } from "@phosphor-icons/react";
 
-import { usePathname } from "next/navigation";
-import { Bell, HelpCircle, Moon, ChevronRight, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, Buildings, BookOpen, Question, FileText, SquaresFour, SignOut, ChatCircle, Microphone, Moon, SidebarSimple, Plus, MagnifyingGlass, HardDrives, GearSix, Sparkle, Star, Flask, User, Users } from "@phosphor-icons/react/dist/ssr";
+import { toast } from "sonner";
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from "@/components/ui/command";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuthStore } from "@/stores/auth-store";
 
-export function Topbar() {
+const routeLabels: Record<string, string> = {
+  dashboard: "Dashboard",
+  host: "Host",
+  participant: "Participant",
+  profile: "Profile",
+  rooms: "Rooms",
+  create: "Create Room",
+  history: "History",
+  "ai-summaries": "AI Summaries",
+  "ai-chat": "AI Chat",
+  feedback: "Feedback",
+  terminology: "Terminology",
+  "voice-profiles": "Voice Profiles",
+  settings: "GearSix",
+  workspace: "Workspace",
+  admin: "Admin",
+  "dev-test": "Dev Test",
+};
+
+const searchItems: Array<{
+  title: string;
+  url: string;
+  group: string;
+  icon: React.ElementType;
+  shortcut?: string;
+}> = [
+  { title: "Host Dashboard", url: "/host/dashboard", group: "Host", icon: SquaresFour, shortcut: "D" },
+  { title: "Participant Dashboard", url: "/participant/dashboard", group: "Participant", icon: Users },
+  { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: Buildings },
+  { title: "Internal Dashboard", url: "/internal/dashboard", group: "Internal", icon: HardDrives },
+  { title: "Rooms", url: "/rooms", group: "Workspace", icon: SquaresFour, shortcut: "R" },
+  { title: "Create Room", url: "/rooms/create", group: "Workspace", icon: Plus, shortcut: "N" },
+  { title: "History & Transcripts", url: "/history", group: "Workspace", icon: FileText, shortcut: "H" },
+  { title: "AI Summaries", url: "/ai-summaries", group: "AI", icon: Sparkle },
+  { title: "Chat with AI", url: "/ai-chat", group: "AI", icon: Question },
+  { title: "Terminology", url: "/terminology", group: "Configuration", icon: BookOpen },
+  { title: "Voice Profiles", url: "/voice-profiles", group: "Configuration", icon: Microphone },
+  { title: "Post-room Feedback", url: "/feedback", group: "Operations", icon: Star },
+  { title: "GearSix", url: "/settings", group: "Configuration", icon: GearSix },
+  { title: "Workspace", url: "/workspace/dashboard", group: "Administration", icon: Buildings },
+  { title: "Internal Admin", url: "/internal/dashboard", group: "Administration", icon: HardDrives },
+  { title: "Dev Test", url: "/dev-test", group: "Developer", icon: Flask },
+];
+
+function Breadcrumbs() {
   const pathname = usePathname();
-
-  // Build breadcrumbs from pathname
   const segments = pathname.split("/").filter(Boolean);
-  const breadcrumbs = segments.map((seg, i) => ({
-    label: seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, " "),
-    isLast: i === segments.length - 1,
-  }));
+  const current = segments.at(-1);
+  const isRoomInformationPage = /^\/rooms\/[^/]+$/.test(pathname);
+  const label = isRoomInformationPage ? "Information Room" : current ? routeLabels[current] ?? current : "Dashboard";
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-slate-100 bg-white px-6 shrink-0">
-      {/* Breadcrumbs */}
-      <div className="flex items-center text-sm">
-        <span className="text-[#000000] hover:text-[#003476] cursor-pointer font-medium">WarpTalk</span>
-        {breadcrumbs.map((crumb, i) => (
-          <span key={i} className="flex items-center">
-            <ChevronRight className="h-4 w-4 text-[#000000] mx-1" />
-            <span className={crumb.isLast ? "text-[#003476] font-semibold" : "text-[#000000] hover:text-[#003476] cursor-pointer font-medium"}>
-              {crumb.label}
-            </span>
-          </span>
-        ))}
-      </div>
+    <div className="min-w-0">
+      <h1 className="truncate text-[16px] font-semibold tracking-tight text-foreground">{label}</h1>
+      {!isRoomInformationPage ? <p className="text-[13px] text-muted-foreground">WarpTalk workspace</p> : null}
+    </div>
+  );
+}
 
-      <div className="flex items-center gap-3">
-        <button className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-[#000000] hover:bg-[#fdfcf6] transition-colors">
-          <HelpCircle className="h-4 w-4" />
-        </button>
-        <button className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-[#000000] hover:bg-[#fdfcf6] transition-colors">
-          <Bell className="h-4 w-4" />
-        </button>
-        <button className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-[#000000] hover:bg-[#fdfcf6] transition-colors">
-          <Moon className="h-4 w-4" />
-        </button>
+function SearchTrigger({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="hidden h-8 w-full max-w-[330px] items-center gap-2 rounded-md bg-muted/50 border border-border px-3 text-[13px] text-muted-foreground transition hover:bg-muted md:flex"
+    >
+      <MagnifyingGlass weight="light" className="h-3.5 w-3.5" />
+      <span className="flex-1 text-left">MagnifyingGlass pages...</span>
+      <kbd className="rounded-sm bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">Ctrl K</kbd>
+    </button>
+  );
+}
 
-        <div className="ml-2 flex items-center gap-2 rounded-full border border-slate-200 p-1 pr-3 cursor-pointer hover:bg-[#fdfcf6] transition-colors">
-          <Avatar className="h-7 w-7 bg-[#003476]">
-            <AvatarFallback className="bg-[#003476] text-white text-xs font-semibold">H</AvatarFallback>
-          </Avatar>
-          <span className="text-sm font-semibold text-[#003476]">Host</span>
-          <ChevronDown className="h-4 w-4 text-[#000000]" />
+function IconButton({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+    >
+      {children}
+    </button>
+  );
+}
+
+export function Topbar() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const logout = useAuthStore((state) => state.logout);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const groupedItems = useMemo(
+    () =>
+      searchItems.reduce<Record<string, typeof searchItems>>((groups, item) => {
+        groups[item.group] = [...(groups[item.group] ?? []), item];
+        return groups;
+      }, {}),
+    []
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setSearchOpen((open) => !open);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleSelect = (url: string) => {
+    router.push(url);
+    setSearchOpen(false);
+  };
+
+  const roleLabel = pathname.startsWith("/participant")
+    ? "Participant"
+    : pathname.startsWith("/workspace")
+      ? "Workspace"
+      : pathname.startsWith("/internal")
+        ? "Internal"
+        : "Host";
+  const roleInitial = roleLabel.slice(0, 1);
+  const profileHref = pathname.startsWith("/participant")
+    ? "/participant/profile"
+    : pathname.startsWith("/workspace")
+      ? "/workspace/profile"
+      : pathname.startsWith("/internal")
+        ? "/internal/profile"
+        : "/host/profile";
+
+  const handleSignOut = () => {
+    logout();
+    router.replace("/login");
+  };
+
+  return (
+    <>
+      <header className="sticky top-0 z-20 flex h-[63px] shrink-0 items-center gap-4 border-b border-border bg-background px-4">
+        <button
+          type="button"
+          aria-label="Toggle sidebar"
+          title="Sidebar"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <SidebarSimple weight="light" className="h-4 w-4" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <Breadcrumbs />
         </div>
-      </div>
-    </header>
+        <SearchTrigger onClick={() => setSearchOpen(true)} />
+        <div className="ml-auto flex items-center gap-1">
+          <IconButton label="Help">
+            <Question weight="light" className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Notifications">
+            <Bell weight="light" className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Theme">
+            <Moon weight="light" className="h-4 w-4" />
+          </IconButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="ml-2 flex h-8 items-center gap-2 rounded-md bg-muted/50 px-2 text-foreground outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Open account menu"
+            >
+              <Avatar className="h-5 w-5">
+                <AvatarFallback className="bg-primary text-[10px] text-primary-foreground">{roleInitial}</AvatarFallback>
+              </Avatar>
+              <span className="hidden text-[13px] font-medium sm:inline">{roleLabel}</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={10}
+              className="w-56 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-sm"
+            >
+              <DropdownMenuItem
+                onClick={() => router.push(profileHref)}
+                className="h-8 cursor-pointer gap-2 rounded-md px-2 text-[13px] focus:bg-muted"
+              >
+                <User weight="light" className="h-4 w-4" />
+                <span>Profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => toast.info("Community is coming soon.")}
+                className="h-8 cursor-pointer gap-2 rounded-md px-2 text-[13px] focus:bg-muted"
+              >
+                <ChatCircle weight="light" className="h-4 w-4" />
+                <span>Community</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => toast.info("Help Center is coming soon.")}
+                className="h-8 cursor-pointer gap-2 rounded-md px-2 text-[13px] focus:bg-muted"
+              >
+                <Question weight="light" className="h-4 w-4" />
+                <span>Help Center</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="my-1 bg-border" />
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="h-8 cursor-pointer gap-2 rounded-md px-2 text-[13px] focus:bg-muted"
+              >
+                <SignOut weight="light" className="h-4 w-4" />
+                <span>Sign Out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      <CommandDialog open={searchOpen} onOpenChange={setSearchOpen} className="max-w-[640px]">
+        <Command className="rounded-xl">
+          <CommandInput placeholder="MagnifyingGlass WarpTalk pages..." autoFocus />
+          <CommandList>
+            <CommandEmpty>No page found.</CommandEmpty>
+            {Object.entries(groupedItems).map(([group, items]) => (
+              <CommandGroup key={group} heading={group}>
+                {items.map((item) => (
+                  <CommandItem key={item.url} value={item.title} onSelect={() => handleSelect(item.url)}>
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                    {item.shortcut ? <CommandShortcut>{item.shortcut}</CommandShortcut> : null}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </CommandDialog>
+    </>
   );
 }

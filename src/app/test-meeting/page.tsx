@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
-  ControlBar,
   VideoConference,
   useConnectionState,
 } from "@livekit/components-react";
@@ -12,18 +11,16 @@ import "@livekit/components-styles";
 import { TranscriptView } from "./TranscriptView";
 import { useAuthStore } from "@/stores/auth-store";
 
-// 10-year ROOT token
-const JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMTllMzIzNC1kZmM1LTdmMWItOTViYi00M2EzY2RlYjNiNmEiLCJlbWFpbCI6InJvb3RAd2FycHRhbGsudm4iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJtZW1iZXIiLCJleHAiOjIwOTQzMjEzMDcsImlzcyI6IldhcnBUYWxrLkF1dGhTZXJ2aWNlIiwiYXVkIjoiV2FycFRhbGsifQ.A9ZNUt0HrJ2o0xC4RXYPrAj5ltDORXgL0okUGQiTxB4";
-
 export default function TestMeetingPage() {
   const authStoreToken = useAuthStore((state) => state.accessToken);
-  const [jwtToken, setJwtToken] = useState(JWT_TOKEN);
+  const [jwtToken, setJwtToken] = useState("");
   const [roomId, setRoomId] = useState("019e3237-d685-7fbb-9156-cc889b4f12bc");
   const [lkToken, setLkToken] = useState("");
   const [wsUrl, setWsUrl] = useState("");
   const [status, setStatus] = useState("Setup"); // Setup -> Waiting -> Connected
   const [isHost, setIsHost] = useState(false);
   const [participantIdToAdmit, setParticipantIdToAdmit] = useState("");
+  const currentToken = jwtToken.trim() || authStoreToken || "";
 
   const handleJoin = async () => {
     try {
@@ -32,13 +29,15 @@ export default function TestMeetingPage() {
         setStatus("Setup");
         return;
       }
-      
+
+      if (!currentToken) {
+        alert("Sign in or paste a short-lived development token.");
+        setStatus("Setup");
+        return;
+      }
+
       setStatus("Joining...");
       const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200/api/v1").replace(/\/+$/, "");
-      
-          // Use the hardcoded long-lived root token to bypass all authentication errors
-          let currentToken = jwtToken;
-
 
       const res = await fetch(`${baseUrl}/meetings/rooms/${roomId}/join`, {
         method: "POST",
@@ -77,7 +76,7 @@ export default function TestMeetingPage() {
           console.error("Failed to trigger AI", err);
       }
 
-    } catch (e) {
+    } catch {
       alert("Error joining meeting");
       setStatus("Setup");
     }
@@ -85,16 +84,21 @@ export default function TestMeetingPage() {
 
   const handleAdmit = async () => {
     try {
+        if (!currentToken) {
+            alert("Sign in or paste a short-lived development token.");
+            return;
+        }
+
         const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200/api/v1").replace(/\/+$/, "");
         const res = await fetch(`${baseUrl}/translation-rooms/${roomId}/participants/${participantIdToAdmit}/admit`, {
             method: "PUT",
             headers: {
-              Authorization: `Bearer ${jwtToken}`,
+              Authorization: `Bearer ${currentToken}`,
             },
         });
         if (res.ok) alert("Admitted!");
         else alert("Failed to admit: " + await res.text());
-    } catch (e) {
+    } catch {
         alert("Error admitting");
     }
   }
@@ -102,7 +106,7 @@ export default function TestMeetingPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white p-8 font-sans selection:bg-blue-500/30">
       <div className="max-w-7xl mx-auto space-y-8">
-        
+
         {/* Header */}
         <div className="space-y-2">
           <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent pb-1">
@@ -115,20 +119,23 @@ export default function TestMeetingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="col-span-1 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
             <h2 className="text-xl font-bold text-slate-200">Configuration</h2>
-            
+
             <div className="space-y-2">
               <label className="text-sm text-slate-400 font-semibold uppercase tracking-wider">JWT Token</label>
-              <textarea 
+              <textarea
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none h-28 font-mono text-slate-300"
-                placeholder="eyJhbGci..."
+                placeholder="Optional short-lived development token"
                 value={jwtToken}
                 onChange={(e) => setJwtToken(e.target.value)}
               />
+              <p className="text-xs text-slate-500">
+                Uses the current signed-in session when empty. Never commit credentials here.
+              </p>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm text-slate-400 font-semibold uppercase tracking-wider">Translation Room ID</label>
-              <input 
+              <input
                 type="text"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all font-mono text-slate-300"
                 placeholder="UUID"
@@ -138,7 +145,7 @@ export default function TestMeetingPage() {
             </div>
 
             {status !== "Connected" && (
-                <button 
+                <button
                   onClick={handleJoin}
                   className="w-full py-4 px-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-bold text-base transition-all shadow-lg shadow-indigo-500/25 active:scale-[0.98]"
                 >
@@ -154,10 +161,10 @@ export default function TestMeetingPage() {
                   </div>
                   <span className="group-hover:text-white transition-colors">I am the Host</span>
                </label>
-               
+
                {isHost && (
                    <div className="space-y-3 bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50">
-                       <input 
+                       <input
                          type="text"
                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
                          placeholder="Participant ID to Admit"
@@ -174,12 +181,12 @@ export default function TestMeetingPage() {
 
           {/* Main Area */}
           <div className="col-span-1 lg:col-span-2 space-y-6 flex flex-col">
-            
+
             {/* LiveKit Room */}
             <div className="flex-none bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center justify-center min-h-[400px] relative overflow-hidden">
                 {/* Decorative background element */}
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 pointer-events-none" />
-                
+
                 {status === "Connected" && lkToken ? (
                     <LiveKitRoom
                         video={true}
@@ -201,7 +208,7 @@ export default function TestMeetingPage() {
             {/* Transcript View */}
             <div className="flex-1 min-h-0">
                {status === "Connected" ? (
-                   <TranscriptView roomId={roomId} token={jwtToken} />
+                   <TranscriptView roomId={roomId} token={currentToken} />
                ) : (
                    <div className="h-full border border-slate-800 rounded-3xl bg-slate-900/50 flex flex-col items-center justify-center text-slate-500/80 space-y-4">
                        <svg className="w-12 h-12 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">

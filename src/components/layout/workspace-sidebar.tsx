@@ -1,104 +1,31 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Users,
-  CreditCard,
-  LineChart,
-  BookOpen,
-  Settings,
-  ChevronLeft,
-  LogOut,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import { useAuthStore } from "@/stores/auth-store";
+import { BookOpen, Robot, CreditCard, FileText, SquaresFour, ChartLineUp, GearSix, SlidersHorizontal, Users } from "@phosphor-icons/react/dist/ssr";
 
-const navigation = [
-  { name: "Workspace Dashboard", href: "/workspace/dashboard", icon: LayoutDashboard },
-  { name: "Members", href: "/workspace/members", icon: Users },
-  { name: "Billing & Usage", href: "/workspace/billing", icon: CreditCard },
-  { name: "AI Insights", href: "/workspace/ai-insights", icon: LineChart },
-  { name: "Workspace Glossary", href: "/workspace/glossary", icon: BookOpen },
-  { name: "Workspace Settings", href: "/workspace/settings", icon: Settings },
+import { RoleSidebar, type RoleSidebarGroup } from "@/components/layout/role-sidebar";
+
+const navGroups: RoleSidebarGroup[] = [
+  {
+    label: "Workspace",
+    items: [
+      { title: "Dashboard", href: "/workspace/dashboard", icon: SquaresFour },
+      { title: "Members", href: "/workspace/members", icon: Users },
+      { title: "Rooms", href: "/workspace/rooms", icon: ChartLineUp },
+      { title: "Artifacts", href: "/workspace/artifacts", icon: FileText },
+      { title: "AI Chat", href: "/workspace/ai-chat", icon: Robot },
+    ],
+  },
+  {
+    label: "Governance",
+    items: [
+      { title: "Meeting Setup", href: "/workspace/meeting-settings", icon: SlidersHorizontal },
+      { title: "Terminology", href: "/workspace/terminology", icon: BookOpen },
+      { title: "Billing", href: "/workspace/billing", icon: CreditCard },
+      { title: "GearSix", href: "/workspace/settings", icon: GearSix },
+    ],
+  },
 ];
 
 export function WorkspaceSidebar() {
-  const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const logout = useAuthStore((s) => s.logout);
-
-  return (
-    <aside
-      className={cn(
-        "flex h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
-      )}
-    >
-      <div className="flex h-16 items-center justify-center gap-2.5 border-b px-4">
-        {!collapsed ? (
-          <Image 
-            src="/assets/logos/warptalk-logo-primary.jpg" 
-            alt="WarpTalk" 
-            width={120} 
-            height={32} 
-            className="object-contain"
-          />
-        ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xl">W</div>
-        )}
-      </div>
-
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
-        {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-              )}
-              title={collapsed ? item.name : undefined}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="border-t p-2 flex flex-col gap-2">
-        <Button
-          variant="ghost"
-          className={cn("w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100/10", collapsed && "justify-center px-0")}
-          onClick={logout}
-          title={collapsed ? "Sign Out" : undefined}
-        >
-          <LogOut className={cn("h-5 w-5", !collapsed && "mr-3")} />
-          {!collapsed && <span>Sign Out</span>}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="w-full"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          <ChevronLeft
-            className={cn(
-              "h-4 w-4 transition-transform",
-              collapsed && "rotate-180"
-            )}
-          />
-        </Button>
-      </div>
-    </aside>
-  );
+  return <RoleSidebar homeHref="/workspace/dashboard" srLabel="Workspace Dashboard" groups={navGroups} />;
 }

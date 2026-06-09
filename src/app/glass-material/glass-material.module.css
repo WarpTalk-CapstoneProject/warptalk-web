@@ -1,0 +1,497 @@
+.stage {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: clamp(28px, 5vw, 72px);
+  background:
+    radial-gradient(circle at 50% 12%, rgba(255, 255, 255, 0.07), transparent 32%),
+    radial-gradient(circle at 76% 46%, rgba(126, 123, 130, 0.16), transparent 28%),
+    linear-gradient(135deg, #070808 0%, #111214 46%, #060707 100%);
+  color: #f4f3ef;
+}
+
+.backgroundGrid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 92px 92px;
+  mask-image: radial-gradient(circle at 52% 45%, #000 0%, transparent 68%);
+  pointer-events: none;
+}
+
+.lightBloom {
+  position: absolute;
+  width: min(72vw, 920px);
+  aspect-ratio: 1.7;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.09), transparent 66%);
+  filter: blur(22px);
+  opacity: 0.82;
+  pointer-events: none;
+}
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.72), rgba(190, 184, 179, 0.34) 16%, transparent 34%),
+    repeating-radial-gradient(circle at 52% 44%, rgba(255, 255, 255, 0.13) 0 1px, transparent 2px 8px),
+    conic-gradient(from 18deg, #221f1e, #6f655d, #2a2726, #817873, #1a1817, #504943, #221f1e);
+  box-shadow:
+    inset -28px -38px 70px rgba(0, 0, 0, 0.62),
+    inset 20px 18px 34px rgba(255, 255, 255, 0.12),
+    0 30px 80px rgba(0, 0, 0, 0.55);
+  filter: saturate(0.76) contrast(1.1);
+  opacity: 0.58;
+}
+
+.orb::after {
+  content: "";
+  position: absolute;
+  inset: 8%;
+  border-radius: inherit;
+  background: repeating-linear-gradient(118deg, transparent 0 11px, rgba(255, 255, 255, 0.08) 12px, transparent 15px);
+  mix-blend-mode: overlay;
+  opacity: 0.45;
+}
+
+.orbLarge {
+  width: clamp(250px, 32vw, 460px);
+  left: max(-40px, 8vw);
+  bottom: 8%;
+}
+
+.orbTop {
+  width: clamp(128px, 16vw, 232px);
+  left: 50%;
+  top: 18%;
+  transform: translateX(-20%);
+}
+
+.orbRight {
+  width: clamp(168px, 19vw, 282px);
+  right: 9%;
+  top: 36%;
+}
+
+.workbench {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 22px;
+  width: min(100%, 1060px);
+}
+
+.scene {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  align-items: end;
+  gap: 24px;
+}
+
+.glassCard {
+  --glass-thickness: 1;
+  --glass-light: 0.78;
+  --glass-frost: 0.52;
+  --glass-radius: clamp(28px, 3.5vw, 42px);
+  --bevel-size: max(5px, calc(7px * var(--glass-thickness)));
+  position: relative;
+  min-height: clamp(430px, 42vw, 570px);
+  border-radius: var(--glass-radius);
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at 74% 31%, rgba(226, 228, 240, calc(0.15 * var(--glass-light))), transparent 18%),
+    radial-gradient(ellipse at 19% 76%, rgba(230, 234, 250, calc(0.2 * var(--glass-light))), transparent 24%),
+    radial-gradient(ellipse at 53% 12%, rgba(186, 174, 163, calc(0.13 * var(--glass-light))), transparent 18%),
+    linear-gradient(112deg, rgba(255, 255, 255, calc(0.085 * var(--glass-frost))), rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, calc(0.055 * var(--glass-frost)))),
+    rgba(7, 7, 7, calc(0.55 + var(--glass-frost) * 0.15));
+  backdrop-filter: blur(calc(26px + var(--glass-frost) * 26px)) saturate(132%) brightness(0.76);
+  -webkit-backdrop-filter: blur(calc(26px + var(--glass-frost) * 26px)) saturate(132%) brightness(0.76);
+  box-shadow:
+    0 38px 100px rgba(0, 0, 0, 0.62),
+    0 0 2px rgba(245, 250, 255, calc(0.46 * var(--glass-light))),
+    0 0 calc(15px * var(--glass-light)) rgba(205, 220, 255, 0.14),
+    0 0 0 1px rgba(244, 249, 255, calc(0.56 * var(--glass-light))),
+    inset 0 0 36px rgba(0, 0, 0, 0.58),
+    inset 0 -26px 48px rgba(0, 0, 0, 0.4);
+}
+
+.glassCard::before,
+.glassCard::after,
+.outerRim,
+.bevelWall,
+.innerRim,
+.surfaceReflection,
+.topEdgeLight,
+.leftEdgeWarmth,
+.rightEdgeLight,
+.cornerGlint,
+.lowerCaustic {
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.glassCard::before {
+  content: "";
+  inset: 0;
+  padding: 1px;
+  background:
+    linear-gradient(180deg, rgba(252, 254, 255, calc(0.96 * var(--glass-light))) 0%, rgba(235, 241, 255, calc(0.28 * var(--glass-light))) 9%, rgba(255, 255, 255, 0.025) 24%, rgba(255, 255, 255, 0.015) 78%, rgba(198, 212, 244, calc(0.28 * var(--glass-light))) 100%),
+    linear-gradient(90deg, rgba(255, 255, 255, calc(0.58 * var(--glass-light))), rgba(226, 204, 170, 0.14) 8%, transparent 28%, transparent 78%, rgba(238, 246, 255, calc(0.42 * var(--glass-light))) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: 16;
+}
+
+.glassCard::after {
+  content: "";
+  inset: calc(10px * var(--glass-thickness));
+  border-radius: calc(var(--glass-radius) - calc(10px * var(--glass-thickness)));
+  border: 0;
+  box-shadow:
+    0 0 20px rgba(0, 0, 0, 0.66),
+    inset 0 0 28px rgba(0, 0, 0, 0.28),
+    inset 0 -18px 36px rgba(0, 0, 0, 0.42);
+  z-index: 11;
+}
+
+.outerRim {
+  inset: 0;
+  padding: calc(3px + var(--glass-thickness) * 1px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, calc(0.38 * var(--glass-light))) 0%, rgba(239, 245, 255, calc(0.23 * var(--glass-light))) 22%, rgba(226, 236, 255, calc(0.12 * var(--glass-light))) 48%, rgba(255, 255, 255, 0.035) 74%, transparent 100%),
+    linear-gradient(90deg, rgba(255, 255, 255, calc(0.3 * var(--glass-light))) 0%, rgba(226, 204, 170, 0.13) 22%, rgba(255, 255, 255, 0.04) 52%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter: blur(1.7px);
+  opacity: 0.78;
+  z-index: 15;
+}
+
+.bevelWall {
+  inset: 0;
+  border-radius: inherit;
+  padding: 0;
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, calc(0.12 * var(--glass-light))) 0px,
+      rgba(235, 242, 255, calc(0.075 * var(--glass-light))) 4px,
+      rgba(120, 128, 145, 0.08) 9px,
+      rgba(0, 0, 0, 0.18) 16px,
+      rgba(0, 0, 0, 0.3) 25px,
+      transparent 42px
+    ) top / 100% 44px no-repeat,
+    linear-gradient(90deg,
+      rgba(255, 255, 255, calc(0.095 * var(--glass-light))) 0px,
+      rgba(226, 205, 171, 0.08) 4px,
+      rgba(115, 115, 110, 0.08) 9px,
+      rgba(0, 0, 0, 0.19) 16px,
+      rgba(0, 0, 0, 0.29) 25px,
+      transparent 42px
+    ) left / 44px 100% no-repeat,
+    radial-gradient(circle at var(--glass-radius) var(--glass-radius),
+      rgba(255, 255, 255, calc(0.12 * var(--glass-light))) 0px,
+      rgba(230, 238, 255, calc(0.08 * var(--glass-light))) 6px,
+      rgba(118, 123, 132, 0.08) 14px,
+      rgba(0, 0, 0, 0.2) 23px,
+      rgba(0, 0, 0, 0.31) 34px,
+      transparent 52px
+    ) left top / calc(var(--glass-radius) * 2) calc(var(--glass-radius) * 2) no-repeat;
+  opacity: 0.72;
+  filter: blur(2.6px);
+  z-index: 10;
+}
+
+.innerRim {
+  inset: calc(10px * var(--glass-thickness));
+  border-radius: calc(var(--glass-radius) - calc(10px * var(--glass-thickness)));
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, calc(0.026 * var(--glass-light))), transparent 36%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0.08) 42%, transparent 70%);
+  box-shadow:
+    0 0 18px rgba(0, 0, 0, 0.76),
+    inset 0 0 24px rgba(0, 0, 0, 0.3);
+  z-index: 12;
+}
+
+.surfaceReflection {
+  inset: calc(14px * var(--glass-thickness));
+  border-radius: calc(var(--glass-radius) - calc(14px * var(--glass-thickness)));
+  background:
+    radial-gradient(ellipse at 73% 33%, rgba(231, 229, 242, calc(0.2 * var(--glass-light))), transparent 13%),
+    radial-gradient(ellipse at 21% 77%, rgba(230, 235, 255, calc(0.25 * var(--glass-light))), transparent 18%),
+    radial-gradient(ellipse at 52% 5%, rgba(206, 189, 171, calc(0.13 * var(--glass-light))), transparent 20%),
+    linear-gradient(116deg, transparent 0%, transparent 39%, rgba(255, 255, 255, calc(0.045 * var(--glass-light))) 48%, transparent 58%),
+    linear-gradient(184deg, rgba(255, 255, 255, calc(0.048 * var(--glass-light))) 0%, transparent 16%);
+  mix-blend-mode: screen;
+  mask-image:
+    linear-gradient(112deg, transparent 0%, #000 28%, #000 54%, transparent 78%),
+    radial-gradient(ellipse at 70% 24%, #000 0%, transparent 42%);
+  opacity: 0.86;
+  z-index: 13;
+}
+
+.topEdgeLight {
+  left: calc(var(--glass-radius) * 0.72);
+  right: calc(var(--glass-radius) * 0.72);
+  top: 1px;
+  height: 4px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent, rgba(235, 243, 255, calc(0.84 * var(--glass-light))) 8%, rgba(255, 255, 255, calc(0.3 * var(--glass-light))) 50%, rgba(224, 234, 255, calc(0.54 * var(--glass-light))) 93%, transparent);
+  box-shadow:
+    0 1px 2px rgba(255, 255, 255, calc(0.38 * var(--glass-light))),
+    0 5px 13px rgba(218, 230, 255, calc(0.24 * var(--glass-light)));
+  filter: blur(0.8px);
+  z-index: 17;
+}
+
+.leftEdgeWarmth {
+  top: calc(var(--glass-radius) * 0.78);
+  bottom: calc(var(--glass-radius) * 0.78);
+  left: calc(2px * var(--glass-thickness));
+  width: calc(4px * var(--glass-thickness));
+  background: linear-gradient(180deg, transparent, rgba(226, 204, 168, calc(0.28 * var(--glass-light))) 10%, rgba(255, 255, 255, calc(0.06 * var(--glass-light))) 48%, rgba(214, 224, 250, calc(0.1 * var(--glass-light))) 92%, transparent);
+  filter: blur(0.55px);
+  z-index: 17;
+}
+
+.rightEdgeLight {
+  top: calc(var(--glass-radius) * 0.7);
+  right: calc(3px * var(--glass-thickness));
+  bottom: calc(var(--glass-radius) * 0.72);
+  width: calc(4px * var(--glass-thickness));
+  background: linear-gradient(180deg, transparent, rgba(235, 242, 255, calc(0.12 * var(--glass-light))) 15%, rgba(255, 255, 255, calc(0.18 * var(--glass-light))) 68%, transparent);
+  filter: blur(0.55px);
+  z-index: 17;
+}
+
+.cornerGlint {
+  width: 220px;
+  height: 120px;
+  right: -42px;
+  top: -34px;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 46% 56%, rgba(255, 255, 255, calc(0.5 * var(--glass-light))), rgba(255, 255, 255, 0.12) 24%, transparent 62%);
+  filter: blur(8px);
+  mix-blend-mode: screen;
+  z-index: 8;
+}
+
+.lowerCaustic {
+  left: calc(var(--glass-radius) * 0.72);
+  right: calc(var(--glass-radius) * 0.72);
+  bottom: calc(4px * var(--glass-thickness));
+  height: calc(9px * var(--glass-thickness));
+  background: linear-gradient(90deg, transparent, rgba(155, 170, 198, calc(0.34 * var(--glass-light))) 14%, rgba(215, 226, 255, calc(0.22 * var(--glass-light))) 52%, rgba(172, 188, 220, calc(0.26 * var(--glass-light))) 88%, transparent);
+  filter: blur(1.4px);
+  z-index: 17;
+}
+
+.cardContent {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  align-content: center;
+  min-height: inherit;
+  width: min(76%, 620px);
+  padding: clamp(42px, 8vw, 86px);
+}
+
+.eyebrow {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.cardContent h1 {
+  max-width: 540px;
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: clamp(3.2rem, 7vw, 6.5rem);
+  font-weight: 700;
+  line-height: 0.88;
+}
+
+.copy {
+  max-width: 420px;
+  margin-top: 24px;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  line-height: 1.45;
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 42px;
+}
+
+.badgeRow span {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.74rem;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.dotStack {
+  position: absolute;
+  z-index: 4;
+  right: 12%;
+  top: 45%;
+  display: grid;
+  gap: 14px;
+}
+
+.dotStack span {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.22);
+}
+
+.dotStack span:nth-child(2) {
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.layerPanel,
+.controlBar {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025)),
+    rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 24px 64px rgba(0, 0, 0, 0.32);
+}
+
+.layerPanel {
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.layerHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.layerHeader strong {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.layerPanel ul {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.layerPanel li {
+  position: relative;
+  padding-left: 16px;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.86rem;
+}
+
+.layerPanel li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 10px rgba(220, 230, 255, 0.38);
+}
+
+.controlBar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  border-radius: 18px;
+  padding: 16px 18px;
+}
+
+.controlBar label {
+  display: grid;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.controlBar input {
+  width: 100%;
+  accent-color: #eef2ff;
+}
+
+@media (max-width: 900px) {
+  .stage {
+    padding: 22px;
+  }
+
+  .scene {
+    grid-template-columns: 1fr;
+  }
+
+  .glassCard {
+    min-height: 520px;
+  }
+
+  .cardContent {
+    width: 100%;
+  }
+
+  .layerPanel {
+    display: none;
+  }
+
+  .controlBar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .glassCard {
+    min-height: 520px;
+    border-radius: 30px;
+  }
+
+  .cardContent {
+    padding: 34px 28px;
+  }
+
+  .dotStack {
+    right: 28px;
+    top: auto;
+    bottom: 38px;
+  }
+}
