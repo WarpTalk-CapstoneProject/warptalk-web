@@ -23,13 +23,12 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider
         attribute="class"
-        defaultTheme="light"
-        enableSystem={false}
-        forcedTheme="light"
+        defaultTheme="system"
+        enableSystem={true}
         disableTransitionOnChange
       >
         {children}
-        <Toaster richColors position="top-right" />
+
       </ThemeProvider>
     </QueryClientProvider>
   );

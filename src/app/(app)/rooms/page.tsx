@@ -1,230 +1,165 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, Calendar, Clock, Globe, Plus, Search, Users } from "lucide-react";
+import { CaretRight, CaretDown, CheckCircle, Circle, DotsThree, Copy, Calendar as CalendarIcon } from "@phosphor-icons/react/dist/ssr";
+import { toast } from "sonner";
+import { Calendar } from "@/components/ui/calendar";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
-import { getLanguageName } from "@/lib/languages";
-import type { TranslationRoomDto, TranslationRoomStatus } from "@/types/translationRoom";
+import type { TranslationRoomDto } from "@/types/translationRoom";
 
-const statusOptions: Array<{ value: string; label: string }> = [
-  { value: "", label: "All" },
-  { value: "SCHEDULED,WAITING", label: "Upcoming" },
-  { value: "IN_PROGRESS,PAUSED", label: "Active" },
-  { value: "ENDED,CANCELLED", label: "Completed" },
-];
 
-const statusLabels: Record<TranslationRoomStatus, string> = {
-  scheduled: "Scheduled",
-  waiting: "Waiting",
-  in_progress: "Active",
-  paused: "Paused",
-  ended: "Ended",
-  cancelled: "Cancelled",
-  expired: "Expired",
-  failed: "Failed",
-};
-
-const statusStyles: Record<TranslationRoomStatus, string> = {
-  scheduled: "border-[#003476]/15 bg-[#e4eef9] text-[#003476]",
-  waiting: "border-amber-200 bg-amber-50 text-amber-700",
-  in_progress: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  paused: "border-slate-200 bg-slate-50 text-slate-700",
-  ended: "border-slate-200 bg-white text-slate-600",
-  cancelled: "border-rose-200 bg-rose-50 text-rose-700",
-  expired: "border-slate-200 bg-slate-50 text-slate-500",
-  failed: "border-rose-200 bg-rose-50 text-rose-700",
-};
-
-function formatDate(value?: string) {
-  if (!value) return "No schedule";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+function formatTimeShort(value?: string) {
+  if (!value) return "No date";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
-function formatLanguages(room: TranslationRoomDto) {
-  const targets = room.targetLanguages.map(getLanguageName).join(", ");
-  return `${getLanguageName(room.sourceLanguage ?? "en")} -> ${targets || "No target"}`;
+function StatusIcon({ status }: { status: string }) {
+  if (status === "in_progress") return <div className="w-3 h-3 rounded-full border-[1.5px] border-foreground/70 bg-foreground/10" />;
+  if (status === "scheduled" || status === "waiting") return <div className="w-3 h-3 rounded-full border-[1.5px] border-muted-foreground/40" />;
+  if (status === "ended") return <CheckCircle size={13} weight="light" className="text-muted-foreground" />;
+  return <Circle size={13} weight="light" className="text-muted-foreground/40" />;
 }
 
-function getRoomTime(room: TranslationRoomDto) {
-  return room.scheduledAt ?? room.startedAt ?? room.createdAt;
-}
-
-export default function RoomsPage() {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const roomList = useTranslationRooms({
-    status: status || undefined,
-    search: search.trim() || undefined,
-    pageSize: 100,
-  });
-
-  const rooms = useMemo(() => roomList.data?.rooms ?? [], [roomList.data?.rooms]);
-  const activeCount = useMemo(
-    () => rooms.filter((room) => room.status === "in_progress" || room.status === "paused").length,
-    [rooms]
-  );
-  const upcomingCount = useMemo(
-    () => rooms.filter((room) => room.status === "scheduled" || room.status === "waiting").length,
-    [rooms]
-  );
-
+function StatusBadge({ status }: { status: string }) {
   return (
-    <div className="mx-auto w-full max-w-[1320px] space-y-6 pb-16">
-      <div className="flex flex-col gap-4 rounded-2xl border border-[#e4eef9] bg-white p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-[#003476]">Translation rooms</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Room operations</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Manage rooms backed by the TranslationRoom API. Empty states reflect live data from the current workspace.
-          </p>
-        </div>
-        <Link
-          href="/rooms/create"
-          className="inline-flex h-10 items-center justify-center rounded-md bg-[#003476] px-4 text-sm font-semibold text-white hover:bg-[#003476]/90"
+    <span className="text-[11px] text-muted-foreground capitalize">
+      {status.replace(/_/g, " ")}
+    </span>
+  );
+}
+
+function LinearRow({ room }: { room: TranslationRoomDto }) {
+  return (
+    <Link 
+      href={`/rooms/${room.id}`}
+      className="flex items-center h-[34px] text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
+    >
+      <div className="flex items-center w-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            const inviteLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
+            navigator.clipboard.writeText(inviteLink);
+            toast.success("Invite link copied");
+          }}
+          className="hover:text-foreground transition-colors p-1"
+          title="Copy invite link"
         >
-          <Plus className="mr-2 h-4 w-4" />
-          Create room
-        </Link>
+          <Copy size={14} weight="bold" />
+        </button>
       </div>
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <MetricCard icon={<Calendar className="h-4 w-4" />} label="Total rooms" value={roomList.data?.total ?? rooms.length} />
-        <MetricCard icon={<Clock className="h-4 w-4" />} label="Upcoming" value={upcomingCount} />
-        <MetricCard icon={<Users className="h-4 w-4" />} label="Active" value={activeCount} />
+      
+      <div className="flex items-center w-8 shrink-0">
+        <StatusIcon status={room.status} />
       </div>
+      
+      <div className="w-[72px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
+        {room.translationRoomCode}
+      </div>
+      
+      <div className="flex-1 min-w-0">
+        <span className="text-foreground truncate block">{room.title}</span>
+      </div>
+      
+      <div className="flex items-center gap-4 shrink-0 text-muted-foreground text-[11px]">
+        <StatusBadge status={room.status} />
+        <span>{room.sourceLanguage} → {room.targetLanguages[0]}</span>
+        <span className="tabular-nums">{room.participantCount}/{room.maxParticipants}</span>
+        <span className="w-[52px] text-right tabular-nums">
+          {formatTimeShort(room.scheduledAt ?? room.createdAt)}
+        </span>
+      </div>
+    </Link>
+  );
+}
 
-      <div className="rounded-2xl border border-[#e4eef9] bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-[#e4eef9] p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full lg:max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search title, description, or code"
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#003476] focus:ring-1 focus:ring-[#003476]"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {statusOptions.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => setStatus(option.value)}
-                className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                  status === option.value
-                    ? "border-[#003476] bg-[#003476] text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-[#003476]/40"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
+export default function MeetingsPageLinear() {
+  const [isGroupOpen, setIsGroupOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<"active" | "scheduled" | "history" | "all">("active");
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const roomList = useTranslationRooms({ pageSize: 100 });
 
-        {roomList.isLoading && <StateRow title="Loading rooms..." description="Fetching rooms from the TranslationRoom service." />}
+  const rooms = useMemo(() => {
+    return roomList.data?.rooms ?? [];
+  }, [roomList.data?.rooms]);
 
-        {roomList.isError && (
-          <StateRow
-            icon={<AlertCircle className="h-5 w-5" />}
-            title="Could not load rooms"
-            description="Check your session and the TranslationRoom service connection."
-          />
-        )}
+  const filteredRooms = useMemo(() => {
+    if (activeTab === "active") return rooms.filter(r => r.status === "in_progress" || r.status === "waiting");
+    if (activeTab === "scheduled") {
+      if (!selectedDate) return rooms.filter(r => r.status === "scheduled");
+      return rooms.filter(r => r.status === "scheduled" && r.scheduledAt && new Date(r.scheduledAt).toDateString() === selectedDate.toDateString());
+    }
+    if (activeTab === "history") return rooms.filter(r => r.status === "ended" || r.status === "cancelled");
+    return rooms;
+  }, [rooms, activeTab, selectedDate]);
 
-        {!roomList.isLoading && !roomList.isError && rooms.length === 0 && (
-          <div className="flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
-            <Calendar className="h-10 w-10 text-[#003476]" />
-            <h2 className="mt-4 text-xl font-bold text-slate-950">No rooms found</h2>
-            <p className="mt-2 max-w-md text-sm text-slate-600">
-              Create a translation room or adjust your filters to see existing scheduled, active, or completed rooms.
-            </p>
-            <Link
-              href="/rooms/create"
-              className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-[#003476] px-4 text-sm font-semibold text-white hover:bg-[#003476]/90"
+  return (
+    <div className="flex flex-col h-full ">
+      
+      {/* View Tabs */}
+      <div className="flex items-center px-4 border-b border-border h-[38px] shrink-0">
+        <div className="flex gap-0 text-[13px] h-full">
+          {(["active", "scheduled", "history", "all"] as const).map((tab) => (
+            <div
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`h-full flex items-center px-2.5 cursor-pointer transition-colors capitalize ${activeTab === tab ? "border-b-[1.5px] border-foreground text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
             >
-              Create room
-            </Link>
+              {tab}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden">
+        {activeTab === "scheduled" && (
+          <div className="w-[300px] border-r border-border flex flex-col items-center py-4 px-2 overflow-y-auto bg-surface-1/30">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              className="rounded-md border bg-surface-1 shadow-sm"
+            />
+            <div className="mt-4 text-[12px] text-muted-foreground w-full px-2">
+              <p className="font-medium text-foreground mb-1">Scheduled for {selectedDate?.toDateString()}</p>
+              <p>Select a date to view meetings scheduled for that day.</p>
+            </div>
           </div>
         )}
 
-        {rooms.length > 0 && (
-          <div className="divide-y divide-[#e4eef9]">
-            {rooms.map((room) => (
-              <Link
-                key={room.id}
-                href={`/room/${room.id}`}
-                className="grid gap-4 p-4 transition hover:bg-[#fdfcf6]/60 lg:grid-cols-[minmax(0,1.5fr)_180px_220px_140px]"
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-base font-bold text-slate-950">{room.title}</h2>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${statusStyles[room.status]}`}>
-                      {statusLabels[room.status]}
-                    </span>
-                  </div>
-                  {room.description && <p className="mt-1 line-clamp-2 text-sm text-slate-600">{room.description}</p>}
-                  <p className="mt-2 font-mono text-xs font-semibold uppercase tracking-wide text-[#003476]">
-                    {room.translationRoomCode}
-                  </p>
+        <div className="flex-1 overflow-y-auto">
+          {/* Group Header */}
+          <div 
+            className="flex items-center gap-1.5 px-4 h-[30px] hover:bg-accent/40 cursor-pointer text-[12px] text-muted-foreground select-none transition-colors"
+            onClick={() => setIsGroupOpen(!isGroupOpen)}
+          >
+            {isGroupOpen ? (
+              <CaretDown size={12} weight="bold" />
+            ) : (
+              <CaretRight size={12} weight="bold" />
+            )}
+            <span className="font-medium text-foreground capitalize">{activeTab} Meetings</span>
+            <span className="tabular-nums">{filteredRooms.length}</span>
+          </div>
+
+          {/* Group Content */}
+          {isGroupOpen && (
+            <div className="flex flex-col">
+              {filteredRooms.length > 0 ? (
+                filteredRooms.map((room) => (
+                  <LinearRow key={room.id} room={room} />
+                ))
+              ) : (
+                <div className="px-6 py-8 text-[13px] text-muted-foreground flex flex-col items-center justify-center border-t border-border/40">
+                  <CalendarIcon size={24} weight="light" className="mb-2 opacity-50" />
+                  <p>No {activeTab} meetings found.</p>
                 </div>
-                <InfoLine icon={<Clock className="h-4 w-4" />} label={formatDate(getRoomTime(room))} />
-                <InfoLine icon={<Globe className="h-4 w-4" />} label={formatLanguages(room)} />
-                <InfoLine
-                  icon={<Users className="h-4 w-4" />}
-                  label={`${room.participantCount ?? 0}/${room.maxParticipants} participants`}
-                />
-              </Link>
-            ))}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
-}
-
-function MetricCard({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
-  return (
-    <div className="rounded-2xl border border-[#e4eef9] bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e4eef9] text-[#003476]">{icon}</span>
-        {label}
-      </div>
-      <p className="mt-3 text-2xl font-bold text-slate-950">{value}</p>
-    </div>
-  );
-}
-
-function InfoLine({ icon, label }: { icon: ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-      <span className="text-[#003476]">{icon}</span>
-      <span className="min-w-0 truncate">{label}</span>
-    </div>
-  );
-}
-
-function StateRow({
-  icon,
-  title,
-  description,
-}: {
-  icon?: ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center text-slate-600">
-      {icon}
-      <p className="mt-3 text-base font-bold text-slate-950">{title}</p>
-      <p className="mt-1 text-sm">{description}</p>
     </div>
   );
 }

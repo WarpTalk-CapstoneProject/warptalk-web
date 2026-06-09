@@ -3,16 +3,24 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_ROUTES = ["/", "/pricing", "/about", "/login", "/register", "/forgot-password", "/dev-test"];
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password"];
-const ADMIN_PREFIX = "/admin";
+const ADMIN_PREFIX = "/internal";
+
+// Temporary frontend-only mode: backend/auth is not ready yet, so allow direct
+// access to app pages while dashboard and layout work is being reviewed.
+const DISABLE_AUTH_GUARD = false;
 
 export function middleware(request: NextRequest) {
+  if (DISABLE_AUTH_GUARD) {
+    return NextResponse.next();
+  }
+
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("access_token")?.value;
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
   if (token && isAuthRoute) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/host/dashboard", request.url));
   }
 
   if (!token && !isPublicRoute) {

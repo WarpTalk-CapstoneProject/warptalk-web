@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "linear-ui-skills": {
+      "source": "ihlamury/design-skills",
+      "sourceType": "github",
+      "skillPath": "skills/linear/SKILL.md",
+      "computedHash": "90c9a6ba781cd83c22943718259ef0bd8704c9de0e0a3e42ed2914322bc88c05"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "8f8bcc9024aa068245fac646d654a18c80280e4b06112ccd3e691a8c96cd66bd"
+    },
+    "ui-ux-pro-max": {
+      "source": "nexu-io/open-design",
+      "sourceType": "github",
+      "skillPath": "skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "13887b516bebbd2e97885435ea022b2aec36cc77224f639d098a47f2723865cb"
+    }
+  }
+}

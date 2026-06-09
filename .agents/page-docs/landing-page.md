@@ -45,9 +45,18 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
   - Narrative steps sit close to the shared trace while compact SVG branches enter the wave, crossing, pause, and memory diagrams from continuous connection points below each title.
   - The small branch paths inherit scroll progress from the same story-board spine: each fork begins only when the live spine reaches its junction, grows with the continuing spine, and retracts when the user scrolls upward.
   - Branch tick marks and labels reveal after the branch path reaches them, keeping content such as `live`, `low latency`, `room signal`, `xin chao`, `hello`, `bonjour`, and `konnichiwa` tied to the motion sequence instead of appearing as static copy.
+  - The 01/02/03/04 branch animations are now derived from the live spine progress rather than a separate scroll timer, so side branches only begin after the main trace reaches each measured fork point.
+  - Nested branch diagrams use a shared trunk plus synchronized child paths; child paths no longer duplicate the trunk, so internal forks split together from the same junction instead of showing one child line before another.
+  - Child branch starts use flat caps and a slightly lighter stroke so overlapping split points do not create heavy blobs at nested forks.
+  - The standalone midpoint nodes on the pause and memory branches were removed; only meaningful label ticks keep their small dots.
+  - The passive spine guide was reduced to a very faint ghost line so unfinished sections no longer read as pre-existing branch paths before the active white trace arrives.
   - Branch diagrams reverse their reveal when they leave view on upward scrolling instead of staying as static lines.
   - The trace lane is shifted farther left with a stronger stroke hierarchy: the main spine is thicker/brighter than the branch lines so users can distinguish the primary scroll path.
+  - The SVG canvas is extended slightly to the left so the primary rail sits farther left while the long right-side branch endpoints stay visually balanced with the centered copy.
   - Branch reveal ranges were tightened so the fork paths draw faster once the main spine reaches each junction.
+  - The Feature trace starts earlier after the hero and uses a faster shared spine progress so the live rail is already moving when users leave the hero.
+  - Branch opacity now fades in across a longer slice of branch progress so side paths draw in gradually instead of popping on at the fork.
+  - The four branch progress windows are mapped to measured SVG path-length fork points so side branches do not appear before the live spine reaches each fork.
   - Step titles and index labels were compacted into a cleaner left-to-right editorial grid, with branch baselines routed below the large copy to avoid line/text collisions.
   - Major step headings now reveal from the same branch progress as their SVG fork instead of using independent viewport entrance animation.
   - The Feature story board was expanded into a taller single coordinate system so steps 03, 04, and the shared `System Signals` continuation have more even breathing room and are easier to read at 100% zoom.
@@ -131,7 +140,9 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - The opening `Feature` branch diagrams live in the same SVG story board as the trace lane, keeping the small branches continuous while leaving the title blocks clear on desktop.
 - Branch progress is range-mapped from the shared spine path at the four fork junctions, so short horizontal lines stop at their endpoints while the spine keeps moving down to later forks.
 - The `System Signals` rail is drawn as the lower tail of the same story-board SVG spine; its dots and row visibility are driven by the board scroll progress instead of standalone viewport animations.
-- The `System Signals` copy appears first, dots light in order, each row divider is an animated SVG path, and row content is gated until after its horizontal path has crossed the rail dot.
+  - The `System Signals` copy appears first, dots light in order, each row divider is an animated SVG path, and row content is gated until after its horizontal path has crossed the rail dot.
+  - The `System Signals` intro copy is positioned above the first row so the rail dots can appear before row content without overlapping `Capture`.
+  - Signal rail dots now finish their sequential reveal early, before the horizontal row lines draw across them.
 - The pricing yearly toggle only updates the displayed price text; it does not yet start checkout.
 - Footer social icons, footer nav links, and subscribe button use hover-only transitions.
 - Footer watermark viewBox is recalculated after fonts are ready and on resize.
