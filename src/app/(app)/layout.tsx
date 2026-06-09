@@ -13,11 +13,20 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
+import { CreateRoomDialog } from "@/components/rooms/create-room-dialog";
+import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
+
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const logout = useAuthStore((state) => state.logout);
   const { rightSidebarOpen, toggleRightSidebar } = useUIStore();
+
+  const roomIdMatch = pathname.match(/^\/rooms\/([0-9a-fA-F-]{36})/);
+  const roomId = roomIdMatch ? roomIdMatch[1] : undefined;
+  const roomQuery = useTranslationRoom(roomId as string);
+  const roomTitle = roomQuery.data?.title;
 
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
@@ -33,7 +42,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               if (pathname.startsWith('/rooms')) {
                 parts.push({ label: "Meetings", href: "/rooms" });
                 const sub = pathname.replace('/rooms', '').split('/').filter(Boolean)[0];
-                if (sub && !/^[0-9a-fA-F-]{36}$/.test(sub)) parts.push({ label: sub });
+                if (sub) {
+                  if (/^[0-9a-fA-F-]{36}$/.test(sub)) {
+                    parts.push({ label: roomTitle || "Loading..." });
+                  } else {
+                    parts.push({ label: sub });
+                  }
+                }
               } else if (pathname.startsWith('/history')) {
                 parts.push({ label: "History" });
               } else if (pathname.startsWith('/ai-summaries')) {
@@ -44,10 +59,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 parts.push({ label: "Voice Profiles" });
               } else if (pathname.startsWith('/settings')) {
                 parts.push({ label: "Settings" });
+              } else if (pathname.startsWith('/join')) {
+                parts.push({ label: "Join Translation Room" });
               } else if (pathname.startsWith('/room/')) {
                  parts.push({ label: "Meetings", href: "/rooms" });
                  const sub = pathname.replace('/room/', '').split('/').filter(Boolean)[0];
-                 if (sub && !/^[0-9a-fA-F-]{36}$/.test(sub)) parts.push({ label: sub });
+                 if (sub) {
+                   if (/^[0-9a-fA-F-]{36}$/.test(sub)) {
+                     parts.push({ label: roomTitle || "Loading..." });
+                   } else {
+                     parts.push({ label: sub });
+                   }
+                 }
               } else {
                 parts.push({ label: "Workspace" });
               }
@@ -59,7 +82,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       {part.label}
                     </Link>
                   ) : (
-                    <span className={index === parts.length - 1 ? "text-ink font-medium" : "hover:text-ink cursor-pointer transition-colors"}>
+                    <span className={index === parts.length - 1 ? "text-ink font-medium max-w-[300px] truncate" : "hover:text-ink cursor-pointer transition-colors capitalize"}>
                       {part.label}
                     </span>
                   )}
@@ -102,6 +125,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           )}
         </div>
       </div>
+      <CreateRoomDialog />
+      <SearchMeetingDialog />
     </div>
   );
 }

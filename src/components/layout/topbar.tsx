@@ -69,17 +69,35 @@ const searchItems: Array<{
   { title: "Dev Test", url: "/dev-test", group: "Developer", icon: Flask },
 ];
 
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import Link from "next/link";
+import { CaretRight } from "@phosphor-icons/react/dist/ssr";
+
 function Breadcrumbs() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
   const current = segments.at(-1);
   const isRoomInformationPage = /^\/rooms\/[^/]+$/.test(pathname);
-  const label = isRoomInformationPage ? "Information Room" : current ? routeLabels[current] ?? current : "Dashboard";
+  
+  const roomId = isRoomInformationPage ? current : undefined;
+  const roomQuery = useTranslationRoom(roomId as string);
+  const roomTitle = roomQuery.data?.title;
+
+  if (isRoomInformationPage) {
+    return (
+      <div className="min-w-0 flex items-center gap-2 text-[14px] font-medium tracking-tight">
+        <Link href="/rooms" className="text-muted-foreground hover:text-foreground transition-colors">Meetings</Link>
+        <CaretRight weight="bold" className="text-muted-foreground/40 w-3 h-3" />
+        <span className="truncate text-foreground max-w-[300px]">{roomTitle || "Loading..."}</span>
+      </div>
+    );
+  }
+
+  const label = current ? routeLabels[current] ?? current : "Dashboard";
 
   return (
     <div className="min-w-0">
-      <h1 className="truncate text-[16px] font-semibold tracking-tight text-foreground">{label}</h1>
-      {!isRoomInformationPage ? <p className="text-[13px] text-muted-foreground">WarpTalk workspace</p> : null}
+      <h1 className="truncate text-[16px] font-semibold tracking-tight text-foreground capitalize">{label}</h1>
     </div>
   );
 }

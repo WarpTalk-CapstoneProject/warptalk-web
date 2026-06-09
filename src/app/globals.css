@@ -31,6 +31,13 @@
   --color-semantic-success: #27a644;
   --color-semantic-overlay: #000000;
 
+  /* Status Colors */
+  --color-status-in-progress: #3b82f6;
+  --color-status-waiting: #f59e0b;
+  --color-status-scheduled: #10b981;
+  --color-status-ended: #6b7280;
+  --color-status-error: #ef4444;
+
   /* Fonts */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;

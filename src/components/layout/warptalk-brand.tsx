@@ -16,7 +16,7 @@ export function WarpTalkBrand({ compact = false, className }: WarpTalkBrandProps
         fill
         priority
         sizes={compact ? "18px" : "65px"}
-        className="object-contain object-left"
+        className="object-contain object-left mix-blend-multiply"
       />
     </span>
   );

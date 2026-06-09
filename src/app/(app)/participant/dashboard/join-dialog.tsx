@@ -22,10 +22,12 @@ export function JoinByCodeDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">
-          Join by code
-        </button>
+      <DialogTrigger
+        render={
+          <button className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800" />
+        }
+      >
+        Join by code
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
