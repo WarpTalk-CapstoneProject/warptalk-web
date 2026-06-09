@@ -37,6 +37,7 @@ export const API = {
     end: (id: string) => `/translation-rooms/${id}/end`,
     cancel: (id: string) => `/translation-rooms/${id}/cancel`,
     artifacts: (id: string) => `/translation-rooms/${id}/artifacts`,
+    settings: (id: string) => `/translation-rooms/${id}/settings`,
     feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
   },

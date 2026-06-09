@@ -10,6 +10,7 @@ import type {
   TranslationRoomFeedbackStateDto,
   TranslationRoomDto,
   TranslationRoomParticipantDto,
+  UpdateRoomSettingsRequest,
 } from "@/types/translationRoom";
 
 const MEETING_KEY = ["translationRooms"] as const;
@@ -53,6 +54,21 @@ export function useCreateTranslationRoom() {
       return translationRoom;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    },
+  });
+}
+
+/** Update translationRoom settings mutation */
+export function useUpdateTranslationRoomSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: UpdateRoomSettingsRequest }) => {
+      const { data: translationRoom } = await translationRoomService.updateSettings(id, data);
+      return translationRoom;
+    },
+    onSuccess: (translationRoom, { id }) => {
+      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
   });

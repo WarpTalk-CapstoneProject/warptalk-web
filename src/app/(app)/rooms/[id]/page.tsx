@@ -21,9 +21,10 @@ import {
 
 import { useTranslationRoom, useTranslationRoomParticipants } from "@/hooks/use-translationRooms";
 import { getLanguageName } from "@/lib/languages";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-
+import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 
 const getShortLang = (val: string) => {
   if (!val) return "";
@@ -56,6 +57,13 @@ export default function RoomInformationPage() {
   const router = useRouter();
   const roomId = params.id;
   const [activeTab, setActiveTab] = useState<"overview" | "activity" | "transcript">("overview");
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedText("Copied");
+    setTimeout(() => setCopiedText(null), 2000);
+  };
 
   const roomQuery = useTranslationRoom(roomId);
   const participantsQuery = useTranslationRoomParticipants(roomId);
@@ -98,6 +106,11 @@ export default function RoomInformationPage() {
 
   return (
     <div className="flex flex-col h-full  overflow-hidden">
+      {copiedText && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[13px] font-medium px-4 py-2 rounded-md shadow-lg z-[100] animate-in fade-in slide-in-from-top-4 duration-200">
+          {copiedText}
+        </div>
+      )}
       
       {/* Scrollable Container (holds both content and right sidebar) */}
       <div className="flex-1 overflow-y-auto">
@@ -107,11 +120,17 @@ export default function RoomInformationPage() {
           <div className="flex-1 min-w-0 px-10 py-10 flex flex-col">
             {/* Title section */}
             <div className="mb-6 flex items-start justify-between">
-              <div>
+              <div className="flex-1 min-w-0 pr-4">
                 <h1 className="text-[24px] font-semibold text-foreground tracking-tight leading-snug">{room.title}</h1>
                 {room.description && (
                   <p className="mt-1 text-[14px] text-muted-foreground">{room.description}</p>
                 )}
+                <MeetingPropertiesPills 
+                  room={room} 
+                  apiParticipants={apiParticipants} 
+                  activeParticipantCount={activeParticipantCount} 
+                  user={user} 
+                />
               </div>
               <div className="flex items-center gap-2 px-3 py-1 rounded-[6px] border border-border bg-surface-2 text-[12px] font-medium text-muted-foreground">
                 <StatusDot status={room.status} />
@@ -131,10 +150,37 @@ export default function RoomInformationPage() {
                   {apiParticipants.length > 0 ? apiParticipants.map(p => p.displayName).join("; ") : "No participants added"}
                 </div>
                 <div className="shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <button className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors">
-                     <Users className="w-3.5 h-3.5" />
-                     Tracking
-                   </button>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <div className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors cursor-pointer">
+                        <Users className="w-3.5 h-3.5" />
+                        Tracking
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-[300px] p-3 rounded-xl bg-canvas shadow-xl border-border/60 z-[100]">
+                      <h4 className="text-[13px] font-medium text-ink mb-3">Participants</h4>
+                      <div className="flex items-center gap-2 mb-4">
+                        <input type="email" placeholder="Invite via email..." className="flex-1 bg-surface-1 border border-border/60 rounded-md px-2.5 py-1.5 text-[13px] text-ink placeholder:text-ink-muted/50 outline-none focus:border-ink/30 transition-colors" />
+                        <button className="bg-ink text-canvas px-3 py-1.5 rounded-md text-[13px] font-medium hover:opacity-90 transition-opacity">Invite</button>
+                      </div>
+                      <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                        <div className="text-[11px] font-medium text-ink-muted uppercase tracking-wider mb-2">Current ({apiParticipants.length})</div>
+                        {apiParticipants.length > 0 ? apiParticipants.map((p, i) => (
+                          <div key={i} className="flex items-center gap-2.5 text-[13px] text-ink p-1.5 hover:bg-surface-1 rounded-md transition-colors">
+                            <div className="h-7 w-7 rounded-full bg-surface-2 border border-border/40 flex items-center justify-center shrink-0">
+                              <span className="text-[11px] font-medium text-ink-muted">{p.displayName?.charAt(0).toUpperCase() || '?'}</span>
+                            </div>
+                            <div className="flex-1 truncate leading-tight">
+                              <div className="font-medium text-ink">{p.displayName}</div>
+                              {p.email && <div className="text-[11px] text-ink-muted truncate">{p.email}</div>}
+                            </div>
+                          </div>
+                        )) : (
+                          <div className="text-[13px] text-ink-muted text-center py-4">No participants added</div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
@@ -313,38 +359,6 @@ export default function RoomInformationPage() {
 
           {/* Right sidebar — Linear Properties panels */}
           <div className="w-[280px] shrink-0 py-10 pr-2 flex flex-col gap-2">
-            
-
-            {/* Properties Card */}
-            <div className="rounded-[10px] border border-border bg-surface-1 shadow-[0px_3px_6px_-2px_rgba(0,0,0,0.02),0px_1px_1px_rgba(0,0,0,0.04)] overflow-visible">
-              <div className="px-2.5 pt-3 pb-2 flex items-center justify-between">
-                <span className="text-[12px] font-medium text-muted-foreground flex items-center gap-1 px-1.5">
-                  Properties
-                  <ChevronDown size={12} strokeWidth={2} className="ml-0.5" />
-                </span>
-              </div>
-              
-              <div className="px-1.5 pb-3 flex flex-col">
-                <SidebarProperty label="Status" icon={<Info className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />}>
-                  <div className="flex items-center gap-1.5">
-                    <StatusDot status={room.status} />
-                    <span>{statusLabels[room.status]}</span>
-                  </div>
-                </SidebarProperty>
-
-                <SidebarProperty label="Languages" icon={<Globe2 className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />}>
-                  <div className="flex items-center gap-1.5 overflow-hidden text-foreground">
-                    <span className="shrink-0">{getShortLang(room.sourceLanguage ?? "")}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" strokeWidth={1.5} />
-                    <span className="truncate">{room.targetLanguages.map(getShortLang).join(", ")}</span>
-                  </div>
-                </SidebarProperty>
-
-                <SidebarProperty label="Created" icon={<Calendar className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />}>
-                  <span>{formatDateTime(room.createdAt)}</span>
-                </SidebarProperty>
-              </div>
-            </div>
 
             {/* Tracking Card */}
             <div className="rounded-[10px] border border-border bg-surface-1 shadow-[0px_3px_6px_-2px_rgba(0,0,0,0.02),0px_1px_1px_rgba(0,0,0,0.04)] overflow-visible mt-2">
@@ -413,11 +427,17 @@ export default function RoomInformationPage() {
                 </span>
               </div>
               <div className="px-1.5 pb-3 flex flex-col">
-                <button className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors">
+                <button 
+                  onClick={() => handleCopy(room.translationRoomCode, "Room code")}
+                  className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors"
+                >
                   <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span className="text-foreground">Copy room code</span>
                 </button>
-                <button className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors">
+                <button 
+                  onClick={() => handleCopy(`${window.location.origin}/join/${room.translationRoomCode}`, "Invite link")}
+                  className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors"
+                >
                   <LinkIcon className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span className="text-foreground">Copy invite link</span>
                 </button>

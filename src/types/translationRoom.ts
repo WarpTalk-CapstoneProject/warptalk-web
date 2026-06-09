@@ -187,3 +187,9 @@ export interface TranslationRoomHistoryResponse {
   page: number;
   pageSize: number;
 }
+
+export interface UpdateRoomSettingsRequest {
+  sourceLanguage?: string;
+  targetLanguages?: string[];
+  settings?: any;
+}

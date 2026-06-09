@@ -14,6 +14,7 @@ import type {
   TranslationRoomParticipantDto,
   TranslationRoomPreflightDto,
   TranslationRoomStatus,
+  UpdateRoomSettingsRequest,
 } from "@/types/translationRoom";
 
 type BackendRoom = Omit<TranslationRoomDto, "status" | "translationRoomType" | "targetLanguages"> & {
@@ -227,6 +228,11 @@ export const translationRoomService = {
 
   async artifacts(id: string) {
     return apiClient.get<TranslationRoomArtifactDto[]>(API.translationRooms.artifacts(id));
+  },
+
+  async updateSettings(id: string, data: UpdateRoomSettingsRequest) {
+    const response = await apiClient.put<BackendRoom>(API.translationRooms.settings(id), data);
+    return { ...response, data: normalizeRoom(response.data) };
   },
 
   getFeedbackState(id: string) {
