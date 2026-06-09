@@ -40,7 +40,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { useJoinMeeting, useTriggerMeetingAi } from "@/hooks/use-meeting";
+import { Button } from "@/components/ui/button";
+import { useJoinMeeting } from "@/hooks/use-meeting";
 import {
   useAdmitParticipant,
   useEndTranslationRoom,
@@ -57,7 +58,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
-import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto } from "@/types/realtime";
+import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto, TranslationTextDto } from "@/types/realtime";
 import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
 
 function getJoinLink(code: string) {
@@ -83,13 +84,10 @@ export default function RoomDetailPage() {
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } = useJoinMeeting();
-  const { mutate: triggerAiMutate } = useTriggerMeetingAi(roomId);
   const autoStartedRef = useRef(false);
   const meetingJoinedRef = useRef(false);
-  const aiTriggeredRef = useRef(false);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  
   const [meetingSession, setMeetingSession] = useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [warptalkStarted, setWarptalkStarted] = useState(false);
@@ -112,6 +110,7 @@ export default function RoomDetailPage() {
   const removeLiveParticipant = useTranslationRoomStore((state) => state.removeParticipant);
   const { rightSidebarOpen } = useUIStore();
   const addTranscriptSegment = useTranslationRoomStore((state) => state.addTranscriptSegment);
+  const addOrMergeTranslationText = useTranslationRoomStore((state) => state.addOrMergeTranslationText);
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
 
   const isPreviewRoom = roomId.startsWith("preview-");
@@ -138,7 +137,6 @@ export default function RoomDetailPage() {
     if (!room?.id || !canConnectMeeting) return;
 
     meetingJoinedRef.current = true;
-    aiTriggeredRef.current = false;
     setMeetingSession(null);
 
     void joinMeetingAsync(room.id)
@@ -184,13 +182,6 @@ export default function RoomDetailPage() {
   }, [canConnectMeeting, joinMeetingAsync, room?.id]);
 
   useEffect(() => {
-    if (!meetingSession || aiTriggeredRef.current) return;
-
-    aiTriggeredRef.current = true;
-    triggerAiMutate({ participantIdentity: meetingSession.participantIdentity });
-  }, [meetingSession, triggerAiMutate]);
-
-  useEffect(() => {
     if (!roomId) return;
 
     resetLiveRoom();
@@ -200,6 +191,7 @@ export default function RoomDetailPage() {
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => addLiveParticipant(participant));
     connection.on("ParticipantLeft", (userId: string) => removeLiveParticipant(userId));
     connection.on("TranscriptSegmentReceived", (segment: TranscriptSegmentDto) => addTranscriptSegment(segment));
+    connection.on("TranslationTextReceived", (translation: TranslationTextDto) => addOrMergeTranslationText(translation));
     connection.on("TranslationRoomEnded", () => refetchRoom());
 
     connection
@@ -217,6 +209,7 @@ export default function RoomDetailPage() {
     };
   }, [
     addLiveParticipant,
+    addOrMergeTranslationText,
     addTranscriptSegment,
     refetchRoom,
     removeLiveParticipant,
