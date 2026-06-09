@@ -4,6 +4,7 @@ import { Calendar, Clock, FileText, Headphones, Translate, ChatCircleText } from
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
+import { JoinByCodeDialog } from "./join-dialog";
 
 const upcomingMeetings = [
   { title: "Partner Sync Room", code: "SYNC-882", time: "Today, 12:30 PM", language: "Vietnamese to English" },
@@ -24,7 +25,7 @@ export default function ParticipantDashboardPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Participant Dashboard</h1>
           <p className="text-sm text-neutral-500">Join meetings, review shared artifacts, and keep language preferences ready.</p>
         </div>
-        <Link href="/join" className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Join by code</Link>
+        <JoinByCodeDialog />
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">

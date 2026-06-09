@@ -33,8 +33,9 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-function setAccessTokenCookie(accessToken: string, expiresAt: string) {
-  const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+function setAccessTokenCookie(accessToken: string) {
+  // Save for 7 days (604800 seconds) so middleware doesn't kick user out
+  const maxAge = 7 * 24 * 60 * 60;
   document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 

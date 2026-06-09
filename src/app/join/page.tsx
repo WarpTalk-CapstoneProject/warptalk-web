@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 
 const languages = [
   { value: "vi", label: "Vietnamese" },
@@ -48,30 +49,52 @@ function JoinMeetingContent() {
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [status, setStatus] = useState<"idle" | "ready">("idle");
+  const joinMutation = useJoinTranslationRoomByCode();
 
   const normalizedCode = useMemo(() => roomCode.trim().toUpperCase(), [roomCode]);
   const canJoin = displayName.trim().length > 1 && normalizedCode.length >= 4;
 
-  function handleJoin() {
+  async function handleJoin() {
     if (!canJoin) {
       toast.error("Enter your display name and room code first.");
       return;
     }
 
-    window.sessionStorage.setItem(
-      `warptalk.join.preview`,
-      JSON.stringify({
+    try {
+      const result = await joinMutation.mutateAsync({
+        translationRoomCode: normalizedCode,
         displayName: displayName.trim(),
-        roomCode: normalizedCode,
         speakLanguage,
         listenLanguage,
         cameraEnabled,
         microphoneEnabled,
         speakerEnabled,
-      })
-    );
-    setStatus("ready");
-    toast.success("Join settings saved for preview.");
+      });
+
+      if (result.status === "success" && result.room) {
+        window.sessionStorage.setItem(
+          `warptalk.join.preview`,
+          JSON.stringify({
+            displayName: displayName.trim(),
+            roomCode: normalizedCode,
+            speakLanguage,
+            listenLanguage,
+            cameraEnabled,
+            microphoneEnabled,
+            speakerEnabled,
+            roomId: result.room.id,
+            participantId: result.participant?.id,
+          })
+        );
+        setStatus("ready");
+        toast.success("Joined room successfully.");
+        router.push(`/rooms/${result.room.id}/setup`);
+      } else {
+        toast.error(result.message || "Failed to join room.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not join room.");
+    }
   }
 
   return (
@@ -187,16 +210,13 @@ function JoinMeetingContent() {
                   <div>
                     <p className="font-medium">{status === "ready" ? "Ready to enter" : "Waiting for room details"}</p>
                     <p className="text-sm text-muted-foreground">
-                      Authentication and backend room validation are intentionally skipped for now.
+                      Confirm your language and devices before joining the room.
                     </p>
                   </div>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Button onClick={handleJoin} disabled={!canJoin}>
-                    Save join preview
-                  </Button>
-                  <Button variant="outline" onClick={() => router.push(`/rooms/preview-investor-qa/setup`)}>
-                    Continue setup
+                <div className="grid gap-2 sm:grid-cols-1">
+                  <Button onClick={handleJoin} disabled={!canJoin || joinMutation.isPending}>
+                    {joinMutation.isPending ? "Joining..." : "Join Room"}
                   </Button>
                 </div>
               </CardContent>

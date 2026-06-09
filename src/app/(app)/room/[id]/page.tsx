@@ -31,7 +31,14 @@ import {
   VideoCameraSlash,
   CheckCircle,
   Stop,
+  SignOut,
 } from "@phosphor-icons/react/dist/ssr";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useJoinMeeting, useTriggerMeetingAi } from "@/hooks/use-meeting";
 import {
@@ -48,6 +55,7 @@ import { getLanguageName } from "@/lib/languages";
 import { createHubConnection } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { useUIStore } from "@/stores/ui-store";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto } from "@/types/realtime";
 import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
@@ -86,18 +94,23 @@ export default function RoomDetailPage() {
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [warptalkStarted, setWarptalkStarted] = useState(false);
   const [sidePanelMode, setSidePanelMode] = useState<"transcript" | "chat" | "notes" | "people">("transcript");
-  const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [localMediaError, setLocalMediaError] = useState<string | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [meetingLayout, setMeetingLayout] = useState<MeetingLayoutMode>("auto");
+
+  // Read config from sessionStorage
+  const savedDevices = typeof window !== 'undefined' ? JSON.parse(window.sessionStorage.getItem('warptalk.devices.preview') || '{}') : {};
+  const savedJoinConfig = typeof window !== 'undefined' ? JSON.parse(window.sessionStorage.getItem('warptalk.join.preview') || '{}') : {};
+  const [cameraEnabled, setCameraEnabled] = useState<boolean>(savedDevices.cameraEnabled ?? savedJoinConfig.cameraEnabled ?? true);
+  const [microphoneEnabled, setMicrophoneEnabled] = useState<boolean>(savedDevices.microphoneEnabled ?? savedJoinConfig.microphoneEnabled ?? true);
 
   const liveParticipants = useTranslationRoomStore((state) => state.participants);
   const transcriptSegments = useTranslationRoomStore((state) => state.transcriptSegments);
   const setLiveState = useTranslationRoomStore((state) => state.setTranslationRoomState);
   const addLiveParticipant = useTranslationRoomStore((state) => state.addParticipant);
   const removeLiveParticipant = useTranslationRoomStore((state) => state.removeParticipant);
+  const { rightSidebarOpen } = useUIStore();
   const addTranscriptSegment = useTranslationRoomStore((state) => state.addTranscriptSegment);
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
 
@@ -117,9 +130,9 @@ export default function RoomDetailPage() {
     room?.status !== "cancelled" &&
     room?.status !== "expired" &&
     room?.status !== "failed";
-  const displayName = user?.fullName || user?.email || "Participant";
-  const sourceLanguage = room?.sourceLanguage ?? "vi";
-  const targetLanguage = room?.targetLanguages[0] ?? "en";
+  const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
+  const sourceLanguage = savedJoinConfig.speakLanguage || room?.sourceLanguage || "vi";
+  const targetLanguage = savedJoinConfig.listenLanguage || room?.targetLanguages?.[0] || "en";
 
   function retryMeetingConnection() {
     if (!room?.id || !canConnectMeeting) return;
@@ -268,18 +281,22 @@ export default function RoomDetailPage() {
     toast.success(`${label} copied.`);
   }
 
-  async function handleExit() {
+  async function handleExit(action: "leave" | "end") {
     try {
       if (isPreviewRoom) {
         toast.success("Preview room ended.");
         router.push("/rooms");
         return;
       }
-      if (isHost && room?.status !== "ended" && room?.status !== "cancelled") {
-        await endRoom.mutateAsync(roomId);
+      if (action === "end") {
+        if (room?.status !== "ended" && room?.status !== "cancelled") {
+          await endRoom.mutateAsync(roomId);
+        }
         toast.success("Room ended.");
-      } else if (!isHost && room?.status !== "ended" && room?.status !== "cancelled") {
-        await leaveRoom.mutateAsync();
+      } else {
+        if (room?.status !== "ended" && room?.status !== "cancelled") {
+          await leaveRoom.mutateAsync();
+        }
         toast.success("You left the room.");
       }
       router.push("/rooms");
@@ -317,8 +334,21 @@ export default function RoomDetailPage() {
   }
 
   function handleStartWarptalk() {
-    setWarptalkStarted(true);
-    toast.success("WarpTalk realtime translation started.");
+    if (!room?.id || isPreviewRoom) {
+      setWarptalkStarted(true);
+      toast.success("WarpTalk realtime translation started.");
+      return;
+    }
+
+    startRoom.mutate(room.id, {
+      onSuccess: () => {
+        setWarptalkStarted(true);
+        toast.success("WarpTalk realtime translation started.");
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : "Failed to start translation.");
+      }
+    });
   }
 
   function handleStopWarptalk() {
@@ -399,20 +429,22 @@ export default function RoomDetailPage() {
             </div>
           </section>
 
-          <MeetingSidePanel
-            roomId={roomId}
-            room={room}
-            isHost={isHost}
-            mode={sidePanelMode}
-            onModeChange={setSidePanelMode}
-            participants={participants}
-            participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
-            participantsError={participantsQuery.isError && !isPreviewRoom}
-            activeCount={activeCount}
-            segments={warptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
-            onCopyText={copyText}
-            joinLink={joinLink}
-          />
+          {rightSidebarOpen && (
+            <MeetingSidePanel
+              roomId={roomId}
+              room={room}
+              isHost={isHost}
+              mode={sidePanelMode}
+              onModeChange={setSidePanelMode}
+              participants={participants}
+              participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
+              participantsError={participantsQuery.isError && !isPreviewRoom}
+              activeCount={activeCount}
+              segments={warptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
+              onCopyText={copyText}
+              joinLink={joinLink}
+            />
+          )}
         </main>
       </LiveKitRoom>
     </div>
@@ -433,7 +465,7 @@ function MeetingTopBar({
   isHost: boolean;
   sourceLanguage: string;
   targetLanguage: string;
-  onExit: () => void;
+  onExit: (action: "leave" | "end") => void;
   warptalkStarted: boolean;
   onStartWarptalk: () => void;
   onStopWarptalk: () => void;
@@ -466,17 +498,30 @@ function MeetingTopBar({
             }`}
           >
             {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
-            {warptalkStarted ? "Stop Translation" : "Start WarpTalk"}
+            {warptalkStarted ? "Stop Translation" : "Start Translation"}
           </button>
         )}
         <div className="h-4 w-[1px] bg-surface-3 mx-1" />
-        <button
-          type="button"
-          onClick={onExit}
-          className="flex h-7 items-center gap-1.5 rounded-[6px] px-3 text-[13px] font-medium text-destructive transition-colors hover:bg-destructive/10"
-        >
-          {isHost ? "End Meeting" : "Leave"}
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex h-7 w-7 items-center justify-center rounded-[6px] text-destructive transition-colors hover:bg-destructive/10 outline-none"
+            >
+              <SignOut className="h-4 w-4" weight="bold" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => onExit("leave")} className="cursor-pointer">
+              Leave Meeting
+            </DropdownMenuItem>
+            {isHost && (
+              <DropdownMenuItem onClick={() => onExit("end")} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
+                End Meeting for All
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
@@ -873,7 +918,7 @@ function LiveKitMeetingStage({
     />
   );
   const participantTiles = participants.filter((participant) => participant.displayName !== fallbackName).slice(0, 24);
-  const effectiveLayout: Exclude<MeetingLayoutMode, "auto"> = layoutMode === "auto" ? (screenStream ? "sidebar" : participantTiles.length > 5 ? "grid" : "spotlight") : layoutMode;
+  const effectiveLayout: Exclude<MeetingLayoutMode, "auto"> = layoutMode === "auto" ? (screenStream ? "sidebar" : participantTiles.length === 0 ? "grid" : participantTiles.length > 5 ? "grid" : "spotlight") : layoutMode;
 
   if (screenStream && effectiveLayout === "sidebar") {
     return (
@@ -954,11 +999,7 @@ function LiveKitMeetingStage({
 }
 
 function ConnectionBadge({ state }: { state: ConnectionState }) {
-  return (
-    <div className="absolute right-4 top-4 rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink-muted shadow-sm backdrop-blur">
-      {liveKitStateLabel(state)}
-    </div>
-  );
+  return null;
 }
 
 function liveKitStateLabel(state: ConnectionState) {

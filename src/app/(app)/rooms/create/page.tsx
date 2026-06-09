@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useCreateTranslationRoom } from "@/hooks/use-translationRooms";
 
 const languageOptions = [
   { code: "vi-VN", label: "Vietnamese" },
@@ -70,6 +71,8 @@ function CreateRoomContent() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [startAt, setStartAt] = useState(initialStartAt);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
+  const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
+  const createRoomMutation = useCreateTranslationRoom();
   const [touched, setTouched] = useState({
     title: false,
     capacity: false,
@@ -93,7 +96,7 @@ function CreateRoomContent() {
   const canCreate = Object.values(validation).every(Boolean);
   const hasReviewedSummary = touched.capacity && touched.languages && touched.startAt;
   const canSubmit = canCreate && hasReviewedSummary;
-  const inviteLink = typeof window === "undefined" ? "http://localhost:3000/join?code=WARP-241" : `${window.location.origin}/join?code=WARP-241`;
+  const inviteLink = typeof window === "undefined" || !createdRoomCode ? "" : `${window.location.origin}/join?code=${createdRoomCode}`;
 
   useEffect(() => {
     if (!createdRoomId) return;
@@ -117,15 +120,26 @@ function CreateRoomContent() {
     setTouched((current) => ({ ...current, [field]: true }));
   }
 
-  function createPreviewRoom() {
+  async function createPreviewRoom() {
     setTouched({ title: true, capacity: true, languages: true, startAt: true });
     if (!canSubmit) {
       toast.error("Complete valid room summary items before creating the room.");
       return;
     }
 
-    setCreatedRoomId("preview-investor-qa");
-    toast.success("Room created. Continue to setup.");
+    try {
+      const room = await createRoomMutation.mutateAsync({
+        title: title.trim(),
+        maxParticipants: participantCount,
+        supportedLanguages: selectedLanguages,
+        startAt: new Date(startAt).toISOString(),
+      });
+      setCreatedRoomId(room.id);
+      setCreatedRoomCode(room.translationRoomCode);
+      toast.success("Room created. Continue to setup.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create room.");
+    }
   }
 
   async function copyInviteLink() {
@@ -197,10 +211,10 @@ function CreateRoomContent() {
                 </Link>
                 <Button
                   onClick={createPreviewRoom}
-                  disabled={!canSubmit}
+                  disabled={!canSubmit || createRoomMutation.isPending}
                   className="rounded-full bg-neutral-950 text-white hover:bg-neutral-800 disabled:pointer-events-none disabled:opacity-40"
                 >
-                  Create Room
+                  {createRoomMutation.isPending ? "Creating..." : "Create Room"}
                 </Button>
               </div>
             ) : (

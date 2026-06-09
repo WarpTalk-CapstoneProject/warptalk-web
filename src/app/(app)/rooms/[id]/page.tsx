@@ -21,6 +21,9 @@ import {
 
 import { useTranslationRoom, useTranslationRoomParticipants } from "@/hooks/use-translationRooms";
 import { getLanguageName } from "@/lib/languages";
+import { useAuthStore } from "@/stores/auth-store";
+import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+
 
 const getShortLang = (val: string) => {
   if (!val) return "";
@@ -35,7 +38,6 @@ const getShortLang = (val: string) => {
   if (code.includes('es')) return 'ES';
   return val.split('-')[0].toUpperCase();
 };
-import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import type { TranslationRoomDto, TranslationRoomStatus } from "@/types/translationRoom";
 
 const statusLabels: Record<TranslationRoomStatus, string> = {
@@ -55,13 +57,13 @@ export default function RoomInformationPage() {
   const roomId = params.id;
   const [activeTab, setActiveTab] = useState<"overview" | "activity" | "transcript">("overview");
 
-  const isPreviewRoom = roomId.startsWith("preview-");
   const roomQuery = useTranslationRoom(roomId);
   const participantsQuery = useTranslationRoomParticipants(roomId);
   const liveParticipants = useTranslationRoomStore((state) => state.participants);
   const liveRoomState = useTranslationRoomStore((state) => state.translationRoomState);
+  const user = useAuthStore((state) => state.user);
 
-  const room = roomQuery.data ?? (isPreviewRoom ? getPreviewRoom(roomId) : null);
+  const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
   const activeApiParticipants = apiParticipants.filter((participant) =>
     ["joined", "connected"].includes(participant.status.toLowerCase())
@@ -312,13 +314,6 @@ export default function RoomInformationPage() {
           {/* Right sidebar — Linear Properties panels */}
           <div className="w-[280px] shrink-0 py-10 pr-2 flex flex-col gap-2">
             
-            {/* Join Meeting Button */}
-            <Link
-              href={`/rooms/${roomId}/setup`}
-              className="flex h-[32px] w-full items-center justify-center rounded-[6px] bg-foreground text-white text-[13px] font-medium hover:opacity-90 transition-opacity shadow-sm"
-            >
-              {isLive ? "Join Meeting" : "Open Room"}
-            </Link>
 
             {/* Properties Card */}
             <div className="rounded-[10px] border border-border bg-surface-1 shadow-[0px_3px_6px_-2px_rgba(0,0,0,0.02),0px_1px_1px_rgba(0,0,0,0.04)] overflow-visible">
@@ -365,11 +360,13 @@ export default function RoomInformationPage() {
                 <div>
                   <h4 className="text-[12px] font-medium text-muted-foreground mb-2">Organizer</h4>
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
-                      {room.isHost ? "Y" : room.hostId.charAt(0).toUpperCase()}
+                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0 uppercase">
+                      {room.hostId === user?.id ? user?.fullName?.charAt(0) : (apiParticipants.find(p => p.userId === room.hostId)?.displayName?.charAt(0) || room.hostId.charAt(0))}
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="text-[13px] text-foreground font-medium truncate">{room.isHost ? "You" : room.hostId}</span>
+                      <span className="text-[13px] text-foreground font-medium truncate">
+                        {room.hostId === user?.id ? user?.fullName : (apiParticipants.find(p => p.userId === room.hostId)?.displayName || room.hostId)}
+                      </span>
                       <span className="text-[11px] text-muted-foreground truncate">Organizer</span>
                     </div>
                   </div>
@@ -485,28 +482,6 @@ function SidebarProperty({ label, icon, children }: { label: string; icon?: Reac
 
 /* ── Utilities ── */
 
-function getPreviewRoom(id: string): TranslationRoomDto {
-  const now = new Date();
-  const startedAt = new Date(now.getTime() - 38 * 60 * 1000);
-  return {
-    id,
-    workspaceId: "preview",
-    hostId: "host",
-    title: id.includes("partner") ? "Partner Sync Room" : "Investor Q&A Translation",
-    description: "Live multilingual investor meeting with real-time interpretation support.",
-    translationRoomCode: id.includes("partner") ? "SYNC-882" : "WARP-241",
-    status: "in_progress",
-    translationRoomType: "scheduled",
-    maxParticipants: 50,
-    sourceLanguage: "en-US",
-    targetLanguages: ["vi-VN", "ja-JP"],
-    scheduledAt: startedAt.toISOString(),
-    startedAt: startedAt.toISOString(),
-    createdAt: new Date(startedAt.getTime() - 24 * 60 * 60 * 1000).toISOString(),
-    participantCount: 4,
-    isHost: true,
-  };
-}
 
 function formatDateTime(value?: string) {
   if (!value) return "Not set";

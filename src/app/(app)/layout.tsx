@@ -1,25 +1,23 @@
 "use client";
 
+import Link from "next/link";
+
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
-  MagnifyingGlass,
-  PencilSimple,
-  Star,
-  DotsThree,
-  Bell,
+  SignOut,
   Question,
+  Bell,
   SidebarSimple,
 } from "@phosphor-icons/react/dist/ssr";
+import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isMeetingSurface = pathname.startsWith("/room/");
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
-
-
+  const logout = useAuthStore((state) => state.logout);
+  const { rightSidebarOpen, toggleRightSidebar } = useUIStore();
 
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
@@ -31,34 +29,40 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <header className="h-[44px] border-b border-border flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-1.5 text-[13px] text-ink-muted">
             {(() => {
-              const parts: string[] = [];
+              const parts: { label: string; href?: string }[] = [];
               if (pathname.startsWith('/rooms')) {
-                parts.push("Meetings");
+                parts.push({ label: "Meetings", href: "/rooms" });
                 const sub = pathname.replace('/rooms', '').split('/').filter(Boolean)[0];
-                if (sub) parts.push(sub);
+                if (sub && !/^[0-9a-fA-F-]{36}$/.test(sub)) parts.push({ label: sub });
               } else if (pathname.startsWith('/history')) {
-                parts.push("History");
+                parts.push({ label: "History" });
               } else if (pathname.startsWith('/ai-summaries')) {
-                parts.push("AI Summaries");
+                parts.push({ label: "AI Summaries" });
               } else if (pathname.startsWith('/terminology')) {
-                parts.push("Terminology");
+                parts.push({ label: "Terminology" });
               } else if (pathname.startsWith('/voice-profiles')) {
-                parts.push("Voice Profiles");
+                parts.push({ label: "Voice Profiles" });
               } else if (pathname.startsWith('/settings')) {
-                parts.push("Settings");
+                parts.push({ label: "Settings" });
               } else if (pathname.startsWith('/room/')) {
-                 parts.push("Meetings");
+                 parts.push({ label: "Meetings", href: "/rooms" });
                  const sub = pathname.replace('/room/', '').split('/').filter(Boolean)[0];
-                 if (sub) parts.push(sub);
+                 if (sub && !/^[0-9a-fA-F-]{36}$/.test(sub)) parts.push({ label: sub });
               } else {
-                parts.push("Workspace");
+                parts.push({ label: "Workspace" });
               }
 
               return parts.map((part, index) => (
                 <span key={index} className="flex items-center gap-1.5">
-                  <span className={index === parts.length - 1 ? "text-ink font-medium" : "hover:text-ink cursor-pointer transition-colors"}>
-                    {part}
-                  </span>
+                  {part.href && index < parts.length - 1 ? (
+                    <Link href={part.href} className="hover:text-ink cursor-pointer transition-colors">
+                      {part.label}
+                    </Link>
+                  ) : (
+                    <span className={index === parts.length - 1 ? "text-ink font-medium" : "hover:text-ink cursor-pointer transition-colors"}>
+                      {part.label}
+                    </span>
+                  )}
                   {index < parts.length - 1 && <span className="text-ink-muted/40">/</span>}
                 </span>
               ));
@@ -70,7 +74,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
             <div className="w-[1px] h-3.5 bg-border mx-1" />
             <button 
-              onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+              onClick={toggleRightSidebar}
               className="flex size-6 items-center justify-center rounded-[6px] border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
             >
               <SidebarSimple size={13} weight="bold" />
@@ -84,7 +88,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </main>
           
           {/* Right Sidebar (Context/Properties) */}
-          {rightSidebarOpen && (
+          {rightSidebarOpen && !pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
             <aside className="w-[260px] shrink-0 border-l border-border bg-surface-1 flex flex-col overflow-hidden">
               <div className="flex items-center px-4 h-[38px] border-b border-border">
                 <span className="text-[12px] font-medium text-ink">Properties</span>

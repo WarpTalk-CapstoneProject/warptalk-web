@@ -10,72 +10,6 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { cn } from "@/lib/utils";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 
-const demoRooms: TranslationRoomDto[] = [
-  {
-    id: "preview-investor-qa",
-    workspaceId: "preview",
-    hostId: "host",
-    title: "Investor Q&A Translation",
-    description: "English to Vietnamese live room for product due diligence.",
-    translationRoomCode: "WARP-241",
-    status: "in_progress",
-    translationRoomType: "instant",
-    maxParticipants: 24,
-    sourceLanguage: "en-US",
-    targetLanguages: ["vi-VN", "ja-JP"],
-    startedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    participantCount: 18,
-    isHost: true,
-  },
-  {
-    id: "preview-partner-sync",
-    workspaceId: "preview",
-    hostId: "host",
-    title: "Partner Sync Room",
-    translationRoomCode: "SYNC-882",
-    status: "scheduled",
-    translationRoomType: "scheduled",
-    maxParticipants: 12,
-    sourceLanguage: "vi-VN",
-    targetLanguages: ["en-US"],
-    scheduledAt: new Date(Date.now() + 1000 * 60 * 55).toISOString(),
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    participantCount: 7,
-    isHost: true,
-  },
-  {
-    id: "preview-onboarding",
-    workspaceId: "preview",
-    hostId: "host",
-    title: "Customer Onboarding",
-    translationRoomCode: "CUST-104",
-    status: "waiting",
-    translationRoomType: "group",
-    maxParticipants: 16,
-    sourceLanguage: "en-US",
-    targetLanguages: ["ko-KR", "vi-VN"],
-    scheduledAt: new Date(Date.now() + 1000 * 60 * 130).toISOString(),
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
-    participantCount: 9,
-    isHost: true,
-  },
-  {
-    id: "preview-board-review",
-    workspaceId: "preview",
-    hostId: "host",
-    title: "Board Review Translation",
-    translationRoomCode: "BORD-778",
-    status: "ended",
-    translationRoomType: "scheduled",
-    maxParticipants: 20,
-    sourceLanguage: "en-US",
-    targetLanguages: ["vi-VN"],
-    createdAt: new Date(Date.now() - 1000 * 60 * 190).toISOString(),
-    participantCount: 14,
-    isHost: true,
-  },
-];
 
 const demoHistory = [
   {
@@ -173,8 +107,7 @@ export default function DashboardPage() {
   const history = useRoomHistory();
 
   const rooms = useMemo(() => {
-    const apiRooms = roomList.data?.rooms ?? [];
-    return apiRooms.length > 0 ? apiRooms : demoRooms;
+    return roomList.data?.rooms ?? [];
   }, [roomList.data?.rooms]);
 
   const historyRows = useMemo(() => {

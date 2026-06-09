@@ -29,8 +29,8 @@ const registerSchema = z.object({
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
-function setAccessTokenCookie(accessToken: string, expiresAt: string) {
-  const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+function setAccessTokenCookie(accessToken: string) {
+  const maxAge = 7 * 24 * 60 * 60; // 7 days
   document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 

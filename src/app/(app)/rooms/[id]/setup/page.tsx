@@ -288,14 +288,19 @@ export default function RoomSetupPage() {
 
           </div>
 
-          {/* Join Action Area */}
           <div className="p-6 border-t border-border bg-surface-1">
-            <Link
-              href={`/room/${roomId}`}
+            <button
+              onClick={() => {
+                window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
+                  cameraEnabled,
+                  microphoneEnabled,
+                }));
+                router.push(`/room/${roomId}`);
+              }}
               className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[32px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm"
             >
               Join Meeting
-            </Link>
+            </button>
           </div>
         </div>
 

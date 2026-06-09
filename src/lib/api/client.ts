@@ -75,6 +75,10 @@ apiClient.interceptors.response.use(
 
       useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
 
+      if (typeof document !== "undefined") {
+        document.cookie = `access_token=${data.accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+      }
+
       originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
       processQueue(null, data.accessToken);
 
