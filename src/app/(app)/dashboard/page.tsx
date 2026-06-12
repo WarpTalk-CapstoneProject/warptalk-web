@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LegacyDashboardPage() {
-  redirect("/host/dashboard");
+  redirect("/workspace/dashboard");
 }

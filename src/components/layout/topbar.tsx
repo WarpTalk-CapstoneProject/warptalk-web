@@ -51,7 +51,7 @@ const searchItems: Array<{
   icon: React.ElementType;
   shortcut?: string;
 }> = [
-  { title: "Host Dashboard", url: "/host/dashboard", group: "Host", icon: SquaresFour, shortcut: "D" },
+  { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: SquaresFour, shortcut: "D" },
   { title: "Participant Dashboard", url: "/participant/dashboard", group: "Participant", icon: Users },
   { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: Buildings },
   { title: "Internal Dashboard", url: "/internal/dashboard", group: "Internal", icon: HardDrives },
@@ -174,7 +174,7 @@ export function Topbar() {
       ? "/workspace/profile"
       : pathname.startsWith("/internal")
         ? "/internal/profile"
-        : "/host/profile";
+        : "/workspace/profile";
 
   const handleSignOut = () => {
     logout();

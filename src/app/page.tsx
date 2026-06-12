@@ -6,6 +6,8 @@ import Link from "next/link";
 import Hls from "hls.js";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import type { MotionValue, Variants } from "motion/react";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth-store";
 
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
@@ -762,6 +764,16 @@ function FeatureTraceSection() {
 
 function PricingSection() {
   const [yearly, setYearly] = useState(false);
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  const handleChoosePlan = () => {
+    if (!isAuthenticated) {
+      router.push("/login");
+    } else {
+      router.push("/workspace/payment/success");
+    }
+  };
 
   return (
     <section id="pricing" className="c3-pricing-section scroll-mt-20 bg-[#0c0c0c] text-white">
@@ -808,7 +820,7 @@ function PricingSection() {
                 </li>
               ))}
             </ul>
-            <button type="button" className="c3-btn">
+            <button type="button" className="c3-btn cursor-pointer" onClick={handleChoosePlan}>
               Choose Plan
             </button>
           </article>

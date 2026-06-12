@@ -29,7 +29,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 function getSafeCallbackUrl(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/host/dashboard";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/workspace/dashboard";
   return value;
 }
 
@@ -58,11 +58,11 @@ function LoginForm() {
     const url = new URL(window.location.href);
     const hasSensitiveParams = url.searchParams.has("email") || url.searchParams.has("password");
 
-    if (!hasSensitiveParams) return;
-
-    url.searchParams.delete("email");
-    url.searchParams.delete("password");
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    if (hasSensitiveParams) {
+      url.searchParams.delete("email");
+      url.searchParams.delete("password");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
   }, []);
 
   const onSubmit = async (data: LoginFormData) => {
@@ -71,7 +71,7 @@ function LoginForm() {
       const { user, accessToken, refreshToken, expiresAt } = res.data;
 
       login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken, expiresAt);
+      setAccessTokenCookie(accessToken);
 
       toast.success("Login successful!");
       router.replace(callbackUrl);

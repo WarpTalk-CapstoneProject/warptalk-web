@@ -10,7 +10,6 @@ import { useState } from "react";
 import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 
 const navigation = [
-  { name: "Dashboard", href: "/host/dashboard", icon: SquaresFour },
   { name: "Cuộc họp", href: "/rooms", icon: VideoCamera },
   { name: "Bản ghi", href: "/transcripts", icon: FileText },
   { name: "Workspace", href: "/workspace/dashboard", icon: Buildings },

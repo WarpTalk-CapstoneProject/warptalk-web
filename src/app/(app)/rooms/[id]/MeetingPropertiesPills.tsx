@@ -16,10 +16,10 @@ export function MeetingPropertiesPills({
   room: TranslationRoomDto;
   apiParticipants: TranslationRoomParticipantDto[];
   activeParticipantCount: number;
-  user: any;
+  user: { id: string; fullName?: string } | null;
 }) {
   const updateSettings = useUpdateTranslationRoomSettings();
-  const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1 || room.translationMode === "multi");
+  const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1 || (room as any).translationMode === "multi");
 
   const handleSourceChange = (lang: string) => {
     updateSettings.mutate({ 
@@ -72,19 +72,16 @@ export function MeetingPropertiesPills({
       </div>
 
       <Popover>
-        <PopoverTrigger asChild>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] min-w-[80px] justify-center text-muted-foreground cursor-pointer hover:bg-surface-2 transition-colors">
-            <CalendarIcon size={13} weight="regular" />
-            <span className="tabular-nums text-[12px] font-medium">
-              {new Date(room.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-            </span>
-          </div>
+        <PopoverTrigger className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] min-w-[80px] justify-center text-muted-foreground cursor-pointer hover:bg-surface-2 transition-colors">
+          <CalendarIcon size={13} weight="regular" />
+          <span className="tabular-nums text-[12px] font-medium">
+            {new Date(room.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          </span>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 rounded-xl" align="end">
           <Calendar
             mode="single"
             selected={new Date(room.createdAt)}
-            initialFocus
           />
         </PopoverContent>
       </Popover>

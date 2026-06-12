@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeClosed, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { useForm } from "react-hook-form";
@@ -20,22 +20,34 @@ import { API } from "@/lib/api/endpoints";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
-const registerSchema = z.object({
-  firstName: z.string().min(1, "Please enter your first name"),
-  lastName: z.string().min(1, "Please enter your last name"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 symbols"),
-});
+const getRegisterSchema = (hasToken: boolean) =>
+  z.object({
+    firstName: z.string().min(1, "Please enter your first name"),
+    lastName: z.string().min(1, "Please enter your last name"),
+    email: hasToken
+      ? z.string().optional().or(z.literal(""))
+      : z.string().min(1, "Email is required").email("Invalid email address"),
+    password: z.string().min(8, "Password must be at least 8 symbols"),
+  });
 
-type RegisterFormData = z.infer<typeof registerSchema>;
+type RegisterFormData = {
+  firstName: string;
+  lastName: string;
+  email?: string;
+  password: string;
+};
 
 function setAccessTokenCookie(accessToken: string) {
   const maxAge = 7 * 24 * 60 * 60; // 7 days
   document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+  const hasToken = Boolean(token);
+
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -44,23 +56,33 @@ export default function RegisterPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
+    resolver: zodResolver(getRegisterSchema(hasToken)) as any,
   });
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
-      const res = await apiClient.post<AuthResponse>(API.auth.register, {
-        email: data.email,
-        password: data.password,
-        fullName: `${data.firstName} ${data.lastName}`.trim(),
-      });
-      const { user, accessToken, refreshToken, expiresAt } = res.data;
+      let res;
+      if (hasToken) {
+        res = await apiClient.post<AuthResponse>(API.auth.registerInvited, {
+          token,
+          password: data.password,
+          fullName: `${data.firstName} ${data.lastName}`.trim(),
+        });
+      } else {
+        res = await apiClient.post<AuthResponse>(API.auth.register, {
+          email: data.email,
+          password: data.password,
+          fullName: `${data.firstName} ${data.lastName}`.trim(),
+        });
+      }
+
+      const { user, accessToken, refreshToken } = res.data;
 
       login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken, expiresAt);
+      setAccessTokenCookie(accessToken);
 
       toast.success("Registration successful!");
-      router.replace("/host/dashboard");
+      router.replace("/workspace/dashboard");
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };
@@ -77,7 +99,9 @@ export default function RegisterPage() {
       <div className="space-y-2">
         <h1 className="text-3xl font-medium tracking-tight">Create New Profile</h1>
         <p className="text-sm text-white/40">
-          Input your basic details to begin the journey.
+          {hasToken 
+            ? "You've been invited! Enter your details to join the workspace."
+            : "Input your basic details to begin the journey."}
         </p>
       </div>
 
@@ -112,19 +136,21 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div>
-          <InputGroup
-            label="Email"
-            placeholder="name@domain.com"
-            type="email"
-            autoComplete="email"
-            aria-invalid={Boolean(errors.email)}
-            {...register("email")}
-          />
-          {errors.email && (
-            <p className="mt-2 text-xs text-white/50">{errors.email.message}</p>
-          )}
-        </div>
+        {!hasToken && (
+          <div>
+            <InputGroup
+              label="Email"
+              placeholder="name@domain.com"
+              type="email"
+              autoComplete="email"
+              aria-invalid={Boolean(errors.email)}
+              {...register("email")}
+            />
+            {errors.email && (
+              <p className="mt-2 text-xs text-white/50">{errors.email.message}</p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-2">
           <label className="block space-y-2">
@@ -179,5 +205,13 @@ export default function RegisterPage() {
 
       <SocialButton icon={<GoogleAuthIcon />} label="Google" />
     </CinematicAuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center"><Spinner weight="light" className="animate-spin text-white" size={32} /></div>}>
+      <RegisterForm />
+    </Suspense>
   );
 }

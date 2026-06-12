@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/", "/pricing", "/about", "/login", "/register", "/forgot-password", "/dev-test"];
+const PUBLIC_ROUTES = ["/", "/pricing", "/about", "/login", "/register", "/forgot-password", "/dev-test", "/workspace/payment/plans"];
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password"];
 const ADMIN_PREFIX = "/internal";
 
@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
   if (token && isAuthRoute) {
-    return NextResponse.redirect(new URL("/host/dashboard", request.url));
+    return NextResponse.redirect(new URL("/workspace/dashboard", request.url));
   }
 
   if (!token && !isPublicRoute) {

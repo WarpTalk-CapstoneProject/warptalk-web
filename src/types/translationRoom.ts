@@ -191,5 +191,5 @@ export interface TranslationRoomHistoryResponse {
 export interface UpdateRoomSettingsRequest {
   sourceLanguage?: string;
   targetLanguages?: string[];
-  settings?: any;
+  settings?: Record<string, unknown>;
 }

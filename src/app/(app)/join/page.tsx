@@ -65,7 +65,7 @@ function JoinMeetingContent() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  const displayName = user?.fullName || user?.username || "Guest";
+  const displayName = user?.fullName || "Guest";
   const [roomCode] = useState(searchParams.get("code") ?? "");
   const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
   const [listenLanguage, setListenLanguage] = useState("en-US");
@@ -349,7 +349,7 @@ function JoinMeetingContent() {
               <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">Language Routing</h4>
               <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
                 
-                <Select value={speakLanguage} onValueChange={setSpeakLanguage}>
+                <Select value={speakLanguage} onValueChange={(val) => val && setSpeakLanguage(val)}>
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">{getFlagEmoji(speakLanguage)}</span>
                     <span className="font-medium text-ink">{speakLanguage.split('-')[0].toUpperCase()}</span>
@@ -368,7 +368,7 @@ function JoinMeetingContent() {
 
                 <span className="text-muted-foreground/40 font-bold px-1 text-[11px]">→</span>
 
-                <Select value={listenLanguage} onValueChange={setListenLanguage}>
+                <Select value={listenLanguage} onValueChange={(val) => val && setListenLanguage(val)}>
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">{getFlagEmoji(listenLanguage)}</span>
                     <span className="font-medium text-ink">{listenLanguage.split('-')[0].toUpperCase()}</span>
@@ -430,8 +430,8 @@ function JoinMeetingContent() {
 
 // Sub-components
 
-function DeviceSelect({ label, icon, value, devices, fallback, onChange }: any) {
-  const selectedDevice = devices.find((d: any) => d.deviceId === value);
+function DeviceSelect({ label, icon, value, devices, fallback, onChange }: { label: string; icon: React.ReactNode; value: string; devices: MediaDeviceInfo[]; fallback: string; onChange: (val: string) => void }) {
+  const selectedDevice = devices.find((d) => d.deviceId === value);
   const validValue = selectedDevice ? value : "default";
 
   let displayValue = fallback;
@@ -448,13 +448,13 @@ function DeviceSelect({ label, icon, value, devices, fallback, onChange }: any) 
       <label className="text-[12px] font-medium flex items-center gap-1.5 text-ink-muted">
         {icon} {label}
       </label>
-      <Select value={validValue} onValueChange={(val) => onChange(val === "default" ? "" : val)}>
+      <Select value={validValue} onValueChange={(val) => onChange(val === "default" ? "" : (val ?? ""))}>
         <SelectTrigger className="h-[32px] bg-canvas border border-border text-ink text-[13px] rounded-[6px] w-full truncate focus:ring-2 focus:ring-ring/50 focus:border-ring">
           {displayValue}
         </SelectTrigger>
         <SelectContent className="bg-surface-1 border-border text-ink rounded-[6px]">
           <SelectItem value="default" className="focus:bg-surface-2 focus:text-ink text-[13px]">{fallback}</SelectItem>
-          {devices.map((d: any, i: number) => {
+          {devices.map((d, i: number) => {
             let deviceName = d.label && d.label.trim() !== "" ? d.label : `${label} ${i + 1}`;
             if (deviceName === d.deviceId || deviceName.length > 40) {
               deviceName = `${label} ${i + 1}`;

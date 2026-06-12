@@ -19,12 +19,13 @@ export function createHubConnection(
 ): signalR.HubConnection {
   const connection = new signalR.HubConnectionBuilder()
     .withUrl(`${BASE_URL}${hubPath}`, {
+      transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling,
       accessTokenFactory: () => {
         return useAuthStore.getState().accessToken ?? "";
       },
     })
     .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-    .configureLogging(signalR.LogLevel.Warning)
+    .configureLogging(signalR.LogLevel.None)
     .build();
 
   return connection;

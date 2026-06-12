@@ -13,8 +13,9 @@ import {
   CaretDown,
   Plus,
   Keyboard,
+  CreditCard,
 } from "@phosphor-icons/react/dist/ssr";
-import type { Icon } from "@phosphor-icons/react/dist/ssr";
+import type { Icon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -41,6 +42,7 @@ interface NavItem {
 const configNav: NavItem[] = [
   { icon: BookBookmark, label: "Terminology", href: "/terminology" },
   { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
+  { icon: CreditCard, label: "Wallet", href: "/workspace/wallet" },
   { icon: GearSix, label: "Settings", href: "/settings" },
 ];
 

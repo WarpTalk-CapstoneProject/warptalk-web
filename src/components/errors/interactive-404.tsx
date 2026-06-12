@@ -258,7 +258,7 @@ export function Interactive404({ mode = "not-found", onRetry }: Interactive404Pr
             <span className="sr-only">WarpTalk home</span>
           </Link>
           <nav className="hidden items-center gap-5 text-[11px] text-white/65 md:flex">
-            <Link href="/host/dashboard" className="transition hover:text-white">Dashboard</Link>
+            <Link href="/workspace/dashboard" className="transition hover:text-white">Dashboard</Link>
             <Link href="/rooms" className="transition hover:text-white">Rooms</Link>
             <Link href="/history" className="transition hover:text-white">History</Link>
             <Link href="/login" className="rounded-full bg-white px-4 py-2 font-medium text-black transition hover:bg-white/90">
@@ -294,7 +294,7 @@ export function Interactive404({ mode = "not-found", onRetry }: Interactive404Pr
           <p className="mt-4 max-w-md text-sm text-white/72 sm:text-base">{copy.description}</p>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
             <Link
-              href="/host/dashboard"
+              href="/workspace/dashboard"
               className="inline-flex h-11 items-center justify-center rounded-full bg-[#6c76ff] px-6 text-sm font-medium text-white shadow-[0_16px_36px_rgba(108,118,255,0.28)] transition hover:bg-[#7b84ff]"
             >
               {copy.primary} <ArrowUpRight weight="light" className="ml-2 h-4 w-4" />

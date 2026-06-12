@@ -12,6 +12,7 @@
 export const API = {
   auth: {
     register: "/auth/register",
+    registerInvited: "/auth/register-invited",
     login: "/auth/login",
     googleLogin: "/auth/google-login",
     refresh: "/auth/refresh",

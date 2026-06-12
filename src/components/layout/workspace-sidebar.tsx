@@ -20,8 +20,8 @@ const navGroups: RoleSidebarGroup[] = [
     items: [
       { title: "Meeting Setup", href: "/workspace/meeting-settings", icon: SlidersHorizontal },
       { title: "Terminology", href: "/workspace/terminology", icon: BookOpen },
-      { title: "Billing", href: "/workspace/billing", icon: CreditCard },
-      { title: "GearSix", href: "/workspace/settings", icon: GearSix },
+      { title: "Wallet", href: "/workspace/wallet", icon: CreditCard },
+      { title: "Settings", href: "/workspace/settings", icon: GearSix },
     ],
   },
 ];
