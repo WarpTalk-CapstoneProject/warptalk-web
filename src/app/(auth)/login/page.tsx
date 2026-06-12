@@ -74,7 +74,13 @@ function LoginForm() {
       setAccessTokenCookie(accessToken);
 
       toast.success("Login successful!");
-      router.replace(callbackUrl);
+      
+      const isAdmin = user.roles?.some((r: string) => r.toLowerCase() === "admin");
+      if (isAdmin && callbackUrl === "/workspace/dashboard") {
+        router.replace("/internal/dashboard");
+      } else {
+        router.replace(callbackUrl);
+      }
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(
