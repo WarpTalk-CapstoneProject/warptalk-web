@@ -8,8 +8,7 @@ import { Label } from "@/components/ui/label";
 import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
 
 // Mock data
-const workspaceId = "ws_0987654321";
-const workspaceName = "Acme Corp";
+// Future: fetch system-wide global transactions here
 
 const auditLogs = [
   { id: "log_998", date: "2026-06-11 14:30:22.105", type: "Adjust", amount: "+500", balance: "32,980", reason: "Compensation", user: "admin@warptalk.com", isRaw: false },
@@ -30,11 +29,11 @@ export default function AdminBillingPage() {
       <div className="flex items-center justify-between bg-surface-1 p-6 rounded-xl border border-hairline shadow-linear">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Badge variant="outline" className="bg-surface-2 text-ink border-hairline">Admin Mode</Badge>
-            <h1 className="text-2xl font-semibold tracking-tight">Workspace Billing Audit</h1>
+            <Badge variant="outline" className="bg-surface-2 text-ink border-hairline">Global View</Badge>
+            <h1 className="text-2xl font-semibold tracking-tight">System Billing Audit</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            Managing <strong className="text-ink font-medium">{workspaceName}</strong> ({workspaceId})
+            Managing system-wide billing and payments
           </p>
         </div>
         <div className="flex items-center gap-4">

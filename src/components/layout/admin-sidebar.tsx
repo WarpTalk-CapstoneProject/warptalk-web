@@ -17,6 +17,7 @@ const navGroups: RoleSidebarGroup[] = [
     label: "Operations",
     items: [
       { title: "Plans", href: "/internal/plans", icon: CreditCard },
+      { title: "Billing", href: "/internal/billing", icon: CreditCard },
       { title: "AI Ops", href: "/internal/ai-ops", icon: Robot },
       { title: "Support", href: "/internal/support", icon: Users },
       { title: "GearSix", href: "/internal/settings", icon: GearSix },
