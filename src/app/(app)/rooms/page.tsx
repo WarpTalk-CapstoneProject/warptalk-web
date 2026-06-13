@@ -124,7 +124,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
         </div>
 
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <LanguageWithFlag locale={room.sourceLanguage} />
+          <LanguageWithFlag locale={room.sourceLanguage ?? ""} />
           {room.targetLanguages.length > 1 ? (
             <>
               <span className="text-muted-foreground/40 font-bold px-1 text-[13px]">;</span>

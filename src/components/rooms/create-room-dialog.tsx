@@ -319,10 +319,8 @@ export function OptionsMenu({
 }) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <div className="flex items-center justify-center h-[26px] w-[26px] rounded-full border border-border/60 bg-white dark:bg-transparent shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-ink-muted hover:text-ink hover:border-border hover:bg-surface-1 transition-colors cursor-pointer">
-          <DotsThree weight="bold" size={16} />
-        </div>
+      <PopoverTrigger className="flex items-center justify-center h-[26px] w-[26px] rounded-full border border-border/60 bg-white dark:bg-transparent shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-ink-muted hover:text-ink hover:border-border hover:bg-surface-1 transition-colors cursor-pointer outline-none">
+        <DotsThree weight="bold" size={16} />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[200px] p-1 bg-canvas rounded-xl shadow-xl border-border/50">
         <Command className="bg-transparent">
@@ -373,14 +371,12 @@ function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onChange: 
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <div>
-          <PillButton 
-            icon={Users} 
-            label={active ? `${emails.length} people` : "People"} 
-            active={active} 
-          />
-        </div>
+      <PopoverTrigger className="outline-none">
+        <PillButton 
+          icon={Users} 
+          label={active ? `${emails.length} people` : "People"} 
+          active={active} 
+        />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[260px] p-2 bg-canvas rounded-xl shadow-xl border-border/50">
         <div className="space-y-2">
@@ -438,21 +434,18 @@ function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduledAt: Dat
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <div>
-          <PillButton 
-            icon={CalendarIcon} 
-            label={format(scheduledAt, "MMM d, h:mm a")} 
-            active={true} 
-          />
-        </div>
+      <PopoverTrigger className="outline-none">
+        <PillButton 
+          icon={CalendarIcon} 
+          label={format(scheduledAt, "MMM d, h:mm a")} 
+          active={true} 
+        />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-3 bg-canvas rounded-xl shadow-xl border-border/50">
         <Calendar
           mode="single"
           selected={scheduledAt}
           onSelect={handleDateSelect}
-          initialFocus
           className="p-0 border-none bg-transparent"
         />
         <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/40">
@@ -515,11 +508,9 @@ export function LanguageSelector({
   return (
     <div className="flex items-center gap-1 px-1 py-1 rounded-full border border-border/60 bg-transparent select-none text-[13px]">
       <Popover>
-        <PopoverTrigger asChild>
-          <div className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full cursor-pointer hover:bg-surface-2 transition-colors">
-            <span className="leading-none text-[14px]">{getFlagEmoji(source)}</span>
-            <span className="font-medium text-ink">{languageOptions.find(o => o.code === source)?.label.substring(0, 2).toUpperCase() || source.split('-')[0].toUpperCase()}</span>
-          </div>
+        <PopoverTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full cursor-pointer hover:bg-surface-2 transition-colors outline-none">
+          <span className="leading-none text-[14px]">{getFlagEmoji(source)}</span>
+          <span className="font-medium text-ink">{languageOptions.find(o => o.code === source)?.label.substring(0, 2).toUpperCase() || source.split('-')[0].toUpperCase()}</span>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[180px] rounded-xl bg-canvas border-border/50 p-1.5 shadow-xl z-[100]">
           <Command className="bg-transparent">
@@ -554,8 +545,7 @@ export function LanguageSelector({
       </span>
 
       <Popover>
-        <PopoverTrigger asChild>
-          <div className="flex items-center outline-none cursor-pointer">
+        <PopoverTrigger className="flex items-center outline-none cursor-pointer">
             {targets.map((t, i) => (
               <div key={t} className="flex items-center">
                 {i > 0 && <span className="text-muted-foreground/40 font-bold text-[13px] px-1">;</span>}
@@ -575,7 +565,6 @@ export function LanguageSelector({
                 </div>
               </div>
             )}
-          </div>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[180px] rounded-xl bg-canvas border-border/50 p-1.5 shadow-xl z-[100]">
           <Command className="bg-transparent">
@@ -607,10 +596,8 @@ export function LanguageSelector({
 function TemplatePicker({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <div className="flex items-center gap-1 hover:bg-surface-2 px-1.5 py-0.5 rounded transition-colors text-ink cursor-pointer">
-          {value} <CaretDown size={12} weight="bold" className="text-ink-muted" />
-        </div>
+      <PopoverTrigger className="flex items-center gap-1 hover:bg-surface-2 px-1.5 py-0.5 rounded transition-colors text-ink cursor-pointer outline-none">
+        {value} <CaretDown size={12} weight="bold" className="text-ink-muted" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[220px] p-1 bg-canvas rounded-xl shadow-xl border-border/50">
         <Command className="bg-transparent">

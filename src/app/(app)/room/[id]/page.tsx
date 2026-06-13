@@ -496,13 +496,10 @@ function MeetingTopBar({
         )}
         <div className="h-4 w-[1px] bg-surface-3 mx-1" />
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-[6px] text-destructive transition-colors hover:bg-destructive/10 outline-none"
-            >
-              <SignOut className="h-4 w-4" weight="bold" />
-            </button>
+          <DropdownMenuTrigger
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-destructive transition-colors hover:bg-destructive/10 outline-none"
+          >
+            <SignOut className="h-4 w-4" weight="bold" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={() => onExit("leave")} className="cursor-pointer">

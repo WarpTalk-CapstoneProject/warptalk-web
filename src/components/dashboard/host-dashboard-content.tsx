@@ -139,12 +139,12 @@ export default function DashboardPage() {
         translationRoomCode: room.translationRoomCode,
         status: room.status,
         endedAt: room.endedAt,
-        createdAt: room.createdAt,
+        createdAt: (room as any).createdAt,
         durationSeconds: room.durationSeconds,
         participantCount: room.participantCount,
-        maxParticipants: room.maxParticipants,
-        sourceLanguage: room.sourceLanguage,
-        targetLanguages: room.targetLanguages,
+        maxParticipants: (room as any).maxParticipants,
+        sourceLanguage: (room as any).sourceLanguage,
+        targetLanguages: (room as any).targetLanguages,
       })) ?? [];
 
     return apiHistory.length > 0 ? apiHistory : demoHistory;
@@ -154,8 +154,8 @@ export default function DashboardPage() {
   const upcomingRooms = rooms.filter((room) => room.status === "scheduled" || room.status === "waiting");
   
   const allRooms = [...rooms, ...historyRows].sort((a, b) => {
-    const timeA = new Date(getRoomTime(a)).getTime();
-    const timeB = new Date(getRoomTime(b)).getTime();
+    const timeA = new Date(getRoomTime(a as any)).getTime();
+    const timeB = new Date(getRoomTime(b as any)).getTime();
     return timeB - timeA;
   });
 

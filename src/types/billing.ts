@@ -9,11 +9,15 @@ export interface CreditBalanceDto {
 
 export interface CreditTransactionDto {
   id: string;
+  workspaceId: string;
+  workspaceName?: string | null;
+  userId: string;
+  userName?: string | null;
   amount: number; // negative = consumption, positive = top-up
-  type: "consumption" | "top_up" | "adjust" | string;
-  description: string | null;
-  referenceType: string | null;
-  referenceId: string | null;
+  type: 'consumption' | 'top_up' | 'reserve' | 'refund' | 'adjustment';
+  description?: string;
+  referenceType?: string;
+  referenceId?: string;
   balanceAfter: number;
   createdAt: string; // ISO datetime
 }
@@ -43,9 +47,35 @@ export interface PagedResult<T> {
 
 
 export interface CreditHistoryFilters {
+  workspaceId?: string;
   type?: string;
   fromDate?: string;
   toDate?: string;
   minAmount?: number;
   maxAmount?: number;
+}
+
+export interface GlobalBillingMetricsDto {
+  totalBalance: number;
+  monthlyUsage: number;
+  auditEventsLast30Days: number;
+  activeWorkspaces: number;
+}
+
+export interface MonthlyUsagePoint {
+  month: number;
+  monthName: string;
+  consumedCredits: number;
+  topUpCredits: number;
+}
+
+export interface UsageChartDto {
+  year: number;
+  monthlyData: MonthlyUsagePoint[];
+}
+
+export interface TopWorkspaceDto {
+  workspaceId: string;
+  workspaceName: string;
+  consumedCredits: number;
 }

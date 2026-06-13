@@ -1,10 +1,10 @@
 "use client";
 
-import { Download, Robot, Coins, CreditCard, Translate, Users, Wallet, ArrowRight, ArrowUpRight, ArrowDownRight, Spinner } from "@phosphor-icons/react/dist/ssr";
+import { Download, Robot, Coins, CreditCard, Translate, Users, Wallet, ArrowRight, ArrowUpRight, ArrowDownRight, Spinner, CaretLeft } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, use } from "react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { Badge } from "@/components/ui/badge";
@@ -19,10 +19,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
 import type { UsageSummaryDto } from "@/types/billing";
-import { useAuthStore } from "@/stores/auth-store";
 import { createHubConnection } from "@/lib/signalr";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
+import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -40,17 +40,16 @@ function getLabelForUsage(usageType: string) {
   return usageType;
 }
 
-export default function WorkspaceWalletPage() {
+export default function AdminWorkspaceBillingPage({ params }: { params: Promise<{ id: string }> }) {
   const queryClient = useQueryClient();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
 
-  const { isAuthenticated, accessToken, user } = useAuthStore();
-  const workspaceId = user?.id || "";
+  // In Next.js 15+, params is a Promise and must be unwrapped
+  const resolvedParams = React.use(params);
+  const workspaceId = resolvedParams.id;
 
   useEffect(() => {
-    if (!isAuthenticated || !accessToken) return;
-
     const connection = createHubConnection("/hubs/notification");
 
     connection.on("NewNotification", (notification) => {
@@ -65,14 +64,13 @@ export default function WorkspaceWalletPage() {
     connection.start().catch((err) => {
       if (!isMounted) return;
       if (err?.message?.includes("stop() was called")) return;
-      // Connection failed silently - will retry via withAutomaticReconnect
     });
 
     return () => {
       isMounted = false;
       connection.stop();
     };
-  }, [queryClient, accessToken, isAuthenticated]);
+  }, [queryClient]);
 
   const { data: balance, isLoading: isBalanceLoading } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
@@ -302,19 +300,22 @@ export default function WorkspaceWalletPage() {
     <div className="flex min-h-full flex-col gap-6 pb-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Workspace Wallet</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage your credit balance, view history, and monitor AI usage.</p>
+          <div className="flex items-center gap-3 mb-1">
+            <Link href="/internal/billing">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-ink">
+                <CaretLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Badge variant="outline" className="bg-surface-2 text-ink border-hairline">Workspace View</Badge>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">{workspaceId}</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">Manage credit balance, view history, and monitor AI usage for this workspace.</p>
         </div>
         <div className="flex items-center gap-3">
-
           <Button variant="outline" className="rounded-md h-9 px-4" onClick={handleOpenExport}>
             <Download className="mr-2 h-4 w-4" weight="light" /> Export usage
           </Button>
-          <Link href="/workspace/payment/plans">
-            <Button className="rounded-md h-9 px-4 bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm">
-              <Wallet className="mr-2 h-4 w-4" /> Top up credits
-            </Button>
-          </Link>
+          <AdjustCreditModal workspaceId={workspaceId} />
         </div>
       </div>
 
@@ -335,11 +336,9 @@ export default function WorkspaceWalletPage() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
-          <section className="flex flex-col gap-4">
+          <section className="grid gap-4 md:grid-cols-[1fr_380px]">
             <UsageChart workspaceId={workspaceId} />
-            <div className="grid gap-4 md:grid-cols-2">
-              <FeatureBreakdownChart workspaceId={workspaceId} />
-            </div>
+            <FeatureBreakdownChart workspaceId={workspaceId} />
           </section>
           
           <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">

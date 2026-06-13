@@ -151,11 +151,9 @@ export default function RoomInformationPage() {
                 </div>
                 <div className="shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Popover>
-                    <PopoverTrigger asChild>
-                      <div className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors cursor-pointer">
-                        <Users className="w-3.5 h-3.5" />
-                        Tracking
-                      </div>
+                    <PopoverTrigger className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors cursor-pointer outline-none">
+                      <Users className="w-3.5 h-3.5" />
+                      Tracking
                     </PopoverTrigger>
                     <PopoverContent align="end" className="w-[300px] p-3 rounded-xl bg-canvas shadow-xl border-border/60 z-[100]">
                       <h4 className="text-[13px] font-medium text-ink mb-3">Participants</h4>
@@ -172,7 +170,6 @@ export default function RoomInformationPage() {
                             </div>
                             <div className="flex-1 truncate leading-tight">
                               <div className="font-medium text-ink">{p.displayName}</div>
-                              {p.email && <div className="text-[11px] text-ink-muted truncate">{p.email}</div>}
                             </div>
                           </div>
                         )) : (
