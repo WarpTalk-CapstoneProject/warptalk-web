@@ -54,6 +54,7 @@ export interface TranslationRoomParticipantDto {
   isUsingVoiceClone?: boolean;
   avatarUrl?: string;
   joinedAt?: string;
+  isExternal?: boolean;
 }
 
 // ── Request DTOs ──────────────────────────────

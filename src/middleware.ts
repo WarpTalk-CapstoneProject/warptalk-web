@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
   if (token && isAuthRoute) {
-    return NextResponse.redirect(new URL("/host/dashboard", request.url));
+    return NextResponse.redirect(new URL("/rooms", request.url));
   }
 
   if (!token && !isPublicRoute) {

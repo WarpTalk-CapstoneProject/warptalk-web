@@ -60,5 +60,18 @@ export const API = {
   meetings: {
     join: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/join`,
     triggerAi: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/trigger-ai`,
+    chatList: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
+    chatSend: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
+    chatTranslate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/translate`,
+    chatModerate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/moderate`,
+    rejectParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/reject`,
+    transferHost: (roomId: string, newHostId: string) => `/meetings/rooms/${roomId}/transfer-host/${newHostId}`,
+    kickParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/kick`,
+    endMeeting: (roomId: string) => `/meetings/rooms/${roomId}/end`,
+  },
+  workspaces: {
+    list: "/workspaces",
+    get: (id: string) => `/workspaces/${id}`,
+    members: (id: string) => `/workspaces/${id}/members`,
   },
 } as const;

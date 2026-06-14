@@ -4,6 +4,7 @@
 import { Suspense, useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { motion } from "motion/react";
 import {
   ArrowLeft,
   VideoCamera,
@@ -65,7 +66,7 @@ function JoinMeetingContent() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  const displayName = user?.fullName || user?.username || "Guest";
+  const displayName = user?.fullName || user?.email || "Guest";
   const [roomCode] = useState(searchParams.get("code") ?? "");
   const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
   const [listenLanguage, setListenLanguage] = useState("en-US");
@@ -266,7 +267,10 @@ function JoinMeetingContent() {
   return (
     <div className="flex flex-col items-center p-4 sm:p-8 h-full overflow-y-auto">
       {/* Top Header Navigation */}
-      <div className="w-full max-w-[960px] flex items-center justify-between mb-4 mt-4">
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+        className="w-full max-w-[960px] flex items-center justify-between mb-4 mt-4"
+      >
         <button
           onClick={() => router.push('/rooms')}
           className="flex items-center gap-2 text-[13px] text-ink-muted hover:text-ink transition-colors"
@@ -274,18 +278,24 @@ function JoinMeetingContent() {
           <ArrowLeft className="w-4 h-4" />
           Back to Meetings
         </button>
-      </div>
+      </motion.div>
 
       {/* Title */}
-      <div className="w-full max-w-[960px] space-y-1 mb-6 animate-in fade-in zoom-in-95 duration-300">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}
+        className="w-full max-w-[960px] space-y-1 mb-6"
+      >
         <h1 className="text-[24px] font-semibold tracking-tight text-foreground">
           Join Translation Room
         </h1>
         <p className="text-[14px] text-ink-muted tracking-[-0.05px]">Enter the meeting code and configure your devices.</p>
-      </div>
+      </motion.div>
 
       {/* Main Container */}
-      <div className="w-full max-w-[960px] grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in zoom-in-95 duration-300 items-stretch pb-12">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.2, type: "spring", stiffness: 200, damping: 20 }}
+        className="w-full max-w-[960px] grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch pb-12"
+      >
         
         {/* Left Side: Video Preview Panel (Surface 1) */}
         <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden relative flex flex-col h-full min-h-[460px]">
@@ -349,7 +359,7 @@ function JoinMeetingContent() {
               <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">Language Routing</h4>
               <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
                 
-                <Select value={speakLanguage} onValueChange={setSpeakLanguage}>
+                <Select value={speakLanguage} onValueChange={(val) => val && setSpeakLanguage(val)}>
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">{getFlagEmoji(speakLanguage)}</span>
                     <span className="font-medium text-ink">{speakLanguage.split('-')[0].toUpperCase()}</span>
@@ -368,7 +378,7 @@ function JoinMeetingContent() {
 
                 <span className="text-muted-foreground/40 font-bold px-1 text-[11px]">→</span>
 
-                <Select value={listenLanguage} onValueChange={setListenLanguage}>
+                <Select value={listenLanguage} onValueChange={(val) => val && setListenLanguage(val)}>
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">{getFlagEmoji(listenLanguage)}</span>
                     <span className="font-medium text-ink">{listenLanguage.split('-')[0].toUpperCase()}</span>
@@ -423,7 +433,7 @@ function JoinMeetingContent() {
           </div>
         </div>
 
-      </div>
+      </motion.div>
     </div>
   );
 }

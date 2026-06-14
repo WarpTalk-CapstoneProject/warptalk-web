@@ -40,12 +40,25 @@ export interface TranslationTextDto {
   targetLang: string;
 }
 
+export interface ChatMentionDto {
+  id: string;
+  display: string;
+  type: string;
+}
+
 export interface ChatMessageDto {
-  messageId: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  sentAt: string;
+  id: string;
+  meetingRoomId: string;
+  senderUserId?: string;
+  senderDisplayName: string;
+  senderType: string;
+  messageType: string;
+  originalLanguage: string;
+  originalText: string;
+  translationEnabled: boolean;
+  containsWarpbotMention?: boolean;
+  mentions?: ChatMentionDto[];
+  createdAt: string;
 }
 
 export interface TranslationRoomStateDto {

@@ -15,6 +15,12 @@ import {
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { motion } from "motion/react";
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { DeviceSelect } from "@/components/rooms/setup/device-select";
+import { LanguageRoleConfirm } from "@/components/rooms/setup/language-role-confirm";
 
 const languages = [
   { value: "en-US", label: "English" },
@@ -30,15 +36,32 @@ export default function RoomSetupPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const roomId = params.id;
+  const user = useAuthStore(state => state.user);
+  
+  const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(roomId);
+  const { isAdmin, isOwner } = useWorkspaceRole(room?.workspaceId);
+  const isHost = Boolean(room && user && (room.hostId === user.id || isAdmin || isOwner));
+
   const videoRef = useRef<SinkVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  const [speakLanguage, setSpeakLanguage] = useState("en-US");
-  const [listenLanguage, setListenLanguage] = useState("vi-VN");
+  const [speakLanguage, setSpeakLanguage] = useState("vi");
+  const [listenLanguage, setListenLanguage] = useState("vi");
   const [transcriptEnabled, setTranscriptEnabled] = useState(true);
+  
+  useEffect(() => {
+    if (room && room.targetLanguages?.length > 0) {
+      // Default to the first target language if available
+      setListenLanguage(room.targetLanguages[0]);
+      setSpeakLanguage(room.targetLanguages[0]);
+    } else if (room) {
+      setListenLanguage(room.sourceLanguage);
+      setSpeakLanguage(room.sourceLanguage);
+    }
+  }, [room]);
   
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
@@ -184,7 +207,10 @@ export default function RoomSetupPage() {
   return (
     <div className="flex flex-col items-center p-4 sm:p-8 h-full overflow-y-auto">
       {/* Top Header Navigation */}
-      <div className="w-full max-w-[960px] flex items-center justify-between mb-4">
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+        className="w-full max-w-[960px] flex items-center justify-between mb-4"
+      >
         <button
           onClick={() => router.back()}
           className="flex items-center gap-2 text-[13px] text-ink-muted hover:text-ink transition-colors"
@@ -192,18 +218,24 @@ export default function RoomSetupPage() {
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
-      </div>
+      </motion.div>
 
       {/* Title */}
-      <div className="w-full max-w-[960px] space-y-1 mb-6 animate-in fade-in zoom-in-95 duration-300">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}
+        className="w-full max-w-[960px] space-y-1 mb-6"
+      >
         <h1 className="text-[24px] font-semibold tracking-tight text-foreground">
-          Ready to join?
+          {isLoadingRoom ? "Loading room..." : room?.title || "Ready to join?"}
         </h1>
-        <p className="text-[14px] text-ink-muted tracking-[-0.05px]">{roomId}</p>
-      </div>
+        <p className="text-[14px] text-ink-muted tracking-[-0.05px]">Room Code: {room?.translationRoomCode || roomId}</p>
+      </motion.div>
 
       {/* Main Container */}
-      <div className="w-full max-w-[960px] grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in zoom-in-95 duration-300 items-stretch">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.2, type: "spring", stiffness: 200, damping: 20 }}
+        className="w-full max-w-[960px] grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch"
+      >
         
         {/* Left Side: Video Preview Panel (Surface 1) */}
         <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden relative flex flex-col h-full min-h-[460px]">
@@ -284,8 +316,17 @@ export default function RoomSetupPage() {
               </div>
             </div>
 
-
-
+            {room && (
+              <LanguageRoleConfirm
+                isHost={isHost}
+                roomSourceLanguage={room.sourceLanguage}
+                roomTargetLanguages={room.targetLanguages ? room.targetLanguages.split(",") : []}
+                listenLanguage={listenLanguage}
+                setListenLanguage={setListenLanguage}
+                speakLanguage={speakLanguage}
+                setSpeakLanguage={setSpeakLanguage}
+              />
+            )}
           </div>
 
           <div className="p-6 border-t border-border bg-surface-1">
@@ -299,59 +340,17 @@ export default function RoomSetupPage() {
               }}
               className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[32px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm"
             >
-              Join Meeting
+              {isHost ? "Start Meeting" : "Join Meeting"}
             </button>
           </div>
         </div>
 
-      </div>
+      </motion.div>
     </div>
   );
 }
 
-// Sub-components
 
-function DeviceSelect({ label, icon, value, devices, fallback, onChange }: any) {
-  const selectedDevice = devices.find((d: any) => d.deviceId === value);
-  const validValue = selectedDevice ? value : "default";
-
-  let displayValue = fallback;
-  if (selectedDevice) {
-    let deviceName = selectedDevice.label && selectedDevice.label.trim() !== "" ? selectedDevice.label : `${label} ${devices.indexOf(selectedDevice) + 1}`;
-    if (deviceName === selectedDevice.deviceId || deviceName.length > 40) {
-      deviceName = `${label} ${devices.indexOf(selectedDevice) + 1}`;
-    }
-    displayValue = deviceName;
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[12px] font-medium flex items-center gap-1.5 text-ink-muted">
-        {icon} {label}
-      </label>
-      <Select value={validValue} onValueChange={(val) => onChange(val === "default" ? "" : val)}>
-        <SelectTrigger className="h-[32px] bg-canvas border border-border text-ink text-[13px] rounded-[6px] w-full truncate focus:ring-2 focus:ring-ring/50 focus:border-ring">
-          {displayValue}
-        </SelectTrigger>
-        <SelectContent className="bg-surface-1 border-border text-ink rounded-[6px]">
-          <SelectItem value="default" className="focus:bg-surface-2 focus:text-ink text-[13px]">{fallback}</SelectItem>
-          {devices.map((d: any, i: number) => {
-            let deviceName = d.label && d.label.trim() !== "" ? d.label : `${label} ${i + 1}`;
-            if (deviceName === d.deviceId || deviceName.length > 40) {
-              deviceName = `${label} ${i + 1}`;
-            }
-            const deviceId = d.deviceId || `device-${i}`;
-            return (
-              <SelectItem key={deviceId} value={deviceId} className="focus:bg-surface-2 focus:text-ink text-[13px] truncate">
-                {deviceName}
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
 
 
 

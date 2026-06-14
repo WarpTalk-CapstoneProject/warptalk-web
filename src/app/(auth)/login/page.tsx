@@ -29,7 +29,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 function getSafeCallbackUrl(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/host/dashboard";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/rooms";
   return value;
 }
 
@@ -71,7 +71,7 @@ function LoginForm() {
       const { user, accessToken, refreshToken, expiresAt } = res.data;
 
       login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken, expiresAt);
+      setAccessTokenCookie(accessToken);
 
       toast.success("Login successful!");
       router.replace(callbackUrl);

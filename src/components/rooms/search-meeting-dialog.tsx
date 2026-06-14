@@ -27,7 +27,7 @@ export function SearchMeetingDialog() {
     pageSize: 10,
   });
 
-  const meetings = data?.items || [];
+  const meetings = data?.rooms || [];
 
   const handleSelect = (roomId: string) => {
     router.push(`/rooms/${roomId}`);
