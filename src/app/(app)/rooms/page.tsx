@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 
@@ -74,7 +75,8 @@ function LanguageWithFlag({ locale, hideText }: { locale: string; hideText?: boo
 
 function LinearRow({ room }: { room: TranslationRoomDto }) {
   const user = useAuthStore((state) => state.user);
-  const isCurrentUserHost = room.hostId === user?.id || room.isHost;
+  const role = useWorkspaceRole();
+  const isCurrentUserHost = room.hostId === user?.id || role === "admin" || role === "owner" || room.isHost;
   const hostName = isCurrentUserHost && user?.fullName ? user.fullName : "Host";
   const hostAvatar = isCurrentUserHost ? user?.avatarUrl : undefined;
 
@@ -84,18 +86,20 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
       className="flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
     >
       <div className="flex items-center w-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground">
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            const inviteLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
-            navigator.clipboard.writeText(inviteLink);
-            toast.success("Invite link copied");
-          }}
-          className="hover:text-foreground transition-colors p-1"
-          title="Copy invite link"
-        >
-          <Copy size={14} weight="bold" />
-        </button>
+        {isCurrentUserHost && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              const inviteLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
+              navigator.clipboard.writeText(inviteLink);
+              toast.success("Invite link copied");
+            }}
+            className="hover:text-foreground transition-colors p-1"
+            title="Copy invite link"
+          >
+            <Copy size={14} weight="bold" />
+          </button>
+        )}
       </div>
       
       <div className="flex items-center w-8 shrink-0">
@@ -124,7 +128,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
         </div>
 
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <LanguageWithFlag locale={room.sourceLanguage} />
+          <LanguageWithFlag locale={room.sourceLanguage ?? ""} />
           {room.targetLanguages.length > 1 ? (
             <>
               <span className="text-muted-foreground/40 font-bold px-1 text-[13px]">;</span>
@@ -271,11 +275,14 @@ function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[
   );
 }
 
+import { useUIStore } from "@/stores/ui-store";
+
 export default function MeetingsPageLinear() {
   const [isGroupOpen, setIsGroupOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<"active" | "scheduled" | "history" | "all">("active");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const roomList = useTranslationRooms({ pageSize: 100 });
+  const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
 
   const rooms = useMemo(() => {
     return roomList.data?.rooms ?? [];
@@ -314,6 +321,16 @@ export default function MeetingsPageLinear() {
           </button>
           <button className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm" title="Display Options">
             <SlidersHorizontal weight="bold" size={13} />
+          </button>
+          
+          <div className="h-4 w-[1px] bg-border mx-1" />
+          
+          <button 
+            onClick={() => setCreateRoomModalOpen(true)}
+            className="flex items-center gap-1.5 h-[28px] pl-2.5 pr-3 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity text-[13px] font-medium shadow-sm"
+          >
+            <Plus weight="bold" size={12} />
+            New Meeting
           </button>
         </div>
       </div>

@@ -14,7 +14,8 @@ import {
   Plus,
   Keyboard,
 } from "@phosphor-icons/react/dist/ssr";
-import type { Icon } from "@phosphor-icons/react/dist/ssr";
+import type { IconProps } from "@phosphor-icons/react";
+type IconType = React.ElementType<IconProps>;
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -27,11 +28,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface NavItem {
-  icon: Icon;
+  icon: IconType;
   label: string;
   href: string;
   actions?: Array<{
-    icon: Icon;
+    icon: IconType;
     href?: string;
     onClick?: () => void;
     title?: string;

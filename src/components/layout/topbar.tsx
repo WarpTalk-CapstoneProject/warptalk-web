@@ -51,10 +51,6 @@ const searchItems: Array<{
   icon: React.ElementType;
   shortcut?: string;
 }> = [
-  { title: "Host Dashboard", url: "/host/dashboard", group: "Host", icon: SquaresFour, shortcut: "D" },
-  { title: "Participant Dashboard", url: "/participant/dashboard", group: "Participant", icon: Users },
-  { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: Buildings },
-  { title: "Internal Dashboard", url: "/internal/dashboard", group: "Internal", icon: HardDrives },
   { title: "Rooms", url: "/rooms", group: "Workspace", icon: SquaresFour, shortcut: "R" },
   { title: "Create Room", url: "/rooms/create", group: "Workspace", icon: Plus, shortcut: "N" },
   { title: "History & Transcripts", url: "/history", group: "Workspace", icon: FileText, shortcut: "H" },
@@ -64,8 +60,6 @@ const searchItems: Array<{
   { title: "Voice Profiles", url: "/voice-profiles", group: "Configuration", icon: Microphone },
   { title: "Post-room Feedback", url: "/feedback", group: "Operations", icon: Star },
   { title: "GearSix", url: "/settings", group: "Configuration", icon: GearSix },
-  { title: "Workspace", url: "/workspace/dashboard", group: "Administration", icon: Buildings },
-  { title: "Internal Admin", url: "/internal/dashboard", group: "Administration", icon: HardDrives },
   { title: "Dev Test", url: "/dev-test", group: "Developer", icon: Flask },
 ];
 

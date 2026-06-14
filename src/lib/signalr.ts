@@ -15,10 +15,10 @@ const BASE_URL =
  *   /hubs/notification     — NotificationHub
  */
 export function createHubConnection(
-  hubPath: "/hubs/translation-room" | "/hubs/notification"
+  hubPath: "/hubs/translation-room" | "/hubs/notification" | "/api/v1/meetings/chat-hub"
 ): signalR.HubConnection {
   const connection = new signalR.HubConnectionBuilder()
-    .withUrl(`${BASE_URL}${hubPath}`, {
+    .withUrl(`${BASE_URL}${hubPath.startsWith("/api") ? hubPath : hubPath}`, {
       accessTokenFactory: () => {
         return useAuthStore.getState().accessToken ?? "";
       },

@@ -3,28 +3,17 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  ArrowLeft,
-  Star,
-  Link as LinkIcon,
-  Copy,
-  ChevronDown,
-  Info,
-  Globe2,
-  Calendar,
-  ArrowRight,
-  Clock,
-  MapPin,
-  Video,
-  Users,
-} from "lucide-react";
+import { Globe2, Calendar, ArrowRight, Clock, MapPin, Video, Users, ChevronDown, Copy, Link as LinkIcon, Star, ArrowLeft, Info, FileText } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 import { useTranslationRoom, useTranslationRoomParticipants } from "@/hooks/use-translationRooms";
 import { getLanguageName } from "@/lib/languages";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 
 const getShortLang = (val: string) => {
   if (!val) return "";
@@ -52,6 +41,21 @@ const statusLabels: Record<TranslationRoomStatus, string> = {
   failed: "Failed",
 };
 
+function TabButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-[32px] flex items-center text-[13px] font-medium transition-colors border-b-2 ${
+        active
+          ? "border-foreground text-foreground"
+          : "border-transparent text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function RoomInformationPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -70,6 +74,11 @@ export default function RoomInformationPage() {
   const liveParticipants = useTranslationRoomStore((state) => state.participants);
   const liveRoomState = useTranslationRoomStore((state) => state.translationRoomState);
   const user = useAuthStore((state) => state.user);
+  const role = useWorkspaceRole();
+
+  const transcriptQuery = useTranscriptByRoom(roomId);
+  const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
+  const transcriptSegments = segmentsQuery.data?.items || [];
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
@@ -103,6 +112,7 @@ export default function RoomInformationPage() {
 
   const isEnded = room.status === "ended";
   const isLive = room.status === "in_progress";
+  const isHost = room.hostId === user?.id || role === "admin" || role === "owner";
 
   return (
     <div className="flex flex-col h-full  overflow-hidden">
@@ -151,18 +161,18 @@ export default function RoomInformationPage() {
                 </div>
                 <div className="shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Popover>
-                    <PopoverTrigger asChild>
-                      <div className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors cursor-pointer">
-                        <Users className="w-3.5 h-3.5" />
-                        Tracking
-                      </div>
+                    <PopoverTrigger className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors cursor-pointer">
+                      <Users className="w-3.5 h-3.5" />
+                      Tracking
                     </PopoverTrigger>
                     <PopoverContent align="end" className="w-[300px] p-3 rounded-xl bg-canvas shadow-xl border-border/60 z-[100]">
                       <h4 className="text-[13px] font-medium text-ink mb-3">Participants</h4>
-                      <div className="flex items-center gap-2 mb-4">
-                        <input type="email" placeholder="Invite via email..." className="flex-1 bg-surface-1 border border-border/60 rounded-md px-2.5 py-1.5 text-[13px] text-ink placeholder:text-ink-muted/50 outline-none focus:border-ink/30 transition-colors" />
-                        <button className="bg-ink text-canvas px-3 py-1.5 rounded-md text-[13px] font-medium hover:opacity-90 transition-opacity">Invite</button>
-                      </div>
+                      {isHost && (
+                        <div className="flex items-center gap-2 mb-4">
+                          <input type="email" placeholder="Invite via email..." className="flex-1 bg-surface-1 border border-border/60 rounded-md px-2.5 py-1.5 text-[13px] text-ink placeholder:text-ink-muted/50 outline-none focus:border-ink/30 transition-colors" />
+                          <button className="bg-ink text-canvas px-3 py-1.5 rounded-md text-[13px] font-medium hover:opacity-90 transition-opacity">Invite</button>
+                        </div>
+                      )}
                       <div className="space-y-1 max-h-[200px] overflow-y-auto">
                         <div className="text-[11px] font-medium text-ink-muted uppercase tracking-wider mb-2">Current ({apiParticipants.length})</div>
                         {apiParticipants.length > 0 ? apiParticipants.map((p, i) => (
@@ -172,7 +182,6 @@ export default function RoomInformationPage() {
                             </div>
                             <div className="flex-1 truncate leading-tight">
                               <div className="font-medium text-ink">{p.displayName}</div>
-                              {p.email && <div className="text-[11px] text-ink-muted truncate">{p.email}</div>}
                             </div>
                           </div>
                         )) : (
@@ -199,10 +208,12 @@ export default function RoomInformationPage() {
                   )}
                 </div>
                 <div className="shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                   <button className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors">
-                     <Calendar className="w-3.5 h-3.5" />
-                     Scheduling Assistant
-                   </button>
+                   {isHost && (
+                     <button className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors">
+                       <Calendar className="w-3.5 h-3.5" />
+                       Scheduling Assistant
+                     </button>
+                   )}
                 </div>
               </div>
 
@@ -216,18 +227,6 @@ export default function RoomInformationPage() {
                 </div>
               </div>
 
-              {/* Toggle Row */}
-              <div className="flex items-center min-h-[44px] py-2">
-                <div className="w-10 flex justify-center shrink-0 text-muted-foreground">
-                  <Video className="w-4 h-4" />
-                </div>
-                <div className="flex-1 pr-4 flex items-center gap-3 text-muted-foreground">
-                  <div className="w-8 h-4 bg-primary rounded-full relative">
-                    <div className="w-3 h-3 bg-white rounded-full absolute right-0.5 top-0.5 shadow-sm" />
-                  </div>
-                  <span>WarpTalk Meeting</span>
-                </div>
-              </div>
             </div>
 
             {/* Tabs (no full-width border) */}
@@ -311,42 +310,57 @@ export default function RoomInformationPage() {
               {activeTab === "transcript" && (
                 <div>
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-[14px] font-medium text-foreground">Live Transcript</h3>
+                    <h3 className="text-[14px] font-medium text-foreground">Transcript</h3>
                     <button className="text-[13px] text-muted-foreground hover:text-foreground">Download</button>
                   </div>
                   
-                  {isLive ? (
-                    <div className="space-y-4">
-                      <div className="flex gap-4">
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                          <span className="text-[11px] font-medium text-muted-foreground">H</span>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[13px] font-medium text-foreground">Host</span>
-                            <span className="text-[11px] text-muted-foreground">Just now</span>
+                  {isLive || isEnded ? (
+                    <div className="flex-1 overflow-y-auto space-y-6">
+                      {isLive && transcriptSegments.length === 0 ? (
+                        <div className="space-y-4">
+                          <div className="animate-pulse flex gap-4 opacity-50">
+                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0"></div>
+                            <div className="flex-1 space-y-2 py-1">
+                              <div className="h-3 bg-muted rounded w-1/4"></div>
+                              <div className="h-3 bg-muted rounded w-3/4"></div>
+                            </div>
                           </div>
-                          <p className="text-[13px] text-muted-foreground">
-                            Welcome everyone to the meeting. We will be translating from {getLanguageName(room.sourceLanguage ?? "")} today.
-                          </p>
                         </div>
-                      </div>
-                      <div className="animate-pulse flex gap-4 opacity-50">
-                         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0"></div>
-                         <div className="flex-1 space-y-2 py-1">
-                           <div className="h-3 bg-muted rounded w-1/4"></div>
-                           <div className="h-3 bg-muted rounded w-3/4"></div>
-                         </div>
-                      </div>
-                    </div>
-                  ) : isEnded ? (
-                    <div className="space-y-6">
-                      <p className="text-[13px] text-muted-foreground text-center py-10 italic">
-                        Transcript recording ended.
-                      </p>
+                      ) : (
+                        <div className="space-y-4">
+                          {transcriptSegments.map((segment) => {
+                            const date = new Date(transcriptQuery.data?.createdAt || Date.now());
+                            date.setMilliseconds(date.getMilliseconds() + segment.startTimeMs);
+                            const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            
+                            return (
+                              <div key={segment.id} className="flex gap-4 group">
+                                <div className="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center shrink-0">
+                                  <span className="text-[11px] font-medium text-ink-muted">{segment.speakerName?.charAt(0).toUpperCase() || '?'}</span>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-baseline gap-2 mb-1">
+                                    <span className="text-[13px] font-medium text-ink">{segment.speakerName || 'Unknown Speaker'}</span>
+                                    <span className="text-[11px] text-ink-muted opacity-0 group-hover:opacity-100 transition-opacity">{timeString}</span>
+                                  </div>
+                                  <p className="text-[13px] text-ink-subtle leading-relaxed">
+                                    {segment.originalText}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          
+                          {isEnded && (
+                            <p className="text-[13px] text-muted-foreground text-center py-6 italic border-t border-border/50 mt-6">
+                              Transcript recording ended.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-border rounded-xl">
                       <p className="text-[13px] text-muted-foreground">
                         The meeting hasn&apos;t started yet. Transcript will appear here.
                       </p>
@@ -434,13 +448,15 @@ export default function RoomInformationPage() {
                   <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span className="text-foreground">Copy room code</span>
                 </button>
-                <button 
-                  onClick={() => handleCopy(`${window.location.origin}/join/${room.translationRoomCode}`, "Invite link")}
-                  className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors"
-                >
-                  <LinkIcon className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  <span className="text-foreground">Copy invite link</span>
-                </button>
+                {isHost && (
+                  <button 
+                    onClick={() => handleCopy(`${window.location.origin}/join?code=${room.translationRoomCode}`, "Invite link")}
+                    className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors"
+                  >
+                    <LinkIcon className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span className="text-foreground">Copy invite link</span>
+                  </button>
+                )}
                 <button className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors">
                   <Star className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span className="text-foreground">Add to favorites</span>
@@ -457,20 +473,7 @@ export default function RoomInformationPage() {
 
 /* ── Sub-components ── */
 
-function TabButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`h-[32px] flex items-center text-[13px] font-medium transition-colors border-b-2 ${
-        active
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
+
 
 function StatusDot({ status }: { status: string }) {
   const isLive = status === "in_progress";

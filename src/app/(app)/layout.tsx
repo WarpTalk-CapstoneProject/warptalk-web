@@ -23,7 +23,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const logout = useAuthStore((state) => state.logout);
   const { rightSidebarOpen, toggleRightSidebar } = useUIStore();
 
-  const roomIdMatch = pathname.match(/^\/rooms\/([0-9a-fA-F-]{36})/);
+  const roomIdMatch = pathname.match(/^\/rooms?\/([0-9a-fA-F-]{36})/);
   const roomId = roomIdMatch ? roomIdMatch[1] : undefined;
   const roomQuery = useTranslationRoom(roomId as string);
   const roomTitle = roomQuery.data?.title;

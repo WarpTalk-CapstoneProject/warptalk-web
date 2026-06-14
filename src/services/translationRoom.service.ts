@@ -171,7 +171,7 @@ export const translationRoomService = {
 
   async joinByCode(data: JoinTranslationRoomByCodeRequest) {
     const response = await apiClient.post<BackendJoinResponse>(API.translationRooms.join, {
-      translationRoomCode: data.translationRoomCode.trim().toLowerCase(),
+      translationRoomCode: data.translationRoomCode.trim(),
       displayName: data.displayName.trim(),
       speakLanguage: data.speakLanguage,
       listenLanguage: data.listenLanguage,

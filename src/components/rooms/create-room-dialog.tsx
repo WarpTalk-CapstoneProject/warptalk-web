@@ -38,11 +38,20 @@ import { cn } from "@/lib/utils";
 import { useCreateTranslationRoom } from "@/hooks/use-translationRooms";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaces, useWorkspaceMembers } from "@/hooks/use-workspace";
+import { OptionsMenu } from "./create/options-menu";
+import { TemplatePicker } from "./create/template-picker";
+import { InvitePeoplePicker } from "./create/invite-people-picker";
+import { StartTimePicker } from "./create/start-time-picker";
+import { LanguageSelector } from "./create/language-selector";
 
 const languageOptions = [
-  { code: "vi-VN", label: "Vietnamese" },
-  { code: "en-US", label: "English" },
-  { code: "ja-JP", label: "Japanese" },
+  { code: "vi", label: "Vietnamese" },
+  { code: "en", label: "English" },
+  { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
+  { code: "fr", label: "French" },
+  { code: "es", label: "Spanish" },
 ];
 
 function getDefaultStartTime() {
@@ -60,8 +69,8 @@ export function CreateRoomDialog() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
-  const [sourceLanguage, setSourceLanguage] = useState<string>("en-US");
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["vi-VN"]);
+  const [sourceLanguage, setSourceLanguage] = useState<string>("en");
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["vi"]);
   const [isMultiLang, setIsMultiLang] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -88,8 +97,8 @@ export function CreateRoomDialog() {
         setTitle("");
         setDescription("");
         setInvitedEmails([]);
-        setSelectedLanguages(["vi-VN"]);
-        setSourceLanguage("en-US");
+        setSelectedLanguages(["vi"]);
+        setSourceLanguage("en");
         setIsMultiLang(false);
         setScheduledAt(null);
         setIsExpanded(false);
@@ -286,364 +295,3 @@ export function CreateRoomDialog() {
   );
 }
 
-// Subcomponents - Pill Style Options
-
-function PillButton({ icon: Icon, label, active, onClick }: { icon: React.ElementType, label?: React.ReactNode, active: boolean, onClick?: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors border shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
-        active 
-          ? "border-border bg-surface-1 text-ink hover:bg-surface-2" 
-          : "border-border/60 bg-white dark:bg-transparent text-ink-muted hover:text-ink hover:border-border hover:bg-surface-1"
-      )}
-    >
-      <Icon weight={active ? "duotone" : "bold"} size={14} className={active ? "text-ink" : "text-ink-muted/70"} />
-      {label}
-    </button>
-  );
-}
-
-export function OptionsMenu({ 
-  hasScheduledAt, 
-  onAddScheduledAt,
-  isMultiLang,
-  onToggleMultiLang
-}: { 
-  hasScheduledAt?: boolean; 
-  onAddScheduledAt?: () => void;
-  isMultiLang: boolean;
-  onToggleMultiLang: () => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <div className="flex items-center justify-center h-[26px] w-[26px] rounded-full border border-border/60 bg-white dark:bg-transparent shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-ink-muted hover:text-ink hover:border-border hover:bg-surface-1 transition-colors cursor-pointer">
-          <DotsThree weight="bold" size={16} />
-        </div>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[200px] p-1 bg-canvas rounded-xl shadow-xl border-border/50">
-        <Command className="bg-transparent">
-          <CommandList>
-            {!hasScheduledAt && (
-              <CommandItem onSelect={onAddScheduledAt} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                <CalendarIcon weight="duotone" size={14} />
-                Date & Time
-              </CommandItem>
-            )}
-            <CommandItem 
-              onSelect={() => {
-                onToggleMultiLang();
-              }} 
-              className="text-[13px] rounded-md cursor-pointer flex items-center justify-between px-2 py-2 aria-selected:bg-surface-2"
-            >
-              <div className="flex items-center gap-2">
-                <GlobeHemisphereWest weight="duotone" size={16} />
-                <span className="font-medium text-ink whitespace-nowrap">Multi-lang</span>
-              </div>
-              <Switch checked={isMultiLang} />
-            </CommandItem>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onChange: (val: string[]) => void }) {
-  const [input, setInput] = useState("");
-  const active = emails.length > 0;
-  
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && input.trim()) {
-      e.preventDefault();
-      const email = input.trim();
-      if (!emails.includes(email) && email.includes("@")) {
-        onChange([...emails, email]);
-      }
-      setInput("");
-    }
-  };
-
-  const removeEmail = (email: string) => {
-    onChange(emails.filter(e => e !== email));
-  };
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <div>
-          <PillButton 
-            icon={Users} 
-            label={active ? `${emails.length} people` : "People"} 
-            active={active} 
-          />
-        </div>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[260px] p-2 bg-canvas rounded-xl shadow-xl border-border/50">
-        <div className="space-y-2">
-          <label className="text-[11px] font-medium text-ink-muted px-1">Invite by Email</label>
-          <div className="relative">
-            <Users weight="duotone" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted/70 h-3.5 w-3.5 pointer-events-none" />
-            <input
-              type="email"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="name@company.com..."
-              className="w-full h-8 pl-8 pr-3 text-[13px] bg-surface-1 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-ink/20 text-ink"
-              autoFocus
-            />
-          </div>
-          {emails.length > 0 && (
-            <div className="mt-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
-              {emails.map(email => (
-                <div key={email} className="flex items-center justify-between text-[12px] bg-surface-2 px-2 py-1 rounded">
-                  <span className="truncate max-w-[180px] text-ink">{email}</span>
-                  <button onClick={() => removeEmail(email)} className="text-ink-muted hover:text-red-500">
-                    <X size={12} weight="bold" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduledAt: Date; onChange: (value: Date) => void; onRemove: () => void }) {
-  const [timeStr, setTimeStr] = useState(format(scheduledAt, "HH:mm"));
-
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setTimeStr(val);
-    const [hours, minutes] = val.split(":").map(Number);
-    if (!isNaN(hours) && !isNaN(minutes)) {
-      const newDate = setMinutes(setHours(scheduledAt, hours), minutes);
-      onChange(newDate);
-    }
-  };
-
-  const handleDateSelect = (d: Date | undefined) => {
-    if (d) {
-      const [hours, minutes] = timeStr.split(":").map(Number);
-      const newDate = setMinutes(setHours(d, hours || 0), minutes || 0);
-      onChange(newDate);
-    }
-  };
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <div>
-          <PillButton 
-            icon={CalendarIcon} 
-            label={format(scheduledAt, "MMM d, h:mm a")} 
-            active={true} 
-          />
-        </div>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-3 bg-canvas rounded-xl shadow-xl border-border/50">
-        <Calendar
-          mode="single"
-          selected={scheduledAt}
-          onSelect={handleDateSelect}
-          initialFocus
-          className="p-0 border-none bg-transparent"
-        />
-        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/40">
-          <input
-            type="time"
-            value={timeStr}
-            onChange={handleTimeChange}
-            className="w-full h-8 px-2 text-[13px] bg-surface-1 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-ink/20 text-ink"
-          />
-          <button 
-            onClick={onRemove}
-            className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-colors shrink-0"
-            title="Remove schedule"
-          >
-            <Trash weight="bold" size={14} />
-          </button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function getFlagEmoji(locale: string) {
-  if (!locale) return "";
-  const parts = locale.split("-");
-  const countryCode = parts.length > 1 ? parts[1].toUpperCase() : "";
-  if (!countryCode) return "";
-  const codePoints = countryCode.split("").map(char => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
-}
-
-export function LanguageSelector({ 
-  source, 
-  onSourceChange, 
-  targets, 
-  onTargetsChange,
-  isMultiLang
-}: { 
-  source: string; 
-  onSourceChange: (lang: string) => void;
-  targets: string[]; 
-  onTargetsChange: (languages: string[]) => void;
-  isMultiLang: boolean;
-}) {
-  function toggleTarget(code: string) {
-    if (isMultiLang) {
-      if (targets.includes(code)) {
-        if (targets.length === 1) return; // Must have at least one target
-        onTargetsChange(targets.filter((item) => item !== code));
-      } else {
-        onTargetsChange([...targets, code]);
-      }
-    } else {
-      onTargetsChange([code]);
-    }
-  }
-
-  const targetLang = targets.length > 0 ? targets[0] : "vi-VN";
-
-  return (
-    <div className="flex items-center gap-1 px-1 py-1 rounded-full border border-border/60 bg-transparent select-none text-[13px]">
-      <Popover>
-        <PopoverTrigger asChild>
-          <div className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full cursor-pointer hover:bg-surface-2 transition-colors">
-            <span className="leading-none text-[14px]">{getFlagEmoji(source)}</span>
-            <span className="font-medium text-ink">{languageOptions.find(o => o.code === source)?.label.substring(0, 2).toUpperCase() || source.split('-')[0].toUpperCase()}</span>
-          </div>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-[180px] rounded-xl bg-canvas border-border/50 p-1.5 shadow-xl z-[100]">
-          <Command className="bg-transparent">
-            <CommandList>
-              <CommandGroup heading="Source Language" className="text-[11px] text-ink-muted">
-                {languageOptions.map((language) => {
-                  const isSelected = source === language.code;
-                  return (
-                    <CommandItem
-                      key={language.code}
-                      onSelect={() => onSourceChange(language.code)}
-                      className="rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 cursor-pointer flex items-center gap-2"
-                    >
-                      <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
-                      <span className="truncate font-medium text-ink">{language.label}</span>
-                      {isSelected && <CheckCircle weight="fill" className="ml-auto text-emerald-500 h-3.5 w-3.5" />}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      <span className="text-muted-foreground/40 font-bold px-1">
-        {isMultiLang ? (
-          <span className="text-[13px]">;</span>
-        ) : (
-          <span className="text-[11px]">→</span>
-        )}
-      </span>
-
-      <Popover>
-        <PopoverTrigger asChild>
-          <div className="flex items-center outline-none cursor-pointer">
-            {targets.map((t, i) => (
-              <div key={t} className="flex items-center">
-                {i > 0 && <span className="text-muted-foreground/40 font-bold text-[13px] px-1">;</span>}
-                <div className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full hover:bg-surface-2 transition-colors">
-                  <span className="leading-none text-[14px]">{getFlagEmoji(t)}</span>
-                  {targets.length === 1 && !isMultiLang && (
-                    <span className="font-medium text-ink">{languageOptions.find(o => o.code === targetLang)?.label.substring(0, 2).toUpperCase() || targetLang.split('-')[0].toUpperCase()}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {isMultiLang && (
-              <div className="flex items-center">
-                <span className="text-muted-foreground/40 font-bold text-[13px] px-1">;</span>
-                <div className="flex items-center justify-center px-2 py-[5px] rounded-full hover:bg-surface-2 transition-colors">
-                  <Plus weight="bold" size={12} className="text-ink-muted" />
-                </div>
-              </div>
-            )}
-          </div>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-[180px] rounded-xl bg-canvas border-border/50 p-1.5 shadow-xl z-[100]">
-          <Command className="bg-transparent">
-            <CommandList>
-              <CommandGroup heading="Target Languages" className="text-[11px] text-ink-muted">
-                {languageOptions.map((language) => {
-                  const isSelected = targets.includes(language.code);
-                  return (
-                    <CommandItem
-                      key={language.code}
-                      onSelect={() => toggleTarget(language.code)}
-                      className="rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 cursor-pointer flex items-center gap-2"
-                    >
-                      <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
-                      <span className="truncate font-medium text-ink">{language.label}</span>
-                      {isSelected && <CheckCircle weight="fill" className="ml-auto text-emerald-500 h-3.5 w-3.5" />}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
-function TemplatePicker({ value, onChange }: { value: string; onChange: (val: string) => void }) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <div className="flex items-center gap-1 hover:bg-surface-2 px-1.5 py-0.5 rounded transition-colors text-ink cursor-pointer">
-          {value} <CaretDown size={12} weight="bold" className="text-ink-muted" />
-        </div>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[220px] p-1 bg-canvas rounded-xl shadow-xl border-border/50">
-        <Command className="bg-transparent">
-          <CommandList>
-             <CommandGroup heading="Meeting Type" className="text-[11px] text-ink-muted">
-                <CommandItem onSelect={() => onChange("Event")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <CalendarIcon weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Event</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Channel Meeting")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <Monitor weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Channel Meeting</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Webinar")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <VideoCamera weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Webinar</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Company Meeting")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <UsersThree weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Company Meeting</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Virtual Appointment")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <MicrophoneStage weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Virtual Appointment</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Live Event")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <Broadcast weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Live Event</span>
-                </CommandItem>
-             </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
