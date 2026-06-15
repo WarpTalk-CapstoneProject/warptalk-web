@@ -155,8 +155,11 @@ export function CreateRoomDialog() {
       <DialogContent 
         overlayClassName="!bg-black/40 !backdrop-blur-none" 
         className={cn(
-          "max-w-[calc(100vw-2rem)] sm:max-w-[750px] w-full p-0 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden top-[12vh] !translate-y-0 [transition-property:height,top,bottom,max-height] duration-300",
-          isExpanded && "top-[5vh] bottom-[5vh] sm:h-[90vh] flex flex-col"
+          "max-w-[calc(100vw-2rem)] w-full p-0 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden [transition-property:height,top,bottom,max-height,transform] duration-300",
+          createdRoomId 
+            ? "sm:max-w-[500px] top-[50%] !-translate-y-1/2" 
+            : "sm:max-w-[750px] top-[12vh] !translate-y-0",
+          !createdRoomId && isExpanded && "top-[5vh] bottom-[5vh] sm:h-[90vh] flex flex-col"
         )}
       >
         <DialogTitle className="sr-only">Create new meeting</DialogTitle>
@@ -252,29 +255,33 @@ export function CreateRoomDialog() {
               </div>
             </div>
           ) : (
-            <div ref={completionRef} className="p-8 flex items-start gap-5">
-              <div className="h-12 w-12 rounded-full bg-surface-2 flex items-center justify-center shrink-0">
-                <CheckCircle weight="duotone" className="text-emerald-500 h-6 w-6" />
+            <div ref={completionRef} className="p-12 flex flex-col items-center text-center justify-center gap-6 relative">
+              <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <CheckCircle weight="duotone" className="text-emerald-500 h-8 w-8" />
               </div>
-              <div className="flex-1">
-                <h3 className="text-[16px] font-medium text-ink mb-1">{title}</h3>
-                <p className="text-[13px] text-ink-muted mb-5">
-                  Room Code: <span className="font-mono bg-surface-2 px-1.5 py-0.5 rounded text-ink">{createdRoomCode}</span>
+              <div className="flex flex-col items-center max-w-[300px]">
+                <h3 className="text-[20px] font-semibold text-ink mb-2 leading-tight">{title}</h3>
+                <p className="text-[14px] text-ink-muted mb-8">
+                  Room Code: <span className="font-mono bg-surface-2 px-2 py-1 rounded text-ink border border-border/60 shadow-sm ml-1">{createdRoomCode}</span>
                 </p>
 
-                <div className="flex items-center gap-3">
-                  <Link 
-                    href={`/rooms/${createdRoomId}/setup`} 
-                    onClick={() => handleOpenChange(false)}
-                    className="flex h-8 items-center gap-2 rounded-md bg-ink px-3.5 text-[13px] font-medium text-canvas transition-all hover:opacity-90 shadow-sm"
+                <div className="flex items-center gap-3 justify-center w-full">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleOpenChange(false);
+                      useUIStore.getState().setSetupRoomId(createdRoomId);
+                      useUIStore.getState().setSetupRoomModalOpen(true);
+                    }}
+                    className="flex flex-1 h-10 items-center justify-center gap-2 rounded-lg bg-ink px-4 text-[14px] font-medium text-canvas transition-all hover:opacity-90 shadow-md"
                   >
                     <SlidersHorizontal weight="duotone" className="h-4 w-4" />
                     Setup Room
-                  </Link>
+                  </button>
                   <button
                     type="button"
                     onClick={copyInviteLink}
-                    className="flex h-8 items-center gap-2 rounded-md border border-border/60 bg-surface-1 px-3.5 text-[13px] font-medium text-ink transition-all hover:bg-surface-2 shadow-sm"
+                    className="flex flex-1 h-10 items-center justify-center gap-2 rounded-lg border border-border/80 bg-surface-1 px-4 text-[14px] font-medium text-ink transition-all hover:bg-surface-2 shadow-sm"
                   >
                     <Copy weight="duotone" className="h-4 w-4 text-ink-muted" />
                     Copy Link

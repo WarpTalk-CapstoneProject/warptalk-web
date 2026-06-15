@@ -10,6 +10,7 @@ import { useTranslationRoom, useTranslationRoomParticipants } from "@/hooks/use-
 import { getLanguageName } from "@/lib/languages";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
@@ -255,13 +256,17 @@ export default function RoomInformationPage() {
                             </p>
                           </div>
                         </div>
-                        <Link 
-                          href={`/rooms/${roomId}/setup`}
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            useUIStore.getState().setSetupRoomId(roomId as string);
+                            useUIStore.getState().setSetupRoomModalOpen(true);
+                          }}
                           className="flex shrink-0 items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white text-[13px] font-semibold rounded-lg hover:bg-primary-hover transition-colors shadow-sm focus:ring-2 focus:ring-primary/20 outline-none"
                         >
                           Join Meeting
                           <ArrowRight className="w-4 h-4" />
-                        </Link>
+                        </button>
                       </div>
                     </div>
                     <div className="pt-4 border-t border-border">

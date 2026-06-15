@@ -1,21 +1,33 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { useSendMeetingChat } from "@/hooks/use-meeting";
+import { useMeetingChat, useSendMeetingChat } from "@/hooks/use-meeting";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import { useEditor, EditorContent } from '@tiptap/react';
+import type { JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Mention from '@tiptap/extension-mention';
 import Placeholder from '@tiptap/extension-placeholder';
 import { suggestion } from './mentions';
+import { LoaderCircle, Send } from "lucide-react";
 
 import { motion, AnimatePresence } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function ChatPanel({ roomId }: { roomId: string }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
+  const setChatMessages = useTranslationRoomStore((state) => state.setChatMessages);
+  const addChatMessage = useTranslationRoomStore((state) => state.addChatMessage);
   const user = useAuthStore((state) => state.user);
-  const { mutate: sendMessageAPI } = useSendMeetingChat();
+  const historyQuery = useMeetingChat(roomId);
+  const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
+  const [sendError, setSendError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (historyQuery.data) {
+      setChatMessages(historyQuery.data);
+    }
+  }, [historyQuery.data, setChatMessages]);
 
   useEffect(() => {
     if (containerRef.current) {
@@ -66,24 +78,20 @@ export function ChatPanel({ roomId }: { roomId: string }) {
     const json = editor.getJSON();
     let textContent = '';
     const mentions: ChatMentionDto[] = [];
-    let hasWarpbotMention = false;
 
     // A simple recursive function to extract text and mentions
-    const parseNode = (node: any) => {
+    const parseNode = (node: JSONContent) => {
       if (node.type === 'text') {
         textContent += node.text;
       } else if (node.type === 'mention') {
-        const id = node.attrs.id;
-        const label = node.attrs.label;
+        const id = String(node.attrs?.id ?? "");
+        const label = String(node.attrs?.label ?? "");
         textContent += `@${label}`;
         mentions.push({
           id,
           display: label,
           type: 'agent' // Assuming all mentions are agents for now based on our mock
         });
-        if (id === 'bot-warpbot') {
-          hasWarpbotMention = true;
-        }
       } else if (node.type === 'hardBreak') {
         textContent += '\n';
       }
@@ -94,7 +102,7 @@ export function ChatPanel({ roomId }: { roomId: string }) {
     };
 
     if (json.content) {
-      json.content.forEach((block: any) => {
+      json.content.forEach((block) => {
         parseNode(block);
         textContent += '\n';
       });
@@ -103,22 +111,55 @@ export function ChatPanel({ roomId }: { roomId: string }) {
     const trimmedText = textContent.trim();
     if (!trimmedText) return;
 
-    sendMessageAPI({
-      roomId,
-      data: {
-        originalText: trimmedText,
-        originalLanguage: "en", // Simplified for now
-        translationEnabled: true,
-        mentions: mentions.length > 0 ? mentions : undefined,
+    setSendError(null);
+    sendMessageAPI(
+      {
+        roomId,
+        data: {
+          originalText: trimmedText,
+          originalLanguage: "en", // Simplified for now
+          translationEnabled: true,
+          mentions: mentions.length > 0 ? mentions : undefined,
+        },
       },
-    });
-
-    editor.commands.clearContent(true);
+      {
+        onSuccess: (message) => {
+          addChatMessage(message);
+          editor.commands.clearContent(true);
+        },
+        onError: () => {
+          setSendError("Message could not be sent. Try again.");
+        },
+      }
+    );
   }
 
   return (
     <div className="flex h-full flex-col">
       <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
+        {historyQuery.isLoading && messages.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
+            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading messages
+          </div>
+        ) : null}
+        {historyQuery.isError && messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <p className="text-[13px] font-medium text-ink">Could not load chat history</p>
+            <button
+              type="button"
+              onClick={() => void historyQuery.refetch()}
+              className="text-[12px] font-medium text-brand-primary hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+        {!historyQuery.isLoading && !historyQuery.isError && messages.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
+            No messages yet
+          </div>
+        ) : null}
         <AnimatePresence initial={false}>
           {messages.map((message: ChatMessageDto) => {
             const isMine = message.senderUserId === user?.id;
@@ -137,6 +178,9 @@ export function ChatPanel({ roomId }: { roomId: string }) {
                     {message.senderDisplayName}
                   </p>
                   <p className="leading-relaxed whitespace-pre-wrap">{message.originalText}</p>
+                  <p className={`mt-1 text-[10px] ${isMine ? "text-white/60" : "text-ink-subtle"}`}>
+                    {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
                 </div>
               </motion.div>
             );
@@ -144,8 +188,19 @@ export function ChatPanel({ roomId }: { roomId: string }) {
         </AnimatePresence>
       </div>
       <div className="p-3 bg-transparent">
-        <div className="flex items-center gap-2 rounded-md border border-border bg-surface-1 transition-colors focus-within:border-brand-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0">
-          <EditorContent editor={editor} className="w-full flex-1" />
+        {sendError ? <p className="mb-2 text-[12px] text-red-600">{sendError}</p> : null}
+        <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-brand-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0">
+          <EditorContent editor={editor} className="min-w-0 flex-1" />
+          <button
+            type="button"
+            onClick={sendMessage}
+            disabled={isPending}
+            aria-label="Send message"
+            title="Send message"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </button>
         </div>
       </div>
     </div>

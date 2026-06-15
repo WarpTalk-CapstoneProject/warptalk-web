@@ -23,6 +23,7 @@ interface TranslationRoomStoreState {
   updateParticipantMute: (userId: string, isMuted: boolean) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
+  setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
   setMuted: (muted: boolean) => void;
   reset: () => void;
@@ -112,12 +113,28 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
           ],
     })),
 
+  setChatMessages: (messages) =>
+    set((s) => ({
+      chatMessages: mergeChatMessages(s.chatMessages, messages),
+    })),
+
   addChatMessage: (message) =>
     set((s) => ({
-      chatMessages: [...s.chatMessages, message],
+      chatMessages: s.chatMessages.some((existing) => existing.id === message.id)
+        ? s.chatMessages.map((existing) => (existing.id === message.id ? message : existing))
+        : [...s.chatMessages, message],
     })),
 
   setMuted: (isMuted) => set({ isMuted }),
 
   reset: () => set(initialState),
 }));
+
+function mergeChatMessages(current: ChatMessageDto[], incoming: ChatMessageDto[]) {
+  const messagesById = new Map(current.map((message) => [message.id, message]));
+  incoming.forEach((message) => messagesById.set(message.id, message));
+
+  return Array.from(messagesById.values()).sort(
+    (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+  );
+}
