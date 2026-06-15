@@ -1,9 +1,10 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
-export function PillButton({ icon: Icon, label, active, onClick }: { icon: React.ElementType, label?: React.ReactNode, active: boolean, onClick?: () => void }) {
+export const PillButton = React.forwardRef<HTMLButtonElement, { icon: React.ElementType, label?: React.ReactNode, active: boolean, onClick?: () => void }>(({ icon: Icon, label, active, onClick, ...props }, ref) => {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       className={cn(
@@ -12,9 +13,11 @@ export function PillButton({ icon: Icon, label, active, onClick }: { icon: React
           ? "border-border bg-surface-1 text-ink hover:bg-surface-2" 
           : "border-border/60 bg-white dark:bg-transparent text-ink-muted hover:text-ink hover:border-border hover:bg-surface-1"
       )}
+      {...props}
     >
       <Icon weight={active ? "duotone" : "bold"} size={14} className={active ? "text-ink" : "text-ink-muted/70"} />
       {label}
     </button>
   );
-}
+});
+PillButton.displayName = "PillButton";
