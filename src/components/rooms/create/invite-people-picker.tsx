@@ -37,13 +37,15 @@ export function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onC
 
   return (
     <Popover>
-      <PopoverTrigger>
-        <PillButton 
-          icon={Users} 
-          label={active ? `${emails.length} people` : "People"} 
-          active={active} 
-        />
-      </PopoverTrigger>
+      <PopoverTrigger 
+        render={
+          <PillButton 
+            icon={Users} 
+            label={active ? `${emails.length} people` : "People"} 
+            active={active} 
+          />
+        }
+      />
       <PopoverContent align="start" className="w-[280px] p-2 bg-white rounded-xl shadow-xl border border-border/20">
         <div className="space-y-2">
           <label className="text-[11px] font-medium text-ink-muted px-1">Invite by Email</label>

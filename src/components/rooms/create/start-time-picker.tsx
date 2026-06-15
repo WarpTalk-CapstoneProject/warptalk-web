@@ -28,13 +28,15 @@ export function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduled
 
   return (
     <Popover>
-      <PopoverTrigger>
-        <PillButton 
-          icon={CalendarIcon} 
-          label={format(scheduledAt, "MMM d, h:mm a")} 
-          active={true} 
-        />
-      </PopoverTrigger>
+      <PopoverTrigger 
+        render={
+          <PillButton 
+            icon={CalendarIcon} 
+            label={format(scheduledAt, "MMM d, h:mm a")} 
+            active={true} 
+          />
+        }
+      />
       <PopoverContent align="start" className="w-auto p-3 bg-canvas rounded-xl shadow-xl border-border/50">
         <Calendar
           mode="single"
