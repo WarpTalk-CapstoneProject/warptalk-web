@@ -15,6 +15,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { CreateRoomDialog } from "@/components/rooms/create-room-dialog";
 import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
+import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 
@@ -127,6 +128,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </div>
       <CreateRoomDialog />
       <SearchMeetingDialog />
+      <SetupRoomModal />
     </div>
   );
 }
