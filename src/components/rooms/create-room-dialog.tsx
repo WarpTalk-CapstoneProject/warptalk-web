@@ -79,11 +79,14 @@ export function CreateRoomDialog() {
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
   const createRoomMutation = useCreateTranslationRoom();
+  const { data: workspaces } = useWorkspaces();
+  const workspace = workspaces?.[0];
   
   const completionRef = useRef<HTMLDivElement | null>(null);
 
   const participantCount = 100; // default for UI
   const validation = {
+    workspace: Boolean(workspace?.id),
     title: title.trim().length > 0,
     languages: selectedLanguages.length > 0,
   };
@@ -127,6 +130,7 @@ export function CreateRoomDialog() {
 
     try {
       const room = await createRoomMutation.mutateAsync({
+        workspaceId: workspace?.id,
         title: title.trim(),
         description: description.trim() || undefined,
         translationRoomType: scheduledAt ? "scheduled" : "instant",
@@ -148,7 +152,7 @@ export function CreateRoomDialog() {
     toast.success("Invite link copied.");
   }
 
-  const workspaceName = "FPT-SEP490";
+  const workspaceName = workspace?.name ?? "Workspace";
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>

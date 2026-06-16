@@ -320,7 +320,7 @@ export default function RoomSetupPage() {
               <LanguageRoleConfirm
                 isHost={isHost}
                 roomSourceLanguage={room.sourceLanguage}
-                roomTargetLanguages={room.targetLanguages ? room.targetLanguages.split(",") : []}
+                roomTargetLanguages={room.targetLanguages ?? []}
                 listenLanguage={listenLanguage}
                 setListenLanguage={setListenLanguage}
                 speakLanguage={speakLanguage}

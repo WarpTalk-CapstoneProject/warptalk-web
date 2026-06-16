@@ -99,6 +99,8 @@ export default function RoomDetailPage() {
     room?.status !== "cancelled" &&
     room?.status !== "expired" &&
     room?.status !== "failed";
+  const isTranslationLive = room?.status === "in_progress";
+  const displayWarptalkStarted = warptalkStarted || isTranslationLive;
     
   const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
   const sourceLanguage = savedJoinConfig.speakLanguage || room?.sourceLanguage || "vi";
@@ -301,6 +303,12 @@ export default function RoomDetailPage() {
   }
 
   function handleStartWarptalk() {
+    if (isTranslationLive) {
+      setWarptalkStarted(true);
+      toast.info("WarpTalk realtime translation is already running.");
+      return;
+    }
+
     if (!room?.id || isPreviewRoom) {
       setWarptalkStarted(true);
       toast.success("WarpTalk realtime translation started.");
@@ -357,7 +365,8 @@ export default function RoomDetailPage() {
           sourceLanguage={sourceLanguage}
           targetLanguage={targetLanguage}
           onExit={handleExit}
-          warptalkStarted={warptalkStarted}
+          warptalkStarted={displayWarptalkStarted}
+          startDisabled={startRoom.isPending || isTranslationLive}
           onStartWarptalk={handleStartWarptalk}
           onStopWarptalk={handleStopWarptalk}
         />
@@ -409,7 +418,7 @@ export default function RoomDetailPage() {
               participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
               participantsError={participantsQuery.isError && !isPreviewRoom}
               activeCount={activeCount}
-              segments={warptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
+              segments={displayWarptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
               onCopyText={copyText}
               joinLink={joinLink}
               meetingStarted={room?.status === "in_progress"}

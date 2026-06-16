@@ -2,11 +2,25 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { Workspace, WorkspaceMember } from "@/types/workspace";
 
+type WorkspaceListResponse = {
+  items: Workspace[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+type WorkspaceMemberListResponse = {
+  items: WorkspaceMember[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
 export const workspaceService = {
   getWorkspaces: async (): Promise<Workspace[]> => {
     try {
-      const response = await apiClient.get<Workspace[]>(API.workspaces.list);
-      return response.data;
+      const response = await apiClient.get<WorkspaceListResponse>(API.workspaces.list);
+      return response.data.items;
     } catch (e) {
       // Mock data since WorkspaceService is not deployed
       return [{
@@ -35,8 +49,8 @@ export const workspaceService = {
 
   getWorkspaceMembers: async (workspaceId: string): Promise<WorkspaceMember[]> => {
     try {
-      const response = await apiClient.get<WorkspaceMember[]>(API.workspaces.members(workspaceId));
-      return response.data;
+      const response = await apiClient.get<WorkspaceMemberListResponse>(API.workspaces.members(workspaceId));
+      return response.data.items;
     } catch (e) {
       // Return the mock seed data we just inserted into DB
       const firstNames = ['John', 'Jane', 'Michael', 'Emily', 'David', 'Sarah', 'James', 'Anna', 'Robert', 'Laura', 'William', 'Emma', 'Joseph', 'Olivia', 'Charles', 'Sophia', 'Thomas', 'Isabella', 'Daniel', 'Mia'];

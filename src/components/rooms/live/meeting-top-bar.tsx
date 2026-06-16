@@ -29,6 +29,7 @@ export function MeetingTopBar({
   targetLanguage,
   onExit,
   warptalkStarted,
+  startDisabled = false,
   onStartWarptalk,
   onStopWarptalk,
 }: {
@@ -38,6 +39,7 @@ export function MeetingTopBar({
   targetLanguage: string;
   onExit: (action: "leave" | "end") => void;
   warptalkStarted: boolean;
+  startDisabled?: boolean;
   onStartWarptalk: () => void;
   onStopWarptalk: () => void;
 }) {
@@ -73,10 +75,11 @@ export function MeetingTopBar({
             <button
               type="button"
               onClick={warptalkStarted ? onStopWarptalk : onStartWarptalk}
+              disabled={!warptalkStarted && startDisabled}
               className={`flex h-7 items-center gap-1.5 rounded-[6px] px-3 text-[13px] font-medium transition-colors shadow-sm ${
                 warptalkStarted
                   ? "bg-surface-3 text-ink hover:bg-surface-4"
-                  : "bg-primary text-white hover:bg-primary-hover"
+                  : "bg-primary text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-70"
               }`}
             >
               {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
@@ -136,8 +139,8 @@ export function MeetingTopBar({
               try {
                 await endForAll.mutateAsync();
                 onExit("end");
-              } catch (e: any) {
-                toast.error(e.message || "Failed to end meeting");
+              } catch (error: unknown) {
+                toast.error(error instanceof Error ? error.message : "Failed to end meeting");
               }
             }}>End for Everyone</Button>
           </DialogFooter>
