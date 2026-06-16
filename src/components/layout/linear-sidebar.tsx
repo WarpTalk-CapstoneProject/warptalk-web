@@ -209,7 +209,7 @@ export function LinearSidebar() {
               <Label htmlFor="code" className="text-foreground font-medium text-[13px]">Meeting code</Label>
               <Input
                 id="code"
-                placeholder="e.g. WARP-123"
+                placeholder="e.g. ROOM-abc-123"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 autoComplete="off"

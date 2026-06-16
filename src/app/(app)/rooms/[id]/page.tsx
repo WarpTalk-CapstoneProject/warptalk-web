@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Globe2, Calendar, ArrowRight, Clock, MapPin, Video, Users, ChevronDown, Copy, Link as LinkIcon, Star, ArrowLeft, Info, FileText } from "lucide-react";
+import { Globe2, Calendar, ArrowRight, Clock, MapPin, Video, Users, ChevronDown, Copy, Link as LinkIcon, Star, ArrowLeft, Info, FileText, StopCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
-import { useTranslationRoom, useTranslationRoomParticipants } from "@/hooks/use-translationRooms";
+import { useTranslationRoom, useTranslationRoomParticipants, useTranslationRoomInvitations, useEndTranslationRoom } from "@/hooks/use-translationRooms";
 import { getLanguageName } from "@/lib/languages";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { Button } from "@/components/ui/button";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
@@ -72,6 +73,8 @@ export default function RoomInformationPage() {
 
   const roomQuery = useTranslationRoom(roomId);
   const participantsQuery = useTranslationRoomParticipants(roomId);
+  const invitationsQuery = useTranslationRoomInvitations(roomId);
+  const endRoomMutation = useEndTranslationRoom();
   const liveParticipants = useTranslationRoomStore((state) => state.participants);
   const liveRoomState = useTranslationRoomStore((state) => state.translationRoomState);
   const user = useAuthStore((state) => state.user);
@@ -83,6 +86,7 @@ export default function RoomInformationPage() {
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
+  const apiInvitations = invitationsQuery.data ?? [];
   const activeApiParticipants = apiParticipants.filter((participant) =>
     ["joined", "connected"].includes(participant.status.toLowerCase())
   );
@@ -143,9 +147,24 @@ export default function RoomInformationPage() {
                   user={user} 
                 />
               </div>
-              <div className="flex items-center gap-2 px-3 py-1 rounded-[6px] border border-border bg-surface-2 text-[12px] font-medium text-muted-foreground">
-                <StatusDot status={room.status} />
-                {statusLabels[room.status]}
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex items-center gap-2 px-3 py-1 rounded-[6px] border border-border bg-surface-2 text-[12px] font-medium text-muted-foreground">
+                  <StatusDot status={room.status} />
+                  {statusLabels[room.status]}
+                </div>
+                {room.hostId === user?.id && (room.status === "scheduled" || room.status === "waiting") && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-[12px] w-full"
+                    onClick={() => {
+                      useUIStore.getState().setEditRoomId(room.id);
+                      useUIStore.getState().setCreateRoomModalOpen(true);
+                    }}
+                  >
+                    Edit Room
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -166,27 +185,73 @@ export default function RoomInformationPage() {
                       <Users className="w-3.5 h-3.5" />
                       Tracking
                     </PopoverTrigger>
-                    <PopoverContent align="end" className="w-[300px] p-3 rounded-xl bg-canvas shadow-xl border-border/60 z-[100]">
+                    <PopoverContent align="end" className="w-[300px] p-3 rounded-xl bg-white shadow-xl border-border/20 z-[100]">
                       <h4 className="text-[13px] font-medium text-ink mb-3">Participants</h4>
                       {isHost && (
-                        <div className="flex items-center gap-2 mb-4">
-                          <input type="email" placeholder="Invite via email..." className="flex-1 bg-surface-1 border border-border/60 rounded-md px-2.5 py-1.5 text-[13px] text-ink placeholder:text-ink-muted/50 outline-none focus:border-ink/30 transition-colors" />
-                          <button className="bg-ink text-canvas px-3 py-1.5 rounded-md text-[13px] font-medium hover:opacity-90 transition-opacity">Invite</button>
+                        <div className="mb-4">
+                          <label className="text-[11px] font-medium text-ink-muted px-1 mb-1.5 block">Invite by Email</label>
+                          <div className="relative">
+                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted/70 h-4 w-4 pointer-events-none" />
+                            <input 
+                              type="email" 
+                              placeholder="name@company.com..." 
+                              className="w-full h-9 pl-9 pr-9 text-[13px] bg-surface-1 border border-border/30 rounded-lg focus:outline-none focus:ring-1 focus:ring-border/50 text-ink placeholder:text-ink-muted/50 transition-all" 
+                            />
+                            <button className="absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded-md text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors">
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
                       <div className="space-y-1 max-h-[200px] overflow-y-auto">
                         <div className="text-[11px] font-medium text-ink-muted uppercase tracking-wider mb-2">Current ({apiParticipants.length})</div>
                         {apiParticipants.length > 0 ? apiParticipants.map((p, i) => (
-                          <div key={i} className="flex items-center gap-2.5 text-[13px] text-ink p-1.5 hover:bg-surface-1 rounded-md transition-colors">
-                            <div className="h-7 w-7 rounded-full bg-surface-2 border border-border/40 flex items-center justify-center shrink-0">
-                              <span className="text-[11px] font-medium text-ink-muted">{p.displayName?.charAt(0).toUpperCase() || '?'}</span>
+                          <div key={`p-${i}`} className="flex items-center justify-between gap-2.5 text-[13px] text-ink p-1.5 hover:bg-surface-1 rounded-md transition-colors">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="h-7 w-7 rounded-full bg-surface-2 border border-border/40 flex items-center justify-center shrink-0">
+                                <span className="text-[11px] font-medium text-ink-muted">{p.displayName?.charAt(0).toUpperCase() || '?'}</span>
+                              </div>
+                              <div className="flex-1 truncate leading-tight">
+                                <div className="font-medium text-ink truncate">{p.displayName}</div>
+                              </div>
                             </div>
-                            <div className="flex-1 truncate leading-tight">
-                              <div className="font-medium text-ink">{p.displayName}</div>
-                            </div>
+                            <span className="text-[10px] font-medium text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-sm shrink-0">
+                              Joined
+                            </span>
                           </div>
-                        )) : (
-                          <div className="text-[13px] text-ink-muted text-center py-4">No participants added</div>
+                        )) : null}
+
+                        {apiInvitations.length > 0 && (
+                          <div className="mt-3">
+                            <div className="text-[11px] font-medium text-ink-muted uppercase tracking-wider mb-2">Invited ({apiInvitations.length})</div>
+                            {apiInvitations.map((inv, i) => {
+                              const isAccepted = inv.status === 'ACCEPTED';
+                              const isDeclined = inv.status === 'DECLINED';
+                              return (
+                                <div key={`inv-${i}`} className="flex items-center justify-between gap-2.5 text-[13px] text-ink p-1.5 hover:bg-surface-1 rounded-md transition-colors">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="h-7 w-7 rounded-full bg-surface-2 border border-border/40 flex items-center justify-center shrink-0">
+                                      <span className="text-[11px] font-medium text-ink-muted">{inv.email.charAt(0).toUpperCase()}</span>
+                                    </div>
+                                    <div className="flex-1 truncate leading-tight">
+                                      <div className="font-medium text-ink truncate">{inv.email}</div>
+                                    </div>
+                                  </div>
+                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-sm shrink-0 ${
+                                    isAccepted ? "text-green-500 bg-green-500/10" : 
+                                    isDeclined ? "text-red-500 bg-red-500/10" : 
+                                    "text-orange-500 bg-orange-500/10"
+                                  }`}>
+                                    {inv.status}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {apiParticipants.length === 0 && apiInvitations.length === 0 && (
+                          <div className="text-[13px] text-ink-muted text-center py-4">No participants or invitations</div>
                         )}
                       </div>
                     </PopoverContent>
@@ -409,26 +474,34 @@ export default function RoomInformationPage() {
                 <div>
                   <h4 className="text-[12px] font-medium text-muted-foreground mb-2 flex items-center gap-1">
                     <ChevronDown size={12} strokeWidth={2} />
-                    Attendees: {activeParticipantCount}
+                    Attendees: {(apiParticipants.filter(p => p.userId !== room.hostId).length + (invitationsQuery.data || []).filter(i => i.status !== "ACCEPTED").length)}
                   </h4>
-                  {activeParticipantCount > 0 ? (
+                  {((apiParticipants.filter(p => p.userId !== room.hostId).length + (invitationsQuery.data || []).filter(i => i.status !== "ACCEPTED").length) > 0) ? (
                     <div className="space-y-2 mt-2">
-                      {Array.from({ length: Math.min(activeParticipantCount, 5) }).map((_, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-surface-2 text-muted-foreground flex items-center justify-center text-[10px] font-medium shrink-0">
-                            P{i+1}
+                      {apiParticipants.filter(p => p.userId !== room.hostId).map((p) => (
+                        <div key={p.id} className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-surface-2 text-muted-foreground flex items-center justify-center text-[10px] font-bold shrink-0 uppercase">
+                            {p.displayName?.charAt(0) || "U"}
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-[13px] text-foreground truncate">Participant {i+1}</span>
-                            <span className="text-[11px] text-muted-foreground truncate">In meeting</span>
+                            <span className="text-[13px] text-foreground truncate">{p.displayName || "Unknown User"}</span>
+                            <span className="text-[11px] text-muted-foreground truncate">
+                              {p.status === "joined" ? "In meeting" : p.status}
+                            </span>
                           </div>
                         </div>
                       ))}
-                      {activeParticipantCount > 5 && (
-                        <div className="text-[11px] text-muted-foreground mt-2 pl-8">
-                          + {activeParticipantCount - 5} others
+                      {(invitationsQuery.data || []).filter(i => i.status !== "ACCEPTED").map((inv) => (
+                        <div key={inv.id} className="flex items-center gap-2 opacity-60">
+                          <div className="w-6 h-6 rounded-full bg-surface-2 text-muted-foreground flex items-center justify-center text-[10px] font-medium shrink-0 uppercase">
+                            {inv.email.charAt(0)}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[13px] text-foreground truncate">{inv.email}</span>
+                            <span className="text-[11px] text-muted-foreground truncate">Invited ({inv.status ? inv.status.charAt(0).toUpperCase() + inv.status.slice(1).toLowerCase() : 'Pending'})</span>
+                          </div>
                         </div>
-                      )}
+                      ))}
                     </div>
                   ) : (
                     <div className="text-[12px] text-muted-foreground">No attendees yet.</div>
@@ -466,6 +539,22 @@ export default function RoomInformationPage() {
                   <Star className="w-3.5 h-3.5" strokeWidth={1.5} />
                   <span className="text-foreground">Add to favorites</span>
                 </button>
+                {isHost && !isEnded && room.status !== "cancelled" && (
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await endRoomMutation.mutateAsync(room.id);
+                      } catch (e) {
+                        // error handled by mutation
+                      }
+                    }}
+                    disabled={endRoomMutation.isPending}
+                    className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-red-500 hover:bg-red-500/10 transition-colors mt-2"
+                  >
+                    <StopCircle className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    <span className="text-foreground text-red-500">End Meeting</span>
+                  </button>
+                )}
               </div>
             </div>
             

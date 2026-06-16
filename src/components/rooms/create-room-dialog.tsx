@@ -18,24 +18,26 @@ import {
   DotsThree,
   ArrowsOutSimple,
   ArrowsInSimple,
+  Link as LinkIcon,
   Paperclip,
   CaretDown,
   Monitor,
   VideoCamera,
   UsersThree,
   MicrophoneStage,
-  Broadcast
+  Broadcast,
+  SignIn
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { useCreateTranslationRoom } from "@/hooks/use-translationRooms";
+import { useCreateTranslationRoom, useTranslationRoom, useTranslationRoomInvitations, useUpdateTranslationRoomSettings } from "@/hooks/use-translationRooms";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaces, useWorkspaceMembers } from "@/hooks/use-workspace";
@@ -64,6 +66,8 @@ function getDefaultStartTime() {
 export function CreateRoomDialog() {
   const isOpen = useUIStore((state) => state.createRoomModalOpen);
   const setIsOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const editRoomId = useUIStore((state) => state.editRoomId);
+  const setEditRoomId = useUIStore((state) => state.setEditRoomId);
   const user = useAuthStore((state) => state.user);
 
   const [title, setTitle] = useState("");
@@ -72,13 +76,43 @@ export function CreateRoomDialog() {
   const [sourceLanguage, setSourceLanguage] = useState<string>("en");
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["vi"]);
   const [isMultiLang, setIsMultiLang] = useState(false);
+  const [isDaily, setIsDaily] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
   
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
+
+  const handleCopyLink = () => {
+    setIsLinkCopied(true);
+    navigator.clipboard.writeText(window.location.href);
+    setTimeout(() => setIsLinkCopied(false), 5000);
+  };
+  
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
   const createRoomMutation = useCreateTranslationRoom();
+  const updateRoomMutation = useUpdateTranslationRoomSettings();
+  
+  const { data: editRoomData } = useTranslationRoom(editRoomId || "");
+  const { data: editInvitations } = useTranslationRoomInvitations(editRoomId || "");
+
+  useEffect(() => {
+    if (editRoomId && editRoomData) {
+      setTitle(editRoomData.title);
+      setDescription(editRoomData.description || "");
+      setSourceLanguage(editRoomData.sourceLanguage || "en");
+      setSelectedLanguages(editRoomData.targetLanguages);
+      setIsMultiLang(editRoomData.targetLanguages.length > 1);
+      setScheduledAt(editRoomData.scheduledAt ? new Date(editRoomData.scheduledAt) : null);
+    }
+  }, [editRoomId, editRoomData]);
+
+  useEffect(() => {
+    if (editRoomId && editInvitations) {
+      setInvitedEmails(editInvitations.map(i => i.email));
+    }
+  }, [editRoomId, editInvitations]);
   
   const completionRef = useRef<HTMLDivElement | null>(null);
 
@@ -104,6 +138,7 @@ export function CreateRoomDialog() {
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
+        setEditRoomId(null);
       }, 400);
     }
   }
@@ -119,27 +154,51 @@ export function CreateRoomDialog() {
     }
   }, [createdRoomId]);
 
-  async function createPreviewRoom() {
+  async function handleSubmit() {
     if (!canSubmit) {
       toast.error("Please complete all required fields.");
       return;
     }
 
     try {
-      const room = await createRoomMutation.mutateAsync({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        translationRoomType: scheduledAt ? "scheduled" : "instant",
-        maxParticipants: participantCount,
-        sourceLanguage: sourceLanguage,
-        targetLanguages: selectedLanguages,
-        scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
-      });
-      setCreatedRoomId(room.id);
-      setCreatedRoomCode(room.translationRoomCode);
-      toast.success("Room created successfully.");
+      // Normalize target languages: remove duplicates and remove source language
+      const normalizedTargetLanguages = Array.from(new Set(selectedLanguages))
+        .filter(lang => lang !== sourceLanguage);
+      
+      const targetLangs = normalizedTargetLanguages.length > 0 ? normalizedTargetLanguages : [sourceLanguage === "vi" ? "en" : "vi"];
+
+      if (editRoomId) {
+        await updateRoomMutation.mutateAsync({
+          id: editRoomId,
+          data: {
+            title: title.trim(),
+            description: description.trim() || undefined,
+            maxParticipants: participantCount,
+            sourceLanguage: sourceLanguage,
+            targetLanguages: targetLangs,
+            scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
+            invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+          }
+        });
+        toast.success("Room updated successfully.");
+        handleOpenChange(false);
+      } else {
+        const room = await createRoomMutation.mutateAsync({
+          title: title.trim(),
+          description: description.trim() || undefined,
+          translationRoomType: scheduledAt ? "scheduled" : "instant",
+          maxParticipants: participantCount,
+          sourceLanguage: sourceLanguage,
+          targetLanguages: targetLangs,
+          scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
+          invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+        });
+        setCreatedRoomId(room.id);
+        setCreatedRoomCode(room.translationRoomCode);
+        toast.success("Room created successfully. Invites sent!");
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create room.");
+      toast.error(error instanceof Error ? error.message : `Failed to ${editRoomId ? "update" : "create"} room.`);
     }
   }
 
@@ -157,12 +216,13 @@ export function CreateRoomDialog() {
         className={cn(
           "max-w-[calc(100vw-2rem)] w-full p-0 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden [transition-property:height,top,bottom,max-height,transform] duration-300",
           createdRoomId 
-            ? "sm:max-w-[500px] top-[50%] !-translate-y-1/2" 
+            ? "sm:max-w-[500px] !top-[25%] !-translate-y-[25%]" 
             : "sm:max-w-[750px] top-[12vh] !translate-y-0",
           !createdRoomId && isExpanded && "top-[5vh] bottom-[5vh] sm:h-[90vh] flex flex-col"
         )}
       >
-        <DialogTitle className="sr-only">Create new meeting</DialogTitle>
+        <DialogTitle className="sr-only">{editRoomId ? "Edit meeting" : "Create new meeting"}</DialogTitle>
+        <DialogDescription className="sr-only">Configure and create a new translation room</DialogDescription>
         
         <div className="flex flex-col w-full relative h-full">
           {!createdRoomId ? (
@@ -235,65 +295,83 @@ export function CreateRoomDialog() {
                       setSelectedLanguages([selectedLanguages[0]]);
                     }
                   }}
+                  isDaily={isDaily}
+                  onToggleDaily={() => setIsDaily(!isDaily)}
                 />
               </div>
 
               {/* Footer */}
               <div className="flex items-center justify-between px-5 py-3 bg-surface-1/50 shrink-0">
-                <button className="p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors" title="Attach file">
-                  <Paperclip weight="bold" size={16} />
-                </button>
+                {isLinkCopied ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-canvas text-ink rounded-md text-[12px] font-medium border border-border/60 shadow-sm transition-all">
+                    <CheckCircle weight="fill" size={14} className="text-emerald-500" />
+                    <span>Link copied</span>
+                  </div>
+                ) : (
+                  <button onClick={handleCopyLink} className="p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors" title="Copy meeting link">
+                    <LinkIcon weight="bold" size={16} />
+                  </button>
+                )}
                 <div className="flex items-center gap-4">
                   <Button
-                    onClick={createPreviewRoom}
-                    disabled={!canSubmit || createRoomMutation.isPending}
+                    onClick={handleSubmit}
+                    disabled={!canSubmit || createRoomMutation.isPending || updateRoomMutation.isPending}
                     className="h-[30px] px-3.5 rounded-md bg-ink text-canvas hover:opacity-90 disabled:opacity-40 transition-all font-medium text-[13px] shadow-sm"
                   >
-                    {createRoomMutation.isPending ? "Creating..." : "Create Room"}
+                    {createRoomMutation.isPending || updateRoomMutation.isPending ? "Saving..." : editRoomId ? "Save Changes" : "Create Room"}
                   </Button>
                 </div>
               </div>
             </div>
           ) : (
-            <div ref={completionRef} className="p-12 flex flex-col items-center text-center justify-center gap-6 relative">
-              <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                <CheckCircle weight="duotone" className="text-emerald-500 h-8 w-8" />
+            <div ref={completionRef} className="p-8 flex flex-col items-center text-center justify-center relative">
+              <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
+                <CheckCircle weight="bold" className="text-emerald-600 h-6 w-6" />
               </div>
-              <div className="flex flex-col items-center max-w-[300px]">
-                <h3 className="text-[20px] font-semibold text-ink mb-2 leading-tight">{title}</h3>
-                <p className="text-[14px] text-ink-muted mb-8">
-                  Room Code: <span className="font-mono bg-surface-2 px-2 py-1 rounded text-ink border border-border/60 shadow-sm ml-1">{createdRoomCode}</span>
-                </p>
+              
+              <div className="flex flex-col items-center w-full max-w-[320px]">
+                <h3 className="text-[18px] font-semibold text-foreground mb-1 tracking-tight">Meeting Created Successfully</h3>
+                <p className="text-[13px] text-muted-foreground mb-6">Your room "{title}" is ready to use.</p>
+                
+                {/* Room Code Card */}
+                <div className="w-full bg-surface-1 border border-border/60 rounded-lg p-3 mb-8 flex flex-col items-center gap-2">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Room Code</p>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[16px] font-semibold text-foreground tracking-wide">{createdRoomCode}</span>
+                    <button onClick={copyInviteLink} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-surface-2" title="Copy Invite Link">
+                      <Copy weight="bold" className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
 
-                <div className="flex items-center gap-3 justify-center w-full">
-                  <button
+                {/* Buttons */}
+                <div className="flex items-center gap-3 w-full">
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => {
                       handleOpenChange(false);
                       useUIStore.getState().setSetupRoomId(createdRoomId);
                       useUIStore.getState().setSetupRoomModalOpen(true);
                     }}
-                    className="flex flex-1 h-10 items-center justify-center gap-2 rounded-lg bg-ink px-4 text-[14px] font-medium text-canvas transition-all hover:opacity-90 shadow-md"
+                    className="flex-1 text-[13px] h-[34px] font-medium gap-2"
                   >
-                    <SlidersHorizontal weight="duotone" className="h-4 w-4" />
-                    Setup Room
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copyInviteLink}
-                    className="flex flex-1 h-10 items-center justify-center gap-2 rounded-lg border border-border/80 bg-surface-1 px-4 text-[14px] font-medium text-ink transition-all hover:bg-surface-2 shadow-sm"
+                    <SlidersHorizontal weight="bold" size={14} />
+                    Configure
+                  </Button>
+                  <Link 
+                    href={`/rooms/${createdRoomId}`}
+                    onClick={() => handleOpenChange(false)}
+                    className={cn(
+                      buttonVariants({ variant: "default" }),
+                      "flex-1 text-[13px] h-[34px] font-medium bg-primary text-white hover:bg-primary/90 gap-2 flex items-center justify-center"
+                    )}
                   >
-                    <Copy weight="duotone" className="h-4 w-4 text-ink-muted" />
-                    Copy Link
-                  </button>
+                    <SignIn weight="bold" size={14} />
+                    Join
+                  </Link>
                 </div>
               </div>
-              <button 
-                onClick={() => handleOpenChange(false)}
-                className="p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors absolute top-4 right-4"
-              >
-                <X weight="bold" size={16} />
-              </button>
             </div>
           )}
         </div>

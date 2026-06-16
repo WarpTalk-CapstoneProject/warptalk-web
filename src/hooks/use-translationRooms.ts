@@ -64,11 +64,10 @@ export function useUpdateTranslationRoomSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpdateRoomSettingsRequest }) => {
-      const { data: translationRoom } = await translationRoomService.updateSettings(id, data);
-      return translationRoom;
+      await translationRoomService.updateSettings(id, data);
     },
-    onSuccess: (translationRoom, { id }) => {
-      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, id] });
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
   });
@@ -139,6 +138,18 @@ export function useTranslationRoomParticipants(roomId: string) {
     queryKey: [...MEETING_KEY, roomId, "participants"],
     queryFn: async () => {
       const { data } = await translationRoomService.participants(roomId);
+      return data;
+    },
+    enabled: Boolean(roomId),
+    refetchInterval: 3000,
+  });
+}
+
+export function useTranslationRoomInvitations(roomId: string) {
+  return useQuery({
+    queryKey: [...MEETING_KEY, roomId, "invitations"],
+    queryFn: async () => {
+      const { data } = await translationRoomService.invitations(roomId);
       return data;
     },
     enabled: Boolean(roomId),

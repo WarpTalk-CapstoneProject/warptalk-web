@@ -26,6 +26,7 @@ export const API = {
     join: "/translation-rooms/join",
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,
+    invitations: (id: string) => `/translation-rooms/${id}/invitations`,
     participantAudio: (id: string, participantId: string) =>
       `/translation-rooms/${id}/participants/${participantId}/audio`,
     admitParticipant: (id: string, participantId: string) =>

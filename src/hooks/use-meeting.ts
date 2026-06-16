@@ -6,8 +6,8 @@ import type { TriggerAiRequest } from "@/types/meeting";
 
 export function useJoinMeeting() {
   return useMutation({
-    mutationFn: async (translationRoomId: string) => {
-      const { data } = await meetingService.join(translationRoomId);
+    mutationFn: async ({ translationRoomId, displayName }: { translationRoomId: string; displayName?: string }) => {
+      const { data } = await meetingService.join(translationRoomId, displayName);
       return data;
     },
   });

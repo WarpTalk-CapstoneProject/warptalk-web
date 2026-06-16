@@ -13,7 +13,7 @@ import { LoaderCircle, Send } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
-export function ChatPanel({ roomId }: { roomId: string }) {
+export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, sourceLanguage?: string }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
   const setChatMessages = useTranslationRoomStore((state) => state.setChatMessages);
   const addChatMessage = useTranslationRoomStore((state) => state.addChatMessage);
@@ -117,7 +117,7 @@ export function ChatPanel({ roomId }: { roomId: string }) {
         roomId,
         data: {
           originalText: trimmedText,
-          originalLanguage: "en", // Simplified for now
+          originalLanguage: sourceLanguage,
           translationEnabled: true,
           mentions: mentions.length > 0 ? mentions : undefined,
         },

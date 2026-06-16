@@ -57,7 +57,7 @@ export function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onC
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="name@company.com..."
-              className="w-full h-8 pl-8 pr-3 text-[13px] bg-surface-1 border border-border/20 rounded-md focus:outline-none focus:ring-1 focus:ring-ink/20 text-ink"
+              className="w-full h-8 pl-8 pr-3 text-[13px] bg-surface-1 border border-border/20 rounded-md focus:outline-none focus:ring-0 focus:border-border/20 text-ink"
               autoFocus
             />
           </div>

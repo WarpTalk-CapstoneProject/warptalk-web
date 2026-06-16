@@ -46,7 +46,7 @@ export function LanguageRoleConfirm({
             <label className="text-[12px] font-medium flex items-center gap-1.5 text-ink-muted">
               <Translate className="w-4 h-4 text-ink-muted" /> Language you will hear
             </label>
-            <Select value={listenLanguage} onValueChange={setListenLanguage}>
+            <Select value={listenLanguage} onValueChange={(val) => val && setListenLanguage(val)}>
               <SelectTrigger className="h-[32px] bg-canvas border border-border text-ink text-[13px] rounded-[6px] w-full focus:ring-2 focus:ring-ring/50 focus:border-ring">
                 <SelectValue placeholder="Select language" />
               </SelectTrigger>
@@ -64,7 +64,7 @@ export function LanguageRoleConfirm({
             <label className="text-[12px] font-medium flex items-center gap-1.5 text-ink-muted">
               <MicrophoneStage className="w-4 h-4 text-ink-muted" /> Language you will speak
             </label>
-            <Select value={speakLanguage} onValueChange={setSpeakLanguage}>
+            <Select value={speakLanguage} onValueChange={(val) => val && setSpeakLanguage(val)}>
               <SelectTrigger className="h-[32px] bg-canvas border border-border text-ink text-[13px] rounded-[6px] w-full focus:ring-2 focus:ring-ring/50 focus:border-ring">
                 <SelectValue placeholder="Select language" />
               </SelectTrigger>

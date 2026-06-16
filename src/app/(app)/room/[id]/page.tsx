@@ -46,6 +46,7 @@ export default function RoomDetailPage() {
   const user = useAuthStore((state) => state.user);
   const roomQuery = useTranslationRoom(roomId);
   const participantsQuery = useTranslationRoomParticipants(roomId);
+  const refetchParticipants = participantsQuery.refetch;
   const startRoom = useStartTranslationRoom();
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
@@ -109,7 +110,7 @@ export default function RoomDetailPage() {
     meetingJoinedRef.current = true;
     setMeetingSession(null);
 
-    void joinMeetingAsync(room.id)
+    void joinMeetingAsync({ translationRoomId: room.id, displayName })
       .then((session) => {
         setMeetingError(null);
         setMeetingSession(session);
@@ -139,7 +140,7 @@ export default function RoomDetailPage() {
 
     const translationRoomId = room.id;
     queueMicrotask(() => {
-      void joinMeetingAsync(translationRoomId)
+      void joinMeetingAsync({ translationRoomId, displayName })
         .then((session) => {
           setMeetingError(null);
           setMeetingSession(session);
@@ -157,8 +158,14 @@ export default function RoomDetailPage() {
     const connection = createHubConnection("/hubs/translation-room");
 
     connection.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => setLiveState(state));
-    connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => addLiveParticipant(participant));
-    connection.on("ParticipantLeft", (userId: string) => removeLiveParticipant(userId));
+    connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
+      addLiveParticipant(participant);
+      void refetchParticipants();
+    });
+    connection.on("ParticipantLeft", (userId: string) => {
+      removeLiveParticipant(userId);
+      void refetchParticipants();
+    });
     connection.on("TranscriptSegmentReceived", (segment: TranscriptSegmentDto) => addTranscriptSegment(segment));
     connection.on("TranslationTextReceived", (translation: TranslationTextDto) => addOrMergeTranslationText(translation));
     connection.on("TranslationRoomEnded", () => refetchRoom());
@@ -176,12 +183,16 @@ export default function RoomDetailPage() {
       connection.stop().catch(() => undefined);
       resetLiveRoom();
     };
-  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, roomId, setLiveState, sourceLanguage, targetLanguage]);
+  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, roomId, setLiveState, sourceLanguage, targetLanguage]);
 
   useEffect(() => {
     if (!roomId) return;
     const chatConnection = createHubConnection("/api/v1/meetings/chat-hub");
-    chatConnection.on("MeetingChatMessageReceived", (message: import("@/types/realtime").ChatMessageDto) => {
+    chatConnection.on("ChatMessageHidden", (messageId: string) => {
+      useTranslationRoomStore.getState().hideChatMessage(messageId);
+    });
+
+    chatConnection.on("ChatMessageReceived", (message: import("@/types/realtime").ChatMessageDto) => {
       addChatMessage(message);
     });
 
@@ -367,6 +378,7 @@ export default function RoomDetailPage() {
             <div className="relative flex-1 min-h-0 w-full">
               <LiveKitMeetingStage
                 fallbackName={user?.fullName || user?.email || room.title}
+                currentUserId={user?.id}
                 isJoining={isMeetingJoining}
                 error={meetingError}
                 localStream={localStream}
@@ -388,6 +400,7 @@ export default function RoomDetailPage() {
                   isScreenSharing={Boolean(screenStream)}
                   layoutMode={meetingLayout}
                   roomCode={room.translationRoomCode}
+                  joinLink={joinLink}
                   onCopyText={copyText}
                   onToggleCamera={() => setCameraEnabled((current) => !current)}
                   onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}

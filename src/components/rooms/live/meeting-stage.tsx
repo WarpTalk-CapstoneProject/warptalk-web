@@ -2,13 +2,14 @@
 
 import { RefObject, useEffect, useRef } from "react";
 import { ConnectionState, Track } from "livekit-client";
-import { TrackLoop, useConnectionState, useTracks, ParticipantTile } from "@livekit/components-react";
+import { useConnectionState, ParticipantTile, useParticipants, ParticipantLoop } from "@livekit/components-react";
 import { SpinnerGap, Microphone, MicrophoneSlash } from "@phosphor-icons/react/dist/ssr";
 import type { TranslationRoomParticipantDto } from "@/types/translationRoom";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
 
 export function LiveKitMeetingStage({
   fallbackName,
+  currentUserId,
   isJoining,
   error,
   localStream,
@@ -20,6 +21,7 @@ export function LiveKitMeetingStage({
   onRetry,
 }: {
   fallbackName: string;
+  currentUserId?: string;
   isJoining: boolean;
   error: string | null;
   localStream: MediaStream | null;
@@ -33,14 +35,8 @@ export function LiveKitMeetingStage({
   const connectionState = useConnectionState();
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
-  const tracks = useTracks(
-    [
-      { source: Track.Source.Camera, withPlaceholder: false },
-      { source: Track.Source.ScreenShare, withPlaceholder: false },
-    ],
-    { onlySubscribed: false }
-  );
-  const hasTracks = connectionState === ConnectionState.Connected && tracks.length > 0;
+  const lkParticipants = useParticipants();
+  const hasParticipants = connectionState === ConnectionState.Connected && lkParticipants.length > 0;
 
   useEffect(() => {
     if (!localVideoRef.current) return;
@@ -52,42 +48,7 @@ export function LiveKitMeetingStage({
     screenVideoRef.current.srcObject = screenStream;
   }, [screenStream]);
 
-  if (hasTracks) {
-    return (
-      <div className="relative h-full w-full p-2 bg-surface-1">
-        <div className={`grid h-full gap-3 ${tracks.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
-          <TrackLoop tracks={tracks}>
-            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur" />
-          </TrackLoop>
-        </div>
-        <ConnectionBadge state={connectionState} />
-      </div>
-    );
-  }
-
-  const localTile = (
-    <MeetingPreviewTile
-      name={fallbackName}
-      stream={localStream}
-      videoRef={localVideoRef}
-      cameraEnabled={cameraEnabled}
-      muted={false}
-      featured
-    />
-  );
-  const participantTiles = participants.filter((participant) => participant.displayName !== fallbackName).slice(0, 24);
-  const effectiveLayout: Exclude<MeetingLayoutMode, "auto"> =
-    layoutMode === "auto"
-      ? screenStream
-        ? "sidebar"
-        : participantTiles.length === 0
-        ? "grid"
-        : participantTiles.length > 5
-        ? "grid"
-        : "spotlight"
-      : layoutMode;
-
-  if (screenStream && effectiveLayout === "sidebar") {
+  if (screenStream) {
     return (
       <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_260px] bg-surface-1">
         <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-1">
@@ -96,57 +57,30 @@ export function LiveKitMeetingStage({
             You are presenting
           </div>
         </div>
-        <div className="grid min-h-0 gap-3 overflow-hidden">
-          {localTile}
-          {participantTiles.slice(0, 3).map((participant) => (
-            <ParticipantGridTile key={participant.id} participant={participant} />
-          ))}
+        
+        <div className="grid h-full gap-3 overflow-hidden grid-cols-1 overflow-y-auto">
+          <ParticipantLoop participants={lkParticipants}>
+            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur min-h-[160px]" />
+          </ParticipantLoop>
         </div>
         <ConnectionBadge state={connectionState} />
       </div>
     );
   }
 
-  if (screenStream) {
+  if (hasParticipants) {
     return (
-      <div className="relative h-full w-full overflow-hidden p-2 bg-surface-1">
-        <div className="h-full overflow-hidden rounded-xl border border-border bg-surface-1">
-          <video ref={screenVideoRef} className="h-full w-full object-contain" autoPlay muted playsInline />
+      <div className="relative h-full w-full p-2 bg-surface-1">
+        <div className={`grid h-full gap-3 ${gridClassName(lkParticipants.length)}`}>
+          <ParticipantLoop participants={lkParticipants}>
+            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur" />
+          </ParticipantLoop>
         </div>
         <ConnectionBadge state={connectionState} />
       </div>
     );
   }
 
-  if (effectiveLayout === "spotlight") {
-    return (
-      <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_240px] bg-surface-1">
-        {localTile}
-        <div className="grid min-h-0 gap-3 overflow-hidden">
-          {participantTiles.slice(0, 3).map((participant) => (
-            <ParticipantGridTile key={participant.id} participant={participant} />
-          ))}
-        </div>
-        <ConnectionBadge state={connectionState} />
-        <LocalMediaError error={localMediaError} />
-      </div>
-    );
-  }
-
-  if (effectiveLayout === "grid" || effectiveLayout === "sidebar") {
-    return (
-      <div className="relative h-full min-h-0 p-2 bg-surface-1">
-        <div className={`grid h-full min-h-0 gap-3 ${gridClassName(participantTiles.length + 1)}`}>
-          {localTile}
-          {participantTiles.map((participant) => (
-            <ParticipantGridTile key={participant.id} participant={participant} />
-          ))}
-        </div>
-        <ConnectionBadge state={connectionState} />
-        <LocalMediaError error={localMediaError} />
-      </div>
-    );
-  }
 
   return (
     <div className="flex w-full flex-col items-center justify-center px-6 py-20 bg-surface-2">

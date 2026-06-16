@@ -16,6 +16,7 @@ export function MeetingControlBar({
   isScreenSharing,
   layoutMode,
   roomCode,
+  joinLink,
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
@@ -28,6 +29,7 @@ export function MeetingControlBar({
   isScreenSharing: boolean;
   layoutMode: MeetingLayoutMode;
   roomCode: string;
+  joinLink: string;
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
@@ -57,10 +59,10 @@ export function MeetingControlBar({
       
       <div className="h-6 w-[1px] bg-surface-3 mx-1" />
       
-      <MeetControl 
-        label="Copy room code" 
-        icon={<Copy className="h-[18px] w-[18px]" />} 
-        onClick={() => onCopyText(roomCode, "Room code")} 
+      <MeetControl
+        label="Copy join link"
+        icon={<Copy className="h-[18px] w-[18px]" />}
+        onClick={() => onCopyText(joinLink || roomCode, joinLink ? "Join link" : "Room code")}
       />
 
       <div className="relative">

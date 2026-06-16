@@ -30,6 +30,7 @@ export interface TranslationRoomDto {
   sourceLanguage?: string;
   targetLanguages: string[];
   scheduledAt?: string;
+  invitedEmails?: string[];
   startedAt?: string;
   endedAt?: string;
   durationSeconds?: number;
@@ -77,6 +78,7 @@ export interface CreateTranslationRoomRequest {
     requiresApproval: boolean;
   };
   scheduledAt?: string;
+  invitedEmails?: string[];
 }
 
 export interface TranslationRoomListResponse {
@@ -144,6 +146,16 @@ export interface TranslationRoomFeedbackDto {
   comments?: string;
   communicationInsights?: Record<string, unknown>;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface TranslationRoomInvitationDto {
+  id: string;
+  translationRoomId: string;
+  email: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SubmitTranslationRoomFeedbackRequest {
@@ -190,6 +202,11 @@ export interface TranslationRoomHistoryResponse {
 }
 
 export interface UpdateRoomSettingsRequest {
+  title?: string;
+  description?: string;
+  maxParticipants?: number;
+  scheduledAt?: string;
+  invitedEmails?: string[];
   sourceLanguage?: string;
   targetLanguages?: string[];
   settings?: any;
