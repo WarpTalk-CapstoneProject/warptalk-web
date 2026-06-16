@@ -7,7 +7,7 @@ const ADMIN_PREFIX = "/internal";
 
 // Temporary frontend-only mode: backend/auth is not ready yet, so allow direct
 // access to app pages while dashboard and layout work is being reviewed.
-const DISABLE_AUTH_GUARD = false;
+const DISABLE_AUTH_GUARD = true;
 
 export function middleware(request: NextRequest) {
   if (DISABLE_AUTH_GUARD) {

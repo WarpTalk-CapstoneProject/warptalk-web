@@ -3,8 +3,8 @@ import { API } from "@/lib/api/endpoints";
 import type { JoinMeetingResponseDto, TriggerAiRequest } from "@/types/meeting";
 
 export const meetingService = {
-  join(translationRoomId: string) {
-    return apiClient.post<JoinMeetingResponseDto>(API.meetings.join(translationRoomId));
+  join(translationRoomId: string, displayName?: string) {
+    return apiClient.post<JoinMeetingResponseDto>(API.meetings.join(translationRoomId), { displayName });
   },
 
   triggerAi(translationRoomId: string, data: TriggerAiRequest) {

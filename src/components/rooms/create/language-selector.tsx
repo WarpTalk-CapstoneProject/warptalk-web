@@ -69,11 +69,15 @@ export function LanguageSelector({
                     <CommandItem
                       key={language.code}
                       onSelect={() => onSourceChange(language.code)}
-                      className="rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 cursor-pointer flex items-center gap-2"
+                      className="w-full rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 cursor-pointer flex items-center justify-between"
                     >
-                      <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
-                      <span className="truncate font-medium text-ink">{language.label}</span>
-                      {isSelected && <CheckCircle weight="fill" className="ml-auto text-emerald-500 h-3.5 w-3.5" />}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
+                        <span className="truncate font-medium text-ink">{language.label}</span>
+                      </div>
+                      <div data-slot="command-shortcut" className="flex shrink-0 ml-auto items-center">
+                        {isSelected && <CheckCircle weight="fill" color="#3b82f6" className="h-3.5 w-3.5" />}
+                      </div>
                     </CommandItem>
                   );
                 })}
@@ -123,11 +127,15 @@ export function LanguageSelector({
                     <CommandItem
                       key={language.code}
                       onSelect={() => toggleTarget(language.code)}
-                      className="rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 cursor-pointer flex items-center gap-2"
+                      className="w-full rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 cursor-pointer flex items-center justify-between"
                     >
-                      <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
-                      <span className="truncate font-medium text-ink">{language.label}</span>
-                      {isSelected && <CheckCircle weight="fill" className="ml-auto text-emerald-500 h-3.5 w-3.5" />}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
+                        <span className="truncate font-medium text-ink">{language.label}</span>
+                      </div>
+                      <div data-slot="command-shortcut" className="flex shrink-0 ml-auto items-center">
+                        {isSelected && <CheckCircle weight="fill" color="#3b82f6" className="h-3.5 w-3.5" />}
+                      </div>
                     </CommandItem>
                   );
                 })}

@@ -12,6 +12,7 @@ import type {
   TranslationRoomHistoryResponse,
   TranslationRoomListResponse,
   TranslationRoomParticipantDto,
+  TranslationRoomInvitationDto,
   TranslationRoomPreflightDto,
   TranslationRoomStatus,
   UpdateRoomSettingsRequest,
@@ -75,8 +76,8 @@ function normalizeParticipantStatus(status: string): TranslationRoomParticipantD
 function normalizeRoom(room: BackendRoom): TranslationRoomDto {
   return {
     ...room,
-    status: normalizeStatus(room.status),
-    translationRoomType: room.translationRoomType.toLowerCase(),
+    status: normalizeStatus(room.status || "scheduled"),
+    translationRoomType: room.translationRoomType?.toLowerCase() || "scheduled",
     targetLanguages: normalizeTargetLanguages(room.targetLanguages),
   };
 }
@@ -230,9 +231,12 @@ export const translationRoomService = {
     return apiClient.get<TranslationRoomArtifactDto[]>(API.translationRooms.artifacts(id));
   },
 
+  async invitations(id: string) {
+    return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
+  },
+
   async updateSettings(id: string, data: UpdateRoomSettingsRequest) {
-    const response = await apiClient.put<BackendRoom>(API.translationRooms.settings(id), data);
-    return { ...response, data: normalizeRoom(response.data) };
+    await apiClient.put<void>(API.translationRooms.settings(id), data);
   },
 
   getFeedbackState(id: string) {

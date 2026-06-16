@@ -52,8 +52,8 @@ export function SetupRoomModal() {
       setListenLanguage(room.targetLanguages[0]);
       setSpeakLanguage(room.targetLanguages[0]);
     } else if (room) {
-      setListenLanguage(room.sourceLanguage);
-      setSpeakLanguage(room.sourceLanguage);
+      setListenLanguage(room.sourceLanguage || "en");
+      setSpeakLanguage(room.sourceLanguage || "en");
     }
   }, [room]);
   
@@ -308,7 +308,7 @@ export function SetupRoomModal() {
               {room && (
                 <LanguageRoleConfirm
                   isHost={isHost}
-                  roomSourceLanguage={room.sourceLanguage}
+                  roomSourceLanguage={room.sourceLanguage || "en"}
                   roomTargetLanguages={room.targetLanguages || []}
                   listenLanguage={listenLanguage}
                   setListenLanguage={setListenLanguage}

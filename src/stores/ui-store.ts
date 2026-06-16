@@ -12,6 +12,8 @@ interface UIState {
   setSetupRoomModalOpen: (open: boolean) => void;
   setupRoomId: string | null;
   setSetupRoomId: (id: string | null) => void;
+  editRoomId: string | null;
+  setEditRoomId: (id: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -26,4 +28,6 @@ export const useUIStore = create<UIState>((set) => ({
   setSetupRoomModalOpen: (open) => set({ setupRoomModalOpen: open }),
   setupRoomId: null,
   setSetupRoomId: (id) => set({ setupRoomId: id }),
+  editRoomId: null,
+  setEditRoomId: (id) => set({ editRoomId: id }),
 }));

@@ -85,7 +85,7 @@ function JoinMeetingContent() {
   const [micLevel, setMicLevel] = useState(0);
 
   const joinMutation = useJoinTranslationRoomByCode();
-  const normalizedCode = useMemo(() => roomCode.trim().toUpperCase(), [roomCode]);
+  const normalizedCode = useMemo(() => roomCode.trim(), [roomCode]);
   const canJoin = displayName.trim().length > 1 && normalizedCode.length >= 4;
 
   useEffect(() => {

@@ -25,6 +25,7 @@ interface TranslationRoomStoreState {
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
   setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
+  hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
   reset: () => void;
 }
@@ -123,6 +124,11 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       chatMessages: s.chatMessages.some((existing) => existing.id === message.id)
         ? s.chatMessages.map((existing) => (existing.id === message.id ? message : existing))
         : [...s.chatMessages, message],
+    })),
+
+  hideChatMessage: (messageId) =>
+    set((s) => ({
+      chatMessages: s.chatMessages.filter((m) => m.id !== messageId),
     })),
 
   setMuted: (isMuted) => set({ isMuted }),

@@ -43,9 +43,7 @@ export function MeetingSidePanel({
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-1 rounded-2xl border border-border shadow-sm">
         <div className="flex items-center gap-4 px-4 pt-3 pb-2 shrink-0 border-b border-border">
           <TabButton active={mode === "transcript"} label="Transcript" onClick={() => onModeChange("transcript")} />
-          {meetingStarted ? (
-            <TabButton active={mode === "chat"} label="Chat" onClick={() => onModeChange("chat")} />
-          ) : null}
+          <TabButton active={mode === "chat"} label="Chat" onClick={() => onModeChange("chat")} />
           <TabButton active={mode === "warpbot"} label="WarpBot" onClick={() => onModeChange("warpbot")} />
           <TabButton active={mode === "participants"} label="Participants" badge={activeCount} onClick={() => onModeChange("participants")} />
         </div>

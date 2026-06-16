@@ -2,7 +2,12 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { CaretRight, CaretDown, CheckCircle, Circle, Copy, Calendar as CalendarIcon, Funnel, SlidersHorizontal, SidebarSimple, Plus } from "@phosphor-icons/react/dist/ssr";
+import { useRouter } from "next/navigation";
+import { CaretRight, CaretDown, CheckCircle, Circle, Copy, Calendar as CalendarIcon, Funnel, SlidersHorizontal, SidebarSimple, Plus, Keyboard } from "@phosphor-icons/react/dist/ssr";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
@@ -110,8 +115,13 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
         {room.translationRoomCode}
       </div>
       
-      <div className="flex-1 min-w-0 pr-4">
+      <div className="flex-1 min-w-0 pr-4 flex items-center gap-2">
         <span className="text-foreground font-medium truncate block">{room.title}</span>
+        {user?.id && room.hostId !== user.id && (
+          <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-500/20">
+            Invited
+          </span>
+        )}
       </div>
       
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
@@ -172,6 +182,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
 
 function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const user = useAuthStore((state) => state.user);
   const startHour = 0;
   const endHour = 24;
   const hours = Array.from({ length: endHour - startHour }, (_, i) => i + startHour);
@@ -234,40 +245,88 @@ function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[
 
           {/* Events */}
           <div className="absolute inset-0 right-4">
-            {rooms.map((room) => {
-              if (!room.scheduledAt) return null;
-              const scheduledDate = new Date(room.scheduledAt);
-              const eventHour = scheduledDate.getHours();
-              const eventMinute = scheduledDate.getMinutes();
-              const durationMinutes = (room.durationSeconds ?? 3600) / 60;
-              
-              const top = (eventHour * 60 + eventMinute) * minuteHeight;
-              const height = Math.max(durationMinutes * minuteHeight, 24); // Minimum height
+            {(() => {
+              const validRooms = rooms.filter(r => r.scheduledAt);
+              // Sort by start time
+              validRooms.sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime());
 
-              return (
-                <Link
-                  key={room.id}
-                  href={`/rooms/${room.id}`}
-                  className="absolute left-2 right-2 rounded-md border border-primary/20 bg-primary/10 border-l-4 border-l-primary hover:bg-primary/20 transition-all p-2 overflow-hidden flex flex-col group shadow-sm hover:shadow-md z-10"
-                  style={{ top, height }}
-                >
-                  <div className="flex justify-between items-start gap-4">
-                    <span className="font-semibold text-primary text-[12px] leading-tight truncate">{room.title}</span>
-                    <span className="text-[10px] text-primary/70 font-medium shrink-0">
-                      {scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
-                      {new Date(scheduledDate.getTime() + durationMinutes * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  {height >= 40 && (
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">
-                      <span>{room.sourceLanguage} {room.targetLanguages.length > 1 ? ";" : "→"} {room.targetLanguages.join(", ")}</span>
-                      <span>•</span>
-                      <span className="font-mono">{room.translationRoomCode}</span>
+              // Calculate columns for overlapping events
+              const columns: TranslationRoomDto[][] = [];
+              const layouts = new Map<string, { column: number }>();
+              
+              validRooms.forEach(room => {
+                const start = new Date(room.scheduledAt!).getTime();
+                
+                let placed = false;
+                for (let i = 0; i < columns.length; i++) {
+                  const col = columns[i];
+                  const lastEvent = col[col.length - 1];
+                  const lastEnd = new Date(lastEvent.scheduledAt!).getTime() + (lastEvent.durationSeconds ?? 3600) * 1000;
+                  if (lastEnd <= start) {
+                    col.push(room);
+                    layouts.set(room.id, { column: i });
+                    placed = true;
+                    break;
+                  }
+                }
+                if (!placed) {
+                  columns.push([room]);
+                  layouts.set(room.id, { column: columns.length - 1 });
+                }
+              });
+
+              const totalColumns = Math.max(1, columns.length);
+
+              return validRooms.map((room) => {
+                const scheduledDate = new Date(room.scheduledAt!);
+                const eventHour = scheduledDate.getHours();
+                const eventMinute = scheduledDate.getMinutes();
+                const durationMinutes = (room.durationSeconds ?? 3600) / 60;
+                
+                const top = (eventHour * 60 + eventMinute) * minuteHeight;
+                const height = Math.max(durationMinutes * minuteHeight, 24); // Minimum height
+                
+                const colIndex = layouts.get(room.id)?.column || 0;
+                const leftPercent = (colIndex / totalColumns) * 100;
+                const widthPercent = 100 / totalColumns;
+
+                return (
+                  <Link
+                    key={room.id}
+                    href={`/rooms/${room.id}`}
+                    className="absolute rounded-[12px] border border-primary/20 bg-primary/10 hover:bg-primary/20 transition-all p-2 overflow-hidden flex flex-col group shadow-sm hover:shadow-md z-10"
+                    style={{ 
+                      top, 
+                      height,
+                      left: `calc(0.5rem + ${leftPercent}%)`,
+                      width: `calc(${widthPercent}% - 0.5rem)`
+                    }}
+                  >
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="font-semibold text-primary text-[12px] leading-tight truncate">{room.title}</span>
+                        {user?.id && room.hostId !== user.id && (
+                          <span className="shrink-0 rounded bg-amber-500/10 px-1 py-0.5 text-[8px] font-medium text-amber-600 border border-amber-500/20">
+                            Invited
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-primary/70 font-medium shrink-0">
+                        {scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
+                        {new Date(scheduledDate.getTime() + durationMinutes * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
-                  )}
-                </Link>
-              );
-            })}
+                    {height >= 40 && (
+                      <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">
+                        <span>{room.sourceLanguage} {room.targetLanguages.length > 1 ? ";" : "→"} {room.targetLanguages.join(", ")}</span>
+                        <span>•</span>
+                        <span className="font-mono">{room.translationRoomCode}</span>
+                      </div>
+                    )}
+                  </Link>
+                );
+              });
+            })()}
           </div>
         </div>
       </div>
@@ -278,10 +337,24 @@ function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[
 import { useUIStore } from "@/stores/ui-store";
 
 export default function MeetingsPageLinear() {
+  const router = useRouter();
+  const [joinModalOpen, setJoinModalOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+
+  function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = joinCode.trim();
+    if (!trimmed) return;
+    setJoinModalOpen(false);
+    router.push(`/join?code=${encodeURIComponent(trimmed)}`);
+  }
   const [isGroupOpen, setIsGroupOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<"active" | "scheduled" | "history" | "all">("active");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const roomList = useTranslationRooms({ pageSize: 100 });
+  const roomList = useTranslationRooms({ 
+    pageSize: 100,
+    status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT"
+  });
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
 
   const rooms = useMemo(() => {
@@ -289,12 +362,20 @@ export default function MeetingsPageLinear() {
   }, [roomList.data?.rooms]);
 
   const filteredRooms = useMemo(() => {
-    if (activeTab === "active") return rooms.filter(r => r.status === "in_progress" || r.status === "waiting");
+    if (activeTab === "active") {
+      const now = new Date();
+      const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60000);
+      return rooms.filter(r => 
+        r.status === "in_progress" || 
+        r.status === "waiting" || 
+        (r.status === "scheduled" && (!r.scheduledAt || new Date(r.scheduledAt) <= fifteenMinsFromNow))
+      );
+    }
     if (activeTab === "scheduled") {
       if (!selectedDate) return rooms.filter(r => r.status === "scheduled");
       return rooms.filter(r => r.status === "scheduled" && r.scheduledAt && new Date(r.scheduledAt).toDateString() === selectedDate.toDateString());
     }
-    if (activeTab === "history") return rooms.filter(r => r.status === "ended" || r.status === "cancelled");
+    if (activeTab === "history") return rooms.filter(r => r.status === "ended" || r.status === "cancelled" || r.status === "timeout");
     return rooms;
   }, [rooms, activeTab, selectedDate]);
 
@@ -325,13 +406,22 @@ export default function MeetingsPageLinear() {
           
           <div className="h-4 w-[1px] bg-border mx-1" />
           
-          <button 
-            onClick={() => setCreateRoomModalOpen(true)}
-            className="flex items-center gap-1.5 h-[28px] pl-2.5 pr-3 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity text-[13px] font-medium shadow-sm"
-          >
-            <Plus weight="bold" size={12} />
-            New Meeting
-          </button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setCreateRoomModalOpen(true)}
+              className="flex items-center gap-1.5 h-[28px] pl-2.5 pr-3 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity text-[13px] font-medium shadow-sm"
+            >
+              <Plus weight="bold" size={12} />
+              New Meeting
+            </button>
+            <button
+              onClick={() => setJoinModalOpen(true)}
+              className="flex items-center justify-center w-[28px] h-[28px] rounded-full bg-surface-2 hover:bg-surface-3 text-ink transition-colors shadow-sm border border-border/60"
+              title="Join via code"
+            >
+              <Keyboard weight="fill" size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -396,6 +486,40 @@ export default function MeetingsPageLinear() {
           </div>
         )}
       </div>
+
+      <Dialog open={joinModalOpen} onOpenChange={setJoinModalOpen}>
+        <DialogContent className="sm:max-w-[425px] !top-[25%] !translate-y-[-25%]">
+          <DialogHeader>
+            <DialogTitle>Join Translation Room</DialogTitle>
+            <DialogDescription>
+              Enter the meeting code provided by your host to join the room.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleJoin} className="grid gap-4 pt-2">
+            <div className="grid gap-2">
+              <Label htmlFor="code" className="text-foreground font-medium text-[13px]">Meeting code</Label>
+              <Input
+                id="code"
+                placeholder="e.g. ROOM-abc-123"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                autoComplete="off"
+                autoFocus
+                className="bg-surface-1"
+              />
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button 
+                type="submit" 
+                disabled={!joinCode.trim()}
+                className="disabled:bg-surface-2 disabled:text-ink-muted disabled:opacity-100 min-w-[80px] text-white"
+              >
+                Join
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
