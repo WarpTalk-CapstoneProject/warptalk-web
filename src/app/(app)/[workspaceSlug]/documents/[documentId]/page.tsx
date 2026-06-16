@@ -1,0 +1,714 @@
+"use client";
+
+import { use, useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import {
+  ShieldCheck,
+  ShieldWarning,
+  ArrowLeft,
+  Spinner,
+  Plus,
+  Trash,
+  Info,
+  User,
+  Users,
+  Eye,
+  Download,
+  Lock,
+  Check,
+  X,
+  FileText,
+  FolderOpen
+} from "@phosphor-icons/react";
+
+import apiClient from "@/lib/api/client";
+import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  useWorkspaceDocument,
+  useWorkspaceDocumentAccessPolicies,
+  useAddWorkspaceDocumentAccessPolicy,
+  useRemoveWorkspaceDocumentAccessPolicy,
+  useWorkspaceMembers,
+  useDownloadWorkspaceDocument,
+  useApproveWorkspaceDocument
+} from "@/hooks/use-workspace";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const policySchema = z.object({
+  subjectType: z.enum(["Role", "MembershipType", "User"]),
+  subjectValue: z.string().min(1, "Please specify a subject value (e.g. Admin, External, or User ID)"),
+  permission: z.enum(["View", "Download"]),
+  effect: z.enum(["ALLOW", "DENY"]),
+});
+
+type PolicyFormData = z.infer<typeof policySchema>;
+
+interface PageProps {
+  params: Promise<{ documentId: string }>;
+}
+
+export default function DocumentDetailPage({ params }: PageProps) {
+  const { documentId } = use(params);
+  const router = useRouter();
+  const routeParams = useParams<{ workspaceSlug: string }>();
+  const workspaceSlug = routeParams.workspaceSlug;
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const role = useWorkspaceStore((s) => s.role);
+  const currentUser = useAuthStore((s) => s.user);
+
+  const [policyPage, setPolicyPage] = useState(1);
+  const [builderMode, setBuilderMode] = useState<"AllowExternal" | "AllowUser" | "BlockUser" | "Custom">("AllowExternal");
+
+  // Queries
+  const documentQuery = useWorkspaceDocument(activeWorkspaceId || "", documentId);
+  const policiesQuery = useWorkspaceDocumentAccessPolicies(activeWorkspaceId || "", documentId, policyPage, 10);
+  const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
+
+  // Mutations
+  const addPolicyMutation = useAddWorkspaceDocumentAccessPolicy(activeWorkspaceId || "", documentId);
+  const removePolicyMutation = useRemoveWorkspaceDocumentAccessPolicy(activeWorkspaceId || "", documentId);
+  const downloadMutation = useDownloadWorkspaceDocument(activeWorkspaceId || "");
+  const approveMutation = useApproveWorkspaceDocument(activeWorkspaceId || "");
+
+  const [showAllowedDropdown, setShowAllowedDropdown] = useState(false);
+  const [showBlockedDropdown, setShowBlockedDropdown] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<PolicyFormData>({
+    resolver: zodResolver(policySchema),
+    defaultValues: {
+      subjectType: "MembershipType",
+      subjectValue: "External",
+      permission: "View",
+      effect: "ALLOW",
+    },
+  });
+
+  const subjectTypeVal = watch("subjectType");
+  const doc = documentQuery.data;
+
+  // Sync Form Defaults with Selected Builder Mode Preset
+  useEffect(() => {
+    if (builderMode === "AllowExternal") {
+      setValue("subjectType", "MembershipType");
+      setValue("subjectValue", "External");
+      setValue("effect", "ALLOW");
+    } else if (builderMode === "AllowUser") {
+      setValue("subjectType", "User");
+      setValue("subjectValue", "");
+      setValue("effect", "ALLOW");
+    } else if (builderMode === "BlockUser") {
+      setValue("subjectType", "User");
+      setValue("subjectValue", "");
+      setValue("effect", "DENY");
+    } else if (builderMode === "Custom") {
+      setValue("subjectType", "Role");
+      setValue("subjectValue", "");
+      setValue("effect", "ALLOW");
+    }
+  }, [builderMode, setValue]);
+
+  if (!activeWorkspaceId) return null;
+
+  const isOwnerOrAdmin = role === "Owner" || role === "Admin";
+  const isDocOwner = doc ? (doc.ownerId === currentUser?.id || doc.uploadedBy === currentUser?.id) : false;
+  const canManagePolicies = isOwnerOrAdmin || isDocOwner;
+
+  const handleAddPolicy = async (formData: PolicyFormData) => {
+    try {
+      const isUserType = formData.subjectType === "User";
+      await addPolicyMutation.mutateAsync({
+        subjectType: formData.subjectType,
+        subjectId: isUserType ? formData.subjectValue : null,
+        subjectKey: !isUserType ? formData.subjectValue : null,
+        permission: formData.permission,
+        effect: formData.effect,
+      });
+
+      toast.success("Access policy registered successfully!");
+      reset({
+        subjectType: builderMode === "AllowExternal" ? "MembershipType" : builderMode === "Custom" ? "Role" : "User",
+        subjectValue: builderMode === "AllowExternal" ? "External" : "",
+        permission: "View",
+        effect: builderMode === "BlockUser" ? "DENY" : "ALLOW",
+      });
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+        || "Failed to add policy.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleRemovePolicy = async (policyId: string) => {
+    try {
+      await removePolicyMutation.mutateAsync(policyId);
+      toast.success("Access policy removed.");
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+        || "Failed to remove policy.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleDownloadDefault = async () => {
+    if (!doc) return;
+    try {
+      const result = await downloadMutation.mutateAsync(doc.id);
+      if (result.downloadUrl) {
+        // Fetch raw file bytes from backend
+        const response = await apiClient.get<Blob>(result.downloadUrl, {
+          responseType: "blob",
+        });
+        const blob = response.data;
+
+        // Programmatic anchor download (standard browser behavior, goes to default downloads folder)
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = doc.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        toast.success("File download started.");
+      } else {
+        toast.error("Failed to retrieve download link.");
+      }
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+        || "Failed to download document.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleDownloadSaveAs = async () => {
+    if (!doc) return;
+    try {
+      const result = await downloadMutation.mutateAsync(doc.id);
+      if (result.downloadUrl) {
+        // Fetch raw file bytes from backend
+        const response = await apiClient.get<Blob>(result.downloadUrl, {
+          responseType: "blob",
+        });
+        const blob = response.data;
+
+        // Trigger native file picker for selecting local folder
+        if ("showSaveFilePicker" in window) {
+          try {
+            const handle = await (window as any).showSaveFilePicker({
+              suggestedName: doc.fileName,
+            });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            toast.success("File saved successfully!");
+            return;
+          } catch (pickerErr) {
+            // User cancelled or picker failed, swallow cancellation
+            console.log("Save file picker cancelled or failed", pickerErr);
+            return;
+          }
+        } else {
+          toast.error("Your browser does not support choosing folder to save.");
+        }
+      } else {
+        toast.error("Failed to retrieve download link.");
+      }
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+        || "Failed to download document.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleApprove = async (approve: boolean) => {
+    try {
+      await approveMutation.mutateAsync({ docId: documentId, approve });
+      toast.success(approve ? "Document approved for ingestion." : "Document rejected.");
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+        || "Action failed.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  if (documentQuery.isLoading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center text-ink bg-canvas">
+        <Spinner className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!doc) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center px-4">
+        <Card className="max-w-md border-hairline bg-surface-1 p-6 text-center">
+          <CardHeader className="flex flex-col items-center gap-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <ShieldWarning className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-lg font-bold">Document Not Found</CardTitle>
+            <CardDescription className="text-xs">
+              The requested document does not exist or has been deleted from this workspace.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <button
+              onClick={() => router.push(`/${workspaceSlug}/documents`)}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-primary text-xs font-semibold text-white px-4 hover:bg-primary-hover transition"
+            >
+              Back to Documents
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const policiesList = policiesQuery.data?.items || [];
+  const membersList = membersQuery.data?.items || [];
+
+  return (
+    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-8 text-ink animate-fade-in max-w-7xl mx-auto w-full">
+      {/* Back button & Header */}
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={() => router.push(`/${workspaceSlug}/documents`)}
+          className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink w-fit transition"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Back to Library</span>
+        </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-1">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-ink break-all">{doc.name}</h1>
+            <p className="text-[11px] text-ink-muted mt-1 font-mono">
+              ID: {doc.id}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleDownloadDefault}
+              disabled={downloadMutation.isPending}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover text-xs font-semibold text-white px-3.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
+            >
+              {downloadMutation.isPending ? (
+                <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              <span>Download</span>
+            </button>
+            <button
+              onClick={handleDownloadSaveAs}
+              disabled={downloadMutation.isPending}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-surface-2 hover:bg-surface-3 border border-hairline text-ink text-xs font-semibold px-3.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
+              title="Save to folder on local machine"
+            >
+              {downloadMutation.isPending ? (
+                <Spinner className="h-3.5 w-3.5 animate-spin text-ink-muted" />
+              ) : (
+                <FolderOpen className="h-3.5 w-3.5" />
+              )}
+              <span>Save As...</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Grid: Left Center (Preview) vs Right (Properties Sidebar) */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px] items-start">
+        {/* Central panel - content preview */}
+        <div className="flex flex-col gap-6 min-w-0">
+          <Card className="border-hairline bg-surface-1 rounded-xl shadow-sm overflow-hidden">
+            <CardHeader className="border-b border-hairline px-5 py-4 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                <CardTitle className="text-sm font-semibold">Document Content Preview</CardTitle>
+              </div>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-hairline bg-surface-2 uppercase font-mono text-ink-muted">
+                {doc.fileExtension.replace(".", "") || "DOC"}
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-6">
+              {/* Document status banners */}
+              {doc.status === "Pending approval" && (
+                <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-ink">
+                  <div className="flex gap-2.5 items-start">
+                    <Info className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-bold text-amber-500">Awaiting Registration Approval</span>
+                      <p className="text-[10px] text-ink-muted leading-relaxed">
+                        Standard member uploaded this document. An Admin or Owner must approve it to ingest text mappings.
+                      </p>
+                    </div>
+                  </div>
+                  {isOwnerOrAdmin && (
+                    <div className="flex gap-1.5 shrink-0 self-end sm:self-center">
+                      <button
+                        onClick={() => handleApprove(true)}
+                        disabled={approveMutation.isPending}
+                        className="inline-flex h-7 px-3 items-center justify-center rounded-md bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleApprove(false)}
+                        disabled={approveMutation.isPending}
+                        className="inline-flex h-7 px-3 items-center justify-center rounded-md bg-destructive/10 text-destructive text-xs font-semibold hover:bg-destructive/20 transition disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Preview Viewer Box */}
+              <div className="relative rounded-xl border border-hairline bg-surface-2 p-6 min-h-[300px] flex flex-col justify-between">
+                <div className="flex flex-col gap-4">
+                  {/* Info header */}
+                  <div className="flex items-center justify-between border-b border-hairline pb-3">
+                    <span className="text-xs font-semibold text-ink-muted">File: {doc.fileName}</span>
+                    <span className="text-[10px] text-ink-muted font-mono">{formatBytes(doc.sizeBytes)}</span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2 mt-2">
+                    <h3 className="text-sm font-bold text-ink">{doc.name}</h3>
+                    <p className="text-xs text-ink-muted leading-relaxed">
+                      {doc.isSensitive ? (
+                        <span className="text-destructive/90 font-semibold block mb-1">
+                          ⚠️ This document is marked as sensitive.
+                        </span>
+                      ) : null}
+                      WarpTalk AI engine has indexed this document context. This content is dynamically queried and linked during active translation sessions in this workspace to provide highly accurate terminology translation matches.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 opacity-40 select-none mt-4 font-serif text-[11px] leading-loose text-ink-muted">
+                    <p>
+                      1. GENERAL TERMS AND SCOPE OF COLLABORATION. The parties agree to collaborate on the project context translation alignment. All files uploaded under this workspace directory are considered strictly confidential.
+                    </p>
+                    <p>
+                      2. TERMINOLOGY ALIGNMENT AND GLOSSARY SYNCHRONIZATION. Mapped keywords are automatically synchronized with the database schema for real-time translation rendering pipeline.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex items-center justify-between border-t border-hairline pt-4 text-[10px] text-ink-muted">
+                  <span>Ingested via: {doc.sourceType}</span>
+                  <span>Indexed: {doc.updatedAt ? new Date(doc.updatedAt).toLocaleDateString() : "Pending"}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right properties sidebar panel */}
+        <div className="flex flex-col gap-6">
+          {/* Properties Card */}
+          <Card className="border-hairline bg-surface-1 shadow-sm">
+            <CardHeader className="border-b border-hairline px-5 py-4">
+              <CardTitle className="text-sm font-semibold">Document Properties</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 flex flex-col gap-3.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-muted">Status</span>
+                <Badge
+                  variant="outline"
+                  className={`text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ${
+                    doc.status === "Active"
+                      ? "bg-primary/5 text-primary border-primary/20"
+                      : doc.status === "Pending approval"
+                        ? "bg-amber-500/5 text-amber-500 border-amber-500/20"
+                        : "bg-surface-3 border-hairline text-ink-muted"
+                  }`}
+                >
+                  {doc.status}
+                </Badge>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-muted">File Size</span>
+                <span className="font-mono text-ink font-semibold">{formatBytes(doc.sizeBytes)}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-muted">File Format</span>
+                <span className="uppercase text-ink font-semibold">{doc.fileExtension.replace(".", "") || "N/A"}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-muted">Ingestion</span>
+                <span className="capitalize text-ink font-semibold">{doc.ingestionStatus.toLowerCase()}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs border-t border-hairline pt-3">
+                <span className="text-ink-muted">Uploaded By</span>
+                <span className="text-ink font-semibold">
+                  {membersList.find((m) => m.userId === doc.uploadedBy)?.fullName || "System / Uploader"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-muted">Uploaded At</span>
+                <span className="text-ink font-semibold">{new Date(doc.createdAt).toLocaleDateString()}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Access Control & Policies Sidebar Section */}
+          <Card className="border-hairline bg-surface-1 shadow-sm">
+            <CardHeader className="border-b border-hairline px-5 py-4">
+              <CardTitle className="text-sm font-semibold">Access Policies & Rules</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 flex flex-col gap-4">
+              {canManagePolicies ? (
+                <>
+                  {/* External Access Toggle */}
+                  <div className="flex items-center justify-between bg-surface-2 border border-hairline rounded-lg p-3">
+                    <div className="flex flex-col gap-0.5 pr-2">
+                      <span className="text-xs font-semibold">External Users Access</span>
+                      <span className="text-[9px] text-ink-muted leading-tight">
+                        Allow guest/external members to view this document
+                      </span>
+                    </div>
+                    <Switch
+                      checked={policiesList.some(
+                        (p) =>
+                          p.subjectType === "MembershipType" &&
+                          p.subjectKey === "External" &&
+                          p.permission === "View" &&
+                          p.effect === "ALLOW"
+                      )}
+                      onCheckedChange={async (checked) => {
+                        const extPolicy = policiesList.find(
+                          (p) =>
+                            p.subjectType === "MembershipType" &&
+                            p.subjectKey === "External" &&
+                            p.permission === "View" &&
+                            p.effect === "ALLOW"
+                        );
+                        if (checked) {
+                          try {
+                            await addPolicyMutation.mutateAsync({
+                              subjectType: "MembershipType",
+                              subjectKey: "External",
+                              subjectId: null,
+                              permission: "View",
+                              effect: "ALLOW",
+                            });
+                            toast.success("External access enabled.");
+                          } catch (err) {
+                            toast.error("Failed to enable external access.");
+                          }
+                        } else if (extPolicy) {
+                          try {
+                            await removePolicyMutation.mutateAsync(extPolicy.id);
+                            toast.success("External access disabled.");
+                          } catch (err) {
+                            toast.error("Failed to disable external access.");
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* Allowed Users Dropdown */}
+                  <div className="flex flex-col gap-1.5 relative">
+                    <label className="text-xs font-semibold text-ink-muted">Allowed Users List</label>
+                    <div className="flex flex-wrap gap-1 border border-hairline rounded-md bg-surface-2 p-1.5 min-h-9 items-center">
+                      {policiesList.filter(p => p.subjectType === "User" && p.effect === "ALLOW").length === 0 ? (
+                        <span className="text-[10px] text-ink-muted pl-1">Inherited only</span>
+                      ) : (
+                        policiesList
+                          .filter(p => p.subjectType === "User" && p.effect === "ALLOW")
+                          .map(p => {
+                            const m = membersList.find(member => member.userId === p.subjectId);
+                            return (
+                              <Badge key={p.id} className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 gap-1 px-1.5 py-0.5 rounded text-[9px]">
+                                <span>{m ? m.fullName : "User"}</span>
+                                <X className="h-2.5 w-2.5 cursor-pointer hover:text-destructive" onClick={() => handleRemovePolicy(p.id)} />
+                              </Badge>
+                            );
+                          })
+                      )}
+                      <button
+                        onClick={() => {
+                          setShowAllowedDropdown(!showAllowedDropdown);
+                          setShowBlockedDropdown(false);
+                        }}
+                        className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-hairline text-ink-muted hover:bg-surface-3 transition"
+                        title="Add Allowed User"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    {showAllowedDropdown && (
+                      <div className="absolute right-0 top-full mt-1.5 w-full bg-surface-1 border border-hairline rounded-lg shadow-lg max-h-48 overflow-y-auto z-50 divide-y divide-hairline">
+                        {membersList.length === 0 ? (
+                          <div className="p-3 text-center text-xs text-ink-muted">No members found</div>
+                        ) : (
+                          membersList.map((m) => {
+                            const isAllowed = policiesList.some(
+                              (p) => p.subjectType === "User" && p.subjectId === m.userId && p.effect === "ALLOW"
+                            );
+                            return (
+                              <div
+                                key={m.userId}
+                                onClick={async () => {
+                                  const policy = policiesList.find(
+                                    (p) => p.subjectType === "User" && p.subjectId === m.userId && p.effect === "ALLOW"
+                                  );
+                                  if (isAllowed && policy) {
+                                    await handleRemovePolicy(policy.id);
+                                  } else {
+                                    try {
+                                      await addPolicyMutation.mutateAsync({
+                                        subjectType: "User",
+                                        subjectId: m.userId,
+                                        subjectKey: null,
+                                        permission: "View",
+                                        effect: "ALLOW",
+                                      });
+                                      toast.success(`Allowed ${m.fullName}`);
+                                    } catch (e) {
+                                      toast.error("Failed to allow user.");
+                                    }
+                                  }
+                                }}
+                                className="flex items-center justify-between px-3 py-2 text-xs hover:bg-surface-2 cursor-pointer transition-colors"
+                              >
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-semibold text-ink truncate">{m.fullName}</span>
+                                  <span className="text-[9px] text-ink-muted truncate">{m.email}</span>
+                                </div>
+                                {isAllowed && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Blocked Users Dropdown */}
+                  <div className="flex flex-col gap-1.5 relative mt-1.5">
+                    <label className="text-xs font-semibold text-ink-muted">Blocked Users List</label>
+                    <div className="flex flex-wrap gap-1 border border-hairline rounded-md bg-surface-2 p-1.5 min-h-9 items-center">
+                      {policiesList.filter(p => p.subjectType === "User" && p.effect === "DENY").length === 0 ? (
+                        <span className="text-[10px] text-ink-muted pl-1">No blocks active</span>
+                      ) : (
+                        policiesList
+                          .filter(p => p.subjectType === "User" && p.effect === "DENY")
+                          .map(p => {
+                            const m = membersList.find(member => member.userId === p.subjectId);
+                            return (
+                              <Badge key={p.id} className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 gap-1 px-1.5 py-0.5 rounded text-[9px]">
+                                <span>{m ? m.fullName : "User"}</span>
+                                <X className="h-2.5 w-2.5 cursor-pointer hover:text-destructive" onClick={() => handleRemovePolicy(p.id)} />
+                              </Badge>
+                            );
+                          })
+                      )}
+                      <button
+                        onClick={() => {
+                          setShowBlockedDropdown(!showBlockedDropdown);
+                          setShowAllowedDropdown(false);
+                        }}
+                        className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-hairline text-ink-muted hover:bg-surface-3 transition"
+                        title="Add Blocked User"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    {showBlockedDropdown && (
+                      <div className="absolute right-0 top-full mt-1.5 w-full bg-surface-1 border border-hairline rounded-lg shadow-lg max-h-48 overflow-y-auto z-50 divide-y divide-hairline">
+                        {membersList.length === 0 ? (
+                          <div className="p-3 text-center text-xs text-ink-muted">No members found</div>
+                        ) : (
+                          membersList.map((m) => {
+                            const isBlocked = policiesList.some(
+                              (p) => p.subjectType === "User" && p.subjectId === m.userId && p.effect === "DENY"
+                            );
+                            return (
+                              <div
+                                key={m.userId}
+                                onClick={async () => {
+                                  const policy = policiesList.find(
+                                    (p) => p.subjectType === "User" && p.subjectId === m.userId && p.effect === "DENY"
+                                  );
+                                  if (isBlocked && policy) {
+                                    await handleRemovePolicy(policy.id);
+                                  } else {
+                                    try {
+                                      await addPolicyMutation.mutateAsync({
+                                        subjectType: "User",
+                                        subjectId: m.userId,
+                                        subjectKey: null,
+                                        permission: "View",
+                                        effect: "DENY",
+                                      });
+                                      toast.success(`Blocked ${m.fullName}`);
+                                    } catch (e) {
+                                      toast.error("Failed to block user.");
+                                    }
+                                  }
+                                }}
+                                className="flex items-center justify-between px-3 py-2 text-xs hover:bg-surface-2 cursor-pointer transition-colors"
+                              >
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-semibold text-ink truncate">{m.fullName}</span>
+                                  <span className="text-[9px] text-ink-muted truncate">{m.email}</span>
+                                </div>
+                                {isBlocked && <Check className="h-3.5 w-3.5 text-destructive shrink-0" />}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-4 text-center gap-2 border border-dashed border-hairline rounded-lg">
+                  <Lock className="h-5 w-5 text-ink-muted" />
+                  <span className="text-xs font-semibold text-ink-muted">Configuration locked</span>
+                  <p className="text-[9px] text-ink-muted leading-relaxed">
+                    Access overrides can only be set by workspace Owners, Admins, or the Document Owner.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

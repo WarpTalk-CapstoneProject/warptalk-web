@@ -19,8 +19,13 @@ export function middleware(request: NextRequest) {
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
-  if (token && isAuthRoute) {
-    return NextResponse.redirect(new URL("/host/dashboard", request.url));
+  if (token && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
+    const activeWorkspaceSlug = request.cookies.get("active_workspace_slug")?.value;
+    if (activeWorkspaceSlug) {
+      return NextResponse.redirect(new URL(`/${activeWorkspaceSlug}/rooms`, request.url));
+    } else {
+      return NextResponse.redirect(new URL("/workspace", request.url));
+    }
   }
 
   if (!token && !isPublicRoute) {

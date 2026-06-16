@@ -48,7 +48,7 @@ const demoHistory = [
     participantCount: 11,
     maxParticipants: 15,
     sourceLanguage: "en-US",
-    targetLanguages: ["ko-KR", "vi-VN"],
+    targetLanguages: ["ja-JP", "vi-VN"],
   },
 ];
 
@@ -72,7 +72,6 @@ function getLanguageLabel(code?: string) {
     "en-US": "English",
     "vi-VN": "Vietnamese",
     "ja-JP": "Japanese",
-    "ko-KR": "Korean",
   };
 
   return labels[code ?? ""] ?? code ?? "Unknown";

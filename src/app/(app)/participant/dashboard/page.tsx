@@ -8,7 +8,7 @@ import { JoinByCodeDialog } from "./join-dialog";
 
 const upcomingMeetings = [
   { title: "Partner Sync Room", code: "SYNC-882", time: "Today, 12:30 PM", language: "Vietnamese to English" },
-  { title: "Customer Onboarding", code: "CUST-104", time: "Tomorrow, 09:00 AM", language: "English to Korean" },
+  { title: "Customer Onboarding", code: "CUST-104", time: "Tomorrow, 09:00 AM", language: "English to Japanese" },
 ];
 
 const recentSummaries = [

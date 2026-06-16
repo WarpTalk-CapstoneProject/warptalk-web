@@ -33,10 +33,19 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-function setAccessTokenCookie(accessToken: string) {
-  // Save for 7 days (604800 seconds) so middleware doesn't kick user out
-  const maxAge = 7 * 24 * 60 * 60;
-  document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
+  let expiresString = "";
+  if (expiresAt) {
+    const expiresDate = new Date(expiresAt);
+    if (!isNaN(expiresDate.getTime())) {
+      expiresString = `; expires=${expiresDate.toUTCString()}`;
+    }
+  }
+
+  // Fallback to 7 days if expiresAt is not provided or invalid
+  const maxAgeString = expiresString ? "" : `; max-age=${7 * 24 * 60 * 60}`;
+
+  document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
 }
 
 function LoginForm() {
