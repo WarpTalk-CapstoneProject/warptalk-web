@@ -20,7 +20,12 @@ import {
   Shield,
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
+<<<<<<< HEAD
 import type { Icon } from "@phosphor-icons/react";
+=======
+import type { IconProps } from "@phosphor-icons/react";
+type IconType = React.ElementType<IconProps>;
+>>>>>>> origin/development
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -45,11 +50,11 @@ import { toast } from "sonner";
 import { SignOut } from "@phosphor-icons/react/dist/ssr";
 
 interface NavItem {
-  icon: Icon;
+  icon: IconType;
   label: string;
   href: string;
   actions?: Array<{
-    icon: Icon;
+    icon: IconType;
     href?: string;
     onClick?: () => void;
     title?: string;
@@ -432,7 +437,7 @@ export function LinearSidebar() {
               <Label htmlFor="code" className="text-foreground font-medium text-[13px]">Meeting code</Label>
               <Input
                 id="code"
-                placeholder="e.g. WARP-123"
+                placeholder="e.g. ROOM-abc-123"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 autoComplete="off"

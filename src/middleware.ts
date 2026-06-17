@@ -7,7 +7,7 @@ const ADMIN_PREFIX = "/internal";
 
 // Temporary frontend-only mode: backend/auth is not ready yet, so allow direct
 // access to app pages while dashboard and layout work is being reviewed.
-const DISABLE_AUTH_GUARD = false;
+const DISABLE_AUTH_GUARD = true;
 
 export function middleware(request: NextRequest) {
   if (DISABLE_AUTH_GUARD) {
@@ -19,6 +19,7 @@ export function middleware(request: NextRequest) {
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
+<<<<<<< HEAD
   if (token && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
     const activeWorkspaceSlug = request.cookies.get("active_workspace_slug")?.value;
     if (activeWorkspaceSlug) {
@@ -26,6 +27,10 @@ export function middleware(request: NextRequest) {
     } else {
       return NextResponse.redirect(new URL("/workspace", request.url));
     }
+=======
+  if (token && isAuthRoute) {
+    return NextResponse.redirect(new URL("/rooms", request.url));
+>>>>>>> origin/development
   }
 
   if (!token && !isPublicRoute) {

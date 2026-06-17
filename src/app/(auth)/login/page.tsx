@@ -2,37 +2,37 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeClosed, Spinner } from "@phosphor-icons/react/dist/ssr";
+import { CaretLeft, Eye, EyeClosed, Spinner, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { motion, AnimatePresence } from "motion/react";
 
-import {
-  CinematicAuthShell,
-  GoogleAuthIcon,
-  InputGroup,
-  SocialButton,
-} from "@/components/auth/cinematic-auth-shell";
+import { AnimatedHalftone } from "@/components/auth/animated-halftone";
+import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
 import { Checkbox } from "@/components/ui/checkbox";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
+import { cn } from "@/lib/utils";
 
 const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: z.string().min(1, "Email is required").email("Invalid email address"),
+  password: z.string().optional(),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
 function getSafeCallbackUrl(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/host/dashboard";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/rooms";
   return value;
 }
 
+<<<<<<< HEAD
 function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
   let expiresString = "";
   if (expiresAt) {
@@ -46,6 +46,11 @@ function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
   const maxAgeString = expiresString ? "" : `; max-age=${7 * 24 * 60 * 60}`;
 
   document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
+=======
+function setAccessTokenCookie(accessToken: string) {
+  const maxAge = 7 * 24 * 60 * 60;
+  document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+>>>>>>> origin/development
 }
 
 function LoginForm() {
@@ -54,10 +59,14 @@ function LoginForm() {
   const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState<"email" | "password">("email");
 
   const {
     register,
     handleSubmit,
+    trigger,
+    getValues,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -66,118 +75,220 @@ function LoginForm() {
   useEffect(() => {
     const url = new URL(window.location.href);
     const hasSensitiveParams = url.searchParams.has("email") || url.searchParams.has("password");
-
     if (!hasSensitiveParams) return;
-
     url.searchParams.delete("email");
     url.searchParams.delete("password");
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }, []);
 
+  const onContinue = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const isEmailValid = await trigger("email");
+    if (isEmailValid) {
+      setStep("password");
+    }
+  };
+
   const onSubmit = async (data: LoginFormData) => {
+    if (step === "email") {
+      const isEmailValid = await trigger("email");
+      if (isEmailValid) {
+        setStep("password");
+      }
+      return;
+    }
+
+    if (!data.password || data.password.length < 6) {
+      setError("password", { message: "Password must be at least 6 characters" });
+      return;
+    }
+
     try {
-      const res = await apiClient.post<AuthResponse>(API.auth.login, data);
-      const { user, accessToken, refreshToken, expiresAt } = res.data;
+      const res = await apiClient.post<AuthResponse>(API.auth.login, {
+        email: data.email,
+        password: data.password,
+      });
+      const { user, accessToken, refreshToken } = res.data;
 
       login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken, expiresAt);
+      setAccessTokenCookie(accessToken);
 
       toast.success("Login successful!");
       router.replace(callbackUrl);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(
-        error?.response?.data?.error || "Login failed. Please try again."
-      );
+      toast.error(error?.response?.data?.error || "Login failed. Please try again.");
     }
   };
 
   return (
-    <CinematicAuthShell>
-      <div className="space-y-2">
-        <h1 className="text-3xl font-medium tracking-tight">Welcome Back</h1>
-        <p className="text-sm text-white/40">
-          Log in to continue configuring your WarpTalk space.
-        </p>
-      </div>
+    <div className="relative w-full min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden bg-white text-black font-sans">
+      <AnimatedHalftone />
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div>
-          <InputGroup
-            label="Email"
-            placeholder="name@domain.com"
-            type="email"
-            autoComplete="email"
-            aria-invalid={Boolean(errors.email)}
-            {...register("email")}
+      {/* Header Logo area like ChatGPT */}
+      <div className="absolute top-6 left-6 z-30">
+        <Link href="/" className="inline-block transition-opacity hover:opacity-80">
+          <Image
+            src="/assets/logos/warptalk-sidebar-logo.png"
+            alt="WarpTalk"
+            width={100}
+            height={24}
+            className="h-6 w-auto object-contain mix-blend-multiply"
+            priority
           />
-          {errors.email && (
-            <p className="mt-2 text-xs text-white/50">{errors.email.message}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-white">Password</span>
-            <span className="relative block">
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter password"
-                autoComplete="current-password"
-                className="h-11 w-full rounded-xl border-none bg-brand-gray px-4 pr-12 text-white outline-none placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
-                aria-invalid={Boolean(errors.password)}
-                {...register("password")}
-              />
-              <button
-                type="button"
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 transition-colors hover:text-white"
-                onClick={() => setShowPassword((value) => !value)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeClosed weight="light" /> : <Eye weight="light" />}
-              </button>
-            </span>
-          </label>
-          {errors.password && (
-            <p className="text-xs text-white/50">{errors.password.message}</p>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <label className="flex items-center gap-2 text-xs font-medium text-white/40">
-            <Checkbox className="size-3.5 border-white/20 bg-brand-gray data-checked:border-white data-checked:bg-white data-checked:text-black" />
-            Keep me logged in
-          </label>
-          <Link href="/forgot-password" className="text-xs font-medium text-white hover:underline">
-            Forgot password?
-          </Link>
-        </div>
-
-        <button
-          type="submit"
-          className="mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-white font-semibold text-black transition hover:bg-white/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? <Spinner weight="light" className="animate-spin" /> : "Log In"}
-        </button>
-      </form>
-
-      <p className="text-center text-sm text-white/40">
-        New to WarpTalk?{" "}
-        <Link href="/register" className="font-medium text-white hover:underline">
-          Create account
         </Link>
-      </p>
-
-      <div className="relative">
-        <div className="border-t border-white/10" />
-        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-black px-4 text-xs font-medium uppercase tracking-widest text-white/40">
-          Or
-        </span>
       </div>
 
-      <SocialButton icon={<GoogleAuthIcon />} label="Google" />
-    </CinematicAuthShell>
+      <div className="relative z-20 w-full max-w-[360px] px-4">
+        <div className="flex flex-col items-center mb-10">
+          <h1 className="text-3xl font-semibold tracking-tight text-black mb-2 text-center">Log in or sign up</h1>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="w-full" noValidate>
+          <AnimatePresence mode="wait">
+            {step === "email" ? (
+              <motion.div
+                key="email-step"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4"
+              >
+                {/* Social Login */}
+                <button
+                  type="button"
+                  className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50"
+                >
+                  <GoogleAuthIcon className="size-5" />
+                  Continue with Google
+                </button>
+
+                {/* Divider */}
+                <div className="flex items-center gap-4 py-2">
+                  <div className="h-[1px] flex-1 bg-neutral-200" />
+                  <span className="text-[11px] font-medium uppercase text-neutral-500 tracking-wider">
+                    Or
+                  </span>
+                  <div className="h-[1px] flex-1 bg-neutral-200" />
+                </div>
+
+                {/* Email Input */}
+                <div className="space-y-2">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    autoFocus
+                    placeholder="Email address"
+                    className={cn(
+                      "h-14 w-full rounded-full border border-neutral-300 bg-white px-5 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
+                      errors.email && "border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]"
+                    )}
+                    {...register("email")}
+                  />
+                  {errors.email && (
+                    <div className="flex items-center gap-1.5 mt-1.5 text-[#d92d20]">
+                      <WarningCircle size={16} />
+                      <p className="text-[13px] font-medium">{errors.email.message}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Continue Button */}
+                <button
+                  type="submit"
+                  className="flex h-14 w-full items-center justify-center rounded-full bg-black font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99] text-[15px]"
+                >
+                  Continue
+                </button>
+
+              </motion.div>
+            ) : (
+              <motion.div
+                key="password-step"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4"
+              >
+                <div className="relative flex h-14 w-full items-center justify-between rounded-full border border-neutral-300 bg-white px-5 mb-4">
+                  <label className="absolute -top-2 left-4 bg-white px-1 text-[12px] font-normal text-neutral-500">
+                    Email address
+                  </label>
+                  <span className="text-[15px] text-black truncate pr-4">
+                    {getValues("email")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStep("email")}
+                    className="text-[15px] font-normal text-[#2563eb] hover:underline whitespace-nowrap"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="relative block">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      autoFocus
+                      placeholder="Password"
+                      className={cn(
+                        "h-14 w-full rounded-full border border-neutral-300 bg-white px-5 pr-12 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
+                        errors.password && "border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]"
+                      )}
+                      {...register("password")}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 transition-colors hover:text-black"
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      {showPassword ? <EyeClosed weight="regular" size={20} /> : <Eye weight="regular" size={20} />}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <div className="flex items-center gap-1.5 mt-1.5 text-[#d92d20]">
+                      <WarningCircle size={16} />
+                      <p className="text-[13px] font-medium">{errors.password.message}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-2 text-[13px] font-medium text-neutral-800 cursor-pointer bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg">
+                    <Checkbox className="size-[14px] rounded-sm border-neutral-300 data-[state=checked]:bg-black data-[state=checked]:text-white" />
+                    Keep me logged in
+                  </label>
+                  <Link href="/forgot-password" className="text-[13px] font-medium text-neutral-800 hover:text-black hover:underline bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg">
+                    Forgot password?
+                  </Link>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex h-14 w-full items-center justify-center rounded-full bg-black font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99] disabled:opacity-70 disabled:pointer-events-none mt-2 text-[15px]"
+                >
+                  {isSubmitting ? <Spinner weight="bold" className="animate-spin" /> : "Log In"}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </form>
+
+        {/* Footer */}
+        <div className="mt-auto pb-6 pt-12 flex justify-center relative z-20">
+          <div className="flex items-center gap-4 bg-white/70 backdrop-blur-md px-4 py-1.5 rounded-full text-[13px] font-medium text-neutral-700 shadow-sm border border-white/50">
+            <Link href="/terms" className="hover:text-black hover:underline transition-colors">Terms of use</Link>
+            <span className="text-neutral-400">|</span>
+            <Link href="/privacy" className="hover:text-black hover:underline transition-colors">Privacy policy</Link>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -185,8 +296,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="fixed inset-0 z-20 grid place-items-center bg-black">
-          <Spinner weight="light" className="animate-spin text-white" />
+        <div className="fixed inset-0 z-20 grid place-items-center bg-white">
+          <Spinner weight="bold" className="animate-spin text-black" size={32} />
         </div>
       }
     >

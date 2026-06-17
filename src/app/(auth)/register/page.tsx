@@ -57,10 +57,10 @@ export default function RegisterPage() {
       const { user, accessToken, refreshToken, expiresAt } = res.data;
 
       login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken, expiresAt);
+      setAccessTokenCookie(accessToken);
 
       toast.success("Registration successful!");
-      router.replace("/host/dashboard");
+      router.replace("/rooms");
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };

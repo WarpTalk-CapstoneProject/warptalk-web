@@ -16,6 +16,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { CreateRoomDialog } from "@/components/rooms/create-room-dialog";
 import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
+import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
@@ -89,7 +90,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
       <LinearSidebar />
-      
+
       {/* Main content */}
       <div className="relative flex flex-col flex-1 overflow-hidden my-1.5 mr-1.5 rounded-xl border border-border bg-surface-1 shadow-sm">
         {/* Top bar */}
@@ -159,12 +160,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               ));
             })()}
           </div>
-          
+
           <div className="flex items-center gap-1.5 text-ink-muted">
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Bell size={12} weight="bold" /></button>
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
             <div className="w-[1px] h-3.5 bg-border mx-1" />
-            <button 
+            <button
               onClick={toggleRightSidebar}
               className="flex size-6 items-center justify-center rounded-[6px] border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
             >
@@ -177,7 +178,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="min-h-0 flex-1 overflow-y-auto">
             {children}
           </main>
-          
+
           {/* Right Sidebar (Context/Properties) */}
           {rightSidebarOpen && !pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
             <aside className="w-[260px] shrink-0 border-l border-border bg-surface-1 flex flex-col overflow-hidden">
@@ -195,6 +196,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <CreateRoomDialog />
       <SearchMeetingDialog />
+      <SetupRoomModal />
     </div>
   );
 }

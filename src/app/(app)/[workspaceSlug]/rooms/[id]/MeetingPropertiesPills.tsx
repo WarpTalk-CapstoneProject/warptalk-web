@@ -1,4 +1,5 @@
-import { LanguageSelector, OptionsMenu } from "@/components/rooms/create-room-dialog";
+import { LanguageSelector } from "@/components/rooms/create/language-selector";
+import { OptionsMenu } from "@/components/rooms/create/options-menu";
 import { useUpdateTranslationRoomSettings } from "@/hooks/use-translationRooms";
 import { StatusPanel } from "../page";
 import { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
@@ -19,7 +20,11 @@ export function MeetingPropertiesPills({
   user: any;
 }) {
   const updateSettings = useUpdateTranslationRoomSettings();
+<<<<<<< HEAD:src/app/(app)/[workspaceSlug]/rooms/[id]/MeetingPropertiesPills.tsx
   const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1 || (room as any).translationMode === "multi");
+=======
+  const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1);
+>>>>>>> origin/development:src/app/(app)/rooms/[id]/MeetingPropertiesPills.tsx
 
   const handleSourceChange = (lang: string) => {
     updateSettings.mutate({ 

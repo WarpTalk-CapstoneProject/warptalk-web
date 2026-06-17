@@ -4,6 +4,7 @@ import { Clock, Copy, ShieldCheck, UserCheck, Users } from "@phosphor-icons/reac
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BackToSetupButton } from "@/components/rooms/setup/back-to-setup-button";
 
 const participants = [
   { name: "Mai Nguyen", language: "Vietnamese to English", status: "Ready" },
@@ -52,7 +53,7 @@ export default async function WaitingRoomPage({ params }: { params: Promise<{ id
           </CardHeader>
           <CardContent className="grid gap-2">
             <Link href={`/room/${roomId}`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Start meeting</Link>
-            <Link href={`/rooms/${roomId}/setup`} className="inline-flex h-8 items-center justify-center rounded-full border border-border  px-3 text-sm font-medium transition hover:bg-muted">Back to setup</Link>
+            <BackToSetupButton roomId={roomId} />
           </CardContent>
         </Card>
 

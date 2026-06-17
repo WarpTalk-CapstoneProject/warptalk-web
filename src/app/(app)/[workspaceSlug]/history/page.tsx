@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useRoomHistory } from "@/hooks/use-room-history";
+import { useMeetingHistory, useMeetingRoomDetail } from "@/hooks/use-meeting-history";
 import { cn } from "@/lib/utils";
 
 const demoHistory = [
@@ -49,7 +49,7 @@ const demoHistory = [
     endedAt: "May 22, 2:00 PM",
     duration: "58m",
     participants: 11,
-    languages: "English -> Japanese, Vietnamese",
+    languages: "English -> Korean, Vietnamese",
     status: "processing",
     artifacts: ["Transcript processing", "Summary queued"],
     summary: "Legal terms and approval requirements were discussed across regions.",
@@ -63,18 +63,6 @@ const transcriptPreview = [
     text: "Welcome everyone. Today's review will focus on product milestones and next steps.",
     translation: "Chao moi nguoi. Buoi danh gia hom nay tap trung vao cac moc san pham va buoc tiep theo.",
   },
-  {
-    time: "07:18",
-    speaker: "Guest",
-    text: "Can we clarify how terminology is handled for regulated documents?",
-    translation: "Chung ta co the lam ro cach xu ly thuat ngu cho tai lieu duoc quan ly khong?",
-  },
-  {
-    time: "19:04",
-    speaker: "Interpreter",
-    text: "The glossary is applied before final transcript export.",
-    translation: "Bang thuat ngu duoc ap dung truoc khi xuat ban ghi cuoi cung.",
-  },
 ];
 
 function normalizeStatus(status: string) {
@@ -83,33 +71,32 @@ function normalizeStatus(status: string) {
 
 export default function HistoryPage() {
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState(demoHistory[0].id);
-  const history = useRoomHistory();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const history = useMeetingHistory(1, 50, query);
 
   const historyRows = useMemo(() => {
     const apiRows =
-      history.data?.rooms.map((room) => ({
+      history.data?.items?.map((room: any) => ({
         id: room.id,
-        title: room.title,
-        code: room.translationRoomCode,
+        title: room.title || "Meeting",
+        code: room.translationRoomCode || "N/A",
         endedAt: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(
-          new Date(room.endedAt)
+          new Date(room.endedAt || room.createdAt)
         ),
-        duration: `${Math.round(room.durationSeconds / 60)}m`,
+        duration: room.durationSeconds ? `${Math.round(room.durationSeconds / 60)}m` : "Unknown",
         participants: room.participantCount,
-        languages: `${room.sourceLanguage} -> ${room.targetLanguages.join(", ")}`,
-        status: room.artifacts.some((artifact) => artifact.status === "processing") ? "processing" : "ready",
-        artifacts: room.artifacts.map((artifact) => artifact.title),
-        summary: room.summary?.summary ?? room.description ?? "No AI summary is attached to this room yet.",
+        languages: room.languageMode || "N/A",
+        status: room.status === "FINISHED" ? "ready" : room.status.toLowerCase(),
+        artifacts: ["Transcript TXT", "AI summary"],
+        summary: room.summary || "No AI summary is attached to this room yet.",
       })) ?? [];
 
     return apiRows.length > 0 ? apiRows : demoHistory;
-  }, [history.data?.rooms]);
+  }, [history.data?.items]);
 
-  const filteredRows = historyRows.filter((room) =>
-    [room.title, room.code, room.languages].some((value) => value.toLowerCase().includes(query.trim().toLowerCase()))
-  );
-  const selectedRoom = filteredRows.find((room) => room.id === selectedId) ?? filteredRows[0] ?? historyRows[0];
+  const selectedRoomId = selectedId || (historyRows.length > 0 ? historyRows[0].id : undefined);
+  const selectedRoom = historyRows.find((room: any) => room.id === selectedRoomId) ?? historyRows[0];
+  const { data: detailData } = useMeetingRoomDetail(selectedRoomId && selectedRoomId !== "hist-001" ? selectedRoomId : undefined);
 
   return (
     <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink">
@@ -130,10 +117,10 @@ export default function HistoryPage() {
         <Card className="shadow-sm" size="sm">
           <CardHeader>
             <CardTitle className="text-sm">Ended rooms</CardTitle>
-            <CardDescription className="text-xs">{filteredRows.length} retained sessions</CardDescription>
+            <CardDescription className="text-xs">{historyRows.length} retained sessions</CardDescription>
           </CardHeader>
           <CardContent className="space-y-1.5">
-            {filteredRows.map((room) => (
+            {historyRows.map((room: any) => (
               <button
                 key={room.id}
                 type="button"
@@ -177,19 +164,34 @@ export default function HistoryPage() {
                 <TabsTrigger value="participants">Details</TabsTrigger>
               </TabsList>
               <TabsContent value="transcript" className="mt-3 space-y-2">
-                {transcriptPreview.map((item) => (
-                  <div key={`${item.time}-${item.speaker}`} className="rounded-lg border  p-3">
-                    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline">{item.time}</Badge>
-                      <span>{item.speaker}</span>
+                {detailData?.recentMessages && detailData.recentMessages.length > 0 ? (
+                  detailData.recentMessages.map((item: any) => (
+                    <div key={item.id} className="rounded-lg border  p-3">
+                      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">{new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' }).format(new Date(item.createdAt))}</Badge>
+                        <span>{item.senderName || "Unknown"}</span>
+                      </div>
+                      <p className="text-sm">{item.originalText}</p>
+                      {item.translatedText && (
+                        <p className="mt-2 rounded-md bg-muted p-2.5 text-xs text-muted-foreground">{item.translatedText}</p>
+                      )}
                     </div>
-                    <p className="text-sm">{item.text}</p>
-                    <p className="mt-2 rounded-md bg-muted p-2.5 text-xs text-muted-foreground">{item.translation}</p>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  transcriptPreview.map((item: any) => (
+                    <div key={`${item.time}-${item.speaker}`} className="rounded-lg border  p-3">
+                      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">{item.time}</Badge>
+                        <span>{item.speaker}</span>
+                      </div>
+                      <p className="text-sm">{item.text}</p>
+                      <p className="mt-2 rounded-md bg-muted p-2.5 text-xs text-muted-foreground">{item.translation}</p>
+                    </div>
+                  ))
+                )}
               </TabsContent>
               <TabsContent value="artifacts" className="mt-3 grid gap-2.5 md:grid-cols-2">
-                {selectedRoom.artifacts.map((artifact) => (
+                {selectedRoom.artifacts.map((artifact: any) => (
                   <div key={artifact} className="flex items-center justify-between rounded-lg border  p-2.5">
                     <div className="flex items-center gap-2">
                       <FileText weight="light" className="h-4 w-4 text-primary" />
