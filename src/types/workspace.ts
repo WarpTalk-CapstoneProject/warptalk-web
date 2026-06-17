@@ -166,3 +166,20 @@ export interface SelectWorkspaceResponse {
   name: string;
   slug: string;
 }
+
+export interface ExtractedPageDto {
+  pageNumber: number;
+  text: string;
+}
+
+export interface ExtractedSheetDto {
+  sheetName: string;
+  rows: string[][];
+}
+
+export interface ExtractedTextDto {
+  fullText: string;
+  pages: ExtractedPageDto[];
+  sheets: ExtractedSheetDto[];
+  text?: string;
+}

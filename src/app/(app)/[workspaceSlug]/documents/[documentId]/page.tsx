@@ -57,6 +57,16 @@ interface PageProps {
   params: Promise<{ documentId: string }>;
 }
 
+const getColumnLabel = (index: number): string => {
+  let label = "";
+  let temp = index;
+  while (temp >= 0) {
+    label = String.fromCharCode((temp % 26) + 65) + label;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return label;
+};
+
 export default function DocumentDetailPage({ params }: PageProps) {
   const { documentId } = use(params);
   const router = useRouter();
@@ -68,6 +78,11 @@ export default function DocumentDetailPage({ params }: PageProps) {
 
   const [policyPage, setPolicyPage] = useState(1);
   const [builderMode, setBuilderMode] = useState<"AllowExternal" | "AllowUser" | "BlockUser" | "Custom">("AllowExternal");
+  const [activeSheetIndex, setActiveSheetIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveSheetIndex(0);
+  }, [documentId]);
 
   // Queries
   const documentQuery = useWorkspaceDocument(activeWorkspaceId || "", documentId);
@@ -419,11 +434,105 @@ export default function DocumentDetailPage({ params }: PageProps) {
                     <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-xs mt-4">
                       Failed to load extracted text content.
                     </div>
-                  ) : (
-                    <div className="mt-4 border border-hairline rounded-lg bg-surface-3 p-4 max-h-[400px] overflow-y-auto font-mono text-[11px] leading-relaxed text-ink whitespace-pre-wrap select-text">
-                      {extractedTextQuery.data?.text || "No text content found in document."}
-                    </div>
-                  )}
+                  ) : (() => {
+                    const data = extractedTextQuery.data;
+                    if (data?.sheets && data.sheets.length > 0) {
+                      const activeSheet = data.sheets[activeSheetIndex] || data.sheets[0];
+                      // Find max column length to construct column headers safely
+                      const maxCols = activeSheet.rows?.reduce((max, row) => Math.max(max, row.length), 0) || 0;
+                      
+                      return (
+                        <div className="flex flex-col gap-3 mt-4">
+                          {/* Sheets Tab Bar */}
+                          <div className="flex border-b border-hairline overflow-x-auto gap-1 pb-1 scrollbar-thin">
+                            {data.sheets.map((sheet, index) => (
+                              <button
+                                key={index}
+                                onClick={() => setActiveSheetIndex(index)}
+                                className={`px-3.5 py-1.5 text-xs font-semibold rounded-t-md border-b-2 transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                                  activeSheetIndex === index
+                                    ? "border-primary text-primary bg-primary/5"
+                                    : "border-transparent text-ink-muted hover:text-ink hover:bg-surface-3"
+                                }`}
+                              >
+                                <span className="text-emerald-500">田</span>
+                                <span>{sheet.sheetName || `Sheet ${index + 1}`}</span>
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Grid Table Container */}
+                          <div className="border border-hairline rounded-lg bg-surface-1 shadow-inner overflow-auto max-h-[500px] scrollbar-thin">
+                            {(!activeSheet.rows || activeSheet.rows.length === 0) ? (
+                              <div className="p-8 text-center text-xs text-ink-muted">
+                                No data found in this sheet.
+                              </div>
+                            ) : (
+                              <table className="w-full border-collapse text-left text-xs font-sans">
+                                <thead>
+                                  <tr className="bg-surface-3">
+                                    <th className="sticky top-0 left-0 z-30 bg-surface-3 border-r border-b border-hairline w-10 text-center text-[10px] font-mono text-ink-muted select-none"></th>
+                                    {Array.from({ length: maxCols }).map((_, colIdx) => (
+                                      <th
+                                        key={colIdx}
+                                        className="sticky top-0 z-10 bg-surface-3 border-r border-b border-hairline px-3 py-1.5 text-center text-[10px] font-mono text-ink-muted font-semibold min-w-[120px] select-none"
+                                      >
+                                        {getColumnLabel(colIdx)}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {activeSheet.rows.map((row, rowIdx) => (
+                                    <tr key={rowIdx} className="hover:bg-surface-2/40 transition-colors">
+                                      <td className="sticky left-0 z-25 bg-surface-3 border-r border-b border-hairline text-center text-[10px] font-mono text-ink-muted select-none font-semibold">
+                                        {rowIdx + 1}
+                                      </td>
+                                      {Array.from({ length: maxCols }).map((_, colIdx) => {
+                                        const cellVal = row[colIdx] || "";
+                                        return (
+                                          <td
+                                            key={colIdx}
+                                            className="border-r border-b border-hairline px-3 py-2 text-ink break-words font-sans min-w-[120px] max-w-[280px]"
+                                            title={cellVal}
+                                          >
+                                            {cellVal}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (data?.pages && data.pages.length > 0) {
+                      return (
+                        <div className="flex flex-col gap-6 mt-4 max-h-[500px] overflow-y-auto p-4 bg-surface-3 border border-hairline rounded-lg scrollbar-thin">
+                          {data.pages.map((page, idx) => (
+                            <div key={idx} className="bg-surface-1 border border-hairline rounded-xl shadow-sm p-6 relative min-h-[150px] flex flex-col">
+                              <div className="absolute top-3 right-3 text-[10px] font-mono text-ink-muted bg-surface-2 px-2 py-0.5 rounded border border-hairline">
+                                Page {page.pageNumber || idx + 1}
+                              </div>
+                              <div className="mt-4 font-sans text-xs leading-relaxed text-ink whitespace-pre-wrap select-text">
+                                {page.text}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="mt-4 border border-hairline rounded-lg bg-surface-3 p-4 max-h-[400px] overflow-y-auto font-mono text-[11px] leading-relaxed text-ink whitespace-pre-wrap select-text scrollbar-thin">
+                        {data?.fullText || data?.text || "No text content found in document."}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="mt-8 flex items-center justify-between border-t border-hairline pt-4 text-[10px] text-ink-muted">

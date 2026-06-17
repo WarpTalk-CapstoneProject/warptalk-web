@@ -13,7 +13,8 @@ import type {
   PagedResult,
   SelectWorkspaceResponse,
   InviteMemberResponse,
-  PreviewInvitationResponse
+  PreviewInvitationResponse,
+  ExtractedTextDto
 } from "@/types/workspace";
 
 export const WorkspaceService = {
@@ -159,8 +160,8 @@ export const WorkspaceService = {
     return data;
   },
 
-  async getExtractedText(workspaceId: string, docId: string): Promise<{ text: string }> {
-    const { data } = await apiClient.get<{ text: string }>(API.workspaces.documentExtractedText(workspaceId, docId));
+  async getExtractedText(workspaceId: string, docId: string): Promise<ExtractedTextDto> {
+    const { data } = await apiClient.get<ExtractedTextDto>(API.workspaces.documentExtractedText(workspaceId, docId));
     return data;
   },
 
