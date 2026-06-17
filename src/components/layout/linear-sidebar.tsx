@@ -20,12 +20,8 @@ import {
   Shield,
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
-<<<<<<< HEAD
-import type { Icon } from "@phosphor-icons/react";
-=======
 import type { IconProps } from "@phosphor-icons/react";
 type IconType = React.ElementType<IconProps>;
->>>>>>> origin/development
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -71,9 +67,9 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
   return (
     <div className={cn(
-        "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-        isActive ? "bg-surface-2" : "hover:bg-surface-2"
-      )}>
+      "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+      isActive ? "bg-surface-2" : "hover:bg-surface-2"
+    )}>
       <Link href={item.href} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
         <item.icon size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
         <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">{item.label}</span>
@@ -82,7 +78,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
         <div className="flex items-center">
           {item.actions.map((action, i) => (
             action.onClick ? (
-              <button 
+              <button
                 key={i}
                 type="button"
                 title={action.title}
@@ -96,7 +92,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
                 <action.icon size={14} weight="bold" />
               </button>
             ) : (
-              <Link 
+              <Link
                 key={i}
                 href={action.href || "#"}
                 title={action.title}
@@ -135,14 +131,14 @@ export function LinearSidebar() {
   const slug = activeWorkspaceSlug || "workspace";
 
   const mainNav: NavItem[] = [
-    { 
-      icon: SquaresFour, 
-      label: "Meetings", 
-      href: `/${slug}/rooms`, 
+    {
+      icon: SquaresFour,
+      label: "Meetings",
+      href: `/${slug}/rooms`,
       actions: [
         { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: "Join by code" },
         { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
-      ] 
+      ]
     },
     { icon: ClockCounterClockwise, label: "History", href: `/${slug}/history` },
     { icon: Sparkle, label: "AI Summaries", href: `/${slug}/ai-summaries` },
@@ -213,7 +209,7 @@ export function LinearSidebar() {
           <div className="px-2 mb-2 flex items-center h-[24px]">
             <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">Personal</span>
           </div>
-          
+
           <div className="flex flex-col gap-px">
             <div className={cn(
               "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
@@ -224,7 +220,7 @@ export function LinearSidebar() {
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Profile</span>
               </Link>
             </div>
-            
+
             {/* Conditional workspace settings link inside Settings sidebar */}
             {isOwnerOrAdmin && activeWorkspaceSlug && (
               <>
@@ -268,7 +264,7 @@ export function LinearSidebar() {
         {/* User Account Panel */}
         {user && (
           <div className="p-3 mt-auto shrink-0">
-            <div 
+            <div
               onClick={() => router.push("/settings")}
               className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
             >
@@ -286,7 +282,7 @@ export function LinearSidebar() {
                   {user.email}
                 </span>
               </div>
-              <button 
+              <button
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -311,12 +307,12 @@ export function LinearSidebar() {
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2 hover:bg-surface-2 px-1.5 py-1 -ml-1.5 rounded-md cursor-pointer transition-colors min-w-0 max-w-[170px]">
             <div className="w-[20px] h-[20px] rounded bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shrink-0 text-white border border-white/10">
-                <span className="text-[10px] font-bold leading-none tracking-tight">{workspaceInitials}</span>
-              </div>
-              <span className="text-[14px] font-semibold text-ink truncate tracking-tight">
-                {activeWorkspaceName || "Workspace"}
-              </span>
-              <CaretDown size={12} className="text-ink-muted ml-1 shrink-0" weight="bold" />
+              <span className="text-[10px] font-bold leading-none tracking-tight">{workspaceInitials}</span>
+            </div>
+            <span className="text-[14px] font-semibold text-ink truncate tracking-tight">
+              {activeWorkspaceName || "Workspace"}
+            </span>
+            <CaretDown size={12} className="text-ink-muted ml-1 shrink-0" weight="bold" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[220px] bg-popover border border-border shadow-md rounded-lg p-1">
             <DropdownMenuLabel className="px-2 py-1.5 text-xs text-ink-muted">
@@ -360,8 +356,8 @@ export function LinearSidebar() {
         </DropdownMenu>
 
         <div className="flex items-center gap-1.5 text-ink-muted shrink-0">
-          <button 
-             onClick={() => setSearchMeetingModalOpen(true)}
+          <button
+            onClick={() => setSearchMeetingModalOpen(true)}
             className="flex size-7 items-center justify-center rounded-[6px] hover:bg-surface-2 hover:text-ink transition-colors"
           >
             <MagnifyingGlass size={16} weight="regular" />
@@ -390,7 +386,7 @@ export function LinearSidebar() {
       {/* User Account Panel */}
       {user && (
         <div className="p-3 mt-auto shrink-0">
-          <div 
+          <div
             onClick={() => router.push("/settings")}
             className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
           >
@@ -408,7 +404,7 @@ export function LinearSidebar() {
                 {user.email}
               </span>
             </div>
-            <button 
+            <button
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -446,8 +442,8 @@ export function LinearSidebar() {
               />
             </div>
             <div className="flex justify-end pt-2">
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={!joinCode.trim()}
                 className="disabled:bg-surface-2 disabled:text-ink-muted disabled:opacity-100 min-w-[80px] text-white"
               >

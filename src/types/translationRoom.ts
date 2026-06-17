@@ -13,7 +13,8 @@ export type TranslationRoomStatus =
   | "ended"
   | "cancelled"
   | "expired"
-  | "failed";
+  | "failed"
+  | "timeout";
 
 export type TranslationRoomLifecycleAction = "start" | "end" | "cancel";
 

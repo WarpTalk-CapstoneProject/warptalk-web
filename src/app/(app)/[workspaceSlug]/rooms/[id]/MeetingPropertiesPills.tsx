@@ -8,35 +8,31 @@ import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 
-export function MeetingPropertiesPills({ 
-  room, 
+export function MeetingPropertiesPills({
+  room,
   apiParticipants,
   activeParticipantCount,
   user
-}: { 
+}: {
   room: TranslationRoomDto;
   apiParticipants: TranslationRoomParticipantDto[];
   activeParticipantCount: number;
   user: any;
 }) {
   const updateSettings = useUpdateTranslationRoomSettings();
-<<<<<<< HEAD:src/app/(app)/[workspaceSlug]/rooms/[id]/MeetingPropertiesPills.tsx
-  const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1 || (room as any).translationMode === "multi");
-=======
   const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1);
->>>>>>> origin/development:src/app/(app)/rooms/[id]/MeetingPropertiesPills.tsx
 
   const handleSourceChange = (lang: string) => {
-    updateSettings.mutate({ 
-      id: room.id, 
-      data: { sourceLanguage: lang, targetLanguages: room.targetLanguages } 
+    updateSettings.mutate({
+      id: room.id,
+      data: { sourceLanguage: lang, targetLanguages: room.targetLanguages }
     });
   };
 
   const handleTargetsChange = (langs: string[]) => {
-    updateSettings.mutate({ 
-      id: room.id, 
-      data: { sourceLanguage: room.sourceLanguage, targetLanguages: langs } 
+    updateSettings.mutate({
+      id: room.id,
+      data: { sourceLanguage: room.sourceLanguage, targetLanguages: langs }
     });
   };
 
@@ -53,7 +49,7 @@ export function MeetingPropertiesPills({
         </span>
       </div>
 
-      <LanguageSelector 
+      <LanguageSelector
         source={room.sourceLanguage ?? ""}
         onSourceChange={handleSourceChange}
         targets={isMultiLang ? room.targetLanguages : room.targetLanguages.slice(0, 1)}
@@ -61,15 +57,15 @@ export function MeetingPropertiesPills({
         isMultiLang={isMultiLang}
       />
 
-      <OptionsMenu 
-        isMultiLang={isMultiLang} 
+      <OptionsMenu
+        isMultiLang={isMultiLang}
         onToggleMultiLang={() => {
           setIsMultiLang(!isMultiLang);
           if (isMultiLang && room.targetLanguages.length > 1) {
             // Revert back to 1 target if we toggle multi-lang off
             handleTargetsChange([room.targetLanguages[0]]);
           }
-        }} 
+        }}
       />
 
       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">

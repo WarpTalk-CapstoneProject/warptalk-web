@@ -72,12 +72,8 @@ export const API = {
     endMeeting: (roomId: string) => `/meetings/rooms/${roomId}/end`,
   },
   workspaces: {
-    list: "/workspaces",
-    get: (id: string) => `/workspaces/${id}`,
-    members: (id: string) => `/workspaces/${id}/members`,
-  },
-  workspaces: {
     base: "/workspaces",
+    list: "/workspaces",
     get: (id: string) => `/workspaces/${id}`,
     select: (id: string) => `/workspaces/${id}/select`,
     settings: (id: string) => `/workspaces/${id}/settings`,

@@ -59,7 +59,7 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
       attributes: {
         class: 'min-h-[36px] max-h-[120px] overflow-y-auto custom-scrollbar w-full bg-transparent text-[13px] text-ink outline-none px-3 py-2',
       },
-      handleKeyDown: (view, event) => {
+      handleKeyDown: (view: any, event: any) => {
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
           sendMessage();
@@ -102,7 +102,7 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
     };
 
     if (json.content) {
-      json.content.forEach((block) => {
+      json.content.forEach((block: any) => {
         parseNode(block);
         textContent += '\n';
       });

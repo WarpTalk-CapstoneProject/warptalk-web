@@ -19,7 +19,6 @@ export function middleware(request: NextRequest) {
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
-<<<<<<< HEAD
   if (token && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
     const activeWorkspaceSlug = request.cookies.get("active_workspace_slug")?.value;
     if (activeWorkspaceSlug) {
@@ -27,10 +26,6 @@ export function middleware(request: NextRequest) {
     } else {
       return NextResponse.redirect(new URL("/workspace", request.url));
     }
-=======
-  if (token && isAuthRoute) {
-    return NextResponse.redirect(new URL("/rooms", request.url));
->>>>>>> origin/development
   }
 
   if (!token && !isPublicRoute) {

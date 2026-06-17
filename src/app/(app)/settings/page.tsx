@@ -166,7 +166,7 @@ export default function SettingsPage() {
         {/* Language select */}
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-semibold text-ink-muted">Preferred Language</label>
-          <Select value={preferredLanguage} onValueChange={setPreferredLanguage} disabled={saving}>
+          <Select value={preferredLanguage} onValueChange={(val) => setPreferredLanguage(val || "vi-VN")} disabled={saving}>
             <SelectTrigger className="h-10 text-[13px] bg-surface-2/40 border-hairline rounded-md">
               <SelectValue placeholder="Select language..." />
             </SelectTrigger>
@@ -182,7 +182,7 @@ export default function SettingsPage() {
         {/* Timezone select */}
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-semibold text-ink-muted">Timezone</label>
-          <Select value={timezone} onValueChange={setTimezone} disabled={saving}>
+          <Select value={timezone} onValueChange={(val) => setTimezone(val || "Asia/Ho_Chi_Minh")} disabled={saving}>
             <SelectTrigger className="h-10 text-[13px] bg-surface-2/40 border-hairline rounded-md">
               <SelectValue placeholder="Select timezone..." />
             </SelectTrigger>

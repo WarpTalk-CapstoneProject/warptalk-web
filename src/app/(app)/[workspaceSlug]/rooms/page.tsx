@@ -114,13 +114,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
       <div className="w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
         {room.translationRoomCode}
       </div>
-<<<<<<< HEAD:src/app/(app)/[workspaceSlug]/rooms/page.tsx
-
-      <div className="flex-1 min-w-0 pr-4">
-=======
-      
       <div className="flex-1 min-w-0 pr-4 flex items-center gap-2">
->>>>>>> origin/development:src/app/(app)/rooms/page.tsx
         <span className="text-foreground font-medium truncate block">{room.title}</span>
         {user?.id && room.hostId !== user.id && (
           <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-500/20">
@@ -143,11 +137,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
         </div>
 
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-<<<<<<< HEAD:src/app/(app)/[workspaceSlug]/rooms/page.tsx
           <LanguageWithFlag locale={room.sourceLanguage || "en-US"} />
-=======
-          <LanguageWithFlag locale={room.sourceLanguage ?? ""} />
->>>>>>> origin/development:src/app/(app)/rooms/page.tsx
           {room.targetLanguages.length > 1 ? (
             <>
               <span className="text-muted-foreground/40 font-bold px-1 text-[13px]">;</span>
@@ -254,37 +244,6 @@ function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[
 
           {/* Events */}
           <div className="absolute inset-0 right-4">
-<<<<<<< HEAD:src/app/(app)/[workspaceSlug]/rooms/page.tsx
-            {rooms.map((room) => {
-              if (!room.scheduledAt) return null;
-              const scheduledDate = new Date(room.scheduledAt);
-              const eventHour = scheduledDate.getHours();
-              const eventMinute = scheduledDate.getMinutes();
-              const durationMinutes = (room.durationSeconds ?? 3600) / 60;
-
-              const top = (eventHour * 60 + eventMinute) * minuteHeight;
-              const height = Math.max(durationMinutes * minuteHeight, 24); // Minimum height
-
-              return (
-                <Link
-                  key={room.id}
-                  href={`/rooms/${room.id}`}
-                  className="absolute left-2 right-2 rounded-md border border-primary/20 bg-primary/10 border-l-4 border-l-primary hover:bg-primary/20 transition-all p-2 overflow-hidden flex flex-col group shadow-sm hover:shadow-md z-10"
-                  style={{ top, height }}
-                >
-                  <div className="flex justify-between items-start gap-4">
-                    <span className="font-semibold text-primary text-[12px] leading-tight truncate">{room.title}</span>
-                    <span className="text-[10px] text-primary/70 font-medium shrink-0">
-                      {scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
-                      {new Date(scheduledDate.getTime() + durationMinutes * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  {height >= 40 && (
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">
-                      <span>{room.sourceLanguage} {room.targetLanguages.length > 1 ? ";" : "→"} {room.targetLanguages.join(", ")}</span>
-                      <span>•</span>
-                      <span className="font-mono">{room.translationRoomCode}</span>
-=======
             {(() => {
               const validRooms = rooms.filter(r => r.scheduledAt);
               // Sort by start time
@@ -355,7 +314,6 @@ function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[
                         {scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
                         {new Date(scheduledDate.getTime() + durationMinutes * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
->>>>>>> origin/development:src/app/(app)/rooms/page.tsx
                     </div>
                     {height >= 40 && (
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">

@@ -32,7 +32,6 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-<<<<<<< HEAD
 function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
   let expiresString = "";
   if (expiresAt) {
@@ -46,11 +45,6 @@ function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
   const maxAgeString = expiresString ? "" : `; max-age=${7 * 24 * 60 * 60}`;
 
   document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
-=======
-function setAccessTokenCookie(accessToken: string) {
-  const maxAge = 7 * 24 * 60 * 60;
-  document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
->>>>>>> origin/development
 }
 
 function LoginForm() {
