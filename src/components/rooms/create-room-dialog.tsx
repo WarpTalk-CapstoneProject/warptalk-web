@@ -26,7 +26,8 @@ import {
   UsersThree,
   MicrophoneStage,
   Broadcast,
-  SignIn
+  SignIn,
+  FileText
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -46,6 +47,7 @@ import { TemplatePicker } from "./create/template-picker";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
 import { StartTimePicker } from "./create/start-time-picker";
 import { LanguageSelector } from "./create/language-selector";
+import { ResourcePicker } from "./create/resource-picker";
 
 const languageOptions = [
   { code: "vi", label: "Vietnamese" },
@@ -77,6 +79,8 @@ export function CreateRoomDialog() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["vi"]);
   const [isMultiLang, setIsMultiLang] = useState(false);
   const [isDaily, setIsDaily] = useState(false);
+  const [hasResources, setHasResources] = useState(false);
+  const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -135,6 +139,8 @@ export function CreateRoomDialog() {
         setSourceLanguage("en");
         setIsMultiLang(false);
         setScheduledAt(null);
+        setHasResources(false);
+        setSelectedResources([]);
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
@@ -285,6 +291,12 @@ export function CreateRoomDialog() {
                     onRemove={() => setScheduledAt(null)} 
                   />
                 )}
+                {hasResources && (
+                  <ResourcePicker 
+                    resources={selectedResources} 
+                    onChange={setSelectedResources} 
+                  />
+                )}
                 <OptionsMenu 
                   hasScheduledAt={!!scheduledAt} 
                   onAddScheduledAt={() => setScheduledAt(getDefaultStartTime())} 
@@ -297,6 +309,8 @@ export function CreateRoomDialog() {
                   }}
                   isDaily={isDaily}
                   onToggleDaily={() => setIsDaily(!isDaily)}
+                  hasResources={hasResources}
+                  onAddResources={() => setHasResources(true)}
                 />
               </div>
 

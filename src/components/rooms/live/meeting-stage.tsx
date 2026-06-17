@@ -2,7 +2,7 @@
 
 import { RefObject, useEffect, useRef } from "react";
 import { ConnectionState, Track } from "livekit-client";
-import { useConnectionState, ParticipantTile, useParticipants, ParticipantLoop } from "@livekit/components-react";
+import { useConnectionState, ParticipantTile, useTracks, TrackLoop } from "@livekit/components-react";
 import { SpinnerGap, Microphone, MicrophoneSlash } from "@phosphor-icons/react/dist/ssr";
 import type { TranslationRoomParticipantDto } from "@/types/translationRoom";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
@@ -35,8 +35,14 @@ export function LiveKitMeetingStage({
   const connectionState = useConnectionState();
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
-  const lkParticipants = useParticipants();
-  const hasParticipants = connectionState === ConnectionState.Connected && lkParticipants.length > 0;
+  const tracks = useTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.ScreenShare, withPlaceholder: false },
+    ],
+    { onlySubscribed: false }
+  );
+  const hasParticipants = connectionState === ConnectionState.Connected && tracks.length > 0;
 
   useEffect(() => {
     if (!localVideoRef.current) return;
@@ -59,9 +65,9 @@ export function LiveKitMeetingStage({
         </div>
         
         <div className="grid h-full gap-3 overflow-hidden grid-cols-1 overflow-y-auto">
-          <ParticipantLoop participants={lkParticipants}>
+          <TrackLoop tracks={tracks}>
             <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur min-h-[160px]" />
-          </ParticipantLoop>
+          </TrackLoop>
         </div>
         <ConnectionBadge state={connectionState} />
       </div>
@@ -71,10 +77,10 @@ export function LiveKitMeetingStage({
   if (hasParticipants) {
     return (
       <div className="relative h-full w-full p-2 bg-surface-1">
-        <div className={`grid h-full gap-3 ${gridClassName(lkParticipants.length)}`}>
-          <ParticipantLoop participants={lkParticipants}>
+        <div className={`grid h-full gap-3 ${gridClassName(tracks.length)}`}>
+          <TrackLoop tracks={tracks}>
             <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur" />
-          </ParticipantLoop>
+          </TrackLoop>
         </div>
         <ConnectionBadge state={connectionState} />
       </div>

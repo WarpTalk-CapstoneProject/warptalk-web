@@ -33,23 +33,28 @@ export function TranscriptPanel({ segments }: { segments: TranscriptSegmentDto[]
 function TranscriptBubble({ segment }: { segment: TranscriptSegmentDto }) {
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 15, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="flex flex-col gap-1 origin-bottom"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex gap-3 items-start group"
     >
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-medium text-ink">{segment.speakerName || "Speaker"}</span>
-        <span className="text-[11px] text-ink-subtle">
-          {getLanguageName(segment.originalLanguage)}
-          {segment.targetLanguage ? ` -> ${getLanguageName(segment.targetLanguage)}` : ""}
-        </span>
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-3 text-[11px] font-semibold text-ink shadow-sm">
+        {(segment.speakerName || "S").substring(0, 2).toUpperCase()}
       </div>
-      <div className="rounded-lg border border-border bg-surface-1 p-3 shadow-sm">
-        <p className="text-[13px] leading-relaxed text-ink-muted">{segment.originalText}</p>
-        {segment.translatedText ? (
-          <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-ink">{segment.translatedText}</p>
-        ) : null}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-baseline gap-2">
+          <span className="text-[13px] font-semibold text-ink">{segment.speakerName || "Speaker"}</span>
+          <span className="text-[11px] font-medium text-ink-subtle">
+            {getLanguageName(segment.originalLanguage)}
+            {segment.targetLanguage ? ` → ${getLanguageName(segment.targetLanguage)}` : ""}
+          </span>
+        </div>
+        <div className="mt-0.5 flex flex-col gap-1">
+          <p className="text-[13px] leading-relaxed text-ink-muted">{segment.originalText}</p>
+          {segment.translatedText ? (
+            <p className="text-[13px] font-medium leading-relaxed text-ink">{segment.translatedText}</p>
+          ) : null}
+        </div>
       </div>
     </motion.div>
   );

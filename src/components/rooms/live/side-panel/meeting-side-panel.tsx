@@ -7,7 +7,7 @@ import { TranscriptPanel } from "./transcript-panel";
 import { WarpBotPanel } from "./warpbot-panel";
 import { PeoplePanel } from "./people-panel";
 
-export type SidePanelMode = "transcript" | "chat" | "warpbot" | "participants";
+export type SidePanelMode = "transcript" | "chat" | "participants";
 
 export function MeetingSidePanel({
   roomId,
@@ -44,14 +44,12 @@ export function MeetingSidePanel({
         <div className="flex items-center gap-4 px-4 pt-3 pb-2 shrink-0 border-b border-border">
           <TabButton active={mode === "transcript"} label="Transcript" onClick={() => onModeChange("transcript")} />
           <TabButton active={mode === "chat"} label="Chat" onClick={() => onModeChange("chat")} />
-          <TabButton active={mode === "warpbot"} label="WarpBot" onClick={() => onModeChange("warpbot")} />
           <TabButton active={mode === "participants"} label="Participants" badge={activeCount} onClick={() => onModeChange("participants")} />
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
           {mode === "transcript" ? <TranscriptPanel segments={segments} /> : null}
           {mode === "chat" ? <ChatPanel roomId={roomId} /> : null}
-          {mode === "warpbot" ? <WarpBotPanel /> : null}
           {mode === "participants" ? (
             <PeoplePanel
               roomId={roomId}
