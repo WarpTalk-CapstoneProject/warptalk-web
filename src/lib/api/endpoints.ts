@@ -77,6 +77,7 @@ export const API = {
     acceptInvitation: "/workspaces/invitations/accept",
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
+    documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,
     documentApprove: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/approve`,
     documentDownload: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/download`,
     documentPolicies: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies`,

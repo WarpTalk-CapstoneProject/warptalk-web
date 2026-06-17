@@ -16,8 +16,12 @@ import {
   MagnifyingGlass,
   Spinner,
   ShieldWarning,
-  Warning
+  Warning,
+  VideoCamera,
+  Archive,
+  ArrowCounterClockwise
 } from "@phosphor-icons/react";
+import { useTranslationRooms } from "@/hooks/use-translationRooms";
 
 import apiClient from "@/lib/api/client";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -25,7 +29,9 @@ import {
   useWorkspaceDocuments,
   useUploadWorkspaceDocument,
   useApproveWorkspaceDocument,
-  useDeleteWorkspaceDocument
+  useDeleteWorkspaceDocument,
+  useArchiveWorkspaceDocument,
+  useRestoreWorkspaceDocument
 } from "@/hooks/use-workspace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -54,6 +60,7 @@ export default function WorkspaceDocumentsPage() {
 
   // TanStack Query list with 5 second polling if any document is in processing
   const documentsQuery = useWorkspaceDocuments(activeWorkspaceId || "", page, 10, query);
+  const roomsQuery = useTranslationRooms({ pageSize: 100 });
   
   // Decide whether to poll: check if any document has ingestionStatus "Pending" or "Processing"
   const isAnyDocumentProcessing = documentsQuery.data?.items.some(
@@ -64,6 +71,8 @@ export default function WorkspaceDocumentsPage() {
   const uploadMutation = useUploadWorkspaceDocument(activeWorkspaceId || "");
   const approveMutation = useApproveWorkspaceDocument(activeWorkspaceId || "");
   const deleteMutation = useDeleteWorkspaceDocument(activeWorkspaceId || "");
+  const archiveMutation = useArchiveWorkspaceDocument(activeWorkspaceId || "");
+  const restoreMutation = useRestoreWorkspaceDocument(activeWorkspaceId || "");
 
   const {
     register,
@@ -87,6 +96,12 @@ export default function WorkspaceDocumentsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File size exceeds 10MB limit.");
+        e.target.value = "";
+        setSelectedFile(null);
+        return;
+      }
       setSelectedFile(file);
       // Automatically prefill document name field with file name (sans extension)
       const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
@@ -99,18 +114,18 @@ export default function WorkspaceDocumentsPage() {
       toast.error("Please select a file to register.");
       return;
     }
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      toast.error("File size exceeds 10MB limit.");
+      return;
+    }
 
     try {
-      const fileExt = selectedFile.name.substring(selectedFile.name.lastIndexOf(".") + 1).toLowerCase();
       await uploadMutation.mutateAsync({
         name: formData.name,
-        fileName: selectedFile.name,
-        fileExtension: fileExt,
-        mimeType: selectedFile.type || "application/octet-stream",
-        sizeBytes: selectedFile.size,
         sourceType: "Upload",
         sourceId: null,
         isSensitive: formData.isSensitive,
+        file: selectedFile,
       });
 
       toast.success("Document uploaded and registered successfully!");
@@ -122,6 +137,28 @@ export default function WorkspaceDocumentsPage() {
     } catch (err: unknown) {
       const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
         || "Failed to upload document.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleArchive = async (docId: string) => {
+    try {
+      await archiveMutation.mutateAsync(docId);
+      toast.success("Document archived.");
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+        || "Failed to archive document.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleRestore = async (docId: string) => {
+    try {
+      await restoreMutation.mutateAsync(docId);
+      toast.success("Document restored.");
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+        || "Failed to restore document.";
       toast.error(errorMsg);
     }
   };
@@ -206,20 +243,23 @@ export default function WorkspaceDocumentsPage() {
                 </p>
               </div>
             ) : (
-              <div className="min-w-[750px] divide-y divide-hairline">
-                <div className="grid grid-cols-[50px_1fr_120px_180px_80px] items-center gap-4 px-4 py-2 bg-surface-2 text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
+              <div className="min-w-[720px] divide-y divide-hairline">
+                <div className="grid grid-cols-[40px_1.5fr_1fr_110px_120px_70px] items-center gap-4 px-4 py-2 bg-surface-2 text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
                   <span>#</span>
                   <span>Name</span>
+                  <span>Room/Source</span>
                   <span>Status</span>
                   <span>Access Policies</span>
                   <span className="text-right">Actions</span>
                 </div>
 
                 {docsList.map((doc, index) => {
+                  const room = roomsQuery.data?.rooms?.find((r) => r.id === doc.sourceId);
+                  const isMeeting = doc.sourceType?.toLowerCase() === "meeting";
                   return (
                     <div
                       key={doc.id}
-                      className="grid grid-cols-[50px_1fr_120px_180px_80px] items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors"
+                      className="grid grid-cols-[40px_1.5fr_1fr_110px_120px_70px] items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors"
                     >
                       {/* Number Index */}
                       <span className="text-xs text-ink-muted font-mono">{(page - 1) * 10 + index + 1}</span>
@@ -240,16 +280,34 @@ export default function WorkspaceDocumentsPage() {
                         </div>
                       </div>
 
+                      {/* Room/Source */}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {isMeeting ? (
+                          <>
+                            <VideoCamera className="h-4 w-4 text-primary shrink-0" />
+                            <span className="text-xs font-medium text-ink truncate" title={room?.title || "Meeting Room"}>
+                              {room?.title || `Room #${doc.sourceId?.substring(0, 8) || "Meeting"}`}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-xs text-ink-muted font-normal italic">
+                            {doc.sourceType || "Direct Upload"}
+                          </span>
+                        )}
+                      </div>
+
                       {/* Status */}
                       <div>
                         <Badge
                           variant="outline"
                           className={`text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ${
-                            doc.status === "Active"
+                            doc.status?.toLowerCase() === "active"
                               ? "bg-primary/5 text-primary border-primary/20"
-                              : doc.status === "Pending approval"
+                              : doc.status?.toLowerCase() === "pending_approval"
                                 ? "bg-amber-500/5 text-amber-500 border-amber-500/20"
-                                : "bg-surface-3 border-hairline text-ink-muted"
+                                : doc.status?.toLowerCase() === "archived"
+                                  ? "bg-stone-500/5 text-stone-500 border-stone-500/20"
+                                  : "bg-surface-3 border-hairline text-ink-muted"
                           }`}
                         >
                           {doc.status}
@@ -265,7 +323,7 @@ export default function WorkspaceDocumentsPage() {
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="border-hairline text-ink-muted text-[10px] px-1.5 py-0.5 rounded-md">
-                            Default (Inherited)
+                            Default
                           </Badge>
                         )}
                       </div>
@@ -279,6 +337,25 @@ export default function WorkspaceDocumentsPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
+                        {isOwnerOrAdmin && (
+                          doc.status?.toLowerCase() === "archived" ? (
+                            <button
+                              onClick={() => handleRestore(doc.id)}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:bg-primary/10 hover:text-primary transition-colors"
+                              title="Restore Document"
+                            >
+                              <ArrowCounterClockwise className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleArchive(doc.id)}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:bg-amber-500/10 hover:text-amber-500 transition-colors"
+                              title="Archive Document"
+                            >
+                              <Archive className="h-4 w-4" />
+                            </button>
+                          )
+                        )}
                         {isOwnerOrAdmin && (
                           <button
                             onClick={() => setDocToDelete({ id: doc.id, name: doc.name })}

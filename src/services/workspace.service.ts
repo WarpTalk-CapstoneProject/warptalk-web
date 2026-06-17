@@ -112,17 +112,39 @@ export const WorkspaceService = {
     workspaceId: string,
     request: {
       name: string;
-      fileName: string;
-      fileExtension: string;
-      mimeType: string;
-      sizeBytes: number;
       sourceType: string;
       sourceId?: string | null;
       isSensitive: boolean;
+      file: File;
     }
   ): Promise<WorkspaceDocumentDto> {
-    const { data } = await apiClient.post<WorkspaceDocumentDto>(API.workspaces.documents(workspaceId), request);
+    const formData = new FormData();
+    formData.append("name", request.name);
+    formData.append("sourceType", request.sourceType);
+    if (request.sourceId) {
+      formData.append("sourceId", request.sourceId);
+    }
+    formData.append("isSensitive", String(request.isSensitive));
+    formData.append("file", request.file);
+
+    const { data } = await apiClient.post<WorkspaceDocumentDto>(
+      API.workspaces.documents(workspaceId),
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
     return data;
+  },
+
+  async archiveDocument(workspaceId: string, docId: string): Promise<void> {
+    await apiClient.post(API.workspaces.documentDetail(workspaceId, docId) + "/archive");
+  },
+
+  async restoreDocument(workspaceId: string, docId: string): Promise<void> {
+    await apiClient.post(API.workspaces.documentDetail(workspaceId, docId) + "/restore");
   },
 
   async listDocuments(workspaceId: string, page = 1, pageSize = 10, search = ""): Promise<PagedResult<WorkspaceDocumentDto>> {
@@ -134,6 +156,11 @@ export const WorkspaceService = {
 
   async getDocumentById(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {
     const { data } = await apiClient.get<WorkspaceDocumentDto>(API.workspaces.documentDetail(workspaceId, docId));
+    return data;
+  },
+
+  async getExtractedText(workspaceId: string, docId: string): Promise<{ text: string }> {
+    const { data } = await apiClient.get<{ text: string }>(API.workspaces.documentExtractedText(workspaceId, docId));
     return data;
   },
 

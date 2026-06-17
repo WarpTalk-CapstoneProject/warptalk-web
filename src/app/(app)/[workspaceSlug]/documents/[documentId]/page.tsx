@@ -35,7 +35,8 @@ import {
   useRemoveWorkspaceDocumentAccessPolicy,
   useWorkspaceMembers,
   useDownloadWorkspaceDocument,
-  useApproveWorkspaceDocument
+  useApproveWorkspaceDocument,
+  useWorkspaceDocumentExtractedText
 } from "@/hooks/use-workspace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
 
   // Queries
   const documentQuery = useWorkspaceDocument(activeWorkspaceId || "", documentId);
+  const extractedTextQuery = useWorkspaceDocumentExtractedText(activeWorkspaceId || "", documentId);
   const policiesQuery = useWorkspaceDocumentAccessPolicies(activeWorkspaceId || "", documentId, policyPage, 10);
   const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
 
@@ -409,14 +411,19 @@ export default function DocumentDetailPage({ params }: PageProps) {
                     </p>
                   </div>
 
-                  <div className="flex flex-col gap-2.5 opacity-40 select-none mt-4 font-serif text-[11px] leading-loose text-ink-muted">
-                    <p>
-                      1. GENERAL TERMS AND SCOPE OF COLLABORATION. The parties agree to collaborate on the project context translation alignment. All files uploaded under this workspace directory are considered strictly confidential.
-                    </p>
-                    <p>
-                      2. TERMINOLOGY ALIGNMENT AND GLOSSARY SYNCHRONIZATION. Mapped keywords are automatically synchronized with the database schema for real-time translation rendering pipeline.
-                    </p>
-                  </div>
+                  {extractedTextQuery.isLoading ? (
+                    <div className="flex items-center justify-center p-8 mt-4">
+                      <Spinner className="h-5 w-5 animate-spin text-primary" />
+                    </div>
+                  ) : extractedTextQuery.isError ? (
+                    <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-xs mt-4">
+                      Failed to load extracted text content.
+                    </div>
+                  ) : (
+                    <div className="mt-4 border border-hairline rounded-lg bg-surface-3 p-4 max-h-[400px] overflow-y-auto font-mono text-[11px] leading-relaxed text-ink whitespace-pre-wrap select-text">
+                      {extractedTextQuery.data?.text || "No text content found in document."}
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-8 flex items-center justify-between border-t border-hairline pt-4 text-[10px] text-ink-muted">

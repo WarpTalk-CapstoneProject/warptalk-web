@@ -200,6 +200,28 @@ export function useUploadWorkspaceDocument(workspaceId: string) {
   });
 }
 
+export function useArchiveWorkspaceDocument(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (docId: string) => WorkspaceService.archiveDocument(workspaceId, docId),
+    onSuccess: (_, docId) => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "documents", workspaceId] });
+    },
+  });
+}
+
+export function useRestoreWorkspaceDocument(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (docId: string) => WorkspaceService.restoreDocument(workspaceId, docId),
+    onSuccess: (_, docId) => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "documents", workspaceId] });
+    },
+  });
+}
+
 export function useWorkspaceDocuments(workspaceId: string, page = 1, pageSize = 10, search = "") {
   return useQuery({
     queryKey: WORKSPACE_KEYS.documents(workspaceId, page, pageSize, search),
@@ -214,6 +236,15 @@ export function useWorkspaceDocument(workspaceId: string, docId: string) {
   return useQuery({
     queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId),
     queryFn: () => WorkspaceService.getDocumentById(workspaceId, docId),
+    enabled: !!workspaceId && !!docId,
+    staleTime: 30000,
+  });
+}
+
+export function useWorkspaceDocumentExtractedText(workspaceId: string, docId: string) {
+  return useQuery({
+    queryKey: ["workspaces", "document-extracted-text", workspaceId, docId],
+    queryFn: () => WorkspaceService.getExtractedText(workspaceId, docId),
     enabled: !!workspaceId && !!docId,
     staleTime: 30000,
   });
