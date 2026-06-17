@@ -20,6 +20,8 @@ import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { DeviceSelect } from "@/components/rooms/setup/device-select";
 import { LanguageRoleConfirm } from "@/components/rooms/setup/language-role-confirm";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Lumidot } from "lumidot";
+import { useTheme } from "next-themes";
 
 type SinkVideoElement = HTMLVideoElement & {
   setSinkId?: (sinkId: string) => Promise<void>;
@@ -34,6 +36,8 @@ export function SetupRoomModal() {
   
   const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(roomId ?? "");
   const role = useWorkspaceRole();
+  const { resolvedTheme } = useTheme();
+  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
   const isAdmin = role === "admin";
   const isOwner = role === "owner";
   const isHost = Boolean(room && user && (room.hostId === user.id || isAdmin || isOwner));
@@ -218,8 +222,8 @@ export function SetupRoomModal() {
 
         {/* Title Area */}
         <div className="w-full space-y-1">
-          <h2 className="text-[20px] font-semibold tracking-tight text-foreground pr-8">
-            {isLoadingRoom ? "Loading room..." : room?.title || "Ready to join?"}
+          <h2 className="text-[20px] font-semibold tracking-tight text-foreground pr-8 flex items-center gap-3">
+            {isLoadingRoom ? <><Lumidot variant={lumidotVariant} pattern="all" glow={4} /> <span>Loading room...</span></> : room?.title || "Ready to join?"}
           </h2>
           <p className="text-[13px] text-ink-muted tracking-[-0.05px]">Room Code: {room?.translationRoomCode || roomId}</p>
         </div>

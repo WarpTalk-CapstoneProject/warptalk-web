@@ -13,14 +13,18 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Lumidot } from "lumidot";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
+import { useTheme } from "next-themes";
 
 export function SearchMeetingDialog() {
   const router = useRouter();
   const searchMeetingModalOpen = useUIStore((state) => state.searchMeetingModalOpen);
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
   const [searchQuery, setSearchQuery] = useState("");
+  const { resolvedTheme } = useTheme();
+  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   const { data, isLoading } = useTranslationRooms({
     search: searchQuery,
@@ -44,7 +48,7 @@ export function SearchMeetingDialog() {
           autoFocus 
         />
         <CommandList>
-          {isLoading && <div className="p-4 text-sm text-center text-muted-foreground">Searching meetings...</div>}
+          {isLoading && <div className="p-4 text-sm flex items-center justify-center gap-3 text-muted-foreground"><Lumidot variant={lumidotVariant} pattern="all" glow={4} /><span>Searching meetings...</span></div>}
           {!isLoading && meetings.length > 0 && (
             <CommandGroup heading="Meetings">
               {meetings.map((meeting) => (

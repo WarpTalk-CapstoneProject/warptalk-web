@@ -19,6 +19,9 @@ import {
 } from "@/hooks/use-meeting";
 import { useAdmitParticipant, useUpdateParticipantAudio } from "@/hooks/use-translationRooms";
 import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
+import { useParticipants } from "@livekit/components-react";
+import { Lumidot } from "lumidot";
+import { useTheme } from "next-themes";
 
 export function PeoplePanel({
   roomId,
@@ -40,6 +43,11 @@ export function PeoplePanel({
   onCopyText: (value: string, label: string) => void;
   joinLink: string;
 }) {
+  const lkParticipants = useParticipants();
+  const lkParticipantIds = new Set(lkParticipants.map(p => p.identity));
+  const { resolvedTheme } = useTheme();
+  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
+
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-canvas p-3">
@@ -53,7 +61,7 @@ export function PeoplePanel({
       </div>
 
       <div className="space-y-1">
-        {participantsLoading ? <p className="text-[13px] text-ink-subtle">Loading participants...</p> : null}
+        {participantsLoading ? <div className="flex items-center gap-2"><Lumidot variant={lumidotVariant} pattern="all" glow={4} /><p className="text-[13px] text-ink-subtle">Loading participants...</p></div> : null}
         {participantsError ? <p className="text-[13px] text-red-600">Could not load participant controls.</p> : null}
         {participants.map((participant) => (
           <ParticipantRow
@@ -62,6 +70,7 @@ export function PeoplePanel({
             isHost={isHost}
             roomId={roomId}
             isRoomHost={participant.userId === room.hostId}
+            isInRoom={lkParticipantIds.has(participant.userId)}
           />
         ))}
       </div>
@@ -74,11 +83,13 @@ function ParticipantRow({
   isHost,
   roomId,
   isRoomHost,
+  isInRoom,
 }: {
   participant: TranslationRoomParticipantDto;
   isHost: boolean;
   roomId: string;
   isRoomHost: boolean;
+  isInRoom: boolean;
 }) {
   const updateAudio = useUpdateParticipantAudio(roomId);
   const admit = useAdmitParticipant(roomId);
@@ -141,9 +152,20 @@ function ParticipantRow({
               {participant.isExternal && (
                 <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">External</span>
               )}
+              {isInRoom ? (
+                <span className="rounded bg-green-50 px-1 py-0.5 text-[10px] font-medium text-green-600 border border-green-200">In Room</span>
+              ) : participant.status === "invited" ? (
+                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">Not in room</span>
+              ) : participant.status === "waiting" ? (
+                <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-200">Waiting in Lobby</span>
+              ) : participant.status === "disconnected" ? (
+                <span className="rounded bg-red-50 px-1 py-0.5 text-[10px] font-medium text-red-600 border border-red-200">Disconnected</span>
+              ) : (
+                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">Left</span>
+              )}
             </div>
             <p className="truncate text-[11px] text-ink-subtle capitalize">
-              {participant.role.toString().toLowerCase()} · {participant.status.replace("_", " ")}
+              {participant.role.toString().toLowerCase()}
             </p>
           </div>
         </div>
