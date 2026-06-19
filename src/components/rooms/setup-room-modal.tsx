@@ -223,7 +223,7 @@ export function SetupRoomModal() {
         {/* Title Area */}
         <div className="w-full space-y-1">
           <h2 className="text-[20px] font-semibold tracking-tight text-foreground pr-8 flex items-center gap-3">
-            {isLoadingRoom ? <><Lumidot variant={lumidotVariant} pattern="all" glow={4} /> <span>Loading room...</span></> : room?.title || "Ready to join?"}
+            {isLoadingRoom ? <><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /> <span>Loading room...</span></> : room?.title || "Ready to join?"}
           </h2>
           <p className="text-[13px] text-ink-muted tracking-[-0.05px]">Room Code: {room?.translationRoomCode || roomId}</p>
         </div>

@@ -40,6 +40,24 @@ export interface TranslationTextDto {
   targetLang: string;
 }
 
+export interface TranslatedAudioDto {
+  segmentId: string;
+  speakerId: string;
+  audioBase64: string;
+  voiceType: "default" | "blended" | "cloned";
+  durationMs: number;
+  voiceMode?: "standard" | "blended" | "cloned" | "caption_only";
+  cloneStrength?: number;
+  anchorProvider?: string;
+  cloneProvider?: string;
+  renderLocation?: "server" | "desktop";
+  cacheKey?: string;
+  cacheHit?: boolean;
+  synthesisLatencyMs?: number;
+  conversionLatencyMs?: number;
+  fallbackReason?: string;
+}
+
 export interface ChatMentionDto {
   id: string;
   display: string;

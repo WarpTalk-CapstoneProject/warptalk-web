@@ -61,7 +61,7 @@ export function PeoplePanel({
       </div>
 
       <div className="space-y-1">
-        {participantsLoading ? <div className="flex items-center gap-2"><Lumidot variant={lumidotVariant} pattern="all" glow={4} /><p className="text-[13px] text-ink-subtle">Loading participants...</p></div> : null}
+        {participantsLoading ? <div className="flex items-center gap-2"><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /><p className="text-[13px] text-ink-subtle">Loading participants...</p></div> : null}
         {participantsError ? <p className="text-[13px] text-red-600">Could not load participant controls.</p> : null}
         {participants.map((participant) => (
           <ParticipantRow

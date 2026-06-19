@@ -48,7 +48,7 @@ export function SearchMeetingDialog() {
           autoFocus 
         />
         <CommandList>
-          {isLoading && <div className="p-4 text-sm flex items-center justify-center gap-3 text-muted-foreground"><Lumidot variant={lumidotVariant} pattern="all" glow={4} /><span>Searching meetings...</span></div>}
+          {isLoading && <div className="p-4 text-sm flex items-center justify-center gap-3 text-muted-foreground"><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /><span>Searching meetings...</span></div>}
           {!isLoading && meetings.length > 0 && (
             <CommandGroup heading="Meetings">
               {meetings.map((meeting) => (
