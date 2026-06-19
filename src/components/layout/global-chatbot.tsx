@@ -223,7 +223,7 @@ export function GlobalChatbot() {
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 text-[13px] text-ink-subtle py-2 pl-4">
                       <div className="scale-75 origin-left flex items-center justify-center">
-                        <Lumidot variant={lumidotVariant} pattern="all" glow={4} />
+                        <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
                       </div>
                       <span>Thinking...</span>
                     </div>

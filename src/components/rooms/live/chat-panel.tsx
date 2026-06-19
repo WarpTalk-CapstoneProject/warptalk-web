@@ -144,7 +144,7 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
       <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
-            <Lumidot variant={lumidotVariant} pattern="all" glow={4} />
+            <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
             <span className="ml-2">Loading messages</span>
           </div>
         ) : null}

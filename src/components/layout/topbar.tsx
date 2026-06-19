@@ -87,7 +87,7 @@ function Breadcrumbs() {
         <Link href="/rooms" className="text-muted-foreground hover:text-foreground transition-colors">Meetings</Link>
         <CaretRight weight="bold" className="text-muted-foreground/40 w-3 h-3" />
         <span className="truncate text-foreground max-w-[300px] flex items-center gap-2">
-          {roomTitle ? roomTitle : <><Lumidot variant={lumidotVariant} pattern="all" glow={4} /><span>Loading...</span></>}
+          {roomTitle ? roomTitle : <><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /><span>Loading...</span></>}
         </span>
       </div>
     );
