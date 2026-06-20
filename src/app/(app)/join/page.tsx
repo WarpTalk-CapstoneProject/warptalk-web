@@ -26,7 +26,6 @@ const languages = [
   { value: "en-US", label: "English" },
   { value: "vi-VN", label: "Vietnamese" },
   { value: "ja-JP", label: "Japanese" },
-  { value: "ko-KR", label: "Korean" },
 ];
 
 const getFlagEmoji = (countryCode: string) => {

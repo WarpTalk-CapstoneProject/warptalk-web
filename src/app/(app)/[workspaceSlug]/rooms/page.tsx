@@ -34,7 +34,7 @@ function StatusIcon({ status }: { status: string }) {
 export function StatusPanel({ status }: { status: string }) {
   let colorClass = "text-muted-foreground bg-surface-2 border-border/50";
   let icon = <Circle size={12} weight="light" className="text-muted-foreground/40" />;
-  
+
   if (status === "in_progress") {
     colorClass = "text-status-in-progress bg-status-in-progress/10 border-status-in-progress/20";
     icon = <div className="w-2 h-2 rounded-full border border-status-in-progress bg-status-in-progress/20" />;
@@ -86,7 +86,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
   const hostAvatar = isCurrentUserHost ? user?.avatarUrl : undefined;
 
   return (
-    <Link 
+    <Link
       href={`/rooms/${room.id}`}
       className="flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
     >
@@ -106,15 +106,14 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
           </button>
         )}
       </div>
-      
+
       <div className="flex items-center w-8 shrink-0">
         <StatusIcon status={room.status} />
       </div>
-      
+
       <div className="w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
         {room.translationRoomCode}
       </div>
-      
       <div className="flex-1 min-w-0 pr-4 flex items-center gap-2">
         <span className="text-foreground font-medium truncate block">{room.title}</span>
         {user?.id && room.hostId !== user.id && (
@@ -123,10 +122,10 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
           </span>
         )}
       </div>
-      
+
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
         <StatusPanel status={room.status} />
-        
+
         <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <Avatar className="size-5 rounded-full">
             <AvatarImage src={hostAvatar} alt={hostName} />
@@ -138,7 +137,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
         </div>
 
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <LanguageWithFlag locale={room.sourceLanguage ?? ""} />
+          <LanguageWithFlag locale={room.sourceLanguage || "en-US"} />
           {room.targetLanguages.length > 1 ? (
             <>
               <span className="text-muted-foreground/40 font-bold px-1 text-[13px]">;</span>
@@ -188,9 +187,9 @@ function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[
   const hours = Array.from({ length: endHour - startHour }, (_, i) => i + startHour);
   const hourHeight = 64; // pixels per hour
   const minuteHeight = hourHeight / 60; // pixels per minute
-  
+
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
@@ -235,7 +234,7 @@ function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[
 
           {/* Current time indicator */}
           {isToday && (
-            <div 
+            <div
               className="absolute w-full border-t-[1.5px] border-red-500 z-20 pointer-events-none flex items-center"
               style={{ top: currentTop }}
             >
@@ -381,7 +380,7 @@ export default function MeetingsPageLinear() {
 
   return (
     <div className="flex flex-col h-full bg-surface-1">
-      
+
       {/* View Tabs & Actions */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
@@ -395,7 +394,7 @@ export default function MeetingsPageLinear() {
             </div>
           ))}
         </div>
-        
+
         <div className="flex items-center gap-2 pl-4 shrink-0">
           <button className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm" title="Filter">
             <Funnel weight="bold" size={13} />
@@ -442,8 +441,8 @@ export default function MeetingsPageLinear() {
                 {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
               <p className="leading-relaxed">
-                {filteredRooms.length === 0 
-                  ? "You have no meetings scheduled for this day." 
+                {filteredRooms.length === 0
+                  ? "You have no meetings scheduled for this day."
                   : `You have ${filteredRooms.length} meeting${filteredRooms.length === 1 ? '' : 's'} scheduled for this day.`}
               </p>
             </div>
@@ -455,7 +454,7 @@ export default function MeetingsPageLinear() {
         ) : (
           <div className="flex-1 overflow-y-auto">
             {/* Group Header */}
-            <div 
+            <div
               className="flex items-center gap-1.5 px-4 h-[30px] hover:bg-accent/40 cursor-pointer text-[12px] text-muted-foreground select-none transition-colors sticky top-0 bg-surface-1/90 backdrop-blur-sm z-10 border-b border-border/40"
               onClick={() => setIsGroupOpen(!isGroupOpen)}
             >

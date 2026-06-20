@@ -8,9 +8,10 @@ export function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onC
   const [input, setInput] = useState("");
   const active = emails.length > 0;
   
-  const { data: workspaces } = useWorkspaces();
-  const workspaceId = workspaces?.[0]?.id;
-  const { data: members } = useWorkspaceMembers(workspaceId);
+  const { data: workspacesData } = useWorkspaces(1, 100);
+  const workspaceId = workspacesData?.items?.[0]?.id;
+  const { data: membersData } = useWorkspaceMembers(workspaceId || "", 1, 100);
+  const members = membersData?.items ?? [];
 
   // Safely extract members array
   const membersArray = Array.isArray(members) 

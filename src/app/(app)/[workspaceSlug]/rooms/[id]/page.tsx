@@ -42,17 +42,17 @@ const statusLabels: Record<TranslationRoomStatus, string> = {
   cancelled: "Cancelled",
   expired: "Expired",
   failed: "Failed",
+  timeout: "Timed Out",
 };
 
 function TabButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`h-[32px] flex items-center text-[13px] font-medium transition-colors border-b-2 ${
-        active
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground"
-      }`}
+      className={`h-[32px] flex items-center text-[13px] font-medium transition-colors border-b-2 ${active
+        ? "border-foreground text-foreground"
+        : "border-transparent text-muted-foreground hover:text-foreground"
+        }`}
     >
       {children}
     </button>
@@ -137,11 +137,11 @@ export default function RoomInformationPage() {
           {copiedText}
         </div>
       )}
-      
+
       {/* Scrollable Container (holds both content and right sidebar) */}
       <div className="flex-1 overflow-y-auto">
         <div className="flex w-full min-h-full">
-          
+
           {/* Main content area */}
           <div className="flex-1 min-w-0 px-10 py-10 flex flex-col">
             {/* Title section */}
@@ -151,11 +151,11 @@ export default function RoomInformationPage() {
                 {room.description && (
                   <p className="mt-1 text-[14px] text-muted-foreground">{room.description}</p>
                 )}
-                <MeetingPropertiesPills 
-                  room={room} 
-                  apiParticipants={apiParticipants} 
-                  activeParticipantCount={activeParticipantCount} 
-                  user={user} 
+                <MeetingPropertiesPills
+                  room={room}
+                  apiParticipants={apiParticipants}
+                  activeParticipantCount={activeParticipantCount}
+                  user={user}
                 />
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
@@ -164,9 +164,9 @@ export default function RoomInformationPage() {
                   {statusLabels[room.status]}
                 </div>
                 {room.hostId === user?.id && (room.status === "scheduled" || room.status === "waiting") && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="h-8 text-[12px] w-full"
                     onClick={() => {
                       useUIStore.getState().setEditRoomId(room.id);
@@ -181,7 +181,7 @@ export default function RoomInformationPage() {
 
             {/* Teams-like metadata rows */}
             <div className="flex flex-col mb-8 text-[13px] text-foreground border-y border-border/50 divide-y divide-border/50">
-              
+
               {/* Participants Row */}
               <div className="flex items-center min-h-[44px] py-2 group">
                 <div className="w-10 flex justify-center shrink-0 text-muted-foreground">
@@ -203,10 +203,10 @@ export default function RoomInformationPage() {
                           <label className="text-[11px] font-medium text-ink-muted px-1 mb-1.5 block">Invite by Email</label>
                           <div className="relative">
                             <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted/70 h-4 w-4 pointer-events-none" />
-                            <input 
-                              type="email" 
-                              placeholder="name@company.com..." 
-                              className="w-full h-9 pl-9 pr-9 text-[13px] bg-surface-1 border border-border/30 rounded-lg focus:outline-none focus:ring-1 focus:ring-border/50 text-ink placeholder:text-ink-muted/50 transition-all" 
+                            <input
+                              type="email"
+                              placeholder="name@company.com..."
+                              className="w-full h-9 pl-9 pr-9 text-[13px] bg-surface-1 border border-border/30 rounded-lg focus:outline-none focus:ring-1 focus:ring-border/50 text-ink placeholder:text-ink-muted/50 transition-all"
                             />
                             <button className="absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded-md text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors">
                               <ArrowRight className="h-3.5 w-3.5" />
@@ -250,11 +250,10 @@ export default function RoomInformationPage() {
                                       <div className="font-medium text-ink truncate">{displayEmail}</div>
                                     </div>
                                   </div>
-                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-sm shrink-0 ${
-                                    isAccepted ? "text-green-500 bg-green-500/10" : 
-                                    isDeclined ? "text-red-500 bg-red-500/10" : 
-                                    "text-orange-500 bg-orange-500/10"
-                                  }`}>
+                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-sm shrink-0 ${isAccepted ? "text-green-500 bg-green-500/10" :
+                                    isDeclined ? "text-red-500 bg-red-500/10" :
+                                      "text-orange-500 bg-orange-500/10"
+                                    }`}>
                                     {inv.status}
                                   </span>
                                 </div>
@@ -287,12 +286,12 @@ export default function RoomInformationPage() {
                   )}
                 </div>
                 <div className="shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                   {isHost && (
-                     <button className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors">
-                       <Calendar className="w-3.5 h-3.5" />
-                       Scheduling Assistant
-                     </button>
-                   )}
+                  {isHost && (
+                    <button className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors">
+                      <Calendar className="w-3.5 h-3.5" />
+                      Scheduling Assistant
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -387,7 +386,7 @@ export default function RoomInformationPage() {
                             </p>
                           </div>
                         </div>
-                        <button 
+                        <button
                           type="button"
                           onClick={() => {
                             useUIStore.getState().setSetupRoomId(roomId as string);
@@ -401,11 +400,44 @@ export default function RoomInformationPage() {
                       </div>
                     </div>
                     <div className="pt-4 border-t border-border">
-                      <textarea 
-                        placeholder="Add meeting agenda or notes..." 
+                      <textarea
+                        placeholder="Add meeting agenda or notes..."
                         className="w-full bg-canvas border border-border rounded-lg px-3 py-2.5 text-[13px] text-ink outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-ink-muted resize-none min-h-[80px] shadow-sm"
                       />
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "activity" && (
+                <div className="space-y-6">
+                  <div className="relative pl-4 border-l border-border space-y-8">
+                    <div className="relative">
+                      <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-foreground" />
+                      <div className="text-[13px]">
+                        <span className="font-medium text-foreground">Meeting scheduled</span>
+                        <span className="text-muted-foreground ml-2">{formatDateTime(room.createdAt)}</span>
+                      </div>
+                      <div className="text-[13px] text-muted-foreground mt-1">Host set the languages to {languageNames.join(", ")}.</div>
+                    </div>
+                    {room.startedAt && (
+                      <div className="relative">
+                        <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-border " />
+                        <div className="text-[13px]">
+                          <span className="font-medium text-foreground">Meeting started</span>
+                          <span className="text-muted-foreground ml-2">{formatDateTime(room.startedAt)}</span>
+                        </div>
+                      </div>
+                    )}
+                    {isEnded && room.endedAt && (
+                      <div className="relative">
+                        <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-border " />
+                        <div className="text-[13px]">
+                          <span className="font-medium text-foreground">Meeting ended</span>
+                          <span className="text-muted-foreground ml-2">{formatDateTime(room.endedAt)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -416,7 +448,7 @@ export default function RoomInformationPage() {
                     <h3 className="text-[14px] font-medium text-foreground">Transcript</h3>
                     <button className="text-[13px] text-muted-foreground hover:text-foreground">Download</button>
                   </div>
-                  
+
                   {isLive || isEnded ? (
                     <div className="flex-1 overflow-y-auto space-y-6">
                       {isLive && transcriptSegments.length === 0 ? (
@@ -435,7 +467,7 @@ export default function RoomInformationPage() {
                             const date = new Date(transcriptQuery.data?.createdAt || Date.now());
                             date.setMilliseconds(date.getMilliseconds() + segment.startTimeMs);
                             const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                            
+
                             return (
                               <div key={segment.id} className="flex gap-4 group">
                                 <div className="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center shrink-0">
@@ -453,7 +485,7 @@ export default function RoomInformationPage() {
                               </div>
                             );
                           })}
-                          
+
                           {isEnded && (
                             <p className="text-[13px] text-muted-foreground text-center py-6 italic border-t border-border/50 mt-6">
                               Transcript recording ended.
@@ -485,7 +517,7 @@ export default function RoomInformationPage() {
                   <ChevronDown size={12} strokeWidth={2} className="ml-0.5" />
                 </span>
               </div>
-              
+
               <div className="px-3 pb-3 flex flex-col gap-4">
                 {/* Organizer */}
                 <div>
@@ -556,7 +588,7 @@ export default function RoomInformationPage() {
                 </span>
               </div>
               <div className="px-1.5 pb-3 flex flex-col">
-                <button 
+                <button
                   onClick={() => handleCopy(room.translationRoomCode, "Room code")}
                   className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors"
                 >
@@ -564,7 +596,7 @@ export default function RoomInformationPage() {
                   <span className="text-foreground">Copy room code</span>
                 </button>
                 {isHost && (
-                  <button 
+                  <button
                     onClick={() => handleCopy(`${window.location.origin}/join?code=${room.translationRoomCode}`, "Invite link")}
                     className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors"
                   >
@@ -577,7 +609,7 @@ export default function RoomInformationPage() {
                   <span className="text-foreground">Add to favorites</span>
                 </button>
                 {isHost && !isEnded && room.status !== "cancelled" && (
-                  <button 
+                  <button
                     onClick={async () => {
                       try {
                         await endRoomMutation.mutateAsync(room.id);
@@ -594,7 +626,7 @@ export default function RoomInformationPage() {
                 )}
               </div>
             </div>
-            
+
           </div>
         </div>
       </div>

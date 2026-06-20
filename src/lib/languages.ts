@@ -13,7 +13,6 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
   { code: "de", name: "German", nativeName: "Deutsch", region: "DE" },
   { code: "fr", name: "French", nativeName: "Francais", region: "FR" },
   { code: "hi", name: "Hindi", nativeName: "Hindi", region: "IN" },
-  { code: "ko", name: "Korean", nativeName: "Hanguk-eo", region: "KR" },
   { code: "zh", name: "Chinese", nativeName: "Zhongwen", region: "CN" },
 ];
 
@@ -35,8 +34,6 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   fr: "fr",
   hindi: "hi",
   hi: "hi",
-  korean: "ko",
-  ko: "ko",
   chinese: "zh",
   zh: "zh",
 };

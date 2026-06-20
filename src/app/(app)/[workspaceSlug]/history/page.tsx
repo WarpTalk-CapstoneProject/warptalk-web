@@ -30,9 +30,33 @@ const demoHistory = [
     artifacts: ["Transcript TXT", "AI summary", "Participant CSV", "Recording"],
     summary: "Reviewed investor questions, translation accuracy, and rollout risks.",
   },
+  {
+    id: "hist-002",
+    title: "Product Demo Follow-up",
+    code: "DEMO-514",
+    endedAt: "Yesterday, 4:12 PM",
+    duration: "32m",
+    participants: 8,
+    languages: "Vietnamese -> English",
+    status: "ready",
+    artifacts: ["Transcript PDF", "AI summary", "Action items"],
+    summary: "Captured follow-up questions about onboarding and support coverage.",
+  },
+  {
+    id: "hist-003",
+    title: "Legal Review Session",
+    code: "LEGL-307",
+    endedAt: "May 22, 2:00 PM",
+    duration: "58m",
+    participants: 11,
+    languages: "English -> Korean, Vietnamese",
+    status: "processing",
+    artifacts: ["Transcript processing", "Summary queued"],
+    summary: "Legal terms and approval requirements were discussed across regions.",
+  },
 ];
 
-const demoTranscriptPreview = [
+const transcriptPreview = [
   {
     time: "00:42",
     speaker: "Host",
@@ -75,7 +99,7 @@ export default function HistoryPage() {
   const { data: detailData } = useMeetingRoomDetail(selectedRoomId && selectedRoomId !== "hist-001" ? selectedRoomId : undefined);
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink">
       <section className="flex justify-end">
         <div className="relative w-full lg:w-[280px]">
           <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -154,7 +178,7 @@ export default function HistoryPage() {
                     </div>
                   ))
                 ) : (
-                  demoTranscriptPreview.map((item: any) => (
+                  transcriptPreview.map((item: any) => (
                     <div key={`${item.time}-${item.speaker}`} className="rounded-lg border  p-3">
                       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <Badge variant="outline">{item.time}</Badge>

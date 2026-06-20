@@ -46,7 +46,7 @@ export const workspaceMembers: WorkspaceMember[] = [
 export const workspaceRooms: WorkspaceRoom[] = [
   { id: "WARP-241", name: "Investor Q&A Translation", department: "Leadership", host: "Linh Nguyen", status: "In progress", languages: "English → Vietnamese, Japanese", startsAt: "Jun 07, 09:30", participants: "18/24", credits: 186 },
   { id: "SYNC-882", name: "Partner Sync Room", department: "APAC", host: "Mika Tanaka", status: "Scheduled", languages: "Vietnamese → English", startsAt: "Jun 07, 14:00", participants: "7/12", credits: 84 },
-  { id: "CUST-104", name: "Customer Onboarding", department: "Customer Success", host: "Daniel Kim", status: "Setup needed", languages: "English → Korean, Vietnamese", startsAt: "Jun 08, 10:00", participants: "9/16", credits: 0 },
+  { id: "CUST-104", name: "Customer Onboarding", department: "Customer Success", host: "Daniel Kim", status: "Setup needed", languages: "English → Japanese, Vietnamese", startsAt: "Jun 08, 10:00", participants: "9/16", credits: 0 },
   { id: "BORD-778", name: "Board Review Translation", department: "Leadership", host: "Linh Nguyen", status: "Completed", languages: "English → Vietnamese", startsAt: "Jun 06, 16:30", participants: "14/20", credits: 242 },
   { id: "PROD-328", name: "Product Research Debrief", department: "Product", host: "Minh Tran", status: "Completed", languages: "Japanese → English", startsAt: "Jun 05, 13:00", participants: "11/18", credits: 164 },
   { id: "OPS-512", name: "Operations Weekly", department: "Operations", host: "Linh Nguyen", status: "Scheduled", languages: "Vietnamese → English", startsAt: "Jun 09, 08:30", participants: "0/30", credits: 0 },

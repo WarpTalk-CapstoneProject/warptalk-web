@@ -1,19 +1,19 @@
 import { LanguageSelector } from "@/components/rooms/create/language-selector";
 import { OptionsMenu } from "@/components/rooms/create/options-menu";
 import { useUpdateTranslationRoomSettings } from "@/hooks/use-translationRooms";
-import { StatusPanel } from "@/app/(app)/rooms/page";
+import { StatusPanel } from "../page";
 import { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
 import { Calendar as CalendarIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 
-export function MeetingPropertiesPills({ 
-  room, 
+export function MeetingPropertiesPills({
+  room,
   apiParticipants,
   activeParticipantCount,
   user
-}: { 
+}: {
   room: TranslationRoomDto;
   apiParticipants: TranslationRoomParticipantDto[];
   activeParticipantCount: number;
@@ -23,16 +23,16 @@ export function MeetingPropertiesPills({
   const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1);
 
   const handleSourceChange = (lang: string) => {
-    updateSettings.mutate({ 
-      id: room.id, 
-      data: { sourceLanguage: lang, targetLanguages: room.targetLanguages } 
+    updateSettings.mutate({
+      id: room.id,
+      data: { sourceLanguage: lang, targetLanguages: room.targetLanguages }
     });
   };
 
   const handleTargetsChange = (langs: string[]) => {
-    updateSettings.mutate({ 
-      id: room.id, 
-      data: { sourceLanguage: room.sourceLanguage, targetLanguages: langs } 
+    updateSettings.mutate({
+      id: room.id,
+      data: { sourceLanguage: room.sourceLanguage, targetLanguages: langs }
     });
   };
 
@@ -49,7 +49,7 @@ export function MeetingPropertiesPills({
         </span>
       </div>
 
-      <LanguageSelector 
+      <LanguageSelector
         source={room.sourceLanguage ?? ""}
         onSourceChange={handleSourceChange}
         targets={isMultiLang ? room.targetLanguages : room.targetLanguages.slice(0, 1)}
@@ -57,15 +57,15 @@ export function MeetingPropertiesPills({
         isMultiLang={isMultiLang}
       />
 
-      <OptionsMenu 
-        isMultiLang={isMultiLang} 
+      <OptionsMenu
+        isMultiLang={isMultiLang}
         onToggleMultiLang={() => {
           setIsMultiLang(!isMultiLang);
           if (isMultiLang && room.targetLanguages.length > 1) {
             // Revert back to 1 target if we toggle multi-lang off
             handleTargetsChange([room.targetLanguages[0]]);
           }
-        }} 
+        }}
       />
 
       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">

@@ -297,7 +297,7 @@ export default function AiSummariesPage() {
   const aiChatHref = `/ai-chat?meetingId=${selectedMeeting.id}&artifact=transcript-v${selectedMeeting.revision}`;
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 px-4 py-4 pb-6 text-ink overflow-hidden">
       <div className="flex min-w-0 items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
