@@ -19,6 +19,7 @@ type IconType = React.ElementType<IconProps>;
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaces } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -101,6 +102,11 @@ export function LinearSidebar() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
 
+  const { data: workspaces } = useWorkspaces();
+  const currentWorkspace = workspaces?.[0];
+  const workspaceName = currentWorkspace?.name || "Workspace";
+  const workspaceInitials = workspaceName.substring(0, 2).toUpperCase();
+
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = joinCode.trim();
@@ -129,9 +135,9 @@ export function LinearSidebar() {
       <div className="flex items-center justify-between px-3 h-[48px] shrink-0">
         <div className="flex items-center gap-2 hover:bg-surface-2 px-1.5 py-1 -ml-1.5 rounded-md cursor-pointer transition-colors min-w-0">
           <div className="w-[20px] h-[20px] rounded bg-pink-400 flex items-center justify-center shrink-0">
-            <span className="text-[10px] font-bold text-white leading-none tracking-tight">FP</span>
+            <span className="text-[10px] font-bold text-white leading-none tracking-tight">{workspaceInitials}</span>
           </div>
-          <span className="text-[14px] font-semibold text-ink truncate tracking-tight">FPT-SEP490-SU26</span>
+          <span className="text-[14px] font-semibold text-ink truncate tracking-tight">{workspaceName}</span>
           <CaretDown size={12} className="text-ink-muted ml-1 shrink-0" weight="bold" />
         </div>
         <div className="flex items-center gap-1.5 text-ink-muted shrink-0">

@@ -71,6 +71,9 @@ export function CreateRoomDialog() {
   const editRoomId = useUIStore((state) => state.editRoomId);
   const setEditRoomId = useUIStore((state) => state.setEditRoomId);
   const user = useAuthStore((state) => state.user);
+  const { data: workspaces } = useWorkspaces();
+  const currentWorkspace = workspaces?.[0];
+  const workspaceName = currentWorkspace?.name || "Workspace";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -212,8 +215,6 @@ export function CreateRoomDialog() {
     await navigator.clipboard?.writeText(inviteLink);
     toast.success("Invite link copied.");
   }
-
-  const workspaceName = "FPT-SEP490";
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
