@@ -66,6 +66,8 @@ const searchItems: Array<{
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import Link from "next/link";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
+import { Lumidot } from "lumidot";
+import { useTheme } from "next-themes";
 
 function Breadcrumbs() {
   const pathname = usePathname();
@@ -76,13 +78,17 @@ function Breadcrumbs() {
   const roomId = isRoomInformationPage ? current : undefined;
   const roomQuery = useTranslationRoom(roomId as string);
   const roomTitle = roomQuery.data?.title;
+  const { resolvedTheme } = useTheme();
+  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   if (isRoomInformationPage) {
     return (
       <div className="min-w-0 flex items-center gap-2 text-[14px] font-medium tracking-tight">
         <Link href="/rooms" className="text-muted-foreground hover:text-foreground transition-colors">Meetings</Link>
         <CaretRight weight="bold" className="text-muted-foreground/40 w-3 h-3" />
-        <span className="truncate text-foreground max-w-[300px]">{roomTitle || "Loading..."}</span>
+        <span className="truncate text-foreground max-w-[300px] flex items-center gap-2">
+          {roomTitle ? roomTitle : <><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /><span>Loading...</span></>}
+        </span>
       </div>
     );
   }

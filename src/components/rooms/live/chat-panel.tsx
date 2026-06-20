@@ -9,12 +9,15 @@ import Mention from '@tiptap/extension-mention';
 import Placeholder from '@tiptap/extension-placeholder';
 import { suggestion } from './mentions';
 import { LoaderCircle, Send } from "lucide-react";
+import { Lumidot } from "lumidot";
+import { useTheme } from "next-themes";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, sourceLanguage?: string }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
+  const participants = useTranslationRoomStore((state) => state.participants);
   const setChatMessages = useTranslationRoomStore((state) => state.setChatMessages);
   const addChatMessage = useTranslationRoomStore((state) => state.addChatMessage);
   const user = useAuthStore((state) => state.user);
@@ -22,6 +25,8 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
   const [sendError, setSendError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
+  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   useEffect(() => {
     if (historyQuery.data) {
@@ -139,8 +144,8 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
       <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
-            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-            Loading messages
+            <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+            <span className="ml-2">Loading messages</span>
           </div>
         ) : null}
         {historyQuery.isError && messages.length === 0 ? (
@@ -165,21 +170,36 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
             const isMine = message.senderUserId === user?.id;
             const isAssistant = message.messageType === "assistant";
             
+            let displayName = "";
+            if (isMine && user) {
+              displayName = user.fullName;
+            } else if (isAssistant) {
+              displayName = "WarpBot";
+            } else {
+              const senderParticipant = participants.find(p => p.userId === message.senderUserId || p.providerIdentity === message.senderDisplayName);
+              displayName = senderParticipant?.displayName || "User";
+            }
+            
             return (
               <motion.div 
                 key={`${message.id}-${message.createdAt}`} 
-                initial={{ opacity: 0, y: 15, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 24 }}
-                className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className={`flex gap-3 items-start group ${isMine ? "flex-row-reverse" : ""}`}
               >
-                <div className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] shadow-sm ${isMine ? "bg-ink text-white" : isAssistant ? "border border-brand-primary/20 bg-brand-primary/5 text-ink" : "border border-border bg-surface-1 text-ink"}`}>
-                  <p className={`mb-0.5 text-[11px] font-medium ${isMine ? "text-ink-tertiary" : isAssistant ? "text-brand-primary" : "text-ink-subtle"}`}>
-                    {message.senderDisplayName}
-                  </p>
-                  <p className="leading-relaxed whitespace-pre-wrap">{message.originalText}</p>
-                  <p className={`mt-1 text-[10px] ${isMine ? "text-white/60" : "text-ink-subtle"}`}>
-                    {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold shadow-sm ${isAssistant ? "bg-brand-primary text-white" : isMine ? "bg-ink text-white" : "bg-surface-3 text-ink"}`}>
+                  {displayName.substring(0, 2).toUpperCase()}
+                </div>
+                <div className={`flex min-w-0 flex-1 flex-col ${isMine ? "items-end" : "items-start"}`}>
+                  <div className={`flex items-baseline gap-2 ${isMine ? "flex-row-reverse" : ""}`}>
+                    <span className="text-[13px] font-semibold text-ink">{displayName}</span>
+                    <span className="text-[11px] font-medium text-ink-subtle">
+                      {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                  <p className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-brand-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}>
+                    {message.originalText}
                   </p>
                 </div>
               </motion.div>

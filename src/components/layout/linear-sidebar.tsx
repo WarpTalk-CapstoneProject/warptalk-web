@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaces } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -118,6 +119,11 @@ export function LinearSidebar() {
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+
+  const { data: workspaces } = useWorkspaces();
+  const currentWorkspace = workspaces?.[0];
+  const workspaceName = currentWorkspace?.name || "Workspace";
+  const workspaceInitials = workspaceName.substring(0, 2).toUpperCase();
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -354,7 +360,6 @@ export function LinearSidebar() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
         <div className="flex items-center gap-1.5 text-ink-muted shrink-0">
           <button
             onClick={() => setSearchMeetingModalOpen(true)}

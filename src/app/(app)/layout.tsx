@@ -17,6 +17,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { CreateRoomDialog } from "@/components/rooms/create-room-dialog";
 import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
 import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
+import { GlobalChatbot } from "@/components/layout/global-chatbot";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
@@ -90,10 +91,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
       <LinearSidebar />
-
-      {/* Main content */}
-      <div className="relative flex flex-col flex-1 overflow-hidden my-1.5 mr-1.5 rounded-xl border border-border bg-surface-1 shadow-sm">
-        {/* Top bar */}
+      {/* Main Column */}
+      <div className="relative flex flex-col flex-1 overflow-hidden min-w-0">
+        {/* Main content box */}
+        <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-surface-1 shadow-sm">
+          {/* Top bar */}
         <header className="h-[44px] border-b border-border flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-1.5 text-[13px] text-ink-muted">
             {(() => {
@@ -192,6 +194,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </aside>
           )}
+        </div>
+        </div>
+        
+        {/* Global Chatbot outside main content box */}
+        <div className="shrink-0 mr-1.5">
+          <GlobalChatbot />
         </div>
       </div>
       <CreateRoomDialog />

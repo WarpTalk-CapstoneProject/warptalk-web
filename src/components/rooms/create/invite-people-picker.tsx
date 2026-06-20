@@ -13,7 +13,16 @@ export function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onC
   const { data: membersData } = useWorkspaceMembers(workspaceId || "", 1, 100);
   const members = membersData?.items ?? [];
 
-  const suggestedMembers = members?.filter(m => m.email && !emails.includes(m.email)) || [];
+  // Safely extract members array
+  const membersArray = Array.isArray(members) 
+    ? members 
+    : (members?.items || members?.data || []);
+
+  const suggestedMembers = membersArray.filter((m: any) => 
+    m.fullName && 
+    m.fullName !== 'Unknown' && 
+    !emails.includes(m.email || m.userId || m.id)
+  );
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && input.trim()) {
@@ -64,14 +73,18 @@ export function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onC
           </div>
           {emails.length > 0 && (
             <div className="mt-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
-              {emails.map(email => (
-                <div key={email} className="flex items-center justify-between text-[12px] bg-surface-2 px-2 py-1 rounded">
-                  <span className="truncate max-w-[180px] text-ink">{email}</span>
-                  <button onClick={() => removeEmail(email)} className="text-ink-muted hover:text-red-500">
-                    <X size={12} weight="bold" />
-                  </button>
-                </div>
-              ))}
+              {emails.map(email => {
+                const member = membersArray.find((m: any) => m.email === email || m.userId === email || m.id === email);
+                const displayText = member?.fullName || email;
+                return (
+                  <div key={email} className="flex items-center justify-between text-[12px] bg-surface-2 px-2 py-1 rounded">
+                    <span className="truncate max-w-[180px] text-ink">{displayText}</span>
+                    <button onClick={() => removeEmail(email)} className="text-ink-muted hover:text-red-500">
+                      <X size={12} weight="bold" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
           {suggestedMembers.length > 0 && (
@@ -81,19 +94,21 @@ export function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onC
                 {suggestedMembers.map(member => (
                   <button 
                     key={member.id} 
-                    onClick={() => addEmail(member.email)}
+                    onClick={() => addEmail(member.email || member.userId)}
                     className="flex items-center gap-2 text-[12px] hover:bg-surface-2 px-2 py-1.5 rounded transition-colors text-left"
                   >
                     <div className="h-6 w-6 rounded-full bg-surface-3 flex items-center justify-center shrink-0 overflow-hidden text-ink-muted font-medium text-[10px]">
                       {member.avatarUrl ? (
-                        <img src={member.avatarUrl} alt={member.fullName} className="h-full w-full object-cover" />
+                        <img src={member.avatarUrl} alt={member.fullName || 'User'} className="h-full w-full object-cover" />
                       ) : (
-                        (member.fullName || member.email).charAt(0).toUpperCase()
+                        (member.fullName || member.email || 'U').charAt(0).toUpperCase()
                       )}
                     </div>
                     <div className="flex flex-col overflow-hidden">
-                      <span className="truncate font-medium text-ink leading-tight">{member.fullName || member.email.split('@')[0]}</span>
-                      <span className="truncate text-ink-muted text-[10px] leading-tight">{member.email}</span>
+                      <span className="truncate font-medium text-ink leading-tight">{member.fullName}</span>
+                      {member.email && (
+                        <span className="truncate text-ink-muted text-[10px] leading-tight">{member.email}</span>
+                      )}
                     </div>
                     <Plus size={12} weight="bold" className="ml-auto text-ink-muted" />
                   </button>

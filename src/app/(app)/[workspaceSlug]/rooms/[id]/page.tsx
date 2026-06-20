@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 
 const getShortLang = (val: string) => {
   if (!val) return "";
@@ -62,7 +63,8 @@ export default function RoomInformationPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const roomId = params.id;
-  const [activeTab, setActiveTab] = useState<"overview" | "activity" | "transcript">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "transcript">("overview");
+  const [isActivityExpanded, setIsActivityExpanded] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   const handleCopy = (text: string, label: string) => {
@@ -87,6 +89,15 @@ export default function RoomInformationPage() {
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
   const apiInvitations = invitationsQuery.data ?? [];
+  
+  const { data: workspaces } = useWorkspaces();
+  const validWorkspaceId = room?.workspaceId && room.workspaceId !== '00000000-0000-0000-0000-000000000000'
+    ? room.workspaceId
+    : workspaces?.[0]?.id;
+    
+  const { data: members } = useWorkspaceMembers(validWorkspaceId);
+  const membersArray = Array.isArray(members) ? members : (members?.items || members?.data || []);
+
   const activeApiParticipants = apiParticipants.filter((participant) =>
     ["joined", "connected"].includes(participant.status.toLowerCase())
   );
@@ -227,14 +238,16 @@ export default function RoomInformationPage() {
                             {apiInvitations.map((inv, i) => {
                               const isAccepted = inv.status === 'ACCEPTED';
                               const isDeclined = inv.status === 'DECLINED';
+                              const member = membersArray.find((m: any) => m.userId === inv.email || m.id === inv.email || m.email === inv.email);
+                              const displayEmail = member?.fullName || inv.email;
                               return (
                                 <div key={`inv-${i}`} className="flex items-center justify-between gap-2.5 text-[13px] text-ink p-1.5 hover:bg-surface-1 rounded-md transition-colors">
                                   <div className="flex items-center gap-2.5 min-w-0">
                                     <div className="h-7 w-7 rounded-full bg-surface-2 border border-border/40 flex items-center justify-center shrink-0">
-                                      <span className="text-[11px] font-medium text-ink-muted">{inv.email.charAt(0).toUpperCase()}</span>
+                                      <span className="text-[11px] font-medium text-ink-muted">{displayEmail.charAt(0).toUpperCase()}</span>
                                     </div>
                                     <div className="flex-1 truncate leading-tight">
-                                      <div className="font-medium text-ink truncate">{inv.email}</div>
+                                      <div className="font-medium text-ink truncate">{displayEmail}</div>
                                     </div>
                                   </div>
                                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-sm shrink-0 ${isAccepted ? "text-green-500 bg-green-500/10" :
@@ -297,13 +310,66 @@ export default function RoomInformationPage() {
             {/* Tabs (no full-width border) */}
             <div className="flex items-center gap-6 mt-8 mb-6 border-b border-border/50">
               <TabButton active={activeTab === "overview"} onClick={() => setActiveTab("overview")}>Overview</TabButton>
-              <TabButton active={activeTab === "activity"} onClick={() => setActiveTab("activity")}>Activity</TabButton>
               <TabButton active={activeTab === "transcript"} onClick={() => setActiveTab("transcript")}>Transcript</TabButton>
             </div>
 
             <div className="flex-1 min-h-0">
               {activeTab === "overview" && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  {/* Expandable Activity Section */}
+                  <div 
+                    onClick={() => !isActivityExpanded && setIsActivityExpanded(true)}
+                    className={`border border-border/40 rounded-xl bg-surface-1/50 p-4 transition-all duration-300 ${!isActivityExpanded ? "cursor-pointer hover:bg-surface-2/50 group" : ""}`}
+                  >
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsActivityExpanded(!isActivityExpanded);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/50 bg-canvas text-[12px] font-medium text-ink-subtle hover:text-ink hover:bg-surface-2 transition-colors mb-4 relative z-10"
+                    >
+                      Activity log
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isActivityExpanded ? "" : "-rotate-90"}`} />
+                    </button>
+                    
+                    <div 
+                      className={`relative transition-all duration-300 ${!isActivityExpanded ? "max-h-[110px] overflow-hidden" : ""}`}
+                      style={!isActivityExpanded ? {
+                        WebkitMaskImage: "linear-gradient(to bottom, black 30%, transparent 100%)",
+                        maskImage: "linear-gradient(to bottom, black 30%, transparent 100%)"
+                      } : {}}
+                    >
+                      <div className="relative pl-4 border-l border-border/60 space-y-6 ml-1 pb-2">
+                        <div className="relative">
+                          <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-primary" />
+                          <div className="text-[13px]">
+                            <span className="font-medium text-ink">Meeting scheduled</span>
+                            <span className="text-ink-muted ml-2">{formatDateTime(room.createdAt)}</span>
+                          </div>
+                          <div className="text-[13px] text-ink-subtle mt-0.5">Host set the languages to {languageNames.join(", ")}.</div>
+                        </div>
+                        {room.startedAt && (
+                          <div className="relative">
+                            <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full border border-border/80 bg-canvas" />
+                            <div className="text-[13px]">
+                              <span className="font-medium text-ink">Meeting started</span>
+                              <span className="text-ink-muted ml-2">{formatDateTime(room.startedAt)}</span>
+                            </div>
+                          </div>
+                        )}
+                        {isEnded && room.endedAt && (
+                          <div className="relative">
+                            <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full border border-border/80 bg-canvas" />
+                            <div className="text-[13px]">
+                              <span className="font-medium text-ink">Meeting ended</span>
+                              <span className="text-ink-muted ml-2">{formatDateTime(room.endedAt)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Meeting Link Block */}
                   <div className="border border-border rounded-xl bg-surface-1 overflow-hidden shadow-sm p-5 space-y-5">
                     <div>
@@ -441,7 +507,7 @@ export default function RoomInformationPage() {
           </div>
 
           {/* Right sidebar — Linear Properties panels */}
-          <div className="w-[280px] shrink-0 py-10 pr-2 flex flex-col gap-2">
+          <div className="w-[280px] shrink-0 py-10 pr-2 flex flex-col gap-2 sticky top-0 self-start max-h-full overflow-y-auto">
 
             {/* Tracking Card */}
             <div className="rounded-[10px] border border-border bg-surface-1 shadow-[0px_3px_6px_-2px_rgba(0,0,0,0.02),0px_1px_1px_rgba(0,0,0,0.04)] overflow-visible mt-2">
@@ -490,17 +556,21 @@ export default function RoomInformationPage() {
                           </div>
                         </div>
                       ))}
-                      {(invitationsQuery.data || []).filter(i => i.status !== "ACCEPTED").map((inv) => (
-                        <div key={inv.id} className="flex items-center gap-2 opacity-60">
-                          <div className="w-6 h-6 rounded-full bg-surface-2 text-muted-foreground flex items-center justify-center text-[10px] font-medium shrink-0 uppercase">
-                            {inv.email.charAt(0)}
+                      {(invitationsQuery.data || []).filter(i => i.status !== "ACCEPTED").map((inv) => {
+                        const member = membersArray.find((m: any) => m.userId === inv.email || m.id === inv.email || m.email === inv.email);
+                        const displayEmail = member?.fullName || inv.email;
+                        return (
+                          <div key={inv.id} className="flex items-center gap-2 opacity-60">
+                            <div className="w-6 h-6 rounded-full bg-surface-2 text-muted-foreground flex items-center justify-center text-[10px] font-medium shrink-0 uppercase">
+                              {displayEmail.charAt(0)}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[13px] text-foreground truncate">{displayEmail}</span>
+                              <span className="text-[11px] text-muted-foreground truncate">Invited ({inv.status ? inv.status.charAt(0).toUpperCase() + inv.status.slice(1).toLowerCase() : 'Pending'})</span>
+                            </div>
                           </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[13px] text-foreground truncate">{inv.email}</span>
-                            <span className="text-[11px] text-muted-foreground truncate">Invited ({inv.status ? inv.status.charAt(0).toUpperCase() + inv.status.slice(1).toLowerCase() : 'Pending'})</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-[12px] text-muted-foreground">No attendees yet.</div>
