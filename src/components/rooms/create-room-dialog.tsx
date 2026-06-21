@@ -375,7 +375,7 @@ export function CreateRoomDialog() {
                     Configure
                   </Button>
                   <Link 
-                    href={`/rooms/${createdRoomId}`}
+                    href={`/room/${createdRoomId}`}
                     onClick={() => handleOpenChange(false)}
                     className={cn(
                       buttonVariants({ variant: "default" }),

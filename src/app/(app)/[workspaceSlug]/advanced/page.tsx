@@ -51,7 +51,7 @@ export default function AdvancedSettingsPage() {
       toast.success("Workspace ownership transferred successfully.");
       setIsTransferModalOpen(false);
       setNewOwnerId("");
-      router.push("/host/dashboard"); // They are no longer owner, maybe redirect to dashboard
+      router.push("/workspace"); // They are no longer owner, redirect to workspace selection
     } catch {
       toast.error("Failed to transfer ownership.");
     }
@@ -66,7 +66,7 @@ export default function AdvancedSettingsPage() {
       await deleteWorkspaceMutation.mutateAsync(activeWorkspaceId);
       toast.success("Workspace deleted successfully.");
       setIsDeleteModalOpen(false);
-      router.push("/host/dashboard"); // Redirect to home/dashboard since workspace is gone
+      router.push("/workspace"); // Redirect to workspace selection since workspace is gone
     } catch {
       toast.error("Failed to delete workspace.");
     }

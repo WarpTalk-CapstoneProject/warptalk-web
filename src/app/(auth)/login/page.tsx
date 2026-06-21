@@ -28,7 +28,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 function getSafeCallbackUrl(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/rooms";
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value === "/rooms") return "/workspace";
   return value;
 }
 

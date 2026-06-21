@@ -8,6 +8,7 @@ import {
   SignIn,
   Spinner,
 } from "@phosphor-icons/react/dist/ssr";
+import Image from "next/image";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -18,6 +19,7 @@ export default function WorkspaceOnboardingGatePage() {
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
   const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
@@ -31,9 +33,9 @@ export default function WorkspaceOnboardingGatePage() {
 
   useEffect(() => {
     if (mounted && activeWorkspaceId) {
-      router.replace("/host/dashboard");
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/dashboard`);
     }
-  }, [mounted, activeWorkspaceId, router]);
+  }, [mounted, activeWorkspaceId, activeWorkspaceSlug, router]);
 
   useEffect(() => {
     if (mounted && !isAuthenticated) router.replace("/login");
@@ -51,7 +53,7 @@ export default function WorkspaceOnboardingGatePage() {
           firstWs.role || "Member",
           (firstWs as any).membershipType || "Internal"
         );
-        router.replace("/host/dashboard");
+        router.replace(`/${firstWs.slug}/dashboard`);
       }
     }
   }, [mounted, isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, selectWorkspace, setActiveWorkspace, router]);
@@ -68,9 +70,15 @@ export default function WorkspaceOnboardingGatePage() {
     <main className="flex h-dvh flex-col bg-canvas select-none font-sans antialiased text-ink">
       {/* Top Header info */}
       <header className="flex h-14 items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-2 text-[13px] text-ink-muted">
-          <Buildings weight="duotone" size={16} />
-          <span className="font-medium">WarpTalk</span>
+        <div className="flex items-center gap-2">
+          <Image
+            src="/assets/logos/warptalk-sidebar-logo.png"
+            alt="WarpTalk"
+            width={100}
+            height={24}
+            className="h-6 w-auto object-contain mix-blend-multiply opacity-80"
+            priority
+          />
         </div>
         <div className="text-[12px] text-ink-muted font-medium">
           {user?.email}
@@ -113,7 +121,7 @@ export default function WorkspaceOnboardingGatePage() {
               onClick={() => router.push("/workspace/create")}
               className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all hover:bg-surface-2 hover:border-hairline-strong shadow-sm hover:shadow-md cursor-pointer h-[160px]"
             >
-              <div className="flex size-9 items-center justify-center rounded-[6px] bg-primary text-primary-foreground">
+              <div className="flex size-9 items-center justify-center rounded-[6px] bg-primary text-white">
                 <Plus weight="bold" size={18} />
               </div>
               <div>

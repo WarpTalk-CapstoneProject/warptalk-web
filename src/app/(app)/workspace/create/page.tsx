@@ -63,6 +63,7 @@ export default function CreateWorkspaceDemoPage() {
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const createWorkspace = useCreateWorkspace();
   const selectWorkspace = useSelectWorkspace();
@@ -100,9 +101,9 @@ export default function CreateWorkspaceDemoPage() {
 
   useEffect(() => {
     if (mounted && activeWorkspaceId) {
-      router.replace("/host/dashboard");
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/dashboard`);
     }
-  }, [mounted, activeWorkspaceId, router]);
+  }, [mounted, activeWorkspaceId, activeWorkspaceSlug, router]);
 
   async function onSubmit(values: CreateWorkspaceFormData) {
     if (!emailDomain) {
@@ -127,7 +128,7 @@ export default function CreateWorkspaceDemoPage() {
       await selectWorkspace.mutateAsync(workspace.id);
       setActiveWorkspace(workspace.id, workspace.name, workspace.slug, workspace.role || "Owner", "Internal");
       toast.success(`Workspace "${workspace.name}" created.`);
-      router.push("/host/dashboard");
+      router.push(`/${workspace.slug}/dashboard`);
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);

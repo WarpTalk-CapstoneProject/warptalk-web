@@ -42,7 +42,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
+import { useSelectWorkspace } from "@/hooks/use-workspace";
 import { toast } from "sonner";
 import { SignOut } from "@phosphor-icons/react/dist/ssr";
 
@@ -120,11 +120,6 @@ export function LinearSidebar() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
 
-  const { data: workspaces } = useWorkspaces();
-  const currentWorkspace = workspaces?.[0];
-  const workspaceName = currentWorkspace?.name || "Workspace";
-  const workspaceInitials = workspaceName.substring(0, 2).toUpperCase();
-
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = joinCode.trim();
@@ -165,7 +160,7 @@ export function LinearSidebar() {
       await selectWorkspaceMutation.mutateAsync(workspaceId);
       setActiveWorkspace(workspaceId, name, slug, roleName, membershipType);
       toast.success(`Switched to workspace "${name}"`);
-      router.push("/host/dashboard");
+      router.push(`/${slug}/dashboard`);
     } catch (err) {
       toast.error("Failed to switch workspace");
     }
@@ -202,7 +197,7 @@ export function LinearSidebar() {
         {/* Back to App Button */}
         <div className="flex items-center px-3 h-[48px] shrink-0 border-b border-border/30">
           <Link
-            href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/rooms` : "/host/dashboard"}
+            href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/rooms` : "/workspace"}
             className="flex items-center gap-2 px-1.5 py-1 -ml-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer w-full"
           >
             <CaretLeft size={14} weight="bold" />
@@ -321,9 +316,9 @@ export function LinearSidebar() {
             <CaretDown size={12} className="text-ink-muted ml-1 shrink-0" weight="bold" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[220px] bg-popover border border-border shadow-md rounded-lg p-1">
-            <DropdownMenuLabel className="px-2 py-1.5 text-xs text-ink-muted">
+            <div className="px-2 py-1.5 text-xs text-ink-muted font-medium">
               Workspaces ({workspaces.length})
-            </DropdownMenuLabel>
+            </div>
             <DropdownMenuSeparator className="bg-border" />
             <div className="max-h-[160px] overflow-y-auto">
               {workspaces.map((ws) => (
