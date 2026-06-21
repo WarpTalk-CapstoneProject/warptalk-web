@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { CaretRight, CaretDown, CheckCircle, Circle, Copy, Calendar as CalendarIcon, Funnel, SlidersHorizontal, SidebarSimple, Plus, Keyboard } from "@phosphor-icons/react/dist/ssr";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -79,6 +79,8 @@ function LanguageWithFlag({ locale, hideText }: { locale: string; hideText?: boo
 }
 
 function LinearRow({ room }: { room: TranslationRoomDto }) {
+  const params = useParams();
+  const workspaceSlug = params?.workspaceSlug as string;
   const user = useAuthStore((state) => state.user);
   const role = useWorkspaceRole();
   const isCurrentUserHost = room.hostId === user?.id || role === "admin" || role === "owner" || room.isHost;
@@ -87,7 +89,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
 
   return (
     <Link
-      href={`/rooms/${room.id}`}
+      href={`/${workspaceSlug}/rooms/${room.id}`}
       className="flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
     >
       <div className="flex items-center w-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground">
@@ -180,6 +182,8 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
 }
 
 function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[] }) {
+  const params = useParams();
+  const workspaceSlug = params?.workspaceSlug as string;
   const scrollRef = useRef<HTMLDivElement>(null);
   const user = useAuthStore((state) => state.user);
   const startHour = 0;
@@ -292,7 +296,7 @@ function DailyTimeline({ date, rooms }: { date: Date; rooms: TranslationRoomDto[
                 return (
                   <Link
                     key={room.id}
-                    href={`/rooms/${room.id}`}
+                    href={`/${workspaceSlug}/rooms/${room.id}`}
                     className="absolute rounded-[12px] border border-primary/20 bg-primary/10 hover:bg-primary/20 transition-all p-2 overflow-hidden flex flex-col group shadow-sm hover:shadow-md z-10"
                     style={{ 
                       top, 

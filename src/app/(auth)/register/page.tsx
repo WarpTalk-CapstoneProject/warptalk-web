@@ -60,7 +60,7 @@ export default function RegisterPage() {
       setAccessTokenCookie(accessToken);
 
       toast.success("Registration successful!");
-      router.replace("/rooms");
+      router.replace("/workspace");
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -21,6 +22,7 @@ import { aiCreditUsage, workspaceRooms } from "@/lib/workspace-preview";
 export default function WorkspaceDashboardPage() {
   const router = useRouter();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const role = useWorkspaceStore((s) => s.role);
   const membershipType = useWorkspaceStore((s) => s.membershipType);
 
@@ -39,34 +41,15 @@ export default function WorkspaceDashboardPage() {
   const isAdmin = role === "Admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
 
-  // RBAC boundaries: Only Owners and Admins have access to the workspace dashboard
+  // RBAC boundaries: Redirect regular members to the rooms page
+  useEffect(() => {
+    if (!isOwnerOrAdmin && activeWorkspaceSlug) {
+      router.replace(`/${activeWorkspaceSlug}/rooms`);
+    }
+  }, [isOwnerOrAdmin, activeWorkspaceSlug, router]);
+
   if (!isOwnerOrAdmin) {
-    return (
-      <div className="flex h-[80vh] items-center justify-center">
-        <div className="max-w-md border border-hairline bg-surface-1/40 p-6 text-center rounded-lg">
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <Lock className="h-6 w-6" />
-            </div>
-            <h2 className="text-lg font-bold text-foreground">Access Denied</h2>
-            <p className="text-xs text-ink-muted">
-              Only workspace Owners and Administrators have access to the workspace dashboard.
-            </p>
-          </div>
-          <div className="flex flex-col gap-4 mt-4">
-            <p className="text-xs text-ink-muted">
-              If you require operational statistics or room history, please request authorization from the workspace Administrator.
-            </p>
-            <button
-              onClick={() => router.push("/workspace")}
-              className="inline-flex h-9 items-center justify-center rounded-md bg-primary text-xs font-semibold text-white transition hover:bg-primary-hover cursor-pointer"
-            >
-              Switch Workspace
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    return null; // Return nothing while redirecting
   }
 
   // Derive counts

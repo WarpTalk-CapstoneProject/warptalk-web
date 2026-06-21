@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -133,6 +134,7 @@ export function Topbar() {
   const router = useRouter();
   const pathname = usePathname();
   const logout = useAuthStore((state) => state.logout);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const [searchOpen, setSearchOpen] = useState(false);
   const groupedItems = useMemo(
     () =>
@@ -174,7 +176,7 @@ export function Topbar() {
       ? "/workspace/profile"
       : pathname.startsWith("/internal")
         ? "/internal/profile"
-        : "/host/profile";
+        : `/${activeWorkspaceSlug || "workspace"}/profile`;
 
   const handleSignOut = () => {
     logout();

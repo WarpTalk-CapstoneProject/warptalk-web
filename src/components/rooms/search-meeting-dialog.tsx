@@ -34,7 +34,7 @@ export function SearchMeetingDialog() {
   const meetings = data?.rooms || [];
 
   const handleSelect = (roomId: string) => {
-    router.push(`/rooms/${roomId}`);
+    router.push(`/room/${roomId}`);
     setSearchMeetingModalOpen(false);
   };
 
