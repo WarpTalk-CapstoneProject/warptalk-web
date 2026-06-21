@@ -49,7 +49,7 @@ export default function WorkspaceOnboardingGatePage() {
           firstWs.name,
           firstWs.slug,
           firstWs.role || "Member",
-          (firstWs as any).membershipType || "Internal"
+          firstWs.membershipType || "Internal"
         );
         router.replace("/host/dashboard");
       }

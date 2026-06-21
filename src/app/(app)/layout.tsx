@@ -68,7 +68,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           firstWs.name,
           firstWs.slug,
           firstWs.role || "Member",
-          (firstWs as any).membershipType || "Internal"
+          firstWs.membershipType || "Internal"
         );
       } else {
         router.replace("/workspace");

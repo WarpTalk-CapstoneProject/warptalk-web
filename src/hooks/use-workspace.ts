@@ -187,6 +187,37 @@ export function useAcceptWorkspaceInvitation() {
   });
 }
 
+export function useCreateJoinRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: { roomCode?: string; workspaceSlug?: string }) => WorkspaceService.createJoinRequest(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
+    },
+  });
+}
+
+export function useApproveWorkspaceJoinRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (inviteId: string) => WorkspaceService.approveJoinRequest(workspaceId, inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
+    },
+  });
+}
+
+export function useRejectWorkspaceJoinRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (inviteId: string) => WorkspaceService.rejectJoinRequest(workspaceId, inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+    },
+  });
+}
+
 // ─── Documents ───
 
 export function useUploadWorkspaceDocument(workspaceId: string) {

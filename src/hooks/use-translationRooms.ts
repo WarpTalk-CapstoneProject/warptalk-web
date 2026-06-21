@@ -11,6 +11,7 @@ import type {
   TranslationRoomDto,
   TranslationRoomParticipantDto,
   UpdateRoomSettingsRequest,
+  RoomPreflightResponse,
 } from "@/types/translationRoom";
 
 const MEETING_KEY = ["translationRooms"] as const;
@@ -252,5 +253,14 @@ export function useSubmitTranslationRoomFeedback(roomId: string) {
         feedback
       );
     },
+  });
+}
+
+export function useRoomPreflight(roomCode: string, enabled = true) {
+  return useQuery({
+    queryKey: ["translationRooms", "preflight", roomCode],
+    queryFn: () => translationRoomService.preflight(roomCode),
+    enabled: enabled && !!roomCode,
+    staleTime: 5000,
   });
 }

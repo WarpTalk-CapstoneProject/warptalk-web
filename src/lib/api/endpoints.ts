@@ -42,6 +42,7 @@ export const API = {
     settings: (id: string) => `/translation-rooms/${id}/settings`,
     feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
+    preflight: (roomCode: string) => `/translation-rooms/preflight/${roomCode}`,
   },
   transcripts: {
     start: "/transcripts",
@@ -85,6 +86,9 @@ export const API = {
     revokeInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}`,
     previewInvitation: (token: string) => `/workspaces/invitations/preview?token=${encodeURIComponent(token)}`,
     acceptInvitation: "/workspaces/invitations/accept",
+    joinRequests: "/workspaces/join-requests",
+    approveJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/approve`,
+    rejectJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/reject`,
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
     documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,

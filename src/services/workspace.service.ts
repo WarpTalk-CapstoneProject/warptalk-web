@@ -99,6 +99,19 @@ export const WorkspaceService = {
     await apiClient.delete(API.workspaces.revokeInvitation(workspaceId, inviteId));
   },
 
+  async createJoinRequest(request: { roomCode?: string; workspaceSlug?: string }): Promise<WorkspaceInvitationDto> {
+    const { data } = await apiClient.post<WorkspaceInvitationDto>(API.workspaces.joinRequests, request);
+    return data;
+  },
+
+  async approveJoinRequest(workspaceId: string, inviteId: string): Promise<void> {
+    await apiClient.post(API.workspaces.approveJoinRequest(workspaceId, inviteId));
+  },
+
+  async rejectJoinRequest(workspaceId: string, inviteId: string): Promise<void> {
+    await apiClient.post(API.workspaces.rejectJoinRequest(workspaceId, inviteId));
+  },
+
   async previewInvitation(token: string): Promise<PreviewInvitationResponse> {
     const { data } = await apiClient.get<PreviewInvitationResponse>(API.workspaces.previewInvitation(token));
     return data;

@@ -26,7 +26,6 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useWorkspaces } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -119,11 +118,6 @@ export function LinearSidebar() {
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
-
-  const { data: workspaces } = useWorkspaces();
-  const currentWorkspace = workspaces?.[0];
-  const workspaceName = currentWorkspace?.name || "Workspace";
-  const workspaceInitials = workspaceName.substring(0, 2).toUpperCase();
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -329,7 +323,7 @@ export function LinearSidebar() {
               {workspaces.map((ws) => (
                 <DropdownMenuItem
                   key={ws.id}
-                  onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", (ws as any).membershipType || "Internal")}
+                  onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", ws.membershipType || "Internal")}
                   className={cn(
                     "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2",
                     ws.id === activeWorkspaceId ? "bg-surface-2 text-primary font-medium" : "text-ink"

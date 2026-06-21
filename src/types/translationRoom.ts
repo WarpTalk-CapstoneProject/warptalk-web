@@ -212,3 +212,15 @@ export interface UpdateRoomSettingsRequest {
   targetLanguages?: string[];
   settings?: any;
 }
+
+export interface RoomPreflightResponse {
+  roomCode: string;
+  requiresJoinRequest: boolean;
+  isUserMember: boolean;
+  isDomainMatched: boolean;
+  allowExternalCollaboration: boolean;
+  workspaceName?: string | null;
+  workspaceSlug?: string | null;
+  isAuthenticated: boolean;
+}
+

@@ -43,7 +43,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
         targetWorkspace.name,
         targetWorkspace.slug,
         targetWorkspace.role || "Member",
-        "Internal" // default membership type
+        targetWorkspace.membershipType || "Internal"
       );
       setIsSyncing(false);
     } else {

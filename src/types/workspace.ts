@@ -4,6 +4,7 @@ export interface WorkspaceDto {
   slug: string;
   logoUrl?: string | null;
   role: string;
+  membershipType?: string;
   createdAt: string;
 }
 
