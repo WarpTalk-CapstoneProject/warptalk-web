@@ -85,7 +85,7 @@ function Breadcrumbs() {
   if (isRoomInformationPage) {
     return (
       <div className="min-w-0 flex items-center gap-2 text-[14px] font-medium tracking-tight">
-        <Link href="/rooms" className="text-muted-foreground hover:text-foreground transition-colors">Meetings</Link>
+        <Link href={`/${activeWorkspaceSlug || "workspace"}/rooms`} className="text-muted-foreground hover:text-foreground transition-colors">Meetings</Link>
         <CaretRight weight="bold" className="text-muted-foreground/40 w-3 h-3" />
         <span className="truncate text-foreground max-w-[300px] flex items-center gap-2">
           {roomTitle ? roomTitle : <><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /><span>Loading...</span></>}
@@ -158,7 +158,11 @@ export function Topbar() {
   }, []);
 
   const handleSelect = (url: string) => {
-    router.push(url);
+    let finalUrl = url;
+    if (url === "/rooms" || url === "/history" || url === "/ai-summaries" || url === "/rooms/create") {
+      finalUrl = `/${activeWorkspaceSlug || "workspace"}${url === "/rooms/create" ? "/rooms" : url}`;
+    }
+    router.push(finalUrl);
     setSearchOpen(false);
   };
 

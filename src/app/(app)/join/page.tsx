@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 const languages = [
   { value: "en-US", label: "English" },
@@ -58,6 +59,7 @@ function JoinMeetingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   
   const videoRef = useRef<SinkVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -271,7 +273,7 @@ function JoinMeetingContent() {
         className="w-full max-w-[960px] flex items-center justify-between mb-4 mt-4"
       >
         <button
-          onClick={() => router.push('/rooms')}
+          onClick={() => router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`)}
           className="flex items-center gap-2 text-[13px] text-ink-muted hover:text-ink transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
