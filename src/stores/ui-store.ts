@@ -17,7 +17,7 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  rightSidebarOpen: false,
+  rightSidebarOpen: true,
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
   createRoomModalOpen: false,
