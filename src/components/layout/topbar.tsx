@@ -157,11 +157,11 @@ export function Topbar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const WORKSPACE_SCOPED_PREFIXES = ["/rooms", "/history", "/ai-summaries"];
   const handleSelect = (url: string) => {
-    let finalUrl = url;
-    if (url === "/rooms" || url === "/history" || url === "/ai-summaries" || url === "/rooms/create") {
-      finalUrl = `/${activeWorkspaceSlug || "workspace"}${url === "/rooms/create" ? "/rooms" : url}`;
-    }
+    const slug = activeWorkspaceSlug || "workspace";
+    const isScoped = WORKSPACE_SCOPED_PREFIXES.some((p) => url === p || url.startsWith(p + "/"));
+    const finalUrl = isScoped ? `/${slug}${url}` : url;
     router.push(finalUrl);
     setSearchOpen(false);
   };

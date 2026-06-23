@@ -170,6 +170,17 @@ export default function RoomDetailPage() {
     connection.on("TranslationTextReceived", (translation: TranslationTextDto) => addOrMergeTranslationText(translation));
     connection.on("TranslationRoomEnded", () => refetchRoom());
 
+    // BR-159: Backend initiated disconnections
+    connection.on("ForceDisconnected", (reason?: string) => {
+      toast.error(reason || "This room has been forcibly closed or you were disconnected from another device.");
+      router.push("/rooms");
+    });
+    
+    connection.on("ParticipantKicked", () => {
+      toast.error("You have been permanently removed from this room.");
+      router.push("/rooms");
+    });
+
     connection
       .start()
       .then(() =>
