@@ -757,9 +757,9 @@ function PricingSection() {
 
   const handleChoosePlan = () => {
     if (!isAuthenticated || !user) {
-      router.push("/login");
+      router.push("/login?redirect=/workspace");
     } else {
-      router.push("/workspace/payment/plans");
+      router.push("/workspace");
     }
   };
 
