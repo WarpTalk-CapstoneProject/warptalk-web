@@ -18,7 +18,7 @@ const plans = [
   {
     name: "Startup",
     monthlyPrice: "190.000đ",
-    yearlyPrice: "158.000đ",
+    yearlyPrice: "1.900.000đ",
     monthlyTotal: 190000,
     yearlyTotal: 1900000,
     interval: "/tháng",
@@ -36,7 +36,7 @@ const plans = [
   {
     name: "Enterprise",
     monthlyPrice: "490.000đ",
-    yearlyPrice: "408.000đ",
+    yearlyPrice: "4.900.000đ",
     monthlyTotal: 490000,
     yearlyTotal: 4900000,
     interval: "/tháng",
@@ -115,10 +115,10 @@ export default function PaymentPlansPage() {
               <p className="text-sm text-muted-foreground mt-2 min-h-[40px]">{plan.description}</p>
               <div className="mt-4 flex items-end gap-1">
                 <span className="text-4xl font-semibold tracking-tight">{billingInterval === "yearly" ? plan.yearlyPrice : plan.monthlyPrice}</span>
-                {plan.interval && <span className="text-sm text-muted-foreground mb-1">{plan.interval}</span>}
+                {plan.interval && <span className="text-sm text-muted-foreground mb-1">{billingInterval === "yearly" ? "/năm" : plan.interval}</span>}
               </div>
               {billingInterval === "yearly" && plan.interval && (
-                <p className="text-xs text-semantic-success mt-1">Save 20% compared to monthly</p>
+                <p className="text-xs text-semantic-success mt-1">Tương đương {plan.name === "Startup" ? "158.000đ" : "408.000đ"}/tháng (Tiết kiệm 20%)</p>
               )}
             </CardHeader>
             <CardContent className="flex-1 p-6 pt-4">
