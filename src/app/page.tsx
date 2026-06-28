@@ -56,19 +56,6 @@ const signalRows = [
 
 const pricingPlans = [
   {
-    tier: "Free",
-    monthly: "Free",
-    yearly: "Free",
-    description: "For teams trying real-time interpretation across first conversations.",
-    features: [
-      "Up to 3 live translation rooms each month",
-      "Real-time captions for bilingual meetings",
-      "Basic transcript export",
-      "Web access for small teams",
-      "Community support",
-    ],
-  },
-  {
     tier: "Startup",
     monthly: "190.000đ/tháng",
     yearly: "158.000đ/tháng",

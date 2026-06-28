@@ -16,24 +16,6 @@ import { paymentService } from "@/services/payment.service";
 
 const plans = [
   {
-    name: "Free",
-    monthlyPrice: "Free",
-    yearlyPrice: "Free",
-    monthlyTotal: 0,
-    yearlyTotal: 0,
-    interval: "",
-    description: "For teams trying real-time interpretation across first conversations.",
-    features: [
-      "Up to 3 live translation rooms each month",
-      "Real-time captions for bilingual meetings",
-      "Basic transcript export",
-      "Web access for small teams",
-      "Community support",
-    ],
-    buttonText: "Choose Plan",
-    featured: false,
-  },
-  {
     name: "Startup",
     monthlyPrice: "190.000đ",
     yearlyPrice: "158.000đ",
@@ -120,7 +102,7 @@ export default function PaymentPlansPage() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6 w-full max-w-6xl px-4">
+      <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl px-4">
         {plans.map((plan) => (
           <Card key={plan.name} className={`relative flex flex-col rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${plan.featured ? "border-primary/50 bg-surface-2 shadow-[0_8px_30px_rgb(94,106,210,0.12)]" : "border-hairline bg-surface-1"}`}>
             {plan.featured && (
