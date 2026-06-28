@@ -758,7 +758,7 @@ function PricingSection() {
     if (!isAuthenticated) {
       router.push("/login");
     } else {
-      router.push("/workspace/payment/success");
+      router.push("/workspace/payment/plans");
     }
   };
 
