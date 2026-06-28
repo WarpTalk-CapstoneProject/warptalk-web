@@ -107,7 +107,7 @@ export function FeatureBreakdownChart({ workspaceId, className }: FeatureBreakdo
                     fontSize: "13px"
                   }}
                   itemStyle={{ fontWeight: 500 }}
-                  formatter={(value: number) => [value.toLocaleString() + " Credits", "Consumed"]}
+                  formatter={(value: any) => [value?.toLocaleString() + " Credits", "Consumed"]}
                 />
                 <Legend 
                   verticalAlign="bottom" 

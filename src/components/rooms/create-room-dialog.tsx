@@ -72,7 +72,7 @@ export function CreateRoomDialog() {
   const setEditRoomId = useUIStore((state) => state.setEditRoomId);
   const user = useAuthStore((state) => state.user);
   const { data: workspaces } = useWorkspaces();
-  const currentWorkspace = workspaces?.[0];
+  const currentWorkspace = workspaces?.items?.[0];
   const workspaceName = currentWorkspace?.name || "Workspace";
 
   const [title, setTitle] = useState("");

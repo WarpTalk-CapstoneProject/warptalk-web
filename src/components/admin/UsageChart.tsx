@@ -31,14 +31,14 @@ export function UsageChart({ workspaceId, className }: UsageChartProps) {
         const yearsToFetch = [currentYear - 4, currentYear - 3, currentYear - 2, currentYear - 1, currentYear];
         const promises = yearsToFetch.map(y =>
           workspaceId
-            ? billingService.getWorkspaceUsageChart(workspaceId, y)
+            ? billingService.getWorkspaceUsageChart(workspaceId!, y)
             : billingService.getGlobalUsageChart(y)
         );
         const results = await Promise.all(promises);
         return results;
       } else {
         const result = workspaceId
-          ? await billingService.getWorkspaceUsageChart(workspaceId, year)
+          ? await billingService.getWorkspaceUsageChart(workspaceId!, year)
           : await billingService.getGlobalUsageChart(year);
         return [result];
       }
@@ -117,7 +117,7 @@ export function UsageChart({ workspaceId, className }: UsageChartProps) {
 
           {grouping !== "year" && (
             <div className="w-[90px]">
-              <Select value={year.toString()} onValueChange={(v) => setYear(parseInt(v))}>
+              <Select value={year.toString()} onValueChange={(v) => setYear(parseInt(v || ""))}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -180,7 +180,7 @@ export function UsageChart({ workspaceId, className }: UsageChartProps) {
                     fontSize: "13px"
                   }}
                   itemStyle={{ fontWeight: 500 }}
-                  formatter={(value: number) => [value.toLocaleString(), "Credits"]}
+                  formatter={(value: any) => [value?.toLocaleString(), "Credits"]}
                 />
                 <Legend
                   iconType="circle"

@@ -89,14 +89,14 @@ export function TopWorkspacesChart({ className }: TopWorkspacesChartProps) {
                     boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                   }}
                   itemStyle={{ color: "#3b82f6", fontWeight: 500 }}
-                  formatter={(value: number) => [value.toLocaleString() + " Credits", "Consumed"]}
+                  formatter={(value: any) => [value?.toLocaleString() + " Credits", "Consumed"]}
                 />
                 <Bar 
                   dataKey="consumedCredits" 
                   fill="#3b82f6" 
                   radius={[0, 4, 4, 0]}
                   barSize={24}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     const id = data?.workspaceId || data?.payload?.workspaceId;
                     if (id) {
                       router.push(`/internal/billing/workspace/${id}`);

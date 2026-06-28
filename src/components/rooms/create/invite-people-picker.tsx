@@ -14,9 +14,7 @@ export function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onC
   const members = membersData?.items ?? [];
 
   // Safely extract members array
-  const membersArray = Array.isArray(members) 
-    ? members 
-    : (members?.items || members?.data || []);
+  const membersArray = members;
 
   const suggestedMembers = membersArray.filter((m: any) => 
     m.fullName && 

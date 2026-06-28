@@ -10,8 +10,8 @@ const jobs = [
   { label: "Artifact permissions", status: "Ready", icon: FileText },
 ];
 
-export default async function RoomEndedPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: roomId } = await params;
+export default async function RoomEndedPage({ params }: { params: Promise<{ id: string; workspaceSlug: string }> }) {
+  const { id: roomId, workspaceSlug } = await params;
 
   return (
     <div className="mx-auto grid max-w-5xl gap-4">
@@ -32,7 +32,7 @@ export default async function RoomEndedPage({ params }: { params: Promise<{ id: 
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Link href={`/${params.workspaceSlug}/rooms/${roomId}/artifacts`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Open artifacts</Link>
+        <Link href={`/${workspaceSlug}/rooms/${roomId}/artifacts`} className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800">Open artifacts</Link>
         <Link href="/feedback" className="inline-flex h-8 items-center justify-center rounded-full border border-border  px-3 text-sm font-medium transition hover:bg-muted"><Star weight="light" className="mr-2 h-4 w-4" />Submit feedback</Link>
         <Link href="/history" className="inline-flex h-8 items-center justify-center rounded-full border border-border  px-3 text-sm font-medium transition hover:bg-muted">View history</Link>
       </div>

@@ -19,6 +19,8 @@ const plans = [
     name: "Free",
     monthlyPrice: "Free",
     yearlyPrice: "Free",
+    monthlyTotal: 0,
+    yearlyTotal: 0,
     interval: "",
     description: "For teams trying real-time interpretation across first conversations.",
     features: [
@@ -32,33 +34,37 @@ const plans = [
     featured: false,
   },
   {
-    name: "Standard",
-    monthlyPrice: "$9.99",
-    yearlyPrice: "$7.99",
-    interval: "/m",
+    name: "Startup",
+    monthlyPrice: "190.000đ",
+    yearlyPrice: "158.000đ",
+    monthlyTotal: 190000,
+    yearlyTotal: 1900000,
+    interval: "/tháng",
     description: "For growing global teams that need reliable AI summaries and history.",
     features: [
-      "Up to 50 live translation rooms each month",
-      "AI meeting summary and action items",
-      "Speaker timeline and transcript search",
-      "Team collaboration up to 5 members",
-      "Priority web and mobile access",
+      "30,000 credits per cycle",
+      "120 minutes of Voice Cloning",
+      "Automatic standard fallback",
+      "Web access for up to 15 members",
+      "Standard email support",
     ],
     buttonText: "Choose Plan",
     featured: true,
   },
   {
-    name: "Pro",
-    monthlyPrice: "$19.99",
-    yearlyPrice: "$15.99",
-    interval: "/m",
+    name: "Enterprise",
+    monthlyPrice: "490.000đ",
+    yearlyPrice: "408.000đ",
+    monthlyTotal: 490000,
+    yearlyTotal: 4900000,
+    interval: "/tháng",
     description: "For operators using voice cloning and native-feeling interpretation at scale.",
     features: [
-      "Unlimited live translation rooms",
-      "Human voice cloning for supported speakers",
-      "Advanced AI analysis and conversation insights",
-      "Unlimited team members",
-      "Brand and workspace customization",
+      "100,000 credits per cycle",
+      "Unlimited Voice Cloning",
+      "Workspace Glossary & AI Customization",
+      "Advanced ACL permission controls",
+      "Stripe-backed top-up support",
     ],
     buttonText: "Choose Plan",
     featured: false,
@@ -83,7 +89,7 @@ export default function PaymentPlansPage() {
         userId: user.id,
         workspaceId: user.id,
         amount,
-        currency: "usd",
+        currency: "vnd",
         paymentType,
       });
       if (url) {
@@ -152,9 +158,8 @@ export default function PaymentPlansPage() {
                     router.push("/workspace"); // Free plan just goes to workspace
                     return;
                   }
-                  const price = billingInterval === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
-                  const numericPrice = parseFloat(price.replace("$", ""));
-                  handleCheckout(numericPrice, "Subscription");
+                  const checkoutAmount = billingInterval === "yearly" ? plan.yearlyTotal : plan.monthlyTotal;
+                  handleCheckout(checkoutAmount, "Subscription");
                 }}
                 className={`inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${plan.featured ? "bg-primary hover:bg-primary-hover text-primary-foreground" : "bg-surface-2 hover:bg-surface-3 text-ink border border-hairline"}`}
               >

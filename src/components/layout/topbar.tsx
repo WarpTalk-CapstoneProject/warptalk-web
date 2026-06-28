@@ -72,6 +72,7 @@ import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 
 function Breadcrumbs() {
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
   const current = segments.at(-1);
