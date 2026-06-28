@@ -3,7 +3,7 @@
 import { CheckCircle, Lightning, ArrowRight } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,12 @@ export default function PaymentPlansPage() {
   const { isAuthenticated, user } = useAuthStore();
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, user, router]);
 
   const handleCheckout = async (amount: number, paymentType: string) => {
     if (!isAuthenticated || !user) {
