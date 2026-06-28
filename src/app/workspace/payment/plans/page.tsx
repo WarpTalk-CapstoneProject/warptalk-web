@@ -21,7 +21,7 @@ const plans = [
     yearlyPrice: "158.000đ",
     monthlyTotal: 190000,
     yearlyTotal: 1900000,
-    interval: "/tháng",
+    interval: "/mo",
     description: "For growing global teams that need reliable AI summaries and history.",
     features: [
       "30,000 credits per cycle",
@@ -39,7 +39,7 @@ const plans = [
     yearlyPrice: "408.000đ",
     monthlyTotal: 490000,
     yearlyTotal: 4900000,
-    interval: "/tháng",
+    interval: "/mo",
     description: "For operators using voice cloning and native-feeling interpretation at scale.",
     features: [
       "100,000 credits per cycle",
@@ -124,7 +124,7 @@ export default function PaymentPlansPage() {
                 {plan.interval && <span className="text-sm text-muted-foreground mb-1">{plan.interval}</span>}
               </div>
               {billingInterval === "yearly" && plan.interval && (
-                <p className="text-xs text-semantic-success mt-1">Thanh toán hằng năm: {plan.name === "Startup" ? "1.900.000đ" : "4.900.000đ"} (Tiết kiệm 20%)</p>
+                <p className="text-xs text-semantic-success mt-1">Billed yearly: {plan.name === "Startup" ? "1.900.000đ" : "4.900.000đ"} (Save 20%)</p>
               )}
             </CardHeader>
             <CardContent className="flex-1 p-6 pt-4">

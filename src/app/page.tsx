@@ -57,8 +57,8 @@ const signalRows = [
 const pricingPlans = [
   {
     tier: "Startup",
-    monthly: "190.000đ/tháng",
-    yearly: "158.000đ/tháng",
+    monthly: "190.000đ/mo",
+    yearly: "158.000đ/mo",
     description: "For growing global teams that need reliable AI summaries and history.",
     features: [
       "30,000 credits per cycle",
@@ -70,8 +70,8 @@ const pricingPlans = [
   },
   {
     tier: "Enterprise",
-    monthly: "490.000đ/tháng",
-    yearly: "408.000đ/tháng",
+    monthly: "490.000đ/mo",
+    yearly: "408.000đ/mo",
     description: "For operators using voice cloning and native-feeling interpretation at scale.",
     features: [
       "100,000 credits per cycle",
