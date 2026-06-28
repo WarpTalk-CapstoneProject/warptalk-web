@@ -753,9 +753,10 @@ function PricingSection() {
   const [yearly, setYearly] = useState(false);
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
 
   const handleChoosePlan = () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !user) {
       router.push("/login");
     } else {
       router.push("/workspace/payment/plans");
