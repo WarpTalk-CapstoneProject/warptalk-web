@@ -58,7 +58,7 @@ const pricingPlans = [
   {
     tier: "Startup",
     monthly: "190.000đ/tháng",
-    yearly: "1.900.000đ/năm",
+    yearly: "158.000đ/tháng",
     description: "For growing global teams that need reliable AI summaries and history.",
     features: [
       "30,000 credits per cycle",
@@ -71,7 +71,7 @@ const pricingPlans = [
   {
     tier: "Enterprise",
     monthly: "490.000đ/tháng",
-    yearly: "4.900.000đ/năm",
+    yearly: "408.000đ/tháng",
     description: "For operators using voice cloning and native-feeling interpretation at scale.",
     features: [
       "100,000 credits per cycle",
@@ -787,6 +787,11 @@ function PricingSection() {
           <article className={plan.featured ? "c3-card c3-card-pro" : "c3-card"} key={plan.tier}>
             <p className="c3-tier-small">{plan.tier}</p>
             <h3 className="c3-tier-large">{yearly ? plan.yearly : plan.monthly}</h3>
+            {yearly && (
+              <p className="text-xs text-primary/80 mt-1 font-medium">
+                Billed yearly: {plan.tier === "Startup" ? "1.900.000đ" : "4.900.000đ"}
+              </p>
+            )}
             <p className="c3-desc">{plan.description}</p>
             <ul className="c3-list">
               {plan.features.map((feature) => (
