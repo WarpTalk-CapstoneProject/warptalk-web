@@ -897,10 +897,10 @@
 
 .c3-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 24px;
   width: 100%;
-  max-width: 1040px;
+  max-width: 720px;
   margin-top: 24px;
   transform: none;
   position: relative;
