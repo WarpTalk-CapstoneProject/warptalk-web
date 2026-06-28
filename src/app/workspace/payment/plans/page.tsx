@@ -21,7 +21,7 @@ const plans = [
     yearlyPrice: "158.000đ",
     monthlyTotal: 190000,
     yearlyTotal: 1900000,
-    interval: "/mo",
+    interval: "/month",
     description: "For growing global teams that need reliable AI summaries and history.",
     features: [
       "30,000 credits per cycle",
@@ -39,7 +39,7 @@ const plans = [
     yearlyPrice: "408.000đ",
     monthlyTotal: 490000,
     yearlyTotal: 4900000,
-    interval: "/mo",
+    interval: "/month",
     description: "For operators using voice cloning and native-feeling interpretation at scale.",
     features: [
       "100,000 credits per cycle",
@@ -97,7 +97,7 @@ export default function PaymentPlansPage() {
         <Badge variant="secondary" className="mb-4 bg-surface-2 text-primary border border-hairline hover:bg-surface-2">Pricing & Subscriptions</Badge>
         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink mb-4">Choose the right plan for your team</h1>
         <p className="text-lg text-muted-foreground">Upgrade your workspace to unlock advanced AI capabilities, real-time translation, and more credits.</p>
-        
+
         <div className="mt-8 flex justify-center">
           <Tabs value={billingInterval} onValueChange={(val) => setBillingInterval(val as "monthly" | "yearly")} className="w-fit">
             <TabsList className="bg-surface-2 p-1 rounded-full border border-hairline">
@@ -138,7 +138,7 @@ export default function PaymentPlansPage() {
               </ul>
             </CardContent>
             <CardFooter className="p-6 pt-0">
-              <button 
+              <button
                 type="button"
                 disabled={isProcessing}
                 onClick={() => {
@@ -170,7 +170,7 @@ export default function PaymentPlansPage() {
                 <p className="text-sm text-muted-foreground">Top up your AI credits without changing your plan.</p>
               </div>
             </div>
-            <button 
+            <button
               type="button"
               disabled={isProcessing}
               onClick={() => handleCheckout(50, "CreditTopUp")}
