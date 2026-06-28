@@ -11,8 +11,7 @@ import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 
 const navigation = [
   { name: "Cuộc họp", href: "/rooms", icon: VideoCamera },
-  { name: "Bản ghi", href: "/transcripts", icon: FileText },
-  { name: "Workspace", href: "/workspace/dashboard", icon: Buildings },
+  { name: "Bản ghi", href: "/history", icon: FileText },
   { name: "Gói dịch vụ", href: "/subscription", icon: CreditCard },
 ];
 
@@ -22,7 +21,7 @@ const secondaryNav = [
 ];
 
 const adminNav = [
-  { name: "Quản trị", href: "/internal/dashboard", icon: Shield },
+  { name: "Admin", href: "/rooms", icon: Shield },
 ];
 
 export function Sidebar() {

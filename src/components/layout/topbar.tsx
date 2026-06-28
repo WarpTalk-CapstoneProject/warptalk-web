@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -51,10 +52,7 @@ const searchItems: Array<{
   icon: React.ElementType;
   shortcut?: string;
 }> = [
-  { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: SquaresFour, shortcut: "D" },
-  { title: "Participant Dashboard", url: "/participant/dashboard", group: "Participant", icon: Users },
-  { title: "Workspace Dashboard", url: "/workspace/dashboard", group: "Workspace", icon: Buildings },
-  { title: "Internal Dashboard", url: "/internal/dashboard", group: "Internal", icon: HardDrives },
+
   { title: "Rooms", url: "/rooms", group: "Workspace", icon: SquaresFour, shortcut: "R" },
   { title: "Create Room", url: "/rooms/create", group: "Workspace", icon: Plus, shortcut: "N" },
   { title: "History & Transcripts", url: "/history", group: "Workspace", icon: FileText, shortcut: "H" },
@@ -64,14 +62,14 @@ const searchItems: Array<{
   { title: "Voice Profiles", url: "/voice-profiles", group: "Configuration", icon: Microphone },
   { title: "Post-room Feedback", url: "/feedback", group: "Operations", icon: Star },
   { title: "GearSix", url: "/settings", group: "Configuration", icon: GearSix },
-  { title: "Workspace", url: "/workspace/dashboard", group: "Administration", icon: Buildings },
-  { title: "Internal Admin", url: "/internal/dashboard", group: "Administration", icon: HardDrives },
   { title: "Dev Test", url: "/dev-test", group: "Developer", icon: Flask },
 ];
 
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import Link from "next/link";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
+import { Lumidot } from "lumidot";
+import { useTheme } from "next-themes";
 
 function Breadcrumbs() {
   const pathname = usePathname();
@@ -82,13 +80,17 @@ function Breadcrumbs() {
   const roomId = isRoomInformationPage ? current : undefined;
   const roomQuery = useTranslationRoom(roomId as string);
   const roomTitle = roomQuery.data?.title;
+  const { resolvedTheme } = useTheme();
+  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   if (isRoomInformationPage) {
     return (
       <div className="min-w-0 flex items-center gap-2 text-[14px] font-medium tracking-tight">
-        <Link href="/rooms" className="text-muted-foreground hover:text-foreground transition-colors">Meetings</Link>
+        <Link href={`/${activeWorkspaceSlug || "workspace"}/rooms`} className="text-muted-foreground hover:text-foreground transition-colors">Meetings</Link>
         <CaretRight weight="bold" className="text-muted-foreground/40 w-3 h-3" />
-        <span className="truncate text-foreground max-w-[300px]">{roomTitle || "Loading..."}</span>
+        <span className="truncate text-foreground max-w-[300px] flex items-center gap-2">
+          {roomTitle ? roomTitle : <><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /><span>Loading...</span></>}
+        </span>
       </div>
     );
   }
@@ -133,6 +135,7 @@ export function Topbar() {
   const router = useRouter();
   const pathname = usePathname();
   const logout = useAuthStore((state) => state.logout);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const [searchOpen, setSearchOpen] = useState(false);
   const groupedItems = useMemo(
     () =>
@@ -155,8 +158,12 @@ export function Topbar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const WORKSPACE_SCOPED_PREFIXES = ["/rooms", "/history", "/ai-summaries"];
   const handleSelect = (url: string) => {
-    router.push(url);
+    const slug = activeWorkspaceSlug || "workspace";
+    const isScoped = WORKSPACE_SCOPED_PREFIXES.some((p) => url === p || url.startsWith(p + "/"));
+    const finalUrl = isScoped ? `/${slug}${url}` : url;
+    router.push(finalUrl);
     setSearchOpen(false);
   };
 
@@ -174,7 +181,7 @@ export function Topbar() {
       ? "/workspace/profile"
       : pathname.startsWith("/internal")
         ? "/internal/profile"
-        : "/workspace/profile";
+        : `/${activeWorkspaceSlug || "workspace"}/profile`;
 
   const handleSignOut = () => {
     logout();

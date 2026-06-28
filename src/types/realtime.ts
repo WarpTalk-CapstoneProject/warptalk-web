@@ -40,12 +40,43 @@ export interface TranslationTextDto {
   targetLang: string;
 }
 
+export interface TranslatedAudioDto {
+  segmentId: string;
+  speakerId: string;
+  audioBase64: string;
+  voiceType: "default" | "blended" | "cloned";
+  durationMs: number;
+  voiceMode?: "standard" | "blended" | "cloned" | "caption_only";
+  cloneStrength?: number;
+  anchorProvider?: string;
+  cloneProvider?: string;
+  renderLocation?: "server" | "desktop";
+  cacheKey?: string;
+  cacheHit?: boolean;
+  synthesisLatencyMs?: number;
+  conversionLatencyMs?: number;
+  fallbackReason?: string;
+}
+
+export interface ChatMentionDto {
+  id: string;
+  display: string;
+  type: string;
+}
+
 export interface ChatMessageDto {
-  messageId: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  sentAt: string;
+  id: string;
+  meetingRoomId: string;
+  senderUserId?: string;
+  senderDisplayName: string;
+  senderType: string;
+  messageType: string;
+  originalLanguage: string;
+  originalText: string;
+  translationEnabled: boolean;
+  containsWarpbotMention?: boolean;
+  mentions?: ChatMentionDto[];
+  createdAt: string;
 }
 
 export interface TranslationRoomStateDto {

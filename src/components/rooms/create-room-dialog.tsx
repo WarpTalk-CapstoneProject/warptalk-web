@@ -18,31 +18,44 @@ import {
   DotsThree,
   ArrowsOutSimple,
   ArrowsInSimple,
+  Link as LinkIcon,
   Paperclip,
   CaretDown,
   Monitor,
   VideoCamera,
   UsersThree,
   MicrophoneStage,
-  Broadcast
+  Broadcast,
+  SignIn,
+  FileText
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { useCreateTranslationRoom } from "@/hooks/use-translationRooms";
+import { useCreateTranslationRoom, useTranslationRoom, useTranslationRoomInvitations, useUpdateTranslationRoomSettings } from "@/hooks/use-translationRooms";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaces, useWorkspaceMembers } from "@/hooks/use-workspace";
+import { OptionsMenu } from "./create/options-menu";
+import { TemplatePicker } from "./create/template-picker";
+import { InvitePeoplePicker } from "./create/invite-people-picker";
+import { StartTimePicker } from "./create/start-time-picker";
+import { LanguageSelector } from "./create/language-selector";
+import { ResourcePicker } from "./create/resource-picker";
 
 const languageOptions = [
-  { code: "vi-VN", label: "Vietnamese" },
-  { code: "en-US", label: "English" },
-  { code: "ja-JP", label: "Japanese" },
+  { code: "vi", label: "Vietnamese" },
+  { code: "en", label: "English" },
+  { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
+  { code: "fr", label: "French" },
+  { code: "es", label: "Spanish" },
 ];
 
 function getDefaultStartTime() {
@@ -55,21 +68,58 @@ function getDefaultStartTime() {
 export function CreateRoomDialog() {
   const isOpen = useUIStore((state) => state.createRoomModalOpen);
   const setIsOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const editRoomId = useUIStore((state) => state.editRoomId);
+  const setEditRoomId = useUIStore((state) => state.setEditRoomId);
   const user = useAuthStore((state) => state.user);
+  const { data: workspaces } = useWorkspaces();
+  const currentWorkspace = workspaces?.[0];
+  const workspaceName = currentWorkspace?.name || "Workspace";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
-  const [sourceLanguage, setSourceLanguage] = useState<string>("en-US");
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["vi-VN"]);
+  const [sourceLanguage, setSourceLanguage] = useState<string>("en");
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["vi"]);
   const [isMultiLang, setIsMultiLang] = useState(false);
+  const [isDaily, setIsDaily] = useState(false);
+  const [hasResources, setHasResources] = useState(false);
+  const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
   
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
+
+  const handleCopyLink = () => {
+    setIsLinkCopied(true);
+    navigator.clipboard.writeText(window.location.href);
+    setTimeout(() => setIsLinkCopied(false), 5000);
+  };
+  
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
   const createRoomMutation = useCreateTranslationRoom();
+  const updateRoomMutation = useUpdateTranslationRoomSettings();
+  
+  const { data: editRoomData } = useTranslationRoom(editRoomId || "");
+  const { data: editInvitations } = useTranslationRoomInvitations(editRoomId || "");
+
+  useEffect(() => {
+    if (editRoomId && editRoomData) {
+      setTitle(editRoomData.title);
+      setDescription(editRoomData.description || "");
+      setSourceLanguage(editRoomData.sourceLanguage || "en");
+      setSelectedLanguages(editRoomData.targetLanguages);
+      setIsMultiLang(editRoomData.targetLanguages.length > 1);
+      setScheduledAt(editRoomData.scheduledAt ? new Date(editRoomData.scheduledAt) : null);
+    }
+  }, [editRoomId, editRoomData]);
+
+  useEffect(() => {
+    if (editRoomId && editInvitations) {
+      setInvitedEmails(editInvitations.map(i => i.email));
+    }
+  }, [editRoomId, editInvitations]);
   
   const completionRef = useRef<HTMLDivElement | null>(null);
 
@@ -88,13 +138,16 @@ export function CreateRoomDialog() {
         setTitle("");
         setDescription("");
         setInvitedEmails([]);
-        setSelectedLanguages(["vi-VN"]);
-        setSourceLanguage("en-US");
+        setSelectedLanguages(["vi"]);
+        setSourceLanguage("en");
         setIsMultiLang(false);
         setScheduledAt(null);
+        setHasResources(false);
+        setSelectedResources([]);
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
+        setEditRoomId(null);
       }, 400);
     }
   }
@@ -110,27 +163,51 @@ export function CreateRoomDialog() {
     }
   }, [createdRoomId]);
 
-  async function createPreviewRoom() {
+  async function handleSubmit() {
     if (!canSubmit) {
       toast.error("Please complete all required fields.");
       return;
     }
 
     try {
-      const room = await createRoomMutation.mutateAsync({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        translationRoomType: scheduledAt ? "scheduled" : "instant",
-        maxParticipants: participantCount,
-        sourceLanguage: sourceLanguage,
-        targetLanguages: selectedLanguages,
-        scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
-      });
-      setCreatedRoomId(room.id);
-      setCreatedRoomCode(room.translationRoomCode);
-      toast.success("Room created successfully.");
+      // Normalize target languages: remove duplicates and remove source language
+      const normalizedTargetLanguages = Array.from(new Set(selectedLanguages))
+        .filter(lang => lang !== sourceLanguage);
+      
+      const targetLangs = normalizedTargetLanguages.length > 0 ? normalizedTargetLanguages : [sourceLanguage === "vi" ? "en" : "vi"];
+
+      if (editRoomId) {
+        await updateRoomMutation.mutateAsync({
+          id: editRoomId,
+          data: {
+            title: title.trim(),
+            description: description.trim() || undefined,
+            maxParticipants: participantCount,
+            sourceLanguage: sourceLanguage,
+            targetLanguages: targetLangs,
+            scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
+            invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+          }
+        });
+        toast.success("Room updated successfully.");
+        handleOpenChange(false);
+      } else {
+        const room = await createRoomMutation.mutateAsync({
+          title: title.trim(),
+          description: description.trim() || undefined,
+          translationRoomType: scheduledAt ? "scheduled" : "instant",
+          maxParticipants: participantCount,
+          sourceLanguage: sourceLanguage,
+          targetLanguages: targetLangs,
+          scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
+          invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+        });
+        setCreatedRoomId(room.id);
+        setCreatedRoomCode(room.translationRoomCode);
+        toast.success("Room created successfully. Invites sent!");
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create room.");
+      toast.error(error instanceof Error ? error.message : `Failed to ${editRoomId ? "update" : "create"} room.`);
     }
   }
 
@@ -139,18 +216,20 @@ export function CreateRoomDialog() {
     toast.success("Invite link copied.");
   }
 
-  const workspaceName = "FPT-SEP490";
-
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent 
         overlayClassName="!bg-black/40 !backdrop-blur-none" 
         className={cn(
-          "max-w-[calc(100vw-2rem)] sm:max-w-[750px] w-full p-0 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden top-[12vh] !translate-y-0 [transition-property:height,top,bottom,max-height] duration-300",
-          isExpanded && "top-[5vh] bottom-[5vh] sm:h-[90vh] flex flex-col"
+          "max-w-[calc(100vw-2rem)] w-full p-0 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden [transition-property:height,top,bottom,max-height,transform] duration-300",
+          createdRoomId 
+            ? "sm:max-w-[500px] !top-[25%] !-translate-y-[25%]" 
+            : "sm:max-w-[750px] top-[12vh] !translate-y-0",
+          !createdRoomId && isExpanded && "top-[5vh] bottom-[5vh] sm:h-[90vh] flex flex-col"
         )}
       >
-        <DialogTitle className="sr-only">Create new meeting</DialogTitle>
+        <DialogTitle className="sr-only">{editRoomId ? "Edit meeting" : "Create new meeting"}</DialogTitle>
+        <DialogDescription className="sr-only">Configure and create a new translation room</DialogDescription>
         
         <div className="flex flex-col w-full relative h-full">
           {!createdRoomId ? (
@@ -213,6 +292,12 @@ export function CreateRoomDialog() {
                     onRemove={() => setScheduledAt(null)} 
                   />
                 )}
+                {hasResources && (
+                  <ResourcePicker 
+                    resources={selectedResources} 
+                    onChange={setSelectedResources} 
+                  />
+                )}
                 <OptionsMenu 
                   hasScheduledAt={!!scheduledAt} 
                   onAddScheduledAt={() => setScheduledAt(getDefaultStartTime())} 
@@ -223,414 +308,89 @@ export function CreateRoomDialog() {
                       setSelectedLanguages([selectedLanguages[0]]);
                     }
                   }}
+                  isDaily={isDaily}
+                  onToggleDaily={() => setIsDaily(!isDaily)}
+                  hasResources={hasResources}
+                  onAddResources={() => setHasResources(true)}
                 />
               </div>
 
               {/* Footer */}
               <div className="flex items-center justify-between px-5 py-3 bg-surface-1/50 shrink-0">
-                <button className="p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors" title="Attach file">
-                  <Paperclip weight="bold" size={16} />
-                </button>
+                {isLinkCopied ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-canvas text-ink rounded-md text-[12px] font-medium border border-border/60 shadow-sm transition-all">
+                    <CheckCircle weight="fill" size={14} className="text-emerald-500" />
+                    <span>Link copied</span>
+                  </div>
+                ) : (
+                  <button onClick={handleCopyLink} className="p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors" title="Copy meeting link">
+                    <LinkIcon weight="bold" size={16} />
+                  </button>
+                )}
                 <div className="flex items-center gap-4">
                   <Button
-                    onClick={createPreviewRoom}
-                    disabled={!canSubmit || createRoomMutation.isPending}
+                    onClick={handleSubmit}
+                    disabled={!canSubmit || createRoomMutation.isPending || updateRoomMutation.isPending}
                     className="h-[30px] px-3.5 rounded-md bg-ink text-canvas hover:opacity-90 disabled:opacity-40 transition-all font-medium text-[13px] shadow-sm"
                   >
-                    {createRoomMutation.isPending ? "Creating..." : "Create Room"}
+                    {createRoomMutation.isPending || updateRoomMutation.isPending ? "Saving..." : editRoomId ? "Save Changes" : "Create Room"}
                   </Button>
                 </div>
               </div>
             </div>
           ) : (
-            <div ref={completionRef} className="p-8 flex items-start gap-5">
-              <div className="h-12 w-12 rounded-full bg-surface-2 flex items-center justify-center shrink-0">
-                <CheckCircle weight="duotone" className="text-emerald-500 h-6 w-6" />
+            <div ref={completionRef} className="p-8 flex flex-col items-center text-center justify-center relative">
+              <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
+                <CheckCircle weight="bold" className="text-emerald-600 h-6 w-6" />
               </div>
-              <div className="flex-1">
-                <h3 className="text-[16px] font-medium text-ink mb-1">{title}</h3>
-                <p className="text-[13px] text-ink-muted mb-5">
-                  Room Code: <span className="font-mono bg-surface-2 px-1.5 py-0.5 rounded text-ink">{createdRoomCode}</span>
-                </p>
+              
+              <div className="flex flex-col items-center w-full max-w-[320px]">
+                <h3 className="text-[18px] font-semibold text-foreground mb-1 tracking-tight">Meeting Created Successfully</h3>
+                <p className="text-[13px] text-muted-foreground mb-6">Your room "{title}" is ready to use.</p>
+                
+                {/* Room Code Card */}
+                <div className="w-full bg-surface-1 border border-border/60 rounded-lg p-3 mb-8 flex flex-col items-center gap-2">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Room Code</p>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[16px] font-semibold text-foreground tracking-wide">{createdRoomCode}</span>
+                    <button onClick={copyInviteLink} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-surface-2" title="Copy Invite Link">
+                      <Copy weight="bold" className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
 
-                <div className="flex items-center gap-3">
-                  <Link 
-                    href={`/rooms/${createdRoomId}/setup`} 
-                    onClick={() => handleOpenChange(false)}
-                    className="flex h-8 items-center gap-2 rounded-md bg-ink px-3.5 text-[13px] font-medium text-canvas transition-all hover:opacity-90 shadow-sm"
-                  >
-                    <SlidersHorizontal weight="duotone" className="h-4 w-4" />
-                    Setup Room
-                  </Link>
-                  <button
+                {/* Buttons */}
+                <div className="flex items-center gap-3 w-full">
+                  <Button
                     type="button"
-                    onClick={copyInviteLink}
-                    className="flex h-8 items-center gap-2 rounded-md border border-border/60 bg-surface-1 px-3.5 text-[13px] font-medium text-ink transition-all hover:bg-surface-2 shadow-sm"
+                    variant="outline"
+                    onClick={() => {
+                      handleOpenChange(false);
+                      useUIStore.getState().setSetupRoomId(createdRoomId);
+                      useUIStore.getState().setSetupRoomModalOpen(true);
+                    }}
+                    className="flex-1 text-[13px] h-[34px] font-medium gap-2"
                   >
-                    <Copy weight="duotone" className="h-4 w-4 text-ink-muted" />
-                    Copy Link
-                  </button>
+                    <SlidersHorizontal weight="bold" size={14} />
+                    Configure
+                  </Button>
+                  <Link 
+                    href={`/room/${createdRoomId}`}
+                    onClick={() => handleOpenChange(false)}
+                    className={cn(
+                      buttonVariants({ variant: "default" }),
+                      "flex-1 text-[13px] h-[34px] font-medium bg-primary text-white hover:bg-primary/90 gap-2 flex items-center justify-center"
+                    )}
+                  >
+                    <SignIn weight="bold" size={14} />
+                    Join
+                  </Link>
                 </div>
               </div>
-              <button 
-                onClick={() => handleOpenChange(false)}
-                className="p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors absolute top-4 right-4"
-              >
-                <X weight="bold" size={16} />
-              </button>
             </div>
           )}
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// Subcomponents - Pill Style Options
-
-function PillButton({ icon: Icon, label, active, onClick }: { icon: React.ElementType, label?: React.ReactNode, active: boolean, onClick?: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors border shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
-        active 
-          ? "border-border bg-surface-1 text-ink hover:bg-surface-2" 
-          : "border-border/60 bg-white dark:bg-transparent text-ink-muted hover:text-ink hover:border-border hover:bg-surface-1"
-      )}
-    >
-      <Icon weight={active ? "duotone" : "bold"} size={14} className={active ? "text-ink" : "text-ink-muted/70"} />
-      {label}
-    </button>
-  );
-}
-
-export function OptionsMenu({ 
-  hasScheduledAt, 
-  onAddScheduledAt,
-  isMultiLang,
-  onToggleMultiLang
-}: { 
-  hasScheduledAt?: boolean; 
-  onAddScheduledAt?: () => void;
-  isMultiLang: boolean;
-  onToggleMultiLang: () => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger className="flex items-center justify-center h-[26px] w-[26px] rounded-full border border-border/60 bg-white dark:bg-transparent shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-ink-muted hover:text-ink hover:border-border hover:bg-surface-1 transition-colors cursor-pointer outline-none">
-        <DotsThree weight="bold" size={16} />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[200px] p-1 bg-canvas rounded-xl shadow-xl border-border/50">
-        <Command className="bg-transparent">
-          <CommandList>
-            {!hasScheduledAt && (
-              <CommandItem onSelect={onAddScheduledAt} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                <CalendarIcon weight="duotone" size={14} />
-                Date & Time
-              </CommandItem>
-            )}
-            <CommandItem 
-              onSelect={() => {
-                onToggleMultiLang();
-              }} 
-              className="text-[13px] rounded-md cursor-pointer flex items-center justify-between px-2 py-2 aria-selected:bg-surface-2"
-            >
-              <div className="flex items-center gap-2">
-                <GlobeHemisphereWest weight="duotone" size={16} />
-                <span className="font-medium text-ink whitespace-nowrap">Multi-lang</span>
-              </div>
-              <Switch checked={isMultiLang} />
-            </CommandItem>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onChange: (val: string[]) => void }) {
-  const [input, setInput] = useState("");
-  const active = emails.length > 0;
-  
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && input.trim()) {
-      e.preventDefault();
-      const email = input.trim();
-      if (!emails.includes(email) && email.includes("@")) {
-        onChange([...emails, email]);
-      }
-      setInput("");
-    }
-  };
-
-  const removeEmail = (email: string) => {
-    onChange(emails.filter(e => e !== email));
-  };
-
-  return (
-    <Popover>
-      <PopoverTrigger className="outline-none">
-        <PillButton 
-          icon={Users} 
-          label={active ? `${emails.length} people` : "People"} 
-          active={active} 
-        />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[260px] p-2 bg-canvas rounded-xl shadow-xl border-border/50">
-        <div className="space-y-2">
-          <label className="text-[11px] font-medium text-ink-muted px-1">Invite by Email</label>
-          <div className="relative">
-            <Users weight="duotone" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted/70 h-3.5 w-3.5 pointer-events-none" />
-            <input
-              type="email"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="name@company.com..."
-              className="w-full h-8 pl-8 pr-3 text-[13px] bg-surface-1 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-ink/20 text-ink"
-              autoFocus
-            />
-          </div>
-          {emails.length > 0 && (
-            <div className="mt-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
-              {emails.map(email => (
-                <div key={email} className="flex items-center justify-between text-[12px] bg-surface-2 px-2 py-1 rounded">
-                  <span className="truncate max-w-[180px] text-ink">{email}</span>
-                  <button onClick={() => removeEmail(email)} className="text-ink-muted hover:text-red-500">
-                    <X size={12} weight="bold" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduledAt: Date; onChange: (value: Date) => void; onRemove: () => void }) {
-  const [timeStr, setTimeStr] = useState(format(scheduledAt, "HH:mm"));
-
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setTimeStr(val);
-    const [hours, minutes] = val.split(":").map(Number);
-    if (!isNaN(hours) && !isNaN(minutes)) {
-      const newDate = setMinutes(setHours(scheduledAt, hours), minutes);
-      onChange(newDate);
-    }
-  };
-
-  const handleDateSelect = (d: Date | undefined) => {
-    if (d) {
-      const [hours, minutes] = timeStr.split(":").map(Number);
-      const newDate = setMinutes(setHours(d, hours || 0), minutes || 0);
-      onChange(newDate);
-    }
-  };
-
-  return (
-    <Popover>
-      <PopoverTrigger className="outline-none">
-        <PillButton 
-          icon={CalendarIcon} 
-          label={format(scheduledAt, "MMM d, h:mm a")} 
-          active={true} 
-        />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-3 bg-canvas rounded-xl shadow-xl border-border/50">
-        <Calendar
-          mode="single"
-          selected={scheduledAt}
-          onSelect={handleDateSelect}
-          className="p-0 border-none bg-transparent"
-        />
-        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/40">
-          <input
-            type="time"
-            value={timeStr}
-            onChange={handleTimeChange}
-            className="w-full h-8 px-2 text-[13px] bg-surface-1 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-ink/20 text-ink"
-          />
-          <button 
-            onClick={onRemove}
-            className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-colors shrink-0"
-            title="Remove schedule"
-          >
-            <Trash weight="bold" size={14} />
-          </button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function getFlagEmoji(locale: string) {
-  if (!locale) return "";
-  const parts = locale.split("-");
-  const countryCode = parts.length > 1 ? parts[1].toUpperCase() : "";
-  if (!countryCode) return "";
-  const codePoints = countryCode.split("").map(char => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
-}
-
-export function LanguageSelector({ 
-  source, 
-  onSourceChange, 
-  targets, 
-  onTargetsChange,
-  isMultiLang
-}: { 
-  source: string; 
-  onSourceChange: (lang: string) => void;
-  targets: string[]; 
-  onTargetsChange: (languages: string[]) => void;
-  isMultiLang: boolean;
-}) {
-  function toggleTarget(code: string) {
-    if (isMultiLang) {
-      if (targets.includes(code)) {
-        if (targets.length === 1) return; // Must have at least one target
-        onTargetsChange(targets.filter((item) => item !== code));
-      } else {
-        onTargetsChange([...targets, code]);
-      }
-    } else {
-      onTargetsChange([code]);
-    }
-  }
-
-  const targetLang = targets.length > 0 ? targets[0] : "vi-VN";
-
-  return (
-    <div className="flex items-center gap-1 px-1 py-1 rounded-full border border-border/60 bg-transparent select-none text-[13px]">
-      <Popover>
-        <PopoverTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full cursor-pointer hover:bg-surface-2 transition-colors outline-none">
-          <span className="leading-none text-[14px]">{getFlagEmoji(source)}</span>
-          <span className="font-medium text-ink">{languageOptions.find(o => o.code === source)?.label.substring(0, 2).toUpperCase() || source.split('-')[0].toUpperCase()}</span>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-[180px] rounded-xl bg-canvas border-border/50 p-1.5 shadow-xl z-[100]">
-          <Command className="bg-transparent">
-            <CommandList>
-              <CommandGroup heading="Source Language" className="text-[11px] text-ink-muted">
-                {languageOptions.map((language) => {
-                  const isSelected = source === language.code;
-                  return (
-                    <CommandItem
-                      key={language.code}
-                      onSelect={() => onSourceChange(language.code)}
-                      className="rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 cursor-pointer flex items-center gap-2"
-                    >
-                      <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
-                      <span className="truncate font-medium text-ink">{language.label}</span>
-                      {isSelected && <CheckCircle weight="fill" className="ml-auto text-emerald-500 h-3.5 w-3.5" />}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      <span className="text-muted-foreground/40 font-bold px-1">
-        {isMultiLang ? (
-          <span className="text-[13px]">;</span>
-        ) : (
-          <span className="text-[11px]">→</span>
-        )}
-      </span>
-
-      <Popover>
-        <PopoverTrigger className="flex items-center outline-none cursor-pointer">
-            {targets.map((t, i) => (
-              <div key={t} className="flex items-center">
-                {i > 0 && <span className="text-muted-foreground/40 font-bold text-[13px] px-1">;</span>}
-                <div className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full hover:bg-surface-2 transition-colors">
-                  <span className="leading-none text-[14px]">{getFlagEmoji(t)}</span>
-                  {targets.length === 1 && !isMultiLang && (
-                    <span className="font-medium text-ink">{languageOptions.find(o => o.code === targetLang)?.label.substring(0, 2).toUpperCase() || targetLang.split('-')[0].toUpperCase()}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {isMultiLang && (
-              <div className="flex items-center">
-                <span className="text-muted-foreground/40 font-bold text-[13px] px-1">;</span>
-                <div className="flex items-center justify-center px-2 py-[5px] rounded-full hover:bg-surface-2 transition-colors">
-                  <Plus weight="bold" size={12} className="text-ink-muted" />
-                </div>
-              </div>
-            )}
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-[180px] rounded-xl bg-canvas border-border/50 p-1.5 shadow-xl z-[100]">
-          <Command className="bg-transparent">
-            <CommandList>
-              <CommandGroup heading="Target Languages" className="text-[11px] text-ink-muted">
-                {languageOptions.map((language) => {
-                  const isSelected = targets.includes(language.code);
-                  return (
-                    <CommandItem
-                      key={language.code}
-                      onSelect={() => toggleTarget(language.code)}
-                      className="rounded-md text-[13px] aria-selected:bg-surface-2 mb-0.5 cursor-pointer flex items-center gap-2"
-                    >
-                      <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
-                      <span className="truncate font-medium text-ink">{language.label}</span>
-                      {isSelected && <CheckCircle weight="fill" className="ml-auto text-emerald-500 h-3.5 w-3.5" />}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
-function TemplatePicker({ value, onChange }: { value: string; onChange: (val: string) => void }) {
-  return (
-    <Popover>
-      <PopoverTrigger className="flex items-center gap-1 hover:bg-surface-2 px-1.5 py-0.5 rounded transition-colors text-ink cursor-pointer outline-none">
-        {value} <CaretDown size={12} weight="bold" className="text-ink-muted" />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[220px] p-1 bg-canvas rounded-xl shadow-xl border-border/50">
-        <Command className="bg-transparent">
-          <CommandList>
-             <CommandGroup heading="Meeting Type" className="text-[11px] text-ink-muted">
-                <CommandItem onSelect={() => onChange("Event")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <CalendarIcon weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Event</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Channel Meeting")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <Monitor weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Channel Meeting</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Webinar")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <VideoCamera weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Webinar</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Company Meeting")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <UsersThree weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Company Meeting</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Virtual Appointment")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <MicrophoneStage weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Virtual Appointment</span>
-                </CommandItem>
-                <CommandItem onSelect={() => onChange("Live Event")} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                  <Broadcast weight="duotone" size={14} className="text-ink-muted" />
-                  <span className="text-ink font-medium">Live Event</span>
-                </CommandItem>
-             </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
   );
 }

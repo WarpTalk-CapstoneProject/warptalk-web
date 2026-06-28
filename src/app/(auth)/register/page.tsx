@@ -82,7 +82,7 @@ function RegisterForm() {
       setAccessTokenCookie(accessToken);
 
       toast.success("Registration successful!");
-      router.replace("/workspace/dashboard");
+      router.replace("/workspace");
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };

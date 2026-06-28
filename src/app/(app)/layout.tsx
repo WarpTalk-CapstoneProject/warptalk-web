@@ -2,75 +2,146 @@
 
 import Link from "next/link";
 
-import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
   SignOut,
   Question,
   Bell,
   SidebarSimple,
+  Spinner,
 } from "@phosphor-icons/react/dist/ssr";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { CreateRoomDialog } from "@/components/rooms/create-room-dialog";
 import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
+import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
+import { GlobalChatbot } from "@/components/layout/global-chatbot";
 
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 
-export default function AppLayout({ children }: { children: ReactNode }) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const logout = useAuthStore((state) => state.logout);
   const { rightSidebarOpen, toggleRightSidebar } = useUIStore();
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
-  const roomIdMatch = pathname.match(/^\/rooms\/([0-9a-fA-F-]{36})/);
-  const roomId = roomIdMatch ? roomIdMatch[1] : undefined;
-  const roomQuery = useTranslationRoom(roomId as string);
-  const roomTitle = roomQuery.data?.title;
+  const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
+  const selectWorkspace = useSelectWorkspace();
+
+  const roomId = (() => {
+    const segments = pathname.split('/').filter(Boolean);
+    if (segments.length >= 3 && segments[1] === 'rooms') {
+      const id = segments[2];
+      if (/^[0-9a-fA-F-]{36}$/.test(id)) return id;
+    }
+    if (segments.length >= 2 && segments[0] === 'room') {
+      const id = segments[1];
+      if (/^[0-9a-fA-F-]{36}$/.test(id)) return id;
+    }
+    return undefined;
+  })();
+
+  const roomQuery = useTranslationRoom(roomId ?? "");
+  const roomTitle = roomId && roomQuery?.data ? roomQuery.data.title : undefined;
+
+  const isOnboardingRoute =
+    pathname === "/workspace" ||
+    pathname === "/workspace/create" ||
+    pathname === "/workspace/join";
+
+  useEffect(() => {
+    if (isOnboardingRoute || workspacesLoading) return;
+
+    if (!activeWorkspaceId) {
+      if (workspacesData?.items && workspacesData.items.length > 0) {
+        const firstWs = workspacesData.items[0];
+        selectWorkspace.mutate(firstWs.id);
+        setActiveWorkspace(
+          firstWs.id,
+          firstWs.name,
+          firstWs.slug,
+          firstWs.role || "Member",
+          (firstWs as any).membershipType || "Internal"
+        );
+      } else {
+        router.replace("/workspace");
+      }
+    }
+  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, selectWorkspace, setActiveWorkspace, router]);
+
+  if (isOnboardingRoute) {
+    return <>{children}</>;
+  }
+
+  if (!activeWorkspaceId || workspacesLoading) {
+    return (
+      <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
+        <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
       <LinearSidebar />
-      
-      {/* Main content */}
-      <div className="relative flex flex-col flex-1 overflow-hidden my-1.5 mr-1.5 rounded-xl border border-border bg-surface-1 shadow-sm">
-        {/* Top bar */}
+      {/* Main Column */}
+      <div className="relative flex flex-col flex-1 overflow-hidden min-w-0">
+        {/* Main content box */}
+        <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-surface-1 shadow-sm">
+          {/* Top bar */}
         <header className="h-[44px] border-b border-border flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-1.5 text-[13px] text-ink-muted">
             {(() => {
               const parts: { label: string; href?: string }[] = [];
-              if (pathname.startsWith('/rooms')) {
-                parts.push({ label: "Meetings", href: "/rooms" });
-                const sub = pathname.replace('/rooms', '').split('/').filter(Boolean)[0];
-                if (sub) {
-                  if (/^[0-9a-fA-F-]{36}$/.test(sub)) {
+              const segments = pathname.split('/').filter(Boolean);
+
+              if (segments.length >= 1) {
+                const firstSeg = segments[0];
+                if (firstSeg === "voice-profiles") {
+                  parts.push({ label: "Voice Profiles" });
+                } else if (firstSeg === "join") {
+                  parts.push({ label: "Join Translation Room" });
+                } else if (firstSeg === "room") {
+                  parts.push({ label: "Meetings", href: `/${activeWorkspaceSlug || "workspace"}/rooms` });
+                  const rId = segments[1];
+                  if (rId) {
                     parts.push({ label: roomTitle || "Loading..." });
-                  } else {
-                    parts.push({ label: sub });
                   }
+                } else if (segments.length >= 2) {
+                  const slug = firstSeg;
+                  const feature = segments[1];
+
+                  if (feature === "rooms") {
+                    parts.push({ label: "Meetings", href: `/${slug}/rooms` });
+                    const sub = segments[2];
+                    if (sub) {
+                      parts.push({ label: roomTitle || "Loading..." });
+                    }
+                  } else if (feature === "history") {
+                    parts.push({ label: "History" });
+                  } else if (feature === "ai-summaries") {
+                    parts.push({ label: "AI Summaries" });
+                  } else if (feature === "dashboard") {
+                    parts.push({ label: "Dashboard" });
+                  } else if (feature === "members") {
+                    parts.push({ label: "Members" });
+                  } else if (feature === "documents") {
+                    parts.push({ label: "Documents" });
+                  } else if (feature === "settings") {
+                    parts.push({ label: "Settings" });
+                  } else {
+                    parts.push({ label: feature });
+                  }
+                } else {
+                  parts.push({ label: "Workspace" });
                 }
-              } else if (pathname.startsWith('/history')) {
-                parts.push({ label: "History" });
-              } else if (pathname.startsWith('/ai-summaries')) {
-                parts.push({ label: "AI Summaries" });
-              } else if (pathname.startsWith('/terminology')) {
-                parts.push({ label: "Terminology" });
-              } else if (pathname.startsWith('/voice-profiles')) {
-                parts.push({ label: "Voice Profiles" });
-              } else if (pathname.startsWith('/settings')) {
-                parts.push({ label: "Settings" });
-              } else if (pathname.startsWith('/join')) {
-                parts.push({ label: "Join Translation Room" });
-              } else if (pathname.startsWith('/room/')) {
-                 parts.push({ label: "Meetings", href: "/rooms" });
-                 const sub = pathname.replace('/room/', '').split('/').filter(Boolean)[0];
-                 if (sub) {
-                   if (/^[0-9a-fA-F-]{36}$/.test(sub)) {
-                     parts.push({ label: roomTitle || "Loading..." });
-                   } else {
-                     parts.push({ label: sub });
-                   }
-                 }
               } else {
                 parts.push({ label: "Workspace" });
               }
@@ -91,12 +162,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               ));
             })()}
           </div>
-          
+
           <div className="flex items-center gap-1.5 text-ink-muted">
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Bell size={12} weight="bold" /></button>
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
             <div className="w-[1px] h-3.5 bg-border mx-1" />
-            <button 
+            <button
               onClick={toggleRightSidebar}
               className="flex size-6 items-center justify-center rounded-[6px] border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
             >
@@ -109,7 +180,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <main className="min-h-0 flex-1 overflow-y-auto">
             {children}
           </main>
-          
+
           {/* Right Sidebar (Context/Properties) */}
           {rightSidebarOpen && !pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
             <aside className="w-[260px] shrink-0 border-l border-border bg-surface-1 flex flex-col overflow-hidden">
@@ -124,9 +195,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </aside>
           )}
         </div>
+        </div>
+        
+        {/* Global Chatbot outside main content box */}
+        <div className="shrink-0 mr-1.5">
+          <GlobalChatbot />
+        </div>
       </div>
       <CreateRoomDialog />
       <SearchMeetingDialog />
+      <SetupRoomModal />
     </div>
   );
 }

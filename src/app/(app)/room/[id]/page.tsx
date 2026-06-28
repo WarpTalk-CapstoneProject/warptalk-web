@@ -1,58 +1,19 @@
 "use client";
 
-import type { ReactNode, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  LiveKitRoom,
-  ParticipantTile,
-  RoomAudioRenderer,
-  TrackLoop,
-  TrackToggle,
-  useConnectionState,
-  useTracks,
-} from "@livekit/components-react";
+import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import "@livekit/components-styles";
-import { ConnectionState, Track } from "livekit-client";
-import {
-  WarningCircle,
-  ClosedCaptioning,
-  Copy,
-  SpinnerGap,
-  Microphone,
-  MicrophoneSlash,
-  Play,
-  Broadcast,
-  Screencast,
-  UserCheck,
-  UserMinus,
-  Layout,
-  VideoCamera,
-  VideoCameraSlash,
-  CheckCircle,
-  Stop,
-  SignOut,
-} from "@phosphor-icons/react/dist/ssr";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { useJoinMeeting } from "@/hooks/use-meeting";
 import {
-  useAdmitParticipant,
-  useEndTranslationRoom,
-  useKickParticipant,
-  useLeaveTranslationRoom,
   useStartTranslationRoom,
+  useEndTranslationRoom,
+  useLeaveTranslationRoom,
   useTranslationRoom,
   useTranslationRoomParticipants,
-  useUpdateParticipantAudio,
 } from "@/hooks/use-translationRooms";
-import { getLanguageName } from "@/lib/languages";
 import { createHubConnection } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -60,6 +21,14 @@ import { useUIStore } from "@/stores/ui-store";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto, TranslationTextDto } from "@/types/realtime";
 import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+
+// Import Refactored Components
+import { MeetingTopBar } from "@/components/rooms/live/meeting-top-bar";
+import { MeetingControlBar, type MeetingLayoutMode } from "@/components/rooms/live/meeting-control-bar";
+import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
+import { MeetingSidePanel, type SidePanelMode } from "@/components/rooms/live/side-panel/meeting-side-panel";
+import { WaitingRoomView, StatePanel } from "@/components/rooms/live/waiting-room-view";
 
 function getJoinLink(code: string) {
   if (typeof window === "undefined") return code;
@@ -70,9 +39,6 @@ function isInstantRoom(room: TranslationRoomDto) {
   return ["instant", "group", "one_to_one", "webinar", "b2b_virtual_mic"].includes(room.translationRoomType);
 }
 
-const LIVEKIT_SERVER_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "ws://localhost:7880";
-type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
-
 export default function RoomDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -80,18 +46,21 @@ export default function RoomDetailPage() {
   const user = useAuthStore((state) => state.user);
   const roomQuery = useTranslationRoom(roomId);
   const participantsQuery = useTranslationRoomParticipants(roomId);
+  const refetchParticipants = participantsQuery.refetch;
   const startRoom = useStartTranslationRoom();
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } = useJoinMeeting();
+  
   const autoStartedRef = useRef(false);
   const meetingJoinedRef = useRef(false);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  
   const [meetingSession, setMeetingSession] = useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [warptalkStarted, setWarptalkStarted] = useState(false);
-  const [sidePanelMode, setSidePanelMode] = useState<"transcript" | "chat" | "notes" | "people">("transcript");
+  const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>("transcript");
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [localMediaError, setLocalMediaError] = useState<string | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
@@ -112,34 +81,36 @@ export default function RoomDetailPage() {
   const addTranscriptSegment = useTranslationRoomStore((state) => state.addTranscriptSegment);
   const addOrMergeTranslationText = useTranslationRoomStore((state) => state.addOrMergeTranslationText);
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
+  const addChatMessage = useTranslationRoomStore((state) => state.addChatMessage);
 
   const isPreviewRoom = roomId.startsWith("preview-");
   const room = roomQuery.data ?? (isPreviewRoom ? getPreviewLiveRoom(roomId) : undefined);
   const refetchRoom = roomQuery.refetch;
   const apiParticipants = participantsQuery.data ?? (isPreviewRoom ? getPreviewLiveParticipants(roomId) : []);
-  const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id));
+  const role = useWorkspaceRole();
+  const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id) || role === "admin" || role === "owner");
   const participants = liveParticipants.length ? mergeParticipants(apiParticipants, liveParticipants) : apiParticipants;
   const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
   const joinLink = room?.translationRoomCode ? getJoinLink(room.translationRoomCode) : "";
   const liveSegments = useMemo(() => dedupeSegments(transcriptSegments), [transcriptSegments]);
-  const latestSegment = liveSegments.at(-1);
+  
   const canConnectMeeting =
     Boolean(room) &&
     room?.status !== "ended" &&
     room?.status !== "cancelled" &&
     room?.status !== "expired" &&
     room?.status !== "failed";
+    
   const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
   const sourceLanguage = savedJoinConfig.speakLanguage || room?.sourceLanguage || "vi";
   const targetLanguage = savedJoinConfig.listenLanguage || room?.targetLanguages?.[0] || "en";
 
   function retryMeetingConnection() {
     if (!room?.id || !canConnectMeeting) return;
-
     meetingJoinedRef.current = true;
     setMeetingSession(null);
 
-    void joinMeetingAsync(room.id)
+    void joinMeetingAsync({ translationRoomId: room.id, displayName })
       .then((session) => {
         setMeetingError(null);
         setMeetingSession(session);
@@ -169,7 +140,7 @@ export default function RoomDetailPage() {
 
     const translationRoomId = room.id;
     queueMicrotask(() => {
-      void joinMeetingAsync(translationRoomId)
+      void joinMeetingAsync({ translationRoomId, displayName })
         .then((session) => {
           setMeetingError(null);
           setMeetingSession(session);
@@ -183,16 +154,32 @@ export default function RoomDetailPage() {
 
   useEffect(() => {
     if (!roomId) return;
-
     resetLiveRoom();
     const connection = createHubConnection("/hubs/translation-room");
 
     connection.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => setLiveState(state));
-    connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => addLiveParticipant(participant));
-    connection.on("ParticipantLeft", (userId: string) => removeLiveParticipant(userId));
+    connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
+      addLiveParticipant(participant);
+      void refetchParticipants();
+    });
+    connection.on("ParticipantLeft", (userId: string) => {
+      removeLiveParticipant(userId);
+      void refetchParticipants();
+    });
     connection.on("TranscriptSegmentReceived", (segment: TranscriptSegmentDto) => addTranscriptSegment(segment));
     connection.on("TranslationTextReceived", (translation: TranslationTextDto) => addOrMergeTranslationText(translation));
     connection.on("TranslationRoomEnded", () => refetchRoom());
+
+    // BR-159: Backend initiated disconnections
+    connection.on("ForceDisconnected", (reason?: string) => {
+      toast.error(reason || "This room has been forcibly closed or you were disconnected from another device.");
+      router.push("/rooms");
+    });
+    
+    connection.on("ParticipantKicked", () => {
+      toast.error("You have been permanently removed from this room.");
+      router.push("/rooms");
+    });
 
     connection
       .start()
@@ -207,19 +194,28 @@ export default function RoomDetailPage() {
       connection.stop().catch(() => undefined);
       resetLiveRoom();
     };
-  }, [
-    addLiveParticipant,
-    addOrMergeTranslationText,
-    addTranscriptSegment,
-    refetchRoom,
-    removeLiveParticipant,
-    resetLiveRoom,
-    displayName,
-    roomId,
-    setLiveState,
-    sourceLanguage,
-    targetLanguage,
-  ]);
+  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, roomId, setLiveState, sourceLanguage, targetLanguage]);
+
+  useEffect(() => {
+    if (!roomId) return;
+    const chatConnection = createHubConnection("/api/v1/meetings/chat-hub");
+    chatConnection.on("ChatMessageHidden", (messageId: string) => {
+      useTranslationRoomStore.getState().hideChatMessage(messageId);
+    });
+
+    chatConnection.on("ChatMessageReceived", (message: import("@/types/realtime").ChatMessageDto) => {
+      addChatMessage(message);
+    });
+
+    chatConnection
+      .start()
+      .then(() => chatConnection.invoke("JoinMeetingRoom", roomId).catch(() => undefined))
+      .catch(() => undefined);
+
+    return () => {
+      chatConnection.stop().catch(() => undefined);
+    };
+  }, [roomId, addChatMessage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -332,7 +328,6 @@ export default function RoomDetailPage() {
       toast.success("WarpTalk realtime translation started.");
       return;
     }
-
     startRoom.mutate(room.id, {
       onSuccess: () => {
         setWarptalkStarted(true);
@@ -351,6 +346,10 @@ export default function RoomDetailPage() {
 
   if (roomQuery.isLoading && !isPreviewRoom) {
     return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
+  }
+
+  if (meetingSession?.isWaitingRoom) {
+    return <WaitingRoomView onRetry={retryMeetingConnection} />;
   }
 
   if ((roomQuery.isError && !isPreviewRoom) || !room) {
@@ -390,6 +389,7 @@ export default function RoomDetailPage() {
             <div className="relative flex-1 min-h-0 w-full">
               <LiveKitMeetingStage
                 fallbackName={user?.fullName || user?.email || room.title}
+                currentUserId={user?.id}
                 isJoining={isMeetingJoining}
                 error={meetingError}
                 localStream={localStream}
@@ -405,13 +405,13 @@ export default function RoomDetailPage() {
               {/* Floating Control Bar */}
               <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity hover:opacity-100">
                 <MeetingControlBar
-                  room={room}
-                  roomCode={room.translationRoomCode}
                   meetingEnabled={Boolean(meetingSession?.token)}
                   cameraEnabled={cameraEnabled}
                   microphoneEnabled={microphoneEnabled}
                   isScreenSharing={Boolean(screenStream)}
                   layoutMode={meetingLayout}
+                  roomCode={room.translationRoomCode}
+                  joinLink={joinLink}
                   onCopyText={copyText}
                   onToggleCamera={() => setCameraEnabled((current) => !current)}
                   onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
@@ -436,6 +436,7 @@ export default function RoomDetailPage() {
               segments={warptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
               onCopyText={copyText}
               joinLink={joinLink}
+              meetingStarted={room?.status === "in_progress"}
             />
           )}
         </main>
@@ -444,731 +445,7 @@ export default function RoomDetailPage() {
   );
 }
 
-function MeetingTopBar({
-  room,
-  isHost,
-  sourceLanguage,
-  targetLanguage,
-  onExit,
-  warptalkStarted,
-  onStartWarptalk,
-  onStopWarptalk,
-}: {
-  room: TranslationRoomDto;
-  isHost: boolean;
-  sourceLanguage: string;
-  targetLanguage: string;
-  onExit: (action: "leave" | "end") => void;
-  warptalkStarted: boolean;
-  onStartWarptalk: () => void;
-  onStopWarptalk: () => void;
-}) {
-  return (
-    <header className="flex h-[52px] shrink-0 items-center justify-between px-6">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 text-[13px] font-medium text-ink">
-          <Broadcast className="h-4 w-4 text-ink-subtle" />
-          <span className="max-w-[200px] truncate">{room.title}</span>
-          <span className="text-ink-tertiary">/</span>
-          <span className="text-ink-subtle">{getLanguageName(sourceLanguage)} to {getLanguageName(targetLanguage)}</span>
-        </div>
-        <div className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${warptalkStarted ? "bg-red-50 text-red-600" : "bg-surface-2 text-ink-subtle"}`}>
-          <div className={`h-1.5 w-1.5 rounded-full ${warptalkStarted ? "bg-destructive" : "bg-slate-400"}`} />
-          {warptalkStarted ? "Live Translation" : "Translation Ready"}
-        </div>
-        {isHost ? <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle border border-border">Host</span> : null}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        {isHost && (
-          <button
-            type="button"
-            onClick={warptalkStarted ? onStopWarptalk : onStartWarptalk}
-            className={`flex h-7 items-center gap-1.5 rounded-[6px] px-3 text-[13px] font-medium transition-colors shadow-sm ${
-              warptalkStarted
-                ? "bg-surface-3 text-ink hover:bg-surface-4"
-                : "bg-primary text-white hover:bg-primary-hover"
-            }`}
-          >
-            {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
-            {warptalkStarted ? "Stop Translation" : "Start Translation"}
-          </button>
-        )}
-        <div className="h-4 w-[1px] bg-surface-3 mx-1" />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-destructive transition-colors hover:bg-destructive/10 outline-none"
-          >
-            <SignOut className="h-4 w-4" weight="bold" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => onExit("leave")} className="cursor-pointer">
-              Leave Meeting
-            </DropdownMenuItem>
-            {isHost && (
-              <DropdownMenuItem onClick={() => onExit("end")} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
-                End Meeting for All
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </header>
-  );
-}
-
-function MeetingSidePanel({
-  roomId,
-  room,
-  isHost,
-  mode,
-  onModeChange,
-  participants,
-  participantsLoading,
-  participantsError,
-  activeCount,
-  segments,
-  onCopyText,
-  joinLink,
-}: {
-  roomId: string;
-  room: TranslationRoomDto;
-  isHost: boolean;
-  mode: "transcript" | "chat" | "notes" | "people";
-  onModeChange: (mode: "transcript" | "chat" | "notes" | "people") => void;
-  participants: TranslationRoomParticipantDto[];
-  participantsLoading: boolean;
-  participantsError: boolean;
-  activeCount: number;
-  segments: TranscriptSegmentDto[];
-  onCopyText: (value: string, label: string) => void;
-  joinLink: string;
-}) {
-  return (
-    <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden xl:flex hidden">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-1 rounded-2xl border border-border shadow-sm">
-        <div className="flex items-center gap-4 px-4 pt-3 pb-2 shrink-0 border-b border-border">
-          <TabButton active={mode === "transcript"} label="Transcript" onClick={() => onModeChange("transcript")} />
-          <TabButton active={mode === "chat"} label="Chat" onClick={() => onModeChange("chat")} />
-          <TabButton active={mode === "notes"} label="Notes" onClick={() => onModeChange("notes")} />
-          <TabButton active={mode === "people"} label="People" badge={activeCount} onClick={() => onModeChange("people")} />
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
-          {mode === "transcript" ? (
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {segments.length ? segments.map((segment) => <TranscriptBubble key={segment.segmentId} segment={segment} />) : <EmptyPanel text="Start WarpTalk to see live translation here." />}
-            </div>
-          ) : null}
-          {mode === "chat" ? <MeetingChat /> : null}
-          {mode === "notes" ? (
-            <div className="flex-1 overflow-y-auto p-4">
-              <AiNotesPanel />
-            </div>
-          ) : null}
-          {mode === "people" ? (
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div className="flex flex-col gap-2 rounded-lg border border-border bg-canvas p-3">
-                <p className="text-[12px] font-medium text-ink-subtle">Room Code</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-semibold tracking-wide text-ink">{room.translationRoomCode}</span>
-                  <button onClick={() => onCopyText(joinLink, "Invite link")} className="text-[12px] font-medium text-primary hover:text-primary-hover">Copy Link</button>
-                </div>
-              </div>
-              <PeoplePanel
-                roomId={roomId}
-                room={room}
-                isHost={isHost}
-                participants={participants}
-                participantsLoading={participantsLoading}
-                participantsError={participantsError}
-                activeCount={activeCount}
-              />
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function TabButton({ active, label, badge, onClick }: { active: boolean; label: string; badge?: number; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`relative flex items-center gap-1.5 pb-2.5 text-[13px] font-medium outline-none transition-colors ${
-        active ? "text-ink" : "text-ink-subtle hover:text-ink"
-      }`}
-    >
-      {label}
-      {badge !== undefined && (
-        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-2 px-1 text-[10px] font-semibold text-ink-muted">
-          {badge}
-        </span>
-      )}
-      {active && <div className="absolute inset-x-0 bottom-0 h-0.5 rounded-t-full bg-ink" />}
-    </button>
-  );
-}
-
-function TranscriptBubble({ segment }: { segment: TranscriptSegmentDto }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-medium text-ink">{segment.speakerName || "Speaker"}</span>
-        <span className="text-[11px] text-ink-subtle">
-          {getLanguageName(segment.originalLanguage)}
-          {segment.targetLanguage ? ` -> ${getLanguageName(segment.targetLanguage)}` : ""}
-        </span>
-      </div>
-      <div className="rounded-lg border border-border bg-surface-1 p-3 shadow-sm">
-        <p className="text-[13px] leading-relaxed text-ink-muted">{segment.originalText}</p>
-        {segment.translatedText ? <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-ink">{segment.translatedText}</p> : null}
-      </div>
-    </div>
-  );
-}
-
-function EmptyPanel({ text }: { text: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-      <ClosedCaptioning className="h-8 w-8 text-ink-tertiary" weight="light" />
-      <p className="text-[13px] text-ink-subtle max-w-[200px]">{text}</p>
-    </div>
-  );
-}
-
-function MeetingChat() {
-  const [draftMessage, setDraftMessage] = useState("");
-  const [messages, setMessages] = useState([
-    { from: "Host", body: "We will start WarpTalk translation after everyone confirms audio.", mine: false },
-    { from: "Mika Tanaka", body: "Audio is clear on my side.", mine: false },
-    { from: "You", body: "Thanks. Starting translation in a moment.", mine: true },
-  ]);
-
-  function sendMessage() {
-    const text = draftMessage.trim();
-    if (!text) return;
-    setMessages((current) => [...current, { from: "You", body: text, mine: true }]);
-    setDraftMessage("");
-  }
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div key={`${message.from}-${message.body}`} className={`flex ${message.mine ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] shadow-sm ${message.mine ? "bg-ink text-white" : "border border-border bg-surface-1 text-ink"}`}>
-              <p className={`mb-0.5 text-[11px] font-medium ${message.mine ? "text-ink-tertiary" : "text-ink-subtle"}`}>{message.from}</p>
-              <p className="leading-relaxed">{message.body}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="p-3 bg-transparent">
-        <form
-          className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface-1 px-3 transition-colors focus-within:border-hairline-strong focus-within:shadow-sm"
-          onSubmit={(event) => {
-            event.preventDefault();
-            sendMessage();
-          }}
-        >
-          <input
-            value={draftMessage}
-            onChange={(event) => setDraftMessage(event.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-subtle"
-            placeholder="Write a message..."
-          />
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function AiNotesPanel() {
-  return (
-    <ul className="space-y-3">
-      <li className="flex gap-3 items-start">
-        <CheckCircle className="h-4 w-4 text-ink-subtle mt-0.5 shrink-0" />
-        <span className="text-[13px] leading-relaxed text-ink">Confirm investor rollout risks.</span>
-      </li>
-      <li className="flex gap-3 items-start">
-        <CheckCircle className="h-4 w-4 text-ink-subtle mt-0.5 shrink-0" />
-        <span className="text-[13px] leading-relaxed text-ink">Follow up terminology cleanup.</span>
-      </li>
-      <li className="flex gap-3 items-start">
-        <CheckCircle className="h-4 w-4 text-ink-subtle mt-0.5 shrink-0" />
-        <span className="text-[13px] leading-relaxed text-ink">Export transcript after meeting ends.</span>
-      </li>
-    </ul>
-  );
-}
-
-function PeoplePanel({
-  roomId,
-  room,
-  isHost,
-  participants,
-  participantsLoading,
-  participantsError,
-}: {
-  roomId: string;
-  room: TranslationRoomDto;
-  isHost: boolean;
-  participants: TranslationRoomParticipantDto[];
-  participantsLoading: boolean;
-  participantsError: boolean;
-  activeCount: number;
-}) {
-  return (
-    <div className="space-y-1">
-      {participantsLoading ? <p className="text-[13px] text-ink-subtle">Loading participants...</p> : null}
-      {participantsError ? <p className="text-[13px] text-red-600">Could not load participant controls.</p> : null}
-      {participants.map((participant) => (
-        <ParticipantRow
-          key={participant.id}
-          participant={participant}
-          isHost={isHost}
-          roomId={roomId}
-          isRoomHost={participant.userId === room.hostId}
-        />
-      ))}
-    </div>
-  );
-}
-
-function MeetingControlBar({
-  meetingEnabled,
-  cameraEnabled,
-  microphoneEnabled,
-  isScreenSharing,
-  layoutMode,
-  onCopyText,
-  roomCode,
-  onToggleCamera,
-  onToggleMicrophone,
-  onToggleScreenShare,
-  onLayoutChange,
-}: {
-  room: TranslationRoomDto;
-  meetingEnabled: boolean;
-  cameraEnabled: boolean;
-  microphoneEnabled: boolean;
-  isScreenSharing: boolean;
-  layoutMode: MeetingLayoutMode;
-  roomCode: string;
-  onCopyText: (value: string, label: string) => void;
-  onToggleCamera: () => void;
-  onToggleMicrophone: () => void;
-  onToggleScreenShare: () => void;
-  onLayoutChange: (layout: MeetingLayoutMode) => void;
-}) {
-  const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
-
-  return (
-    <div className="flex h-12 items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2 shadow-sm backdrop-blur-xl">
-      <LiveKitTrackControls
-        enabled={meetingEnabled}
-        cameraEnabled={cameraEnabled}
-        microphoneEnabled={microphoneEnabled}
-        onToggleCamera={onToggleCamera}
-        onToggleMicrophone={onToggleMicrophone}
-      />
-      
-      <div className="h-6 w-[1px] bg-surface-3 mx-1" />
-
-      <MeetControl
-        label={isScreenSharing ? "Stop presenting" : "Present now"}
-        active={isScreenSharing}
-        icon={<Screencast className="h-[18px] w-[18px]" />}
-        onClick={onToggleScreenShare}
-      />
-      
-      <div className="h-6 w-[1px] bg-surface-3 mx-1" />
-      
-      <MeetControl 
-        label="Copy room code" 
-        icon={<Copy className="h-[18px] w-[18px]" />} 
-        onClick={() => onCopyText(roomCode, "Room code")} 
-      />
-
-      <div className="relative">
-        <MeetControl
-          label="Layout options"
-          icon={<Layout className="h-[18px] w-[18px]" />}
-          onClick={() => setIsLayoutMenuOpen((current) => !current)}
-        />
-        {isLayoutMenuOpen ? (
-          <div className="absolute bottom-14 right-0 z-50 w-44 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg">
-            <LayoutOption label="Auto" value="auto" active={layoutMode === "auto"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-            <LayoutOption label="Grid" value="grid" active={layoutMode === "grid"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-            <LayoutOption label="Spotlight" value="spotlight" active={layoutMode === "spotlight"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-            <LayoutOption label="Sidebar" value="sidebar" active={layoutMode === "sidebar"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function LayoutOption({
-  label,
-  value,
-  active,
-  onSelect,
-  close,
-}: {
-  label: string;
-  value: MeetingLayoutMode;
-  active: boolean;
-  onSelect: (layout: MeetingLayoutMode) => void;
-  close: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onSelect(value);
-        close();
-      }}
-      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
-    >
-      {label}
-      {active ? <CheckCircle className="h-3.5 w-3.5 text-ink" weight="fill" /> : null}
-    </button>
-  );
-}
-
-function LiveKitMeetingStage({
-  fallbackName,
-  isJoining,
-  error,
-  localStream,
-  localMediaError,
-  cameraEnabled,
-  participants,
-  screenStream,
-  layoutMode,
-  onRetry,
-}: {
-  fallbackName: string;
-  isJoining: boolean;
-  error: string | null;
-  localStream: MediaStream | null;
-  localMediaError: string | null;
-  cameraEnabled: boolean;
-  participants: TranslationRoomParticipantDto[];
-  screenStream: MediaStream | null;
-  layoutMode: MeetingLayoutMode;
-  onRetry: () => void;
-}) {
-  const connectionState = useConnectionState();
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
-  const tracks = useTracks(
-    [
-      { source: Track.Source.Camera, withPlaceholder: false },
-      { source: Track.Source.ScreenShare, withPlaceholder: false },
-    ],
-    { onlySubscribed: false }
-  );
-  const hasTracks = connectionState === ConnectionState.Connected && tracks.length > 0;
-
-  useEffect(() => {
-    if (!localVideoRef.current) return;
-    localVideoRef.current.srcObject = localStream;
-  }, [localStream]);
-
-  useEffect(() => {
-    if (!screenVideoRef.current) return;
-    screenVideoRef.current.srcObject = screenStream;
-  }, [screenStream]);
-
-  if (hasTracks) {
-    return (
-      <div className="relative h-full w-full p-2 bg-surface-1">
-        <div className={`grid h-full gap-3 ${tracks.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
-          <TrackLoop tracks={tracks}>
-            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur" />
-          </TrackLoop>
-        </div>
-        <ConnectionBadge state={connectionState} />
-      </div>
-    );
-  }
-
-  const localTile = (
-    <MeetingPreviewTile
-      name={fallbackName}
-      stream={localStream}
-      videoRef={localVideoRef}
-      cameraEnabled={cameraEnabled}
-      muted={false}
-      featured
-    />
-  );
-  const participantTiles = participants.filter((participant) => participant.displayName !== fallbackName).slice(0, 24);
-  const effectiveLayout: Exclude<MeetingLayoutMode, "auto"> = layoutMode === "auto" ? (screenStream ? "sidebar" : participantTiles.length === 0 ? "grid" : participantTiles.length > 5 ? "grid" : "spotlight") : layoutMode;
-
-  if (screenStream && effectiveLayout === "sidebar") {
-    return (
-      <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_260px] bg-surface-1">
-        <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-1">
-          <video ref={screenVideoRef} className="h-full w-full object-contain" autoPlay muted playsInline />
-          <div className="absolute left-4 top-4 rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur">
-            You are presenting
-          </div>
-        </div>
-        <div className="grid min-h-0 gap-3 overflow-hidden">
-          {localTile}
-          {participantTiles.slice(0, 3).map((participant) => <ParticipantGridTile key={participant.id} participant={participant} />)}
-        </div>
-        <ConnectionBadge state={connectionState} />
-      </div>
-    );
-  }
-
-  if (screenStream) {
-    return (
-      <div className="relative h-full w-full overflow-hidden p-2 bg-surface-1">
-        <div className="h-full overflow-hidden rounded-xl border border-border bg-surface-1">
-          <video ref={screenVideoRef} className="h-full w-full object-contain" autoPlay muted playsInline />
-        </div>
-        <ConnectionBadge state={connectionState} />
-      </div>
-    );
-  }
-
-  if (effectiveLayout === "spotlight") {
-    return (
-      <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_240px] bg-surface-1">
-        {localTile}
-        <div className="grid min-h-0 gap-3 overflow-hidden">
-          {participantTiles.slice(0, 3).map((participant) => <ParticipantGridTile key={participant.id} participant={participant} />)}
-        </div>
-        <ConnectionBadge state={connectionState} />
-        <LocalMediaError error={localMediaError} />
-      </div>
-    );
-  }
-
-  if (effectiveLayout === "grid" || effectiveLayout === "sidebar") {
-    return (
-      <div className="relative h-full min-h-0 p-2 bg-surface-1">
-        <div className={`grid h-full min-h-0 gap-3 ${gridClassName(participantTiles.length + 1)}`}>
-          {localTile}
-          {participantTiles.map((participant) => <ParticipantGridTile key={participant.id} participant={participant} />)}
-        </div>
-        <ConnectionBadge state={connectionState} />
-        <LocalMediaError error={localMediaError} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex w-full flex-col items-center justify-center px-6 py-20 bg-surface-2">
-      <div className="grid h-20 w-20 place-items-center rounded-full bg-surface-3 text-2xl font-medium text-ink-muted shadow-sm">
-        {initials(fallbackName)}
-      </div>
-      <p className="mt-4 max-w-xl truncate text-center text-[15px] font-medium text-ink">{fallbackName}</p>
-      <p className="mt-1 flex items-center gap-2 text-[13px] text-ink-subtle">
-        {isJoining && <SpinnerGap className="h-3.5 w-3.5 animate-spin" />}
-        {localMediaError || error || liveKitStateLabel(connectionState)}
-      </p>
-      {error && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-4 rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-canvas shadow-sm"
-        >
-          Retry connection
-        </button>
-      )}
-    </div>
-  );
-}
-
-function ConnectionBadge({ state }: { state: ConnectionState }) {
-  return null;
-}
-
-function liveKitStateLabel(state: ConnectionState) {
-  if (state === ConnectionState.Connected) return "Connected";
-  if (state === ConnectionState.Connecting) return "Connecting";
-  if (state === ConnectionState.Reconnecting) return "Reconnecting";
-  return "Waiting for LiveKit";
-}
-
-function gridClassName(count: number) {
-  if (count <= 1) return "grid-cols-1";
-  if (count <= 4) return "grid-cols-2";
-  if (count <= 9) return "grid-cols-3";
-  if (count <= 16) return "grid-cols-4";
-  return "grid-cols-5";
-}
-
-function MeetingPreviewTile({
-  name,
-  stream,
-  videoRef,
-  cameraEnabled,
-  muted,
-  featured,
-}: {
-  name: string;
-  stream: MediaStream | null;
-  videoRef: RefObject<HTMLVideoElement | null>;
-  cameraEnabled: boolean;
-  muted: boolean;
-  featured?: boolean;
-}) {
-  const hasVideo = cameraEnabled && Boolean(stream?.getVideoTracks().length);
-
-  return (
-    <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-3">
-      {hasVideo ? (
-        <video ref={videoRef} className="h-full w-full object-cover -scale-x-100" autoPlay muted playsInline />
-      ) : (
-        <div className="grid h-full min-h-[160px] place-items-center">
-          <div className={`${featured ? "h-24 w-24 text-3xl" : "h-14 w-14 text-xl"} grid place-items-center rounded-full bg-slate-300 font-medium text-ink shadow-sm`}>
-            {initials(name) || "H"}
-          </div>
-        </div>
-      )}
-      <TileLabel name={name} muted={muted} />
-    </div>
-  );
-}
-
-function ParticipantGridTile({ participant }: { participant: TranslationRoomParticipantDto }) {
-  const muted = participant.isTranslationAudioEnabled === false;
-  return (
-    <div className="relative min-h-[128px] overflow-hidden rounded-xl border border-border bg-surface-3">
-      <div className="grid h-full place-items-center">
-        <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-300 text-xl font-medium text-ink shadow-sm">
-          {initials(participant.displayName)}
-        </div>
-      </div>
-      <TileLabel name={participant.displayName} muted={muted} />
-    </div>
-  );
-}
-
-function TileLabel({ name, muted }: { name: string; muted: boolean }) {
-  return (
-    <>
-      <div className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur">
-        {name}
-      </div>
-      <div className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 text-ink shadow-sm backdrop-blur">
-        {muted ? <MicrophoneSlash className="h-3.5 w-3.5" /> : <Microphone className="h-3.5 w-3.5" />}
-      </div>
-    </>
-  );
-}
-
-function LocalMediaError({ error }: { error: string | null }) {
-  if (!error) return null;
-  return (
-    <div className="absolute bottom-5 left-5 right-5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 shadow-sm backdrop-blur">
-      {error}
-    </div>
-  );
-}
-
-function LiveKitTrackControls({
-  enabled,
-  cameraEnabled,
-  microphoneEnabled,
-  onToggleCamera,
-  onToggleMicrophone,
-}: {
-  enabled: boolean;
-  cameraEnabled: boolean;
-  microphoneEnabled: boolean;
-  onToggleCamera: () => void;
-  onToggleMicrophone: () => void;
-}) {
-  if (!enabled) {
-    return (
-      <>
-        <MeetControl
-          label={microphoneEnabled ? "Mute microphone" : "Unmute microphone"}
-          active={!microphoneEnabled}
-          icon={microphoneEnabled ? <Microphone className="h-[18px] w-[18px]" /> : <MicrophoneSlash className="h-[18px] w-[18px]" />}
-          onClick={onToggleMicrophone}
-        />
-        <MeetControl
-          label={cameraEnabled ? "Turn camera off" : "Turn camera on"}
-          active={!cameraEnabled}
-          icon={cameraEnabled ? <VideoCamera className="h-[18px] w-[18px]" /> : <VideoCameraSlash className="h-[18px] w-[18px]" />}
-          onClick={onToggleCamera}
-        />
-      </>
-    );
-  }
-
-  return (
-    <>
-      <TrackToggle
-        source={Track.Source.Microphone}
-        className="grid h-8 w-8 place-items-center rounded-md text-ink-muted hover:bg-surface-2 data-[lk-enabled=false]:bg-red-50 data-[lk-enabled=false]:text-red-600"
-      />
-      <TrackToggle
-        source={Track.Source.Camera}
-        className="grid h-8 w-8 place-items-center rounded-md text-ink-muted hover:bg-surface-2 data-[lk-enabled=false]:bg-red-50 data-[lk-enabled=false]:text-red-600"
-      />
-    </>
-  );
-}
-
-function MeetControl({
-  icon,
-  label,
-  active,
-  disabled,
-  onClick,
-}: {
-  icon: ReactNode;
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`grid h-8 w-8 place-items-center rounded-md transition-colors ${
-        disabled
-          ? "cursor-not-allowed bg-canvas text-ink-tertiary"
-          : active
-          ? "bg-surface-2 text-primary"
-          : "bg-transparent text-ink-muted hover:bg-surface-2"
-      }`}
-      aria-label={label}
-      title={label}
-    >
-      {icon}
-    </button>
-  );
-}
-
-
-
-function StatePanel({ title, description, icon }: { title: string; description: string; icon?: ReactNode }) {
-  return (
-    <div className="flex h-full items-center justify-center bg-canvas text-ink">
-      <div className="flex flex-col items-center gap-3 text-center">
-        {icon || <SpinnerGap className="h-8 w-8 animate-spin text-ink-subtle" />}
-        <h1 className="text-[15px] font-medium">{title}</h1>
-        <p className="text-[13px] text-ink-subtle max-w-sm">{description}</p>
-      </div>
-    </div>
-  );
-}
-
+// Helpers
 function mergeParticipants(apiParticipants: TranslationRoomParticipantDto[], liveParticipants: ParticipantInfoDto[]): TranslationRoomParticipantDto[] {
   const mappedLive = liveParticipants.map((participant) => ({
     id: participant.userId,
@@ -1280,10 +557,6 @@ function getPreviewLiveParticipants(roomId: string): TranslationRoomParticipantD
   ];
 }
 
-function getPreviewTranscriptSegment() {
-  return getPreviewTranscriptSegments().at(-1);
-}
-
 function getPreviewTranscriptSegments(): TranscriptSegmentDto[] {
   return [
     {
@@ -1323,90 +596,4 @@ function getPreviewTranscriptSegments(): TranscriptSegmentDto[] {
       endTimeMs: 15800,
     },
   ];
-}
-
-function initials(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
-
-function ParticipantRow({
-  participant,
-  isHost,
-  roomId,
-  isRoomHost,
-}: {
-  participant: TranslationRoomParticipantDto;
-  isHost: boolean;
-  roomId: string;
-  isRoomHost: boolean;
-}) {
-  const updateAudio = useUpdateParticipantAudio(roomId);
-  const admit = useAdmitParticipant(roomId);
-  const kick = useKickParticipant(roomId);
-  const canManage = isHost && !isRoomHost;
-  const audioEnabled = participant.isTranslationAudioEnabled ?? true;
-
-  async function runAction(action: "audio" | "admit" | "kick") {
-    try {
-      if (action === "audio") {
-        await updateAudio.mutateAsync({
-          participantId: participant.id,
-          isTranslationAudioEnabled: !audioEnabled,
-        });
-        toast.success("Participant audio route updated.");
-      }
-      if (action === "admit") {
-        await admit.mutateAsync(participant.id);
-        toast.success("Participant admitted.");
-      }
-      if (action === "kick") {
-        await kick.mutateAsync(participant.id);
-        toast.success("Participant removed.");
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update participant.");
-    }
-  }
-
-  return (
-    <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-canvas">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-sm bg-primary/10 text-[10px] font-bold text-primary">
-          {initials(participant.displayName)}
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium text-ink">{participant.displayName}</p>
-          <p className="truncate text-[11px] text-ink-subtle capitalize">
-            {participant.role.toString().toLowerCase()} · {participant.status.replace("_", " ")}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="grid h-6 w-6 place-items-center rounded-sm bg-canvas text-ink-subtle">
-          {audioEnabled ? <Microphone className="h-3.5 w-3.5" /> : <MicrophoneSlash className="h-3.5 w-3.5" />}
-        </span>
-        {canManage && (
-          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-            {participant.status === "waiting" && (
-              <button onClick={() => runAction("admit")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted" title="Admit">
-                <UserCheck className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <button onClick={() => runAction("audio")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted" title="Toggle audio">
-              {audioEnabled ? <MicrophoneSlash className="h-3.5 w-3.5" /> : <Microphone className="h-3.5 w-3.5" />}
-            </button>
-            <button onClick={() => runAction("kick")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-red-50 text-red-600" title="Remove">
-              <UserMinus className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
