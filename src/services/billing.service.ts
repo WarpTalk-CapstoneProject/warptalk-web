@@ -1,5 +1,5 @@
 import apiClient from "@/lib/api/client";
-import type { CreditBalanceDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult } from "@/types/billing";
+import type { CreditBalanceDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto } from "@/types/billing";
 
 export const billingService = {
   /**
@@ -77,8 +77,28 @@ export const billingService = {
    * Get workspace usage chart data.
    */
   getWorkspaceUsageChart: async (workspaceId: string, year: number): Promise<import("@/types/billing").UsageChartDto> => {
-    const { data } = await apiClient.get<import("@/types/billing").UsageChartDto>(`/credits/workspace/${workspaceId}/chart`, { params: { year } });
-    return data;
+    try {
+      const { data } = await apiClient.get<import("@/types/billing").UsageChartDto>(`/credits/workspace/${workspaceId}/chart`, { params: { year } });
+      return data;
+    } catch {
+      return {
+        year,
+        monthlyData: [
+          { month: 1, monthName: "Jan", consumedCredits: 0, topUpCredits: 0 },
+          { month: 2, monthName: "Feb", consumedCredits: 0, topUpCredits: 0 },
+          { month: 3, monthName: "Mar", consumedCredits: 0, topUpCredits: 0 },
+          { month: 4, monthName: "Apr", consumedCredits: 0, topUpCredits: 0 },
+          { month: 5, monthName: "May", consumedCredits: 0, topUpCredits: 0 },
+          { month: 6, monthName: "Jun", consumedCredits: 0, topUpCredits: 0 },
+          { month: 7, monthName: "Jul", consumedCredits: 0, topUpCredits: 0 },
+          { month: 8, monthName: "Aug", consumedCredits: 0, topUpCredits: 0 },
+          { month: 9, monthName: "Sep", consumedCredits: 0, topUpCredits: 0 },
+          { month: 10, monthName: "Oct", consumedCredits: 0, topUpCredits: 0 },
+          { month: 11, monthName: "Nov", consumedCredits: 0, topUpCredits: 0 },
+          { month: 12, monthName: "Dec", consumedCredits: 0, topUpCredits: 0 },
+        ]
+      };
+    }
   },
 
   /**
@@ -93,8 +113,12 @@ export const billingService = {
    * Get workspace usage breakdown (Donut).
    */
   getWorkspaceUsageBreakdown: async (workspaceId: string, days = 30): Promise<import("@/types/billing").UsageSummaryDto[]> => {
-    const { data } = await apiClient.get<import("@/types/billing").UsageSummaryDto[]>(`/credits/workspace/${workspaceId}/breakdown`, { params: { days } });
-    return data;
+    try {
+      const { data } = await apiClient.get<import("@/types/billing").UsageSummaryDto[]>(`/credits/workspace/${workspaceId}/breakdown`, { params: { days } });
+      return data;
+    } catch {
+      return [];
+    }
   },
 
   /**
@@ -118,6 +142,52 @@ export const billingService = {
    */
   adjustCredits: async (workspaceId: string, amount: number, reason: string): Promise<CreditTransactionDto> => {
     const { data } = await apiClient.post<CreditTransactionDto>(`/credits/workspace/${workspaceId}/adjust`, { amount, reason });
+    return data;
+  },
+
+  /**
+   * Get the active subscription for a workspace.
+   */
+  getActiveSubscription: async (workspaceId: string): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.get<SubscriptionDto>(`/subscriptions/workspace/${workspaceId}`);
+    return data;
+  },
+
+  /**
+   * Get paginated invoices for a workspace.
+   */
+  getWorkspaceInvoices: async (workspaceId: string, pageNumber = 1, pageSize = 20): Promise<PagedResult<InvoiceDto>> => {
+    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(`/credits/workspace/${workspaceId}/invoices`, {
+      params: { pageNumber, pageSize }
+    });
+    return data;
+  },
+
+  /**
+   * Get all active subscription plans from the backend.
+   */
+  getPlans: async (): Promise<import("@/types/billing").PlanDto[]> => {
+    const { data } = await apiClient.get<import("@/types/billing").PlanDto[]>(`/plans`);
+    return data;
+  },
+
+  /**
+   * Cancel the active subscription for a workspace at period end.
+   */
+  cancelSubscription: async (workspaceId: string, reason?: string): Promise<void> => {
+    await apiClient.delete(`/subscriptions/workspace/${workspaceId}`, {
+      data: { reason: reason ?? "User requested cancellation" }
+    });
+  },
+
+  /**
+   * Upgrade or downgrade the active subscription plan for a workspace.
+   */
+  changeSubscription: async (workspaceId: string, newPlanId: string): Promise<import("@/types/billing").SubscriptionDto> => {
+    const { data } = await apiClient.put<import("@/types/billing").SubscriptionDto>(
+      `/subscriptions/workspace/${workspaceId}/change-plan`,
+      { workspaceId, newPlanId }
+    );
     return data;
   },
 };

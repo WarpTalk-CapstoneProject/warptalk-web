@@ -17,4 +17,9 @@ export const paymentService = {
     const { data } = await apiClient.post<{ url: string }>("/payments/checkout", request);
     return data.url;
   },
+
+  getCheckoutSession: async (sessionId: string): Promise<any> => {
+    const { data } = await apiClient.get<any>(`/payments/checkout-session/${sessionId}`);
+    return data;
+  },
 };

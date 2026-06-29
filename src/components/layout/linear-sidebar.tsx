@@ -188,6 +188,7 @@ export function LinearSidebar() {
   );
 
   if (role === "Owner" || role === "Admin") {
+    workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
   }
 

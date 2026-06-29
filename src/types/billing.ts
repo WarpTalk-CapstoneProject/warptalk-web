@@ -2,9 +2,40 @@ export interface CreditBalanceDto {
   workspaceId: string;
   currentCredits: number;
   creditsUsedThisCycle: number;
+  totalCredits: number;
   status: string;
   currentPeriodStart: string; // ISO datetime
   currentPeriodEnd: string;   // ISO datetime
+}
+
+export interface SubscriptionDto {
+  id: string;
+  userId: string;
+  workspaceId: string | null;
+  planId: string;
+  planName: string;
+  price: number;
+  status: string;
+  creditsRemaining: number;
+  creditsUsedThisCycle: number;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  autoRenew: boolean;
+  cancelAtPeriodEnd: boolean;
+  createdAt: string;
+  cancelledAt: string | null;
+}
+
+export interface PlanDto {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  currency: string;
+  billingCycle: string;
+  creditAllowance: number;
+  isActive: boolean;
 }
 
 export interface CreditTransactionDto {
@@ -78,4 +109,18 @@ export interface TopWorkspaceDto {
   workspaceId: string;
   workspaceName: string;
   consumedCredits: number;
+}
+
+export interface InvoiceDto {
+  id: string;
+  workspaceId: string;
+  subscriptionId: string;
+  paymentId: string;
+  stripeInvoiceId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  invoicePdfUrl: string;
+  hostedInvoiceUrl: string;
+  createdAt: string;
 }
