@@ -95,6 +95,28 @@ export default function WorkspacePlansPage() {
 
   const handleCheckout = async (amount: number, paymentType: string, planSlug = "", billingCycle = "") => {
     if (!isAuthenticated || !user) { router.push("/login"); return; }
+    
+    // If upgrading/downgrading and user already has an active subscription, call direct changeSubscription API instead of Stripe Checkout
+    if (paymentType === "Subscription" && subscription && subscription.status === "active") {
+      const plansList = await billingService.getPlans().catch(() => []);
+      const targetPlan = plansList.find(p => p.slug === planSlug);
+      
+      if (targetPlan) {
+        if (!confirm(`Are you sure you want to change your plan to ${targetPlan.name}? This will instantly update your subscription with proration adjustments.`)) return;
+        try {
+          setIsProcessing(true);
+          const updatedSub = await billingService.changeSubscription(activeWorkspaceId!, targetPlan.id);
+          toast.success(`Successfully updated your plan to ${targetPlan.name}!`);
+          setSubscription(updatedSub);
+        } catch {
+          toast.error("Failed to update plan. Please contact support.");
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
+      }
+    }
+
     try {
       setIsProcessing(true);
       const url = await paymentService.createCheckoutSession({
