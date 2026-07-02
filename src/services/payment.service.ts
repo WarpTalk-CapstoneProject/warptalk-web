@@ -6,6 +6,8 @@ export interface CreateCheckoutSessionRequest {
   amount: number;
   currency: string;
   paymentType: string;
+  planSlug?: string;
+  billingCycle?: string;
 }
 
 export const paymentService = {

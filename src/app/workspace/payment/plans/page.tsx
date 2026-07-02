@@ -131,7 +131,7 @@ export default function PaymentPlansPage() {
     },
   });
 
-  const handleCheckout = async (amount: number, paymentType: string) => {
+  const handleCheckout = async (amount: number, paymentType: string, planSlug = "", billingCycle = "") => {
     if (!isAuthenticated || !user) {
       router.push("/login");
       return;
@@ -144,6 +144,8 @@ export default function PaymentPlansPage() {
         amount,
         currency: "vnd",
         paymentType,
+        planSlug: planSlug || undefined,
+        billingCycle: billingCycle || undefined,
       });
       if (url) window.location.href = url;
     } catch {
@@ -303,7 +305,7 @@ export default function PaymentPlansPage() {
                     disabled={isCheckoutProcessing}
                     onClick={() => {
                       const amount = billingInterval === "yearly" ? meta.yearlyTotal : meta.monthlyTotal;
-                      handleCheckout(amount, "Subscription");
+                      handleCheckout(amount, "Subscription", planName.toLowerCase(), billingInterval);
                     }}
                     className={`inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                       meta.featured
@@ -334,7 +336,7 @@ export default function PaymentPlansPage() {
 
         <div className="grid md:grid-cols-3 gap-4">
           {[
-            { credits: "10,000", creditsNum: 10000, price: "100.000đ", priceNum: 100000, perCredit: "10 VND/credit", discount: null, label: "Standard" },
+            { credits: "10,000", creditsNum: 10000, price: "90.000đ", priceNum: 90000, perCredit: "9 VND/credit", discount: "Save 10%", label: "Standard" },
             { credits: "25,000", creditsNum: 25000, price: "212.500đ", priceNum: 212500, perCredit: "8.5 VND/credit", discount: "Save 15%", label: "Popular" },
             { credits: "50,000", creditsNum: 50000, price: "400.000đ", priceNum: 400000, perCredit: "8 VND/credit", discount: "Save 20%", label: "Best Value" },
           ].map((pkg) => (

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Download, Robot, Coins, CreditCard, Translate, Users, Wallet, ArrowRight, ArrowUpRight, ArrowDownRight, Spinner, MagnifyingGlass } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { useEffect, useState, useMemo } from "react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -213,7 +214,7 @@ export default function WorkspaceBillingPage() {
 
   const confirmExportUsage = async () => {
     if (!historyPage?.items) return;
-    
+    try {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Wallet Statement");
     
@@ -321,6 +322,10 @@ export default function WorkspaceBillingPage() {
     const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     saveAs(blob, `WarpTalk_Wallet_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
     setIsExportOpen(false);
+    toast.success(`Exported ${historyPage.items.length} transactions to Excel.`);
+  } catch {
+    toast.error("Failed to export. Please try again.");
+  }
   };
 
   const displayPlanName = subscription?.planName || "No Active Plan";
@@ -350,7 +355,7 @@ export default function WorkspaceBillingPage() {
           <Link href={`/${workspaceSlug}/payment/plans`}>
             <button className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-3 text-xs font-semibold text-white transition duration-150 cursor-pointer">
               <Wallet className="h-3.5 w-3.5" />
-              <span>Top up credits</span>
+              <span>Manage Plan &amp; Credits</span>
             </button>
           </Link>
         </div>
@@ -447,7 +452,7 @@ export default function WorkspaceBillingPage() {
               <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-hairline/20 px-5 pt-5">
                 <div>
                   <CardTitle className="text-base font-semibold">Cost by AI service</CardTitle>
-                  <p className="text-xs text-ink-muted mt-1">Usage before the fixed Enterprise platform fee.</p>
+                   <p className="text-xs text-ink-muted mt-1">Variable AI usage costs this billing cycle{subscription?.planName ? ` · ${subscription.planName} plan` : ""}.</p>
                 </div>
                 <Badge variant="outline" className="rounded-md border-hairline text-xs">{format(new Date(), "MMMM yyyy")}</Badge>
               </CardHeader>
