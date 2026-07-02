@@ -343,7 +343,7 @@ export default function WorkspacePlansPage() {
                 {subscription?.currentPeriodEnd
                   ? new Date(subscription.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
                   : "the end of the period"}
-              </strong>. After that, your workspace will revert to the free plan.
+              </strong>. After that, your workspace will revert to basic access.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1 my-2">

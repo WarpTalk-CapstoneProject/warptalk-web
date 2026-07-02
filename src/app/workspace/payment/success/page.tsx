@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -62,18 +62,20 @@ function SuccessContent() {
     if (loading) return;
 
     timerRef.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(timerRef.current!);
-          router.push(returnLink);
-          return 0;
-        }
-        return c - 1;
-      });
+      setCountdown((c) => (c > 0 ? c - 1 : 0));
     }, 1000);
 
-    return () => clearInterval(timerRef.current!);
-  }, [loading, returnLink, router]);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [loading]);
+
+  // Navigate when countdown hits 0
+  useEffect(() => {
+    if (countdown === 0) {
+      router.push(returnLink);
+    }
+  }, [countdown, returnLink, router]);
 
   const currency = session?.currency?.toUpperCase() || "VND";
 
