@@ -32,11 +32,12 @@ export function FeatureBreakdownChart({ workspaceId, className }: FeatureBreakdo
     
     // Convert generic names to friendly names if needed
     return data.map(d => {
-      let label = d.usageType;
+      let label = d.usageType || (d as any).featureName;
       if (label === "chat") label = "AI Chat";
-      else if (label === "translation") label = "Translation";
-      else if (label === "summary") label = "AI Summary";
-      else if (label === "voice_clone") label = "Voice Clone";
+      else if (label === "translation" || label === "voice_translation") label = "Translation";
+      else if (label === "summary" || label === "meeting_summary") label = "AI Summary";
+      else if (label === "voice_clone" || label === "voice_cloning") label = "Voice Clone";
+      else if (label === "text_to_speech") label = "AI Voice Synthesis";
 
       return {
         name: label,
@@ -91,6 +92,7 @@ export function FeatureBreakdownChart({ workspaceId, className }: FeatureBreakdo
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
+                  nameKey="name"
                   stroke="none"
                 >
                   {chartData.map((entry, index) => (

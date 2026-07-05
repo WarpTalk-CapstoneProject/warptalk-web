@@ -34,7 +34,7 @@ export default function JoinWorkspacePage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    let inputVal = token.trim();
+    const inputVal = token.trim();
     if (!inputVal) return;
 
     // 1. Check if it's an invitation URL or invitation token

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Coins, Eye, EyeSlash, FileText, ChartLineUp, Download } from "@phosphor-icons/react/dist/ssr";
-import { Building2, User, Bot, Check, Copy, Loader2, Search, Shield } from "lucide-react";
+import { Building2, User, Bot, Check, Copy, Loader2, Search, Shield, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -220,6 +220,11 @@ export default function AdminBillingPage() {
           <Button variant="outline" className="rounded-md h-9 px-4" onClick={() => setIsExportOpen(true)}>
             <Download className="mr-2 h-4 w-4" weight="light" /> Export Report
           </Button>
+          <Link href="/internal/billing/plans">
+            <Button variant="outline" className="rounded-md h-9 px-4">
+              <Settings className="mr-2 h-4 w-4 text-primary" /> Manage Plans
+            </Button>
+          </Link>
           <AdjustCreditModal />
         </div>
       </div>

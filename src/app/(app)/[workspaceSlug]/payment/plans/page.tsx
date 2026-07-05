@@ -1,11 +1,12 @@
 "use client";
 
-import { CheckCircle, Lightning, ArrowRight, ArrowUp, ArrowDown, X } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
+import { CheckCircle, Lightning, ArrowRight, ArrowUp, ArrowDown, X, Lock, CaretLeft } from "@phosphor-icons/react";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -66,13 +67,20 @@ function getTopUpRate(credits: number) {
 
 export default function WorkspacePlansPage() {
   const router = useRouter();
+  const params = useParams();
+  const slug = params?.workspaceSlug as string;
+  const queryClient = useQueryClient();
   const { isAuthenticated, user } = useAuthStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const role = useWorkspaceStore((state) => state.role);
 
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showChangePlanDialog, setShowChangePlanDialog] = useState(false);
+  const [pendingPlanSlug, setPendingPlanSlug] = useState("");
+  const [pendingPlanName, setPendingPlanName] = useState("");
   const [topUpCredits, setTopUpCredits] = useState<number>(0);
   const [subscription, setSubscription] = useState<SubscriptionDto | null>(null);
   const [loadingSub, setLoadingSub] = useState(true);
@@ -93,6 +101,33 @@ export default function WorkspacePlansPage() {
   const activePlanSlug = subscription?.planName?.toLowerCase() as PlanSlug | undefined;
   const activePlanTierIndex = activePlanSlug ? PLAN_TIERS.indexOf(activePlanSlug) : -1;
 
+  const pendingPlanSlugIndex = pendingPlanSlug ? PLAN_TIERS.indexOf(pendingPlanSlug as PlanSlug) : -1;
+  const isUpgrade = activePlanTierIndex === -1 || pendingPlanSlugIndex > activePlanTierIndex;
+  const isDowngrade = activePlanTierIndex !== -1 && pendingPlanSlugIndex < activePlanTierIndex;
+
+  const confirmChangePlan = async () => {
+    if (!pendingPlanSlug || !activeWorkspaceId) return;
+    try {
+      setIsProcessing(true);
+      setShowChangePlanDialog(false);
+      const plansList = await billingService.getPlans().catch(() => []);
+      const targetPlan = plansList.find(p => p.slug === pendingPlanSlug);
+      if (targetPlan) {
+        const updatedSub = await billingService.changeSubscription(activeWorkspaceId, targetPlan.id);
+        toast.success(`Successfully updated your plan to ${targetPlan.name}!`);
+        setSubscription(updatedSub);
+        // Invalidate billing query cache so billing page shows updated plan
+        queryClient.invalidateQueries({ queryKey: ["billing"] });
+      }
+    } catch {
+      toast.error("Failed to update plan. Please contact support.");
+    } finally {
+      setIsProcessing(false);
+      setPendingPlanSlug("");
+      setPendingPlanName("");
+    }
+  };
+
   const handleCheckout = async (amount: number, paymentType: string, planSlug = "", billingCycle = "") => {
     if (!isAuthenticated || !user) { router.push("/login"); return; }
     
@@ -102,17 +137,9 @@ export default function WorkspacePlansPage() {
       const targetPlan = plansList.find(p => p.slug === planSlug);
       
       if (targetPlan) {
-        if (!confirm(`Are you sure you want to change your plan to ${targetPlan.name}? This will instantly update your subscription with proration adjustments.`)) return;
-        try {
-          setIsProcessing(true);
-          const updatedSub = await billingService.changeSubscription(activeWorkspaceId!, targetPlan.id);
-          toast.success(`Successfully updated your plan to ${targetPlan.name}!`);
-          setSubscription(updatedSub);
-        } catch {
-          toast.error("Failed to update plan. Please contact support.");
-        } finally {
-          setIsProcessing(false);
-        }
+        setPendingPlanSlug(planSlug);
+        setPendingPlanName(targetPlan.name);
+        setShowChangePlanDialog(true);
         return;
       }
     }
@@ -164,8 +191,45 @@ export default function WorkspacePlansPage() {
   const { rate, discount } = getTopUpRate(topUpCredits);
   const topUpTotal = topUpCredits * rate;
 
+  if (!role) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-canvas">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (role !== "Owner" && role !== "Admin") {
+    return (
+      <div className="flex h-[80vh] items-center justify-center w-full">
+        <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">
+          <CardHeader className="flex flex-col items-center gap-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <Lock className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-lg font-bold">Access Denied</CardTitle>
+            <CardDescription className="text-xs">
+              Only workspace Owners and Administrators can manage subscription plans and top-up credits.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-full flex-col items-center pb-12 pt-8">
+    <div className="flex min-h-full flex-col items-center pb-12 pt-4 px-4 w-full max-w-6xl mx-auto">
+      {/* Back to Billing Link */}
+      <div className="w-full flex justify-start mb-6">
+        <Link 
+          href={`/${slug}/billing`}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition duration-150 cursor-pointer"
+        >
+          <CaretLeft className="h-3.5 w-3.5" />
+          <span>Back to Billing</span>
+        </Link>
+      </div>
+
       <div className="text-center max-w-2xl mb-12">
         <Badge variant="secondary" className="mb-4 bg-surface-2 text-primary border border-hairline hover:bg-surface-2">Pricing &amp; Subscriptions</Badge>
         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink mb-4">Choose the right plan for your team</h1>
@@ -192,7 +256,7 @@ export default function WorkspacePlansPage() {
           return (
             <Card
               key={plan.name}
-              className={`relative flex flex-col rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${
+              className={`relative flex flex-col !overflow-visible rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${
                 isCurrent
                   ? "border-2 border-primary bg-surface-2 shadow-[0_8px_30px_rgb(94,106,210,0.15)]"
                   : plan.featured
@@ -389,6 +453,41 @@ export default function WorkspacePlansPage() {
             >
               <X className="h-4 w-4" />
               {isCancelling ? "Cancelling..." : "Confirm Cancellation"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Change Subscription confirmation dialog */}
+      <Dialog open={showChangePlanDialog} onOpenChange={setShowChangePlanDialog}>
+        <DialogContent className="sm:max-w-[440px] border-hairline bg-surface-1 shadow-lg rounded-xl text-ink">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">
+              {isUpgrade ? "Upgrade workspace plan?" : (isDowngrade ? "Downgrade workspace plan?" : "Change workspace plan?")}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-ink-muted mt-1">
+              {isUpgrade ? "Are you sure you want to upgrade your workspace plan to " : (isDowngrade ? "Are you sure you want to downgrade your workspace plan to " : "Are you sure you want to change your workspace plan to ")}<strong>{pendingPlanName}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1.5 my-2">
+            <p>• <strong>Billing updates today</strong>: Your billing cycle and price will update immediately.</p>
+            <p>• <strong>Pro-rated credit</strong>: Any unused time on your current plan will be credited to this change.</p>
+            <p>• <strong>Credits carried over</strong>: All your remaining credits will roll over to your new plan.</p>
+          </div>
+          <DialogFooter className="flex gap-2 flex-row justify-end">
+            <button
+              type="button"
+              onClick={() => setShowChangePlanDialog(false)}
+              className="inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 hover:bg-surface-3 px-4 text-sm font-medium text-ink cursor-pointer transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isProcessing}
+              onClick={confirmChangePlan}
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary hover:bg-primary-hover text-primary-foreground px-4 text-sm font-medium cursor-pointer transition disabled:opacity-60"
+            >
+              {isProcessing ? "Updating..." : (isUpgrade ? "Confirm Upgrade" : (isDowngrade ? "Confirm Downgrade" : "Confirm Change"))}
             </button>
           </DialogFooter>
         </DialogContent>

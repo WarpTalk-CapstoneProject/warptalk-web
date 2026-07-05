@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { Download, Robot, Coins, CreditCard, Translate, Users, Wallet, ArrowRight, ArrowUpRight, ArrowDownRight, Spinner, MagnifyingGlass } from "@phosphor-icons/react";
+import { Download, Robot, Coins, CreditCard, Translate, Users, Wallet, ArrowRight, ArrowUpRight, ArrowDownRight, Spinner, MagnifyingGlass, Lock } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -10,7 +10,7 @@ import { saveAs } from "file-saver";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +25,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { createHubConnection } from "@/lib/signalr";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -37,16 +37,28 @@ function getIconForUsage(usageType: string) {
 }
 
 function getLabelForUsage(usageType: string) {
-  if (usageType === "translation") return "Realtime translation";
-  if (usageType === "summary") return "AI summaries";
-  if (usageType === "chat") return "AI workspace chat";
-  return usageType;
+  if (usageType === "translation" || usageType === "voice_translation") return "Real-time Translation (Speech-to-Text / STT)";
+  if (usageType === "summary" || usageType === "meeting_summary") return "AI Meeting Insights (Summarization)";
+  if (usageType === "chat") return "AI Workspace Co-pilot Chat";
+  if (usageType === "text_to_speech") return "AI Voice Synthesis (Text-to-Speech / TTS)";
+  if (usageType === "voice_cloning") return "Custom AI Voice Cloning (Voice Cloning)";
+  return usageType.replace(/_/g, ' ');
+}
+
+function getUnitSuffixForUsage(usageType: string): string {
+  const t = usageType.toLowerCase();
+  if (t === "translation" || t === "voice_translation") return "cr/min";
+  if (t === "summary" || t === "meeting_summary") return "cr/req";
+  if (t === "text_to_speech") return "cr/min";
+  if (t === "voice_cloning") return "cr/min";
+  return "cr";
 }
 
 export default function WorkspaceBillingPage() {
   const queryClient = useQueryClient();
   const params = useParams();
   const slug = params?.workspaceSlug as string;
+  const router = useRouter();
 
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
@@ -55,6 +67,7 @@ export default function WorkspaceBillingPage() {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const workspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug) || slug || "";
   const workspaceId = activeWorkspaceId || "";
+  const role = useWorkspaceStore((state) => state.role);
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -63,14 +76,21 @@ export default function WorkspaceBillingPage() {
 
     connection.on("NewNotification", (notification) => {
       console.log("Realtime billing update:", notification);
-      if (notification?.type === "billing.credits_updated") {
+      if (
+        notification?.type === "billing.credits_updated" ||
+        notification?.type === "billing.subscription_changed"
+      ) {
         queryClient.invalidateQueries({ queryKey: ["billing"] });
       }
     });
 
     let isMounted = true;
 
-    connection.start().catch((err) => {
+    connection.start().then(() => {
+      if (isMounted && workspaceId) {
+        connection.invoke("JoinWorkspace", workspaceId).catch(console.error);
+      }
+    }).catch((err) => {
       if (!isMounted) return;
       if (err?.message?.includes("stop() was called")) return;
     });
@@ -79,7 +99,7 @@ export default function WorkspaceBillingPage() {
       isMounted = false;
       connection.stop();
     };
-  }, [queryClient, accessToken, isAuthenticated]);
+  }, [queryClient, accessToken, isAuthenticated, workspaceId]);
 
   const { data: balance, isLoading: isBalanceLoading } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
@@ -111,6 +131,7 @@ export default function WorkspaceBillingPage() {
 
   const [invoicesPageNumber, setInvoicesPageNumber] = useState(1);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDto | null>(null);
+  const [selectedTxGroup, setSelectedTxGroup] = useState<any | null>(null);
 
   const { data: invoicesPage, isLoading: isInvoicesLoading } = useQuery({
     queryKey: ["billing", "invoices", workspaceId, invoicesPageNumber],
@@ -136,12 +157,16 @@ export default function WorkspaceBillingPage() {
     setHistoryPageNumber(1);
   };
 
+
+
+
+
   const { data: historyPage, isLoading: isHistoryLoading } = useQuery({
     queryKey: [
       "billing", "history", workspaceId, historyPageNumber, historyTypeFilter, 
       filterFromDate, filterToDate, filterMinAmount, filterMaxAmount
     ],
-    queryFn: () => billingService.getCreditHistory(workspaceId, historyPageNumber, 20, {
+    queryFn: () => billingService.getCreditHistory(workspaceId, 1, 1000, {
       type: historyTypeFilter === "ALL" ? undefined : historyTypeFilter,
       fromDate: filterFromDate ? new Date(filterFromDate + "T00:00:00").toISOString() : undefined,
       toDate: filterToDate ? new Date(filterToDate + "T23:59:59.999").toISOString() : undefined,
@@ -152,7 +177,7 @@ export default function WorkspaceBillingPage() {
     retry: 1,
   });
 
-  const totalPages = historyPage ? Math.ceil(historyPage.totalCount / 20) : 0;
+
 
   const groupedHistoryItems = useMemo(() => {
     if (!historyPage?.items) return [];
@@ -165,10 +190,19 @@ export default function WorkspaceBillingPage() {
         return;
       }
 
-      const isSameReference = currentGroup.referenceId && tx.referenceId && currentGroup.referenceId === tx.referenceId;
+      const date1 = format(new Date(currentGroup.createdAt), "yyyy-MM-dd");
+      const date2 = format(new Date(tx.createdAt), "yyyy-MM-dd");
+      const isSameDay = date1 === date2;
       const isSameType = currentGroup.type === tx.type;
 
-      if (isSameReference && isSameType && currentGroup.referenceId !== "00000000-0000-0000-0000-000000000000") {
+      // Group if they both have the same valid referenceId
+      const exactReferenceMatch = currentGroup && tx.referenceId && 
+                                  currentGroup.referenceId === tx.referenceId && 
+                                  currentGroup.referenceId !== "00000000-0000-0000-0000-000000000000";
+
+      const shouldGroup = isSameType && tx.type === "consumption" && exactReferenceMatch;
+
+      if (shouldGroup) {
         currentGroup.amount += tx.amount;
         currentGroup.originalTx.push(tx);
       } else {
@@ -183,6 +217,11 @@ export default function WorkspaceBillingPage() {
 
     return groups;
   }, [historyPage]);
+
+  // Local pagination over the grouped items
+  const PAGE_SIZE = 20;
+  const totalPages = Math.ceil(groupedHistoryItems.length / PAGE_SIZE);
+  const paginatedGroups = groupedHistoryItems.slice((historyPageNumber - 1) * PAGE_SIZE, historyPageNumber * PAGE_SIZE);
 
   const currentCredits = balance?.currentCredits ?? 0;
   const totalCredits = balance?.totalCredits ?? 0;
@@ -218,11 +257,13 @@ export default function WorkspaceBillingPage() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Wallet Statement");
     
-    worksheet.getColumn("A").width = 40;
-    worksheet.getColumn("B").width = 15;
-    worksheet.getColumn("C").width = 25;
-    worksheet.getColumn("D").width = 20;
-    worksheet.getColumn("E").width = 20;
+    worksheet.columns = [
+      { key: "id", width: 40 },
+      { key: "type", width: 15 },
+      { key: "date", width: 25 },
+      { key: "amount", width: 20 },
+      { key: "balance", width: 20 }
+    ];
 
     worksheet.addRow(["WarpTalk - Wallet Transaction Report"]);
     worksheet.getRow(1).font = { size: 16, bold: true };
@@ -271,8 +312,9 @@ export default function WorkspaceBillingPage() {
     });
 
     historyPage.items.forEach((tx) => {
+      const displayTxId = tx.id ? `TX-${tx.id.split("-")[0].toUpperCase()}` : "TX-UNKNOWN";
       const row = worksheet.addRow({
-        id: tx.id,
+        id: displayTxId,
         type: tx.type === "top_up" ? "Top-Up" : "Consumption",
         date: new Date(tx.createdAt),
         amount: tx.amount,
@@ -332,6 +374,32 @@ export default function WorkspaceBillingPage() {
   const displayPlanPrice = subscription?.price 
     ? `${subscription.price.toLocaleString("vi-VN")}đ` 
     : "--";
+
+  if (!role) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-canvas">
+        <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+      </div>
+    );
+  }
+
+  if (role !== "Owner" && role !== "Admin") {
+    return (
+      <div className="flex h-[80vh] items-center justify-center w-full">
+        <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">
+          <CardHeader className="flex flex-col items-center gap-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <Lock className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-lg font-bold">Access Denied</CardTitle>
+            <CardDescription className="text-xs">
+              Only workspace Owners and Administrators can view billing and subscription configurations.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink max-w-7xl mx-auto w-full">
@@ -411,6 +479,7 @@ export default function WorkspaceBillingPage() {
           <TabsTrigger value="overview" className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Overview & Usage</TabsTrigger>
           <TabsTrigger value="history" className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Transaction History</TabsTrigger>
           <TabsTrigger value="invoices" className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Billing History</TabsTrigger>
+
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
@@ -577,7 +646,8 @@ export default function WorkspaceBillingPage() {
                       <TableHead className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">Type</TableHead>
                       <TableHead className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">Date</TableHead>
                       <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">Amount</TableHead>
-                      <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider pr-5 py-2.5">Balance After</TableHead>
+                      <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">Balance After</TableHead>
+                      <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider pr-5 py-2.5">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="divide-y divide-hairline/20">
@@ -588,16 +658,16 @@ export default function WorkspaceBillingPage() {
                           Loading history...
                         </TableCell>
                       </TableRow>
-                    ) : !groupedHistoryItems.length ? (
+                    ) : paginatedGroups.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center py-8 text-xs text-ink-muted">No transactions found.</TableCell>
                       </TableRow>
                     ) : (
-                      groupedHistoryItems.map((tx, index) => {
+                      paginatedGroups.map((tx: any, index: number) => {
                         const isPositive = tx.amount > 0;
                         const sign = isPositive ? "+" : "";
                         const isGrouped = tx.originalTx && tx.originalTx.length > 1;
-                        const rowIndex = (historyPageNumber - 1) * 20 + index + 1;
+                        const rowIndex = (historyPageNumber - 1) * PAGE_SIZE + index + 1;
                         
                         return (
                           <TableRow key={tx.id} className="border-hairline/15 hover:bg-surface-2/20">
@@ -623,7 +693,17 @@ export default function WorkspaceBillingPage() {
                             <TableCell className={`text-right text-xs font-semibold py-3 ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-ink'}`}>
                               {sign}{tx.amount.toLocaleString()} cr
                             </TableCell>
-                            <TableCell className="text-right text-xs font-mono text-ink-muted pr-5 py-3">{tx.balanceAfter.toLocaleString()} cr</TableCell>
+                            <TableCell className="text-right text-xs font-mono text-ink-muted py-3">{tx.balanceAfter.toLocaleString()} cr</TableCell>
+                            <TableCell className="text-right text-xs pr-5 py-3">
+                              {isGrouped && (
+                                <button 
+                                  onClick={() => setSelectedTxGroup(tx)}
+                                  className="text-primary hover:underline font-semibold cursor-pointer bg-transparent border-none p-0"
+                                >
+                                  View Details
+                                </button>
+                              )}
+                            </TableCell>
                           </TableRow>
                         );
                       })
@@ -633,8 +713,9 @@ export default function WorkspaceBillingPage() {
               </div>
               <div className="flex items-center justify-between border-t border-hairline/20 px-5 py-4">
                 <p className="text-xs text-ink-muted">
-                  {historyPage ? (
-                    <>Showing <strong>{(historyPageNumber - 1) * 20 + 1}–{Math.min(historyPageNumber * 20, historyPage.totalCount)}</strong> of <strong>{historyPage.totalCount}</strong> transactions</>
+                  {!isHistoryLoading ? (
+                    <>Showing {Math.min(((historyPageNumber - 1) * PAGE_SIZE) + 1, groupedHistoryItems.length)}–
+                    {Math.min(historyPageNumber * PAGE_SIZE, groupedHistoryItems.length)} of {groupedHistoryItems.length} transactions</>
                   ) : "Loading..."}
                 </p>
                 {totalPages >= 1 && (
@@ -755,6 +836,7 @@ export default function WorkspaceBillingPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
       </Tabs>
       
       <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
@@ -1019,6 +1101,100 @@ export default function WorkspaceBillingPage() {
           <p>For support, please contact billing@warptalk.com or visit our Help Center.</p>
         </div>
       </div>
+      <Dialog open={!!selectedTxGroup} onOpenChange={(open) => !open && setSelectedTxGroup(null)}>
+        <DialogContent className="sm:max-w-[760px] w-[95vw] border-hairline bg-surface-1 shadow-lg rounded-xl overflow-hidden p-0">
+          <div className="bg-gradient-to-br from-primary/10 via-canvas to-canvas px-6 pt-6 pb-4 border-b border-hairline/30 relative">
+            <h3 className="text-base font-extrabold text-ink tracking-tight flex items-center gap-2">
+              <span>📊 Transaction Details</span>
+            </h3>
+            <p className="text-xs text-ink-muted mt-1">
+              Breakdown of variable AI service spend for this session
+            </p>
+          </div>
+          
+          <div className="px-6 py-5 space-y-5">
+            {selectedTxGroup && (
+              <div className="space-y-5">
+                {/* Session General Info */}
+                <div className="grid grid-cols-2 gap-4 bg-surface-2 p-4 rounded-lg border border-hairline/80 text-xs text-ink">
+                  <div>
+                    <span className="text-[10px] text-ink-muted block uppercase font-mono tracking-wider">Date</span>
+                    <span className="font-bold mt-1 block text-sm">{format(new Date(selectedTxGroup.createdAt), "MMMM dd, yyyy")}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-ink-muted block uppercase font-mono tracking-wider">Total Deducted</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-extrabold mt-1 block text-sm">{selectedTxGroup.amount.toLocaleString()} cr</span>
+                  </div>
+                </div>
+
+                {/* Two-Column Responsive Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Service Breakdown Summary */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Service Breakdown</h4>
+                    <div className="divide-y divide-hairline/25 border border-hairline/65 rounded-lg bg-surface-2/40 overflow-hidden">
+                      {Object.entries(
+                        selectedTxGroup.originalTx.reduce((acc: any, item: any) => {
+                          const type = getLabelForUsage(item.referenceType || "Other");
+                          const rawType = item.referenceType || "Other";
+                          if (!acc[type]) {
+                            acc[type] = { count: 0, cost: 0, rawType };
+                          }
+                          acc[type].count += 1;
+                          acc[type].cost += item.amount;
+                          return acc;
+                        }, {})
+                      ).map(([service, data]: [string, any]) => {
+                        const unitPriceVal = Math.round(Math.abs(data.cost) / data.count);
+                        const suffix = getUnitSuffixForUsage(data.rawType);
+                        return (
+                          <div key={service} className="flex justify-between items-center px-4 py-3.5 text-xs text-ink hover:bg-surface-2/30 transition-colors">
+                            <div>
+                              <span className="font-semibold block">{service}</span>
+                              <span className="text-[10px] text-ink-muted mt-1 block">
+                                {data.count} {data.count === 1 ? 'call' : 'calls'} × {unitPriceVal} {suffix}
+                              </span>
+                            </div>
+                            <span className="font-extrabold text-rose-600 dark:text-rose-400">{data.cost.toLocaleString()} cr</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Itemized Events List */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Activity Log Feed</h4>
+                    <div className="h-[268px] overflow-y-auto border border-hairline/80 rounded-lg divide-y divide-hairline/40 text-xs bg-surface-1 text-ink font-sans p-3 space-y-0.5 select-text [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-surface-2/30 [&::-webkit-scrollbar-track]:rounded-r-lg [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-ink-muted">
+                      {selectedTxGroup.originalTx.map((item: any, idx: number) => (
+                        <div key={item.id || idx} className="flex justify-between items-center py-2.5 px-3 rounded-md hover:bg-surface-2/60 transition-colors">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/70"></span>
+                            <span className="text-ink font-medium flex items-center">
+                              <span className="font-mono text-ink-muted text-[10px] mr-2.5">{format(new Date(item.createdAt), "HH:mm:ss")}</span>
+                              {getLabelForUsage(item.referenceType || "AI usage")}
+                            </span>
+                          </div>
+                          <span className="text-rose-600 dark:text-rose-400 font-bold ml-2 shrink-0">{item.amount.toLocaleString()} cr</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="bg-surface-2/60 px-6 py-4 border-t border-hairline/25 flex justify-end">
+            <button 
+              onClick={() => setSelectedTxGroup(null)}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-primary hover:bg-primary-hover px-4 text-xs font-semibold text-white cursor-pointer transition duration-150"
+            >
+              Close
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

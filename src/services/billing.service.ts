@@ -190,4 +190,43 @@ export const billingService = {
     );
     return data;
   },
+
+  /**
+   * Create a new subscription plan (Admin only).
+   */
+  createPlan: async (plan: any): Promise<import("@/types/billing").PlanDto> => {
+    const { data } = await apiClient.post<import("@/types/billing").PlanDto>(`/plans`, plan);
+    return data;
+  },
+
+  /**
+   * Update an existing subscription plan (Admin only).
+   */
+  updatePlan: async (id: string, plan: any): Promise<import("@/types/billing").PlanDto> => {
+    const { data } = await apiClient.put<import("@/types/billing").PlanDto>(`/plans/${id}`, plan);
+    return data;
+  },
+
+  /**
+   * Deactivate a subscription plan (Admin only).
+   */
+  deactivatePlan: async (id: string): Promise<void> => {
+    await apiClient.delete(`/plans/${id}`);
+  },
+
+  /**
+   * Deduct credits from a workspace subscription.
+   */
+  consumeCredits: async (workspaceId: string, amount: number, referenceType: string): Promise<any> => {
+    const { data } = await apiClient.post(`/credits/workspace/${workspaceId}/consume`, { amount, referenceType });
+    return data;
+  },
+
+  /**
+   * Top up credits to a workspace subscription.
+   */
+  topUpCredits: async (workspaceId: string, amount: number, referenceType: string): Promise<any> => {
+    const { data } = await apiClient.post(`/credits/workspace/${workspaceId}/topup`, { amount, referenceType });
+    return data;
+  },
 };

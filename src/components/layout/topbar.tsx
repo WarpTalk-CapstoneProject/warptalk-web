@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { NotificationPopover } from "@/components/notifications/notification-popover";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -43,6 +44,9 @@ const routeLabels: Record<string, string> = {
   workspace: "Workspace",
   admin: "Admin",
   "dev-test": "Dev Test",
+  billing: "Billing & Usage",
+  payment: "Payment",
+  plans: "Plans",
 };
 
 const searchItems: Array<{
@@ -208,9 +212,7 @@ export function Topbar() {
           <IconButton label="Help">
             <Question weight="light" className="h-4 w-4" />
           </IconButton>
-          <IconButton label="Notifications">
-            <Bell weight="light" className="h-4 w-4" />
-          </IconButton>
+          <NotificationPopover />
           <IconButton label="Theme">
             <Moon weight="light" className="h-4 w-4" />
           </IconButton>

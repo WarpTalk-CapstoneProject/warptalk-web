@@ -206,7 +206,7 @@ export default function PaymentPlansPage() {
           return (
             <Card
               key={planName}
-              className={`relative flex flex-col rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${
+              className={`relative flex flex-col !overflow-visible rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${
                 meta.featured
                   ? "border-primary/50 bg-surface-2 shadow-[0_8px_30px_rgb(94,106,210,0.12)]"
                   : "border-hairline bg-surface-1"
