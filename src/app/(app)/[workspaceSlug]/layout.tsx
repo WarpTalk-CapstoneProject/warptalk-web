@@ -48,6 +48,10 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
       }
       setIsSyncing(false);
     } else {
+      const currentSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
+      if (currentSlug === workspaceSlug) {
+        useWorkspaceStore.getState().clearActiveWorkspace();
+      }
       router.replace("/workspace");
     }
   }, [

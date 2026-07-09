@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_ROUTES = ["/", "/pricing", "/about", "/login", "/register", "/forgot-password", "/dev-test", "/workspace/payment/plans"];
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password"];
-const ADMIN_PREFIX = "/internal";
+const ADMIN_PREFIX = "/billing";
 
 // Temporary frontend-only mode: backend/auth is not ready yet, so allow direct
 // access to app pages while dashboard and layout work is being reviewed.

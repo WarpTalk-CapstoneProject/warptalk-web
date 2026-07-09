@@ -176,7 +176,7 @@ export function Topbar() {
     ? "Participant"
     : pathname.startsWith("/workspace")
       ? "Workspace"
-      : pathname.startsWith("/internal")
+      : pathname.startsWith("/billing")
         ? "Internal"
         : "Host";
   const roleInitial = roleLabel.slice(0, 1);
@@ -184,8 +184,8 @@ export function Topbar() {
     ? "/participant/profile"
     : pathname.startsWith("/workspace")
       ? "/workspace/profile"
-      : pathname.startsWith("/internal")
-        ? "/internal/profile"
+      : pathname.startsWith("/billing")
+        ? "/profile"
         : `/${activeWorkspaceSlug || "workspace"}/profile`;
 
   const handleSignOut = () => {

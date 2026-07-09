@@ -26,6 +26,7 @@ import { createHubConnection } from "@/lib/signalr";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { useParams, useRouter } from "next/navigation";
+import AdminBillingPage from "@/app/(internal)/billing/page";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -60,8 +61,13 @@ export default function WorkspaceBillingPage() {
   const slug = params?.workspaceSlug as string;
   const router = useRouter();
 
+  if (slug === "warptalk-global") {
+    return <AdminBillingPage />;
+  }
+
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
+  const [meetingSessionId, setMeetingSessionId] = useState<string | null>(null);
 
   const { isAuthenticated, accessToken } = useAuthStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
@@ -479,7 +485,7 @@ export default function WorkspaceBillingPage() {
           <TabsTrigger value="overview" className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Overview & Usage</TabsTrigger>
           <TabsTrigger value="history" className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Transaction History</TabsTrigger>
           <TabsTrigger value="invoices" className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Billing History</TabsTrigger>
-
+          <TabsTrigger value="simulation" className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Meeting Simulator</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
@@ -832,6 +838,134 @@ export default function WorkspaceBillingPage() {
                     )}
                   </TableBody>
                 </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="simulation" className="mt-6 outline-none">
+          <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
+            <CardHeader className="flex flex-col items-start gap-4 pb-4 border-b border-hairline/20 px-5 pt-5">
+              <div className="flex w-full items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold flex items-center gap-2"><Robot className="h-5 w-5 text-primary" /> Simulate Meeting Activity</CardTitle>
+                  <CardDescription className="text-xs mt-1">
+                    {meetingSessionId 
+                      ? <span className="text-emerald-500 font-medium">Active Session ID: <span className="font-mono">{meetingSessionId}</span></span>
+                      : "Start a session to group the deductions into a single meeting record."
+                    }
+                  </CardDescription>
+                </div>
+                <div>
+                  {meetingSessionId ? (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="border-rose-500/50 text-rose-500 hover:bg-rose-500/10"
+                      onClick={() => {
+                        setMeetingSessionId(null);
+                        toast.info("Meeting session ended.");
+                      }}
+                    >
+                      End Session
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={() => {
+                        setMeetingSessionId(crypto.randomUUID());
+                        toast.success("New meeting session started!");
+                      }}
+                    >
+                      Start New Session
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-5 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="border border-hairline/50 bg-surface-2/60 p-4 rounded-lg flex flex-col items-center text-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                    <Translate className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold">Real-time Translation</h4>
+                    <p className="text-[11px] text-ink-muted">Simulate STT/TTS processing</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    disabled={!meetingSessionId}
+                    className="w-full border-hairline/80 mt-2 bg-surface-1 hover:bg-surface-3 transition-colors"
+                    onClick={async () => {
+                      if (!meetingSessionId) return;
+                      try {
+                        await billingService.consumeCredits(workspaceId, 25, "Translation", meetingSessionId);
+                        toast.success("Simulated 25 cr deduction for Translation");
+                      } catch (err: any) {
+                        toast.error("Simulation failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+                      }
+                    }}
+                  >
+                    Deduct 25 cr
+                  </Button>
+                </div>
+
+                <div className="border border-hairline/50 bg-surface-2/60 p-4 rounded-lg flex flex-col items-center text-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                    <Robot className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold">Meeting Summary</h4>
+                    <p className="text-[11px] text-ink-muted">Simulate AI generation</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    disabled={!meetingSessionId}
+                    className="w-full border-hairline/80 mt-2 bg-surface-1 hover:bg-surface-3 transition-colors"
+                    onClick={async () => {
+                      if (!meetingSessionId) return;
+                      try {
+                        await billingService.consumeCredits(workspaceId, 50, "Summary", meetingSessionId);
+                        toast.success("Simulated 50 cr deduction for Summary");
+                      } catch (err: any) {
+                        toast.error("Simulation failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+                      }
+                    }}
+                  >
+                    Deduct 50 cr
+                  </Button>
+                </div>
+
+                <div className="border border-hairline/50 bg-surface-2/60 p-4 rounded-lg flex flex-col items-center text-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                    <Users className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold">Voice Cloning</h4>
+                    <p className="text-[11px] text-ink-muted">Simulate premium voice</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    disabled={!meetingSessionId}
+                    className="w-full border-hairline/80 mt-2 bg-surface-1 hover:bg-surface-3 transition-colors"
+                    onClick={async () => {
+                      if (!meetingSessionId) return;
+                      try {
+                        await billingService.consumeCredits(workspaceId, 125, "Voice_Cloning", meetingSessionId);
+                        toast.success("Simulated 125 cr deduction for Voice Cloning");
+                      } catch (err: any) {
+                        toast.error("Simulation failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+                      }
+                    }}
+                  >
+                    Deduct 125 cr
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

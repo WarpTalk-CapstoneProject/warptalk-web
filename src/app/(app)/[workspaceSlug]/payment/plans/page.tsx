@@ -3,7 +3,7 @@
 import { CheckCircle, Lightning, ArrowRight, ArrowUp, ArrowDown, X, Lock, CaretLeft } from "@phosphor-icons/react";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -15,48 +15,9 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { paymentService } from "@/services/payment.service";
 import { billingService } from "@/services/billing.service";
 import type { SubscriptionDto } from "@/types/billing";
+import { createHubConnection } from "@/lib/signalr";
 
-const PLAN_TIERS = ["startup", "enterprise"] as const;
-type PlanSlug = typeof PLAN_TIERS[number];
-
-const plans = [
-  {
-    name: "Startup",
-    slug: "startup" as PlanSlug,
-    monthlyPrice: "190.000đ",
-    yearlyPrice: "150.000đ",
-    monthlyTotal: 190000,
-    yearlyTotal: 1800000,
-    interval: "/month",
-    description: "For growing global teams that need reliable AI summaries and history.",
-    features: [
-      "30,000 credits per cycle",
-      "120 minutes of Voice Cloning",
-      "Automatic standard fallback",
-      "Web access for up to 15 members",
-      "Standard email support",
-    ],
-    featured: true,
-  },
-  {
-    name: "Enterprise",
-    slug: "enterprise" as PlanSlug,
-    monthlyPrice: "490.000đ",
-    yearlyPrice: "400.000đ",
-    monthlyTotal: 490000,
-    yearlyTotal: 4800000,
-    interval: "/month",
-    description: "For operators using voice cloning and native-feeling interpretation at scale.",
-    features: [
-      "100,000 credits per cycle",
-      "Unlimited Voice Cloning",
-      "Workspace Glossary & AI Customization",
-      "Advanced ACL permission controls",
-      "Stripe-backed top-up support",
-    ],
-    featured: false,
-  },
-];
+// We fetch plans dynamically now.
 
 function getTopUpRate(credits: number) {
   if (credits >= 50000) return { rate: 8, discount: 20 };
@@ -85,6 +46,14 @@ export default function WorkspacePlansPage() {
   const [subscription, setSubscription] = useState<SubscriptionDto | null>(null);
   const [loadingSub, setLoadingSub] = useState(true);
 
+  // Fetch plans from backend
+  const { data: plansData = [], isLoading: loadingPlans } = useQuery({
+    queryKey: ["plans"],
+    queryFn: () => billingService.getPlans(),
+  });
+
+  const activePlans = plansData.filter((p: any) => p.isActive !== false).sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+
   useEffect(() => {
     if (!isAuthenticated || !user) router.push("/login");
   }, [isAuthenticated, user, router]);
@@ -98,12 +67,36 @@ export default function WorkspacePlansPage() {
       .finally(() => setLoadingSub(false));
   }, [activeWorkspaceId]);
 
-  const activePlanSlug = subscription?.planName?.toLowerCase() as PlanSlug | undefined;
-  const activePlanTierIndex = activePlanSlug ? PLAN_TIERS.indexOf(activePlanSlug) : -1;
+  // SignalR for real-time plan updates
+  useEffect(() => {
+    const connection = createHubConnection("/hubs/notification");
 
-  const pendingPlanSlugIndex = pendingPlanSlug ? PLAN_TIERS.indexOf(pendingPlanSlug as PlanSlug) : -1;
-  const isUpgrade = activePlanTierIndex === -1 || pendingPlanSlugIndex > activePlanTierIndex;
-  const isDowngrade = activePlanTierIndex !== -1 && pendingPlanSlugIndex < activePlanTierIndex;
+    connection.on("NewNotification", (notification) => {
+      if (notification?.type === "billing.plan_changed") {
+        console.log("Real-time plan update received:", notification.content);
+        toast.info(notification.content, { duration: 6000 });
+        queryClient.invalidateQueries({ queryKey: ["plans"] });
+      }
+    });
+
+    let isMounted = true;
+    connection.start().catch((err) => {
+      if (!isMounted) return;
+      if (err?.message?.includes("stop() was called")) return;
+    });
+
+    return () => {
+      isMounted = false;
+      connection.stop();
+    };
+  }, [queryClient]);
+
+  const activePlanId = subscription?.planId;
+  const activePlanTierIndex = activePlanId ? activePlans.findIndex((p: any) => p.id === activePlanId) : -1;
+
+  const pendingPlanTierIndex = pendingPlanSlug ? activePlans.findIndex((p: any) => p.slug === pendingPlanSlug) : -1;
+  const isUpgrade = activePlanTierIndex === -1 || (pendingPlanTierIndex > -1 && pendingPlanTierIndex > activePlanTierIndex);
+  const isDowngrade = activePlanTierIndex !== -1 && pendingPlanTierIndex > -1 && pendingPlanTierIndex < activePlanTierIndex;
 
   const confirmChangePlan = async () => {
     if (!pendingPlanSlug || !activeWorkspaceId) return;
@@ -178,10 +171,10 @@ export default function WorkspacePlansPage() {
     }
   };
 
-  const getPlanAction = (plan: typeof plans[number]) => {
-    if (loadingSub) return { label: "Loading...", variant: "loading", disabled: true };
-    const planTierIndex = PLAN_TIERS.indexOf(plan.slug);
-    const isCurrent = activePlanSlug === plan.slug && subscription?.status === "active";
+  const getPlanAction = (plan: any) => {
+    if (loadingSub || loadingPlans) return { label: "Loading...", variant: "loading", disabled: true };
+    const planTierIndex = activePlans.findIndex((p: any) => p.id === plan.id);
+    const isCurrent = activePlanId === plan.id;
     if (isCurrent) return { label: "Current Plan", variant: "current", disabled: true };
     if (activePlanTierIndex === -1) return { label: "Get Started", variant: "get-started", disabled: false };
     if (planTierIndex > activePlanTierIndex) return { label: "Upgrade", variant: "upgrade", disabled: false };
@@ -218,19 +211,19 @@ export default function WorkspacePlansPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col items-center pb-12 pt-4 px-4 w-full max-w-6xl mx-auto">
+    <div className="flex min-h-full flex-col pb-12 pt-4 px-4 lg:px-8 w-full max-w-[1600px] mx-auto">
       {/* Back to Billing Link */}
-      <div className="w-full flex justify-start mb-6">
+      <div className="w-full flex justify-start mb-4">
         <Link 
           href={`/${slug}/billing`}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition duration-150 cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink transition duration-150 cursor-pointer"
         >
-          <CaretLeft className="h-3.5 w-3.5" />
+          <CaretLeft className="h-4 w-4" />
           <span>Back to Billing</span>
         </Link>
       </div>
 
-      <div className="text-center max-w-2xl mb-12">
+      <div className="text-center max-w-2xl mx-auto mb-10 mt-2">
         <Badge variant="secondary" className="mb-4 bg-surface-2 text-primary border border-hairline hover:bg-surface-2">Pricing &amp; Subscriptions</Badge>
         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink mb-4">Choose the right plan for your team</h1>
         <p className="text-lg text-muted-foreground">
@@ -248,171 +241,275 @@ export default function WorkspacePlansPage() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl px-4">
-        {plans.map((plan) => {
-          const action = getPlanAction(plan);
-          const isCurrent = action.variant === "current";
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 w-full max-w-[1400px] mx-auto">
+        {loadingPlans ? (
+          <div className="col-span-1 md:col-span-3 flex w-full items-center justify-center p-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          activePlans.map((plan: any, index: number) => {
+            const action = getPlanAction(plan);
+            const isCurrent = action.variant === "current";
+            const isFeatured = index === 0; // Highlight the first plan or based on some custom logic
+            
+            const monthlyPrice = plan.price;
+            let yearlyPrice = plan.price;
+            if (plan.billingCycle?.toLowerCase() === "yearly") {
+               // Assuming the plan's price is already the yearly price, but we display monthly equivalent
+               yearlyPrice = plan.price;
+            } else {
+               // Calculate yearly discount equivalent
+               yearlyPrice = Math.round(plan.price * 0.79); // 21% off
+            }
 
-          return (
-            <Card
-              key={plan.name}
-              className={`relative flex flex-col !overflow-visible rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${
-                isCurrent
-                  ? "border-2 border-primary bg-surface-2 shadow-[0_8px_30px_rgb(94,106,210,0.15)]"
-                  : plan.featured
-                  ? "border-primary/50 bg-surface-2 shadow-[0_8px_30px_rgb(94,106,210,0.08)]"
-                  : "border-hairline bg-surface-1"
-              }`}
-            >
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-2">
-                {isCurrent && (
-                  <Badge className="bg-primary hover:bg-primary text-primary-foreground border-none shadow-sm rounded-full px-3 py-0.5">
-                    ✓ Current Plan
-                  </Badge>
-                )}
-                {!isCurrent && plan.featured && (
-                  <Badge className="bg-surface-3 hover:bg-surface-3 text-ink border border-hairline shadow-sm rounded-full px-3 py-0.5">
-                    Most Popular
-                  </Badge>
-                )}
-              </div>
+            const displayPrice = billingInterval === "yearly" ? yearlyPrice : monthlyPrice;
+            const displayTotal = billingInterval === "yearly" ? (monthlyPrice * 12 * 0.79) : monthlyPrice;
 
-              <CardHeader className="p-6 pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-medium">{plan.name}</CardTitle>
-                  {isCurrent && subscription?.status === "active" && (
-                    <Badge className="bg-semantic-success/10 text-semantic-success border border-semantic-success/30 text-xs hover:bg-semantic-success/10">Active</Badge>
+            let parsedFeatures: string[] = [];
+            try {
+              parsedFeatures = JSON.parse(plan.features || "[]");
+              if (!Array.isArray(parsedFeatures)) {
+                parsedFeatures = [];
+              }
+            } catch (e) {
+              parsedFeatures = [];
+            }
+
+            return (
+              <Card
+                key={plan.id}
+                className={`relative flex flex-col h-full overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg w-full ${
+                  isCurrent
+                    ? "border-2 border-primary bg-surface-1 shadow-md ring-4 ring-primary/10"
+                    : isFeatured
+                    ? "border-2 border-primary/30 bg-surface-1 shadow-md"
+                    : "border border-hairline bg-surface-1 hover:border-ink-muted/30"
+                }`}
+              >
+                {/* Optional Top Accent Bar for highlighted cards */}
+                {(isCurrent || isFeatured) && (
+                  <div className={`h-1.5 w-full absolute top-0 left-0 ${isCurrent ? 'bg-primary' : 'bg-primary/40'}`}></div>
+                )}
+
+                <CardHeader className="p-6 md:p-8 pb-6 flex flex-col items-center text-center">
+                  <div className="flex flex-col items-center gap-2 w-full">
+                    <div className="flex items-center justify-center flex-wrap gap-2 mb-2">
+                      {isCurrent && (
+                        <Badge className="bg-primary text-primary-foreground border-none rounded-full px-3 py-1 text-[11px] font-bold tracking-wider uppercase shadow-sm">
+                          Current Plan
+                        </Badge>
+                      )}
+                      {!isCurrent && isFeatured && (
+                        <Badge className="bg-surface-2 text-ink border border-hairline rounded-full px-3 py-1 text-[11px] font-bold tracking-wider uppercase">
+                          Most Popular
+                        </Badge>
+                      )}
+                      
+                      {isCurrent && subscription?.status === "active" && (
+                        <Badge className="bg-semantic-success/10 text-semantic-success border-semantic-success/30 text-[11px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full whitespace-nowrap">Active</Badge>
+                      )}
+                      {isCurrent && subscription?.status === "cancelled" && (
+                        <Badge className="bg-warning/10 text-warning border-warning/30 text-[11px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full whitespace-nowrap">Cancelling</Badge>
+                      )}
+                    </div>
+                    
+                    <CardTitle className="text-3xl font-bold tracking-tight text-ink">{plan.name}</CardTitle>
+                  </div>
+                  
+                  <p className="text-sm text-muted-foreground mt-3 mb-1 leading-relaxed max-w-[90%]">{plan.description}</p>
+                  
+                  <div className="mt-4 flex flex-col justify-start items-center w-full">
+                    <div className="flex items-baseline justify-center gap-1.5 whitespace-nowrap">
+                      <span className="text-[2rem] lg:text-4xl font-bold tracking-tight text-ink leading-none">{displayPrice > 0 ? `${displayPrice.toLocaleString("vi-VN")}đ` : "Free"}</span>
+                      <span className="text-sm font-medium text-muted-foreground">/month</span>
+                    </div>
+                    {billingInterval === "yearly" && (
+                      <p className="text-sm font-medium text-semantic-success mt-1.5">
+                        Billed yearly: {displayTotal.toLocaleString("vi-VN")}đ (Save 21%)
+                      </p>
+                    )}
+                    {isCurrent && subscription?.currentPeriodEnd && (
+                      <p className="text-sm font-medium text-ink-muted mt-1.5">
+                        Renews on {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                      </p>
+                    )}
+                  </div>
+                </CardHeader>
+                
+                <hr className="border-hairline mx-6 opacity-60" />
+
+                <CardContent className="flex-1 p-6 pt-5">
+                  <ul className="space-y-3.5">
+                    {parsedFeatures.map((feature: string, i: number) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
+                        <span className="text-sm font-medium text-ink/80">{feature}</span>
+                      </li>
+                    ))}
+                    {!parsedFeatures.length && (
+                      <>
+                        <li className="flex items-start gap-3">
+                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
+                          <span className="text-sm font-medium text-ink/80">{plan.creditsPerCycle?.toLocaleString()} credits per cycle</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
+                          <span className="text-sm font-medium text-ink/80">{plan.voiceCloneEnabled ? (plan.voiceCloneLimitMins ? `${plan.voiceCloneLimitMins} minutes of Voice Cloning` : "Unlimited Voice Cloning") : "No Voice Cloning"}</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
+                          <span className="text-sm font-medium text-ink/80">Web access for up to {plan.maxParticipants} members</span>
+                        </li>
+                        {plan.allowGlossary && (
+                          <li className="flex items-start gap-3">
+                            <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
+                            <span className="text-sm font-medium text-ink/80">Workspace Glossary included</span>
+                          </li>
+                        )}
+                        {plan.allowAcl && (
+                          <li className="flex items-start gap-3">
+                            <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
+                            <span className="text-sm font-medium text-ink/80">Advanced ACL permission controls</span>
+                          </li>
+                        )}
+                      </>
+                    )}
+                  </ul>
+                </CardContent>
+
+                <CardFooter className="p-8 pt-0 flex flex-col gap-2">
+                  {!isCurrent && (
+                    <button
+                      type="button"
+                      disabled={action.disabled || isProcessing}
+                      onClick={() => {
+                        handleCheckout(displayTotal, "Subscription", plan.slug, billingInterval);
+                      }}
+                      className={`inline-flex items-center justify-center gap-2 w-full rounded-xl h-12 text-[15px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                        action.variant === "upgrade" || action.variant === "get-started"
+                          ? "bg-primary hover:bg-primary-hover text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                          : "bg-surface-1 hover:bg-surface-2 text-ink border-2 border-hairline hover:border-ink/20"
+                      }`}
+                    >
+                      {action.variant === "upgrade" && <ArrowUp className="h-4 w-4" />}
+                      {action.variant === "downgrade" && <ArrowDown className="h-4 w-4" />}
+                      {isProcessing ? "Processing..." : action.label}
+                    </button>
                   )}
-                </div>
-                <p className="text-sm text-muted-foreground mt-2 min-h-[40px]">{plan.description}</p>
-                <div className="mt-4 flex items-end gap-1">
-                  <span className="text-4xl font-semibold tracking-tight">{billingInterval === "yearly" ? plan.yearlyPrice : plan.monthlyPrice}</span>
-                  {plan.interval && <span className="text-sm text-muted-foreground mb-1">{plan.interval}</span>}
-                </div>
-                {billingInterval === "yearly" && plan.interval && (
-                  <p className="text-xs text-semantic-success mt-1">
-                    Billed yearly: {plan.name === "Startup" ? "1.800.000đ" : "4.800.000đ"} ({plan.name === "Startup" ? "Save 21%" : "Save 18%"})
-                  </p>
-                )}
-                {isCurrent && subscription?.currentPeriodEnd && (
-                  <p className="text-xs text-ink-muted mt-2">
-                    Renews on {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
-                  </p>
-                )}
-              </CardHeader>
-
-              <CardContent className="flex-1 p-6 pt-4">
-                <ul className="space-y-3">
-                  {plan.features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-3">
-                      <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
-                      <span className="text-sm text-ink">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-
-              <CardFooter className="p-6 pt-0 flex flex-col gap-2">
-                {!isCurrent && (
-                  <button
-                    type="button"
-                    disabled={action.disabled || isProcessing}
-                    onClick={() => {
-                      const amount = billingInterval === "yearly" ? plan.yearlyTotal : plan.monthlyTotal;
-                      handleCheckout(amount, "Subscription", plan.slug, billingInterval);
-                    }}
-                    className={`inline-flex items-center justify-center gap-2 w-full rounded-md h-10 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                      action.variant === "upgrade" || action.variant === "get-started"
-                        ? "bg-primary hover:bg-primary-hover text-primary-foreground"
-                        : "bg-surface-2 hover:bg-surface-3 text-ink border border-hairline"
-                    }`}
-                  >
-                    {action.variant === "upgrade" && <ArrowUp className="h-4 w-4" />}
-                    {action.variant === "downgrade" && <ArrowDown className="h-4 w-4" />}
-                    {isProcessing ? "Processing..." : action.label}
-                  </button>
-                )}
-                {isCurrent && (
-                  <button
-                    type="button"
-                    disabled={isCancelling}
-                    onClick={() => setShowCancelDialog(true)}
-                    className="inline-flex items-center justify-center gap-2 w-full rounded-md h-10 text-sm font-medium transition-colors border border-hairline bg-surface-1 hover:bg-red-500/5 hover:border-red-400/40 hover:text-red-400 text-ink-muted cursor-pointer disabled:opacity-50"
-                  >
-                    <X className="h-4 w-4" />
-                    Cancel Subscription
-                  </button>
-                )}
-              </CardFooter>
-            </Card>
-          );
-        })}
+                  {isCurrent && subscription?.status === "active" && (
+                    <button
+                      type="button"
+                      disabled={isCancelling}
+                      onClick={() => setShowCancelDialog(true)}
+                      className="inline-flex items-center justify-center gap-2 w-full rounded-xl h-12 text-[15px] font-semibold transition-all border-2 border-hairline bg-surface-1 hover:bg-red-500/5 hover:border-red-400/40 hover:text-red-400 text-ink-muted cursor-pointer disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" />
+                      Cancel Subscription
+                    </button>
+                  )}
+                  {isCurrent && subscription?.status === "cancelled" && (
+                    <button
+                      type="button"
+                      disabled
+                      className="inline-flex items-center justify-center gap-2 w-full rounded-xl h-12 text-[15px] font-semibold transition-all border-2 border-hairline bg-surface-1 text-ink-muted opacity-50 cursor-not-allowed"
+                    >
+                      <X className="h-4 w-4" />
+                      Cancelled (Ends soon)
+                    </button>
+                  )}
+                </CardFooter>
+              </Card>
+            );
+          })
+        )}
       </div>
 
-      <div className="mt-16 w-full max-w-4xl px-4 pb-4">
+      <div className="mt-20 w-full max-w-3xl mx-auto px-4 pb-12">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <Lightning className="h-5 w-5 text-primary" weight="fill" />
-            <h2 className="text-2xl font-semibold tracking-tight text-ink">Need more credits?</h2>
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <div className="flex size-8 rounded-full bg-primary/10 items-center justify-center">
+              <Lightning className="h-4 w-4 text-primary" weight="fill" />
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight text-ink">Need more credits?</h2>
           </div>
-          <p className="text-sm text-muted-foreground">Enter the number of credits you want. Volume discounts apply automatically.</p>
+          <p className="text-base text-muted-foreground">Enter the number of credits you want. Volume discounts apply automatically.</p>
         </div>
-        <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
-          <CardContent className="p-6">
-            <div className="flex flex-col gap-6">
+
+        <Card className="rounded-2xl border-2 border-hairline bg-surface-1 shadow-md overflow-hidden">
+          <CardContent className="p-8">
+            <div className="flex flex-col gap-8">
               <div>
-                <label className="text-sm font-medium text-ink mb-2 block">Credits amount</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number" min="1" step="1000"
-                    value={topUpCredits || ""}
-                    onChange={(e) => setTopUpCredits(Math.max(0, parseInt(e.target.value) || 0))}
-                    placeholder="e.g. 10000"
-                    className="flex-1 h-11 rounded-md border border-hairline bg-surface-2 px-4 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-primary-focus focus:border-transparent"
-                  />
-                  <span className="text-sm text-ink-muted shrink-0">credits</span>
+                <label className="text-base font-semibold text-ink mb-3 block">How many credits do you need?</label>
+                <div className="flex items-center gap-4">
+                  <div className="relative flex-1">
+                    <input
+                      type="number" min="1" step="1000"
+                      value={topUpCredits || ""}
+                      onChange={(e) => setTopUpCredits(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="e.g. 10000"
+                      className="w-full h-14 rounded-xl border-2 border-hairline bg-surface-1 px-5 text-xl font-medium text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
+                    />
+                  </div>
+                  <span className="text-base font-medium text-ink-muted shrink-0">credits</span>
                 </div>
-                <div className="flex gap-2 mt-3 flex-wrap">
+                
+                <div className="flex gap-2.5 mt-4 flex-wrap">
                   {[{ label: "10k", value: 10000 }, { label: "25k", value: 25000 }, { label: "50k", value: 50000 }, { label: "100k", value: 100000 }].map((preset) => (
                     <button key={preset.value} type="button" onClick={() => setTopUpCredits(preset.value)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${topUpCredits === preset.value ? "bg-primary text-primary-foreground border-primary" : "bg-surface-2 text-ink-muted border-hairline hover:border-primary/50 hover:text-ink"}`}>
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all cursor-pointer ${topUpCredits === preset.value ? "bg-primary/10 text-primary border-primary shadow-sm" : "bg-surface-1 text-ink-muted border-hairline hover:border-ink-muted/30 hover:text-ink"}`}>
                       {preset.label} credits
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* Volume Discounts */}
+              <div className="bg-surface-2/50 rounded-xl p-5 border border-hairline">
+                <p className="text-sm font-semibold text-ink mb-3">Volume discount tiers:</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits > 0 && topUpCredits < 10000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}>
+                    <span className={`text-xs font-bold ${topUpCredits > 0 && topUpCredits < 10000 ? "text-primary" : "text-ink-muted"}`}>&lt; 10k</span>
+                    <span className="text-xs font-medium text-ink mt-0.5">10đ/cr</span>
+                  </div>
+                  <div className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 10000 && topUpCredits < 25000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}>
+                    <span className={`text-xs font-bold ${topUpCredits >= 10000 && topUpCredits < 25000 ? "text-primary" : "text-ink-muted"}`}>10k+</span>
+                    <span className="text-xs font-medium text-ink mt-0.5">9đ/cr <span className="text-semantic-success text-[10px] ml-0.5">(10%)</span></span>
+                  </div>
+                  <div className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 25000 && topUpCredits < 50000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}>
+                    <span className={`text-xs font-bold ${topUpCredits >= 25000 && topUpCredits < 50000 ? "text-primary" : "text-ink-muted"}`}>25k+</span>
+                    <span className="text-xs font-medium text-ink mt-0.5">8.5đ/cr <span className="text-semantic-success text-[10px] ml-0.5">(15%)</span></span>
+                  </div>
+                  <div className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 50000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}>
+                    <span className={`text-xs font-bold ${topUpCredits >= 50000 ? "text-primary" : "text-ink-muted"}`}>50k+</span>
+                    <span className="text-xs font-medium text-ink mt-0.5">8đ/cr <span className="text-semantic-success text-[10px] ml-0.5">(20%)</span></span>
+                  </div>
+                </div>
+              </div>
+
               {topUpCredits > 0 && (
-                <div className="rounded-lg bg-surface-2 border border-hairline p-4 space-y-2.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink-muted">Rate</span>
+                <div className="rounded-xl bg-surface-2 border border-hairline p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-ink-muted">Rate applied</span>
                     <div className="flex items-center gap-2">
-                      {discount > 0 && <Badge className="bg-semantic-success/90 hover:bg-semantic-success/90 text-white border-none text-xs px-2 py-0">Save {discount}%</Badge>}
-                      <span className="font-medium text-ink">{rate} VND/credit</span>
+                      {discount > 0 && <Badge className="bg-semantic-success/20 hover:bg-semantic-success/20 text-semantic-success border-none text-xs px-2 py-0.5 rounded-full font-bold shadow-none">Save {discount}%</Badge>}
+                      <span className="text-sm font-semibold text-ink">{rate} VND / credit</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink-muted">Credits</span>
-                    <span className="font-medium text-ink">{topUpCredits.toLocaleString()} credits</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-ink-muted">Credits to add</span>
+                    <span className="text-sm font-semibold text-ink">{topUpCredits.toLocaleString()} credits</span>
                   </div>
-                  <div className="border-t border-hairline pt-2 flex items-center justify-between">
-                    <span className="font-medium text-ink">Total</span>
-                    <span className="text-xl font-semibold text-ink">{topUpTotal.toLocaleString("vi-VN")}đ</span>
+                  <div className="border-t border-hairline pt-3 mt-1 flex items-center justify-between">
+                    <span className="text-base font-bold text-ink">Total</span>
+                    <span className="text-2xl font-bold text-ink tracking-tight">{topUpTotal.toLocaleString("vi-VN")}đ</span>
                   </div>
                 </div>
               )}
-              <div className="text-xs text-ink-muted">
-                <p className="font-medium text-ink-subtle mb-1.5">Volume discount tiers:</p>
-                <div className="flex flex-wrap gap-4">
-                  <span className={topUpCredits > 0 && topUpCredits < 10000 ? "text-primary font-semibold" : ""}>&lt; 10k: 10 VND/credit</span>
-                  <span className={topUpCredits >= 10000 && topUpCredits < 25000 ? "text-primary font-semibold" : ""}>10k+: 9 VND/credit (10% off)</span>
-                  <span className={topUpCredits >= 25000 && topUpCredits < 50000 ? "text-primary font-semibold" : ""}>25k+: 8.5 VND/credit (15% off)</span>
-                  <span className={topUpCredits >= 50000 ? "text-primary font-semibold" : ""}>50k+: 8 VND/credit (20% off)</span>
-                </div>
-              </div>
+
               <button type="button" disabled={isProcessing || topUpCredits <= 0}
                 onClick={() => handleCheckout(topUpTotal, "CreditTopUp")}
-                className="inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus bg-primary hover:bg-primary-hover text-primary-foreground cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                {isProcessing ? "Processing..." : topUpCredits > 0 ? <><span>Top up {topUpCredits.toLocaleString()} credits</span><ArrowRight className="ml-2 h-4 w-4" /></> : "Enter credit amount above"}
+                className="inline-flex items-center justify-center w-full rounded-xl h-14 text-base font-semibold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 bg-primary hover:bg-primary-hover text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none">
+                {isProcessing ? "Processing..." : topUpCredits > 0 ? <><span>Complete Top Up of {topUpCredits.toLocaleString()} credits</span><ArrowRight className="ml-2 h-5 w-5" /></> : "Enter credit amount above"}
               </button>
             </div>
           </CardContent>

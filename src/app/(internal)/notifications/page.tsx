@@ -52,7 +52,7 @@ export default function AdminNotificationsPage() {
       <div className="flex items-center justify-between bg-surface-1 p-6 rounded-xl border border-hairline shadow-linear">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Link href="/internal/billing/plans">
+            <Link href="/billing/plans">
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -86,7 +86,7 @@ export default function AdminNotificationsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="type">Notification Type</Label>
-              <Select value={formState.type} onValueChange={(val) => setFormState({ ...formState, type: val })}>
+              <Select value={formState.type} onValueChange={(val) => setFormState({ ...formState, type: val || "SYSTEM" })}>
                 <SelectTrigger className="bg-surface-2 border-hairline focus:ring-primary-focus">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -101,7 +101,7 @@ export default function AdminNotificationsPage() {
             
             <div className="grid gap-2">
               <Label htmlFor="targetMode">Target Audience</Label>
-              <Select value={formState.targetMode} onValueChange={(val) => setFormState({ ...formState, targetMode: val })}>
+              <Select value={formState.targetMode} onValueChange={(val) => setFormState({ ...formState, targetMode: val || "BROADCAST" })}>
                 <SelectTrigger className="bg-surface-2 border-hairline focus:ring-primary-focus">
                   <SelectValue placeholder="Select audience" />
                 </SelectTrigger>

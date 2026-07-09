@@ -34,6 +34,7 @@ interface PlanFormState {
   allowGlossary: boolean;
   allowAcl: boolean;
   features: string;
+  featuresText: string;
   sortOrder: number;
   isActive: boolean;
 }
@@ -56,6 +57,7 @@ const initialFormState: PlanFormState = {
   allowGlossary: false,
   allowAcl: false,
   features: "[]",
+  featuresText: "",
   sortOrder: 0,
   isActive: true,
 };
@@ -139,6 +141,12 @@ export default function AdminPlansPage() {
       allowGlossary: plan.allowGlossary || false,
       allowAcl: plan.allowAcl || false,
       features: plan.features || "[]",
+      featuresText: (() => {
+        try {
+          const arr = JSON.parse(plan.features || "[]");
+          return Array.isArray(arr) ? arr.join("\n") : "";
+        } catch { return ""; }
+      })(),
       sortOrder: plan.sortOrder || 0,
       isActive: plan.isActive !== false,
     });
@@ -155,18 +163,18 @@ export default function AdminPlansPage() {
     if (formState.price < 0) { setErrorMsg("Price must be non-negative."); return; }
     if (formState.creditsPerCycle < 0) { setErrorMsg("Credits must be non-negative."); return; }
 
-    // Parse features to confirm it's valid JSON
-    try {
-      JSON.parse(formState.features);
-    } catch {
-      setErrorMsg("Features must be a valid JSON array string (e.g. [\"Feature 1\", \"Feature 2\"]).");
-      return;
-    }
+    // Convert lines to JSON array string
+    const lines = formState.featuresText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    const { featuresText, ...rest } = formState;
+    const payload = {
+      ...rest,
+      features: JSON.stringify(lines)
+    };
 
     if (editingPlanId) {
-      updateMutation.mutate({ id: editingPlanId, plan: formState });
+      updateMutation.mutate({ id: editingPlanId, plan: payload });
     } else {
-      createMutation.mutate(formState);
+      createMutation.mutate(payload);
     }
   };
 
@@ -191,7 +199,7 @@ export default function AdminPlansPage() {
       <div className="flex items-center justify-between bg-surface-1 p-6 rounded-xl border border-hairline shadow-linear">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Link href="/internal/billing">
+            <Link href="/billing">
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -263,8 +271,8 @@ export default function AdminPlansPage() {
                           Voice Clone: {plan.voiceCloneEnabled ? `${plan.voiceCloneLimitMins || "Unlimited"} mins` : "Disabled"}
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <CheckCircle2 className={`h-3.5 w-3.5 ${plan.allowGlossary ? "text-emerald-500" : "text-muted-foreground"}`} />
-                          Glossary Access: {plan.allowGlossary ? "Enabled" : "Disabled"}
+                          <CheckCircle2 className={`h-3.5 w-3.5 ${plan.glossaryEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
+                          Glossary Access: {plan.glossaryEnabled ? "Enabled" : "Disabled"}
                         </span>
                         <span className="flex items-center gap-1.5">
                           <CheckCircle2 className={`h-3.5 w-3.5 ${plan.allowAcl ? "text-emerald-500" : "text-muted-foreground"}`} />
@@ -303,7 +311,7 @@ export default function AdminPlansPage() {
 
       {/* Add / Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl bg-surface-1 border-hairline text-ink rounded-lg shadow-linear max-h-[90vh] overflow-y-auto">
+        <DialogContent style={{ maxWidth: '900px', width: '95vw' }} className="bg-surface-1 border-hairline text-ink rounded-lg shadow-linear max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -361,7 +369,7 @@ export default function AdminPlansPage() {
               <div className="grid gap-2">
                 <Label htmlFor="currency">Currency</Label>
                 <Select value={formState.currency} onValueChange={(val) => setFormState({ ...formState, currency: val || "" })}>
-                  <SelectTrigger className="bg-surface-2 border-hairline focus:ring-primary-focus">
+                  <SelectTrigger className="w-full bg-surface-2 border-hairline focus:ring-primary-focus">
                     <SelectValue placeholder="Select currency" />
                   </SelectTrigger>
                   <SelectContent className="bg-surface-1 border-hairline text-ink">
@@ -373,7 +381,7 @@ export default function AdminPlansPage() {
               <div className="grid gap-2">
                 <Label htmlFor="billingCycle">Billing Cycle</Label>
                 <Select value={formState.billingCycle} onValueChange={(val) => setFormState({ ...formState, billingCycle: val || "" })}>
-                  <SelectTrigger className="bg-surface-2 border-hairline focus:ring-primary-focus">
+                  <SelectTrigger className="w-full bg-surface-2 border-hairline focus:ring-primary-focus">
                     <SelectValue placeholder="Select cycle" />
                   </SelectTrigger>
                   <SelectContent className="bg-surface-1 border-hairline text-ink">
@@ -399,16 +407,13 @@ export default function AdminPlansPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="tier">Tier Level</Label>
-                <Select value={formState.tier} onValueChange={(val) => setFormState({ ...formState, tier: val || "" })}>
-                  <SelectTrigger className="bg-surface-2 border-hairline focus:ring-primary-focus">
-                    <SelectValue placeholder="Select tier" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-surface-1 border-hairline text-ink">
-                    <SelectItem value="Free">Free</SelectItem>
-                    <SelectItem value="Startup">Startup</SelectItem>
-                    <SelectItem value="Enterprise">Enterprise</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input
+                  id="tier"
+                  placeholder="e.g. Pro, Premium"
+                  value={formState.tier}
+                  onChange={(e) => setFormState({ ...formState, tier: e.target.value })}
+                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="maxParticipants">Max Participants</Label>
@@ -425,8 +430,15 @@ export default function AdminPlansPage() {
                 <Input
                   id="maxLanguages"
                   type="number"
+                  min={1}
+                  max={3}
                   value={formState.maxLanguages}
-                  onChange={(e) => setFormState({ ...formState, maxLanguages: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => {
+                    let val = parseInt(e.target.value) || 1;
+                    if (val > 3) val = 3;
+                    if (val < 1) val = 1;
+                    setFormState({ ...formState, maxLanguages: val });
+                  }}
                   className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
                 />
               </div>
@@ -512,13 +524,13 @@ export default function AdminPlansPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="features">Plan Highlights (JSON Array String)</Label>
+              <Label htmlFor="features">Plan Highlights (One per line)</Label>
               <Textarea
                 id="features"
-                rows={2}
-                placeholder='e.g. ["Up to 5 participants", "Realtime Translation", "Standard neural TTS"]'
-                value={formState.features}
-                onChange={(e) => setFormState({ ...formState, features: e.target.value })}
+                rows={4}
+                placeholder="e.g. Up to 5 participants&#10;Realtime Translation&#10;Standard neural TTS"
+                value={formState.featuresText}
+                onChange={(e) => setFormState({ ...formState, featuresText: e.target.value })}
                 className="bg-surface-2 border-hairline focus-visible:ring-primary-focus font-mono text-xs"
               />
             </div>

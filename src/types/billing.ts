@@ -24,6 +24,7 @@ export interface SubscriptionDto {
   cancelAtPeriodEnd: boolean;
   createdAt: string;
   cancelledAt: string | null;
+  workspaceName?: string | null;
 }
 
 export interface PlanDto {
@@ -31,11 +32,19 @@ export interface PlanDto {
   name: string;
   slug: string;
   description: string;
+  tier: string;
   price: number;
   currency: string;
   billingCycle: string;
-  creditAllowance: number;
+  creditsPerCycle: number;
+  features: string;
+  sortOrder: number;
   isActive: boolean;
+  maxParticipants: number;
+  maxLanguages: number;
+  allowGlossary: boolean;
+  advancedAcl: boolean;
+  voiceCloneLimitMins: number;
 }
 
 export interface CreditTransactionDto {
@@ -107,8 +116,8 @@ export interface UsageChartDto {
 
 export interface TopWorkspaceDto {
   workspaceId: string;
-  workspaceName: string;
-  consumedCredits: number;
+  workspaceName: string | null;
+  totalCreditsConsumed: number;
 }
 
 export interface InvoiceDto {
@@ -123,4 +132,33 @@ export interface InvoiceDto {
   invoicePdfUrl: string;
   hostedInvoiceUrl: string;
   createdAt: string;
+  workspaceName?: string | null;
+}
+
+export interface UsageAlertDto {
+  workspaceId: string;
+  workspaceName: string;
+  consumedCreditsIn24h: number;
+  reason: string;
+}
+
+export interface MonthlyUsageDto {
+  month: number;
+  monthName: string;
+  consumedCredits: number;
+  topUpCredits: number;
+}
+
+export interface UsageChartDto {
+  year: number;
+  monthlyData: MonthlyUsageDto[];
+}
+
+export interface ServiceRatesDto {
+  sttPerMinute: number;
+  translationPerMinute: number;
+  standardTtsPerMinute: number;
+  voiceClonePerMinute: number;
+  aiSummaryPerRequest: number;
+  aiChatPerRequest: number;
 }

@@ -18,7 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
-import type { UsageSummaryDto } from "@/types/billing";
+import { WorkspaceService } from "@/services/workspace.service";
+import type { UsageSummaryDto, InvoiceDto } from "@/types/billing";
 import { createHubConnection } from "@/lib/signalr";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
@@ -54,23 +55,30 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
 
     connection.on("NewNotification", (notification) => {
       console.log("Realtime billing update:", notification);
-      if (notification?.type === "billing.credits_updated") {
+      if (notification?.type?.startsWith("billing.")) {
         queryClient.invalidateQueries({ queryKey: ["billing"] });
       }
     });
 
     let isMounted = true;
 
-    connection.start().catch((err) => {
-      if (!isMounted) return;
-      if (err?.message?.includes("stop() was called")) return;
-    });
+    connection.start()
+      .then(() => {
+        if (isMounted && workspaceId) {
+          connection.invoke("JoinWorkspace", workspaceId)
+            .catch(err => console.error("Error joining workspace group:", err));
+        }
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        if (err?.message?.includes("stop() was called")) return;
+      });
 
     return () => {
       isMounted = false;
       connection.stop();
     };
-  }, [queryClient]);
+  }, [queryClient, workspaceId]);
 
   const { data: balance, isLoading: isBalanceLoading } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
@@ -79,9 +87,33 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
     retry: 1,
   });
 
+  const { data: workspaceInfo } = useQuery({
+    queryKey: ["workspace", workspaceId],
+    queryFn: () => WorkspaceService.getById(workspaceId),
+    enabled: !!workspaceId,
+    retry: 1,
+  });
+
   const { data: report, isLoading: isReportLoading } = useQuery({
     queryKey: ["billing", "report", workspaceId, CURRENT_YEAR, CURRENT_MONTH],
     queryFn: () => billingService.getBillingReport(workspaceId, CURRENT_MONTH, CURRENT_YEAR),
+    enabled: !!workspaceId,
+    retry: 1,
+  });
+
+  const [invoicesPageNumber, setInvoicesPageNumber] = useState(1);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDto | null>(null);
+
+  const { data: subscription, isLoading: isSubscriptionLoading } = useQuery({
+    queryKey: ["billing", "subscription", workspaceId],
+    queryFn: () => billingService.getActiveSubscription(workspaceId),
+    enabled: !!workspaceId,
+    retry: 1,
+  });
+
+  const { data: invoicesPage, isLoading: isInvoicesLoading } = useQuery({
+    queryKey: ["billing", "invoices", workspaceId, invoicesPageNumber],
+    queryFn: () => billingService.getWorkspaceInvoices(workspaceId, invoicesPageNumber, 20),
     enabled: !!workspaceId,
     retry: 1,
   });
@@ -164,6 +196,11 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
   const usagePercent = totalCredits > 0 ? Math.round((creditsUsed / totalCredits) * 100) : 0;
   
   const renewsDate = balance?.currentPeriodEnd ? format(new Date(balance.currentPeriodEnd), "MMM dd, yyyy") : "N/A";
+  
+  const displayPlanName = subscription?.planName || "Free Plan";
+  const displayPlanPrice = subscription
+    ? subscription.price.toLocaleString("vi-VN") + (subscription.price > 1000 ? "đ" : " VND")
+    : "0đ";
   
   const usageBreakdown = report?.usageBreakdown || [];
 
@@ -297,17 +334,24 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 pb-6">
+    <div className="flex min-h-full flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Link href="/internal/billing">
+          <div className="flex flex-wrap items-center gap-3 mb-1">
+            <Link href="/billing">
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-ink">
                 <CaretLeft className="h-4 w-4" />
               </Button>
             </Link>
             <Badge variant="outline" className="bg-surface-2 text-ink border-hairline">Workspace View</Badge>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">{workspaceId}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {workspaceInfo?.name || workspaceId}
+            </h1>
+            {workspaceInfo?.name && (
+              <span className="text-xs font-mono text-muted-foreground bg-surface-2 border border-hairline px-2 py-0.5 rounded select-all cursor-pointer" title="Click to select entire ID">
+                ID: {workspaceId}
+              </span>
+            )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">Manage credit balance, view history, and monitor AI usage for this workspace.</p>
         </div>
@@ -319,7 +363,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
         </div>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-1 max-w-sm">
+      <section className="grid gap-6 md:grid-cols-2">
         <BillingMetric 
           icon={Coins} 
           label="AI credits remaining" 
@@ -327,12 +371,46 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
           detail={isBalanceLoading ? "Loading..." : `${creditsUsed.toLocaleString()} of ${totalCredits.toLocaleString()} used. Renews ${renewsDate}`} 
           dark 
         />
+        
+        <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear">
+          <CardContent className="flex items-center justify-between gap-4 p-5 h-full">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-primary border border-hairline shrink-0">
+                <CreditCard className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Current subscription plan</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-bold tracking-tight">
+                    {isSubscriptionLoading ? "..." : displayPlanName}
+                  </p>
+                  {subscription && (
+                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none rounded-md text-[11px] px-1.5 py-0.5 font-semibold">
+                      Active
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {isSubscriptionLoading 
+                    ? "Loading plan details..." 
+                    : subscription 
+                      ? `${displayPlanPrice} / month` 
+                      : "No active plan."}
+                </p>
+              </div>
+            </div>
+            <span className="text-xs text-muted-foreground bg-surface-2 border border-hairline px-2.5 py-1 rounded-md font-medium select-none">
+              View Only
+            </span>
+          </CardContent>
+        </Card>
       </section>
 
       <Tabs defaultValue="overview" className="w-full mt-2">
         <TabsList className="bg-surface-2 p-1 rounded-lg">
           <TabsTrigger value="overview" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Overview & Usage</TabsTrigger>
           <TabsTrigger value="history" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Transaction History</TabsTrigger>
+          <TabsTrigger value="invoices" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Billing History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
@@ -592,7 +670,287 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="invoices" className="mt-6 outline-none">
+          <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear">
+            <CardHeader className="pb-4 border-b border-hairline px-5 pt-5">
+              <CardTitle className="text-base font-semibold">Billing History</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-surface-2">
+                    <TableRow className="border-hairline hover:bg-transparent">
+                      <TableHead className="w-[60px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-5 py-2.5">No.</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Invoice ID</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Date</TableHead>
+                      <TableHead className="text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Amount</TableHead>
+                      <TableHead className="text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pr-5 py-2.5">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-hairline">
+                    {isInvoicesLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">
+                          <Spinner className="h-4 w-4 animate-spin inline mr-2 text-primary" />
+                          Loading invoices...
+                        </TableCell>
+                      </TableRow>
+                    ) : !invoicesPage?.items?.length ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">No invoices found.</TableCell>
+                      </TableRow>
+                    ) : (
+                      invoicesPage.items.map((invoice: any, index: number) => {
+                        const rowIndex = (invoicesPageNumber - 1) * 20 + index + 1;
+                        return (
+                          <TableRow key={invoice.id} className="border-hairline hover:bg-surface-2/20">
+                            <TableCell className="font-mono text-xs text-muted-foreground pl-5 py-3">
+                              {rowIndex}
+                            </TableCell>
+                            <TableCell className="text-xs font-mono text-ink py-3">
+                              {invoice.stripeInvoiceId ? (invoice.stripeInvoiceId.startsWith("in_") ? `INV-${invoice.stripeInvoiceId.substring(invoice.stripeInvoiceId.length - 8).toUpperCase()}` : invoice.stripeInvoiceId) : ""}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground py-3">
+                              {format(new Date(invoice.createdAt), "MMM dd, yyyy HH:mm")}
+                            </TableCell>
+                            <TableCell className="text-right text-xs font-semibold text-ink py-3">
+                              {invoice.amount.toLocaleString("vi-VN")}{invoice.currency === "vnd" ? "đ" : ` ${invoice.currency.toUpperCase()}`}
+                            </TableCell>
+                            <TableCell className="text-right text-xs pr-5 py-3 space-x-3">
+                              {invoice.hostedInvoiceUrl && invoice.hostedInvoiceUrl.startsWith("http") ? (
+                                <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">
+                                  View Stripe Receipt
+                                </a>
+                              ) : (
+                                <button 
+                                  onClick={() => setSelectedInvoice(invoice)}
+                                  className="text-primary hover:underline font-semibold cursor-pointer bg-transparent border-none p-0"
+                                >
+                                  View Details
+                                </button>
+                              )}
+                              {invoice.invoicePdfUrl && invoice.invoicePdfUrl.startsWith("http") && (
+                                <a href={invoice.invoicePdfUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">
+                                  Download PDF
+                                </a>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={!!selectedInvoice} onOpenChange={(open) => !open && setSelectedInvoice(null)}>
+        <DialogContent id="invoice-print-area" className="sm:max-w-[420px] border-hairline bg-surface-1 shadow-lg rounded-xl overflow-hidden p-0 print:hidden">
+          <div className="bg-gradient-to-br from-primary/10 via-canvas to-canvas px-6 pt-6 pb-4 text-center border-b border-hairline/30 relative">
+            <div className="absolute top-4 right-4 text-[9px] uppercase font-mono tracking-widest text-ink-muted no-print">Receipt</div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-white mx-auto mb-2 shadow-md shadow-emerald-500/25">
+              <span className="text-lg font-bold">✓</span>
+            </div>
+            <h3 className="text-base font-extrabold text-ink tracking-tight">Payment Successful</h3>
+            <p className="text-[11px] text-ink-muted mt-0.5">
+              Thank you for your subscription payment
+            </p>
+          </div>
+          
+          <div className="px-6 py-5 space-y-4">
+            {selectedInvoice && (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-ink-muted">Invoice Number</span>
+                  <span className="font-mono font-bold text-ink uppercase tracking-wider">
+                    {selectedInvoice.stripeInvoiceId.startsWith("in_") ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}` : selectedInvoice.stripeInvoiceId}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-ink-muted">Date & Time</span>
+                  <span className="text-ink font-semibold">{format(new Date(selectedInvoice.createdAt), "MMMM dd, yyyy HH:mm")}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-ink-muted">Workspace ID</span>
+                  <span className="text-ink font-mono font-semibold">{selectedInvoice.workspaceId}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-ink-muted">Payment Method</span>
+                  <span className="text-ink font-semibold">Stripe Gateway</span>
+                </div>
+
+                <div className="border-t border-dashed border-hairline/60 my-4 pt-4 flex justify-between items-center">
+                  <div>
+                    <span className="text-xs text-ink-muted font-medium block">Amount Paid</span>
+                    <span className="text-[9px] text-emerald-600 font-bold bg-emerald-100 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded uppercase mt-0.5 inline-block">Status: Paid</span>
+                  </div>
+                  <span className="text-lg font-extrabold text-ink tracking-tight">
+                    {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="bg-surface-2/60 px-6 py-4 border-t border-hairline/25 flex gap-3 no-print">
+            <button 
+              onClick={() => {
+                window.print();
+              }}
+              className="flex-1 inline-flex h-9 items-center justify-center rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 px-3 text-xs font-semibold text-ink cursor-pointer transition duration-150"
+            >
+              Print Receipt
+            </button>
+            <button 
+              onClick={() => setSelectedInvoice(null)}
+              className="flex-1 inline-flex h-9 items-center justify-center rounded-md bg-primary hover:bg-primary-hover px-3 text-xs font-semibold text-white cursor-pointer transition duration-150"
+            >
+              Close
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Official Print-Only Invoice Sheet */}
+      <div id="official-invoice-print-sheet" className="hidden print:block p-10 bg-white text-black font-sans text-xs w-full max-w-[800px] mx-auto">
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden !important;
+            }
+            #official-invoice-print-sheet, #official-invoice-print-sheet * {
+              visibility: visible !important;
+            }
+            #official-invoice-print-sheet {
+              display: block !important;
+              position: fixed !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              height: 100% !important;
+              background: white !important;
+              color: black !important;
+              padding: 40px !important;
+              margin: 0 !important;
+              box-sizing: border-box !important;
+              z-index: 999999 !important;
+            }
+            @page {
+              size: A4;
+              margin: 0;
+            }
+          }
+        `}</style>
+        
+        {/* Header */}
+        <div className="flex justify-between items-start border-b-2 border-gray-300 pb-6">
+          <div>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">WarpTalk</h1>
+            <p className="text-[10px] text-gray-500 mt-1">AI-Powered Translation Platform</p>
+          </div>
+          <div className="text-right">
+            <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Official Receipt</h2>
+            <p className="text-xs font-mono font-bold text-gray-700 mt-1.5">
+              No: {selectedInvoice && (selectedInvoice.stripeInvoiceId.startsWith("in_") ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}` : selectedInvoice.stripeInvoiceId)}
+            </p>
+            <p className="text-[10px] text-gray-500 mt-1">Date: {selectedInvoice && format(new Date(selectedInvoice.createdAt), "MMMM dd, yyyy")}</p>
+          </div>
+        </div>
+
+        {/* Company & Client Info */}
+        <div className="grid grid-cols-2 gap-10 my-8">
+          <div>
+            <h3 className="font-bold text-gray-500 uppercase text-[9px] tracking-wider mb-2">From</h3>
+            <p className="font-bold text-gray-900 text-sm">WarpTalk Global Inc.</p>
+            <p className="text-gray-600 mt-1">123 AI Boulevard, Tech District</p>
+            <p className="text-gray-600">Email: billing@warptalk.com</p>
+            <p className="text-gray-600">Website: warptalk.com</p>
+          </div>
+          <div>
+            <h3 className="font-bold text-gray-500 uppercase text-[9px] tracking-wider mb-2">To</h3>
+            <p className="font-bold text-gray-900 text-xs font-mono mt-1">Workspace ID: {selectedInvoice?.workspaceId}</p>
+            <p className="text-gray-600 mt-1">Status: <span className="text-emerald-600 font-extrabold uppercase">Paid</span></p>
+            <p className="text-gray-600">Payment Gateway: Stripe</p>
+          </div>
+        </div>
+
+        {/* Itemized Table */}
+        <table className="w-full text-left border-collapse my-8">
+          <thead>
+            <tr className="border-b-2 border-gray-800 text-[9px] uppercase font-bold text-gray-600 bg-gray-50">
+              <th className="py-3 px-3">Description</th>
+              <th className="py-3 px-3 text-center w-[80px]">Qty</th>
+              <th className="py-3 px-3 text-right w-[150px]">Unit Price</th>
+              <th className="py-3 px-3 text-right pr-4 w-[150px]">Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {selectedInvoice && (
+              <tr>
+                <td className="py-4 px-3">
+                  <span className="font-bold text-gray-900 block text-xs">WarpTalk Startup Plan Subscription</span>
+                  <span className="text-[10px] text-gray-500 mt-1 block">High-quality real-time audio translation & meeting summaries (1 Month)</span>
+                </td>
+                <td className="py-4 px-3 text-center text-gray-700">1</td>
+                <td className="py-4 px-3 text-right text-gray-700 font-mono">
+                  {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                </td>
+                <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
+                  {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {/* Total Summary */}
+        <div className="flex justify-end my-8">
+          <div className="w-[320px] space-y-2.5 border-t border-gray-200 pt-4">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Subtotal:</span>
+              <span className="font-semibold text-gray-900 font-mono">
+                {selectedInvoice && selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Tax (0%):</span>
+              <span className="text-gray-900 font-mono">0đ</span>
+            </div>
+            <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
+              <span className="text-gray-900">Total Paid:</span>
+              <span className="text-gray-950 font-mono text-base">
+                {selectedInvoice && selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Signature Stamp Mock */}
+        <div className="mt-16 grid grid-cols-2 gap-8 text-center text-[10px]">
+          <div>
+            <p className="text-gray-500">Prepared by</p>
+            <p className="mt-8 font-bold text-gray-700">WarpTalk Billing System</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Customer Signature</p>
+            <div className="mt-8 h-10 w-32 border-b border-dashed border-gray-300 mx-auto"></div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-gray-200 pt-6 mt-16 text-center text-[9px] text-gray-400 space-y-1">
+          <p className="font-bold text-gray-500">Thank you for choosing WarpTalk!</p>
+          <p>This is a system-generated electronic receipt. No physical signature or stamp is required.</p>
+          <p>For support, please contact billing@warptalk.com or visit our Help Center.</p>
+        </div>
+      </div>
       
       {/* Export Preview Dialog */}
       <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>

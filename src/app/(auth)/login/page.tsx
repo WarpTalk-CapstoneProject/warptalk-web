@@ -111,7 +111,7 @@ function LoginForm() {
       
       const isAdmin = user.roles?.some((r: string) => r.toLowerCase() === "admin");
       if (isAdmin && callbackUrl === "/workspace/dashboard") {
-        router.replace("/internal/dashboard");
+        router.replace("/dashboard");
       } else {
         router.replace(callbackUrl);
       }

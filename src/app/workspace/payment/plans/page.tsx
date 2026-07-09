@@ -2,7 +2,7 @@
 
 import { CheckCircle, Lightning, ArrowRight, Crown, ArrowFatUp, ArrowFatDown, X, Warning } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -23,6 +23,8 @@ import { useAuthStore } from "@/stores/auth-store";
 import { paymentService } from "@/services/payment.service";
 import { billingService } from "@/services/billing.service";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
+import { getPlanDescription, buildFeatureList } from "@/lib/utils";
+import { createHubConnection } from "@/lib/signalr";
 
 // Static plan metadata (display info) — maps to backend plan slugs
 const PLAN_META: Record<string, {
@@ -84,6 +86,30 @@ export default function PaymentPlansPage() {
   });
 
   const workspaceId = user?.id ?? "";
+
+  // SignalR for real-time plan updates
+  useEffect(() => {
+    const connection = createHubConnection("/hubs/notification");
+
+    connection.on("NewNotification", (notification) => {
+      if (notification?.type === "billing.plan_changed") {
+        console.log("Real-time plan update received:", notification.content);
+        toast.info(notification.content, { duration: 6000 });
+        queryClient.invalidateQueries({ queryKey: ["plans"] });
+      }
+    });
+
+    let isMounted = true;
+    connection.start().catch((err) => {
+      if (!isMounted) return;
+      if (err?.message?.includes("stop() was called")) return;
+    });
+
+    return () => {
+      isMounted = false;
+      connection.stop();
+    };
+  }, [queryClient]);
 
   // Fetch backend plans (for Guid IDs)
   const { data: backendPlans = [] } = useQuery<PlanDto[]>({
@@ -196,24 +222,29 @@ export default function PaymentPlansPage() {
 
       {/* Plan Cards */}
       <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl px-4">
-        {Object.entries(PLAN_META).map(([planName, meta]) => {
+        {backendPlans.filter(p => p.isActive !== false).sort((a, b) => a.sortOrder - b.sortOrder).map((plan) => {
+          const planName = plan.name;
           const isCurrentPlan = currentPlanName?.toLowerCase() === planName.toLowerCase();
           const hasActiveSub = !!currentPlanName;
-          const isUpgrade = planName === "Enterprise" && currentPlanName === "Startup";
-          const isDowngrade = planName === "Startup" && currentPlanName === "Enterprise";
-          const backendPlanId = getPlanBackendId(planName);
+          const currentPlanOrder = backendPlans.find(p => p.name === currentPlanName)?.sortOrder || 0;
+          const isUpgrade = plan.sortOrder > currentPlanOrder && hasActiveSub;
+          const isDowngrade = plan.sortOrder < currentPlanOrder && hasActiveSub;
+          const backendPlanId = plan.id;
+          
+          const featureList = buildFeatureList(plan);
+          const isFeatured = plan.sortOrder > 1;
 
           return (
             <Card
-              key={planName}
+              key={plan.id}
               className={`relative flex flex-col !overflow-visible rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${
-                meta.featured
+                isFeatured
                   ? "border-primary/50 bg-surface-2 shadow-[0_8px_30px_rgb(94,106,210,0.12)]"
                   : "border-hairline bg-surface-1"
               } ${isCurrentPlan ? "ring-2 ring-primary/40" : ""}`}
             >
               {/* Most Popular badge */}
-              {meta.featured && !isCurrentPlan && (
+              {isFeatured && !isCurrentPlan && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <Badge className="bg-primary hover:bg-primary text-primary-foreground border-none shadow-sm rounded-full px-3 py-0.5">Most Popular</Badge>
                 </div>
@@ -230,23 +261,18 @@ export default function PaymentPlansPage() {
 
               <CardHeader className="p-6 pb-4">
                 <CardTitle className="text-xl font-medium">{planName}</CardTitle>
-                <p className="text-sm text-muted-foreground mt-2 min-h-[40px]">{meta.description}</p>
+                <p className="text-sm text-muted-foreground mt-2 min-h-[40px]">{getPlanDescription(plan.name)}</p>
                 <div className="mt-4 flex items-end gap-1">
                   <span className="text-4xl font-semibold tracking-tight">
-                    {billingInterval === "yearly" ? meta.yearlyPrice : meta.monthlyPrice}
+                    {plan.price === 0 ? "Free" : `${plan.price.toLocaleString()}${plan.currency === "VND" ? "đ" : ` ${plan.currency}`}`}
                   </span>
                   <span className="text-sm text-muted-foreground mb-1">/month</span>
                 </div>
-                {billingInterval === "yearly" && (
-                  <p className="text-xs text-semantic-success mt-1">
-                    Billed yearly: {meta.yearlyBilled} (Save 20%)
-                  </p>
-                )}
               </CardHeader>
 
               <CardContent className="flex-1 p-6 pt-4">
                 <ul className="space-y-3">
-                  {meta.features.map((feature, i) => (
+                  {featureList.map((feature: string, i: number) => (
                     <li key={i} className="flex items-start gap-3">
                       <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
                       <span className="text-sm text-ink">{feature}</span>
@@ -286,7 +312,7 @@ export default function PaymentPlansPage() {
                     className="inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors bg-primary hover:bg-primary-hover text-primary-foreground cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ArrowFatUp className="mr-2 h-4 w-4" weight="fill" />
-                    Upgrade to Enterprise
+                    Upgrade Plan
                   </button>
                 ) : isDowngrade ? (
                   <button
@@ -296,7 +322,7 @@ export default function PaymentPlansPage() {
                     className="inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors bg-surface-2 hover:bg-surface-3 text-ink border border-hairline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ArrowFatDown className="mr-2 h-4 w-4" />
-                    Downgrade to Startup
+                    Downgrade Plan
                   </button>
                 ) : (
                   // No active subscription — show checkout
@@ -304,11 +330,10 @@ export default function PaymentPlansPage() {
                     type="button"
                     disabled={isCheckoutProcessing}
                     onClick={() => {
-                      const amount = billingInterval === "yearly" ? meta.yearlyTotal : meta.monthlyTotal;
-                      handleCheckout(amount, "Subscription", planName.toLowerCase(), billingInterval);
+                      handleCheckout(plan.price, "Subscription", plan.slug, plan.billingCycle || "monthly");
                     }}
                     className={`inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                      meta.featured
+                      isFeatured
                         ? "bg-primary hover:bg-primary-hover text-primary-foreground"
                         : "bg-surface-2 hover:bg-surface-3 text-ink border border-hairline"
                     }`}
