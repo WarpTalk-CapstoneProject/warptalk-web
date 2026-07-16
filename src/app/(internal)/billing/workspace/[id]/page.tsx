@@ -359,7 +359,6 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
           <Button variant="outline" className="rounded-md h-9 px-4" onClick={handleOpenExport}>
             <Download className="mr-2 h-4 w-4" weight="light" /> Export usage
           </Button>
-          <AdjustCreditModal workspaceId={workspaceId} />
         </div>
       </div>
 
