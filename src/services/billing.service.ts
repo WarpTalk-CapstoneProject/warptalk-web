@@ -236,7 +236,7 @@ export const billingService = {
    * Get all global invoices (Admin only)
    */
   getGlobalInvoices: async (pageNumber = 1, pageSize = 20): Promise<PagedResult<InvoiceDto>> => {
-    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(`/payments/global/invoices`, {
+    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(`/invoices/global`, {
       params: { pageNumber, pageSize }
     });
     return data;
