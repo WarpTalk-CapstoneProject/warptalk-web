@@ -117,38 +117,22 @@ export default function AdminBillingPage() {
   const displayedLogs = useMemo(() => {
     if (!logs) return [];
     
-    const filtered = logs.filter(log => log.type !== "reserve" && log.type !== "refund");
-    
-    const groups: any[] = [];
-    let currentGroup: any = null;
+    // Static workspace name dictionary for local development fallback
+    const workspaceNameMap: Record<string, string> = {
+      "ff3b618e-325a-4466-8fcd-a15c24fbd8e0": "Acme Corp",
+      "90d53dab-bb88-4f58-8198-5c0ccd643068": "StartupX",
+      "019ec641-97a7-78c9-8f18-000000000000": "WarpTalk Global"
+    };
 
-    filtered.forEach(tx => {
-      if (!currentGroup) {
-        currentGroup = { ...tx, originalTx: [tx], isGrouped: false };
-        return;
-      }
-
-      // Group if same workspace, same type (consumption), and same valid referenceId
-      const isSameWorkspace = currentGroup.workspaceId === tx.workspaceId;
-      const isSameType = currentGroup.type === tx.type;
-      const isSameReference = currentGroup.referenceId === tx.referenceId;
-      const isValidReference = tx.referenceId != null;
-
-      if (isSameWorkspace && isSameType && tx.type === "consumption" && isSameReference && isValidReference) {
-        currentGroup.amount += tx.amount;
-        currentGroup.originalTx.push(tx);
-        currentGroup.isGrouped = true;
-      } else {
-        groups.push(currentGroup);
-        currentGroup = { ...tx, originalTx: [tx], isGrouped: false };
-      }
+    return logs.map(tx => {
+      const mappedName = tx.workspaceName || workspaceNameMap[tx.workspaceId] || `Workspace ${tx.workspaceId.substring(0, 4)}`;
+      return {
+        ...tx,
+        workspaceName: mappedName,
+        originalTx: [tx],
+        isGrouped: false
+      };
     });
-
-    if (currentGroup) {
-      groups.push(currentGroup);
-    }
-
-    return groups;
   }, [logs]);
 
   const totalTopUp = logs.filter(t => t.type === "top_up").reduce((s, t) => s + t.amount, 0);
