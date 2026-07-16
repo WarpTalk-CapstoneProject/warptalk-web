@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { billingService } from "@/services/billing.service";
 import type { UsageSummaryDto } from "@/types/billing";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import { createHubConnection } from "@/lib/signalr";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
@@ -40,13 +41,25 @@ function getLabelForUsage(usageType: string) {
   return usageType;
 }
 
+function getUnitSuffixForUsage(usageType: string): string {
+  const t = usageType.toLowerCase();
+  if (t === "translation" || t === "voice_translation") return "cr/min";
+  if (t === "summary" || t === "meeting_summary") return "cr/req";
+  if (t === "text_to_speech") return "cr/min";
+  if (t === "voice_cloning") return "cr/min";
+  return "cr";
+}
+
 export default function WorkspaceWalletPage() {
   const queryClient = useQueryClient();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
+  const [selectedTxGroup, setSelectedTxGroup] = useState<any | null>(null);
 
   const { isAuthenticated, accessToken, user } = useAuthStore();
-  const workspaceId = user?.id || "";
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId) || user?.id || "";
+  const workspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug) || "";
+  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName) || "";
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -487,20 +500,22 @@ export default function WorkspaceWalletPage() {
                   <TableHeader className="bg-surface-2">
                     <TableRow className="border-hairline hover:bg-transparent">
                       <TableHead className="w-[80px]">No.</TableHead>
+                      <TableHead>Workspace</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead className="text-right">Balance After</TableHead>
+                      <TableHead className="text-right pr-5">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isHistoryLoading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Loading history...</TableCell>
+                        <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Loading history...</TableCell>
                       </TableRow>
                     ) : !groupedHistoryItems.length ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">No transactions found.</TableCell>
+                        <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No transactions found.</TableCell>
                       </TableRow>
                     ) : (
                       groupedHistoryItems.map((tx, index) => {
@@ -513,6 +528,9 @@ export default function WorkspaceWalletPage() {
                           <TableRow key={tx.id} className="border-hairline hover:bg-surface-2">
                             <TableCell className="font-mono text-sm text-muted-foreground">
                               {rowIndex}
+                            </TableCell>
+                            <TableCell className="text-sm font-semibold capitalize">
+                              {tx.workspaceName || workspaceName || workspaceSlug}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -534,6 +552,18 @@ export default function WorkspaceWalletPage() {
                               {sign}{tx.amount} cr
                             </TableCell>
                             <TableCell className="text-right text-sm">{tx.balanceAfter} cr</TableCell>
+                            <TableCell className="text-right pr-5">
+                              {(isGrouped || tx.type === "consumption") && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => setSelectedTxGroup(isGrouped ? tx : { ...tx, originalTx: [tx] })}
+                                  className="text-primary hover:underline font-semibold h-7 px-2 cursor-pointer bg-transparent border-none"
+                                >
+                                  View Details
+                                </Button>
+                              )}
+                            </TableCell>
                           </TableRow>
                         );
                       })
@@ -642,6 +672,101 @@ export default function WorkspaceWalletPage() {
             <Button variant="outline" onClick={() => setIsExportOpen(false)}>Cancel</Button>
             <Button onClick={confirmExportUsage}>Confirm & Export</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedTxGroup} onOpenChange={(open) => !open && setSelectedTxGroup(null)}>
+        <DialogContent className="sm:max-w-[760px] w-[95vw] border border-hairline bg-surface-1 shadow-lg rounded-xl overflow-hidden p-0 text-ink">
+          <div className="bg-gradient-to-br from-primary/10 via-canvas to-canvas px-6 pt-6 pb-4 border-b border-hairline relative">
+            <h3 className="text-base font-extrabold text-ink tracking-tight flex items-center gap-2">
+              <span>📊 Transaction Details</span>
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Breakdown of variable AI service spend for this session
+            </p>
+          </div>
+          
+          <div className="px-6 py-5 space-y-5">
+            {selectedTxGroup && (
+              <div className="space-y-5">
+                {/* Session General Info */}
+                <div className="grid grid-cols-2 gap-4 bg-surface-2 p-4 rounded-lg border border-hairline text-xs text-ink">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block uppercase font-mono tracking-wider">Date</span>
+                    <span className="font-bold mt-1 block text-sm">{format(new Date(selectedTxGroup.createdAt), "MMMM dd, yyyy")}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block uppercase font-mono tracking-wider">Total Deducted</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-extrabold mt-1 block text-sm">{Math.abs(selectedTxGroup.amount).toLocaleString()} cr</span>
+                  </div>
+                </div>
+
+                {/* Two-Column Responsive Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Service Breakdown Summary */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Service Breakdown</h4>
+                    <div className="divide-y divide-hairline border border-hairline rounded-lg bg-surface-2/40 overflow-hidden">
+                      {Object.entries(
+                        selectedTxGroup.originalTx.reduce((acc: any, item: any) => {
+                          const type = getLabelForUsage(item.referenceType || "Other");
+                          const rawType = item.referenceType || "Other";
+                          if (!acc[type]) {
+                            acc[type] = { count: 0, cost: 0, rawType };
+                          }
+                          acc[type].count += 1;
+                          acc[type].cost += item.amount;
+                          return acc;
+                        }, {})
+                      ).map(([service, data]: [string, any]) => {
+                        const unitPriceVal = Math.round(Math.abs(data.cost) / data.count);
+                        const suffix = getUnitSuffixForUsage(data.rawType);
+                        return (
+                          <div key={service} className="flex justify-between items-center px-4 py-3.5 text-xs text-ink hover:bg-surface-2/30 transition-colors">
+                            <div>
+                              <span className="font-semibold block">{service}</span>
+                              <span className="text-[10px] text-muted-foreground mt-1 block">
+                                {data.count} {data.count === 1 ? 'call' : 'calls'} × {unitPriceVal} {suffix}
+                              </span>
+                            </div>
+                            <span className="font-extrabold text-rose-600 dark:text-rose-400">{Math.abs(data.cost).toLocaleString()} cr</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Itemized Events List */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Activity Log Feed</h4>
+                    <div className="h-[268px] overflow-y-auto border border-hairline rounded-lg divide-y divide-hairline text-xs bg-surface-1 text-ink font-sans p-3 space-y-0.5 select-text">
+                      {selectedTxGroup.originalTx.map((item: any, idx: number) => (
+                        <div key={item.id || idx} className="flex justify-between items-center py-2.5 px-3 rounded-md hover:bg-surface-2/60 transition-colors">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/70"></span>
+                            <span className="text-ink font-medium flex items-center">
+                              <span className="font-mono text-muted-foreground text-[10px] mr-2.5">{format(new Date(item.createdAt), "HH:mm:ss")}</span>
+                              {getLabelForUsage(item.referenceType || "AI usage")}
+                            </span>
+                          </div>
+                          <span className="text-rose-600 dark:text-rose-400 font-bold ml-2 shrink-0">{Math.abs(item.amount).toLocaleString()} cr</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="bg-surface-2 px-6 py-4 border-t border-hairline flex justify-end">
+            <Button 
+              onClick={() => setSelectedTxGroup(null)}
+              className="bg-primary hover:bg-primary-hover text-white cursor-pointer px-4 text-xs font-semibold rounded-md h-9"
+            >
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -651,6 +651,7 @@ export default function WorkspaceBillingPage() {
                   <TableHeader className="bg-surface-2/80">
                     <TableRow className="border-hairline/35 hover:bg-transparent">
                       <TableHead className="w-[60px] text-[11px] font-semibold text-ink-muted uppercase tracking-wider pl-5 py-2.5">No.</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">Workspace</TableHead>
                       <TableHead className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">Type</TableHead>
                       <TableHead className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">Date</TableHead>
                       <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">Amount</TableHead>
@@ -661,14 +662,14 @@ export default function WorkspaceBillingPage() {
                   <TableBody className="divide-y divide-hairline/20">
                     {isHistoryLoading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-xs text-ink-muted">
+                        <TableCell colSpan={7} className="text-center py-8 text-xs text-ink-muted">
                           <Spinner className="h-4 w-4 animate-spin inline mr-2 text-primary" />
                           Loading history...
                         </TableCell>
                       </TableRow>
                     ) : paginatedGroups.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-xs text-ink-muted">No transactions found.</TableCell>
+                        <TableCell colSpan={7} className="text-center py-8 text-xs text-ink-muted">No transactions found.</TableCell>
                       </TableRow>
                     ) : (
                       paginatedGroups.map((tx: any, index: number) => {
@@ -681,6 +682,9 @@ export default function WorkspaceBillingPage() {
                           <TableRow key={tx.id} className="border-hairline/15 hover:bg-surface-2/20">
                             <TableCell className="font-mono text-xs text-ink-muted pl-5 py-3">
                               {rowIndex}
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold text-ink py-3 capitalize">
+                              {tx.workspaceName || workspaceSlug}
                             </TableCell>
                             <TableCell className="py-3">
                               <div className="flex items-center gap-2 text-xs">
@@ -703,9 +707,9 @@ export default function WorkspaceBillingPage() {
                             </TableCell>
                             <TableCell className="text-right text-xs font-mono text-ink-muted py-3">{tx.balanceAfter.toLocaleString()} cr</TableCell>
                             <TableCell className="text-right text-xs pr-5 py-3">
-                              {isGrouped && (
+                              {(isGrouped || tx.type === "consumption") && (
                                 <button 
-                                  onClick={() => setSelectedTxGroup(tx)}
+                                  onClick={() => setSelectedTxGroup(isGrouped ? tx : { ...tx, originalTx: [tx] })}
                                   className="text-primary hover:underline font-semibold cursor-pointer bg-transparent border-none p-0"
                                 >
                                   View Details
