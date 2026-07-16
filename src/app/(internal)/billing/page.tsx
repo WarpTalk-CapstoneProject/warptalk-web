@@ -114,18 +114,27 @@ export default function AdminBillingPage() {
   const totalCount = data?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / 20);
   
+  // Dynamically fetch workspaces list to map workspace names instead of hardcoding
+  const { data: workspacesPage } = useQuery({
+    queryKey: ["admin-workspaces-lookup"],
+    queryFn: () => import("@/services/workspace.service").then(m => m.WorkspaceService.list(1, 100)),
+  });
+
+  const workspaceNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (workspacesPage?.items) {
+      workspacesPage.items.forEach(w => {
+        map[w.id] = w.name;
+      });
+    }
+    return map;
+  }, [workspacesPage]);
+
   const displayedLogs = useMemo(() => {
     if (!logs) return [];
     
-    // Static workspace name dictionary for local development fallback
-    const workspaceNameMap: Record<string, string> = {
-      "ff3b618e-325a-4466-8fcd-a15c24fbd8e0": "Acme Corp",
-      "90d53dab-bb88-4f58-8198-5c0ccd643068": "StartupX",
-      "019ec641-97a7-78c9-8f18-000000000000": "WarpTalk Global"
-    };
-
     return logs.map(tx => {
-      const mappedName = tx.workspaceName || workspaceNameMap[tx.workspaceId] || `Workspace ${tx.workspaceId.substring(0, 4)}`;
+      const mappedName = tx.workspaceName || workspaceNames[tx.workspaceId] || `Workspace ${tx.workspaceId.substring(0, 4)}`;
       return {
         ...tx,
         workspaceName: mappedName,
@@ -133,7 +142,7 @@ export default function AdminBillingPage() {
         isGrouped: false
       };
     });
-  }, [logs]);
+  }, [logs, workspaceNames]);
 
   const totalTopUp = logs.filter(t => t.type === "top_up").reduce((s, t) => s + t.amount, 0);
   const totalConsumed = logs.filter(t => t.type === "consumption").reduce((s, t) => s + t.amount, 0);
