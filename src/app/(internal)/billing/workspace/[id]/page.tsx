@@ -593,8 +593,8 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                       groupedHistoryItems.map((tx, index) => {
                         const isPositive = tx.amount > 0;
                         const sign = isPositive ? "+" : "";
+                        const rowIndex = index + 1;
                         const isGrouped = tx.originalTx && tx.originalTx.length > 1;
-                        const rowIndex = (historyPageNumber - 1) * 20 + index + 1;
                         
                         return (
                            <TableRow key={tx.id} className="border-hairline hover:bg-surface-2">
