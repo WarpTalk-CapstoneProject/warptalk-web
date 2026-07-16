@@ -249,17 +249,35 @@ export default function AdminBillingPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (searchWorkspaceId.trim()) {
-                router.push(`/billing/workspace/${searchWorkspaceId.trim()}`);
+              const term = searchWorkspaceId.trim();
+              if (!term) return;
+
+              // Check if term is a valid UUID
+              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+              if (uuidRegex.test(term)) {
+                router.push(`/billing/workspace/${term}`);
+              } else {
+                try {
+                  const { WorkspaceService } = await import("@/services/workspace.service");
+                  const result = await WorkspaceService.list(1, 1, term);
+                  if (result.items && result.items.length > 0) {
+                    router.push(`/billing/workspace/${result.items[0].id}`);
+                  } else {
+                    alert(`No workspace found matching name "${term}"`);
+                  }
+                } catch (err) {
+                  console.error("Workspace name lookup failed:", err);
+                  alert("Could not perform workspace name search. Please use a valid Workspace ID.");
+                }
               }
             }}
             className="relative hidden sm:flex items-center"
           >
             <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Jump to workspace ID..."
+              placeholder="Jump to name or ID..."
               value={searchWorkspaceId}
               onChange={(e) => setSearchWorkspaceId(e.target.value)}
               className="pl-9 w-[220px] h-9 bg-surface-2 border-hairline focus-visible:ring-primary-focus rounded-md text-sm"
