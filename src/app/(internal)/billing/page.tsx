@@ -95,7 +95,7 @@ export default function AdminBillingPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["global-billing-history", page, historyTypeFilter, filterFromDate, filterToDate, filterWorkspaceId, filterMinAmount, filterMaxAmount],
-    queryFn: () => billingService.getGlobalCreditHistory(page, 20, {
+    queryFn: () => billingService.getGlobalCreditHistory(page, 100, {
       type: historyTypeFilter === "ALL" ? undefined : historyTypeFilter,
       fromDate: filterFromDate ? new Date(filterFromDate + "T00:00:00").toISOString() : undefined,
       toDate: filterToDate ? new Date(filterToDate + "T23:59:59.999").toISOString() : undefined,
@@ -112,15 +112,37 @@ export default function AdminBillingPage() {
 
   const logs = data?.items || [];
   const totalCount = data?.totalCount || 0;
-  const totalPages = Math.ceil(totalCount / 20);
+  const totalPages = Math.ceil(totalCount / 100);
   
   const displayedLogs = useMemo(() => {
     if (!logs) return [];
-    return logs.map(tx => ({
-      ...tx,
-      originalTx: [tx],
-      isGrouped: false
-    }));
+    const groups: any[] = [];
+    let currentGroup: any = null;
+
+    logs.forEach(tx => {
+      if (!currentGroup) {
+        currentGroup = { ...tx, originalTx: [tx], isGrouped: false };
+        return;
+      }
+
+      const isSameWorkspace = currentGroup.workspaceId === tx.workspaceId;
+      const isSameReference = currentGroup.referenceId && tx.referenceId && currentGroup.referenceId === tx.referenceId;
+      const isSameType = currentGroup.type === tx.type;
+
+      if (isSameWorkspace && isSameReference && isSameType && currentGroup.referenceId !== "00000000-0000-0000-0000-000000000000") {
+        currentGroup.amount += tx.amount;
+        currentGroup.originalTx.push(tx);
+        currentGroup.isGrouped = true;
+      } else {
+        groups.push(currentGroup);
+        currentGroup = { ...tx, originalTx: [tx], isGrouped: false };
+      }
+    });
+
+    if (currentGroup) {
+      groups.push(currentGroup);
+    }
+    return groups;
   }, [logs]);
 
   const totalTopUp = logs.filter(t => t.type === "top_up").reduce((s, t) => s + t.amount, 0);
@@ -490,7 +512,7 @@ export default function AdminBillingPage() {
         <div className="p-4 border-t border-hairline flex items-center justify-between bg-surface-1">
           <p className="text-xs text-muted-foreground">
             {data ? (
-              <>Showing <strong>{(page - 1) * 20 + 1}–{Math.min(page * 20, totalCount)}</strong> of <strong>{totalCount}</strong> transactions</>
+              <>Showing <strong>1–{displayedLogs.length}</strong> of <strong>{displayedLogs.length}</strong> grouped sessions (from <strong>{logs.length}</strong> transactions)</>
             ) : "Loading..."}
           </p>
           {totalPages > 1 && (
