@@ -14,7 +14,7 @@ export const billingService = {
    * Generate a billing report for a workspace for a specific month and year.
    */
   getBillingReport: async (workspaceId: string, month: number, year: number): Promise<BillingReportDto> => {
-    const { data } = await apiClient.get<BillingReportDto>(`/credits/workspace/${workspaceId}/report`, {
+    const { data } = await apiClient.get<BillingReportDto>(`/usages/workspace/${workspaceId}/report`, {
       params: { month, year },
     });
     return data;
@@ -71,7 +71,7 @@ export const billingService = {
    * Get global billing metrics for admins.
    */
   getGlobalMetrics: async (): Promise<import("@/types/billing").GlobalBillingMetricsDto> => {
-    const { data } = await apiClient.get<import("@/types/billing").GlobalBillingMetricsDto>(`/credits/metrics/global`);
+    const { data } = await apiClient.get<import("@/types/billing").GlobalBillingMetricsDto>(`/usages/metrics/global`);
     return data;
   },
 
@@ -80,7 +80,7 @@ export const billingService = {
    */
   getWorkspaceUsageChart: async (workspaceId: string, year: number): Promise<UsageChartDto> => {
     try {
-      const { data } = await apiClient.get<UsageChartDto>(`/credits/workspace/${workspaceId}/chart`, { params: { year } });
+      const { data } = await apiClient.get<UsageChartDto>(`/usages/workspace/${workspaceId}/chart`, { params: { year } });
       return data;
     } catch {
       return {
@@ -107,7 +107,7 @@ export const billingService = {
    * Get global usage chart data.
    */
   getGlobalUsageChart: async (year: number): Promise<UsageChartDto> => {
-    const { data } = await apiClient.get<UsageChartDto>(`/credits/metrics/global/chart`, { params: { year } });
+    const { data } = await apiClient.get<UsageChartDto>(`/usages/metrics/global/chart`, { params: { year } });
     return data;
   },
 
@@ -116,7 +116,7 @@ export const billingService = {
    */
   getWorkspaceUsageBreakdown: async (workspaceId: string, days = 30): Promise<import("@/types/billing").UsageSummaryDto[]> => {
     try {
-      const { data } = await apiClient.get<import("@/types/billing").UsageSummaryDto[]>(`/credits/workspace/${workspaceId}/breakdown`, { params: { days } });
+      const { data } = await apiClient.get<import("@/types/billing").UsageSummaryDto[]>(`/usages/workspace/${workspaceId}/breakdown`, { params: { days } });
       return data;
     } catch {
       return [];
@@ -127,7 +127,7 @@ export const billingService = {
    * Get global usage breakdown (Donut).
    */
   getGlobalUsageBreakdown: async (days = 30): Promise<import("@/types/billing").UsageSummaryDto[]> => {
-    const { data } = await apiClient.get<import("@/types/billing").UsageSummaryDto[]>(`/credits/metrics/global/breakdown`, { params: { days } });
+    const { data } = await apiClient.get<import("@/types/billing").UsageSummaryDto[]>(`/usages/metrics/global/breakdown`, { params: { days } });
     return data;
   },
 
@@ -135,7 +135,7 @@ export const billingService = {
    * Get top workspaces by consumption.
    */
   getTopWorkspaces: async (days = 30, limit = 5): Promise<TopWorkspaceDto[]> => {
-    const { data } = await apiClient.get<TopWorkspaceDto[]>(`/credits/metrics/global/top-workspaces`, { params: { days, limit } });
+    const { data } = await apiClient.get<TopWorkspaceDto[]>(`/usages/metrics/global/top-workspaces`, { params: { days, limit } });
     return data;
   },
 
@@ -159,7 +159,7 @@ export const billingService = {
    * Get paginated invoices for a workspace.
    */
   getWorkspaceInvoices: async (workspaceId: string, pageNumber = 1, pageSize = 20): Promise<PagedResult<InvoiceDto>> => {
-    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(`/credits/workspace/${workspaceId}/invoices`, {
+    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(`/invoices/workspace/${workspaceId}`, {
       params: { pageNumber, pageSize }
     });
     return data;
@@ -188,7 +188,7 @@ export const billingService = {
   changeSubscription: async (workspaceId: string, newPlanId: string): Promise<import("@/types/billing").SubscriptionDto> => {
     const { data } = await apiClient.put<import("@/types/billing").SubscriptionDto>(
       `/subscriptions/workspace/${workspaceId}/change-plan`,
-      { workspaceId, newPlanId }
+      { workspaceId, planId: newPlanId }
     );
     return data;
   },
@@ -256,7 +256,7 @@ export const billingService = {
    * Get usage alerts (Admin only)
    */
   getUsageAlerts: async (): Promise<UsageAlertDto[]> => {
-    const { data } = await apiClient.get<UsageAlertDto[]>(`/credits/metrics/global/alerts`);
+    const { data } = await apiClient.get<UsageAlertDto[]>(`/usages/metrics/global/alerts`);
     return data;
   },
 
@@ -264,7 +264,7 @@ export const billingService = {
    * Get current AI service credit rates (Admin only).
    */
   getServiceRates: async (): Promise<import("@/types/billing").ServiceRatesDto> => {
-    const { data } = await apiClient.get<import("@/types/billing").ServiceRatesDto>(`/credits/rates`);
+    const { data } = await apiClient.get<import("@/types/billing").ServiceRatesDto>(`/usages/rates`);
     return data;
   },
 
@@ -272,7 +272,7 @@ export const billingService = {
    * Update AI service credit rates (Admin only).
    */
   updateServiceRates: async (rates: import("@/types/billing").ServiceRatesDto): Promise<import("@/types/billing").ServiceRatesDto> => {
-    const { data } = await apiClient.put<import("@/types/billing").ServiceRatesDto>(`/credits/rates`, rates);
+    const { data } = await apiClient.put<import("@/types/billing").ServiceRatesDto>(`/usages/rates`, rates);
     return data;
   }
 };

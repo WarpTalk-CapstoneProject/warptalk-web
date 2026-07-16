@@ -42,9 +42,6 @@ export interface PlanDto {
   isActive: boolean;
   maxParticipants: number;
   maxLanguages: number;
-  allowGlossary: boolean;
-  advancedAcl: boolean;
-  voiceCloneLimitMins: number;
 }
 
 export interface CreditTransactionDto {

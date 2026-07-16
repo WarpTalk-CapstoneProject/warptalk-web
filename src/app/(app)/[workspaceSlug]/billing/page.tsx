@@ -87,6 +87,8 @@ export default function WorkspaceBillingPage() {
         notification?.type === "billing.subscription_changed"
       ) {
         queryClient.invalidateQueries({ queryKey: ["billing"] });
+        queryClient.invalidateQueries({ queryKey: ["workspace-usage-chart"] });
+        queryClient.invalidateQueries({ queryKey: ["workspace-feature-breakdown"] });
       }
     });
 
@@ -805,13 +807,18 @@ export default function WorkspaceBillingPage() {
                               {rowIndex}
                             </TableCell>
                             <TableCell className="text-xs font-mono text-ink py-3">
-                              {invoice.stripeInvoiceId ? (invoice.stripeInvoiceId.startsWith("in_") ? `INV-${invoice.stripeInvoiceId.substring(invoice.stripeInvoiceId.length - 8).toUpperCase()}` : invoice.stripeInvoiceId) : ""}
+                              {(() => {
+                                if (!invoice.stripeInvoiceId) return "";
+                                const rawId = invoice.stripeInvoiceId;
+                                const suffix = rawId.substring(Math.max(0, rawId.length - 8)).toUpperCase();
+                                return `INV-${suffix}`;
+                              })()}
                             </TableCell>
                             <TableCell className="text-xs text-ink-muted py-3">
                               {format(new Date(invoice.createdAt), "MMM dd, yyyy HH:mm")}
                             </TableCell>
                             <TableCell className="text-right text-xs font-semibold text-ink py-3">
-                              {invoice.amount.toLocaleString("vi-VN")}{invoice.currency === "vnd" ? "đ" : ` ${invoice.currency.toUpperCase()}`}
+                              {invoice.amount.toLocaleString("vi-VN")}{invoice.currency?.toLowerCase() === "vnd" ? "đ" : ` ${invoice.currency?.toUpperCase()}`}
                             </TableCell>
                             <TableCell className="text-right text-xs pr-5 py-3 space-x-3">
                               {invoice.hostedInvoiceUrl && invoice.hostedInvoiceUrl.startsWith("http") ? (
@@ -1051,7 +1058,11 @@ export default function WorkspaceBillingPage() {
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Invoice Number</span>
                   <span className="font-mono font-bold text-ink uppercase tracking-wider">
-                    {selectedInvoice.stripeInvoiceId.startsWith("in_") ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}` : selectedInvoice.stripeInvoiceId}
+                    {(() => {
+                      const rawId = selectedInvoice.stripeInvoiceId || "";
+                      const suffix = rawId.substring(Math.max(0, rawId.length - 8)).toUpperCase();
+                      return `INV-${suffix}`;
+                    })()}
                   </span>
                 </div>
                 
@@ -1076,7 +1087,7 @@ export default function WorkspaceBillingPage() {
                     <span className="text-[9px] text-emerald-600 font-bold bg-emerald-100 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded uppercase mt-0.5 inline-block">Status: Paid</span>
                   </div>
                   <span className="text-lg font-extrabold text-ink tracking-tight">
-                    {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                    {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency?.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency?.toUpperCase()}`}
                   </span>
                 </div>
               </div>
@@ -1142,7 +1153,12 @@ export default function WorkspaceBillingPage() {
           <div className="text-right">
             <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Official Receipt</h2>
             <p className="text-xs font-mono font-bold text-gray-700 mt-1.5">
-              No: {selectedInvoice && (selectedInvoice.stripeInvoiceId.startsWith("in_") ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}` : selectedInvoice.stripeInvoiceId)}
+              No: {(() => {
+                if (!selectedInvoice) return "";
+                const rawId = selectedInvoice.stripeInvoiceId || "";
+                const suffix = rawId.substring(Math.max(0, rawId.length - 8)).toUpperCase();
+                return `INV-${suffix}`;
+              })()}
             </p>
             <p className="text-[10px] text-gray-500 mt-1">Date: {selectedInvoice && format(new Date(selectedInvoice.createdAt), "MMMM dd, yyyy")}</p>
           </div>

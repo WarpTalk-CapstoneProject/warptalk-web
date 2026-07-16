@@ -30,9 +30,6 @@ interface PlanFormState {
   aiAssistantEnabled: boolean;
   glossaryEnabled: boolean;
   dedicatedGpu: boolean;
-  voiceCloneLimitMins: number;
-  allowGlossary: boolean;
-  allowAcl: boolean;
   features: string;
   featuresText: string;
   sortOrder: number;
@@ -53,9 +50,6 @@ const initialFormState: PlanFormState = {
   aiAssistantEnabled: false,
   glossaryEnabled: false,
   dedicatedGpu: false,
-  voiceCloneLimitMins: 0,
-  allowGlossary: false,
-  allowAcl: false,
   features: "[]",
   featuresText: "",
   sortOrder: 0,
@@ -137,9 +131,6 @@ export default function AdminPlansPage() {
       aiAssistantEnabled: plan.aiAssistantEnabled || false,
       glossaryEnabled: plan.glossaryEnabled || false,
       dedicatedGpu: plan.dedicatedGpu || false,
-      voiceCloneLimitMins: plan.voiceCloneLimitMins || 0,
-      allowGlossary: plan.allowGlossary || false,
-      allowAcl: plan.allowAcl || false,
       features: plan.features || "[]",
       featuresText: (() => {
         try {
@@ -268,15 +259,11 @@ export default function AdminPlansPage() {
                       <div className="flex flex-col gap-1 text-xs">
                         <span className="flex items-center gap-1.5">
                           <CheckCircle2 className={`h-3.5 w-3.5 ${plan.voiceCloneEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
-                          Voice Clone: {plan.voiceCloneEnabled ? `${plan.voiceCloneLimitMins || "Unlimited"} mins` : "Disabled"}
+                          Voice Clone: {plan.voiceCloneEnabled ? "Enabled" : "Disabled"}
                         </span>
                         <span className="flex items-center gap-1.5">
                           <CheckCircle2 className={`h-3.5 w-3.5 ${plan.glossaryEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
                           Glossary Access: {plan.glossaryEnabled ? "Enabled" : "Disabled"}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <CheckCircle2 className={`h-3.5 w-3.5 ${plan.allowAcl ? "text-emerald-500" : "text-muted-foreground"}`} />
-                          Advanced ACL: {plan.allowAcl ? "Enabled" : "Disabled"}
                         </span>
                       </div>
                     </TableCell>
@@ -480,47 +467,22 @@ export default function AdminPlansPage() {
                   <Switch
                     id="glossaryEnabled"
                     checked={formState.glossaryEnabled}
-                    onCheckedChange={(checked) => setFormState({ ...formState, glossaryEnabled: checked, allowGlossary: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="allowAcl">Advanced ACL</Label>
-                    <p className="text-xs text-muted-foreground">Strict document sharing permissions</p>
-                  </div>
-                  <Switch
-                    id="allowAcl"
-                    checked={formState.allowAcl}
-                    onCheckedChange={(checked) => setFormState({ ...formState, allowAcl: checked })}
+                    onCheckedChange={(checked) => setFormState({ ...formState, glossaryEnabled: checked })}
                   />
                 </div>
               </div>
             </div>
 
             {/* Sub Limits & Features JSON */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="vcLimit">Voice Clone Monthly limit (Minutes)</Label>
-                <Input
-                  id="vcLimit"
-                  type="number"
-                  placeholder="0 = Unlimited"
-                  value={formState.voiceCloneLimitMins}
-                  onChange={(e) => setFormState({ ...formState, voiceCloneLimitMins: parseInt(e.target.value) || 0 })}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                  disabled={!formState.voiceCloneEnabled}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="sortOrder">Sort Order (display sequence)</Label>
-                <Input
-                  id="sortOrder"
-                  type="number"
-                  value={formState.sortOrder}
-                  onChange={(e) => setFormState({ ...formState, sortOrder: parseInt(e.target.value) || 0 })}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                />
-              </div>
+            <div className="grid gap-2">
+              <Label htmlFor="sortOrder">Sort Order (display sequence)</Label>
+              <Input
+                id="sortOrder"
+                type="number"
+                value={formState.sortOrder}
+                onChange={(e) => setFormState({ ...formState, sortOrder: parseInt(e.target.value) || 0 })}
+                className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
+              />
             </div>
 
             <div className="grid gap-2">

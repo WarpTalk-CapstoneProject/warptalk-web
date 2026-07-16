@@ -29,20 +29,7 @@ export function buildFeatureList(plan: PlanDto): string[] {
   if (plan.maxLanguages) {
     features.push(`Up to ${plan.maxLanguages} languages simultaneously`);
   }
-  
-  if (plan.voiceCloneLimitMins === -1) {
-    features.push("Unlimited Voice Cloning");
-  } else if (plan.voiceCloneLimitMins && plan.voiceCloneLimitMins > 0) {
-    features.push(`${plan.voiceCloneLimitMins} minutes of Voice Cloning`);
-  }
-  
-  if (plan.allowGlossary) {
-    features.push("Workspace Glossary & AI Customization");
-  }
-  
-  if (plan.advancedAcl) {
-    features.push("Advanced ACL permission controls");
-  }
+
 
   try {
     const parsed = JSON.parse(plan.features || "[]");

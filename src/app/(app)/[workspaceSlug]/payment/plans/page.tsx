@@ -39,6 +39,16 @@ export default function WorkspacePlansPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonOther, setCancelReasonOther] = useState("");
+
+  const CANCEL_REASONS = [
+    "Too expensive",
+    "Not using it enough",
+    "Missing features I need",
+    "Switching to another service",
+    "Other",
+  ];
   const [showChangePlanDialog, setShowChangePlanDialog] = useState(false);
   const [pendingPlanSlug, setPendingPlanSlug] = useState("");
   const [pendingPlanName, setPendingPlanName] = useState("");
@@ -158,12 +168,17 @@ export default function WorkspacePlansPage() {
 
   const handleCancel = async () => {
     if (!activeWorkspaceId) return;
+    const finalReason = cancelReason === "Other"
+      ? (cancelReasonOther.trim() || "Other")
+      : (cancelReason || "User requested cancellation");
     try {
       setIsCancelling(true);
-      await billingService.cancelSubscription(activeWorkspaceId, "User requested cancellation from plans page");
+      await billingService.cancelSubscription(activeWorkspaceId, finalReason);
       toast.success("Subscription cancelled. You will retain access until the end of your billing period.");
       setSubscription(null);
       setShowCancelDialog(false);
+      setCancelReason("");
+      setCancelReasonOther("");
     } catch {
       toast.error("Failed to cancel subscription. Please try again.");
     } finally {
@@ -241,7 +256,15 @@ export default function WorkspacePlansPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 w-full max-w-[1400px] mx-auto">
+      <div className={`grid grid-cols-1 gap-6 lg:gap-8 w-full mx-auto justify-center ${
+        activePlans.length === 1 
+          ? 'max-w-[380px] md:grid-cols-1' 
+          : activePlans.length === 2 
+          ? 'max-w-[780px] md:grid-cols-2' 
+          : activePlans.length === 3 
+          ? 'max-w-[1150px] md:grid-cols-3' 
+          : 'max-w-[1400px] md:grid-cols-2 lg:grid-cols-4'
+      }`}>
         {loadingPlans ? (
           <div className="col-span-1 md:col-span-3 flex w-full items-center justify-center p-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -278,144 +301,129 @@ export default function WorkspacePlansPage() {
             return (
               <Card
                 key={plan.id}
-                className={`relative flex flex-col h-full overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg w-full ${
+                className={`relative flex flex-col h-full overflow-hidden rounded-3xl transition-all duration-300 border bg-white p-8 ${
                   isCurrent
-                    ? "border-2 border-primary bg-surface-1 shadow-md ring-4 ring-primary/10"
+                    ? "border-[2.5px] border-[#7F1DFF] shadow-[0_8px_30px_rgb(127,29,255,0.06)]"
                     : isFeatured
-                    ? "border-2 border-primary/30 bg-surface-1 shadow-md"
-                    : "border border-hairline bg-surface-1 hover:border-ink-muted/30"
+                    ? "border-[2.5px] border-[#7F1DFF]/40 shadow-sm"
+                    : "border-gray-200 shadow-sm hover:border-gray-300"
                 }`}
               >
-                {/* Optional Top Accent Bar for highlighted cards */}
-                {(isCurrent || isFeatured) && (
-                  <div className={`h-1.5 w-full absolute top-0 left-0 ${isCurrent ? 'bg-primary' : 'bg-primary/40'}`}></div>
-                )}
-
-                <CardHeader className="p-6 md:p-8 pb-6 flex flex-col items-center text-center">
-                  <div className="flex flex-col items-center gap-2 w-full">
-                    <div className="flex items-center justify-center flex-wrap gap-2 mb-2">
+                <CardHeader className="p-0 pb-6 flex flex-col items-start text-left">
+                  <div className="flex justify-between items-center w-full gap-2 mb-3">
+                    <CardTitle className="text-2xl font-extrabold tracking-tight text-gray-900">{plan.name}</CardTitle>
+                    
+                    <div className="flex gap-2 shrink-0">
                       {isCurrent && (
-                        <Badge className="bg-primary text-primary-foreground border-none rounded-full px-3 py-1 text-[11px] font-bold tracking-wider uppercase shadow-sm">
-                          Current Plan
+                        <Badge className="bg-[#7F1DFF]/10 text-[#7F1DFF] border-none rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider">
+                          ACTIVE
                         </Badge>
                       )}
                       {!isCurrent && isFeatured && (
-                        <Badge className="bg-surface-2 text-ink border border-hairline rounded-full px-3 py-1 text-[11px] font-bold tracking-wider uppercase">
-                          Most Popular
+                        <Badge className="bg-[#7F1DFF]/10 text-[#7F1DFF] border-none rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider">
+                          MOST POPULAR
                         </Badge>
                       )}
-                      
-                      {isCurrent && subscription?.status === "active" && (
-                        <Badge className="bg-semantic-success/10 text-semantic-success border-semantic-success/30 text-[11px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full whitespace-nowrap">Active</Badge>
-                      )}
-                      {isCurrent && subscription?.status === "cancelled" && (
-                        <Badge className="bg-warning/10 text-warning border-warning/30 text-[11px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full whitespace-nowrap">Cancelling</Badge>
-                      )}
+                    </div>
+                  </div>
+                  
+                  <p className="text-[13px] text-gray-500 leading-relaxed min-h-[38px] font-normal">{plan.description}</p>
+                  
+                  <div className="mt-5 flex flex-col items-start w-full">
+                    <div className="flex items-baseline whitespace-nowrap">
+                      <span className="text-4xl font-extrabold tracking-tight text-gray-900">
+                        {displayPrice > 0 ? `${displayPrice.toLocaleString("vi-VN")}đ` : "Free"}
+                      </span>
+                      <span className="text-sm font-medium text-gray-500 ml-1">/mo</span>
                     </div>
                     
-                    <CardTitle className="text-3xl font-bold tracking-tight text-ink">{plan.name}</CardTitle>
-                  </div>
-                  
-                  <p className="text-sm text-muted-foreground mt-3 mb-1 leading-relaxed max-w-[90%]">{plan.description}</p>
-                  
-                  <div className="mt-4 flex flex-col justify-start items-center w-full">
-                    <div className="flex items-baseline justify-center gap-1.5 whitespace-nowrap">
-                      <span className="text-[2rem] lg:text-4xl font-bold tracking-tight text-ink leading-none">{displayPrice > 0 ? `${displayPrice.toLocaleString("vi-VN")}đ` : "Free"}</span>
-                      <span className="text-sm font-medium text-muted-foreground">/month</span>
-                    </div>
-                    {billingInterval === "yearly" && (
-                      <p className="text-sm font-medium text-semantic-success mt-1.5">
-                        Billed yearly: {displayTotal.toLocaleString("vi-VN")}đ (Save 21%)
-                      </p>
-                    )}
-                    {isCurrent && subscription?.currentPeriodEnd && (
-                      <p className="text-sm font-medium text-ink-muted mt-1.5">
-                        Renews on {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
-                      </p>
-                    )}
+                    <p className="text-[11px] text-gray-500 font-semibold mt-2">
+                      Pause or cancel anytime.
+                    </p>
+                    <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
+                      24/7 dedicated support.
+                    </p>
                   </div>
                 </CardHeader>
-                
-                <hr className="border-hairline mx-6 opacity-60" />
 
-                <CardContent className="flex-1 p-6 pt-5">
-                  <ul className="space-y-3.5">
+                <CardContent className="flex-1 p-0 pb-6">
+                  {/* Styled action button inside content wrapper matching reference */}
+                  <div className="mb-6">
+                    {!isCurrent && (
+                      <button
+                        type="button"
+                        disabled={action.disabled || isProcessing}
+                        onClick={() => {
+                          handleCheckout(displayTotal, "Subscription", plan.slug, billingInterval);
+                        }}
+                        className={`inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                          action.variant === "upgrade" || action.variant === "get-started"
+                            ? "bg-[#7F1DFF] hover:bg-[#6c17db] text-white shadow-sm"
+                            : "bg-[#00E58F] hover:bg-[#00cf81] text-gray-900 shadow-sm"
+                        }`}
+                      >
+                        {isProcessing ? "Processing..." : "Get Started"}
+                      </button>
+                    )}
+                    {isCurrent && subscription?.status === "active" && (
+                      <button
+                        type="button"
+                        disabled={isCancelling}
+                        onClick={() => setShowCancelDialog(true)}
+                        className="inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all border border-gray-300 hover:border-red-300 hover:bg-red-50 hover:text-red-600 bg-white text-gray-600 cursor-pointer disabled:opacity-50"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Cancel Subscription
+                      </button>
+                    )}
+                    {isCurrent && subscription?.status === "cancelled" && (
+                      <button
+                        type="button"
+                        disabled
+                        className="inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all border border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Cancelled (Ends soon)
+                      </button>
+                    )}
+                  </div>
+
+                  <ul className="space-y-3">
                     {parsedFeatures.map((feature: string, i: number) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
-                        <span className="text-sm font-medium text-ink/80">{feature}</span>
+                      <li key={i} className="flex items-start gap-2.5 text-[13px]">
+                        <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">✓</span>
+                        <span className="text-gray-700 font-medium">{feature}</span>
                       </li>
                     ))}
                     {!parsedFeatures.length && (
                       <>
-                        <li className="flex items-start gap-3">
-                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
-                          <span className="text-sm font-medium text-ink/80">{plan.creditsPerCycle?.toLocaleString()} credits per cycle</span>
+                        <li className="flex items-start gap-2.5 text-[13px]">
+                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">✓</span>
+                          <span className="text-gray-700 font-medium">{plan.creditsPerCycle?.toLocaleString()} credits per cycle</span>
                         </li>
-                        <li className="flex items-start gap-3">
-                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
-                          <span className="text-sm font-medium text-ink/80">{plan.voiceCloneEnabled ? (plan.voiceCloneLimitMins ? `${plan.voiceCloneLimitMins} minutes of Voice Cloning` : "Unlimited Voice Cloning") : "No Voice Cloning"}</span>
+                        <li className="flex items-start gap-2.5 text-[13px]">
+                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">✓</span>
+                          <span className="text-gray-700 font-medium">{plan.voiceCloneEnabled ? "Voice Cloning Enabled" : "No Voice Cloning"}</span>
                         </li>
-                        <li className="flex items-start gap-3">
-                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
-                          <span className="text-sm font-medium text-ink/80">Web access for up to {plan.maxParticipants} members</span>
+                        <li className="flex items-start gap-2.5 text-[13px]">
+                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">✓</span>
+                          <span className="text-gray-700 font-medium">Web access for up to {plan.maxParticipants} members</span>
                         </li>
-                        {plan.allowGlossary && (
-                          <li className="flex items-start gap-3">
-                            <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
-                            <span className="text-sm font-medium text-ink/80">Workspace Glossary included</span>
-                          </li>
-                        )}
-                        {plan.allowAcl && (
-                          <li className="flex items-start gap-3">
-                            <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" weight="fill" />
-                            <span className="text-sm font-medium text-ink/80">Advanced ACL permission controls</span>
-                          </li>
-                        )}
                       </>
                     )}
                   </ul>
                 </CardContent>
 
-                <CardFooter className="p-8 pt-0 flex flex-col gap-2">
-                  {!isCurrent && (
-                    <button
-                      type="button"
-                      disabled={action.disabled || isProcessing}
-                      onClick={() => {
-                        handleCheckout(displayTotal, "Subscription", plan.slug, billingInterval);
-                      }}
-                      className={`inline-flex items-center justify-center gap-2 w-full rounded-xl h-12 text-[15px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                        action.variant === "upgrade" || action.variant === "get-started"
-                          ? "bg-primary hover:bg-primary-hover text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5"
-                          : "bg-surface-1 hover:bg-surface-2 text-ink border-2 border-hairline hover:border-ink/20"
-                      }`}
-                    >
-                      {action.variant === "upgrade" && <ArrowUp className="h-4 w-4" />}
-                      {action.variant === "downgrade" && <ArrowDown className="h-4 w-4" />}
-                      {isProcessing ? "Processing..." : action.label}
-                    </button>
+                <CardFooter className="p-0 mt-auto flex flex-col gap-2">
+                  {isCurrent && subscription?.currentPeriodEnd && (
+                    <p className="text-[11px] text-gray-400 font-medium text-center w-full">
+                      Renews on {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
                   )}
-                  {isCurrent && subscription?.status === "active" && (
-                    <button
-                      type="button"
-                      disabled={isCancelling}
-                      onClick={() => setShowCancelDialog(true)}
-                      className="inline-flex items-center justify-center gap-2 w-full rounded-xl h-12 text-[15px] font-semibold transition-all border-2 border-hairline bg-surface-1 hover:bg-red-500/5 hover:border-red-400/40 hover:text-red-400 text-ink-muted cursor-pointer disabled:opacity-50"
-                    >
-                      <X className="h-4 w-4" />
-                      Cancel Subscription
-                    </button>
-                  )}
-                  {isCurrent && subscription?.status === "cancelled" && (
-                    <button
-                      type="button"
-                      disabled
-                      className="inline-flex items-center justify-center gap-2 w-full rounded-xl h-12 text-[15px] font-semibold transition-all border-2 border-hairline bg-surface-1 text-ink-muted opacity-50 cursor-not-allowed"
-                    >
-                      <X className="h-4 w-4" />
-                      Cancelled (Ends soon)
-                    </button>
+                  {billingInterval === "yearly" && (
+                    <p className="text-[11px] text-[#7F1DFF] font-semibold text-center w-full">
+                      Billed yearly: {displayTotal.toLocaleString("vi-VN")}đ
+                    </p>
                   )}
                 </CardFooter>
               </Card>
@@ -506,22 +514,31 @@ export default function WorkspacePlansPage() {
                 </div>
               )}
 
-              <button type="button" disabled={isProcessing || topUpCredits <= 0}
-                onClick={() => handleCheckout(topUpTotal, "CreditTopUp")}
+              {topUpCredits > 0 && topUpCredits < 1500 && (
+                <p className="text-xs font-semibold text-rose-500 mt-2 bg-rose-500/10 p-3 rounded-lg">
+                  ⚠️ Minimum top-up amount is 1,500 credits (equivalent to 15,000 VND Stripe transaction limit).
+                </p>
+              )}
+
+              <button type="button" disabled={isProcessing || topUpCredits < 1500}
+                onClick={() => handleCheckout(topUpTotal, "CreditTopUp", "", "")}
                 className="inline-flex items-center justify-center w-full rounded-xl h-14 text-base font-semibold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 bg-primary hover:bg-primary-hover text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none">
-                {isProcessing ? "Processing..." : topUpCredits > 0 ? <><span>Complete Top Up of {topUpCredits.toLocaleString()} credits</span><ArrowRight className="ml-2 h-5 w-5" /></> : "Enter credit amount above"}
+                {isProcessing ? "Processing..." : topUpCredits >= 1500 ? <><span>Complete Top Up of {topUpCredits.toLocaleString()} credits</span><ArrowRight className="ml-2 h-5 w-5" /></> : "Enter credit amount above (Min 1,500)"}
               </button>
             </div>
           </CardContent>
         </Card>
       </div>
       {/* Cancel Subscription confirmation dialog */}
-      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-        <DialogContent className="sm:max-w-[440px] border-hairline bg-surface-1 shadow-lg rounded-xl">
+      <Dialog open={showCancelDialog} onOpenChange={(open) => {
+        setShowCancelDialog(open);
+        if (!open) { setCancelReason(""); setCancelReasonOther(""); }
+      }}>
+        <DialogContent className="sm:max-w-[460px] border-hairline bg-surface-1 shadow-lg rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-ink">Cancel subscription?</DialogTitle>
             <DialogDescription className="text-sm text-ink-muted mt-1">
-              Your workspace will remain on the <strong>{subscription?.planName}</strong> plan until the end of the current billing period on{" "}
+              Your workspace will remain on the <strong>{subscription?.planName}</strong> plan until{" "}
               <strong>
                 {subscription?.currentPeriodEnd
                   ? new Date(subscription.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
@@ -529,15 +546,48 @@ export default function WorkspacePlansPage() {
               </strong>. After that, your workspace will revert to basic access.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1 my-2">
+
+          {/* Reason selection */}
+          <div className="space-y-3 my-1">
+            <p className="text-sm font-medium text-ink">Why are you cancelling? <span className="text-ink-muted font-normal">(optional)</span></p>
+            <div className="flex flex-wrap gap-2">
+              {CANCEL_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => { setCancelReason(r); if (r !== "Other") setCancelReasonOther(""); }}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border transition-all cursor-pointer ${
+                    cancelReason === r
+                      ? "bg-red-500/10 border-red-400/60 text-red-500"
+                      : "bg-surface-2 border-hairline text-ink-muted hover:border-ink/30 hover:text-ink"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            {cancelReason === "Other" && (
+              <textarea
+                value={cancelReasonOther}
+                onChange={(e) => setCancelReasonOther(e.target.value)}
+                placeholder="Tell us more (optional)..."
+                rows={3}
+                maxLength={500}
+                className="w-full rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+              />
+            )}
+          </div>
+
+          <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1">
             <p>• Credits already used this cycle will not be refunded.</p>
             <p>• You can re-subscribe at any time.</p>
             <p>• Active rooms and history will not be deleted.</p>
           </div>
+
           <DialogFooter className="flex gap-2 flex-row justify-end">
             <button
               type="button"
-              onClick={() => setShowCancelDialog(false)}
+              onClick={() => { setShowCancelDialog(false); setCancelReason(""); setCancelReasonOther(""); }}
               className="inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 hover:bg-surface-3 px-4 text-sm font-medium text-ink cursor-pointer transition"
             >
               Keep Subscription
