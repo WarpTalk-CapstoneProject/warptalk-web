@@ -114,35 +114,14 @@ export default function AdminBillingPage() {
   const totalCount = data?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / 20);
   
-  // Dynamically fetch workspaces list to map workspace names instead of hardcoding
-  const { data: workspacesPage } = useQuery({
-    queryKey: ["admin-workspaces-lookup"],
-    queryFn: () => import("@/services/workspace.service").then(m => m.WorkspaceService.list(1, 100)),
-  });
-
-  const workspaceNames = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (workspacesPage?.items) {
-      workspacesPage.items.forEach(w => {
-        map[w.id] = w.name;
-      });
-    }
-    return map;
-  }, [workspacesPage]);
-
   const displayedLogs = useMemo(() => {
     if (!logs) return [];
-    
-    return logs.map(tx => {
-      const mappedName = tx.workspaceName || workspaceNames[tx.workspaceId] || `Workspace ${tx.workspaceId.substring(0, 4)}`;
-      return {
-        ...tx,
-        workspaceName: mappedName,
-        originalTx: [tx],
-        isGrouped: false
-      };
-    });
-  }, [logs, workspaceNames]);
+    return logs.map(tx => ({
+      ...tx,
+      originalTx: [tx],
+      isGrouped: false
+    }));
+  }, [logs]);
 
   const totalTopUp = logs.filter(t => t.type === "top_up").reduce((s, t) => s + t.amount, 0);
   const totalConsumed = logs.filter(t => t.type === "consumption").reduce((s, t) => s + t.amount, 0);
