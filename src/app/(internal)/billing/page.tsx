@@ -708,6 +708,13 @@ function getUnitSuffixForUsage(usageType: string): string {
   return "cr";
 }
 
+function getLabelForUsage(usageType: string) {
+  if (usageType === "translation" || usageType === "voice_translation") return "Real-time Translation";
+  if (usageType === "summary" || usageType === "meeting_summary") return "AI meeting insights";
+  if (usageType === "chat") return "AI workspace chat";
+  return usageType;
+}
+
 function IdBadge({ id, type, name }: { id: string, type: "workspace" | "user" | "system" | "admin", name?: string | null }) {
   const [copied, setCopied] = useState(false);
 
