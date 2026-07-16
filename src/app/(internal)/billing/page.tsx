@@ -445,7 +445,7 @@ export default function AdminBillingPage() {
                         <div className="font-mono text-xs">{log.workspaceId}</div>
                       ) : (
                         <Link href={`/billing/workspace/${log.workspaceId}`} className="block hover:opacity-80 transition-opacity">
-                          <IdBadge id={log.workspaceId} type="workspace" name={log.workspaceName || `Workspace ${log.workspaceId.substring(0, 4)}`} />
+                          <IdBadge id={log.workspaceId} type="workspace" name={log.workspaceName} />
                         </Link>
                       )}
                     </TableCell>
