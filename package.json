@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:routes": "node scripts/check-dashboard-routes.mjs",
-    "test:meeting-chat": "node scripts/check-meeting-chat-contract.mjs"
+    "test:meeting-chat": "node scripts/check-meeting-chat-contract.mjs",
+    "test:meeting-ai-trigger": "node scripts/check-meeting-ai-trigger-contract.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

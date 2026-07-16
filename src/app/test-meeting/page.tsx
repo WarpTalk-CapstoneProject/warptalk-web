@@ -68,7 +68,10 @@ export default function TestMeetingPage() {
       try {
           await fetch(`${baseUrl}/meetings/rooms/${roomId}/trigger-ai`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${currentToken}`,
+              },
               body: JSON.stringify({ participantIdentity: data.participantIdentity })
           });
           console.log("AI trigger sent!");
