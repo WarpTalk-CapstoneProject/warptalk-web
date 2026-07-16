@@ -87,7 +87,10 @@ export function AdminSubscriptionsTab() {
 
   const filteredSubscriptions = useMemo(() => {
     return subscriptions.filter(sub => {
-      const matchWorkspace = workspaceFilter ? sub.workspaceId?.toLowerCase().includes(workspaceFilter.toLowerCase()) : true;
+      const query = workspaceFilter.toLowerCase();
+      const matchWorkspace = workspaceFilter
+        ? (sub.workspaceId?.toLowerCase().includes(query) || sub.workspaceName?.toLowerCase().includes(query))
+        : true;
       const matchStatus = statusFilter !== "ALL" ? sub.status?.toLowerCase() === statusFilter.toLowerCase() : true;
       const matchPlan = planFilter !== "ALL" ? sub.planName?.toLowerCase().includes(planFilter.toLowerCase()) : true;
       return matchWorkspace && matchStatus && matchPlan;
@@ -153,8 +156,8 @@ export function AdminSubscriptionsTab() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Workspace ID</Label>
-            <Input type="text" placeholder="Enter ID..." className="h-8 text-sm w-[160px]"
+            <Label className="text-xs text-muted-foreground">Workspace</Label>
+            <Input type="text" placeholder="Name or ID..." className="h-8 text-sm w-[160px]"
               value={workspaceFilter}
               onChange={(e) => { setWorkspaceFilter(e.target.value); setPage(1); }} />
           </div>

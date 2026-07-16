@@ -90,7 +90,10 @@ export function AdminInvoicesTab() {
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter(inv => {
-      const matchWorkspace = workspaceFilter ? inv.workspaceId?.toLowerCase().includes(workspaceFilter.toLowerCase()) : true;
+      const query = workspaceFilter.toLowerCase();
+      const matchWorkspace = workspaceFilter
+        ? (inv.workspaceId?.toLowerCase().includes(query) || inv.workspaceName?.toLowerCase().includes(query))
+        : true;
       const matchStatus = statusFilter !== "ALL" ? inv.status?.toLowerCase() === statusFilter.toLowerCase() : true;
       const matchMin = minAmountFilter !== "" ? inv.amount >= minAmountFilter : true;
       const matchMax = maxAmountFilter !== "" ? inv.amount <= maxAmountFilter : true;
@@ -145,8 +148,8 @@ export function AdminInvoicesTab() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Workspace ID</Label>
-            <Input type="text" placeholder="Enter ID..." className="h-8 text-sm w-[140px]"
+            <Label className="text-xs text-muted-foreground">Workspace</Label>
+            <Input type="text" placeholder="Name or ID..." className="h-8 text-sm w-[140px]"
               value={workspaceFilter}
               onChange={(e) => { setWorkspaceFilter(e.target.value); setPage(1); }} />
           </div>
