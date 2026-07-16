@@ -157,7 +157,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
       "billing", "history", workspaceId, historyPageNumber, historyTypeFilter, 
       filterFromDate, filterToDate, filterMinAmount, filterMaxAmount
     ],
-    queryFn: () => billingService.getCreditHistory(workspaceId, historyPageNumber, 20, {
+    queryFn: () => billingService.getCreditHistory(workspaceId, historyPageNumber, 100, {
       type: historyTypeFilter === "ALL" ? undefined : historyTypeFilter,
       fromDate: filterFromDate ? new Date(filterFromDate + "T00:00:00").toISOString() : undefined,
       toDate: filterToDate ? new Date(filterToDate + "T23:59:59.999").toISOString() : undefined,
@@ -168,7 +168,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
     retry: 1,
   });
 
-  const totalPages = historyPage ? Math.ceil(historyPage.totalCount / 20) : 0;
+  const totalPages = historyPage ? Math.ceil(historyPage.totalCount / 100) : 0;
 
   const groupedHistoryItems = useMemo(() => {
     if (!historyPage?.items) return [];
