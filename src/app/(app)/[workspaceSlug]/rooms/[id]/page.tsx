@@ -63,7 +63,7 @@ export default function RoomInformationPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const roomId = params.id;
-  const [activeTab, setActiveTab] = useState<"overview" | "transcript">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "transcript" | "activity">("overview");
   const [isActivityExpanded, setIsActivityExpanded] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
@@ -96,7 +96,7 @@ export default function RoomInformationPage() {
     : workspaces?.items?.[0]?.id;
     
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
-  const membersArray = members?.items || [];
+  const membersArray = members?.items ?? [];
 
   const activeApiParticipants = apiParticipants.filter((participant) =>
     ["joined", "connected"].includes(participant.status.toLowerCase())
@@ -310,6 +310,7 @@ export default function RoomInformationPage() {
             {/* Tabs (no full-width border) */}
             <div className="flex items-center gap-6 mt-8 mb-6 border-b border-border/50">
               <TabButton active={activeTab === "overview"} onClick={() => setActiveTab("overview")}>Overview</TabButton>
+              <TabButton active={activeTab === "activity"} onClick={() => setActiveTab("activity")}>Activity</TabButton>
               <TabButton active={activeTab === "transcript"} onClick={() => setActiveTab("transcript")}>Transcript</TabButton>
             </div>
 
