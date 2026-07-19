@@ -25,29 +25,33 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
       return;
     }
 
-    // Check if the current URL slug matches the active store slug
-    if (activeWorkspaceSlug === workspaceSlug) {
-      setIsSyncing(false);
-      return;
-    }
-
-    // Slug does not match store: find the workspace matching the URL slug
     const targetWorkspace = workspacesData.items.find(
       (w) => w.slug === workspaceSlug
     );
 
     if (targetWorkspace) {
-      // Sync the store with the target workspace
-      setActiveWorkspace(
-        targetWorkspace.id,
-        targetWorkspace.name,
-        targetWorkspace.slug,
-        targetWorkspace.role || "Member",
-        "Internal" // default membership type
-      );
+      const storedRole = useWorkspaceStore.getState().role;
+      const storedId = useWorkspaceStore.getState().activeWorkspaceId;
+
+      if (
+        activeWorkspaceSlug !== workspaceSlug ||
+        storedId !== targetWorkspace.id ||
+        storedRole !== (targetWorkspace.role || "Member")
+      ) {
+        setActiveWorkspace(
+          targetWorkspace.id,
+          targetWorkspace.name,
+          targetWorkspace.slug,
+          targetWorkspace.role || "Member",
+          "Internal"
+        );
+      }
       setIsSyncing(false);
     } else {
-      // Not a member or workspace doesn't exist, redirect to onboarding selection page
+      const currentSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
+      if (currentSlug === workspaceSlug) {
+        useWorkspaceStore.getState().clearActiveWorkspace();
+      }
       router.replace("/workspace");
     }
   }, [

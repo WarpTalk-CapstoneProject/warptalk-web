@@ -210,5 +210,5 @@ export interface UpdateRoomSettingsRequest {
   invitedEmails?: string[];
   sourceLanguage?: string;
   targetLanguages?: string[];
-  settings?: any;
+  settings?: Record<string, unknown>;
 }

@@ -15,18 +15,15 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
     return () => cancelAnimationFrame(handle);
   }, []);
 
-  if (!mounted) {
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [mounted, isAuthenticated, router]);
+
+  if (!mounted || !isAuthenticated) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-canvas">
-        <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    router.replace("/login");
-    return (
-      <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
       </div>
     );

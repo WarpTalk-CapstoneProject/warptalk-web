@@ -12,6 +12,7 @@
 export const API = {
   auth: {
     register: "/auth/register",
+    registerInvited: "/auth/register-invited",
     login: "/auth/login",
     googleLogin: "/auth/google-login",
     refresh: "/auth/refresh",
@@ -57,7 +58,11 @@ export const API = {
     finalize: (id: string) => `/transcripts/${id}/finalize`,
   },
   notifications: {
+    base: "/notifications",
     preferences: "/notifications/preferences",
+    read: (id: string) => `/notifications/${id}/read`,
+    readAll: "/notifications/read-all",
+    adminBase: "/admin/notifications",
   },
   meetings: {
     join: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/join`,

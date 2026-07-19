@@ -6,7 +6,12 @@ import Link from "next/link";
 import Hls from "hls.js";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import type { MotionValue, Variants } from "motion/react";
-
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth-store";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { billingService } from "@/services/billing.service";
+import { getPlanDescription, buildFeatureList } from "@/lib/utils";
+import { createHubConnection } from "@/lib/signalr";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
@@ -52,48 +57,7 @@ const signalRows = [
   { number: "05", meta: "Remember / Transcript / Assistant", label: "Remember", pattern: "arc" },
 ];
 
-const pricingPlans = [
-  {
-    tier: "Free",
-    monthly: "Free",
-    yearly: "Free",
-    description: "For teams trying real-time interpretation across first conversations.",
-    features: [
-      "Up to 3 live translation rooms each month",
-      "Real-time captions for bilingual meetings",
-      "Basic transcript export",
-      "Web access for small teams",
-      "Community support",
-    ],
-  },
-  {
-    tier: "Standard",
-    monthly: "$9,99/m",
-    yearly: "$99,99/y",
-    description: "For growing global teams that need reliable AI summaries and history.",
-    features: [
-      "Up to 50 live translation rooms each month",
-      "AI meeting summary and action items",
-      "Speaker timeline and transcript search",
-      "Team collaboration up to 5 members",
-      "Priority web and mobile access",
-    ],
-  },
-  {
-    tier: "Pro",
-    monthly: "$19,99/m",
-    yearly: "$199,99/y",
-    description: "For operators using voice cloning and native-feeling interpretation at scale.",
-    features: [
-      "Unlimited live translation rooms",
-      "Human voice cloning for supported speakers",
-      "Advanced AI analysis and conversation insights",
-      "Unlimited team members",
-      "Brand and workspace customization",
-    ],
-    featured: true,
-  },
-];
+
 
 const containerVariants = {
   hidden: {},
@@ -761,7 +725,22 @@ function FeatureTraceSection() {
 }
 
 function PricingSection() {
-  const [yearly, setYearly] = useState(false);
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+
+  const { data: plans = [], isLoading } = useQuery({
+    queryKey: ["landing-plans"],
+    queryFn: () => billingService.getPlans(),
+  });
+
+  const handleChoosePlan = () => {
+    if (!isAuthenticated || !user) {
+      router.push("/login?redirect=/workspace");
+    } else {
+      router.push("/workspace");
+    }
+  };
 
   return (
     <section id="pricing" className="c3-pricing-section scroll-mt-20 bg-[#0c0c0c] text-white">
@@ -784,48 +763,48 @@ function PricingSection() {
       </div>
 
       <div className="c3-grid">
-        {pricingPlans.map((plan) => (
-          <article className={plan.featured ? "c3-card c3-card-pro" : "c3-card"} key={plan.tier}>
-            <p className="c3-tier-small">{plan.tier}</p>
-            <h3 className="c3-tier-large">{yearly ? plan.yearly : plan.monthly}</h3>
-            <p className="c3-desc">{plan.description}</p>
-            <ul className="c3-list">
-              {plan.features.map((feature) => (
-                <li key={feature}>
-                  <span className="c3-check" aria-hidden="true">
-                    <svg viewBox="0 0 16 16" className="size-3.5">
-                      <path
-                        d="M13.5 4.25 6.25 11.5 2.5 7.75"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-            <button type="button" className="c3-btn">
-              Choose Plan
-            </button>
-          </article>
-        ))}
-      </div>
-
-      <div className="c3-toggle-wrap">
-        <span className="text-sm font-medium text-white/70">Yearly</span>
-        <button
-          type="button"
-          className={yearly ? "c3-toggle active" : "c3-toggle"}
-          onClick={() => setYearly((current) => !current)}
-          aria-pressed={yearly}
-          aria-label="Toggle yearly pricing"
-        >
-          <span className="c3-toggle-knob" />
-        </button>
+        {isLoading ? (
+          <div className="col-span-full flex justify-center py-20 text-white/50">Loading plans...</div>
+        ) : (
+          plans
+            .filter((p: any) => p.isActive !== false)
+            .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
+            .map((plan: any) => {
+              const featureList = buildFeatureList(plan);
+              
+              return (
+                <article className={plan.sortOrder > 1 ? "c3-card c3-card-pro" : "c3-card"} key={plan.id}>
+                  <p className="c3-tier-small">{plan.tier}</p>
+                  <h3 className="c3-tier-large">
+                    {plan.price === 0 ? "Free" : `${plan.price.toLocaleString()} ${plan.currency}/mo`}
+                  </h3>
+                  <p className="c3-desc">{getPlanDescription(plan.name)}</p>
+                  <ul className="c3-list">
+                    {featureList.map((feature: string) => (
+                      <li key={feature}>
+                        <span className="c3-check" aria-hidden="true">
+                          <svg viewBox="0 0 16 16" className="size-3.5">
+                            <path
+                              d="M13.5 4.25 6.25 11.5 2.5 7.75"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="button" className="c3-btn cursor-pointer" onClick={handleChoosePlan}>
+                    Choose Plan
+                  </button>
+                </article>
+              );
+            })
+        )}
       </div>
     </section>
   );
@@ -999,11 +978,34 @@ function LandingFooter() {
 }
 
 export default function HomePage() {
+  const queryClient = useQueryClient();
   const [hasLoaderFinished, setHasLoaderFinished] = useState(false);
   const [hasShellLoaded, setHasShellLoaded] = useState(false);
   const [hasHeroVideoLoaded, setHasHeroVideoLoaded] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const isLoading = !hasLoaderFinished || !hasShellLoaded || !hasHeroVideoLoaded;
+
+  // SignalR connection for real-time landing page pricing updates
+  useEffect(() => {
+    const connection = createHubConnection("/hubs/notification");
+
+    connection.on("NewNotification", (notification) => {
+      if (notification?.type === "billing.plan_changed") {
+        queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
+      }
+    });
+
+    let isMounted = true;
+    connection.start().catch((err) => {
+      if (!isMounted) return;
+      if (err?.message?.includes("stop() was called")) return;
+    });
+
+    return () => {
+      isMounted = false;
+      connection.stop();
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     let cancelled = false;

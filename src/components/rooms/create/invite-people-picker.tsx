@@ -13,7 +13,7 @@ export function InvitePeoplePicker({ emails, onChange }: { emails: string[]; onC
   const { data: membersData } = useWorkspaceMembers(workspaceId || "", 1, 100);
   const members = membersData?.items ?? [];
 
-  const suggestedMembers = members.filter((m) =>
+  const suggestedMembers = members.filter((m: any) =>
     m.fullName && 
     m.fullName !== 'Unknown' && 
     !emails.includes(m.email || m.userId || m.id)

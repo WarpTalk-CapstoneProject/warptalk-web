@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { NotificationPopover } from "@/components/notifications/notification-popover";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -43,6 +44,9 @@ const routeLabels: Record<string, string> = {
   workspace: "Workspace",
   admin: "Admin",
   "dev-test": "Dev Test",
+  billing: "Billing & Usage",
+  payment: "Payment",
+  plans: "Plans",
 };
 
 const searchItems: Array<{
@@ -52,6 +56,7 @@ const searchItems: Array<{
   icon: React.ElementType;
   shortcut?: string;
 }> = [
+
   { title: "Rooms", url: "/rooms", group: "Workspace", icon: SquaresFour, shortcut: "R" },
   { title: "Create Room", url: "/rooms/create", group: "Workspace", icon: Plus, shortcut: "N" },
   { title: "History & Transcripts", url: "/history", group: "Workspace", icon: FileText, shortcut: "H" },
@@ -71,6 +76,7 @@ import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 
 function Breadcrumbs() {
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
   const current = segments.at(-1);
@@ -171,7 +177,7 @@ export function Topbar() {
     ? "Participant"
     : pathname.startsWith("/workspace")
       ? "Workspace"
-      : pathname.startsWith("/internal")
+      : pathname.startsWith("/billing")
         ? "Internal"
         : "Host";
   const roleInitial = roleLabel.slice(0, 1);
@@ -179,8 +185,8 @@ export function Topbar() {
     ? "/participant/profile"
     : pathname.startsWith("/workspace")
       ? "/workspace/profile"
-      : pathname.startsWith("/internal")
-        ? "/internal/profile"
+      : pathname.startsWith("/billing")
+        ? "/profile"
         : `/${activeWorkspaceSlug || "workspace"}/profile`;
 
   const handleSignOut = () => {
@@ -207,9 +213,7 @@ export function Topbar() {
           <IconButton label="Help">
             <Question weight="light" className="h-4 w-4" />
           </IconButton>
-          <IconButton label="Notifications">
-            <Bell weight="light" className="h-4 w-4" />
-          </IconButton>
+          <NotificationPopover />
           <IconButton label="Theme">
             <Moon weight="light" className="h-4 w-4" />
           </IconButton>
