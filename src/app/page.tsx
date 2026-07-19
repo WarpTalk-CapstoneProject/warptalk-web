@@ -8,9 +8,10 @@ import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import type { MotionValue, Variants } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
 import { getPlanDescription, buildFeatureList } from "@/lib/utils";
+import { createHubConnection } from "@/lib/signalr";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
@@ -977,11 +978,34 @@ function LandingFooter() {
 }
 
 export default function HomePage() {
+  const queryClient = useQueryClient();
   const [hasLoaderFinished, setHasLoaderFinished] = useState(false);
   const [hasShellLoaded, setHasShellLoaded] = useState(false);
   const [hasHeroVideoLoaded, setHasHeroVideoLoaded] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const isLoading = !hasLoaderFinished || !hasShellLoaded || !hasHeroVideoLoaded;
+
+  // SignalR connection for real-time landing page pricing updates
+  useEffect(() => {
+    const connection = createHubConnection("/hubs/notification");
+
+    connection.on("NewNotification", (notification) => {
+      if (notification?.type === "billing.plan_changed") {
+        queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
+      }
+    });
+
+    let isMounted = true;
+    connection.start().catch((err) => {
+      if (!isMounted) return;
+      if (err?.message?.includes("stop() was called")) return;
+    });
+
+    return () => {
+      isMounted = false;
+      connection.stop();
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     let cancelled = false;

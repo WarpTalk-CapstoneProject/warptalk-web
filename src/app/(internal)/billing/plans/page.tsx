@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit2, Trash2, ArrowLeft, Loader2, Sparkles, Shield, User, Globe, FileText, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { billingService } from "@/services/billing.service";
 import Link from "next/link";
+import { createHubConnection } from "@/lib/signalr";
+import { toast } from "sonner";
 
 interface PlanFormState {
   name: string;
@@ -65,6 +67,29 @@ export default function AdminPlansPage() {
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [deactivatingPlanId, setDeactivatingPlanId] = useState<string | null>(null);
   const [deactivatingPlanName, setDeactivatingPlanName] = useState("");
+
+  // SignalR for real-time plan updates in Admin panel
+  useEffect(() => {
+    const connection = createHubConnection("/hubs/notification");
+
+    connection.on("NewNotification", (notification) => {
+      if (notification?.type === "billing.plan_changed") {
+        toast.info(notification.content, { duration: 5000 });
+        queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
+      }
+    });
+
+    let isMounted = true;
+    connection.start().catch((err) => {
+      if (!isMounted) return;
+      if (err?.message?.includes("stop() was called")) return;
+    });
+
+    return () => {
+      isMounted = false;
+      connection.stop();
+    };
+  }, [queryClient]);
 
   // Queries
   const { data: plans = [], isLoading } = useQuery({
@@ -150,9 +175,43 @@ export default function AdminPlansPage() {
 
     // Validation
     if (!formState.name.trim()) { setErrorMsg("Name is required."); return; }
+    if (formState.name.length > 100) { setErrorMsg("Name must not exceed 100 characters."); return; }
+
     if (!formState.slug.trim()) { setErrorMsg("Slug is required."); return; }
-    if (formState.price < 0) { setErrorMsg("Price must be non-negative."); return; }
+    if (formState.slug.length > 50) { setErrorMsg("Slug must not exceed 50 characters."); return; }
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(formState.slug)) {
+      setErrorMsg("Slug must be lowercase alphanumeric characters and hyphens only (e.g., 'gold-tier').");
+      return;
+    }
+
+    if (!formState.tier.trim()) { setErrorMsg("Tier is required."); return; }
+    if (formState.tier.length > 20) { setErrorMsg("Tier must not exceed 20 characters."); return; }
+
+    const currency = (formState.currency || "").toUpperCase().trim();
+    if (currency.length !== 3) { setErrorMsg("Currency must be a 3-character ISO code."); return; }
+
+    const billingCycle = (formState.billingCycle || "").toLowerCase().trim();
+    if (billingCycle !== "monthly" && billingCycle !== "semiannual" && billingCycle !== "yearly") {
+      setErrorMsg("Billing cycle must be 'monthly', 'semiannual', or 'yearly'.");
+      return;
+    }
+
+    // Stripe Minimum Charge Limits Validation
+    let minPrice = 0.50;
+    if (currency === "VND") minPrice = 15000;
+    else if (currency === "JPY") minPrice = 50;
+    else if (currency === "GBP") minPrice = 0.30;
+    else minPrice = 0.50;
+
+    if (formState.price < minPrice) {
+      setErrorMsg(`Price for ${currency} must be at least ${minPrice} due to Stripe payment constraints.`);
+      return;
+    }
+
     if (formState.creditsPerCycle < 0) { setErrorMsg("Credits must be non-negative."); return; }
+    if (formState.maxParticipants < 2) { setErrorMsg("Max participants must be at least 2."); return; }
+    if (formState.maxLanguages < 1) { setErrorMsg("Max languages must be at least 1."); return; }
+    if (formState.sortOrder < 0) { setErrorMsg("Sort order must be non-negative."); return; }
 
     // Convert lines to JSON array string
     const lines = formState.featuresText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
