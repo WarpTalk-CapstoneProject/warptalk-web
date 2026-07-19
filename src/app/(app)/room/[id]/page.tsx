@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
+import { LiveKitRoom } from "@livekit/components-react";
 import "@livekit/components-styles";
 import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { MeetingTopBar } from "@/components/rooms/live/meeting-top-bar";
 import { MeetingControlBar, type MeetingLayoutMode } from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
+import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { MeetingSidePanel, type SidePanelMode } from "@/components/rooms/live/side-panel/meeting-side-panel";
 import { WaitingRoomView, StatePanel } from "@/components/rooms/live/waiting-room-view";
 
@@ -400,7 +401,7 @@ export default function RoomDetailPage() {
                 layoutMode={meetingLayout}
                 onRetry={retryMeetingConnection}
               />
-              <RoomAudioRenderer />
+              <FilteredRoomAudio targetLanguage={targetLanguage} />
 
               {/* Floating Control Bar */}
               <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity hover:opacity-100">

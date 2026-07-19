@@ -82,10 +82,10 @@ export function useUpdateWorkspaceSettings(workspaceId: string) {
 
 // ─── Members ───
 
-export function useWorkspaceMembers(workspaceId: string, page = 1, pageSize = 10, search = "") {
+export function useWorkspaceMembers(workspaceId: string | undefined, page = 1, pageSize = 10, search = "") {
   return useQuery({
-    queryKey: WORKSPACE_KEYS.members(workspaceId, page, pageSize, search),
-    queryFn: () => WorkspaceService.listMembers(workspaceId, page, pageSize, search),
+    queryKey: WORKSPACE_KEYS.members(workspaceId ?? "", page, pageSize, search),
+    queryFn: () => WorkspaceService.listMembers(workspaceId ?? "", page, pageSize, search),
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
