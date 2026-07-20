@@ -176,7 +176,7 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
             } else if (isAssistant) {
               displayName = "WarpBot";
             } else {
-              const senderParticipant = participants.find(p => p.userId === message.senderUserId || p.displayName === message.senderDisplayName);
+              const senderParticipant = participants.find(p => p.userId === message.senderUserId || p.displayName === message.senderDisplayName || (p as any).providerIdentity === message.senderDisplayName);
               displayName = senderParticipant?.displayName || "User";
             }
             

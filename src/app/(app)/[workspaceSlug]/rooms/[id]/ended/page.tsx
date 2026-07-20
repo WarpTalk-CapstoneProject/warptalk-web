@@ -10,8 +10,8 @@ const jobs = [
   { label: "Artifact permissions", status: "Ready", icon: FileText },
 ];
 
-export default async function RoomEndedPage({ params }: { params: Promise<{ workspaceSlug: string; id: string }> }) {
-  const { workspaceSlug, id: roomId } = await params;
+export default async function RoomEndedPage({ params }: { params: Promise<{ id: string; workspaceSlug: string }> }) {
+  const { id: roomId, workspaceSlug } = await params;
 
   return (
     <div className="mx-auto grid max-w-5xl gap-4">

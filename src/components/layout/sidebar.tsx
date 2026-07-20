@@ -22,6 +22,7 @@ const secondaryNav = [
 
 const adminNav = [
   { name: "Admin", href: "/rooms", icon: Shield },
+  { name: "Notifications", href: "/notifications", icon: Bell },
 ];
 
 export function Sidebar() {

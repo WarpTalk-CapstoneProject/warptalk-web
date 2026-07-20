@@ -17,10 +17,10 @@ export function MeetingPropertiesPills({
   room: TranslationRoomDto;
   apiParticipants: TranslationRoomParticipantDto[];
   activeParticipantCount: number;
-  user: any;
+  user: { id: string; fullName?: string } | null;
 }) {
   const updateSettings = useUpdateTranslationRoomSettings();
-  const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1);
+  const [isMultiLang, setIsMultiLang] = useState(room.targetLanguages.length > 1 || (room as any).translationMode === "multi");
 
   const handleSourceChange = (lang: string) => {
     updateSettings.mutate({

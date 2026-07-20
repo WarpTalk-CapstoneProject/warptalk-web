@@ -18,13 +18,14 @@ export function createHubConnection(
   hubPath: "/hubs/translation-room" | "/hubs/notification" | "/api/v1/meetings/chat-hub"
 ): signalR.HubConnection {
   const connection = new signalR.HubConnectionBuilder()
-    .withUrl(`${BASE_URL}${hubPath.startsWith("/api") ? hubPath : hubPath}`, {
+    .withUrl(`${BASE_URL}${hubPath}`, {
+      transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling,
       accessTokenFactory: () => {
         return useAuthStore.getState().accessToken ?? "";
       },
     })
     .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-    .configureLogging(signalR.LogLevel.Warning)
+    .configureLogging(signalR.LogLevel.None)
     .build();
 
   return connection;

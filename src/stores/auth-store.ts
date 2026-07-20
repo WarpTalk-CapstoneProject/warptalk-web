@@ -1,20 +1,21 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserDto } from "@/types/auth";
+import { useWorkspaceStore } from "./workspace-store";
 
 interface AuthState {
   user: UserDto | null;
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
-
+ 
   setUser: (user: UserDto) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
   login: (user: UserDto, accessToken: string, refreshToken: string) => void;
   logout: () => void;
   updateUser: (updates: Partial<UserDto>) => void;
 }
-
+ 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -22,7 +23,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
-
+ 
       setUser: (user) => set({ user }),
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
@@ -32,6 +33,7 @@ export const useAuthStore = create<AuthState>()(
         if (typeof document !== "undefined") {
           document.cookie = "access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         }
+        useWorkspaceStore.getState().clearActiveWorkspace();
         set({
           user: null,
           accessToken: null,

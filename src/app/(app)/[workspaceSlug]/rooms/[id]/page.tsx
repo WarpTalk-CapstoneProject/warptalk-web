@@ -95,7 +95,7 @@ export default function RoomInformationPage() {
     ? room.workspaceId
     : workspaces?.items?.[0]?.id;
     
-  const { data: members } = useWorkspaceMembers(validWorkspaceId);
+  const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
   const activeApiParticipants = apiParticipants.filter((participant) =>
@@ -192,7 +192,7 @@ export default function RoomInformationPage() {
                 </div>
                 <div className="shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Popover>
-                    <PopoverTrigger className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors cursor-pointer">
+                    <PopoverTrigger className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors cursor-pointer outline-none">
                       <Users className="w-3.5 h-3.5" />
                       Tracking
                     </PopoverTrigger>
@@ -410,38 +410,6 @@ export default function RoomInformationPage() {
                 </div>
               )}
 
-              {activeTab === "activity" && (
-                <div className="space-y-6">
-                  <div className="relative pl-4 border-l border-border space-y-8">
-                    <div className="relative">
-                      <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-foreground" />
-                      <div className="text-[13px]">
-                        <span className="font-medium text-foreground">Meeting scheduled</span>
-                        <span className="text-muted-foreground ml-2">{formatDateTime(room.createdAt)}</span>
-                      </div>
-                      <div className="text-[13px] text-muted-foreground mt-1">Host set the languages to {languageNames.join(", ")}.</div>
-                    </div>
-                    {room.startedAt && (
-                      <div className="relative">
-                        <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-border " />
-                        <div className="text-[13px]">
-                          <span className="font-medium text-foreground">Meeting started</span>
-                          <span className="text-muted-foreground ml-2">{formatDateTime(room.startedAt)}</span>
-                        </div>
-                      </div>
-                    )}
-                    {isEnded && room.endedAt && (
-                      <div className="relative">
-                        <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-border " />
-                        <div className="text-[13px]">
-                          <span className="font-medium text-foreground">Meeting ended</span>
-                          <span className="text-muted-foreground ml-2">{formatDateTime(room.endedAt)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {activeTab === "transcript" && (
                 <div>
