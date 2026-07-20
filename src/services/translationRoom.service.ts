@@ -191,6 +191,10 @@ export const translationRoomService = {
     };
   },
 
+  async generateAudioRoutes(id: string) {
+    return apiClient.post<void>(API.translationRooms.generateAudioRoutes(id));
+  },
+
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };

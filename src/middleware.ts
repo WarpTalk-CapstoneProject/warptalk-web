@@ -22,7 +22,7 @@ export function middleware(request: NextRequest) {
   if (token && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
     const activeWorkspaceSlug = request.cookies.get("active_workspace_slug")?.value;
     if (activeWorkspaceSlug) {
-      return NextResponse.redirect(new URL(`/${activeWorkspaceSlug}/rooms`, request.url));
+      return NextResponse.redirect(new URL(`/${activeWorkspaceSlug}/dashboard`, request.url));
     } else {
       return NextResponse.redirect(new URL("/workspace", request.url));
     }

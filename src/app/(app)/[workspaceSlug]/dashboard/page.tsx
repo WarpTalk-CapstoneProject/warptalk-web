@@ -1,284 +1,301 @@
 "use client";
 
-import { useEffect } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import {
-  ArrowUpRight,
-  Robot,
-  CalendarDots,
-  Coins,
-  CreditCard,
-  Users,
-  VideoCamera,
-  Lock
-} from "@phosphor-icons/react";
-
-import { useWorkspace, useWorkspaceMembers, useWorkspaceInvitations, useWorkspaceSettings } from "@/hooks/use-workspace";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { Badge } from "@/components/ui/badge";
-import { aiCreditUsage, workspaceRooms } from "@/lib/workspace-preview";
+import { useUIStore } from "@/stores/ui-store";
+import { useTranslationRooms } from "@/hooks/use-translationRooms";
+import { Button } from "@/components/ui/button";
+import { 
+  Sparkle, 
+  Waveform, 
+  SquaresFour, 
+  ArrowRight,
+  PlayCircle,
+  Translate,
+  Robot,
+  Users
+} from "@phosphor-icons/react";
+import Image from "next/image";
+import Link from "next/link";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { motion } from "motion/react";
+
+const popularServices = [
+  {
+    title: "Translation Rooms",
+    description: "Host real-time meetings",
+    icon: Translate,
+    href: "/rooms",
+    color: "from-blue-500/20 to-indigo-500/20",
+    iconColor: "text-blue-500"
+  },
+  {
+    title: "AI Summaries",
+    description: "Review past meeting insights",
+    icon: Sparkle,
+    href: "/ai-summaries",
+    color: "from-purple-500/20 to-pink-500/20",
+    iconColor: "text-purple-500"
+  },
+  {
+    title: "Workspace Members",
+    description: "Manage your team",
+    icon: Users,
+    href: "/members",
+    color: "from-emerald-500/20 to-teal-500/20",
+    iconColor: "text-emerald-500"
+  }
+];
 
 export default function WorkspaceDashboardPage() {
-  const router = useRouter();
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const user = useAuthStore((s) => s.user);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
-  const role = useWorkspaceStore((s) => s.role);
-  const membershipType = useWorkspaceStore((s) => s.membershipType);
+  const setCreateRoomModalOpen = useUIStore((s) => s.setCreateRoomModalOpen);
 
-  // Queries
-  const workspaceQuery = useWorkspace(activeWorkspaceId || "");
-  const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
-  const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 1);
-  const invitationsQuery = useWorkspaceInvitations(activeWorkspaceId || "", 1, 1);
+  const { data: roomsData, isLoading: isLoadingRooms } = useTranslationRooms({ pageSize: 6 });
+  const recentRooms = roomsData?.rooms || [];
 
-  // If no workspace is active
-  if (!activeWorkspaceId) {
-    return null; // Will be handled by layout redirect guard
-  }
-
-  const isOwner = role === "Owner";
-  const isAdmin = role === "Admin";
-  const isOwnerOrAdmin = isOwner || isAdmin;
-
-  // RBAC boundaries: Redirect regular members to the rooms page
-  useEffect(() => {
-    if (!isOwnerOrAdmin && activeWorkspaceSlug) {
-      router.replace(`/${activeWorkspaceSlug}/rooms`);
-    }
-  }, [isOwnerOrAdmin, activeWorkspaceSlug, router]);
-
-  if (!isOwnerOrAdmin) {
-    return null; // Return nothing while redirecting
-  }
-
-  // Derive counts
-  const activeMembersCount = membersQuery.data?.total ?? 0;
-  const pendingInvitesCount = invitationsQuery.data?.total ?? 0;
-  const maxRooms = settingsQuery.data?.maxActiveRooms ?? 0;
-  const retentionDays = settingsQuery.data?.artifactRetentionDays ?? 0;
-  const totalSeats = 160;
-  const availableSeats = Math.max(0, totalSeats - activeMembersCount);
-
-  // Chart configuration
-  const maxUsage = Math.max(...aiCreditUsage.map((item) => item.value));
-  const points = aiCreditUsage
-    .map((item, index) => `${index * 100},${104 - (item.value / maxUsage) * 82}`)
-    .join(" ");
-
-  const metrics = [
-    {
-      label: "AI credits remaining",
-      value: "32,480",
-      detail: "68% of monthly quota",
-      icon: Coins,
-      emphasized: true,
-    },
-    {
-      label: "Active members",
-      value: `${activeMembersCount} Users`,
-      detail: `${pendingInvitesCount} pending invites`,
-      icon: Users,
-      emphasized: false,
-    },
-    {
-      label: "Concurrent room limit",
-      value: `${maxRooms || "No limit"}`,
-      detail: `Max active meetings allowed`,
-      icon: VideoCamera,
-      emphasized: false,
-    },
-    {
-      label: "Artifact retention policy",
-      value: `${retentionDays ? `${retentionDays} days` : "Indefinite"}`,
-      detail: `Retention before auto-deletion`,
-      icon: CalendarDots,
-      emphasized: false,
-    },
-  ];
-
-  const billingRows = [
-    { item: "Enterprise platform", amount: "$8,400", status: "Fixed" },
-    { item: "Realtime translation", amount: "$6,218", status: "Usage" },
-    { item: "AI summary & analysis", amount: "$2,062", status: "Usage" },
-  ];
+  const firstName = user?.fullName?.split(" ")[0] || "User";
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink">
+    <div className="flex-1 overflow-y-auto p-6 lg:p-10 scrollbar-hide bg-canvas text-ink">
+      <div className="max-w-7xl mx-auto space-y-10 w-full">
+      {/* Header & Greeting */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex items-center justify-between"
+      >
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-ink flex items-center gap-2">
+            Welcome, <span className="font-serif italic font-normal text-4xl">{firstName}</span> <span className="text-2xl animate-wave origin-bottom-right">👋</span>
+          </h1>
+          <p className="text-ink-muted mt-1">
+            Manage your multilingual meetings, workspace members, and review AI summaries.
+          </p>
+        </div>
+      </motion.div>
 
-      {/* Metrics Grid - Sleek Linear UI style */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((metric) => (
-          <div
-            key={metric.label}
-            className={`rounded-lg p-4 flex flex-col gap-3 transition-colors ${
-              metric.emphasized 
-                ? "bg-primary text-white shadow-[0_0_20px_rgba(94,106,210,0.15)]" 
-                : "bg-surface-1/40 hover:bg-surface-1/60 text-ink border border-hairline/30"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div
-                className={`flex h-7 w-7 items-center justify-center rounded-md ${
-                  metric.emphasized ? "bg-white/20 text-white" : "bg-surface-2/80 text-ink-muted border border-hairline/40"
-                }`}
-              >
-                <metric.icon className="h-4 w-4" />
-              </div>
-              <ArrowUpRight
-                className={`h-3.5 w-3.5 ${metric.emphasized ? "text-white/60" : "text-ink-muted"}`}
+      {/* Hero Section */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+      >
+        {/* Main CTA Card */}
+        <div className="lg:col-span-1 bg-gradient-to-br from-[#0A102A] via-[#101940] to-indigo-950 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl shadow-indigo-500/10 group border border-white/5">
+          {/* Noise texture overlay */}
+          <div className="absolute inset-0 opacity-[0.08] mix-blend-overlay pointer-events-none" style={{backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')"}}></div>
+          
+          {/* Subtle grid pattern */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:32px_32px]"></div>
+
+          {/* Landing Page Video Visual */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-3xl">
+            <video 
+              className="absolute inset-0 size-full object-cover opacity-30 mix-blend-screen transition-opacity duration-1000 group-hover:opacity-50" 
+              autoPlay 
+              muted 
+              loop 
+              playsInline 
+              preload="auto"
+            >
+              <source
+                src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260503_104800_bc43ae09-f494-43e3-97d7-2f8c1692cfd7.mp4"
+                type="video/mp4"
               />
-            </div>
-            <div>
-              <p className={`text-[11px] font-medium tracking-tight ${metric.emphasized ? "text-white/80" : "text-ink-muted"}`}>
-                {metric.label}
-              </p>
-              <p className="text-lg font-bold tracking-tight mt-0.5">{metric.value}</p>
-              <p className={`text-[10px] mt-0.5 ${metric.emphasized ? "text-white/70" : "text-ink-muted"}`}>
-                {metric.detail}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Main & Sidebar Panel */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <div className="flex flex-col gap-4">
-          {/* AI Usage Chart - Borderless with translucent background */}
-          <div className="border border-hairline/30 bg-surface-1/40 rounded-lg p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-2 border-b border-hairline/20">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">AI credit usage</h3>
-                <p className="text-xs text-ink-muted mt-0.5">
-                  Realtime translation, summaries, and workspace AI chat.
-                </p>
-              </div>
-              <Badge variant="outline" className="rounded-md border-hairline bg-surface-2 text-[10px] py-0.5 px-2">
-                Last 7 days
-              </Badge>
-            </div>
-            <div>
-              <div className="grid gap-6 md:grid-cols-[1fr_200px]">
-                <div className="min-w-0">
-                  <svg viewBox="0 0 600 120" className="h-44 w-full overflow-visible" role="img" aria-label="AI credit usage chart">
-                    {[22, 49, 76, 103].map((y) => (
-                      <line key={y} x1="0" x2="600" y1={y} y2={y} stroke="var(--hairline)" strokeDasharray="4 5" opacity="0.4" />
-                    ))}
-                    <defs>
-                      <linearGradient id="creditArea" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="var(--primary)" stopOpacity=".2" />
-                        <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <polygon points={`0,110 ${points} 600,110`} fill="url(#creditArea)" />
-                    <polyline points={points} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                    {aiCreditUsage.map((item, index) => (
-                      <circle key={item.label} cx={index * 100} cy={104 - (item.value / maxUsage) * 82} r="3.5" fill="var(--background)" stroke="var(--primary)" strokeWidth="2" />
-                    ))}
-                  </svg>
-                  <div className="grid grid-cols-7 text-center text-[10px] text-ink-muted mt-2 font-mono">
-                    {aiCreditUsage.map((item) => <span key={item.label}>{item.label.replace("Jun ", "")}</span>)}
-                  </div>
-                </div>
-
-                <div className="flex flex-col justify-between rounded-lg bg-surface-2/50 border border-hairline/30 p-4 text-ink gap-3">
-                  <div className="flex items-center gap-2 text-primary">
-                    <Robot className="h-5 w-5" />
-                    <span className="text-xs font-semibold text-ink">AI Agent State</span>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-ink-muted">Credits consumed</p>
-                    <p className="text-2xl font-bold">17,520</p>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-3/60">
-                    <div className="h-full w-[35%] rounded-full bg-primary" />
-                  </div>
-                  <p className="text-[10px] text-ink-muted leading-normal">
-                    Current forecast stays within the 50,000-credit Enterprise allowance.
-                  </p>
-                </div>
-              </div>
-            </div>
+            </video>
           </div>
 
-          {/* Meeting activity - Sleek Dark List */}
-          <div className="border border-hairline/30 bg-surface-1/40 rounded-lg p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-2 border-b border-hairline/20">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Meeting activity</h3>
-                <p className="text-xs text-ink-muted mt-0.5">Live and upcoming workspace sessions.</p>
+          <div className="relative z-10 flex flex-col h-full justify-between gap-8">
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 backdrop-blur-xl text-xs font-medium border border-white/10 shadow-inner">
+                <Sparkle size={14} weight="fill" className="text-blue-400" />
+                <span className="text-blue-50">WarpTalk Premium</span>
               </div>
-              <Link
-                href="rooms"
-                className="inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-xs font-medium border border-hairline bg-surface-1 hover:bg-surface-2 transition duration-150"
-              >
-                All rooms <ArrowUpRight className="h-3 w-3" />
-              </Link>
+              <h2 className="text-3xl lg:text-4xl font-bold leading-tight font-serif tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white to-white/70">
+                Break Down Language <br/> Barriers Instantly
+              </h2>
+              <p className="text-indigo-100/70 text-sm max-w-sm">
+                Host real-time multilingual meetings with live transcription and AI translation.
+              </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {workspaceRooms.slice(0, 3).map((room) => (
-                <div
-                  key={room.id}
-                  className="rounded-md border border-hairline/30 bg-surface-2/40 p-3 flex flex-col gap-2 hover:border-hairline-strong/60 transition duration-150"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge variant="outline" className="text-[9px] font-mono border-hairline bg-surface-3/40 px-1 py-0.5 text-ink-muted">
-                      {room.status}
-                    </Badge>
-                    <span className="text-[10px] text-ink-muted font-mono">{room.participants}</span>
-                  </div>
-                  <p className="truncate text-xs font-semibold text-ink">{room.name}</p>
-                  <p className="flex items-center gap-1 text-[10px] text-ink-muted">
-                    <CalendarDots className="h-3 w-3" />
-                    {room.startsAt}
-                  </p>
-                </div>
-              ))}
-            </div>
+            
+            <Button 
+              onClick={() => setCreateRoomModalOpen(true)}
+              className="bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20 hover:border-white/30 rounded-2xl px-6 py-5 font-semibold text-sm w-fit group-hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-all flex items-center gap-2"
+            >
+              Start a Room <ArrowRight size={16} weight="bold" className="group-hover:translate-x-1 transition-transform" />
+            </Button>
           </div>
         </div>
 
-        {/* Right Rail: Billing snapshot & Seats usage */}
-        <div className="flex flex-col gap-4">
-          {/* Billing Snapshot Panel */}
-          <div className="border border-hairline/30 bg-surface-1/40 rounded-lg p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-2 border-b border-hairline/20">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Billing Snapshot</h3>
-                <p className="text-xs text-ink-muted mt-0.5">Current billing period charges.</p>
-              </div>
-              <CreditCard className="h-4.5 w-4.5 text-ink-muted" />
-            </div>
-            <div className="flex flex-col gap-2.5">
-              {billingRows.map((row) => (
-                <div key={row.item} className="flex items-center justify-between rounded-md border border-hairline/30 bg-surface-2/40 p-2.5">
-                  <div>
-                    <p className="text-xs font-semibold text-ink">{row.item}</p>
-                    <p className="text-[10px] text-ink-muted mt-0.5">{row.status}</p>
-                  </div>
-                  <p className="text-xs font-bold text-ink">{row.amount}</p>
-                </div>
-              ))}
-              <div className="flex items-center justify-between border-t border-hairline/40 pt-3 mt-1">
-                <span className="text-xs text-ink-muted">Estimated June invoice</span>
-                <span className="text-sm font-bold text-foreground">$16,680</span>
-              </div>
+        {/* Popular Services */}
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-ink">Popular Services</h3>
+            <div className="flex gap-2">
+              <button className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-2 hover:bg-surface-3 transition-colors text-ink-muted border border-border">
+                <ArrowRight size={14} className="rotate-180" />
+              </button>
+              <button className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-2 hover:bg-surface-3 transition-colors text-ink border border-border">
+                <ArrowRight size={14} />
+              </button>
             </div>
           </div>
-
-          {/* Enterprise Seats */}
-          <div className="border border-hairline/30 bg-surface-1/40 rounded-lg p-4 flex items-center justify-between gap-4 text-ink">
-            <div>
-              <p className="text-[10px] text-ink-muted">Enterprise seats</p>
-              <p className="mt-1 text-lg font-bold">{availableSeats} available</p>
-              <p className="text-[10px] text-ink-muted mt-0.5">{activeMembersCount} of {totalSeats} assigned</p>
-            </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-2/60 border border-hairline/30 text-primary">
-              <Users className="h-4 w-4 text-primary" />
-            </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
+            {popularServices.map((service, i) => {
+              const Icon = service.icon;
+              return (
+                <Link href={`/${activeWorkspaceSlug}${service.href}`} key={i} className="block h-full">
+                  <div className="bg-surface-1/50 border border-border/40 rounded-3xl p-6 h-full flex flex-col items-center justify-center text-center hover:border-primary/30 hover:bg-surface-1 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden backdrop-blur-sm">
+                    {/* Abstract Hover Background */}
+                    <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${service.color} opacity-0 group-hover:opacity-40 transition-opacity duration-500 rounded-full blur-2xl -mr-10 -mt-10`}></div>
+                    
+                    <div className="relative z-10 flex flex-col items-center">
+                      <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${service.color} border border-border/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-sm`}>
+                        <Icon size={28} weight="duotone" className={service.iconColor} />
+                      </div>
+                      <h4 className="font-semibold text-ink text-sm">{service.title}</h4>
+                      <p className="text-xs text-ink-muted mt-1">{service.description}</p>
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         </div>
+      </motion.div>
+
+      {/* Recent Rooms */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-ink flex items-center gap-1 group cursor-pointer hover:text-primary transition-colors">
+            Recent & Upcoming Rooms <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 -ml-2 group-hover:ml-0 transition-all" />
+          </h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {isLoadingRooms ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-surface-1 border border-border rounded-2xl p-4 flex items-center gap-4 animate-pulse">
+                <div className="w-12 h-12 rounded-full bg-surface-3"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-surface-3 rounded w-3/4"></div>
+                  <div className="h-3 bg-surface-3 rounded w-1/2"></div>
+                </div>
+              </div>
+            ))
+          ) : recentRooms.length > 0 ? (
+            recentRooms.map((room, i) => {
+              const bgColors = ["bg-blue-500", "bg-purple-500", "bg-teal-500", "bg-orange-500", "bg-pink-500", "bg-indigo-500"];
+              const bgColor = bgColors[i % bgColors.length];
+              const isLive = room.status === "in_progress";
+              
+              return (
+                <Link href={`/${activeWorkspaceSlug}/rooms/${room.id}`} key={room.id} className="block h-full">
+                  <div className="bg-surface-1/50 border border-border/40 rounded-3xl p-4 flex items-center gap-4 hover:border-primary/30 hover:bg-surface-1 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer group h-full relative overflow-hidden backdrop-blur-sm">
+                    {/* Hover Glow */}
+                    <div className="absolute left-0 bottom-0 w-24 h-24 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-full blur-xl -ml-8 -mb-8 pointer-events-none"></div>
+                    
+                    <div className="relative z-10 flex items-center gap-4 w-full">
+                      <div className="relative">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${bgColor} shadow-md ring-2 ring-canvas group-hover:ring-primary/20 transition-all`}>
+                          {(room.title || "R").charAt(0).toUpperCase()}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-ink text-sm truncate group-hover:text-primary transition-colors">{room.title || "Untitled"}</h4>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <div className={`w-1.5 h-1.5 rounded-full ${isLive ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" : "bg-surface-4"}`} />
+                          <span className="text-xs text-ink-muted truncate font-medium">
+                            {isLive ? "Live now" : room.status}
+                          </span>
+                          <span className="text-xs text-ink-muted/50 mx-1">•</span>
+                          <span className="text-xs text-ink-muted truncate">{room.sourceLanguage || "Multiple"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })
+          ) : (
+            <div className="col-span-full py-8 text-center text-ink-muted text-sm border border-dashed border-border rounded-2xl">
+              No recent rooms found.
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Feature Highlights */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+        className="space-y-4 pb-8"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-ink">WarpTalk Feature Highlights</h3>
+          <div className="flex gap-2">
+            <button className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-2 hover:bg-surface-3 transition-colors text-ink-muted border border-border">
+              <ArrowRight size={14} className="rotate-180" />
+            </button>
+            <button className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-2 hover:bg-surface-3 transition-colors text-ink border border-border">
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-surface-1 border border-border/40 rounded-3xl p-5 flex items-center gap-4 hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden group">
+             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:12px_12px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+             <div className="absolute right-0 top-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-blue-500/10 transition-colors duration-500 pointer-events-none"></div>
+             
+             <div className="relative z-10 w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-500 shadow-sm group-hover:scale-105 transition-transform duration-300">
+                <SquaresFour size={28} weight="duotone" />
+             </div>
+             <div className="relative z-10">
+               <p className="font-semibold text-ink text-sm">Enterprise</p>
+               <p className="text-ink-muted text-xs">AI Transcription</p>
+             </div>
+          </div>
+          
+          <div className="bg-surface-1 border border-border/40 rounded-3xl p-5 flex items-center gap-4 hover:border-purple-500/30 hover:shadow-xl hover:shadow-purple-500/5 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden group">
+             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:12px_12px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+             <div className="absolute right-0 top-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-purple-500/10 transition-colors duration-500 pointer-events-none"></div>
+             
+             <div className="relative z-10 w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-500/20 flex items-center justify-center text-purple-500 shadow-sm group-hover:scale-105 transition-transform duration-300">
+                <Sparkle size={28} weight="duotone" />
+             </div>
+             <div className="relative z-10">
+               <p className="font-semibold text-ink text-sm">Instant</p>
+               <p className="text-ink-muted text-xs">Meeting Insights</p>
+             </div>
+          </div>
+
+          <div className="bg-surface-1 border border-border/40 rounded-3xl p-5 flex items-center gap-4 hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden group">
+             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:12px_12px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+             <div className="absolute right-0 top-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors duration-500 pointer-events-none"></div>
+             
+             <div className="relative z-10 w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shadow-sm group-hover:scale-105 transition-transform duration-300">
+                <Robot size={28} weight="duotone" />
+             </div>
+             <div className="relative z-10">
+               <p className="font-semibold text-ink text-sm">Secure</p>
+               <p className="text-ink-muted text-xs">Artifact Retention</p>
+             </div>
+          </div>
+        </div>
+      </motion.div>
       </div>
     </div>
   );

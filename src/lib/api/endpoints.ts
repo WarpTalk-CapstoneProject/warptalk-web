@@ -43,6 +43,7 @@ export const API = {
     settings: (id: string) => `/translation-rooms/${id}/settings`,
     feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
+    generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
   },
   transcripts: {
     start: "/transcripts",

@@ -20,6 +20,7 @@ import {
   User,
   Shield,
   Warning,
+  House,
 } from "@phosphor-icons/react/dist/ssr";
 import type { IconProps } from "@phosphor-icons/react";
 type IconType = React.ElementType<IconProps>;
@@ -134,6 +135,7 @@ export function LinearSidebar() {
   const slug = activeWorkspaceSlug || "workspace";
 
   const mainNav: NavItem[] = [
+    { icon: House, label: "Home", href: `/${slug}/dashboard` },
     {
       icon: SquaresFour,
       label: "Meetings",
@@ -178,9 +180,6 @@ export function LinearSidebar() {
   }, [activeWorkspaceName]);
 
   const workspaceNav: NavItem[] = [];
-  if (isOwnerOrAdmin) {
-    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
-  }
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members` },
     { icon: FileText, label: "Documents", href: `/${slug}/documents` },

@@ -130,7 +130,7 @@ export default function RoomDetailPage() {
     startRoom.mutate(room.id, {
       onSuccess: () => toast.success("Room is live."),
       onError: () => {
-        autoStartedRef.current = false;
+        // Removed autoStartedRef reset to prevent infinite loops if start fails
       },
     });
   }, [isHost, room, startRoom]);

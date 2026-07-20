@@ -87,6 +87,11 @@ export function useStartTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      try {
+        await translationRoomService.generateAudioRoutes(id);
+      } catch (err) {
+        console.warn("Failed to generate audio routes. Room might fail to start if no routes exist.", err);
+      }
       const { data: translationRoom } = await translationRoomService.start(id);
       return translationRoom;
     },
