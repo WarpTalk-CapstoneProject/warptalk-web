@@ -85,7 +85,6 @@ function Breadcrumbs() {
   const roomId = isRoomInformationPage ? current : undefined;
   const roomQuery = useTranslationRoom(roomId as string);
   const roomTitle = roomQuery.data?.title;
-  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
