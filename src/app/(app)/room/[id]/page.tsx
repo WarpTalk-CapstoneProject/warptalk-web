@@ -18,6 +18,7 @@ import { createHubConnection } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto, TranslationTextDto } from "@/types/realtime";
 import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
@@ -28,6 +29,7 @@ import { MeetingTopBar } from "@/components/rooms/live/meeting-top-bar";
 import { MeetingControlBar, type MeetingLayoutMode } from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
+import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import { MeetingSidePanel, type SidePanelMode } from "@/components/rooms/live/side-panel/meeting-side-panel";
 import { WaitingRoomView, StatePanel } from "@/components/rooms/live/waiting-room-view";
 
@@ -43,6 +45,7 @@ function isInstantRoom(room: TranslationRoomDto) {
 export default function RoomDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const roomId = params.id;
   const user = useAuthStore((state) => state.user);
   const roomQuery = useTranslationRoom(roomId);
@@ -78,7 +81,12 @@ export default function RoomDetailPage() {
   const setLiveState = useTranslationRoomStore((state) => state.setTranslationRoomState);
   const addLiveParticipant = useTranslationRoomStore((state) => state.addParticipant);
   const removeLiveParticipant = useTranslationRoomStore((state) => state.removeParticipant);
-  const { rightSidebarOpen } = useUIStore();
+  const { rightSidebarOpen, setLeftSidebarOpen } = useUIStore();
+
+  useEffect(() => {
+    setLeftSidebarOpen(false);
+  }, [setLeftSidebarOpen]);
+
   const addTranscriptSegment = useTranslationRoomStore((state) => state.addTranscriptSegment);
   const addOrMergeTranslationText = useTranslationRoomStore((state) => state.addOrMergeTranslationText);
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
@@ -174,12 +182,12 @@ export default function RoomDetailPage() {
     // BR-159: Backend initiated disconnections
     connection.on("ForceDisconnected", (reason?: string) => {
       toast.error(reason || "This room has been forcibly closed or you were disconnected from another device.");
-      router.push("/rooms");
+      router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
     });
     
     connection.on("ParticipantKicked", () => {
       toast.error("You have been permanently removed from this room.");
-      router.push("/rooms");
+      router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
     });
 
     connection
@@ -275,7 +283,7 @@ export default function RoomDetailPage() {
     try {
       if (isPreviewRoom) {
         toast.success("Preview room ended.");
-        router.push("/rooms");
+        router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
         return;
       }
       if (action === "end") {
@@ -289,7 +297,7 @@ export default function RoomDetailPage() {
         }
         toast.success("You left the room.");
       }
-      router.push("/rooms");
+      router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not leave the room.");
     }
@@ -403,6 +411,9 @@ export default function RoomDetailPage() {
               />
               <FilteredRoomAudio targetLanguage={targetLanguage} />
 
+              {/* Live captions — real pipeline segments only */}
+              <LiveSubtitleOverlay enabled={warptalkStarted} />
+
               {/* Floating Control Bar */}
               <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity hover:opacity-100">
                 <MeetingControlBar
@@ -434,7 +445,7 @@ export default function RoomDetailPage() {
               participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
               participantsError={participantsQuery.isError && !isPreviewRoom}
               activeCount={activeCount}
-              segments={warptalkStarted ? liveSegments.length ? liveSegments : getPreviewTranscriptSegments() : []}
+              segments={warptalkStarted ? (isPreviewRoom && !liveSegments.length ? getPreviewTranscriptSegments() : liveSegments) : []}
               onCopyText={copyText}
               joinLink={joinLink}
               meetingStarted={room?.status === "in_progress"}

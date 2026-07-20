@@ -1,6 +1,9 @@
 import { create } from "zustand";
 
 interface UIState {
+  leftSidebarOpen: boolean;
+  setLeftSidebarOpen: (open: boolean) => void;
+  toggleLeftSidebar: () => void;
   rightSidebarOpen: boolean;
   setRightSidebarOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
@@ -17,6 +20,9 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
+  leftSidebarOpen: true,
+  setLeftSidebarOpen: (open) => set({ leftSidebarOpen: open }),
+  toggleLeftSidebar: () => set((state) => ({ leftSidebarOpen: !state.leftSidebarOpen })),
   rightSidebarOpen: false,
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),

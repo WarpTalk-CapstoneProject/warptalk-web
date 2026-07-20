@@ -28,7 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((state) => state.logout);
-  const { rightSidebarOpen, toggleRightSidebar } = useUIStore();
+  const { rightSidebarOpen, toggleRightSidebar, leftSidebarOpen, toggleLeftSidebar } = useUIStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
@@ -91,7 +91,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
-      <LinearSidebar />
+      {leftSidebarOpen && <LinearSidebar />}
       {/* Main Column */}
       <div className="relative flex flex-col flex-1 overflow-hidden min-w-0">
         {/* Main content box */}
@@ -99,6 +99,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Top bar */}
         <header className="h-[44px] border-b border-border flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-1.5 text-[13px] text-ink-muted">
+            <button
+              onClick={toggleLeftSidebar}
+              className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
+              title="Toggle Sidebar"
+            >
+              <SidebarSimple size={13} weight="bold" />
+            </button>
             {(() => {
               const parts: { label: string; href?: string }[] = [];
               const segments = pathname.split('/').filter(Boolean);
