@@ -20,7 +20,10 @@ export const meetingService = {
   },
 
   chatTranslate(roomId: string, messageId: string, targetLanguage: string) {
-    return apiClient.post<void>(API.meetings.chatTranslate(roomId, messageId), { targetLanguage });
+    return apiClient.post<import("@/types/realtime").ChatMessageTranslationDto>(
+      API.meetings.chatTranslate(roomId, messageId),
+      { targetLanguage }
+    );
   },
 
   chatModerate(roomId: string, messageId: string, reason: string) {

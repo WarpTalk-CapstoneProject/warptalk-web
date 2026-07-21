@@ -985,6 +985,18 @@ export default function HomePage() {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const isLoading = !hasLoaderFinished || !hasShellLoaded || !hasHeroVideoLoaded;
 
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+
+  const handleGetStarted = () => {
+    if (!isAuthenticated || !user) {
+      router.push("/login?redirect=/workspace");
+    } else {
+      router.push("/workspace");
+    }
+  };
+
   // SignalR connection for real-time landing page pricing updates
   useEffect(() => {
     const connection = createHubConnection("/hubs/notification");
@@ -1124,12 +1136,13 @@ export default function HomePage() {
                 ))}
               </div>
 
-              <Link
-                href="/login"
+              <button
+                type="button"
+                onClick={handleGetStarted}
                 className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
               >
                 Get Started for Free
-              </Link>
+              </button>
             </nav>
           </header>
 
@@ -1172,12 +1185,13 @@ export default function HomePage() {
               </motion.p>
 
               <motion.div variants={itemVariants} className="mt-9 flex flex-wrap justify-center gap-4">
-                <Link
-                  href="/login"
-                  className="rounded-xl border border-white/55 bg-black px-7 py-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-white hover:text-black"
+                <button
+                  type="button"
+                  onClick={handleGetStarted}
+                  className="rounded-xl border border-white/55 bg-black px-7 py-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-white hover:text-black cursor-pointer"
                 >
                   Get Started for Free
-                </Link>
+                </button>
                 <Link
                   href="/login"
                   className="rounded-xl border border-white/10 bg-white/[0.06] px-7 py-3 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white hover:text-black"

@@ -79,6 +79,13 @@ export interface ChatMessageDto {
   createdAt: string;
 }
 
+export interface ChatMessageTranslationDto {
+  messageId: string;
+  targetLanguage: string;
+  translatedText: string;
+  cached: boolean;
+}
+
 export interface TranslationRoomStateDto {
   translationRoomId: string;
   translationRoomCode: string;

@@ -42,6 +42,15 @@ export function useSendMeetingChat() {
   });
 }
 
+export function useTranslateMeetingChat(roomId: string) {
+  return useMutation({
+    mutationFn: async ({ messageId, targetLanguage }: { messageId: string; targetLanguage: string }) => {
+      const { data } = await meetingService.chatTranslate(roomId, messageId, targetLanguage);
+      return data;
+    },
+  });
+}
+
 export function useRejectMeetingParticipant(roomId: string) {
   return useMutation({
     mutationFn: async (participantId: string) => {

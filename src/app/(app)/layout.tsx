@@ -6,13 +6,12 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
-  SignOut,
   Question,
-  Bell,
   SidebarSimple,
   Spinner,
+  Command,
+  MagnifyingGlass,
 } from "@phosphor-icons/react/dist/ssr";
-import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { CreateRoomDialog } from "@/components/rooms/create-room-dialog";
 import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
@@ -27,8 +26,13 @@ import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const logout = useAuthStore((state) => state.logout);
-  const { rightSidebarOpen, toggleRightSidebar, leftSidebarOpen, toggleLeftSidebar } = useUIStore();
+  const {
+    rightSidebarOpen,
+    toggleRightSidebar,
+    leftSidebarOpen,
+    toggleLeftSidebar,
+    setSearchMeetingModalOpen,
+  } = useUIStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
@@ -63,13 +67,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
+        const membershipType =
+          "membershipType" in firstWs && typeof firstWs.membershipType === "string"
+            ? firstWs.membershipType
+            : "Internal";
         selectWorkspace.mutate(firstWs.id);
         setActiveWorkspace(
           firstWs.id,
           firstWs.name,
           firstWs.slug,
           firstWs.role || "Member",
-          (firstWs as any).membershipType || "Internal"
+          membershipType
         );
       } else {
         router.replace("/workspace");
@@ -97,8 +105,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main content box */}
         <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-surface-1 shadow-sm">
           {/* Top bar */}
-        <header className="h-[44px] border-b border-border flex items-center justify-between px-4 shrink-0">
-          <div className="flex items-center gap-1.5 text-[13px] text-ink-muted">
+        <header className="h-[44px] border-b border-border grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 shrink-0">
+          <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-muted">
             <button
               onClick={toggleLeftSidebar}
               className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
@@ -138,6 +146,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     parts.push({ label: "AI Summaries" });
                   } else if (feature === "dashboard") {
                     parts.push({ label: "Dashboard" });
+                  } else if (feature === "home") {
+                    parts.push({ label: "Home" });
                   } else if (feature === "members") {
                     parts.push({ label: "Members" });
                   } else if (feature === "documents") {
@@ -179,7 +189,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             })()}
           </div>
 
-          <div className="flex items-center gap-1.5 text-ink-muted">
+          <button
+            type="button"
+            onClick={() => setSearchMeetingModalOpen(true)}
+            className="hidden h-8 w-[min(34vw,420px)] min-w-[260px] items-center gap-2 rounded-full border border-border bg-canvas px-3 text-left text-[12px] text-ink-muted shadow-[0_1px_2px_rgba(16,24,40,0.03)] transition hover:border-hairline-strong hover:bg-surface-2 md:flex"
+          >
+            <MagnifyingGlass size={14} />
+            <span className="flex-1 truncate">Search meetings, rooms, or notes</span>
+            <span className="flex items-center gap-1 rounded-md border border-border bg-surface-1 px-1.5 py-0.5 text-[10px] text-ink-subtle">
+              <Command size={9} weight="bold" /> K
+            </span>
+          </button>
+
+          <div className="flex items-center justify-end gap-1.5 text-ink-muted">
+            <button
+              type="button"
+              onClick={() => setSearchMeetingModalOpen(true)}
+              className="flex size-6 items-center justify-center rounded-[6px] border border-transparent transition-colors hover:bg-surface-2 hover:text-ink md:hidden"
+              aria-label="Search meetings"
+            >
+              <MagnifyingGlass size={13} weight="bold" />
+            </button>
             <NotificationPopover />
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
             <div className="w-[1px] h-3.5 bg-border mx-1" />

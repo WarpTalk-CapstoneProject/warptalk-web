@@ -101,7 +101,7 @@ export default function CreateWorkspaceDemoPage() {
 
   useEffect(() => {
     if (mounted && activeWorkspaceId) {
-      router.replace(`/${activeWorkspaceSlug || "workspace"}/dashboard`);
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/home`);
     }
   }, [mounted, activeWorkspaceId, activeWorkspaceSlug, router]);
 
@@ -128,7 +128,7 @@ export default function CreateWorkspaceDemoPage() {
       await selectWorkspace.mutateAsync(workspace.id);
       setActiveWorkspace(workspace.id, workspace.name, workspace.slug, workspace.role || "Owner", "Internal");
       toast.success(`Workspace "${workspace.name}" created.`);
-      router.push(`/${workspace.slug}/dashboard`);
+      router.push(`/${workspace.slug}/home`);
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);

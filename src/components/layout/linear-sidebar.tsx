@@ -135,7 +135,7 @@ export function LinearSidebar() {
   const slug = activeWorkspaceSlug || "workspace";
 
   const mainNav: NavItem[] = [
-    { icon: House, label: "Home", href: `/${slug}/dashboard` },
+    { icon: House, label: "Home", href: `/${slug}/home` },
     {
       icon: SquaresFour,
       label: "Meetings",
@@ -164,7 +164,7 @@ export function LinearSidebar() {
       await selectWorkspaceMutation.mutateAsync(workspaceId);
       setActiveWorkspace(workspaceId, name, slug, roleName, membershipType);
       toast.success(`Switched to workspace "${name}"`);
-      router.push(`/${slug}/dashboard`);
+      router.push(`/${slug}/home`);
     } catch (err) {
       toast.error("Failed to switch workspace");
     }
@@ -189,6 +189,7 @@ export function LinearSidebar() {
   if (role === "Owner" || role === "Admin") {
     workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
+    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
   }
 
   const isSettingsPage = pathname === "/settings" || pathname.startsWith("/settings/") || pathname.includes("/settings") || pathname.includes("/security") || pathname.includes("/advanced");

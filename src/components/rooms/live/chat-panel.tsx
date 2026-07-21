@@ -1,21 +1,38 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { useMeetingChat, useSendMeetingChat } from "@/hooks/use-meeting";
+import { useMeetingChat, useSendMeetingChat, useTranslateMeetingChat } from "@/hooks/use-meeting";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
+import { getLanguageName, SUPPORTED_LANGUAGES } from "@/lib/languages";
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Mention from '@tiptap/extension-mention';
 import Placeholder from '@tiptap/extension-placeholder';
 import { suggestion } from './mentions';
-import { LoaderCircle, Send } from "lucide-react";
+import { LoaderCircle, Send, Languages } from "lucide-react";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
-export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, sourceLanguage?: string }) {
+interface MessageTranslationState {
+  text?: string;
+  loading: boolean;
+  visible: boolean;
+  error?: string;
+}
+
+export function ChatPanel({
+  roomId,
+  sourceLanguage = "en",
+  targetLanguage,
+}: {
+  roomId: string;
+  sourceLanguage?: string;
+  /** Viewer's own listen language — messages are translated on-click into this. */
+  targetLanguage?: string;
+}) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
   const participants = useTranslationRoomStore((state) => state.participants);
   const setChatMessages = useTranslationRoomStore((state) => state.setChatMessages);
@@ -23,10 +40,48 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
   const user = useAuthStore((state) => state.user);
   const historyQuery = useMeetingChat(roomId);
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
+  const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [translations, setTranslations] = useState<Record<string, MessageTranslationState>>({});
+  // User-facing "translate messages into" choice — defaults to the viewer's own listen
+  // language but can be overridden per session via the dropdown, since the viewer may
+  // not know (or want) the language it was inferred to.
+  const [selectedTargetLanguage, setSelectedTargetLanguage] = useState(targetLanguage || "en");
   const containerRef = useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
+
+  function handleTargetLanguageChange(nextLanguage: string) {
+    setSelectedTargetLanguage(nextLanguage);
+    // Previously fetched translations are for the old target language — drop them so
+    // re-opening a message re-fetches under the newly selected language instead of
+    // silently showing stale text.
+    setTranslations({});
+  }
+
+  function toggleTranslation(messageId: string) {
+    const current = translations[messageId];
+    if (current?.text) {
+      setTranslations((prev) => ({ ...prev, [messageId]: { ...current, visible: !current.visible } }));
+      return;
+    }
+
+    setTranslations((prev) => ({ ...prev, [messageId]: { loading: true, visible: true } }));
+    translateMessageAPI(
+      { messageId, targetLanguage: selectedTargetLanguage },
+      {
+        onSuccess: (dto) => {
+          setTranslations((prev) => ({ ...prev, [messageId]: { text: dto.translatedText, loading: false, visible: true } }));
+        },
+        onError: () => {
+          setTranslations((prev) => ({
+            ...prev,
+            [messageId]: { loading: false, visible: true, error: "Could not translate message." },
+          }));
+        },
+      }
+    );
+  }
 
   useEffect(() => {
     if (historyQuery.data) {
@@ -141,6 +196,23 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
 
   return (
     <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <label htmlFor="chat-translate-target" className="text-[11px] font-medium text-ink-subtle">
+          Translate to
+        </label>
+        <select
+          id="chat-translate-target"
+          value={selectedTargetLanguage}
+          onChange={(event) => handleTargetLanguageChange(event.target.value)}
+          className="rounded-md border border-border bg-surface-1 px-2 py-1 text-[12px] text-ink outline-none focus:border-brand-primary"
+        >
+          {SUPPORTED_LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code}>
+              {language.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
@@ -197,10 +269,36 @@ export function ChatPanel({ roomId, sourceLanguage = "en" }: { roomId: string, s
                     <span className="text-[11px] font-medium text-ink-subtle">
                       {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
+                    {selectedTargetLanguage.toLowerCase() !== message.originalLanguage.toLowerCase() ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleTranslation(message.id)}
+                        aria-label="Translate message"
+                        title="Translate message"
+                        className="flex h-5 w-5 items-center justify-center rounded text-ink-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink group-hover:opacity-100"
+                      >
+                        {translations[message.id]?.loading ? (
+                          <LoaderCircle className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Languages className="h-3 w-3" />
+                        )}
+                      </button>
+                    ) : null}
                   </div>
                   <p className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-brand-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}>
                     {message.originalText}
                   </p>
+                  {translations[message.id]?.visible && translations[message.id]?.text ? (
+                    <p className={`mt-1 rounded-md bg-surface-2 px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap text-ink ${isMine ? "text-right" : "text-left"}`}>
+                      {translations[message.id]!.text}
+                      <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
+                        {getLanguageName(selectedTargetLanguage)}
+                      </span>
+                    </p>
+                  ) : null}
+                  {translations[message.id]?.visible && translations[message.id]?.error ? (
+                    <p className="mt-1 text-[12px] text-red-600">{translations[message.id]!.error}</p>
+                  ) : null}
                 </div>
               </motion.div>
             );

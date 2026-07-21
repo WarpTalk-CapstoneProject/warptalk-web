@@ -33,7 +33,7 @@ export default function WorkspaceOnboardingGatePage() {
 
   useEffect(() => {
     if (mounted && activeWorkspaceId) {
-      router.replace(`/${activeWorkspaceSlug || "workspace"}/dashboard`);
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/home`);
     }
   }, [mounted, activeWorkspaceId, activeWorkspaceSlug, router]);
 
@@ -53,7 +53,7 @@ export default function WorkspaceOnboardingGatePage() {
           firstWs.role || "Member",
           (firstWs as any).membershipType || "Internal"
         );
-        router.replace(`/${firstWs.slug}/dashboard`);
+        router.replace(`/${firstWs.slug}/home`);
       }
     }
   }, [mounted, isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, selectWorkspace, setActiveWorkspace, router]);

@@ -449,6 +449,7 @@ export default function RoomDetailPage() {
               onCopyText={copyText}
               joinLink={joinLink}
               meetingStarted={room?.status === "in_progress"}
+              chatTargetLanguage={targetLanguage}
             />
           )}
         </main>

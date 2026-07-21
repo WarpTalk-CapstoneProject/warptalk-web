@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Robot, CalendarDots, Check, CheckCircle, CaretRight, Download, FileText, Funnel, Translate, ListChecks, ArrowCounterClockwise, MagnifyingGlass, Sparkle, Users } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -297,60 +297,63 @@ export default function AiSummariesPage() {
   const aiChatHref = `/ai-chat?meetingId=${selectedMeeting.id}&artifact=transcript-v${selectedMeeting.revision}`;
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 px-4 py-4 pb-6 text-ink overflow-hidden">
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="MagnifyingGlass meetings, groups, hosts..."
-            className="h-9 pl-8"
-          />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-canvas px-4 py-4 text-ink sm:px-5">
+      <div className="mb-4 flex shrink-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
+            <Sparkle size={14} weight="fill" className="text-primary" />
+            Meeting intelligence
+          </div>
+          <h1 className="text-[24px] font-semibold leading-8 text-ink">AI summaries</h1>
+          <p className="mt-1 text-[12px] text-ink-muted">Review transcripts, decisions, and follow-up work in one place.</p>
         </div>
-        <select
-          value={department}
-          onChange={(event) => setDepartment(event.target.value)}
-          className="h-9 rounded-lg border bg-white px-3 text-xs outline-none"
-          aria-label="Funnel by department"
-        >
-          {["All departments", "Executive", "Sales", "Legal", "Support"].map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-        <select
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-          className="h-9 rounded-lg border bg-white px-3 text-xs outline-none"
-          aria-label="Funnel by status"
-        >
-          {["All statuses", "Processing", "Draft", "Review needed", "Final"].map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-        <Button size="icon" variant="outline" title="More filters">
-          <Funnel weight="light" className="h-4 w-4" />
-        </Button>
+
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+          <div className="relative min-w-0 sm:w-[300px]">
+            <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-subtle" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search meetings, groups, hosts"
+              className="h-8 rounded-md bg-surface-1 pl-8 text-xs shadow-none"
+            />
+          </div>
+          <select
+            value={department}
+            onChange={(event) => setDepartment(event.target.value)}
+            className="h-8 rounded-md border border-border bg-surface-1 px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            aria-label="Filter by department"
+          >
+            {["All departments", "Executive", "Sales", "Legal", "Support"].map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            className="h-8 rounded-md border border-border bg-surface-1 px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            aria-label="Filter by status"
+          >
+            {["All statuses", "Processing", "Draft", "Review needed", "Final"].map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <Button size="icon-sm" variant="outline" title="More filters" aria-label="More filters" className="rounded-md shadow-none">
+            <Funnel weight="light" className="size-3.5" />
+          </Button>
+        </div>
       </div>
 
-      <div className="grid min-h-0 gap-2.5 xl:grid-cols-[260px_minmax(0,1fr)_250px]">
-        <Card className="min-h-0 gap-0 overflow-hidden rounded-[22px] py-0">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b px-3">
+      <div className="grid min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.03)] xl:grid-cols-[236px_minmax(0,1fr)_232px]">
+        <aside className="flex min-h-0 flex-col border-b border-border xl:border-b-0 xl:border-r">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
             <div>
-              <p className="text-sm font-semibold">Meetings</p>
-              <p className="text-[11px] text-muted-foreground">
-                {filteredMeetings.length} available
-              </p>
+              <p className="text-[12px] font-semibold">Sessions</p>
+              <p className="text-[10px] text-ink-muted">{filteredMeetings.length} available</p>
             </div>
-            <CalendarDots weight="light" className="h-4 w-4 text-muted-foreground" />
+            <CalendarDots weight="light" className="size-4 text-ink-subtle" />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {Object.entries(groupedMeetings).map(([dateLabel, records]) => (
-              <div key={dateLabel} className="mb-3 last:mb-0">
-                <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {dateLabel}
-                </p>
-                <div className="space-y-1">
+              <div key={dateLabel} className="mb-4 last:mb-0">
+                <p className="mb-1 px-2 text-[10px] font-medium uppercase text-ink-subtle">{dateLabel}</p>
+                <div className="space-y-0.5">
                   {records.map((meeting) => (
                     <button
                       key={meeting.id}
@@ -360,70 +363,48 @@ export default function AiSummariesPage() {
                         setEditingSegmentId(null);
                       }}
                       className={cn(
-                        "w-full rounded-xl px-2.5 py-2.5 text-left transition",
-                        selectedId === meeting.id
-                          ? "bg-neutral-950 text-white"
-                          : "hover:bg-neutral-100"
+                        "w-full rounded-md px-2 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30",
+                        selectedId === meeting.id ? "bg-surface-2" : "hover:bg-surface-2/70"
                       )}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate text-xs font-semibold">{meeting.title}</p>
+                      <div className="flex items-center gap-2">
                         <StatusDot status={meeting.status} />
+                        <p className="min-w-0 flex-1 truncate text-[12px] font-medium text-ink">{meeting.title}</p>
                       </div>
-                      <p
-                        className={cn(
-                          "mt-1 truncate text-[11px]",
-                          selectedId === meeting.id ? "text-white/60" : "text-muted-foreground"
-                        )}
-                      >
-                        {meeting.department} · {meeting.time}
-                      </p>
+                      <p className="mt-1 truncate pl-4 text-[10px] text-ink-muted">{meeting.department} · {meeting.time}</p>
                     </button>
                   ))}
                 </div>
               </div>
             ))}
-            {filteredMeetings.length === 0 ? (
-              <div className="px-3 py-10 text-center text-xs text-muted-foreground">
-                No meetings match these filters.
-              </div>
-            ) : null}
+            {filteredMeetings.length === 0 ? <MiniEmptyState text="No matching sessions" /> : null}
           </div>
-        </Card>
+        </aside>
 
-        <Card className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-[22px] py-0">
-          <div className="border-b px-3 pt-3">
-            <div className="flex items-start justify-between gap-3 pb-2.5">
+        <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-b border-border xl:border-b-0 xl:border-r">
+          <div className="border-b border-border px-4 pt-3">
+            <div className="flex items-start justify-between gap-3 pb-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="truncate text-sm font-semibold">{selectedMeeting.title}</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-[14px] font-semibold">{selectedMeeting.title}</h2>
                   <StatusBadge status={selectedMeeting.status} />
                 </div>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {selectedMeeting.department} / {selectedMeeting.group} · {selectedMeeting.code}
-                </p>
+                <p className="mt-1 text-[10px] text-ink-muted">{selectedMeeting.department} / {selectedMeeting.group} · {selectedMeeting.code}</p>
               </div>
-              <Button
-                size="sm"
-                onClick={approveFinal}
-                disabled={selectedMeeting.status === "Processing"}
-                className="rounded-full"
-              >
-                <Check weight="light" className="h-3.5 w-3.5" />
-                Approve final
+              <Button size="sm" onClick={approveFinal} disabled={selectedMeeting.status === "Processing"} className="h-8 rounded-md px-3 shadow-none">
+                <Check weight="bold" className="size-3.5" />
+                Approve
               </Button>
             </div>
-            <div className="flex gap-1 overflow-x-auto">
+            <div className="flex gap-4 overflow-x-auto">
               {tabs.map((tab) => (
                 <button
                   key={tab.value}
                   type="button"
                   onClick={() => setActiveTab(tab.value)}
                   className={cn(
-                    "h-8 shrink-0 border-b-2 px-2.5 text-xs font-medium transition",
-                    activeTab === tab.value
-                      ? "border-neutral-950 text-neutral-950"
-                      : "border-transparent text-muted-foreground hover:text-neutral-950"
+                    "h-8 shrink-0 border-b px-0 text-[11px] font-medium transition-colors",
+                    activeTab === tab.value ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"
                   )}
                 >
                   {tab.label}
@@ -432,7 +413,7 @@ export default function AiSummariesPage() {
             </div>
           </div>
 
-          <div className="min-h-0 overflow-y-auto p-3">
+          <div className="min-h-0 overflow-y-auto p-4">
             {activeTab === "overview" ? (
               <Overview meeting={selectedMeeting} onOpenTab={setActiveTab} />
             ) : null}
@@ -471,14 +452,14 @@ export default function AiSummariesPage() {
               />
             ) : null}
           </div>
-        </Card>
+        </main>
 
-        <Card className="min-h-0 gap-0 overflow-hidden rounded-[22px] py-0">
-          <div className="border-b px-3 py-3">
-            <p className="text-sm font-semibold">Meeting inspector</p>
-            <p className="text-[11px] text-muted-foreground">Context, version, and output</p>
+        <aside className="flex min-h-0 flex-col overflow-hidden">
+          <div className="border-b border-border px-3 py-3">
+            <p className="text-[12px] font-semibold">Inspector</p>
+            <p className="text-[10px] text-ink-muted">Context and output</p>
           </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
             <div className="grid grid-cols-2 gap-2">
               <InspectorValue icon={<Users weight="light" />} label="Participants" value={String(selectedMeeting.participants)} />
               <InspectorValue icon={<Translate weight="light" />} label="Translate" value={String(selectedMeeting.languages.length)} />
@@ -486,8 +467,8 @@ export default function AiSummariesPage() {
               <InspectorValue icon={<ArrowCounterClockwise weight="light" />} label="Revision" value={`v${selectedMeeting.revision}`} />
             </div>
 
-            <div className="rounded-xl border p-3">
-              <p className="text-xs font-semibold">Meeting details</p>
+            <div className="border-t border-border pt-3">
+              <p className="text-[11px] font-semibold">Meeting details</p>
               <dl className="mt-2 space-y-2 text-[11px]">
                 <DetailRow label="Host" value={selectedMeeting.host} />
                 <DetailRow label="Date" value={`${selectedMeeting.dateLabel}, ${selectedMeeting.time}`} />
@@ -496,8 +477,8 @@ export default function AiSummariesPage() {
               </dl>
             </div>
 
-            <div className="rounded-xl border p-3">
-              <p className="text-xs font-semibold">AI context</p>
+            <div className="border-t border-border pt-3">
+              <p className="text-[11px] font-semibold">AI context</p>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Uses transcript revision v{selectedMeeting.revision} and{" "}
                 {selectedMeeting.files.filter((file) => file.category === "Context").length} context files.
@@ -506,7 +487,7 @@ export default function AiSummariesPage() {
                 href={aiChatHref}
                 className={cn(
                   buttonVariants({ size: "sm" }),
-                  "mt-3 w-full justify-center rounded-full"
+                  "mt-3 h-8 w-full justify-center rounded-md shadow-none"
                 )}
               >
                 <Robot weight="light" className="h-3.5 w-3.5" />
@@ -514,15 +495,15 @@ export default function AiSummariesPage() {
               </Link>
             </div>
 
-            <div className="rounded-xl border p-3">
-              <p className="text-xs font-semibold">Quick exports</p>
+            <div className="border-t border-border pt-3">
+              <p className="text-[11px] font-semibold">Quick exports</p>
               <div className="mt-2 grid gap-1.5">
                 {["Final transcript", "Summary report", "Action items"].map((item) => (
                   <Button
                     key={item}
                     variant="outline"
                     size="sm"
-                    className="justify-between"
+                    className="h-8 justify-between rounded-md text-[11px] shadow-none"
                     onClick={() =>
                       downloadArtifact(
                         `${selectedMeeting.code}-${item.toLowerCase().replaceAll(" ", "-")}.txt`,
@@ -537,7 +518,7 @@ export default function AiSummariesPage() {
               </div>
             </div>
           </div>
-        </Card>
+        </aside>
       </div>
     </div>
   );
@@ -613,7 +594,7 @@ function TranscriptEditor({
           <div
             key={segment.id}
             className={cn(
-              "rounded-xl border p-3",
+              "rounded-lg border border-border p-3",
               segment.needsReview && "border-amber-300 bg-amber-50/50"
             )}
           >
@@ -643,7 +624,7 @@ function TranscriptEditor({
             ) : (
               <>
                 <p className="text-xs leading-relaxed">{segment.original}</p>
-                <p className="mt-2 rounded-lg bg-neutral-100 px-2.5 py-2 text-xs leading-relaxed text-neutral-600">
+                <p className="mt-2 rounded-md bg-surface-2 px-2.5 py-2 text-xs leading-relaxed text-ink-muted">
                   {segment.translation}
                 </p>
               </>
@@ -715,9 +696,9 @@ function FilesPanel({
   return (
     <div className="space-y-2">
       {meeting.files.map((file) => (
-        <div key={file.name} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+        <div key={file.name} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-2">
               <FileText weight="light" className="h-4 w-4" />
             </span>
             <div className="min-w-0">
@@ -795,10 +776,10 @@ function OverviewSection({
   children: ReactNode;
 }) {
   return (
-    <button type="button" onClick={onOpen} className="rounded-xl border p-3 text-left transition hover:bg-neutral-50">
+    <button type="button" onClick={onOpen} className="rounded-lg border border-border p-3 text-left outline-none transition-colors hover:bg-surface-2/50 focus-visible:ring-2 focus-visible:ring-ring/30">
       <div className="mb-3 flex items-center justify-between">
         <span className="flex items-center gap-2 text-xs font-semibold">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-950 text-white [&_svg]:h-3.5 [&_svg]:w-3.5">
+          <span className="flex size-7 items-center justify-center rounded-md bg-ink text-canvas [&_svg]:size-3.5">
             {icon}
           </span>
           {title}
@@ -820,8 +801,8 @@ function InspectorValue({
   value: string;
 }) {
   return (
-    <div className="rounded-xl border p-2.5">
-      <span className="text-muted-foreground [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
+    <div className="rounded-md border border-border bg-canvas/50 p-2.5">
+      <span className="text-ink-muted [&_svg]:size-3.5">{icon}</span>
       <p className="mt-2 text-[10px] text-muted-foreground">{label}</p>
       <p className="text-sm font-semibold">{value}</p>
     </div>
@@ -879,8 +860,21 @@ function List({ values, empty }: { values: string[]; empty: string }) {
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
-      {text}
+    <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border bg-canvas/40 px-6 text-center">
+      <Image
+        src="/images/workspace/voice-memory-isometric.png"
+        alt=""
+        width={112}
+        height={112}
+        className="mb-1 size-28 object-contain"
+        aria-hidden="true"
+      />
+      <p className="text-[12px] font-medium text-ink">{text}</p>
+      <p className="mt-1 max-w-[260px] text-[11px] leading-4 text-ink-muted">The transcript and summary will appear here when processing is complete.</p>
     </div>
   );
+}
+
+function MiniEmptyState({ text }: { text: string }) {
+  return <div className="px-3 py-10 text-center text-[11px] text-ink-muted">{text}</div>;
 }

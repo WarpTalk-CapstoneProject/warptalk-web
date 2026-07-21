@@ -23,6 +23,7 @@ export function MeetingSidePanel({
   onCopyText,
   joinLink,
   meetingStarted,
+  chatTargetLanguage,
 }: {
   roomId: string;
   room: TranslationRoomDto;
@@ -37,6 +38,8 @@ export function MeetingSidePanel({
   onCopyText: (value: string, label: string) => void;
   joinLink: string;
   meetingStarted: boolean;
+  /** Viewer's own listen language — passed to ChatPanel for on-click translation. */
+  chatTargetLanguage?: string;
 }) {
   return (
     <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden xl:flex hidden">
@@ -49,7 +52,7 @@ export function MeetingSidePanel({
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
           {mode === "transcript" ? <TranscriptPanel segments={segments} /> : null}
-          {mode === "chat" ? <ChatPanel roomId={roomId} /> : null}
+          {mode === "chat" ? <ChatPanel roomId={roomId} targetLanguage={chatTargetLanguage} /> : null}
           {mode === "participants" ? (
             <PeoplePanel
               roomId={roomId}
