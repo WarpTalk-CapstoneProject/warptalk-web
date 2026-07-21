@@ -98,6 +98,10 @@ export default function RoomDetailPage() {
   const apiParticipants = participantsQuery.data ?? (isPreviewRoom ? getPreviewLiveParticipants(roomId) : []);
   const role = useWorkspaceRole();
   const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id) || role === "admin" || role === "owner");
+  // Only the actual host may START the room. Workspace admins/owners get host-like
+  // UI privileges (isHost) but the backend rejects a start from anyone whose id != room.hostId
+  // with 403, so the auto-start below must gate on true host identity — not workspace role.
+  const isRoomHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id));
   const participants = liveParticipants.length ? mergeParticipants(apiParticipants, liveParticipants) : apiParticipants;
   const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
   const joinLink = room?.translationRoomCode ? getJoinLink(room.translationRoomCode) : "";
@@ -131,7 +135,7 @@ export default function RoomDetailPage() {
   }
 
   useEffect(() => {
-    if (!room || !isHost || autoStartedRef.current) return;
+    if (!room || !isRoomHost || autoStartedRef.current) return;
     if (room.status !== "waiting" || !isInstantRoom(room)) return;
 
     autoStartedRef.current = true;
@@ -141,7 +145,7 @@ export default function RoomDetailPage() {
         // Removed autoStartedRef reset to prevent infinite loops if start fails
       },
     });
-  }, [isHost, room, startRoom]);
+  }, [isRoomHost, room, startRoom]);
 
   useEffect(() => {
     if (!room?.id || !canConnectMeeting || meetingJoinedRef.current) return;

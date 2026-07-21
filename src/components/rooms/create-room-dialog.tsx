@@ -78,9 +78,10 @@ export function CreateRoomDialog() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
-  const [sourceLanguage, setSourceLanguage] = useState<string>("en");
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["vi"]);
-  const [isMultiLang, setIsMultiLang] = useState(false);
+  // The set of languages that will be spoken in this meeting. There is no source→target
+  // direction: each participant's own speak/listen language comes from their profile at
+  // join. Defaults to a common bilingual pair.
+  const [meetingLanguages, setMeetingLanguages] = useState<string[]>(["en", "vi"]);
   const [isDaily, setIsDaily] = useState(false);
   const [hasResources, setHasResources] = useState(false);
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
@@ -108,9 +109,13 @@ export function CreateRoomDialog() {
     if (editRoomId && editRoomData) {
       setTitle(editRoomData.title);
       setDescription(editRoomData.description || "");
-      setSourceLanguage(editRoomData.sourceLanguage || "en");
-      setSelectedLanguages(editRoomData.targetLanguages);
-      setIsMultiLang(editRoomData.targetLanguages.length > 1);
+      // Reconstruct the meeting-language set from persisted room fields (target set,
+      // falling back to the legacy source language for older rooms).
+      setMeetingLanguages(
+        editRoomData.targetLanguages?.length
+          ? editRoomData.targetLanguages
+          : [editRoomData.sourceLanguage || "en"]
+      );
       setScheduledAt(editRoomData.scheduledAt ? new Date(editRoomData.scheduledAt) : null);
     }
   }, [editRoomId, editRoomData]);
@@ -126,7 +131,7 @@ export function CreateRoomDialog() {
   const participantCount = 100; // default for UI
   const validation = {
     title: title.trim().length > 0,
-    languages: selectedLanguages.length > 0,
+    languages: meetingLanguages.length > 0,
   };
   const canSubmit = Object.values(validation).every(Boolean);
   const inviteLink = typeof window === "undefined" || !createdRoomCode ? "" : `${window.location.origin}/join?code=${createdRoomCode}`;
@@ -138,9 +143,7 @@ export function CreateRoomDialog() {
         setTitle("");
         setDescription("");
         setInvitedEmails([]);
-        setSelectedLanguages(["vi"]);
-        setSourceLanguage("en");
-        setIsMultiLang(false);
+        setMeetingLanguages(["en", "vi"]);
         setScheduledAt(null);
         setHasResources(false);
         setSelectedResources([]);
@@ -170,11 +173,13 @@ export function CreateRoomDialog() {
     }
 
     try {
-      // Normalize target languages: remove duplicates and remove source language
-      const normalizedTargetLanguages = Array.from(new Set(selectedLanguages))
-        .filter(lang => lang !== sourceLanguage);
-      
-      const targetLangs = normalizedTargetLanguages.length > 0 ? normalizedTargetLanguages : [sourceLanguage === "vi" ? "en" : "vi"];
+      // The meeting is defined by its set of languages. The backend still models a
+      // (sourceLanguage, targetLanguages) pair, so derive them: source is just the first
+      // declared language (an internal fallback for the audio-route mesh), and the full
+      // declared set is sent as targetLanguages.
+      const languages = Array.from(new Set(meetingLanguages));
+      const sourceLanguage = languages[0];
+      const targetLanguages = languages;
 
       if (editRoomId) {
         await updateRoomMutation.mutateAsync({
@@ -184,7 +189,7 @@ export function CreateRoomDialog() {
             description: description.trim() || undefined,
             maxParticipants: participantCount,
             sourceLanguage: sourceLanguage,
-            targetLanguages: targetLangs,
+            targetLanguages: targetLanguages,
             scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
             invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
           }
@@ -198,7 +203,7 @@ export function CreateRoomDialog() {
           translationRoomType: scheduledAt ? "scheduled" : "instant",
           maxParticipants: participantCount,
           sourceLanguage: sourceLanguage,
-          targetLanguages: targetLangs,
+          targetLanguages: targetLanguages,
           scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
         });
@@ -278,12 +283,9 @@ export function CreateRoomDialog() {
               {/* Pill Options Row */}
               <div className="px-5 pb-[5px] pt-2 flex flex-wrap items-center gap-2 mt-2 shrink-0">
                 <InvitePeoplePicker emails={invitedEmails} onChange={setInvitedEmails} />
-                <LanguageSelector 
-                  source={sourceLanguage}
-                  onSourceChange={setSourceLanguage}
-                  targets={selectedLanguages} 
-                  onTargetsChange={setSelectedLanguages}
-                  isMultiLang={isMultiLang}
+                <LanguageSelector
+                  languages={meetingLanguages}
+                  onLanguagesChange={setMeetingLanguages}
                 />
                 {scheduledAt && (
                   <StartTimePicker 
@@ -298,16 +300,9 @@ export function CreateRoomDialog() {
                     onChange={setSelectedResources} 
                   />
                 )}
-                <OptionsMenu 
-                  hasScheduledAt={!!scheduledAt} 
-                  onAddScheduledAt={() => setScheduledAt(getDefaultStartTime())} 
-                  isMultiLang={isMultiLang}
-                  onToggleMultiLang={() => {
-                    setIsMultiLang(!isMultiLang);
-                    if (isMultiLang && selectedLanguages.length > 1) {
-                      setSelectedLanguages([selectedLanguages[0]]);
-                    }
-                  }}
+                <OptionsMenu
+                  hasScheduledAt={!!scheduledAt}
+                  onAddScheduledAt={() => setScheduledAt(getDefaultStartTime())}
                   isDaily={isDaily}
                   onToggleDaily={() => setIsDaily(!isDaily)}
                   hasResources={hasResources}

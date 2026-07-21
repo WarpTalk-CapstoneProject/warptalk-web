@@ -1,29 +1,49 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowRight,
-  CheckCircle2,
+  Bold,
+  Check,
   ChevronDown,
-  Circle,
   Clock,
+  Code,
+  Code2,
   Copy,
   Hash,
+  Italic,
   Link as LinkIcon,
+  List,
+  ListOrdered,
+  Loader2,
   MapPin,
   MessageSquareText,
   MoreHorizontal,
-  Radio,
+  Quote,
   Star,
   StopCircle,
-  Text,
+  Strikethrough,
+  Underline as UnderlineIcon,
   Users,
   Video,
 } from "lucide-react";
+import { useEditor, useEditorState, EditorContent, type Editor } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
+import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
+import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -35,6 +55,7 @@ import {
   useTranslationRoom,
   useTranslationRoomInvitations,
   useTranslationRoomParticipants,
+  useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
@@ -101,6 +122,7 @@ export default function RoomInformationPage() {
   const participantsQuery = useTranslationRoomParticipants(roomId);
   const invitationsQuery = useTranslationRoomInvitations(roomId);
   const endRoomMutation = useEndTranslationRoom();
+  const updateRoomSettings = useUpdateTranslationRoomSettings();
   const liveParticipants = useTranslationRoomStore((state) => state.participants);
   const liveRoomState = useTranslationRoomStore((state) => state.translationRoomState);
   const user = useAuthStore((state) => state.user);
@@ -157,11 +179,20 @@ export default function RoomInformationPage() {
   const isEnded = room.status === "ended";
   const isHost = room.hostId === user?.id || role === "admin" || role === "owner";
   const participants = buildUserList(room, apiParticipants, apiInvitations, membersArray, user);
-  const hostUser = getHostUser(room, participants, user);
-  const threadEvents = buildThreadEvents(room, hostUser, participants, transcriptSegments, transcriptQuery.data?.createdAt, languageNames);
+  const hostUser = getHostUser(room, participants, membersArray, user);
+  const threadEvents = buildThreadEvents(
+    room,
+    hostUser,
+    participants,
+    apiParticipants,
+    apiInvitations,
+    transcriptSegments,
+    transcriptQuery.data?.createdAt,
+    languageNames
+  );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-canvas text-ink">
+    <div className="flex h-full flex-col overflow-hidden bg-white text-ink">
       {copiedText ? (
         <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md bg-black px-4 py-2 text-[13px] font-medium text-white shadow-lg">
           {copiedText}
@@ -186,7 +217,6 @@ export default function RoomInformationPage() {
                     <span className="truncate text-ink">{room.title}</span>
                   </div>
                   <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground">{room.title}</h1>
-                  {room.description ? <p className="mt-2 max-w-3xl text-[14px] leading-6 text-muted-foreground">{room.description}</p> : null}
                   <MeetingPropertiesPills room={room} apiParticipants={apiParticipants} activeParticipantCount={activeParticipantCount} user={user} />
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
@@ -222,6 +252,13 @@ export default function RoomInformationPage() {
                 </MetadataRow>
               </div>
             </div>
+
+            <RoomNotesEditor
+              key={room.id}
+              initialContent={room.description ?? ""}
+              canEdit={isHost}
+              onSave={(html) => updateRoomSettings.mutateAsync({ id: room.id, data: { description: html } })}
+            />
 
             <RoomThread events={threadEvents} isLive={room.status === "in_progress"} isEnded={isEnded} />
           </main>
@@ -278,7 +315,7 @@ export default function RoomInformationPage() {
 
             <PropertyPanel title="Meeting access">
               <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
-                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-canvas text-ink">
+                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-white text-ink">
                   <Video className="size-4" />
                 </div>
                 <div className="min-w-0">
@@ -287,7 +324,7 @@ export default function RoomInformationPage() {
                 </div>
               </div>
               <Button
-                className="h-9 justify-between rounded-md text-[13px]"
+                className="h-9 justify-between rounded-md text-[13px] !text-white [&_svg]:!text-white"
                 onClick={() => {
                   useUIStore.getState().setSetupRoomId(roomId);
                   useUIStore.getState().setSetupRoomModalOpen(true);
@@ -305,42 +342,352 @@ export default function RoomInformationPage() {
 }
 
 function RoomThread({ events, isLive, isEnded }: { events: ThreadEvent[]; isLive: boolean; isEnded: boolean }) {
+  const hasTranscript = events.some((event) => event.kind === "transcript");
+
   return (
-    <section className="relative">
-      <div className="mb-4 flex items-center justify-between">
+    <section className="relative mt-8">
+      <div className="mb-2 flex items-center justify-between">
         <div>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Thread flow</p>
-          <h2 className="mt-1 text-[18px] font-semibold">Meeting timeline</h2>
+          <h2 className="text-[17px] font-semibold">Activity</h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">Room events, participant changes, and captured transcript entries.</p>
         </div>
         <InlineChip icon={<MessageSquareText className="size-3.5" />}>{events.length} updates</InlineChip>
       </div>
 
-      <div className="relative pl-7">
-        <div className="absolute bottom-8 left-[10px] top-2 w-px bg-border" />
-        <div className="space-y-5">
+      <div className="relative mt-4 border-l border-border pl-5">
+        <div className="space-y-1">
           {events.map((event) => (
-            <article key={event.id} className="relative rounded-lg border border-border bg-surface-1 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-              <ThreadDot kind={event.accent ?? (event.kind === "transcript" ? "muted" : "primary")} />
-              <div className="flex flex-wrap items-center gap-2 text-[12px]">
+            <article
+              key={event.id}
+              className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
+            >
+              <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
+              <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
                 <KindChip kind={event.kind} />
                 <UserChip user={event.actor} compact />
                 <span className="font-medium text-ink">{event.title}</span>
                 {event.at ? <span className="text-muted-foreground">{event.at}</span> : null}
                 {event.metadata?.map((item) => <InlineChip key={item}>{item}</InlineChip>)}
               </div>
-              <MarkdownContent content={event.content} />
+              {event.content ? <MarkdownContent content={event.content} /> : null}
             </article>
           ))}
 
           {!isLive && !isEnded ? (
-            <div className="relative rounded-lg border border-dashed border-border bg-surface-1/60 p-4 text-[13px] text-muted-foreground">
-              <ThreadDot kind="muted" />
-              The meeting has not started yet. Transcript items will join this thread when speech is captured.
-            </div>
+            <ThreadEmptyState message="Transcript entries will appear here after the meeting starts." />
+          ) : null}
+
+          {(isLive || isEnded) && !hasTranscript ? (
+            <ThreadEmptyState message="No transcript entries were captured for this room yet." />
           ) : null}
         </div>
       </div>
     </section>
+  );
+}
+
+function ThreadEmptyState({ message }: { message: string }) {
+  return (
+    <div className="relative rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+      <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
+      {message}
+    </div>
+  );
+}
+
+type SaveState = "idle" | "saving" | "saved";
+
+// tiptap-markdown doesn't augment @tiptap/core's Storage type, so its storage key is untyped.
+function getMarkdown(editor: Editor): string {
+  return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
+}
+
+function RoomNotesEditor({
+  initialContent,
+  canEdit,
+  onSave,
+}: {
+  initialContent: string;
+  canEdit: boolean;
+  onSave: (html: string) => Promise<void>;
+}) {
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef(initialContent);
+
+  const flushSave = useCallback(
+    (html: string) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (html === lastSavedRef.current) return;
+      lastSavedRef.current = html;
+      setSaveState("saving");
+      onSave(html)
+        .then(() => {
+          setSaveState("saved");
+          if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+          savedFlashRef.current = setTimeout(() => setSaveState("idle"), 1800);
+        })
+        .catch(() => {
+          // Mutation toast handles the error; just stop showing "Saving...".
+          setSaveState("idle");
+        });
+    },
+    [onSave]
+  );
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    editable: canEdit,
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({
+        openOnClick: "whenNotEditable",
+        autolink: true,
+        HTMLAttributes: { class: "text-brand-primary underline underline-offset-2" },
+      }),
+      Placeholder.configure({
+        placeholder: canEdit ? "Add agenda, context, decisions, or review notes..." : "No room notes yet.",
+        showOnlyWhenEditable: false,
+      }),
+      Markdown.configure({
+        html: true,
+        transformPastedText: true,
+        transformCopiedText: true,
+      }),
+    ],
+    content: initialContent,
+    editorProps: {
+      attributes: {
+        class:
+          "min-h-[160px] w-full max-w-none text-[13px] leading-6 text-ink outline-none " +
+          "[&_p]:my-1.5 [&_h1]:mt-4 [&_h1]:mb-1.5 [&_h1]:text-[20px] [&_h1]:font-semibold [&_h1]:text-foreground " +
+          "[&_h2]:mt-3.5 [&_h2]:mb-1.5 [&_h2]:text-[17px] [&_h2]:font-semibold [&_h2]:text-foreground " +
+          "[&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:text-foreground " +
+          "[&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 " +
+          "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground " +
+          "[&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[12px] " +
+          "[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-surface-2 [&_pre]:p-3 [&_pre]:font-mono [&_pre]:text-[12px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 " +
+          "[&_.is-empty::before]:pointer-events-none [&_.is-empty::before]:float-left [&_.is-empty::before]:h-0 [&_.is-empty::before]:text-muted-foreground [&_.is-empty::before]:content-[attr(data-placeholder)]",
+      },
+    },
+    onUpdate: ({ editor }) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => flushSave(getMarkdown(editor)), 900);
+    },
+  });
+
+  useEffect(() => {
+    editor?.setEditable(canEdit);
+  }, [editor, canEdit]);
+
+  // Flush any pending debounced save immediately when the editor loses focus,
+  // so quickly navigating away doesn't drop the last edit.
+  useEffect(() => {
+    if (!editor) return;
+    const handleBlur = ({ editor: instance }: { editor: Editor }) => flushSave(getMarkdown(instance));
+    editor.on("blur", handleBlur);
+    return () => {
+      editor.off("blur", handleBlur);
+    };
+  }, [editor, flushSave]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+    };
+  }, []);
+
+  const editorState = useEditorState({
+    editor,
+    selector: ({ editor }) =>
+      editor
+        ? {
+            bold: editor.isActive("bold"),
+            italic: editor.isActive("italic"),
+            underline: editor.isActive("underline"),
+            strike: editor.isActive("strike"),
+            link: editor.isActive("link"),
+            blockquote: editor.isActive("blockquote"),
+            code: editor.isActive("code"),
+            codeBlock: editor.isActive("codeBlock"),
+            bulletList: editor.isActive("bulletList"),
+            orderedList: editor.isActive("orderedList"),
+            heading1: editor.isActive("heading", { level: 1 }),
+            heading2: editor.isActive("heading", { level: 2 }),
+            heading3: editor.isActive("heading", { level: 3 }),
+          }
+        : null,
+  });
+
+  return (
+    <section className="border-b border-border/60 pb-7">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold text-ink">Room notes</h2>
+        <SaveIndicator state={saveState} />
+      </div>
+
+      {editor && canEdit ? (
+        <BubbleMenu
+          editor={editor}
+          className="flex items-center gap-0.5 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-[12px] font-medium text-muted-foreground outline-none hover:bg-surface-2 hover:text-ink">
+              Aa
+              <ChevronDown className="size-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-36">
+              <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>Text</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>Heading 1</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>Heading 2</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>Heading 3</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <ToolbarSeparator />
+
+          <ToolbarButton label="Bold" icon={<Bold className="size-3.5" />} active={editorState?.bold} onClick={() => editor.chain().focus().toggleBold().run()} />
+          <ToolbarButton label="Italic" icon={<Italic className="size-3.5" />} active={editorState?.italic} onClick={() => editor.chain().focus().toggleItalic().run()} />
+          <ToolbarButton label="Underline" icon={<UnderlineIcon className="size-3.5" />} active={editorState?.underline} onClick={() => editor.chain().focus().toggleUnderline().run()} />
+          <ToolbarButton label="Strikethrough" icon={<Strikethrough className="size-3.5" />} active={editorState?.strike} onClick={() => editor.chain().focus().toggleStrike().run()} />
+
+          <ToolbarSeparator />
+
+          <LinkToolbarButton editor={editor} active={editorState?.link} />
+
+          <ToolbarSeparator />
+
+          <ToolbarButton label="Quote" icon={<Quote className="size-3.5" />} active={editorState?.blockquote} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
+          <ToolbarButton label="Inline code" icon={<Code className="size-3.5" />} active={editorState?.code} onClick={() => editor.chain().focus().toggleCode().run()} />
+          <ToolbarButton label="Code block" icon={<Code2 className="size-3.5" />} active={editorState?.codeBlock} onClick={() => editor.chain().focus().toggleCodeBlock().run()} />
+
+          <ToolbarSeparator />
+
+          <ToolbarButton label="Bullet list" icon={<List className="size-3.5" />} active={editorState?.bulletList} onClick={() => editor.chain().focus().toggleBulletList().run()} />
+          <ToolbarButton label="Numbered list" icon={<ListOrdered className="size-3.5" />} active={editorState?.orderedList} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+        </BubbleMenu>
+      ) : null}
+
+      <div
+        onClick={() => canEdit && editor?.chain().focus().run()}
+        className={cn("-mx-1 rounded-md px-1", canEdit ? "cursor-text" : "")}
+      >
+        <EditorContent editor={editor} />
+      </div>
+    </section>
+  );
+}
+
+function SaveIndicator({ state }: { state: SaveState }) {
+  if (state === "saving") {
+    return (
+      <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        Saving...
+      </span>
+    );
+  }
+  if (state === "saved") {
+    return (
+      <span className="flex items-center gap-1 text-[12px] text-muted-foreground transition-opacity">
+        <Check className="size-3" />
+        Saved
+      </span>
+    );
+  }
+  return null;
+}
+
+function ToolbarSeparator() {
+  return <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />;
+}
+
+function ToolbarButton({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className={cn(
+        "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink",
+        active ? "bg-surface-2 text-ink" : ""
+      )}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function LinkToolbarButton({ editor, active }: { editor: Editor; active?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+
+  function submitLink() {
+    const trimmed = url.trim();
+    if (trimmed) {
+      editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+    } else {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    }
+    setOpen(false);
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setUrl((editor.getAttributes("link").href as string) ?? "");
+      }}
+    >
+      <PopoverTrigger
+        onMouseDown={(event) => event.preventDefault()}
+        className={cn(
+          "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink",
+          active ? "bg-surface-2 text-ink" : ""
+        )}
+        title="Link"
+        aria-label="Link"
+      >
+        <LinkIcon className="size-3.5" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-2">
+        <form
+          className="flex items-center gap-1.5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitLink();
+          }}
+        >
+          <input
+            autoFocus
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="Paste a link..."
+            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-white px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+          />
+          <Button type="submit" size="sm" className="h-8 shrink-0 rounded-md text-[12px] !text-white">
+            Apply
+          </Button>
+        </form>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -540,6 +887,8 @@ function buildThreadEvents(
   room: TranslationRoomDto,
   hostUser: UserIdentity,
   participants: UserIdentity[],
+  roomParticipants: TranslationRoomParticipantDto[],
+  invitations: TranslationRoomInvitationDto[],
   segments: TranscriptSegmentDto[],
   transcriptCreatedAt: string | undefined,
   languageNames: string[]
@@ -552,32 +901,35 @@ function buildThreadEvents(
       at: formatDateTime(room.createdAt),
       actor: hostUser,
       accent: "primary",
-      content: `**${hostUser.name}** created the room and set the language scope to **${languageNames.join(", ") || "Not set"}**.`,
+      content: `Language scope: **${languageNames.join(", ") || "Not set"}**.`,
       metadata: [room.translationRoomCode],
     },
   ];
 
-  if (room.description) {
-    events.push({
-      id: "brief",
-      kind: "note",
-      title: "Room brief",
-      at: formatTimeAgo(room.createdAt),
-      actor: hostUser,
-      content: room.description,
-      metadata: ["Markdown"],
-    });
-  } else {
-    events.push({
-      id: "brief",
-      kind: "note",
-      title: "Room brief",
-      actor: hostUser,
-      content:
-        "## Agenda\n\n- Align translation setup\n- Confirm attendees and access\n- Capture transcript decisions\n\n| Field | Value |\n| --- | --- |\n| Format | Markdown |\n| Editing | Plain text |",
-      metadata: ["Markdown"],
-    });
-  }
+  const participantEvents = roomParticipants
+    .filter((participant) => participant.joinedAt)
+    .map((participant) => ({
+      id: `participant-${participant.id}`,
+      kind: "log" as const,
+      title: "Participant joined",
+      at: formatDateTime(participant.joinedAt),
+      actor: participants.find((item) => item.id === participant.userId) ?? toUserIdentity(participant),
+      accent: "muted" as const,
+      content: `Joined with **${getLanguageName(participant.speakLanguage)}** speaking and **${getLanguageName(participant.listenLanguage)}** listening.`,
+      metadata: [normalizeLabel(participant.status) ?? "Joined"],
+    }));
+
+  const invitationEvents = invitations.map((invitation) => ({
+    id: `invitation-${invitation.id}`,
+    kind: "log" as const,
+    title: "Invitation updated",
+    at: formatDateTime(invitation.updatedAt || invitation.createdAt),
+    actor: hostUser,
+    accent: "muted" as const,
+    content: `Invitation for **${invitation.email}** is **${normalizeLabel(invitation.status) ?? "Pending"}**.`,
+  }));
+
+  events.push(...participantEvents, ...invitationEvents);
 
   if (room.startedAt) {
     events.push({
@@ -587,7 +939,7 @@ function buildThreadEvents(
       at: formatDateTime(room.startedAt),
       actor: hostUser,
       accent: "success",
-      content: "Realtime translation and transcript capture became available for the room.",
+      content: "Realtime translation and transcript capture started.",
     });
   }
 
@@ -624,7 +976,7 @@ function buildThreadEvents(
     });
   }
 
-  return events;
+  return events.sort((left, right) => compareEventTime(left.at, right.at));
 }
 
 function buildUserList(
@@ -634,14 +986,14 @@ function buildUserList(
   membersArray: WorkspaceMemberDto[],
   currentUser: UserDto | null
 ): UserIdentity[] {
-  const mapped = participants.map((participant) => toUserIdentity(participant));
+  const mapped = participants.map((participant) => toUserIdentity(participant, membersArray, currentUser));
   if (!mapped.some((participant) => participant.id === room.hostId)) {
     mapped.unshift({
       id: room.hostId,
-      name: room.hostId === currentUser?.id ? currentUser?.fullName || currentUser?.email || "Host" : room.hostId,
+      name: resolveUserName(room.hostId, membersArray, currentUser),
       email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
       role: "Organizer",
-      status: "Host",
+      status: "Organizer",
     });
   }
 
@@ -662,11 +1014,16 @@ function buildUserList(
   return mapped;
 }
 
-function toUserIdentity(participant: TranslationRoomParticipantDto): UserIdentity {
+function toUserIdentity(
+  participant: TranslationRoomParticipantDto,
+  membersArray: WorkspaceMemberDto[] = [],
+  currentUser: UserDto | null = null
+): UserIdentity {
+  const role = participant.role.toLowerCase() === "host" ? "Organizer" : normalizeLabel(participant.role);
   return {
     id: participant.userId || participant.id,
-    name: participant.displayName || "Unknown user",
-    role: normalizeLabel(participant.role),
+    name: resolveUserName(participant.userId, membersArray, currentUser, participant.displayName),
+    role,
     status: normalizeLabel(participant.status),
     avatarUrl: participant.avatarUrl,
     speakLanguage: participant.speakLanguage,
@@ -674,13 +1031,18 @@ function toUserIdentity(participant: TranslationRoomParticipantDto): UserIdentit
   };
 }
 
-function getHostUser(room: TranslationRoomDto, participants: UserIdentity[], currentUser: UserDto | null) {
+function getHostUser(
+  room: TranslationRoomDto,
+  participants: UserIdentity[],
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null
+) {
   return participants.find((participant) => participant.id === room.hostId) ?? {
     id: room.hostId,
-    name: room.hostId === currentUser?.id ? currentUser?.fullName || currentUser?.email || "Host" : room.hostId,
+    name: resolveUserName(room.hostId, membersArray, currentUser),
     email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
     role: "Organizer",
-    status: "Host",
+    status: "Organizer",
   };
 }
 
@@ -768,28 +1130,12 @@ function InlineChip({ children, icon }: { children: ReactNode; icon?: ReactNode 
 
 function KindChip({ kind }: { kind: ThreadKind }) {
   const config: Record<ThreadKind, { icon: ReactNode; label: string }> = {
-    log: { icon: <Radio className="size-3.5" />, label: "Log" },
-    note: { icon: <Text className="size-3.5" />, label: "Markdown" },
+    log: { icon: <Hash className="size-3.5" />, label: "Event" },
+    note: { icon: <Hash className="size-3.5" />, label: "Note" },
     transcript: { icon: <MessageSquareText className="size-3.5" />, label: "Transcript" },
     system: { icon: <Hash className="size-3.5" />, label: "System" },
   };
   return <InlineChip icon={config[kind].icon}>{config[kind].label}</InlineChip>;
-}
-
-function ThreadDot({ kind }: { kind: "primary" | "muted" | "success" }) {
-  const icon = kind === "success" ? <CheckCircle2 className="size-3" /> : kind === "primary" ? <Circle className="size-3 fill-current" /> : <Circle className="size-3" />;
-  return (
-    <div
-      className={cn(
-        "absolute -left-[25px] top-4 flex size-5 items-center justify-center rounded-full border bg-canvas",
-        kind === "primary" && "border-primary text-primary",
-        kind === "success" && "border-emerald-500 text-emerald-500",
-        kind === "muted" && "border-border text-muted-foreground"
-      )}
-    >
-      {icon}
-    </div>
-  );
 }
 
 function AvatarInitial({ user, className }: { user: UserIdentity; className?: string }) {
@@ -805,22 +1151,36 @@ function normalizeLabel(value?: string) {
   return value.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function resolveUserName(
+  userId: string | undefined,
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null,
+  fallback?: string
+) {
+  if (userId && userId === currentUser?.id) {
+    return currentUser.fullName || currentUser.email || "Current user";
+  }
+
+  const member = userId
+    ? membersArray.find((item) => item.userId === userId || item.id === userId || item.email === userId)
+    : undefined;
+  if (member?.fullName) return member.fullName;
+  if (member?.email) return member.email;
+
+  const normalizedFallback = fallback?.trim();
+  if (normalizedFallback && normalizedFallback.toLowerCase() !== "host") {
+    return normalizedFallback;
+  }
+
+  return "Organizer";
+}
+
 function formatDateTime(value?: string) {
   if (!value) return "Not set";
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatTimeAgo(value?: string) {
-  if (!value) return "";
-  const diff = Date.now() - new Date(value).getTime();
-  const minutes = Math.max(0, Math.floor(diff / 60000));
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function formatDuration(room: TranslationRoomDto) {
@@ -833,4 +1193,11 @@ function formatDuration(room: TranslationRoomDto) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   return `${hours ? `${hours}h ` : ""}${minutes}m`;
+}
+
+function compareEventTime(left?: string, right?: string) {
+  const leftTime = left ? new Date(left).getTime() : Number.NaN;
+  const rightTime = right ? new Date(right).getTime() : Number.NaN;
+  if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) return 0;
+  return leftTime - rightTime;
 }

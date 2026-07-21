@@ -13,10 +13,10 @@ import {
 
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
-import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { useTranslationRoom, useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
-import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { toast } from "sonner";
 import { DeviceSelect } from "@/components/rooms/setup/device-select";
 import { LanguageRoleConfirm } from "@/components/rooms/setup/language-role-confirm";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -35,12 +35,13 @@ export function SetupRoomModal() {
   const user = useAuthStore(state => state.user);
   
   const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(roomId ?? "");
-  const role = useWorkspaceRole();
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
-  const isAdmin = role === "admin";
-  const isOwner = role === "owner";
-  const isHost = Boolean(room && user && (room.hostId === user.id || isAdmin || isOwner));
+  // Host is strictly the room owner (room.hostId). Workspace admins/owners are NOT the host:
+  // the backend rejects a room start from a non-host with 403, so they enter as participants.
+  const isHost = Boolean(room && user && room.hostId === user.id);
+  const joinRoom = useJoinTranslationRoomByCode();
+  const [isJoining, setIsJoining] = useState(false);
 
   const videoRef = useRef<SinkVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -203,6 +204,55 @@ export function SetupRoomModal() {
     tick();
   }
 
+  async function handleConfirm() {
+    if (!room || isJoining) return;
+    const displayName = (user?.fullName || user?.email || "Participant").trim();
+
+    setIsJoining(true);
+    try {
+      // Register the user as a participant (translation_room_participants) BEFORE entering.
+      // The old flow only cached device prefs and router.push'd straight to /room/{id},
+      // so joiners were never recorded on the backend.
+      const result = await joinRoom.mutateAsync({
+        translationRoomCode: room.translationRoomCode,
+        displayName,
+        speakLanguage,
+        listenLanguage,
+        cameraEnabled,
+        microphoneEnabled,
+        speakerEnabled: true,
+      });
+
+      if (result.status !== "success" || !result.room) {
+        toast.error(result.message || "Unable to join the room.");
+        return;
+      }
+
+      window.sessionStorage.setItem('warptalk.join.preview', JSON.stringify({
+        displayName,
+        roomCode: room.translationRoomCode,
+        speakLanguage,
+        listenLanguage,
+        cameraEnabled,
+        microphoneEnabled,
+        speakerEnabled: true,
+        roomId: result.room.id,
+        participantId: result.participant?.id,
+      }));
+      window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
+        cameraEnabled,
+        microphoneEnabled,
+      }));
+
+      setIsOpen(false);
+      router.push(`/room/${result.room.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not join the room.");
+    } finally {
+      setIsJoining(false);
+    }
+  }
+
   if (!roomId) return null;
 
   return (
@@ -324,17 +374,13 @@ export function SetupRoomModal() {
 
             <div className="p-4 border-t border-border bg-surface-1 shrink-0">
               <button
-                onClick={() => {
-                  window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
-                    cameraEnabled,
-                    microphoneEnabled,
-                  }));
-                  setIsOpen(false);
-                  router.push(`/room/${roomId}`);
-                }}
-                className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm"
+                onClick={handleConfirm}
+                disabled={isJoining || isLoadingRoom || !room}
+                className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {isHost ? "Start Meeting" : "Join Meeting"}
+                {isJoining
+                  ? (isHost ? "Starting..." : "Joining...")
+                  : (isHost ? "Start Meeting" : "Join Meeting")}
               </button>
             </div>
           </div>

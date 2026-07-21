@@ -1,287 +1,192 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import Image from "next/image";
-import { Download, FileText, Translate, MagnifyingGlass, Timer, Users } from "@phosphor-icons/react/dist/ssr";
-import { Badge } from "@/components/ui/badge";
+import {
+  Archive,
+  ArrowRight,
+  CalendarBlank,
+  CheckCircle,
+  Clock,
+  DownloadSimple,
+  FileText,
+  MagnifyingGlass,
+  SpinnerGap,
+  Translate,
+  Users,
+  WarningCircle,
+} from "@phosphor-icons/react/dist/ssr";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useMeetingHistory, useMeetingRoomDetail } from "@/hooks/use-meeting-history";
+import { useRoomHistory } from "@/hooks/use-room-history";
 import { cn } from "@/lib/utils";
+import { translationRoomService } from "@/services/translationRoom.service";
+import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 
-type HistoryRow = {
-  id: string;
-  title: string;
-  code: string;
-  endedAt: string;
-  duration: string;
-  participants: number;
-  languages: string;
-  status: string;
-  artifacts: string[];
-  summary: string;
-};
+type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
 
-type TranscriptPreview = {
-  time: string;
-  speaker: string;
-  text: string;
-  translation: string;
-};
-
-const demoHistory: HistoryRow[] = [
-  {
-    id: "hist-001",
-    title: "Board Review Translation",
-    code: "BORD-778",
-    endedAt: "Today, 10:24 AM",
-    duration: "46m",
-    participants: 14,
-    languages: "English -> Vietnamese, Japanese",
-    status: "ready",
-    artifacts: ["Transcript TXT", "AI summary", "Participant CSV", "Recording"],
-    summary: "Reviewed investor questions, translation accuracy, and rollout risks.",
-  },
-  {
-    id: "hist-002",
-    title: "Product Demo Follow-up",
-    code: "DEMO-514",
-    endedAt: "Yesterday, 4:12 PM",
-    duration: "32m",
-    participants: 8,
-    languages: "Vietnamese -> English",
-    status: "ready",
-    artifacts: ["Transcript PDF", "AI summary", "Action items"],
-    summary: "Captured follow-up questions about onboarding and support coverage.",
-  },
-  {
-    id: "hist-003",
-    title: "Legal Review Session",
-    code: "LEGL-307",
-    endedAt: "May 22, 2:00 PM",
-    duration: "58m",
-    participants: 11,
-    languages: "English -> Korean, Vietnamese",
-    status: "processing",
-    artifacts: ["Transcript processing", "Summary queued"],
-    summary: "Legal terms and approval requirements were discussed across regions.",
-  },
+const historyFilters: Array<{ value: HistoryFilter; label: string }> = [
+  { value: "all", label: "All meetings" },
+  { value: "ended", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "with_outputs", label: "With outputs" },
 ];
-
-const transcriptPreview: TranscriptPreview[] = [
-  {
-    time: "00:42",
-    speaker: "Host",
-    text: "Welcome everyone. Today's review will focus on product milestones and next steps.",
-    translation: "Chao moi nguoi. Buoi danh gia hom nay tap trung vao cac moc san pham va buoc tiep theo.",
-  },
-];
-
-function normalizeStatus(status: string) {
-  return status.replace(/_/g, " ");
-}
 
 export default function HistoryPage() {
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<HistoryFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("transcript");
-  const history = useMeetingHistory(1, 50, query);
+  const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
+  const history = useRoomHistory();
 
-  const historyRows = useMemo(() => {
-    const apiRows =
-      history.data?.items?.map((room): HistoryRow => ({
-        id: room.id,
-        title: room.title || "Meeting",
-        code: room.translationRoomCode || "N/A",
-        endedAt: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(
-          new Date(room.endedAt || room.createdAt)
-        ),
-        duration: room.durationSeconds ? `${Math.round(room.durationSeconds / 60)}m` : "Unknown",
-        participants: room.participantCount,
-        languages: room.languageMode || "N/A",
-        status: room.status === "FINISHED" ? "ready" : room.status.toLowerCase(),
-        artifacts: ["Transcript TXT", "AI summary"],
-        summary: room.summary || "No AI summary is attached to this room yet.",
-      })) ?? [];
+  const rooms = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return (history.data?.rooms ?? []).filter((room) => {
+      const matchesFilter = filter === "all"
+        || room.status === filter
+        || (filter === "with_outputs" && room.artifacts.length > 0);
+      const matchesQuery = !normalized || [
+        room.title,
+        room.translationRoomCode,
+        room.hostName,
+        room.sourceLanguage,
+        ...room.targetLanguages,
+      ].some((value) => value.toLowerCase().includes(normalized));
+      return matchesFilter && matchesQuery;
+    });
+  }, [filter, history.data?.rooms, query]);
 
-    return apiRows.length > 0 ? apiRows : demoHistory;
-  }, [history.data?.items]);
+  const selected = rooms.find((room) => room.id === selectedId) ?? rooms[0];
 
-  const selectedRoomId = selectedId || (historyRows.length > 0 ? historyRows[0].id : undefined);
-  const selectedRoom = historyRows.find((room) => room.id === selectedRoomId) ?? historyRows[0];
-  const { data: detailData } = useMeetingRoomDetail(selectedRoomId && !selectedRoomId.startsWith("hist-") ? selectedRoomId : undefined);
+  async function downloadArtifact(artifact: RoomHistoryArtifact) {
+    if (artifact.status !== "ready") {
+      toast.error("This output is not ready to download.");
+      return;
+    }
 
-  const totalMinutes = historyRows.reduce((total, room) => total + (Number.parseInt(room.duration, 10) || 0), 0);
-  const totalParticipants = historyRows.reduce((total, room) => total + room.participants, 0);
+    setBusyArtifactId(artifact.id);
+    try {
+      if (artifact.consentRequired) {
+        await translationRoomService.approveArtifactConsent(artifact.id);
+      }
+      const { data } = await translationRoomService.artifactDownload(artifact.id);
+      if (!data.url) throw new Error("The download URL is unavailable.");
+      window.open(data.url, "_blank", "noopener,noreferrer");
+      if (artifact.consentRequired) await history.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not download this output.");
+    } finally {
+      setBusyArtifactId(null);
+    }
+  }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-canvas px-4 py-4 text-ink sm:px-5">
-      <div className="mb-4 flex shrink-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
-            <Timer size={14} weight="fill" className="text-primary" />
-            Meeting archive
-          </div>
-          <h1 className="text-[24px] font-semibold leading-8">History</h1>
-          <p className="mt-1 text-[12px] text-ink-muted">Revisit translated conversations and download retained artifacts.</p>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-4 text-[11px]">
-            <InlineStat label="Sessions" value={String(historyRows.length)} />
-            <InlineStat label="Translated" value={`${totalMinutes}m`} />
-            <InlineStat label="Participants" value={String(totalParticipants)} />
-          </div>
-          <div className="relative min-w-0 sm:w-[280px]">
-            <MagnifyingGlass weight="light" className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-subtle" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search history" className="h-8 rounded-md bg-surface-1 pl-8 text-xs shadow-none" />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.03)] xl:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col border-b border-border xl:border-b-0 xl:border-r">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
-            <div>
-              <p className="text-[12px] font-semibold">Ended sessions</p>
-              <p className="text-[10px] text-ink-muted">{historyRows.length} retained</p>
+    <main className="min-h-full bg-canvas text-ink">
+      <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">
+        <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
+              <Archive size={14} /> Workspace archive
             </div>
-            <FileText size={16} weight="light" className="text-ink-subtle" />
+            <h1 className="text-[30px] font-semibold leading-none">Meeting history</h1>
+            <p className="mt-2 text-[13px] text-ink-muted">Finished translation rooms and the outputs retained with them.</p>
           </div>
-          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
-            {historyRows.map((room) => (
-              <button
-                key={room.id}
-                type="button"
-                onClick={() => setSelectedId(room.id)}
-                className={cn(
-                  "w-full rounded-md px-2.5 py-2.5 text-left outline-none transition-colors hover:bg-surface-2/70 focus-visible:ring-2 focus-visible:ring-ring/30",
-                  selectedRoom?.id === room.id && "bg-surface-2"
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <span className={cn("size-1.5 shrink-0 rounded-full", room.status === "ready" ? "bg-emerald-500" : "bg-amber-400")} />
-                  <p className="min-w-0 flex-1 truncate text-[12px] font-medium">{room.title}</p>
-                  <span className="text-[10px] text-ink-subtle">{room.duration}</span>
-                </div>
-                <p className="mt-1 truncate pl-3.5 text-[10px] text-ink-muted">{room.endedAt}</p>
-                <p className="mt-1 truncate pl-3.5 text-[10px] text-ink-subtle">{room.languages}</p>
-              </button>
-            ))}
-            {historyRows.length === 0 ? <HistoryEmptyState title="No meeting history" /> : null}
+          <div className="relative w-full lg:w-[360px]">
+            <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, code, host, or language" className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none" />
           </div>
-        </aside>
+        </header>
 
-        {selectedRoom ? (
-          <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
-            <div className="border-b border-border px-4 pt-3">
-              <div className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate text-[14px] font-semibold">{selectedRoom.title}</h2>
-                    <Badge variant={selectedRoom.status === "ready" ? "default" : "secondary"} className="rounded-md text-[10px]">{normalizeStatus(selectedRoom.status)}</Badge>
+        <div className="flex items-center gap-1 border-b border-border py-3" role="tablist" aria-label="History filters">
+          {historyFilters.map((item) => (
+            <button key={item.value} type="button" role="tab" aria-selected={filter === item.value} onClick={() => setFilter(item.value)} className={cn("h-7 rounded-md px-3 text-[11px] font-medium transition-colors", filter === item.value ? "bg-ink text-surface-1" : "text-ink-muted hover:bg-surface-2 hover:text-ink")}>{item.label}</button>
+          ))}
+          <span className="ml-auto text-[10px] tabular-nums text-ink-subtle">{rooms.length} results</span>
+        </div>
+
+        <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Meeting history results">
+          {history.isLoading ? <LoadingState /> : history.isError ? <ErrorState onRetry={() => history.refetch()} /> : rooms.length === 0 ? <EmptyState hasQuery={Boolean(query)} /> : (
+            <div className="grid min-h-[560px] lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="min-w-0 overflow-x-auto">
+                <div className="min-w-[820px]">
+                  <div className="grid grid-cols-[minmax(260px,1.4fr)_150px_minmax(180px,1fr)_80px_80px_120px] border-b border-border bg-surface-2/45 px-4 py-2 text-[10px] font-medium text-ink-subtle">
+                    <span>Meeting</span><span>Ended</span><span>Language route</span><span>Time</span><span>People</span><span>Outputs</span>
                   </div>
-                  <p className="mt-1 max-w-[680px] text-[11px] leading-4 text-ink-muted">{selectedRoom.summary}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Badge variant="outline" className="rounded-md text-[10px]">{selectedRoom.code}</Badge>
-                  <Badge variant="secondary" className="rounded-md text-[10px]">{selectedRoom.duration}</Badge>
+                  {rooms.map((room) => <HistoryRow key={room.id} room={room} selected={selected?.id === room.id} onSelect={() => setSelectedId(room.id)} />)}
                 </div>
               </div>
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0">
-                <TabsList className="h-8 rounded-md bg-surface-2 p-0.5">
-                  <TabsTrigger value="transcript" className="h-7 rounded-sm px-3 text-[11px]">Transcript</TabsTrigger>
-                  <TabsTrigger value="artifacts" className="h-7 rounded-sm px-3 text-[11px]">Artifacts</TabsTrigger>
-                  <TabsTrigger value="participants" className="h-7 rounded-sm px-3 text-[11px]">Details</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              {selected ? <MeetingDetail room={selected} busyArtifactId={busyArtifactId} onDownload={downloadArtifact} /> : null}
             </div>
-
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 overflow-y-auto p-4">
-              <TabsContent value="transcript" className="mt-0 space-y-2">
-                {detailData?.recentMessages && detailData.recentMessages.length > 0 ? (
-                  detailData.recentMessages.map((item) => (
-                    <div key={item.id} className="rounded-lg border border-border p-3">
-                      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline">{new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' }).format(new Date(item.createdAt))}</Badge>
-                        <span>{item.senderName || "Unknown"}</span>
-                      </div>
-                      <p className="text-sm">{item.originalText}</p>
-                      {item.translatedText && (
-                        <p className="mt-2 rounded-md bg-surface-2 p-2.5 text-xs text-ink-muted">{item.translatedText}</p>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  transcriptPreview.map((item) => (
-                    <div key={`${item.time}-${item.speaker}`} className="rounded-lg border border-border p-3">
-                      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline">{item.time}</Badge>
-                        <span>{item.speaker}</span>
-                      </div>
-                      <p className="text-sm">{item.text}</p>
-                      <p className="mt-2 rounded-md bg-surface-2 p-2.5 text-xs text-ink-muted">{item.translation}</p>
-                    </div>
-                  ))
-                )}
-              </TabsContent>
-              <TabsContent value="artifacts" className="mt-0 grid gap-2 md:grid-cols-2">
-                {selectedRoom.artifacts.map((artifact) => (
-                  <div key={artifact} className="flex items-center justify-between rounded-lg border border-border p-2.5">
-                    <div className="flex items-center gap-2">
-                      <FileText weight="light" className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">{artifact}</span>
-                    </div>
-                    <Button size="icon-sm" variant="ghost" title="Download">
-                      <Download weight="light" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </TabsContent>
-              <TabsContent value="participants" className="mt-0 grid gap-2 md:grid-cols-3">
-                <Detail icon={<Users weight="light" />} label="Participants" value={String(selectedRoom.participants)} />
-                <Detail icon={<Translate weight="light" />} label="Translate" value={selectedRoom.languages} />
-                <Detail icon={<Timer weight="light" />} label="Duration" value={selectedRoom.duration} />
-              </TabsContent>
-            </Tabs>
-          </main>
-        ) : (
-          <HistoryEmptyState title="Select a meeting" />
-        )}
+          )}
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
 
-function InlineStat({ label, value }: { label: string; value: string }) {
+function HistoryRow({ room, selected, onSelect }: { room: EndedRoomHistoryItem; selected: boolean; onSelect: () => void }) {
   return (
-    <div className="border-l border-border pl-3 first:border-l-0 first:pl-0">
-      <p className="font-semibold tabular-nums text-ink">{value}</p>
-      <p className="text-[10px] text-ink-muted">{label}</p>
-    </div>
-  );
-}
-
-function Detail({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border p-3">
-      <span className="mb-2 flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary [&_svg]:size-4">
-        {icon}
+    <button type="button" onClick={onSelect} className={cn("grid w-full grid-cols-[minmax(260px,1.4fr)_150px_minmax(180px,1fr)_80px_80px_120px] items-center border-b border-border px-4 py-3 text-left text-[11px] outline-none transition-colors last:border-b-0 hover:bg-surface-2/55 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30", selected && "bg-surface-2")}> 
+      <span className="flex min-w-0 items-center gap-3">
+        <span className={cn("grid size-8 shrink-0 place-items-center rounded-md border", selected ? "border-ink bg-ink text-surface-1" : "border-border bg-canvas text-ink-muted")}><FileText size={15} /></span>
+        <span className="min-w-0"><span className="block truncate font-medium text-ink">{room.title}</span><span className="mt-0.5 block truncate text-[10px] text-ink-subtle">{room.translationRoomCode} · {room.hostName}</span></span>
       </span>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-medium">{value}</p>
-    </div>
+      <span className="text-ink-muted">{formatDate(room.endedAt)}</span>
+      <span className="truncate pr-4 text-ink-muted">{formatLanguageRoute(room)}</span>
+      <span className="tabular-nums text-ink-muted">{formatDuration(room.durationSeconds)}</span>
+      <span className="tabular-nums text-ink-muted">{room.participantCount}</span>
+      <span className="flex items-center justify-between"><span className="flex items-center gap-2 text-ink-muted"><span className={cn("size-1.5 rounded-full", room.artifacts.length ? "bg-primary" : "bg-ink-subtle/50")} />{room.artifacts.length}</span><ArrowRight size={13} className="text-ink-subtle" /></span>
+    </button>
   );
 }
 
-function HistoryEmptyState({ title }: { title: string }) {
+function MeetingDetail({ room, busyArtifactId, onDownload }: { room: EndedRoomHistoryItem; busyArtifactId: string | null; onDownload: (artifact: RoomHistoryArtifact) => void }) {
   return (
-    <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
-      <Image src="/images/workspace/voice-memory-isometric.png" alt="" width={144} height={144} className="size-36 object-contain" aria-hidden="true" />
-      <p className="mt-1 text-[12px] font-medium text-ink">{title}</p>
-      <p className="mt-1 max-w-[260px] text-[11px] leading-4 text-ink-muted">Completed rooms and retained artifacts will appear here.</p>
-    </div>
+    <aside className="border-t border-border bg-canvas/35 p-5 lg:border-l lg:border-t-0">
+      <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle"><span className={cn("size-1.5 rounded-full", room.status === "ended" ? "bg-emerald-500" : "bg-ink-subtle")} />{room.status}</div>
+      <h2 className="mt-3 text-[18px] font-semibold leading-6">{room.title}</h2>
+      {room.description ? <p className="mt-2 text-[12px] leading-5 text-ink-muted">{room.description}</p> : null}
+
+      <dl className="mt-5 grid grid-cols-2 border-y border-border py-4">
+        <Detail icon={CalendarBlank} label="Ended" value={formatDate(room.endedAt)} />
+        <Detail icon={Clock} label="Duration" value={formatDuration(room.durationSeconds)} />
+        <Detail icon={Users} label="Participants" value={String(room.participantCount)} />
+        <Detail icon={Translate} label="Route" value={formatLanguageRoute(room)} />
+      </dl>
+
+      <div className="mt-5 flex items-center justify-between"><h3 className="text-[11px] font-semibold">Retained outputs</h3><span className="text-[10px] text-ink-subtle">{room.artifacts.length}</span></div>
+      <div className="mt-2 divide-y divide-border border-y border-border">
+        {room.artifacts.length ? room.artifacts.map((artifact) => (
+          <button key={artifact.id} type="button" disabled={busyArtifactId === artifact.id} onClick={() => onDownload(artifact)} className="group flex w-full items-center gap-3 py-3 text-left disabled:opacity-50">
+            <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-1"><ArtifactIcon artifact={artifact} /></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-medium">{artifact.title || artifactLabel(artifact.type)}</span><span className="mt-0.5 block text-[10px] text-ink-subtle">{artifact.format || artifactLabel(artifact.type)} · {artifactStatusLabel(artifact)}</span></span>
+            {busyArtifactId === artifact.id ? <SpinnerGap size={14} className="animate-spin" /> : <DownloadSimple size={14} className="text-ink-subtle transition-colors group-hover:text-ink" />}
+          </button>
+        )) : <p className="py-6 text-center text-[11px] text-ink-muted">No retained outputs for this meeting.</p>}
+      </div>
+
+      <div className="mt-5 flex items-start gap-2 text-[10px] leading-4 text-ink-subtle"><Archive size={13} className="mt-0.5 shrink-0" /><span>{room.retention.expiresAt ? `Retention ends ${formatDate(room.retention.expiresAt)}.` : "Retention follows workspace policy."}</span></div>
+    </aside>
   );
 }
+
+function Detail({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return <div className="min-w-0 py-2 pr-3"><dt className="flex items-center gap-1.5 text-[10px] text-ink-subtle"><Icon size={12} />{label}</dt><dd className="mt-1 truncate text-[11px] font-medium text-ink" title={value}>{value}</dd></div>;
+}
+
+function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
+  if (artifact.status === "processing") return <SpinnerGap size={14} className="animate-spin text-ink-muted" />;
+  if (["failed", "missing", "expired"].includes(artifact.status)) return <WarningCircle size={14} className="text-ink-muted" />;
+  return <CheckCircle size={14} className="text-primary" />;
+}
+
+function LoadingState() { return <div className="grid min-h-[420px] place-items-center"><div className="flex items-center gap-2 text-[11px] text-ink-muted"><SpinnerGap size={15} className="animate-spin" />Loading meeting history</div></div>; }
+function ErrorState({ onRetry }: { onRetry: () => void }) { return <div className="grid min-h-[420px] place-items-center text-center"><div><WarningCircle size={22} className="mx-auto text-ink-muted" /><p className="mt-3 text-[12px] font-medium">Meeting history could not be loaded</p><p className="mt-1 text-[11px] text-ink-muted">Check the translation-room service and try again.</p><Button variant="outline" size="sm" className="mt-4 h-8" onClick={onRetry}>Retry</Button></div></div>; }
+function EmptyState({ hasQuery }: { hasQuery: boolean }) { return <div className="grid min-h-[420px] place-items-center text-center"><div><Archive size={22} className="mx-auto text-ink-muted" /><p className="mt-3 text-[12px] font-medium">{hasQuery ? "No meetings match this search" : "No finished meetings yet"}</p><p className="mt-1 text-[11px] text-ink-muted">{hasQuery ? "Try a different title, code, host, or language." : "Meetings appear here after they end."}</p></div></div>; }
+
+function artifactLabel(type: RoomHistoryArtifact["type"]) { return ({ transcript_export: "Transcript", summary_export: "AI summary", recording: "Recording", debug_log: "Debug log", audio_sample: "Audio sample" } as const)[type]; }
+function artifactStatusLabel(artifact: RoomHistoryArtifact) { return artifact.consentRequired ? "Consent required" : artifact.status.charAt(0).toUpperCase() + artifact.status.slice(1); }
+function formatDuration(seconds: number) { if (!seconds) return "—"; const minutes = Math.floor(seconds / 60); return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`; }
+function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }
+function formatLanguageRoute(room: EndedRoomHistoryItem) { const targets = room.targetLanguages.length ? room.targetLanguages.join(", ") : "—"; return `${room.sourceLanguage.toUpperCase()} → ${targets.toUpperCase()}`; }
