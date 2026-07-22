@@ -250,6 +250,17 @@ export function useWorkspaceDocumentExtractedText(workspaceId: string, docId: st
   });
 }
 
+export function useUpdateWorkspaceDocumentExtractedText(workspaceId: string, docId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => WorkspaceService.updateExtractedText(workspaceId, docId, text),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "document-extracted-text", workspaceId, docId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+    },
+  });
+}
+
 export function usePatchWorkspaceDocumentMetadata(workspaceId: string, docId: string) {
   const queryClient = useQueryClient();
   return useMutation({

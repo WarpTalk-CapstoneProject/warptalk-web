@@ -167,6 +167,11 @@ export const WorkspaceService = {
     return data;
   },
 
+  async updateExtractedText(workspaceId: string, docId: string, text: string): Promise<ExtractedTextDto> {
+    const { data } = await apiClient.put<ExtractedTextDto>(API.workspaces.documentExtractedText(workspaceId, docId), { text });
+    return data;
+  },
+
   async patchDocumentMetadata(
     workspaceId: string,
     docId: string,

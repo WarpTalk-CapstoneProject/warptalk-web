@@ -33,11 +33,13 @@ import {
   FileCode,
   FileCsv,
   FileDoc,
-  FileImage
+  FileImage,
+  Users
 } from "@phosphor-icons/react";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 
 import apiClient from "@/lib/api/client";
+import { API } from "@/lib/api/endpoints";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useWorkspaceDocuments,
@@ -109,6 +111,8 @@ export default function WorkspaceDocumentsPage() {
 
   const isOwnerOrAdmin = role === "Owner" || role === "Admin";
 
+  const [classificationMode, setClassificationMode] = useState<"AiKnowledge" | "General" | "InternalOnly" | "Restricted">("AiKnowledge");
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
@@ -126,9 +130,10 @@ export default function WorkspaceDocumentsPage() {
       setValue("name", nameWithoutExt);
 
       if (isImg) {
-        setValue("isAiAllowed", false);
-        setValue("isSensitive", false);
-        toast.info("Image file selected: set to Administrative mode (AI ingestion skipped).");
+        setClassificationMode("General");
+        setValue("isAiAllowed", false, { shouldValidate: true });
+        setValue("isSensitive", false, { shouldValidate: true });
+        toast.info("Image file selected: set to General Files mode (AI ingestion skipped).");
       }
     }
   };
@@ -144,18 +149,36 @@ export default function WorkspaceDocumentsPage() {
     }
 
     try {
-      await uploadMutation.mutateAsync({
+      const isAi = classificationMode === "AiKnowledge";
+      const isSens = classificationMode === "Restricted";
+
+      const newDoc = await uploadMutation.mutateAsync({
         name: formData.name,
         sourceType: "Upload",
         sourceId: null,
-        isSensitive: formData.isSensitive,
-        isAiAllowed: formData.isAiAllowed,
+        isSensitive: isSens,
+        isAiAllowed: isAi,
         file: selectedFile,
       });
+
+      // If InternalOnly selected, automatically register access policy blocking External members
+      if (classificationMode === "InternalOnly" && newDoc?.id) {
+        try {
+          await apiClient.post(API.workspaces.documentPolicies(activeWorkspaceId, newDoc.id), {
+            subjectType: "MembershipType",
+            subjectKey: "External",
+            permission: "View",
+            effect: "DENY"
+          });
+        } catch (policyErr) {
+          console.error("Failed to add InternalOnly access policy automatically", policyErr);
+        }
+      }
 
       toast.success("Document uploaded and registered successfully!");
       setSelectedFile(null);
       reset({ name: "", isSensitive: false, isAiAllowed: true });
+      setClassificationMode("AiKnowledge");
       setIsUploadModalOpen(false);
       const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
       if (fileInput) fileInput.value = "";
@@ -619,44 +642,46 @@ export default function WorkspaceDocumentsPage() {
               )}
             </div>
 
-            {/* 3 Segmented Classification Cards */}
+            {/* 4 Classification Cards */}
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-ink">Classification & Purpose</label>
+              <label className="text-xs font-semibold text-ink">Classification & Access Purpose</label>
               <div className="grid grid-cols-1 gap-2">
-                {/* Card 1: AI Context */}
+                {/* Card 1: AI Knowledge Base */}
                 <div
                   onClick={() => {
-                    setValue("isAiAllowed", true);
-                    setValue("isSensitive", false);
+                    setClassificationMode("AiKnowledge");
+                    setValue("isAiAllowed", true, { shouldValidate: true });
+                    setValue("isSensitive", false, { shouldValidate: true });
                   }}
                   className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    watch("isAiAllowed") && !watch("isSensitive")
+                    classificationMode === "AiKnowledge"
                       ? "border-emerald-500/50 bg-emerald-500/5 shadow-sm ring-1 ring-emerald-500/30"
                       : "border-hairline bg-surface-2/50 hover:bg-surface-2 opacity-75"
                   }`}
                 >
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mt-0.5">
-                    <Sparkle className="h-4 w-4" />
+                    <Brain className="h-4 w-4" />
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-ink">🟢 AI Context</span>
+                      <span className="text-xs font-bold text-ink">🧠 AI Knowledge Base</span>
                       <span className="text-[9px] font-mono uppercase bg-emerald-500/10 text-emerald-600 px-1.5 py-0.2 rounded-full font-bold">Recommended</span>
                     </div>
                     <span className="text-[10px] text-ink-muted leading-tight">
-                      Allow AI search context & RAG ingestion to answer questions. Accessible to all members.
+                      Allow AI search context & RAG ingestion to answer questions. Accessible to workspace members.
                     </span>
                   </div>
                 </div>
 
-                {/* Card 2: Administrative */}
+                {/* Card 2: General Files */}
                 <div
                   onClick={() => {
-                    setValue("isAiAllowed", false);
-                    setValue("isSensitive", false);
+                    setClassificationMode("General");
+                    setValue("isAiAllowed", false, { shouldValidate: true });
+                    setValue("isSensitive", false, { shouldValidate: true });
                   }}
                   className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    !watch("isAiAllowed") && !watch("isSensitive")
+                    classificationMode === "General"
                       ? "border-primary/50 bg-primary/5 shadow-sm ring-1 ring-primary/30"
                       : "border-hairline bg-surface-2/50 hover:bg-surface-2 opacity-75"
                   }`}
@@ -665,21 +690,46 @@ export default function WorkspaceDocumentsPage() {
                     <FileText className="h-4 w-4" />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-bold text-ink">⚪ Administrative Document</span>
+                    <span className="text-xs font-bold text-ink">📦 General Files</span>
                     <span className="text-[10px] text-ink-muted leading-tight">
-                      Invoices, contracts, internal procedures. Stored securely, skipped from AI ingestion.
+                      Standard file & media storage (contracts, images, manuals). Skipped from AI ingestion.
                     </span>
                   </div>
                 </div>
 
-                {/* Card 3: Sensitive / Restricted */}
+                {/* Card 3: Internal Members Only */}
                 <div
                   onClick={() => {
-                    setValue("isAiAllowed", false);
-                    setValue("isSensitive", true);
+                    setClassificationMode("InternalOnly");
+                    setValue("isAiAllowed", false, { shouldValidate: true });
+                    setValue("isSensitive", false, { shouldValidate: true });
                   }}
                   className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    watch("isSensitive")
+                    classificationMode === "InternalOnly"
+                      ? "border-amber-500/50 bg-amber-500/5 shadow-sm ring-1 ring-amber-500/30"
+                      : "border-hairline bg-surface-2/50 hover:bg-surface-2 opacity-75"
+                  }`}
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mt-0.5">
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-bold text-ink">👥 Internal Members Only</span>
+                    <span className="text-[10px] text-ink-muted leading-tight">
+                      Restricted to internal team members. Automatically blocks Guest & External member access.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card 4: Restricted & Sensitive */}
+                <div
+                  onClick={() => {
+                    setClassificationMode("Restricted");
+                    setValue("isAiAllowed", false, { shouldValidate: true });
+                    setValue("isSensitive", true, { shouldValidate: true });
+                  }}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    classificationMode === "Restricted"
                       ? "border-destructive/50 bg-destructive/5 shadow-sm ring-1 ring-destructive/30"
                       : "border-hairline bg-surface-2/50 hover:bg-surface-2 opacity-75"
                   }`}
@@ -690,7 +740,7 @@ export default function WorkspaceDocumentsPage() {
                   <div className="flex flex-col gap-0.5">
                     <span className="text-xs font-bold text-ink">🔴 Restricted & Sensitive</span>
                     <span className="text-[10px] text-ink-muted leading-tight">
-                      Sensitive data. Skip AI ingestion & restrict access to Owner, Admin, or Uploader.
+                      Confidential data. Skip AI ingestion & restrict access to Owner, Admin, or Uploader.
                     </span>
                   </div>
                 </div>

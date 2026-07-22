@@ -22,7 +22,9 @@ import {
   Check,
   X,
   FileText,
-  FolderOpen
+  FolderOpen,
+  FloppyDisk,
+  PencilSimple
 } from "@phosphor-icons/react";
 
 import apiClient from "@/lib/api/client";
@@ -36,7 +38,8 @@ import {
   useWorkspaceMembers,
   useDownloadWorkspaceDocument,
   useApproveWorkspaceDocument,
-  useWorkspaceDocumentExtractedText
+  useWorkspaceDocumentExtractedText,
+  useUpdateWorkspaceDocumentExtractedText
 } from "@/hooks/use-workspace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -95,6 +98,17 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const removePolicyMutation = useRemoveWorkspaceDocumentAccessPolicy(activeWorkspaceId || "", documentId);
   const downloadMutation = useDownloadWorkspaceDocument(activeWorkspaceId || "");
   const approveMutation = useApproveWorkspaceDocument(activeWorkspaceId || "");
+  const [isEditingContent, setIsEditingContent] = useState(false);
+  const [editableText, setEditableText] = useState("");
+
+  const updateTextMutation = useUpdateWorkspaceDocumentExtractedText(activeWorkspaceId || "", documentId);
+
+  useEffect(() => {
+    if (extractedTextQuery.data) {
+      const full = extractedTextQuery.data.fullText || extractedTextQuery.data.text || "";
+      setEditableText(full);
+    }
+  }, [extractedTextQuery.data]);
 
   const [showAllowedDropdown, setShowAllowedDropdown] = useState(false);
   const [showBlockedDropdown, setShowBlockedDropdown] = useState(false);
@@ -393,36 +407,105 @@ export default function DocumentDetailPage({ params }: PageProps) {
                     <span className="text-[10px] text-ink-muted font-mono">{formatBytes(doc.sizeBytes)}</span>
                   </div>
                   
-                  <div className="flex flex-col gap-2 mt-2">
-                    <h3 className="text-sm font-bold text-ink">{doc.name}</h3>
-                    <p className="text-xs text-ink-muted leading-relaxed">
-                      {doc.isSensitive ? (
-                        <span className="text-destructive/90 font-semibold block mb-1">
-                          ⚠️ This document is marked as sensitive.
-                        </span>
-                      ) : null}
-                      WarpTalk AI engine has indexed this document context. This content is dynamically queried and linked during active translation sessions in this workspace to provide highly accurate terminology translation matches.
-                    </p>
+                  {/* Document Header & Edit Controls */}
+                  <div className="flex items-center justify-between mt-2 pb-2 border-b border-hairline">
+                    <div className="flex flex-col gap-1">
+                      <h3 className="text-sm font-bold text-ink">{doc.name}</h3>
+                      <p className="text-xs text-ink-muted leading-relaxed">
+                        {doc.isSensitive ? (
+                          <span className="text-destructive/90 font-semibold inline-block mr-2">
+                            ⚠️ Sensitive Document
+                          </span>
+                        ) : null}
+                        WarpTalk AI engine indexes this context dynamically for accurate terminology translation.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {!isEditingContent ? (
+                        <button
+                          onClick={() => setIsEditingContent(true)}
+                          className="h-8 px-3 rounded-lg border border-hairline bg-surface-1 text-xs font-semibold text-ink hover:bg-surface-3 transition flex items-center gap-1.5"
+                        >
+                          <PencilSimple className="h-3.5 w-3.5 text-primary" />
+                          <span>Edit Text</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setIsEditingContent(false);
+                              if (extractedTextQuery.data) {
+                                setEditableText(extractedTextQuery.data.fullText || extractedTextQuery.data.text || "");
+                              }
+                            }}
+                            className="h-8 px-3 rounded-lg border border-hairline bg-surface-1 text-xs font-semibold text-ink-muted hover:bg-surface-3 transition"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await updateTextMutation.mutateAsync(editableText);
+                                toast.success("Document content saved and updated!");
+                                setIsEditingContent(false);
+                              } catch (err: unknown) {
+                                const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+                                  || "Failed to save content.";
+                                toast.error(errorMsg);
+                              }
+                            }}
+                            disabled={updateTextMutation.isPending}
+                            className="h-8 px-4 rounded-lg bg-primary text-xs font-semibold text-white hover:bg-primary-hover transition flex items-center gap-1.5 disabled:opacity-50 shadow-sm"
+                          >
+                            {updateTextMutation.isPending ? (
+                              <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
+                            ) : (
+                              <FloppyDisk className="h-3.5 w-3.5 text-white" />
+                            )}
+                            <span>Save Content</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  {extractedTextQuery.isLoading ? (
+                  {/* Text Editor Box or Preview */}
+                  {isEditingContent ? (
+                    <div className="flex flex-col gap-2 mt-4">
+                      <div className="flex items-center gap-1 p-1 bg-surface-3 border border-hairline rounded-t-lg">
+                        <span className="text-[10px] font-mono uppercase text-ink-muted px-2 font-bold">Document Content Editor</span>
+                      </div>
+                      <textarea
+                        value={editableText}
+                        onChange={(e) => setEditableText(e.target.value)}
+                        placeholder="Type or paste document text content here..."
+                        className="w-full min-h-[350px] p-4 bg-surface-1 border border-hairline rounded-b-lg font-mono text-xs text-ink focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-y scrollbar-thin"
+                      />
+                    </div>
+                  ) : extractedTextQuery.isLoading ? (
                     <div className="flex items-center justify-center p-8 mt-4">
                       <Spinner className="h-5 w-5 animate-spin text-primary" />
                     </div>
                   ) : extractedTextQuery.isError ? (
-                    <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-xs mt-4">
-                      Failed to load extracted text content.
+                    <div className="p-4 rounded-lg bg-surface-3 border border-hairline text-ink-muted text-xs mt-4 flex flex-col gap-2">
+                      <p className="text-ink font-medium">No extracted text content loaded from storage file yet.</p>
+                      <button
+                        onClick={() => setIsEditingContent(true)}
+                        className="self-start text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+                      >
+                        <PencilSimple className="h-3 w-3" />
+                        <span>Click here to open editor and add text content</span>
+                      </button>
                     </div>
                   ) : (() => {
                     const data = extractedTextQuery.data;
                     if (data?.sheets && data.sheets.length > 0) {
                       const activeSheet = data.sheets[activeSheetIndex] || data.sheets[0];
-                      // Find max column length to construct column headers safely
                       const maxCols = activeSheet.rows?.reduce((max, row) => Math.max(max, row.length), 0) || 0;
                       
                       return (
                         <div className="flex flex-col gap-3 mt-4">
-                          {/* Sheets Tab Bar */}
                           <div className="flex border-b border-hairline overflow-x-auto gap-1 pb-1 scrollbar-thin">
                             {data.sheets.map((sheet, index) => (
                               <button
@@ -440,7 +523,6 @@ export default function DocumentDetailPage({ params }: PageProps) {
                             ))}
                           </div>
 
-                          {/* Grid Table Container */}
                           <div className="border border-hairline rounded-lg bg-surface-1 shadow-inner overflow-auto max-h-[500px] scrollbar-thin">
                             {(!activeSheet.rows || activeSheet.rows.length === 0) ? (
                               <div className="p-8 text-center text-xs text-ink-muted">
@@ -506,9 +588,26 @@ export default function DocumentDetailPage({ params }: PageProps) {
                       );
                     }
 
+                    const displayText = data?.fullText || data?.text || "";
+
+                    if (!displayText) {
+                      return (
+                        <div className="mt-4 border border-hairline rounded-lg bg-surface-3 p-6 flex flex-col items-center justify-center gap-3">
+                          <p className="text-xs text-ink-muted font-medium">No text content found in document.</p>
+                          <button
+                            onClick={() => setIsEditingContent(true)}
+                            className="h-8 px-4 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition flex items-center gap-1.5"
+                          >
+                            <PencilSimple className="h-3.5 w-3.5" />
+                            <span>Add & Edit Document Content</span>
+                          </button>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div className="mt-4 border border-hairline rounded-lg bg-surface-3 p-4 max-h-[400px] overflow-y-auto font-mono text-[11px] leading-relaxed text-ink whitespace-pre-wrap select-text scrollbar-thin">
-                        {data?.fullText || data?.text || "No text content found in document."}
+                        {displayText}
                       </div>
                     );
                   })()}

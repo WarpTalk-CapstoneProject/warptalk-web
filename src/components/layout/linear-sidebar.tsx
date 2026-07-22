@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   SquaresFour,
+  ClockCounterClockwise,
   Sparkle,
+  BookBookmark,
   Waveform,
   GearSix,
   MagnifyingGlass,
@@ -19,8 +21,8 @@ import {
   Shield,
   Warning,
   House,
-  PaperPlaneTilt,
   Sliders,
+  PaperPlaneTilt,
 } from "@phosphor-icons/react/dist/ssr";
 import type { IconProps } from "@phosphor-icons/react";
 type IconType = React.ElementType<IconProps>;
@@ -28,11 +30,11 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useInviteWorkspaceMember, useWorkspaces } from "@/hooks/use-workspace";
+import { useWorkspaces } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +42,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -58,6 +61,13 @@ interface NavItem {
     title?: string;
   }>;
 }
+
+const configNav: NavItem[] = [
+  { icon: BookBookmark, label: "Terminology", href: "/terminology" },
+  { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
+  { icon: CreditCard, label: "Wallet", href: "/workspace/wallet" },
+  { icon: GearSix, label: "Settings", href: "/settings" },
+];
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -114,10 +124,6 @@ export function LinearSidebar() {
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRoleName, setInviteRoleName] = useState("Member");
-  const [inviteMembershipType, setInviteMembershipType] = useState("Internal");
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -141,8 +147,8 @@ export function LinearSidebar() {
         { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
       ]
     },
-    { icon: Sparkle, label: "Artifacts", href: `/${slug}/ai-summaries` },
-    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
+    { icon: ClockCounterClockwise, label: "History", href: `/${slug}/history` },
+    { icon: Sparkle, label: "AI Summaries", href: `/${slug}/ai-summaries` },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -154,7 +160,6 @@ export function LinearSidebar() {
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
   const selectWorkspaceMutation = useSelectWorkspace();
-  const inviteMemberMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
 
   const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
     try {
@@ -162,30 +167,8 @@ export function LinearSidebar() {
       setActiveWorkspace(workspaceId, name, slug, roleName, membershipType, res.defaultLanguage || defaultLanguage);
       toast.success(`Switched to workspace "${name}"`);
       router.push(`/${slug}/home`);
-    } catch {
-      toast.error("Failed to switch workspace");
-    }
-  };
-
-  const handleInviteMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const email = inviteEmail.trim();
-    if (!activeWorkspaceId || !email) return;
-
-    try {
-      await inviteMemberMutation.mutateAsync({
-        email,
-        roleName: inviteRoleName,
-        membershipType: inviteMembershipType,
-      });
-      toast.success(`Invitation sent to ${email}`);
-      setInviteEmail("");
-      setInviteRoleName("Member");
-      setInviteMembershipType("Internal");
-      setIsInviteModalOpen(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to send invitation";
-      toast.error(message);
+      toast.error("Failed to switch workspace");
     }
   };
 
@@ -201,7 +184,8 @@ export function LinearSidebar() {
   const workspaceNav: NavItem[] = [];
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members` },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents` }
+    { icon: FileText, label: "Documents", href: `/${slug}/documents` },
+    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" }
   );
 
   if (role === "Owner" || role === "Admin") {
@@ -373,7 +357,7 @@ export function LinearSidebar() {
                   </DropdownMenuItem>
                 );
               })}
-            </div>
+            </div >
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={() => router.push("/workspace/create")}
@@ -390,8 +374,8 @@ export function LinearSidebar() {
               <SignOut size={14} />
               <span>Sign out</span>
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenuContent >
+        </DropdownMenu >
         <div className="flex items-center gap-1.5 text-ink-muted shrink-0">
           <button
             onClick={() => setSearchMeetingModalOpen(true)}
@@ -400,10 +384,10 @@ export function LinearSidebar() {
             <MagnifyingGlass size={16} weight="regular" />
           </button>
         </div>
-      </div>
+      </div >
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3">
+      < nav className="flex-1 overflow-y-auto px-3" >
         <div className="flex flex-col gap-[2px]">
           {mainNav.map((item) => (
             <NavLink key={item.href} item={item} pathname={pathname} />
@@ -418,61 +402,45 @@ export function LinearSidebar() {
             <NavLink key={item.href} item={item} pathname={pathname} />
           ))}
         </div>
-      </nav>
-
-      {isOwnerOrAdmin && activeWorkspaceId && (
-        <div className="px-3 pb-2 pt-3">
-          <button
-            type="button"
-            onClick={() => setIsInviteModalOpen(true)}
-            className="group w-full rounded-[14px] border border-border bg-surface-1 p-3 text-left shadow-linear transition hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
-            <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
-              <PaperPlaneTilt size={17} weight="duotone" />
-            </span>
-            <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
-            <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
-              Bring your team in to collaborate and share workspace rooms.
-            </span>
-          </button>
-        </div>
-      )}
+      </nav >
 
       {/* User Account Panel */}
-      {user && (
-        <div className="p-3 mt-auto shrink-0">
-          <div
-            onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
-            className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
-          >
-            <Avatar className="size-8 rounded-lg border border-border/50">
-              <AvatarImage src={user.avatarUrl} alt={user.fullName} />
-              <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
-                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-[13px] font-medium text-ink truncate leading-tight">
-                {user.fullName}
-              </span>
-              <span className="text-[11px] text-ink-muted truncate leading-tight mt-0.5">
-                {user.email}
-              </span>
-            </div>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                logout();
-              }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
-              title="Sign out"
+      {
+        user && (
+          <div className="p-3 mt-auto shrink-0">
+            <div
+              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
+              className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path></svg>
-            </button>
+              <Avatar className="size-8 rounded-lg border border-border/50">
+                <AvatarImage src={user.avatarUrl} alt={user.fullName} />
+                <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
+                  {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-[13px] font-medium text-ink truncate leading-tight">
+                  {user.fullName}
+                </span>
+                <span className="text-[11px] text-ink-muted truncate leading-tight mt-0.5">
+                  {user.email}
+                </span>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  logout();
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
+                title="Sign out"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path></svg>
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Join Room Dialog */}
       <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
@@ -508,95 +476,6 @@ export function LinearSidebar() {
           </form>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
-        <DialogContent className="overflow-hidden p-0 sm:max-w-[520px]">
-          <div className="h-36 border-b border-border bg-[radial-gradient(circle_at_28%_18%,rgba(94,106,210,0.30),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(16,185,129,0.18),transparent_30%),linear-gradient(135deg,var(--surface-2),var(--surface-1))]">
-            <div className="flex h-full items-end p-5">
-              <span className="grid size-12 place-items-center rounded-[14px] border border-white/35 bg-white/40 text-primary shadow-[0_12px_28px_rgba(16,24,40,0.12)] backdrop-blur">
-                <PaperPlaneTilt size={24} weight="duotone" />
-              </span>
-            </div>
-          </div>
-
-          <form onSubmit={handleInviteMember} className="grid gap-4 p-5 pt-4">
-            <DialogHeader>
-              <DialogTitle>Invite team members</DialogTitle>
-              <DialogDescription>
-                Send an invitation to join {activeWorkspaceName || "this workspace"} and collaborate on rooms, documents, and summaries.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid gap-2">
-              <Label htmlFor="invite-email" className="text-[13px] font-medium text-foreground">
-                Email address
-              </Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="teammate@company.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                autoComplete="email"
-                className="bg-surface-1"
-              />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="invite-role" className="text-[13px] font-medium text-foreground">
-                  Role
-                </Label>
-                <select
-                  id="invite-role"
-                  value={inviteRoleName}
-                  onChange={(e) => setInviteRoleName(e.target.value)}
-                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
-                >
-                  <option value="Member">Member</option>
-                  <option value="Admin">Admin</option>
-                </select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="invite-membership" className="text-[13px] font-medium text-foreground">
-                  Access type
-                </Label>
-                <select
-                  id="invite-membership"
-                  value={inviteMembershipType}
-                  onChange={(e) => setInviteMembershipType(e.target.value)}
-                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
-                >
-                  <option value="Internal">Internal</option>
-                  <option value="External">External</option>
-                </select>
-              </div>
-            </div>
-
-            <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-[12px] leading-5 text-ink-muted">
-              Invited members receive workspace access based on the role and access type selected here.
-            </p>
-
-            <DialogFooter className="-mx-5 -mb-5 mt-1">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsInviteModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!inviteEmail.trim() || inviteMemberMutation.isPending}
-                className="min-w-[92px] text-white disabled:bg-surface-3 disabled:text-ink-muted disabled:opacity-100"
-              >
-                {inviteMemberMutation.isPending ? "Inviting..." : "Invite"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </aside>
+    </aside >
   );
 }
