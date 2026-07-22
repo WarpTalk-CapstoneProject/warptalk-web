@@ -32,6 +32,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Admin, workspace, and participant sidebars keep their existing collapsible behavior while sharing the updated logo treatment.
 - Command search now includes the full review route set: dashboard, rooms, create room, history, AI summaries, AI chat, terminology, feedback, workspace, admin, and dev test.
 - `/rooms` and `/history` were compacted to match `/dashboard` density at 100% zoom: smaller section gaps, smaller headings, 82px metric cards, compact table rows, and tighter detail panels.
+- The global `Ask WarpTalk` popover shows ambient page context as a separate Linear-style strip above the chat editor, not inside the editor text row. The strip includes the current page/entity label, status when available, and an `x` control that disables sending page context for the active page/entity.
 
 ## Files Affected
 
@@ -46,6 +47,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - `src/components/layout/admin-sidebar.tsx`
 - `src/components/layout/workspace-sidebar.tsx`
 - `src/components/layout/participant-sidebar.tsx`
+- `src/components/layout/global-chatbot.tsx`
 - `.agents/page-docs/dashboard-inner-pages.md`
 
 ## Important UI Notes
@@ -57,6 +59,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Command search is frontend-only and navigates between available local app pages.
 - The `.glass-dashboard-scope` class in `globals.css` scopes glass styling to authenticated host pages so landing and auth pages stay unchanged.
 - The Host profile control is currently presentational in this layout pass. Account-menu behavior should be wired back in if the product requires profile or logout actions from the topbar.
+- Removing the Ask WarpTalk page-context strip only suppresses the ambient `pageContext` payload for the current page/entity. Explicit `@` mention chips still send their selected entity references.
 
 ## Known Limitations
 
@@ -70,3 +73,4 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Open representative host, admin, participant, and workspace routes to confirm the logo and navigation alignment.
 - Verify active navigation states on nested routes.
 - Check narrow desktop widths to ensure the fixed host sidebar and topbar actions do not overlap page content.
+- Open Ask WarpTalk on a page with registered assistant context, confirm the context strip appears above the editor, remove it with `x`, and confirm messages no longer include ambient page context.

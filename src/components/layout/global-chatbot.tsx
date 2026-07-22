@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
-import { ArrowUp, Sparkle, ClockCounterClockwise, Question, ArrowsOutSimple, CornersIn, PaperPlaneRight, CaretUp, Plus, MagnifyingGlass, PaperPlaneTilt, Cube, CaretDown, FileText, Chats, BookBookmark, VideoCamera } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUp, Sparkle, ClockCounterClockwise, Question, ArrowsOutSimple, CornersIn, PaperPlaneRight, CaretUp, Plus, MagnifyingGlass, PaperPlaneTilt, Cube, CaretDown, FileText, Chats, BookBookmark, VideoCamera, X } from "@phosphor-icons/react/dist/ssr";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthStore } from "@/stores/auth-store";
@@ -159,6 +159,11 @@ function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
   };
 }
 
+function getPageContextKey(context: AssistantPageContextDto | null) {
+  if (!context) return null;
+  return [context.pageType, context.workspaceId ?? "", context.entityId ?? ""].join(":");
+}
+
 export function GlobalChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -170,6 +175,7 @@ export function GlobalChatbot() {
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const [disabledPageContextKey, setDisabledPageContextKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const user = useAuthStore((state) => state.user);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
@@ -233,12 +239,16 @@ export function GlobalChatbot() {
   // Only offer commands relevant to the page the widget was opened from — e.g. "/summarize"
   // only makes sense with a room in ambient context (see chat_worker.py's page-context
   // injection). No ambient context registered on this page ⇒ no commands to offer.
+  const ambientPageContextKey = useMemo(() => getPageContextKey(ambientPageContext), [ambientPageContext]);
+  const effectivePageContext =
+    ambientPageContextKey && disabledPageContextKey === ambientPageContextKey ? null : ambientPageContext;
+
   const availableSlashCommands = useMemo(() => {
-    const pageType = ambientPageContext?.pageType ?? "";
+    const pageType = effectivePageContext?.pageType ?? "";
     if (!pageType) return [];
     return SLASH_COMMANDS.filter((cmd) => cmd.pageTypes.includes(pageType));
-  }, [ambientPageContext?.pageType]);
-  const ambientContextDisplay = useMemo(() => getAmbientContextDisplay(ambientPageContext), [ambientPageContext]);
+  }, [effectivePageContext?.pageType]);
+  const ambientContextDisplay = useMemo(() => getAmbientContextDisplay(effectivePageContext), [effectivePageContext]);
 
   const filteredSlashCommands = availableSlashCommands.filter((cmd) =>
     cmd.command.slice(1).toLowerCase().startsWith(slashQuery.toLowerCase())
@@ -447,7 +457,7 @@ export function GlobalChatbot() {
   };
 
   const insertSlashCommand = (cmd: SlashCommand) => {
-    const prompt = cmd.buildPrompt(ambientPageContext);
+    const prompt = cmd.buildPrompt(effectivePageContext);
     setSlashMenuOpen(false);
 
     if (cmd.autoSend) {
@@ -503,7 +513,7 @@ export function GlobalChatbot() {
       await sendAssistantMessage.mutateAsync({
         conversationId: convId,
         content,
-        pageContext: ambientPageContext,
+        pageContext: effectivePageContext,
         mentions,
       });
       // The assistant's reply streams in over AssistantHub — see the connection effect above.
@@ -616,6 +626,34 @@ export function GlobalChatbot() {
 
               {/* Chat Input Section */}
               <div className="px-2 pb-2 shrink-0">
+                {ambientContextDisplay && (
+                  <div className="mb-1.5 flex min-h-[28px] items-center rounded-t-[8px] bg-surface-2 px-2 py-1 text-[13px] font-medium text-ink">
+                    <div
+                      aria-label="Active page context"
+                      title={`${ambientContextDisplay.pageLabel}: ${ambientContextDisplay.title}`}
+                      className="flex min-w-0 flex-1 items-center gap-1.5"
+                    >
+                      <span className="relative flex size-4 shrink-0 items-center justify-center rounded-full bg-[#34c759]/10 ring-1 ring-[#34c759]/20">
+                        <span className="size-2 rounded-full bg-[#34c759]" />
+                      </span>
+                      <span className="shrink-0 text-[12px] text-ink-muted">{ambientContextDisplay.pageLabel}</span>
+                      <span className="min-w-0 truncate">{ambientContextDisplay.title}</span>
+                      {ambientContextDisplay.status && (
+                        <span className="shrink-0 rounded-[6px] bg-surface-1 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle ring-1 ring-border">
+                          {ambientContextDisplay.status}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      aria-label="Remove page context"
+                      title="Remove page context"
+                      onClick={() => setDisabledPageContextKey(ambientPageContextKey)}
+                      className="ml-2 flex size-5 shrink-0 items-center justify-center rounded-[6px] text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    >
+                      <X size={12} weight="bold" />
+                    </button>
+                  </div>
+                )}
                 <div className="relative rounded-[8px] border border-border bg-surface-1">
 
                   {/* Slash Command Dropdown */}
@@ -711,24 +749,6 @@ export function GlobalChatbot() {
                   </AnimatePresence>
 
                   <div className="flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[120px] bg-transparent px-2 py-1.5 overflow-y-auto">
-                    {ambientContextDisplay && (
-                      <div
-                        aria-label="Active page context"
-                        title={`${ambientContextDisplay.pageLabel}: ${ambientContextDisplay.title}`}
-                        className="group flex min-w-0 max-w-full items-center gap-1.5 rounded-[8px] bg-surface-2 px-2 py-1 text-[13px] font-medium text-ink ring-1 ring-border"
-                      >
-                        <span className="relative flex size-4 shrink-0 items-center justify-center rounded-full bg-[#34c759]/10 ring-1 ring-[#34c759]/20">
-                          <span className="size-2 rounded-full bg-[#34c759]" />
-                        </span>
-                        <span className="shrink-0 text-[12px] text-ink-muted">{ambientContextDisplay.pageLabel}</span>
-                        <span className="min-w-0 truncate">{ambientContextDisplay.title}</span>
-                        {ambientContextDisplay.status && (
-                          <span className="shrink-0 rounded-[6px] bg-surface-1 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle ring-1 ring-border">
-                            {ambientContextDisplay.status}
-                          </span>
-                        )}
-                      </div>
-                    )}
                     {selectedContexts.map(ctx => (
                       <div
                         key={ctx.id}
