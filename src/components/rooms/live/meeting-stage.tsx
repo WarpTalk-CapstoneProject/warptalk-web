@@ -42,7 +42,11 @@ export function LiveKitMeetingStage({
     ],
     { onlySubscribed: false }
   );
-  const hasParticipants = connectionState === ConnectionState.Connected && tracks.length > 0;
+  const visibleTracks = tracks.filter((trackRef) => !isAutomatedParticipant(
+    trackRef.participant.identity,
+    trackRef.participant.name
+  ));
+  const hasParticipants = connectionState === ConnectionState.Connected && visibleTracks.length > 0;
 
   useEffect(() => {
     if (!localVideoRef.current) return;
@@ -65,7 +69,7 @@ export function LiveKitMeetingStage({
         </div>
         
         <div className="grid h-full gap-3 overflow-hidden grid-cols-1 overflow-y-auto">
-          <TrackLoop tracks={tracks}>
+          <TrackLoop tracks={visibleTracks}>
             <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur min-h-[160px]" />
           </TrackLoop>
         </div>
@@ -77,8 +81,8 @@ export function LiveKitMeetingStage({
   if (hasParticipants) {
     return (
       <div className="relative h-full w-full p-2 bg-surface-1">
-        <div className={`grid h-full gap-3 ${gridClassName(tracks.length)}`}>
-          <TrackLoop tracks={tracks}>
+        <div className={`grid h-full gap-3 ${gridClassName(visibleTracks.length)}`}>
+          <TrackLoop tracks={visibleTracks}>
             <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur" />
           </TrackLoop>
         </div>
@@ -130,6 +134,18 @@ function gridClassName(count: number) {
   return "grid-cols-5";
 }
 
+function isAutomatedParticipant(identity?: string, name?: string) {
+  const normalizedIdentity = identity?.toLowerCase() ?? "";
+  const normalizedName = name?.toLowerCase() ?? "";
+
+  return (
+    normalizedIdentity.startsWith("ai-interpreter-") ||
+    normalizedIdentity === "warptalk-ai" ||
+    normalizedName.includes("ai interpreter") ||
+    normalizedName.includes("warptalk ai")
+  );
+}
+
 function MeetingPreviewTile({
   name,
   stream,
@@ -150,7 +166,7 @@ function MeetingPreviewTile({
   return (
     <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-3">
       {hasVideo ? (
-        <video ref={videoRef} className="h-full w-full object-cover -scale-x-100" autoPlay muted playsInline />
+        <video ref={videoRef} className="h-full w-full object-cover" autoPlay muted playsInline />
       ) : (
         <div className="grid h-full min-h-[160px] place-items-center">
           <div className={`${featured ? "h-24 w-24 text-3xl" : "h-14 w-14 text-xl"} grid place-items-center rounded-full bg-slate-300 font-medium text-ink shadow-sm`}>

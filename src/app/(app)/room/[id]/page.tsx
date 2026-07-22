@@ -23,6 +23,7 @@ import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto, TranslationTextDto } from "@/types/realtime";
 import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
 // Import Refactored Components
 import { MeetingTopBar } from "@/components/rooms/live/meeting-top-bar";
@@ -46,6 +47,7 @@ export default function RoomDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const roomId = params.id;
   const user = useAuthStore((state) => state.user);
   const roomQuery = useTranslationRoom(roomId);
@@ -120,8 +122,29 @@ export default function RoomDetailPage() {
     room?.status !== "failed";
     
   const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
-  const sourceLanguage = savedJoinConfig.speakLanguage || room?.sourceLanguage || "vi";
-  const targetLanguage = savedJoinConfig.listenLanguage || room?.targetLanguages?.[0] || "en";
+  const roomSourceLanguage = room?.sourceLanguage || "auto";
+  const sourceLanguage = savedJoinConfig.speakLanguage || "auto";
+  const targetLanguage =
+    savedJoinConfig.listenLanguage ||
+    room?.targetLanguages?.find((language) => normalizeLanguageCode(language) !== normalizeLanguageCode(roomSourceLanguage)) ||
+    room?.targetLanguages?.[0] ||
+    "en";
+
+  useRegisterAssistantContext(
+    room
+      ? {
+          pageType: "in_meeting",
+          entityId: room.id,
+          workspaceId: activeWorkspaceId ?? undefined,
+          snapshot: {
+            title: room.title,
+            status: room.status,
+            participantCount: String(activeCount),
+            sourceLanguage: roomSourceLanguage,
+          },
+        }
+      : null
+  );
 
   function retryMeetingConnection() {
     if (!room?.id || !canConnectMeeting) return;
@@ -199,16 +222,36 @@ export default function RoomDetailPage() {
       router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
     });
 
-    connection
-      .start()
-      .then(() =>
-        connection
-          .invoke("JoinTranslationRoom", roomId, displayName, sourceLanguage, targetLanguage)
-          .catch(() => undefined)
-      )
-      .catch(() => undefined);
+    let cancelled = false;
+    const retryDelays = [0, 500, 1500, 3000];
+
+    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const joinCurrentRoom = () =>
+      connection
+        .invoke("JoinTranslationRoom", roomId, displayName, sourceLanguage, targetLanguage)
+        .catch(() => undefined);
+    const startAndJoin = async () => {
+      for (const delay of retryDelays) {
+        if (cancelled) return;
+        if (delay) await wait(delay);
+        try {
+          await connection.start();
+          if (!cancelled) await joinCurrentRoom();
+          return;
+        } catch {
+          // Token refresh can race the initial SignalR negotiate; retry quietly.
+        }
+      }
+    };
+
+    connection.onreconnected(() => {
+      void joinCurrentRoom();
+    });
+
+    void startAndJoin();
 
     return () => {
+      cancelled = true;
       connection.stop().catch(() => undefined);
       resetLiveRoom();
     };
@@ -225,12 +268,32 @@ export default function RoomDetailPage() {
       addChatMessage(message);
     });
 
-    chatConnection
-      .start()
-      .then(() => chatConnection.invoke("JoinMeetingRoom", roomId).catch(() => undefined))
-      .catch(() => undefined);
+    let cancelled = false;
+    const retryDelays = [0, 500, 1500, 3000];
+    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const joinChatRoom = () => chatConnection.invoke("JoinMeetingRoom", roomId).catch(() => undefined);
+    const startAndJoinChat = async () => {
+      for (const delay of retryDelays) {
+        if (cancelled) return;
+        if (delay) await wait(delay);
+        try {
+          await chatConnection.start();
+          if (!cancelled) await joinChatRoom();
+          return;
+        } catch {
+          // Token refresh can race the initial SignalR negotiate; retry quietly.
+        }
+      }
+    };
+
+    chatConnection.onreconnected(() => {
+      void joinChatRoom();
+    });
+
+    void startAndJoinChat();
 
     return () => {
+      cancelled = true;
       chatConnection.stop().catch(() => undefined);
     };
   }, [roomId, addChatMessage]);
@@ -500,6 +563,10 @@ function dedupeSegments(segments: TranscriptSegmentDto[]) {
     map.set(segment.segmentId, segment);
   }
   return Array.from(map.values()).sort((a, b) => a.startTimeMs - b.startTimeMs);
+}
+
+function normalizeLanguageCode(language: string) {
+  return language.split("-")[0]?.toLowerCase() || language.toLowerCase();
 }
 
 function getPreviewLiveRoom(id: string): TranslationRoomDto {

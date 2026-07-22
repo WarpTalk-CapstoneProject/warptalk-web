@@ -22,6 +22,7 @@ import {
   ArrowCounterClockwise
 } from "@phosphor-icons/react";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
 import apiClient from "@/lib/api/client";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -88,6 +89,19 @@ export default function WorkspaceDocumentsPage() {
       isSensitive: false,
     },
   });
+
+  useRegisterAssistantContext(
+    activeWorkspaceId
+      ? {
+          pageType: "documents",
+          workspaceId: activeWorkspaceId,
+          snapshot: {
+            query,
+            count: String(documentsQuery.data?.items?.length ?? 0),
+          },
+        }
+      : null
+  );
 
   if (!activeWorkspaceId) return null;
 

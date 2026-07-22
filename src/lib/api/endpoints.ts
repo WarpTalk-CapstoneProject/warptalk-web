@@ -119,5 +119,6 @@ export const API = {
     conversations: "/assistant/conversations",
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
+    skills: "/assistant/skills",
   },
 } as const;

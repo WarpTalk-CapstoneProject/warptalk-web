@@ -38,6 +38,7 @@ import {
   useApproveWorkspaceDocument,
   useWorkspaceDocumentExtractedText
 } from "@/hooks/use-workspace";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -139,6 +140,21 @@ export default function DocumentDetailPage({ params }: PageProps) {
       setValue("effect", "ALLOW");
     }
   }, [builderMode, setValue]);
+
+  useRegisterAssistantContext(
+    doc
+      ? {
+          pageType: "document_detail",
+          entityId: documentId,
+          workspaceId: activeWorkspaceId ?? undefined,
+          snapshot: {
+            name: doc.name,
+            status: doc.status,
+            ingestionStatus: doc.ingestionStatus,
+          },
+        }
+      : null
+  );
 
   if (!activeWorkspaceId) return null;
 

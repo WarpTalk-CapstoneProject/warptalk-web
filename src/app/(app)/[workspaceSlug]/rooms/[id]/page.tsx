@@ -51,6 +51,7 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { getLanguageName } from "@/lib/languages";
 import { cn } from "@/lib/utils";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import {
   useEndTranslationRoom,
   useTranslationRoom,
@@ -159,6 +160,21 @@ export default function RoomInformationPage() {
         : room?.status === "in_progress"
           ? room.participantCount ?? 0
           : 0;
+
+  useRegisterAssistantContext(
+    room
+      ? {
+          pageType: "room_detail",
+          entityId: room.id,
+          workspaceId: validWorkspaceId,
+          snapshot: {
+            title: room.title,
+            status: room.status,
+            participantCount: String(activeParticipantCount),
+          },
+        }
+      : null
+  );
 
   function handleCopy(text: string, label: string) {
     navigator.clipboard.writeText(text);
