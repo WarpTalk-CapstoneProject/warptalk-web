@@ -13,7 +13,8 @@ import {
 
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
-import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { useTranslationRoom, useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
+import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
@@ -35,11 +36,12 @@ export function SetupRoomModal() {
   const user = useAuthStore(state => state.user);
   
   const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(roomId ?? "");
+  const joinMutation = useJoinTranslationRoomByCode();
   const role = useWorkspaceRole();
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
-  const isAdmin = role === "admin";
-  const isOwner = role === "owner";
+  const isAdmin = role === "Admin";
+  const isOwner = role === "Owner";
   const isHost = Boolean(room && user && (room.hostId === user.id || isAdmin || isOwner));
 
   const videoRef = useRef<SinkVideoElement | null>(null);
@@ -324,17 +326,33 @@ export function SetupRoomModal() {
 
             <div className="p-4 border-t border-border bg-surface-1 shrink-0">
               <button
-                onClick={() => {
-                  window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
-                    cameraEnabled,
-                    microphoneEnabled,
-                  }));
-                  setIsOpen(false);
-                  router.push(`/room/${roomId}`);
+                disabled={joinMutation.isPending}
+                onClick={async () => {
+                  try {
+                    if (room) {
+                      await joinMutation.mutateAsync({
+                        translationRoomCode: room.translationRoomCode,
+                        displayName: user?.fullName || user?.email || "Participant",
+                        speakLanguage,
+                        listenLanguage,
+                        cameraEnabled,
+                        microphoneEnabled,
+                        speakerEnabled: true,
+                      });
+                    }
+                    window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
+                      cameraEnabled,
+                      microphoneEnabled,
+                    }));
+                    setIsOpen(false);
+                    router.push(`/room/${roomId}`);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Failed to join translation room.");
+                  }
                 }}
-                className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm"
+                className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50"
               >
-                {isHost ? "Start Meeting" : "Join Meeting"}
+                {joinMutation.isPending ? "Joining..." : (isHost ? "Start Meeting" : "Join Meeting")}
               </button>
             </div>
           </div>

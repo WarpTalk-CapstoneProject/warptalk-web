@@ -96,8 +96,7 @@ export default function RoomDetailPage() {
   const room = roomQuery.data ?? (isPreviewRoom ? getPreviewLiveRoom(roomId) : undefined);
   const refetchRoom = roomQuery.refetch;
   const apiParticipants = participantsQuery.data ?? (isPreviewRoom ? getPreviewLiveParticipants(roomId) : []);
-  const role = useWorkspaceRole();
-  const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id) || role === "admin" || role === "owner");
+  const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id));
   const participants = liveParticipants.length ? mergeParticipants(apiParticipants, liveParticipants) : apiParticipants;
   const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
   const joinLink = room?.translationRoomCode ? getJoinLink(room.translationRoomCode) : "";
@@ -143,6 +142,11 @@ export default function RoomDetailPage() {
     });
   }, [isHost, room, startRoom]);
 
+  const retryMeetingConnectionRef = useRef(retryMeetingConnection);
+  useEffect(() => {
+    retryMeetingConnectionRef.current = retryMeetingConnection;
+  }, [retryMeetingConnection]);
+
   useEffect(() => {
     if (!room?.id || !canConnectMeeting || meetingJoinedRef.current) return;
     meetingJoinedRef.current = true;
@@ -166,7 +170,12 @@ export default function RoomDetailPage() {
     resetLiveRoom();
     const connection = createHubConnection("/hubs/translation-room");
 
-    connection.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => setLiveState(state));
+    connection.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => {
+      setLiveState(state);
+      void refetchRoom().then(() => {
+        retryMeetingConnectionRef.current();
+      });
+    });
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
       addLiveParticipant(participant);
       void refetchParticipants();
@@ -377,7 +386,9 @@ export default function RoomDetailPage() {
         video={cameraEnabled}
         audio={microphoneEnabled}
         token={meetingSession?.token}
-        serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+        serverUrl={
+          process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace("localhost", typeof window !== "undefined" ? window.location.hostname : "localhost")
+        }
         connect={Boolean(meetingSession?.token)}
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"

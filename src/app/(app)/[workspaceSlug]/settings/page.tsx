@@ -59,6 +59,13 @@ export default function WorkspaceSettingsPage() {
     formState: { isSubmitting },
   } = useForm<SettingsFormData>({
     resolver: zodResolver(settingsSchema),
+    defaultValues: {
+      defaultLanguage: "",
+      timezone: "",
+      maxActiveRooms: 1,
+      artifactRetentionDays: 0,
+      enforceHostApprovalDefault: false,
+    },
   });
 
   const watchAll = watch();
@@ -193,7 +200,7 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold">Default Language</label>
                 <Select
-                  value={watchAll.defaultLanguage}
+                  value={watchAll.defaultLanguage || ""}
                   onValueChange={(val) => setValue("defaultLanguage", val || "", { shouldDirty: true })}
                 >
                   <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
@@ -212,7 +219,7 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold">Timezone</label>
                 <Select
-                  value={watchAll.timezone}
+                  value={watchAll.timezone || ""}
                   onValueChange={(val) => setValue("timezone", val || "", { shouldDirty: true })}
                 >
                   <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
@@ -258,7 +265,7 @@ export default function WorkspaceSettingsPage() {
                 <span className="text-[9px] text-ink-muted">Requires host permission for participants joining room</span>
               </div>
               <Switch
-                checked={watchAll.enforceHostApprovalDefault}
+                checked={!!watchAll.enforceHostApprovalDefault}
                 onCheckedChange={(val) => setValue("enforceHostApprovalDefault", val, { shouldDirty: true })}
                 disabled={isSubmitting}
               />
