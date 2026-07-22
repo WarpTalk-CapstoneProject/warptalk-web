@@ -143,7 +143,7 @@ export const billingService = {
    * Manually adjust credits for a workspace (admin only).
    */
   adjustCredits: async (workspaceId: string, amount: number, reason: string): Promise<CreditTransactionDto> => {
-    const { data } = await apiClient.post<CreditTransactionDto>(`/credits/workspace/${workspaceId}/adjust`, { amount, reason });
+    const { data } = await apiClient.post<CreditTransactionDto>(`/credits/adjust`, { workspaceId, amount, reason, adminUserId: "" });
     return data;
   },
 
@@ -178,7 +178,7 @@ export const billingService = {
    */
   cancelSubscription: async (workspaceId: string, reason?: string): Promise<void> => {
     await apiClient.delete(`/subscriptions/workspace/${workspaceId}`, {
-      data: { reason: reason ?? "User requested cancellation" }
+      params: { reason: reason ?? "User requested cancellation" }
     });
   },
 
