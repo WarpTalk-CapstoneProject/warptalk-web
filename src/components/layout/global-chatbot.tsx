@@ -5,6 +5,10 @@ import { ArrowUp, Sparkle, ClockCounterClockwise, Question, ArrowsOutSimple, Cor
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCreateAssistantConversation, useSendAssistantMessage } from "@/hooks/use-assistant";
+import { createHubConnection } from "@/lib/signalr";
+import type * as signalR from "@microsoft/signalr";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 
@@ -16,6 +20,16 @@ const CONTEXT_OPTIONS = [
   { id: "user-2", title: "Nhi Ngô", type: "Users", icon: "NN", isAvatar: true, description: "hanhnhi10022005", link: "/user/nhi" },
 ];
 
+type ChatRole = "user" | "assistant";
+
+interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  content: string;
+  context?: string;
+  failed?: boolean;
+}
+
 export function GlobalChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -26,12 +40,97 @@ export function GlobalChatbot() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const user = useAuthStore((state) => state.user);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
-  const [messages, setMessages] = useState<{ id: string; role: "user" | "assistant"; content: string; context?: string }[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+
+  const createConversation = useCreateAssistantConversation();
+  const sendAssistantMessage = useSendAssistantMessage();
+
+  const hubConnectionRef = useRef<signalR.HubConnection | null>(null);
+
+  // Stream the assistant's reply for the active conversation over AssistantHub. Reconnects
+  // whenever conversationId changes (a fresh "New chat" or reopening from history later).
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const connection = createHubConnection("/api/v1/assistant/chat-hub");
+    hubConnectionRef.current = connection;
+
+    const upsertAssistantMessage = (messageId: string, updater: (prev: ChatMessage | undefined) => ChatMessage) => {
+      setMessages((prev) => {
+        const index = prev.findIndex((m) => m.id === messageId);
+        if (index === -1) return [...prev, updater(undefined)];
+        const next = [...prev];
+        next[index] = updater(next[index]);
+        return next;
+      });
+    };
+
+    connection.on("AssistantMessageStarted", (payload: { conversationId: string; messageId: string }) => {
+      if (payload.conversationId !== conversationId) return;
+      setIsAiTyping(true);
+      upsertAssistantMessage(payload.messageId, (prev) => ({
+        id: payload.messageId,
+        role: "assistant",
+        content: prev?.content ?? "",
+      }));
+    });
+
+    connection.on("AssistantMessageChunk", (payload: { conversationId: string; messageId: string; delta: string }) => {
+      if (payload.conversationId !== conversationId) return;
+      setIsAiTyping(false);
+      upsertAssistantMessage(payload.messageId, (prev) => ({
+        id: payload.messageId,
+        role: "assistant",
+        content: (prev?.content ?? "") + payload.delta,
+      }));
+    });
+
+    connection.on("AssistantMessageCompleted", (payload: { conversationId: string; id: string; content: string }) => {
+      if (payload.conversationId !== conversationId) return;
+      setIsAiTyping(false);
+      upsertAssistantMessage(payload.id, () => ({
+        id: payload.id,
+        role: "assistant",
+        content: payload.content,
+      }));
+    });
+
+    connection.on("AssistantMessageFailed", (payload: { conversationId: string; messageId: string; error: string }) => {
+      if (payload.conversationId !== conversationId) return;
+      setIsAiTyping(false);
+      upsertAssistantMessage(payload.messageId, () => ({
+        id: payload.messageId,
+        role: "assistant",
+        content: payload.error,
+        failed: true,
+      }));
+    });
+
+    connection.on("AssistantFollowUpMessage", (payload: { conversationId: string; id: string; content: string }) => {
+      if (payload.conversationId !== conversationId) return;
+      setMessages((prev) => [...prev, { id: payload.id, role: "assistant", content: payload.content }]);
+    });
+
+    connection
+      .start()
+      .then(() => connection.invoke("JoinConversation", conversationId))
+      .catch(() => {
+        // Connection failures surface as a stalled "Thinking..." indicator rather than a
+        // crash — acceptable for v1, revisit with a visible retry affordance later.
+      });
+
+    return () => {
+      connection.stop();
+      hubConnectionRef.current = null;
+    };
+  }, [conversationId]);
 
   // Calculate mention menu position based on @ character
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -40,7 +139,7 @@ export function GlobalChatbot() {
 
     const cursorPosition = e.target.selectionStart;
     const textBeforeCursor = val.slice(0, cursorPosition);
-    
+
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
     if (mentionMatch) {
       setMentionMenuOpen(true);
@@ -72,14 +171,14 @@ export function GlobalChatbot() {
         setSelectedContexts(prev => prev.slice(0, -1));
       }
     }
-    
+
     if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
     }
   };
 
-  const filteredOptions = CONTEXT_OPTIONS.filter(opt => 
+  const filteredOptions = CONTEXT_OPTIONS.filter(opt =>
     opt.title.toLowerCase().includes(mentionQuery.toLowerCase())
   );
 
@@ -88,19 +187,19 @@ export function GlobalChatbot() {
       if (prev.find(p => p.id === opt.id)) return prev;
       return [...prev, opt];
     });
-    
+
     const cursorPosition = inputRef.current?.selectionStart || 0;
     const textBeforeCursor = inputValue.slice(0, cursorPosition);
     const textAfterCursor = inputValue.slice(cursorPosition);
-    
+
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
     if (mentionMatch) {
       const newTextBefore = textBeforeCursor.slice(0, mentionMatch.index);
       setInputValue(newTextBefore + textAfterCursor);
     }
-    
+
     setMentionMenuOpen(false);
-    
+
     // Focus back
     setTimeout(() => {
       inputRef.current?.focus();
@@ -111,23 +210,33 @@ export function GlobalChatbot() {
     setSelectedContexts(prev => prev.filter(c => c.id !== id));
   };
 
-  const sendMessage = () => {
-    if (!inputValue.trim()) return;
-    
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: inputValue.trim() }]);
+  const sendMessage = async () => {
+    const content = inputValue.trim();
+    if (!content || !activeWorkspaceId) return;
+
     setInputValue("");
     setMentionMenuOpen(false);
+
+    let convId = conversationId;
+    if (!convId) {
+      try {
+        const conversation = await createConversation.mutateAsync(activeWorkspaceId);
+        convId = conversation.id;
+        setConversationId(convId);
+      } catch {
+        return;
+      }
+    }
+
+    setMessages((prev) => [...prev, { id: `local-${Date.now()}`, role: "user", content }]);
     setIsAiTyping(true);
-    
-    // Simulate AI response
-    setTimeout(() => {
+
+    try {
+      await sendAssistantMessage.mutateAsync({ conversationId: convId, content });
+      // The assistant's reply streams in over AssistantHub — see the connection effect above.
+    } catch {
       setIsAiTyping(false);
-      setMessages(prev => [...prev, { 
-        id: (Date.now() + 1).toString(), 
-        role: "assistant", 
-        content: "I'm WarpTalk AI. I can help you find information across your meetings, terminology, and workspace. How can I assist you today?" 
-      }]);
-    }, 2500);
+    }
   };
 
   return (
@@ -137,13 +246,13 @@ export function GlobalChatbot() {
         <div className="flex items-center gap-0.5">
           <AnimatePresence>
             {isMinimized && messages.length > 0 && (
-              <motion.button 
+              <motion.button
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                onClick={() => { 
-                  setIsOpen(true); 
-                  setIsMinimized(false); 
+                onClick={() => {
+                  setIsOpen(true);
+                  setIsMinimized(false);
                 }}
                 className="flex items-center h-[26px] px-3 rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors text-ink text-[12px] font-medium mr-1 truncate max-w-[200px]"
               >
@@ -151,14 +260,14 @@ export function GlobalChatbot() {
               </motion.button>
             )}
           </AnimatePresence>
-          
+
           <Popover open={isOpen} onOpenChange={(open) => {
             if (!open && messages.length > 0) {
               setIsMinimized(true);
             }
             setIsOpen(open);
           }}>
-            <PopoverTrigger 
+            <PopoverTrigger
               aria-label="Ask WarpTalk"
               className="flex items-center h-[26px] pl-[8px] pr-[10px] rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors group text-ink"
             >
@@ -167,8 +276,8 @@ export function GlobalChatbot() {
               </span>
               <span className="text-[12px] leading-none whitespace-nowrap">Ask WarpTalk</span>
             </PopoverTrigger>
-            <PopoverContent 
-              align="end" 
+            <PopoverContent
+              align="end"
               sideOffset={8}
               className={`p-0 bg-surface-1 border border-border shadow-xl rounded-xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? 'w-[600px] h-[600px]' : 'w-[400px] h-[412px]'}`}
             >
@@ -176,7 +285,7 @@ export function GlobalChatbot() {
               <div className="flex items-center justify-between h-[48px] px-4 shrink-0">
                 <span className="font-semibold text-[13px] text-ink">New chat</span>
                 <div className="flex items-center gap-1">
-                  <button 
+                  <button
                     onClick={() => {
                       setIsOpen(false);
                       setIsMinimized(true);
@@ -185,17 +294,18 @@ export function GlobalChatbot() {
                   >
                     <span className="w-2.5 h-[1.5px] bg-current rounded-full" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => setIsExpanded(!isExpanded)}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
                     {isExpanded ? <CornersIn size={14} /> : <ArrowsOutSimple size={14} />}
                   </button>
-                  <button 
+                  <button
                     onClick={() => {
                       setIsOpen(false);
                       setIsMinimized(false);
                       setMessages([]);
+                      setConversationId(null);
                     }}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
@@ -210,9 +320,9 @@ export function GlobalChatbot() {
                   messages.map((msg) => (
                     <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[85%] text-[13px] leading-relaxed ${
-                        msg.role === "user" 
-                          ? "bg-surface-2 text-ink rounded-[12px] px-3.5 py-2" 
-                          : "text-ink py-2 pl-4"
+                        msg.role === "user"
+                          ? "bg-surface-2 text-ink rounded-[12px] px-3.5 py-2"
+                          : msg.failed ? "text-red-500 py-2 pl-4" : "text-ink py-2 pl-4"
                       }`}>
                         {msg.content}
                       </div>
@@ -234,11 +344,11 @@ export function GlobalChatbot() {
               {/* Chat Input Section */}
               <div className="px-2 pb-2 shrink-0">
                 <div className="relative rounded-[8px] border border-border bg-surface-1">
-                  
+
                   {/* Mention Dropdown */}
                   <AnimatePresence>
                     {mentionMenuOpen && (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
@@ -293,8 +403,8 @@ export function GlobalChatbot() {
 
                   <div className="flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[120px] bg-transparent px-2 py-1.5 overflow-y-auto">
                     {selectedContexts.map(ctx => (
-                      <div 
-                        key={ctx.id} 
+                      <div
+                        key={ctx.id}
                         className="flex items-center gap-1 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 px-1.5 py-0.5 rounded-md text-[12px] font-medium cursor-pointer transition-colors"
                         onClick={() => {
                           // Handle redirect or logic here
@@ -323,7 +433,7 @@ export function GlobalChatbot() {
                       rows={1}
                     />
                   </div>
-                  
+
                   <div className="flex items-center justify-between px-1.5 pb-1.5">
                     <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium">
                       <Cube weight="regular" size={14} />
@@ -335,7 +445,7 @@ export function GlobalChatbot() {
                       <button className="flex items-center justify-center size-7 rounded-md text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors">
                         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M7.5 2C5.567 2 4 3.567 4 5.5v5a2.5 2.5 0 0 0 5 0v-4.5a1 1 0 0 0-2 0V10.5a.5.5 0 0 1-1 0v-5a1.5 1.5 0 0 1 3 0v5a3.5 3.5 0 0 1-7 0v-5A4.5 4.5 0 0 1 12 5.5v4.5a1 1 0 0 1-2 0V5.5A2.5 2.5 0 0 0 7.5 2Z"/></svg>
                       </button>
-                      <button 
+                      <button
                         onClick={sendMessage}
                         disabled={!inputValue.trim()}
                         className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted disabled:opacity-50 disabled:bg-surface-2 disabled:text-ink-muted transition-colors ml-1"
@@ -349,7 +459,7 @@ export function GlobalChatbot() {
             </PopoverContent>
           </Popover>
 
-          <button 
+          <button
             className="flex items-center justify-center size-[26px] rounded-[6px] text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors"
             title="Chat history"
           >

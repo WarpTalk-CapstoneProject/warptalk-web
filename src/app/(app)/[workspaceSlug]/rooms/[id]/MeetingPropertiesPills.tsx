@@ -1,6 +1,6 @@
 import { LanguageSelector } from "@/components/rooms/create/language-selector";
 import { useUpdateTranslationRoomSettings } from "@/hooks/use-translationRooms";
-import { StatusPanel } from "../page";
+import { StatusPanel } from "../StatusPanel";
 import { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
 import { Calendar as CalendarIcon } from "@phosphor-icons/react/dist/ssr";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

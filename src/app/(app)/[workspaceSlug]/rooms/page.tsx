@@ -15,6 +15,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { TranslationRoomDto } from "@/types/translationRoom";
+import { StatusPanel } from "./StatusPanel";
 
 
 function formatTimeShort(value?: string) {
@@ -29,35 +30,6 @@ function StatusIcon({ status }: { status: string }) {
   if (status === "ended") return <CheckCircle size={13} weight="fill" className="text-status-ended" />;
   if (["cancelled", "failed", "expired"].includes(status)) return <div className="w-3 h-3 rounded-full border-[1.5px] border-status-error bg-status-error/20" />;
   return <Circle size={13} weight="light" className="text-muted-foreground/40" />;
-}
-
-export function StatusPanel({ status }: { status: string }) {
-  let colorClass = "text-muted-foreground bg-surface-2 border-border/50";
-  let icon = <Circle size={12} weight="light" className="text-muted-foreground/40" />;
-
-  if (status === "in_progress") {
-    colorClass = "text-status-in-progress bg-status-in-progress/10 border-status-in-progress/20";
-    icon = <div className="w-2 h-2 rounded-full border border-status-in-progress bg-status-in-progress/20" />;
-  } else if (status === "waiting") {
-    colorClass = "text-status-waiting bg-status-waiting/10 border-status-waiting/20";
-    icon = <div className="w-2 h-2 rounded-full border border-status-waiting bg-status-waiting/20" />;
-  } else if (status === "scheduled") {
-    colorClass = "text-status-scheduled bg-status-scheduled/10 border-status-scheduled/20";
-    icon = <div className="w-2 h-2 rounded-full border border-status-scheduled bg-status-scheduled/20" />;
-  } else if (status === "ended") {
-    colorClass = "text-status-ended bg-surface-2 border-border/50";
-    icon = <CheckCircle size={12} weight="fill" className="text-status-ended" />;
-  } else if (["cancelled", "failed", "expired"].includes(status)) {
-    colorClass = "text-status-error bg-status-error/10 border-status-error/20";
-    icon = <div className="w-2 h-2 rounded-full border border-status-error bg-status-error/20" />;
-  }
-
-  return (
-    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium capitalize ${colorClass}`}>
-      {icon}
-      <span>{status.replace(/_/g, " ")}</span>
-    </div>
-  );
 }
 
 function LanguageWithFlag({ locale, hideText }: { locale: string; hideText?: boolean }) {

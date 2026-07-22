@@ -1,83 +1,421 @@
-import type { ReactNode } from "react";
-import { Waveform, Microphone, Broadcast, UserCheck } from "@phosphor-icons/react/dist/ssr";
+"use client";
+
+import { useMemo, useRef, useState } from "react";
+import {
+  CheckCircle,
+  FileAudio,
+  Funnel,
+  MagnifyingGlass,
+  Microphone,
+  Plus,
+  SlidersHorizontal,
+  Trash,
+  Waveform,
+} from "@phosphor-icons/react/dist/ssr";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useCreateVoiceProfile, useDeleteVoiceProfile, useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import type { VoiceProfileDto } from "@/types/voice-profile";
 
-const previewProfiles = [
-  { name: "Host neutral", language: "English", status: "Default", usage: "Live rooms" },
-  { name: "Vietnamese presenter", language: "Vietnamese", status: "Preview", usage: "Partner sessions" },
-  { name: "Support voice", language: "English", status: "Draft", usage: "Review queue" },
+const LANGUAGE_OPTIONS = [
+  { value: "vi-VN", label: "Vietnamese (vi-VN)" },
+  { value: "en-US", label: "English (en-US)" },
+  { value: "ja-JP", label: "Japanese (ja-JP)" },
+  { value: "ko-KR", label: "Korean (ko-KR)" },
 ];
 
+const FILTERS = ["Vietnamese", "Conversational", "Narration", "Meeting-ready", "Has sample"];
+
+const FEATURED_VOICES = [
+  {
+    name: "Thanh Ngoc - Warm & Trusted Expert",
+    category: "Conversational",
+    language: "Vietnamese",
+    className: "bg-[radial-gradient(circle_at_28%_24%,#d8f3ff_0,#7cc4e8_32%,#15384a_100%)]",
+  },
+  {
+    name: "Nhu - Calm and Confident",
+    category: "Educational",
+    language: "Vietnamese",
+    className: "bg-[radial-gradient(circle_at_28%_24%,#f9dda4_0,#88a57b_38%,#26342f_100%)]",
+  },
+  {
+    name: "Tram - Friendly Southern Vietnamese",
+    category: "Translation rooms",
+    language: "Vietnamese",
+    className: "bg-[radial-gradient(circle_at_24%_22%,#ffd6dc_0,#cf7d6f_35%,#382234_100%)]",
+  },
+];
+
+const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
+
 export default function VoiceProfilesPage() {
+  const { data: profiles, isLoading } = useVoiceProfiles();
+  const createMutation = useCreateVoiceProfile();
+  const deleteMutation = useDeleteVoiceProfile();
+
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [language, setLanguage] = useState("vi-VN");
+  const [sampleFile, setSampleFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const profileList = useMemo(() => profiles ?? [], [profiles]);
+  const readyCount = useMemo(() => profileList.filter((p) => p.hasSample).length, [profileList]);
+
+  function resetForm() {
+    setDisplayName("");
+    setLanguage("vi-VN");
+    setSampleFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    if (file && file.size > MAX_SAMPLE_SIZE_BYTES) {
+      toast.error("Audio sample must be under 20 MB.");
+      e.target.value = "";
+      setSampleFile(null);
+      return;
+    }
+    setSampleFile(file);
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!displayName.trim()) {
+      toast.error("Please enter a profile name.");
+      return;
+    }
+
+    try {
+      await createMutation.mutateAsync({
+        displayName: displayName.trim(),
+        language,
+        sample: sampleFile,
+      });
+      toast.success("Voice profile created");
+      setIsCreateOpen(false);
+      resetForm();
+    } catch {
+      toast.error("Failed to create voice profile");
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteMutation.mutateAsync(id);
+      toast.success("Voice profile deleted");
+    } catch {
+      toast.error("Failed to delete voice profile");
+    }
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <section className="flex justify-end">
-        <Button className="w-fit rounded-full bg-neutral-950 px-5 text-white hover:bg-neutral-800">
-          Create profile
-        </Button>
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-3">
-        <Metric icon={<Microphone weight="light" />} label="Profiles" value="3" />
-        <Metric icon={<Broadcast weight="light" />} label="Room usage" value="12" />
-        <Metric icon={<UserCheck weight="light" />} label="Ready voices" value="1" />
-      </section>
-
-      <Card className="min-h-0 flex-1 rounded-[24px]">
-        <CardHeader>
-          <CardTitle>Preview profiles</CardTitle>
-          <CardDescription>
-            This placeholder keeps configuration navigation inside the dashboard shell until voice APIs are connected.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {previewProfiles.map((profile) => (
-            <div
-              key={profile.name}
-              className="flex flex-col gap-3 rounded-2xl border border-neutral-950/8 bg-white p-4 md:flex-row md:items-center md:justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-950 text-white">
-                  <Waveform weight="light" className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="font-medium text-neutral-950">{profile.name}</p>
-                  <p className="text-sm text-neutral-500">{profile.language} · {profile.usage}</p>
-                </div>
-              </div>
-              <Badge variant="outline" className="w-fit bg-white">
-                {profile.status}
-              </Badge>
+    <div className="min-h-full bg-surface-1 px-5 py-8 text-ink sm:px-8">
+      <div className="mx-auto flex w-full max-w-[1560px] flex-col gap-7">
+        <section className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-[32px] font-semibold leading-tight tracking-normal text-ink">Voice Profiles</h1>
+              <p className="mt-2 max-w-2xl text-[14px] leading-6 text-ink-muted">
+                Build reusable speaker identities for translation rooms, transcripts, and AI summaries.
+              </p>
             </div>
-          ))}
-        </CardContent>
-      </Card>
+            <div className="flex w-fit rounded-[10px] border border-border bg-canvas p-1 text-[13px]">
+              <button className="flex h-8 items-center gap-2 rounded-[8px] bg-surface-1 px-3 font-medium text-ink shadow-sm">
+                <Waveform size={15} weight="bold" />
+                My profiles
+              </button>
+              <button className="flex h-8 items-center gap-2 rounded-[8px] px-3 text-ink-muted hover:text-ink">
+                Explore presets
+              </button>
+            </div>
+          </div>
+          <Button
+            className="h-10 w-fit rounded-full bg-neutral-950 px-5 text-white hover:bg-neutral-800"
+            onClick={() => setIsCreateOpen(true)}
+          >
+            <Plus size={16} weight="bold" />
+            Create profile
+          </Button>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 xl:flex-row">
+            <label className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-[14px] border border-neutral-950 bg-white px-4 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
+              <MagnifyingGlass size={20} className="shrink-0 text-ink" />
+              <input
+                className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-subtle"
+                placeholder="Search voice profiles..."
+                aria-label="Search voice profiles"
+              />
+              <FileAudio size={18} className="shrink-0 text-ink-muted" />
+            </label>
+            <div className="flex gap-2">
+              <Button variant="outline" className="h-12 rounded-[14px] border-border bg-white px-4 text-ink">
+                <SlidersHorizontal size={17} />
+                Filters
+              </Button>
+              <Button variant="outline" size="icon" className="h-12 w-12 rounded-[14px] border-border bg-white text-ink">
+                <Funnel size={17} />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {FILTERS.map((filter) => (
+              <button
+                key={filter}
+                className="h-9 shrink-0 rounded-full border border-border bg-white px-4 text-[13px] font-medium text-ink-muted transition hover:border-hairline-strong hover:text-ink"
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="grid gap-3 border-y border-border py-4 sm:grid-cols-3">
+          <Metric icon={<Microphone size={16} weight="bold" />} label="Profiles" value={String(profileList.length)} />
+          <Metric icon={<CheckCircle size={16} weight="bold" />} label="With sample" value={String(readyCount)} />
+          <Metric icon={<Waveform size={16} weight="bold" />} label="Default language" value="vi-VN" />
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[18px] font-semibold text-ink">Trending voice presets</h2>
+            <button className="text-[13px] font-medium text-ink-muted hover:text-ink">View all</button>
+          </div>
+          <div className="grid gap-x-10 gap-y-5 lg:grid-cols-3">
+            {FEATURED_VOICES.map((voice) => (
+              <PresetVoice key={voice.name} {...voice} />
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-[18px] font-semibold text-ink">Your voice profiles</h2>
+              <p className="text-[13px] leading-5 text-ink-muted">
+                Attach a short reference sample so WarpTalk can personalize your future room audio.
+              </p>
+            </div>
+            <Badge variant="outline" className="w-fit rounded-full bg-white px-3 py-1 text-[12px] text-ink-muted">
+              {readyCount}/{profileList.length} sample ready
+            </Badge>
+          </div>
+
+          <div className="divide-y divide-border rounded-[16px] border border-border bg-white">
+            {isLoading && (
+              <div className="px-5 py-6 text-[14px] text-ink-muted">Loading voice profiles...</div>
+            )}
+
+            {!isLoading && profileList.length === 0 && (
+              <div className="grid gap-4 px-5 py-8 md:grid-cols-[1fr_auto] md:items-center">
+                <div className="flex items-start gap-4">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-neutral-950 text-white">
+                    <Waveform size={20} weight="bold" />
+                  </span>
+                  <div>
+                    <p className="text-[15px] font-semibold text-ink">No voice profiles yet</p>
+                    <p className="mt-1 max-w-2xl text-[13px] leading-5 text-ink-muted">
+                      Create your first profile now, or start with one of the presets above and tune it later with a sample.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  className="h-9 w-fit rounded-full bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+                  onClick={() => setIsCreateOpen(true)}
+                >
+                  <Plus size={15} weight="bold" />
+                  Create profile
+                </Button>
+              </div>
+            )}
+
+            {profileList.map((profile, index) => (
+              <VoiceProfileRow
+                key={profile.id}
+                profile={profile}
+                index={index}
+                onDelete={handleDelete}
+                disabled={deleteMutation.isPending}
+              />
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create voice profile</DialogTitle>
+            <DialogDescription>
+              Give your voice profile a name and language. You can optionally attach a reference audio sample now.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="grid gap-4 pt-2">
+            <div className="grid gap-2">
+              <Label htmlFor="displayName">Profile name</Label>
+              <Input
+                id="displayName"
+                placeholder="e.g. My presenting voice"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Language</Label>
+              <Select value={language} onValueChange={(val) => setLanguage(val || "vi-VN")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select language..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="sample">Reference sample (optional)</Label>
+              <Input
+                id="sample"
+                type="file"
+                accept="audio/*"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+              />
+              <p className="text-xs text-neutral-500">WAV, MP3, M4A or OGG, up to 20 MB.</p>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button
+                type="submit"
+                disabled={createMutation.isPending}
+                className="min-w-[80px] text-white"
+              >
+                {createMutation.isPending ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function Metric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <Card className="rounded-[22px]">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-neutral-950 text-white [&_svg]:h-4 [&_svg]:w-4">
-            {icon}
-          </span>
-          <Badge variant="outline" className="bg-white">Preview</Badge>
+    <div className="flex items-center gap-3">
+      <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-neutral-950/5 text-neutral-950">
+        {icon}
+      </span>
+      <div>
+        <p className="text-[12px] text-ink-muted">{label}</p>
+        <p className="text-[18px] font-semibold leading-6 text-ink">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function PresetVoice({
+  name,
+  category,
+  language,
+  className,
+}: {
+  name: string;
+  category: string;
+  language: string;
+  className: string;
+}) {
+  return (
+    <button className="group flex min-w-0 items-center gap-4 rounded-[16px] border border-transparent p-3 text-left transition hover:border-border hover:bg-white">
+      <span className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] ${className}`}>
+        <Waveform size={22} weight="bold" className="text-white drop-shadow" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[14px] font-semibold text-ink group-hover:underline">{name}</span>
+        <span className="mt-1 block text-[13px] text-ink-muted">{category}</span>
+        <span className="mt-2 inline-flex items-center rounded-full bg-neutral-950/5 px-2 py-0.5 text-[12px] text-ink-muted">
+          {language}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function VoiceProfileRow({
+  profile,
+  index,
+  onDelete,
+  disabled,
+}: {
+  profile: VoiceProfileDto;
+  index: number;
+  onDelete: (id: string) => void;
+  disabled: boolean;
+}) {
+  const avatarClasses = [
+    "bg-[radial-gradient(circle_at_28%_24%,#d8f3ff_0,#7cc4e8_32%,#15384a_100%)]",
+    "bg-[radial-gradient(circle_at_28%_24%,#f9dda4_0,#88a57b_38%,#26342f_100%)]",
+    "bg-[radial-gradient(circle_at_24%_22%,#ffd6dc_0,#cf7d6f_35%,#382234_100%)]",
+  ];
+
+  return (
+    <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex min-w-0 items-center gap-4">
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] ${avatarClasses[index % avatarClasses.length]}`}>
+          <Waveform size={18} weight="bold" className="text-white" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-semibold text-ink">{profile.displayName || "Untitled profile"}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-ink-muted">
+            <span>{profile.language ?? "No language set"}</span>
+            {profile.hasSample && (
+              <span className="inline-flex items-center gap-1">
+                <FileAudio size={14} /> sample attached
+              </span>
+            )}
+          </p>
         </div>
-        <p className="mt-4 text-sm text-neutral-500">{label}</p>
-        <p className="text-2xl font-semibold tracking-tight text-neutral-950">{value}</p>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="flex items-center gap-2 md:justify-end">
+        <Badge variant="outline" className="w-fit rounded-full bg-white capitalize text-ink-muted">
+          {profile.status}
+        </Badge>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-ink-muted hover:text-destructive"
+          disabled={disabled}
+          onClick={() => onDelete(profile.id)}
+          aria-label={`Delete ${profile.displayName || "voice profile"}`}
+        >
+          <Trash weight="light" className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
   );
 }

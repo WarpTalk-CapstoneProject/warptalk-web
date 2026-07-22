@@ -21,6 +21,11 @@ export const API = {
     changePassword: "/auth/change-password",
     settings: "/auth/settings",
   },
+  voiceProfiles: {
+    list: "/auth/voice-profiles",
+    create: "/auth/voice-profiles",
+    delete: (id: string) => `/auth/voice-profiles/${id}`,
+  },
   translationRooms: {
     create: "/translation-rooms",
     list: "/translation-rooms",
@@ -109,5 +114,10 @@ export const API = {
     byWorkspace: (workspaceId: string) => `/glossaries/workspace/${workspaceId}`,
     terms: (id: string) => `/glossaries/${id}/terms`,
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
+  },
+  assistant: {
+    conversations: "/assistant/conversations",
+    conversation: (id: string) => `/assistant/conversations/${id}`,
+    sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
   },
 } as const;

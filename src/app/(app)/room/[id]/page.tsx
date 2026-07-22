@@ -106,6 +106,11 @@ export default function RoomDetailPage() {
   const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
   const joinLink = room?.translationRoomCode ? getJoinLink(room.translationRoomCode) : "";
   const liveSegments = useMemo(() => dedupeSegments(transcriptSegments), [transcriptSegments]);
+  // Transcript history persists whether or not translation is currently running:
+  // "Stop Translation" only halts new live captions (LiveSubtitleOverlay below); it must
+  // NOT wipe what was already transcribed. Segments stay in the store until the room is
+  // left. Preview rooms fall back to sample content when nothing real has arrived yet.
+  const panelSegments = isPreviewRoom && !liveSegments.length ? getPreviewTranscriptSegments() : liveSegments;
   
   const canConnectMeeting =
     Boolean(room) &&
@@ -449,7 +454,7 @@ export default function RoomDetailPage() {
               participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
               participantsError={participantsQuery.isError && !isPreviewRoom}
               activeCount={activeCount}
-              segments={warptalkStarted ? (isPreviewRoom && !liveSegments.length ? getPreviewTranscriptSegments() : liveSegments) : []}
+              segments={panelSegments}
               onCopyText={copyText}
               joinLink={joinLink}
               meetingStarted={room?.status === "in_progress"}

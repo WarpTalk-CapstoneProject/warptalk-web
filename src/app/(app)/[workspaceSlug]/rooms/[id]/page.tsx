@@ -11,6 +11,7 @@ import {
   Code,
   Code2,
   Copy,
+  FileText,
   Hash,
   Italic,
   Link as LinkIcon,
@@ -186,8 +187,6 @@ export default function RoomInformationPage() {
     participants,
     apiParticipants,
     apiInvitations,
-    transcriptSegments,
-    transcriptQuery.data?.createdAt,
     languageNames
   );
 
@@ -260,7 +259,16 @@ export default function RoomInformationPage() {
               onSave={(html) => updateRoomSettings.mutateAsync({ id: room.id, data: { description: html } })}
             />
 
-            <RoomThread events={threadEvents} isLive={room.status === "in_progress"} isEnded={isEnded} />
+            {isEnded || transcriptSegments.length > 0 ? (
+              <MeetingTranscriptArtifact
+                segments={transcriptSegments}
+                baseTime={transcriptQuery.data?.createdAt || room.startedAt || room.createdAt}
+                isEnded={isEnded}
+                onCopy={handleCopy}
+              />
+            ) : null}
+
+            <RoomThread events={threadEvents} />
           </main>
 
           <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
@@ -341,15 +349,13 @@ export default function RoomInformationPage() {
   );
 }
 
-function RoomThread({ events, isLive, isEnded }: { events: ThreadEvent[]; isLive: boolean; isEnded: boolean }) {
-  const hasTranscript = events.some((event) => event.kind === "transcript");
-
+function RoomThread({ events }: { events: ThreadEvent[] }) {
   return (
     <section className="relative mt-8">
       <div className="mb-2 flex items-center justify-between">
         <div>
           <h2 className="text-[17px] font-semibold">Activity</h2>
-          <p className="mt-0.5 text-[12px] text-muted-foreground">Room events, participant changes, and captured transcript entries.</p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">Room events and participant changes.</p>
         </div>
         <InlineChip icon={<MessageSquareText className="size-3.5" />}>{events.length} updates</InlineChip>
       </div>
@@ -372,27 +378,88 @@ function RoomThread({ events, isLive, isEnded }: { events: ThreadEvent[]; isLive
               {event.content ? <MarkdownContent content={event.content} /> : null}
             </article>
           ))}
-
-          {!isLive && !isEnded ? (
-            <ThreadEmptyState message="Transcript entries will appear here after the meeting starts." />
-          ) : null}
-
-          {(isLive || isEnded) && !hasTranscript ? (
-            <ThreadEmptyState message="No transcript entries were captured for this room yet." />
-          ) : null}
         </div>
       </div>
     </section>
   );
 }
 
-function ThreadEmptyState({ message }: { message: string }) {
+/**
+ * The saved meeting transcript, rendered as a distinct artifact participants can read
+ * and copy after the meeting ends. Data is the persisted TranscriptService segments for
+ * this room (already fetched on the page), so it does not depend on any exported file
+ * being stored — it always reflects what was actually transcribed.
+ */
+function MeetingTranscriptArtifact({
+  segments,
+  baseTime,
+  isEnded,
+  onCopy,
+}: {
+  segments: TranscriptSegmentDto[];
+  baseTime?: string;
+  isEnded: boolean;
+  onCopy: (text: string, label: string) => void;
+}) {
+  const ordered = [...segments].sort((left, right) => left.sequenceOrder - right.sequenceOrder);
+  const base = baseTime ? new Date(baseTime) : null;
+
+  function segmentTime(startMs: number) {
+    if (!base) return "";
+    const stamp = new Date(base);
+    stamp.setMilliseconds(stamp.getMilliseconds() + startMs);
+    return stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   return (
-    <div className="relative rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
-      <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
-      {message}
-    </div>
+    <section className="mt-8 border-b border-border/60 pb-7">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[15px] font-semibold text-ink">Meeting transcript</h2>
+          <InlineChip icon={<FileText className="size-3.5" />}>
+            {isEnded ? "Saved" : "Live"} · {ordered.length} {ordered.length === 1 ? "entry" : "entries"}
+          </InlineChip>
+        </div>
+        {ordered.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => onCopy(assembleTranscriptText(ordered), "Transcript")}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <Copy className="size-3.5" />
+            Copy
+          </button>
+        ) : null}
+      </div>
+
+      {ordered.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+          {isEnded
+            ? "No transcript was captured for this meeting."
+            : "The transcript is saved here as the meeting is transcribed."}
+        </div>
+      ) : (
+        <div className="space-y-3 rounded-xl border border-border bg-surface-1 p-4">
+          {ordered.map((segment) => (
+            <div key={segment.id} className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                <span className="font-semibold text-ink">{segment.speakerName || "Unknown speaker"}</span>
+                <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
+                {base ? <span className="text-muted-foreground">{segmentTime(segment.startTimeMs)}</span> : null}
+              </div>
+              <p className="text-[13px] leading-6 text-ink-subtle">{segment.originalText}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
+}
+
+function assembleTranscriptText(segments: TranscriptSegmentDto[]): string {
+  return segments
+    .map((segment) => `[${segment.speakerName || "Unknown"} (${(segment.originalLanguage || "").toUpperCase()})] ${segment.originalText}`)
+    .join("\n");
 }
 
 type SaveState = "idle" | "saving" | "saved";
@@ -889,8 +956,6 @@ function buildThreadEvents(
   participants: UserIdentity[],
   roomParticipants: TranslationRoomParticipantDto[],
   invitations: TranslationRoomInvitationDto[],
-  segments: TranscriptSegmentDto[],
-  transcriptCreatedAt: string | undefined,
   languageNames: string[]
 ): ThreadEvent[] {
   const events: ThreadEvent[] = [
@@ -942,28 +1007,6 @@ function buildThreadEvents(
       content: "Realtime translation and transcript capture started.",
     });
   }
-
-  const transcriptEvents = segments.map((segment) => {
-    const actor = participants.find((participant) => participant.id === segment.speakerParticipantId || participant.name === segment.speakerName) ?? {
-      id: segment.speakerParticipantId ?? segment.speakerName ?? "unknown-speaker",
-      name: segment.speakerName || "Unknown speaker",
-      role: "Speaker",
-    };
-    const date = new Date(transcriptCreatedAt || room.startedAt || room.createdAt);
-    date.setMilliseconds(date.getMilliseconds() + segment.startTimeMs);
-    return {
-      id: segment.id,
-      kind: "transcript" as const,
-      title: "Transcript entry",
-      at: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      actor,
-      accent: "muted" as const,
-      content: segment.originalText,
-      metadata: [segment.originalLanguage.toUpperCase(), `${Math.round((segment.confidence ?? 0) * 100) || 0}%`],
-    };
-  });
-
-  events.push(...transcriptEvents);
 
   if (room.endedAt) {
     events.push({
