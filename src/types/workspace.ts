@@ -5,6 +5,7 @@ export interface WorkspaceDto {
   logoUrl?: string | null;
   role: string;
   createdAt: string;
+  defaultLanguage?: string;
 }
 
 export interface CreateWorkspaceRequest {
@@ -26,6 +27,7 @@ export interface WorkspaceSettingsDto {
   allowExternalCollaboration: boolean;
   requireVerifiedDomainForInternal: boolean;
   aiUsagePolicy?: AiUsagePolicyDto | null;
+  isProfanityFilterEnabled: boolean;
 }
 
 export interface AiUsagePolicyDto {
@@ -108,6 +110,8 @@ export interface WorkspaceDocumentDto {
   sourceType: string;
   sourceId?: string | null;
   ingestionStatus: string;
+  aiEligible: boolean;
+  isAiAllowed: boolean;
   isSensitive: boolean;
   confidentialityLevel: string;
   retentionState: string;
@@ -165,6 +169,7 @@ export interface SelectWorkspaceResponse {
   selectedWorkspaceId: string;
   name: string;
   slug: string;
+  defaultLanguage?: string;
 }
 
 export interface ExtractedPageDto {

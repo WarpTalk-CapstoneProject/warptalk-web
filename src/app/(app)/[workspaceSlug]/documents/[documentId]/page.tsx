@@ -185,27 +185,16 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const handleDownloadDefault = async () => {
     if (!doc) return;
     try {
-      const result = await downloadMutation.mutateAsync(doc.id);
-      if (result.downloadUrl) {
-        // Fetch raw file bytes from backend
-        const response = await apiClient.get<Blob>(result.downloadUrl, {
-          responseType: "blob",
-        });
-        const blob = response.data;
-
-        // Programmatic anchor download (standard browser behavior, goes to default downloads folder)
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = doc.fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        toast.success("File download started.");
-      } else {
-        toast.error("Failed to retrieve download link.");
-      }
+      const blob = await downloadMutation.mutateAsync(doc.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Downloading file...");
     } catch (err: unknown) {
       const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
         || "Failed to download document.";
@@ -216,35 +205,25 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const handleDownloadSaveAs = async () => {
     if (!doc) return;
     try {
-      const result = await downloadMutation.mutateAsync(doc.id);
-      if (result.downloadUrl) {
-        // Fetch raw file bytes from backend
-        const response = await apiClient.get<Blob>(result.downloadUrl, {
-          responseType: "blob",
-        });
-        const blob = response.data;
+      const blob = await downloadMutation.mutateAsync(doc.id);
 
-        // Trigger native file picker for selecting local folder
-        if ("showSaveFilePicker" in window) {
-          try {
-            const handle = await (window as any).showSaveFilePicker({
-              suggestedName: doc.fileName,
-            });
-            const writable = await handle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            toast.success("File saved successfully!");
-            return;
-          } catch (pickerErr) {
-            // User cancelled or picker failed, swallow cancellation
-            console.log("Save file picker cancelled or failed", pickerErr);
-            return;
-          }
-        } else {
-          toast.error("Your browser does not support choosing folder to save.");
+      // Trigger native file picker for selecting local folder
+      if ("showSaveFilePicker" in window) {
+        try {
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: doc.fileName,
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          toast.success("File saved successfully!");
+          return;
+        } catch (pickerErr) {
+          console.log("Save file picker cancelled or failed", pickerErr);
+          return;
         }
       } else {
-        toast.error("Failed to retrieve download link.");
+        toast.error("Your browser does not support choosing a save folder.");
       }
     } catch (err: unknown) {
       const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 

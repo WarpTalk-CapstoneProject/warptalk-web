@@ -116,6 +116,7 @@ export const WorkspaceService = {
       sourceType: string;
       sourceId?: string | null;
       isSensitive: boolean;
+      isAiAllowed?: boolean;
       file: File;
     }
   ): Promise<WorkspaceDocumentDto> {
@@ -126,6 +127,7 @@ export const WorkspaceService = {
       formData.append("sourceId", request.sourceId);
     }
     formData.append("isSensitive", String(request.isSensitive));
+    formData.append("isAiAllowed", String(request.isAiAllowed ?? true));
     formData.append("file", request.file);
 
     const { data } = await apiClient.post<WorkspaceDocumentDto>(
@@ -171,6 +173,7 @@ export const WorkspaceService = {
     request: {
       name?: string;
       isSensitive?: boolean;
+      isAiAllowed?: boolean;
     }
   ): Promise<WorkspaceDocumentDto> {
     const { data } = await apiClient.patch<WorkspaceDocumentDto>(API.workspaces.documentDetail(workspaceId, docId), request);
@@ -181,8 +184,10 @@ export const WorkspaceService = {
     await apiClient.post(API.workspaces.documentApprove(workspaceId, docId), { approve });
   },
 
-  async downloadDocument(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {
-    const { data } = await apiClient.get<WorkspaceDocumentDto>(API.workspaces.documentDownload(workspaceId, docId));
+  async downloadDocument(workspaceId: string, docId: string): Promise<Blob> {
+    const { data } = await apiClient.get<Blob>(API.workspaces.documentDownload(workspaceId, docId), {
+      responseType: "blob",
+    });
     return data;
   },
 

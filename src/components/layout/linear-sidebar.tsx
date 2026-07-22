@@ -4,9 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   SquaresFour,
-  ClockCounterClockwise,
   Sparkle,
-  BookBookmark,
   Waveform,
   GearSix,
   MagnifyingGlass,
@@ -21,6 +19,8 @@ import {
   Shield,
   Warning,
   House,
+  PaperPlaneTilt,
+  Sliders,
 } from "@phosphor-icons/react/dist/ssr";
 import type { IconProps } from "@phosphor-icons/react";
 type IconType = React.ElementType<IconProps>;
@@ -28,11 +28,11 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useWorkspaces } from "@/hooks/use-workspace";
+import { useInviteWorkspaceMember, useWorkspaces } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +40,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -59,13 +58,6 @@ interface NavItem {
     title?: string;
   }>;
 }
-
-const configNav: NavItem[] = [
-  { icon: BookBookmark, label: "Terminology", href: "/terminology" },
-  { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
-  { icon: CreditCard, label: "Wallet", href: "/workspace/wallet" },
-  { icon: GearSix, label: "Settings", href: "/settings" },
-];
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -122,6 +114,10 @@ export function LinearSidebar() {
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRoleName, setInviteRoleName] = useState("Member");
+  const [inviteMembershipType, setInviteMembershipType] = useState("Internal");
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -145,8 +141,8 @@ export function LinearSidebar() {
         { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
       ]
     },
-    { icon: ClockCounterClockwise, label: "History", href: `/${slug}/history` },
-    { icon: Sparkle, label: "AI Summaries", href: `/${slug}/ai-summaries` },
+    { icon: Sparkle, label: "Artifacts", href: `/${slug}/ai-summaries` },
+    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -158,15 +154,38 @@ export function LinearSidebar() {
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
   const selectWorkspaceMutation = useSelectWorkspace();
+  const inviteMemberMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
 
-  const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string) => {
+  const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
     try {
-      await selectWorkspaceMutation.mutateAsync(workspaceId);
-      setActiveWorkspace(workspaceId, name, slug, roleName, membershipType);
+      const res = await selectWorkspaceMutation.mutateAsync(workspaceId);
+      setActiveWorkspace(workspaceId, name, slug, roleName, membershipType, res.defaultLanguage || defaultLanguage);
       toast.success(`Switched to workspace "${name}"`);
       router.push(`/${slug}/home`);
-    } catch (err) {
+    } catch {
       toast.error("Failed to switch workspace");
+    }
+  };
+
+  const handleInviteMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = inviteEmail.trim();
+    if (!activeWorkspaceId || !email) return;
+
+    try {
+      await inviteMemberMutation.mutateAsync({
+        email,
+        roleName: inviteRoleName,
+        membershipType: inviteMembershipType,
+      });
+      toast.success(`Invitation sent to ${email}`);
+      setInviteEmail("");
+      setInviteRoleName("Member");
+      setInviteMembershipType("Internal");
+      setIsInviteModalOpen(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to send invitation";
+      toast.error(message);
     }
   };
 
@@ -182,8 +201,7 @@ export function LinearSidebar() {
   const workspaceNav: NavItem[] = [];
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members` },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents` },
-    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" }
+    { icon: FileText, label: "Documents", href: `/${slug}/documents` }
   );
 
   if (role === "Owner" || role === "Admin") {
@@ -192,7 +210,7 @@ export function LinearSidebar() {
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
   }
 
-  const isSettingsPage = pathname === "/settings" || pathname.startsWith("/settings/") || pathname.includes("/settings") || pathname.includes("/security") || pathname.includes("/advanced");
+  const isSettingsPage = pathname.includes("/settings") || pathname.includes("/advanced");
 
   if (isSettingsPage) {
     return (
@@ -217,11 +235,25 @@ export function LinearSidebar() {
           <div className="flex flex-col gap-px">
             <div className={cn(
               "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-              pathname === "/settings" ? "bg-surface-2" : "hover:bg-surface-2"
+              pathname === `/${activeWorkspaceSlug}/settings/account/preferences` ? "bg-surface-2" : "hover:bg-surface-2"
             )}>
-              <Link href="/settings" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+              <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/preferences` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                <Sliders size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                  Settings
+                </span>
+              </Link>
+            </div>
+
+            <div className={cn(
+              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+              pathname === `/${activeWorkspaceSlug}/settings/account/profile` ? "bg-surface-2" : "hover:bg-surface-2"
+            )}>
+              <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Profile</span>
+                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                  Profile
+                </span>
               </Link>
             </div>
 
@@ -237,16 +269,9 @@ export function LinearSidebar() {
                 )}>
                   <Link href={`/${activeWorkspaceSlug}/settings`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Workspace Settings</span>
-                  </Link>
-                </div>
-                <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/security` ? "bg-surface-2" : "hover:bg-surface-2"
-                )}>
-                  <Link href={`/${activeWorkspaceSlug}/security`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                    <Shield size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Security</span>
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Workspace Settings
+                    </span>
                   </Link>
                 </div>
                 {role === "Owner" && (
@@ -256,7 +281,9 @@ export function LinearSidebar() {
                   )}>
                     <Link href={`/${activeWorkspaceSlug}/advanced`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <Warning size={16} className="shrink-0 text-destructive/80 group-hover:text-destructive transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-destructive transition-colors truncate">Advanced</span>
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-destructive transition-colors truncate">
+                        Advanced
+                      </span>
                     </Link>
                   </div>
                 )}
@@ -269,7 +296,7 @@ export function LinearSidebar() {
         {user && (
           <div className="p-3 mt-auto shrink-0">
             <div
-              onClick={() => router.push("/settings")}
+              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
               className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
             >
               <Avatar className="size-8 rounded-lg border border-border/50">
@@ -324,21 +351,28 @@ export function LinearSidebar() {
             </div>
             <DropdownMenuSeparator className="bg-border" />
             <div className="max-h-[160px] overflow-y-auto">
-              {workspaces.map((ws) => (
-                <DropdownMenuItem
-                  key={ws.id}
-                  onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", (ws as any).membershipType || "Internal")}
-                  className={cn(
-                    "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2",
-                    ws.id === activeWorkspaceId ? "bg-surface-2 text-primary font-medium" : "text-ink"
-                  )}
-                >
-                  <div className="w-[16px] h-[16px] rounded bg-gradient-to-br from-pink-500/80 to-rose-500/80 flex items-center justify-center shrink-0 text-[8px] text-white font-bold">
-                    {ws.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <span className="truncate flex-1">{ws.name}</span>
-                </DropdownMenuItem>
-              ))}
+              {workspaces.map((ws) => {
+                const membershipType =
+                  "membershipType" in ws && typeof ws.membershipType === "string"
+                    ? ws.membershipType
+                    : "Internal";
+
+                return (
+                  <DropdownMenuItem
+                    key={ws.id}
+                    onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", membershipType, ws.defaultLanguage || "en")}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2",
+                      ws.id === activeWorkspaceId ? "bg-surface-2 text-primary font-medium" : "text-ink"
+                    )}
+                  >
+                    <div className="w-[16px] h-[16px] rounded bg-gradient-to-br from-pink-500/80 to-rose-500/80 flex items-center justify-center shrink-0 text-[8px] text-white font-bold">
+                      {ws.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="truncate flex-1">{ws.name}</span>
+                  </DropdownMenuItem>
+                );
+              })}
             </div>
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
@@ -386,11 +420,29 @@ export function LinearSidebar() {
         </div>
       </nav>
 
+      {isOwnerOrAdmin && activeWorkspaceId && (
+        <div className="px-3 pb-2 pt-3">
+          <button
+            type="button"
+            onClick={() => setIsInviteModalOpen(true)}
+            className="group w-full rounded-[14px] border border-border bg-surface-1 p-3 text-left shadow-linear transition hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
+              <PaperPlaneTilt size={17} weight="duotone" />
+            </span>
+            <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
+            <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
+              Bring your team in to collaborate and share workspace rooms.
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* User Account Panel */}
       {user && (
         <div className="p-3 mt-auto shrink-0">
           <div
-            onClick={() => router.push("/settings")}
+            onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
             className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
           >
             <Avatar className="size-8 rounded-lg border border-border/50">
@@ -453,6 +505,95 @@ export function LinearSidebar() {
                 Join
               </Button>
             </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
+        <DialogContent className="overflow-hidden p-0 sm:max-w-[520px]">
+          <div className="h-36 border-b border-border bg-[radial-gradient(circle_at_28%_18%,rgba(94,106,210,0.30),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(16,185,129,0.18),transparent_30%),linear-gradient(135deg,var(--surface-2),var(--surface-1))]">
+            <div className="flex h-full items-end p-5">
+              <span className="grid size-12 place-items-center rounded-[14px] border border-white/35 bg-white/40 text-primary shadow-[0_12px_28px_rgba(16,24,40,0.12)] backdrop-blur">
+                <PaperPlaneTilt size={24} weight="duotone" />
+              </span>
+            </div>
+          </div>
+
+          <form onSubmit={handleInviteMember} className="grid gap-4 p-5 pt-4">
+            <DialogHeader>
+              <DialogTitle>Invite team members</DialogTitle>
+              <DialogDescription>
+                Send an invitation to join {activeWorkspaceName || "this workspace"} and collaborate on rooms, documents, and summaries.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <Label htmlFor="invite-email" className="text-[13px] font-medium text-foreground">
+                Email address
+              </Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="teammate@company.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                autoComplete="email"
+                className="bg-surface-1"
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="invite-role" className="text-[13px] font-medium text-foreground">
+                  Role
+                </Label>
+                <select
+                  id="invite-role"
+                  value={inviteRoleName}
+                  onChange={(e) => setInviteRoleName(e.target.value)}
+                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="Member">Member</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="invite-membership" className="text-[13px] font-medium text-foreground">
+                  Access type
+                </Label>
+                <select
+                  id="invite-membership"
+                  value={inviteMembershipType}
+                  onChange={(e) => setInviteMembershipType(e.target.value)}
+                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="Internal">Internal</option>
+                  <option value="External">External</option>
+                </select>
+              </div>
+            </div>
+
+            <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-[12px] leading-5 text-ink-muted">
+              Invited members receive workspace access based on the role and access type selected here.
+            </p>
+
+            <DialogFooter className="-mx-5 -mb-5 mt-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsInviteModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!inviteEmail.trim() || inviteMemberMutation.isPending}
+                className="min-w-[92px] text-white disabled:bg-surface-3 disabled:text-ink-muted disabled:opacity-100"
+              >
+                {inviteMemberMutation.isPending ? "Inviting..." : "Invite"}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

@@ -45,13 +45,18 @@ export default function WorkspaceOnboardingGatePage() {
     if (mounted && isAuthenticated && !activeWorkspaceId && !workspacesLoading) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
+        const defaultLanguage =
+          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
+            ? firstWs.defaultLanguage
+            : "en";
         selectWorkspace.mutate(firstWs.id);
         setActiveWorkspace(
           firstWs.id,
           firstWs.name,
           firstWs.slug,
           firstWs.role || "Member",
-          (firstWs as any).membershipType || "Internal"
+          (firstWs as any).membershipType || "Internal",
+          defaultLanguage
         );
         router.replace(`/${firstWs.slug}/home`);
       }
