@@ -378,25 +378,37 @@ function RoomThread({ events }: { events: ThreadEvent[] }) {
 
       <div className="relative mt-4 border-l border-border pl-5">
         <div className="space-y-1">
-          {events.map((event) => (
-            <article
-              key={event.id}
-              className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
-            >
-              <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
-              <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                <KindChip kind={event.kind} />
-                <UserChip user={event.actor} compact />
-                <span className="font-medium text-ink">{event.title}</span>
-                {event.at ? <span className="text-muted-foreground">{event.at}</span> : null}
-                {event.metadata?.map((item) => <InlineChip key={item}>{item}</InlineChip>)}
-              </div>
-              {event.content ? <MarkdownContent content={event.content} /> : null}
-            </article>
-          ))}
+          {events.length === 0 ? (
+            <ThreadEmptyState />
+          ) : (
+            events.map((event) => (
+              <article
+                key={event.id}
+                className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
+              >
+                <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
+                <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                  <KindChip kind={event.kind} />
+                  <UserChip user={event.actor} compact />
+                  <span className="font-medium text-ink">{event.title}</span>
+                  {event.at ? <span className="text-muted-foreground">{event.at}</span> : null}
+                  {event.metadata?.map((item) => <InlineChip key={item}>{item}</InlineChip>)}
+                </div>
+                {event.content ? <MarkdownContent content={event.content} /> : null}
+              </article>
+            ))
+          )}
         </div>
       </div>
     </section>
+  );
+}
+
+function ThreadEmptyState() {
+  return (
+    <div className="-ml-5 py-6 text-center text-[12px] text-muted-foreground">
+      No activity yet.
+    </div>
   );
 }
 
