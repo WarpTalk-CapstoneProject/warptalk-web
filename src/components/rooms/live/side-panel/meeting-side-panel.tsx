@@ -24,6 +24,9 @@ export function MeetingSidePanel({
   joinLink,
   meetingStarted,
   chatTargetLanguage,
+  raisedHandUserIds,
+  spotlightedUserId,
+  onToggleSpotlight,
 }: {
   roomId: string;
   room: TranslationRoomDto;
@@ -40,6 +43,12 @@ export function MeetingSidePanel({
   meetingStarted: boolean;
   /** Viewer's own listen language — passed to ChatPanel for on-click translation. */
   chatTargetLanguage?: string;
+  /** userIds with a currently raised hand — see TranslationRoomHub.RaiseHand. */
+  raisedHandUserIds?: Set<string>;
+  /** Host-forced spotlight target, if any — see TranslationRoomHub.SpotlightChanged. */
+  spotlightedUserId?: string | null;
+  /** Host-only: toggles spotlight for this participant. Omit to hide the control. */
+  onToggleSpotlight?: (userId: string) => void;
 }) {
   return (
     <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden xl:flex hidden">
@@ -64,6 +73,9 @@ export function MeetingSidePanel({
               activeCount={activeCount}
               onCopyText={onCopyText}
               joinLink={joinLink}
+              raisedHandUserIds={raisedHandUserIds}
+              spotlightedUserId={spotlightedUserId}
+              onToggleSpotlight={onToggleSpotlight}
             />
           ) : null}
         </div>

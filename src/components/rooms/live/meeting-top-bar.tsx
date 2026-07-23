@@ -21,6 +21,7 @@ import {
 import { useEndMeetingForAll } from "@/hooks/use-meeting";
 import { getLanguageName } from "@/lib/languages";
 import type { TranslationRoomDto } from "@/types/translationRoom";
+import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 
 export function MeetingTopBar({
   room,
@@ -52,6 +53,8 @@ export function MeetingTopBar({
             <span className="text-ink-subtle">
               {getLanguageName(sourceLanguage)} to {getLanguageName(targetLanguage)}
             </span>
+            <span className="text-ink-tertiary">/</span>
+            <MeetingTimer startedAt={room.startedAt} />
           </div>
           <div className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${warptalkStarted ? "bg-red-50 text-red-600" : "bg-surface-2 text-ink-subtle"}`}>
             <div className={`h-1.5 w-1.5 rounded-full ${warptalkStarted ? "bg-destructive" : "bg-slate-400"}`} />

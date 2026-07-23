@@ -5,7 +5,9 @@ import {
   Archive,
   ArrowRight,
   CheckCircle,
+  CheckSquare,
   Clock,
+  Copy,
   DownloadSimple,
   FileText,
   MagnifyingGlass,
@@ -138,6 +140,40 @@ function SummaryQueueRow({ item, selected, onSelect }: { item: SummaryItem; sele
 function SummaryWorkspace({ item, busy, onDownload }: { item: SummaryItem; busy: boolean; onDownload: () => void }) {
   const { room, artifact } = item;
   const ready = artifact?.status === "ready";
+  const summary = room.summary;
+  const hasStructuredContent = Boolean(
+    summary && !summary.insufficientData && (summary.summary || summary.decisions.length || summary.actionItems.length)
+  );
+  // The artifact row itself carries the generated content (Content column) — it doesn't
+  // depend on the file-download status, so a structured summary can render as soon as the
+  // artifact exists even before "ready" settles.
+  const recentlyEnded = Date.now() - new Date(room.endedAt).getTime() < 10 * 60 * 1000;
+  const isGenerating = !artifact && recentlyEnded;
+
+  async function copyAsText() {
+    if (!summary) return;
+    const lines = [
+      `${room.title} — AI meeting summary`,
+      "",
+      "Overview",
+      summary.summary || "(no overview)",
+      "",
+      "Decisions",
+      ...(summary.decisions.length ? summary.decisions.map((decision) => `- ${decision}`) : ["(none recorded)"]),
+      "",
+      "Action items",
+      ...(summary.actionItems.length
+        ? summary.actionItems.map((action) => `- [ ] ${action.owner ? `${action.owner}: ` : ""}${action.task}`)
+        : ["(none recorded)"]),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      toast.success("Summary copied to clipboard.");
+    } catch {
+      toast.error("Could not copy the summary.");
+    }
+  }
+
   return (
     <article className="min-w-0">
       <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
@@ -146,23 +182,72 @@ function SummaryWorkspace({ item, busy, onDownload }: { item: SummaryItem; busy:
           <h2 className="mt-3 text-[20px] font-semibold leading-7">{room.title}</h2>
           <p className="mt-1 text-[11px] text-ink-muted">Hosted by {room.hostName} · ended {formatDate(room.endedAt)}</p>
         </div>
-        <Button size="sm" variant={ready ? "default" : "outline"} disabled={!ready || busy} onClick={onDownload} className="h-8 shrink-0 rounded-md text-[11px] shadow-none">
-          {busy ? <SpinnerGap size={14} className="animate-spin" /> : <DownloadSimple size={14} />} Download summary
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button size="sm" variant="outline" disabled={!hasStructuredContent} onClick={copyAsText} className="h-8 rounded-md text-[11px] shadow-none">
+            <Copy size={14} /> Copy as text
+          </Button>
+          <Button size="sm" variant={ready ? "default" : "outline"} disabled={!ready || busy} onClick={onDownload} className="h-8 rounded-md text-[11px] shadow-none">
+            {busy ? <SpinnerGap size={14} className="animate-spin" /> : <DownloadSimple size={14} />} Download file
+          </Button>
+        </div>
       </div>
 
       <div className="grid xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="p-5 lg:p-7">
           <div className="flex min-h-[360px] flex-col border border-border bg-canvas">
             <div className="flex h-10 items-center justify-between border-b border-border px-4"><span className="text-[10px] font-medium text-ink-subtle">SUMMARY OUTPUT</span><span className="text-[10px] text-ink-subtle">{artifact?.format || "No file"}</span></div>
-            <div className="flex flex-1 items-center justify-center p-8 text-center">
-              <div className="max-w-[360px]">
-                <SummaryStateIcon item={item} />
-                <h3 className="mt-4 text-[15px] font-semibold">{summaryStateTitle(item)}</h3>
-                <p className="mt-2 text-[11px] leading-5 text-ink-muted">{summaryStateDescription(item)}</p>
-                {ready ? <Button variant="outline" size="sm" className="mt-5 h-8 rounded-md text-[11px] shadow-none" onClick={onDownload}><DownloadSimple size={14} />Open generated file</Button> : null}
+
+            {hasStructuredContent && summary ? (
+              <div className="flex-1 space-y-6 p-6">
+                <section>
+                  <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">Overview</h3>
+                  <p className="mt-2 text-[12px] leading-6 text-ink">{summary.summary}</p>
+                </section>
+                <section>
+                  <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">Decisions</h3>
+                  {summary.decisions.length ? (
+                    <ul className="mt-2 space-y-1.5">
+                      {summary.decisions.map((decision, index) => (
+                        <li key={index} className="flex gap-2 text-[12px] leading-5 text-ink"><span className="mt-1.5 size-1 shrink-0 rounded-full bg-ink-subtle" />{decision}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-ink-muted">No decisions recorded.</p>
+                  )}
+                </section>
+                <section>
+                  <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">Action items</h3>
+                  {summary.actionItems.length ? (
+                    <ul className="mt-2 space-y-2">
+                      {summary.actionItems.map((action, index) => (
+                        <li key={index} className="flex items-start gap-2 text-[12px] leading-5 text-ink">
+                          <CheckSquare size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+                          <span>{action.owner ? <span className="font-medium">{action.owner}: </span> : null}{action.task}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-ink-muted">No action items recorded.</p>
+                  )}
+                </section>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-1 items-center justify-center p-8 text-center">
+                <div className="max-w-[360px]">
+                  {isGenerating ? <SpinnerGap size={28} className="mx-auto animate-spin text-ink-muted" /> : <SummaryStateIcon item={item} />}
+                  <h3 className="mt-4 text-[15px] font-semibold">{isGenerating ? "Generating summary…" : summaryStateTitle(item)}</h3>
+                  <p className="mt-2 text-[11px] leading-5 text-ink-muted">
+                    {isGenerating
+                      ? "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute — refresh to check again."
+                      : summary?.insufficientData
+                        ? "There wasn't enough transcript content in this meeting to generate a summary."
+                        : summaryStateDescription(item)}
+                  </p>
+                  {ready ? <Button variant="outline" size="sm" className="mt-5 h-8 rounded-md text-[11px] shadow-none" onClick={onDownload}><DownloadSimple size={14} />Open generated file</Button> : null}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-3 border-t border-border text-[10px]">
               <MetaCell label="Created" value={artifact?.createdAt ? formatDate(artifact.createdAt) : "—"} />
               <MetaCell label="Format" value={artifact?.format || "—"} />

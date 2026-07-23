@@ -14,6 +14,10 @@ interface TranslationRoomStoreState {
   transcriptSegments: TranscriptSegmentDto[];
   chatMessages: ChatMessageDto[];
   isMuted: boolean;
+  // userIds of OTHER participants with a raised hand — TranslationRoomHub.RaiseHand
+  // broadcasts via OthersInGroup, so this never includes the caller's own userId; the
+  // caller tracks its own raised state locally instead.
+  raisedHands: string[];
 
   // Actions — called from SignalR event handlers
   setTranslationRoomState: (state: TranslationRoomStateDto) => void;
@@ -27,6 +31,7 @@ interface TranslationRoomStoreState {
   addChatMessage: (message: ChatMessageDto) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
+  setHandRaised: (userId: string, isRaised: boolean) => void;
   reset: () => void;
 }
 
@@ -36,6 +41,7 @@ const initialState = {
   transcriptSegments: [],
   chatMessages: [],
   isMuted: false,
+  raisedHands: [],
 };
 
 export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set) => ({
@@ -156,6 +162,15 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
     })),
 
   setMuted: (isMuted) => set({ isMuted }),
+
+  setHandRaised: (userId, isRaised) =>
+    set((s) => ({
+      raisedHands: isRaised
+        ? s.raisedHands.includes(userId)
+          ? s.raisedHands
+          : [...s.raisedHands, userId]
+        : s.raisedHands.filter((id) => id !== userId),
+    })),
 
   reset: () => set(initialState),
 }));

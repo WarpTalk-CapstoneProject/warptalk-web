@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Copy, Fingerprint, Layout, Play, Screencast, CheckCircle, Microphone, MicrophoneSlash, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react/dist/ssr";
+import { Copy, Fingerprint, HandPalm, Layout, Play, Screencast, CheckCircle, Microphone, MicrophoneSlash, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getLanguageName } from "@/lib/languages";
@@ -14,9 +14,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { NetworkQualityIcon } from "@/components/rooms/live/network-quality-icon";
 import type { VoiceOptionDto } from "@/types/realtime";
 
 export type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
+
+// Kept in sync with TranslationRoomHub.AllowedReactionEmojis on the Gateway.
+export const ALLOWED_REACTION_EMOJIS = ["👍", "❤️", "😂", "🎉", "👏", "😮"];
 
 import { motion, AnimatePresence } from "motion/react";
 
@@ -36,6 +40,7 @@ export function MeetingControlBar({
   voiceCatalog,
   voiceCloneEnabled,
   voiceEnabled,
+  handRaised,
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
@@ -47,6 +52,8 @@ export function MeetingControlBar({
   onChangeVoicePreference,
   onChangeVoiceCloneConsent,
   onChangeVoiceEnabled,
+  onToggleRaiseHand,
+  onSendReaction,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -71,6 +78,8 @@ export function MeetingControlBar({
   voiceCloneEnabled?: boolean;
   /** false = this listener wants transcript only, no AI/original audio played. Omit to hide the toggle. */
   voiceEnabled?: boolean;
+  /** Whether THIS participant's hand is currently raised. Omit (or omit onToggleRaiseHand) to hide the control. */
+  handRaised?: boolean;
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
@@ -88,10 +97,15 @@ export function MeetingControlBar({
   onChangeVoiceCloneConsent?: (enabled: boolean) => void;
   /** Called with the new value when the participant toggles transcript-only mode. */
   onChangeVoiceEnabled?: (enabled: boolean) => void;
+  /** Toggles this participant's raised-hand state. Omit to hide the control. */
+  onToggleRaiseHand?: () => void;
+  /** Sends an emoji reaction (must be one of ALLOWED_REACTION_EMOJIS). Omit to hide the picker. */
+  onSendReaction?: (emoji: string) => void;
 }) {
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
+  const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
 
   return (
     <div className="flex h-12 items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2 shadow-sm backdrop-blur-xl">
@@ -120,7 +134,13 @@ export function MeetingControlBar({
         onToggleCamera={onToggleCamera}
         onToggleMicrophone={onToggleMicrophone}
       />
-      
+
+      {meetingEnabled ? (
+        <span className="grid h-8 w-8 place-items-center" title="Your connection quality">
+          <NetworkQualityIcon />
+        </span>
+      ) : null}
+
       <div className="h-6 w-[1px] bg-surface-3 mx-1" />
 
       <MeetControl
@@ -129,7 +149,51 @@ export function MeetingControlBar({
         icon={<Screencast className="h-[18px] w-[18px]" />}
         onClick={onToggleScreenShare}
       />
-      
+
+      {onToggleRaiseHand ? (
+        <MeetControl
+          label={handRaised ? "Lower hand" : "Raise hand"}
+          active={handRaised}
+          icon={<HandPalm className="h-[18px] w-[18px]" weight={handRaised ? "fill" : "regular"} />}
+          onClick={onToggleRaiseHand}
+        />
+      ) : null}
+
+      {onSendReaction ? (
+        <div className="relative">
+          <MeetControl
+            label="Send a reaction"
+            icon={<SmileyWink className="h-[18px] w-[18px]" />}
+            onClick={() => setIsReactionMenuOpen((current) => !current)}
+          />
+          <AnimatePresence>
+            {isReactionMenuOpen ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="absolute bottom-14 right-0 z-50 flex w-52 items-center gap-1 rounded-lg border border-border bg-surface-1 p-2 shadow-lg origin-bottom-right"
+              >
+                {ALLOWED_REACTION_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      onSendReaction(emoji);
+                      setIsReactionMenuOpen(false);
+                    }}
+                    className="grid h-8 w-8 place-items-center rounded-md text-lg transition-colors hover:bg-canvas"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      ) : null}
+
       <div className="h-6 w-[1px] bg-surface-3 mx-1" />
       
       <MeetControl

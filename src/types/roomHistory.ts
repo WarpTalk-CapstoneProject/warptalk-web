@@ -1,5 +1,6 @@
 import type { TranscriptDto } from "@/types/transcript";
 import type { TranslationRoomStatus } from "@/types/translationRoom";
+import type { MeetingSummaryActionItem, MeetingSummarySection } from "@/types/meetingSummary";
 
 export type RoomHistoryLoadState = "ready" | "loading" | "empty" | "permission_denied" | "error";
 
@@ -47,10 +48,14 @@ export interface TranslationRoomSummaryArtifact {
   summary: string;
   keyPoints: string[];
   decisions: string[];
-  actionItems: string[];
+  actionItems: MeetingSummaryActionItem[];
   modelUsed: string;
   processingTimeMs: number;
   generatedAt: string;
+  /** True when the AI assistant had nothing to summarize (e.g. an empty transcript). */
+  insufficientData?: boolean;
+  /** Per-target-language translated section, when the room has more than one target language. */
+  translations?: Record<string, MeetingSummarySection>;
 }
 
 export interface TranscriptExportArtifact {
@@ -82,6 +87,8 @@ export interface RoomHistoryArtifact {
   retentionDays?: number;
   consentRequired?: boolean;
   consentStatus?: RoomConsentStatus;
+  /** Inline artifact payload, currently only populated for summary_export artifacts. */
+  content?: string;
   backendSource:
     | "translation_room_recordings"
     | "translation_room_summaries"

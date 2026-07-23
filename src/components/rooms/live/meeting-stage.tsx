@@ -1,11 +1,16 @@
 "use client";
 
-import { RefObject, useEffect, useRef } from "react";
-import { ConnectionState, Track } from "livekit-client";
-import { useConnectionState, ParticipantTile, useTracks, TrackLoop } from "@livekit/components-react";
-import { SpinnerGap, Microphone, MicrophoneSlash } from "@phosphor-icons/react/dist/ssr";
+import { RefObject, useEffect, useRef, useState } from "react";
+import { ConnectionState, RoomEvent, Track, type Participant } from "livekit-client";
+import { useConnectionState, useMaybeRoomContext, ParticipantTile, useTracks, type TrackReferenceOrPlaceholder } from "@livekit/components-react";
+import { SpinnerGap, Microphone, MicrophoneSlash, PushPinSimple, Star } from "@phosphor-icons/react/dist/ssr";
 import type { TranslationRoomParticipantDto } from "@/types/translationRoom";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
+import { NetworkQualityIcon } from "./network-quality-icon";
+import { HandRaiseBadge } from "./hand-raise-badge";
+
+const TILE_CLASSNAME =
+  "overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur";
 
 export function LiveKitMeetingStage({
   fallbackName,
@@ -18,6 +23,10 @@ export function LiveKitMeetingStage({
   participants,
   screenStream,
   layoutMode,
+  pinnedUserId,
+  onPinParticipant,
+  spotlightedUserId,
+  raisedHandUserIds,
   onRetry,
 }: {
   fallbackName: string;
@@ -30,11 +39,19 @@ export function LiveKitMeetingStage({
   participants: TranslationRoomParticipantDto[];
   screenStream: MediaStream | null;
   layoutMode: MeetingLayoutMode;
+  /** Locally-pinned participant (this viewer only) — clicking a tile toggles it. */
+  pinnedUserId?: string | null;
+  onPinParticipant?: (userId: string) => void;
+  /** Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged. Overrides pinnedUserId when set. */
+  spotlightedUserId?: string | null;
+  raisedHandUserIds?: Set<string>;
   onRetry: () => void;
 }) {
   const connectionState = useConnectionState();
+  const room = useMaybeRoomContext();
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [activeSpeakerIdentities, setActiveSpeakerIdentities] = useState<Set<string>>(new Set());
   const tracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
@@ -58,6 +75,57 @@ export function LiveKitMeetingStage({
     screenVideoRef.current.srcObject = screenStream;
   }, [screenStream]);
 
+  // Highlight whoever LiveKit currently reports as speaking. The SDK already applies a
+  // short hangover before dropping a participant from this list, so the ring clears
+  // roughly a second after they stop talking without extra debouncing here.
+  useEffect(() => {
+    if (!room) return;
+    const handleActiveSpeakers = (speakers: Participant[]) => {
+      setActiveSpeakerIdentities(new Set(speakers.map((speaker) => speaker.identity)));
+    };
+    room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+    return () => {
+      room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+    };
+  }, [room]);
+
+  const featuredIdentity = spotlightedUserId || pinnedUserId || null;
+  const isSpotlight = Boolean(spotlightedUserId);
+
+  function renderTile(trackRef: TrackReferenceOrPlaceholder, options?: { minHeight?: string }) {
+    const identity = trackRef.participant.identity;
+    const isActiveSpeaker = activeSpeakerIdentities.has(identity);
+    const isFeatured = featuredIdentity === identity;
+    const handRaised = raisedHandUserIds?.has(identity) ?? false;
+
+    return (
+      <div
+        key={trackRef.participant.sid + (trackRef.publication?.trackSid ?? "placeholder")}
+        className={`relative rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-1" : ""}`}
+        onClick={() => onPinParticipant?.(identity)}
+      >
+        <ParticipantTile
+          trackRef={trackRef}
+          className={`${TILE_CLASSNAME} ${options?.minHeight ?? ""} ${onPinParticipant ? "cursor-pointer" : ""}`}
+        />
+        <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5">
+          {handRaised ? <HandRaiseBadge /> : null}
+          {isFeatured ? (
+            <span
+              className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 text-primary shadow-sm backdrop-blur"
+              title={isSpotlight ? "Spotlighted by host" : "Pinned"}
+            >
+              {isSpotlight ? <Star className="h-3.5 w-3.5" weight="fill" /> : <PushPinSimple className="h-3.5 w-3.5" weight="fill" />}
+            </span>
+          ) : null}
+          <span className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 shadow-sm backdrop-blur">
+            <NetworkQualityIcon participantIdentity={identity} />
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   if (screenStream) {
     return (
       <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_260px] bg-surface-1">
@@ -67,11 +135,9 @@ export function LiveKitMeetingStage({
             You are presenting
           </div>
         </div>
-        
+
         <div className="grid h-full gap-3 overflow-hidden grid-cols-1 overflow-y-auto">
-          <TrackLoop tracks={visibleTracks}>
-            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur min-h-[160px]" />
-          </TrackLoop>
+          {visibleTracks.map((trackRef) => renderTile(trackRef, { minHeight: "min-h-[160px]" }))}
         </div>
         <ConnectionBadge state={connectionState} />
       </div>
@@ -79,12 +145,33 @@ export function LiveKitMeetingStage({
   }
 
   if (hasParticipants) {
+    const featuredTrack = featuredIdentity
+      ? visibleTracks.find((trackRef) => trackRef.participant.identity === featuredIdentity)
+      : undefined;
+    const otherTracks = featuredTrack ? visibleTracks.filter((trackRef) => trackRef !== featuredTrack) : [];
+
+    if (featuredTrack) {
+      return (
+        <div className="relative flex h-full w-full flex-col gap-2 p-2 bg-surface-1">
+          <div className="min-h-0 flex-1">{renderTile(featuredTrack, { minHeight: "h-full" })}</div>
+          {otherTracks.length > 0 ? (
+            <div className="flex h-24 shrink-0 gap-2 overflow-x-auto">
+              {otherTracks.map((trackRef) => (
+                <div key={trackRef.participant.sid} className="aspect-video h-full shrink-0">
+                  {renderTile(trackRef, { minHeight: "h-full" })}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <ConnectionBadge state={connectionState} />
+        </div>
+      );
+    }
+
     return (
       <div className="relative h-full w-full p-2 bg-surface-1">
         <div className={`grid h-full gap-3 ${gridClassName(visibleTracks.length)}`}>
-          <TrackLoop tracks={visibleTracks}>
-            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur" />
-          </TrackLoop>
+          {visibleTracks.map((trackRef) => renderTile(trackRef))}
         </div>
         <ConnectionBadge state={connectionState} />
       </div>

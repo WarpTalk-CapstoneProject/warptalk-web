@@ -36,6 +36,7 @@ import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import { MeetingSidePanel, type SidePanelMode } from "@/components/rooms/live/side-panel/meeting-side-panel";
 import { WaitingRoomView, StatePanel } from "@/components/rooms/live/waiting-room-view";
+import { ReactionOverlay, type FloatingReaction } from "@/components/rooms/live/reaction-overlay";
 
 function getJoinLink(code: string) {
   if (typeof window === "undefined") return code;
@@ -75,6 +76,15 @@ export default function RoomDetailPage() {
   const [localMediaError, setLocalMediaError] = useState<string | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [meetingLayout, setMeetingLayout] = useState<MeetingLayoutMode>("auto");
+  // Local-only tile pin (WT-03) — clicking a tile toggles it; overridden by spotlight below.
+  const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
+  // Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged.
+  const [spotlightedUserId, setSpotlightedUserId] = useState<string | null>(null);
+  // TranslationRoomHub.RaiseHand broadcasts via OthersInGroup, so the caller tracks its
+  // own raised state locally — the store's raisedHands only ever holds OTHER userIds.
+  const [handRaised, setHandRaisedState] = useState(false);
+  const [reactions, setReactions] = useState<FloatingReaction[]>([]);
+  const reactionIdRef = useRef(0);
 
   // Read config from sessionStorage
   const savedDevices = typeof window !== 'undefined' ? JSON.parse(window.sessionStorage.getItem('warptalk.devices.preview') || '{}') : {};
@@ -87,6 +97,8 @@ export default function RoomDetailPage() {
   const setLiveState = useTranslationRoomStore((state) => state.setTranslationRoomState);
   const addLiveParticipant = useTranslationRoomStore((state) => state.addParticipant);
   const removeLiveParticipant = useTranslationRoomStore((state) => state.removeParticipant);
+  const raisedHands = useTranslationRoomStore((state) => state.raisedHands);
+  const setHandRaisedInStore = useTranslationRoomStore((state) => state.setHandRaised);
   const { rightSidebarOpen, setLeftSidebarOpen } = useUIStore();
 
   useEffect(() => {
@@ -115,6 +127,14 @@ export default function RoomDetailPage() {
   }, [participants]);
   const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
   const joinLink = room?.translationRoomCode ? getJoinLink(room.translationRoomCode) : "";
+  // Store only ever holds OTHER users' raised hands (RaiseHand broadcasts via
+  // OthersInGroup) — merge in this viewer's own local toggle so badges render
+  // consistently everywhere (tiles, people panel) regardless of whose row it is.
+  const raisedHandUserIds = useMemo(() => {
+    const ids = new Set(raisedHands);
+    if (handRaised && user?.id) ids.add(user.id);
+    return ids;
+  }, [raisedHands, handRaised, user?.id]);
   const liveSegments = useMemo(() => dedupeSegments(transcriptSegments), [transcriptSegments]);
   // Transcript history persists whether or not translation is currently running:
   // "Stop Translation" only halts new live captions (LiveSubtitleOverlay below); it must
@@ -457,6 +477,17 @@ export default function RoomDetailPage() {
     });
     connection.on("TranslationRoomEnded", () => refetchRoom());
 
+    connection.on("HandRaised", (userId: string, isRaised: boolean) => {
+      setHandRaisedInStore(userId, isRaised);
+    });
+    connection.on("ReactionReceived", (userId: string, emoji: string) => {
+      reactionIdRef.current += 1;
+      setReactions((current) => [...current, { id: `reaction-${reactionIdRef.current}`, emoji }]);
+    });
+    connection.on("SpotlightChanged", (targetUserId: string, on: boolean) => {
+      setSpotlightedUserId(on ? targetUserId : null);
+    });
+
     // BR-159: Backend initiated disconnections
     connection.on("ForceDisconnected", (reason?: string) => {
       toast.error(reason || "This room has been forcibly closed or you were disconnected from another device.");
@@ -513,7 +544,7 @@ export default function RoomDetailPage() {
     // targetLanguage intentionally excluded — see joinCurrentRoom's comment above;
     // runtime language changes go through SetListenLanguage, not a reconnect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, roomId, setLiveState, sourceLanguage]);
+  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, roomId, setLiveState, setHandRaisedInStore, sourceLanguage]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -683,6 +714,42 @@ export default function RoomDetailPage() {
     toast.success("WarpTalk realtime translation stopped.");
   }
 
+  function handleToggleRaiseHand() {
+    const next = !handRaised;
+    setHandRaisedState(next);
+    const connection = translationConnectionRef.current;
+    if (connection?.state !== HubConnectionState.Connected) return;
+    connection.invoke("RaiseHand", roomId, next).catch(() => {
+      setHandRaisedState(!next);
+      toast.error("Could not update raised hand.");
+    });
+  }
+
+  function handleSendReaction(emoji: string) {
+    const connection = translationConnectionRef.current;
+    if (connection?.state !== HubConnectionState.Connected) return;
+    connection.invoke("SendReaction", roomId, emoji).catch(() => {
+      toast.error("Could not send reaction.");
+    });
+  }
+
+  function handleReactionExpired(id: string) {
+    setReactions((current) => current.filter((reaction) => reaction.id !== id));
+  }
+
+  function handlePinParticipant(userId: string) {
+    setPinnedUserId((current) => (current === userId ? null : userId));
+  }
+
+  function handleToggleSpotlight(userId: string) {
+    const connection = translationConnectionRef.current;
+    if (connection?.state !== HubConnectionState.Connected) return;
+    const next = spotlightedUserId !== userId;
+    connection.invoke("SpotlightParticipant", roomId, userId, next).catch(() => {
+      toast.error("Could not update spotlight.");
+    });
+  }
+
   if (roomQuery.isLoading && !isPreviewRoom) {
     return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
   }
@@ -735,6 +802,10 @@ export default function RoomDetailPage() {
                 participants={participants}
                 screenStream={screenStream}
                 layoutMode={meetingLayout}
+                pinnedUserId={pinnedUserId}
+                onPinParticipant={handlePinParticipant}
+                spotlightedUserId={spotlightedUserId}
+                raisedHandUserIds={raisedHandUserIds}
                 onRetry={retryMeetingConnection}
               />
               <FilteredRoomAudio
@@ -746,6 +817,9 @@ export default function RoomDetailPage() {
 
               {/* Live captions — real pipeline segments only */}
               <LiveSubtitleOverlay enabled={warptalkStarted} />
+
+              {/* Emoji reactions — TranslationRoomHub.ReactionReceived */}
+              <ReactionOverlay reactions={reactions} onReactionExpired={handleReactionExpired} />
 
               {/* Floating Control Bar */}
               <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity hover:opacity-100">
@@ -765,6 +839,7 @@ export default function RoomDetailPage() {
                   voiceCatalog={voiceCatalog}
                   voiceCloneEnabled={voiceCloneEnabled}
                   voiceEnabled={voiceEnabled}
+                  handRaised={handRaised}
                   onCopyText={copyText}
                   onToggleCamera={() => setCameraEnabled((current) => !current)}
                   onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
@@ -776,6 +851,8 @@ export default function RoomDetailPage() {
                   onChangeVoicePreference={handleChangeVoicePreference}
                   onChangeVoiceCloneConsent={handleChangeVoiceCloneConsent}
                   onChangeVoiceEnabled={handleChangeVoiceEnabled}
+                  onToggleRaiseHand={handleToggleRaiseHand}
+                  onSendReaction={handleSendReaction}
                 />
               </div>
             </div>
@@ -797,6 +874,9 @@ export default function RoomDetailPage() {
               joinLink={joinLink}
               meetingStarted={room?.status === "in_progress"}
               chatTargetLanguage={targetLanguage}
+              raisedHandUserIds={raisedHandUserIds}
+              spotlightedUserId={spotlightedUserId}
+              onToggleSpotlight={handleToggleSpotlight}
             />
           )}
         </main>
