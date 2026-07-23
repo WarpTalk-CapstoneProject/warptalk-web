@@ -1,9 +1,11 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Copy, Layout, Screencast, CheckCircle, Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react/dist/ssr";
+import { Copy, Layout, Screencast, CheckCircle, Microphone, MicrophoneSlash, SpeakerHigh, Translate, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
+import { getLanguageName } from "@/lib/languages";
+import type { VoiceOptionDto } from "@/types/realtime";
 
 export type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
 
@@ -17,11 +19,17 @@ export function MeetingControlBar({
   layoutMode,
   roomCode,
   joinLink,
+  listenLanguage,
+  availableListenLanguages,
+  voicePreference,
+  voiceCatalog,
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
   onToggleScreenShare,
   onLayoutChange,
+  onChangeListenLanguage,
+  onChangeVoicePreference,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -30,13 +38,27 @@ export function MeetingControlBar({
   layoutMode: MeetingLayoutMode;
   roomCode: string;
   joinLink: string;
+  /** The language this participant currently hears translations/captions in. */
+  listenLanguage?: string;
+  /** Languages selectable in the dropdown — omit or pass a single-item list to hide it. */
+  availableListenLanguages?: string[];
+  /** A real Cartesia voice id this listener explicitly chose, or null/undefined for the automatic default. */
+  voicePreference?: string | null;
+  /** Voices offered for the CURRENT listenLanguage — empty/omit hides the picker. */
+  voiceCatalog?: VoiceOptionDto[];
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
   onToggleScreenShare: () => void;
   onLayoutChange: (layout: MeetingLayoutMode) => void;
+  /** Called when the participant picks a different listen language from the dropdown. */
+  onChangeListenLanguage?: (language: string) => void;
+  /** Called with a voice id, or "" to clear back to the automatic default. */
+  onChangeVoicePreference?: (voiceId: string) => void;
 }) {
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+  const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
 
   return (
     <div className="flex h-12 items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2 shadow-sm backdrop-blur-xl">
@@ -88,7 +110,144 @@ export function MeetingControlBar({
           ) : null}
         </AnimatePresence>
       </div>
+
+      {onChangeListenLanguage && availableListenLanguages && availableListenLanguages.length > 1 ? (
+        <>
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
+          <div className="relative">
+            <MeetControl
+              label={`Listening in ${getLanguageName(listenLanguage)}`}
+              icon={<Translate className="h-[18px] w-[18px]" />}
+              onClick={() => setIsLanguageMenuOpen((current) => !current)}
+            />
+            <AnimatePresence>
+              {isLanguageMenuOpen ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="absolute bottom-14 right-0 z-50 w-48 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg origin-bottom-right"
+                >
+                  {availableListenLanguages.map((language) => (
+                    <LanguageOption
+                      key={language}
+                      label={getLanguageName(language)}
+                      value={language}
+                      active={listenLanguage === language}
+                      onSelect={onChangeListenLanguage}
+                      close={() => setIsLanguageMenuOpen(false)}
+                    />
+                  ))}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        </>
+      ) : null}
+
+      {onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0 ? (
+        <>
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
+          <div className="relative">
+            <MeetControl
+              label={
+                voicePreference
+                  ? `Voice: ${voiceCatalog.find((v) => v.id === voicePreference)?.name ?? "Custom"}`
+                  : "Voice: Automatic"
+              }
+              icon={<SpeakerHigh className="h-[18px] w-[18px]" />}
+              onClick={() => setIsVoiceMenuOpen((current) => !current)}
+            />
+            <AnimatePresence>
+              {isVoiceMenuOpen ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="absolute bottom-14 right-0 z-50 w-48 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg origin-bottom-right"
+                >
+                  <VoiceOption
+                    label="Automatic"
+                    value=""
+                    active={!voicePreference}
+                    onSelect={onChangeVoicePreference}
+                    close={() => setIsVoiceMenuOpen(false)}
+                  />
+                  {voiceCatalog.map((voice) => (
+                    <VoiceOption
+                      key={voice.id}
+                      label={voice.name}
+                      value={voice.id}
+                      active={voicePreference === voice.id}
+                      onSelect={onChangeVoicePreference}
+                      close={() => setIsVoiceMenuOpen(false)}
+                    />
+                  ))}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        </>
+      ) : null}
     </div>
+  );
+}
+
+function VoiceOption({
+  label,
+  value,
+  active,
+  onSelect,
+  close,
+}: {
+  label: string;
+  value: string;
+  active: boolean;
+  onSelect: (voiceId: string) => void;
+  close: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onSelect(value);
+        close();
+      }}
+      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
+    >
+      {label}
+      {active ? <CheckCircle className="h-3.5 w-3.5 text-ink" weight="fill" /> : null}
+    </button>
+  );
+}
+
+function LanguageOption({
+  label,
+  value,
+  active,
+  onSelect,
+  close,
+}: {
+  label: string;
+  value: string;
+  active: boolean;
+  onSelect: (language: string) => void;
+  close: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onSelect(value);
+        close();
+      }}
+      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
+    >
+      {label}
+      {active ? <CheckCircle className="h-3.5 w-3.5 text-ink" weight="fill" /> : null}
+    </button>
   );
 }
 

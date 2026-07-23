@@ -84,23 +84,21 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
     })),
 
   addOrMergeTranslationText: (translation) =>
-    set((s) => ({
-      transcriptSegments: s.transcriptSegments.some((segment) => segment.segmentId === translation.segmentId)
-        ? s.transcriptSegments.map((segment) =>
-            segment.segmentId === translation.segmentId
-              ? {
-                  ...segment,
-                  originalText: segment.originalText || translation.originalText,
-                  originalLanguage: segment.originalLanguage || translation.sourceLang,
-                  translatedText: translation.translatedText,
-                  targetLanguage: translation.targetLang,
-                }
-              : segment,
-          )
-        : [
+    set((s) => {
+      // translation.segmentId is its OWN id ("{sourceSegmentId}-{targetLang}-c{idx}"), never
+      // equal to the transcript bubble's segmentId — sourceSegmentId is the actual join key
+      // back to the TranscriptSegmentReceived bubble it translates. Falling back to
+      // translation.segmentId only covers old/unmigrated messages that never carried it.
+      const joinKey = translation.sourceSegmentId || translation.segmentId;
+      const chunkIndex = translation.chunkIndex ?? 0;
+      const existingIndex = s.transcriptSegments.findIndex((segment) => segment.segmentId === joinKey);
+
+      if (existingIndex === -1) {
+        return {
+          transcriptSegments: [
             ...s.transcriptSegments,
             {
-              segmentId: translation.segmentId,
+              segmentId: joinKey,
               speakerId: translation.speakerId,
               speakerName: "Speaker",
               originalText: translation.originalText,
@@ -108,11 +106,37 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
               translatedText: translation.translatedText,
               targetLanguage: translation.targetLang,
               confidence: 1,
-              startTimeMs: 0,
-              endTimeMs: 0,
+              startTimeMs: translation.startTimeMs ?? 0,
+              endTimeMs: translation.endTimeMs ?? 0,
             },
           ],
-    })),
+        };
+      }
+
+      const segment = s.transcriptSegments[existingIndex];
+      // One STT segment can be split into multiple translated sentences (chunk_index >
+      // 0 for the 2nd+ sentence) — those must be APPENDED, not overwrite the first
+      // sentence's translation. chunk_index 0 always replaces (it's either the only
+      // sentence, or a fresh segment's first one).
+      const translatedText =
+        chunkIndex > 0 && segment.targetLanguage === translation.targetLang && segment.translatedText
+          ? `${segment.translatedText} ${translation.translatedText}`.trim()
+          : translation.translatedText;
+
+      const updated = {
+        ...segment,
+        originalText: segment.originalText || translation.originalText,
+        originalLanguage: segment.originalLanguage || translation.sourceLang,
+        translatedText,
+        targetLanguage: translation.targetLang,
+        startTimeMs: segment.startTimeMs || translation.startTimeMs || 0,
+        endTimeMs: translation.endTimeMs || segment.endTimeMs,
+      };
+
+      const transcriptSegments = s.transcriptSegments.slice();
+      transcriptSegments[existingIndex] = updated;
+      return { transcriptSegments };
+    }),
 
   setChatMessages: (messages) =>
     set((s) => ({

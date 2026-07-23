@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
-import { ArrowUp, Sparkle, ClockCounterClockwise, Question, ArrowsOutSimple, CornersIn, PaperPlaneRight, CaretUp, Plus, MagnifyingGlass, PaperPlaneTilt, Cube, CaretDown, FileText, Chats, BookBookmark, VideoCamera, X } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUp, ClockCounterClockwise, ArrowsOutSimple, CornersIn, Plus, PaperPlaneTilt, Cube, CaretDown, FileText, Chats, BookBookmark, VideoCamera, X } from "@phosphor-icons/react/dist/ssr";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
 import { useWorkspaceMembers, useWorkspaceDocuments } from "@/hooks/use-workspace";
@@ -141,6 +140,14 @@ const PAGE_CONTEXT_LABELS: Record<string, string> = {
   history: "History",
 };
 
+const PAGE_CONTEXT_ICONS: Record<string, ReactNode> = {
+  room_detail: <VideoCamera size={15} weight="regular" />,
+  in_meeting: <VideoCamera size={15} weight="regular" />,
+  document_detail: <FileText size={15} weight="regular" />,
+  documents: <FileText size={15} weight="regular" />,
+  history: <ClockCounterClockwise size={15} weight="regular" />,
+};
+
 function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
   if (!context) return null;
 
@@ -156,6 +163,7 @@ function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
     pageLabel,
     title,
     status: context.snapshot?.status,
+    icon: PAGE_CONTEXT_ICONS[context.pageType] ?? <BookBookmark size={15} weight="regular" />,
   };
 }
 
@@ -177,7 +185,6 @@ export function GlobalChatbot() {
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [disabledPageContextKey, setDisabledPageContextKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const user = useAuthStore((state) => state.user);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const ambientPageContext = useAssistantContextStore((state) => state.pageContext);
   const { resolvedTheme } = useTheme();
@@ -242,6 +249,7 @@ export function GlobalChatbot() {
   const ambientPageContextKey = useMemo(() => getPageContextKey(ambientPageContext), [ambientPageContext]);
   const effectivePageContext =
     ambientPageContextKey && disabledPageContextKey === ambientPageContextKey ? null : ambientPageContext;
+  const isPageContextVisible = Boolean(effectivePageContext);
 
   const availableSlashCommands = useMemo(() => {
     const pageType = effectivePageContext?.pageType ?? "";
@@ -249,6 +257,12 @@ export function GlobalChatbot() {
     return SLASH_COMMANDS.filter((cmd) => cmd.pageTypes.includes(pageType));
   }, [effectivePageContext?.pageType]);
   const ambientContextDisplay = useMemo(() => getAmbientContextDisplay(effectivePageContext), [effectivePageContext]);
+  const contextComposerShellClassName = isPageContextVisible
+    ? "rounded-[14px] bg-surface-2/55 p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+    : "";
+  const contextInputShellClassName = isPageContextVisible
+    ? "relative rounded-[10px] border border-border bg-surface-1 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_10px_24px_rgba(15,23,42,0.08)]"
+    : "relative rounded-[8px] border border-border bg-surface-1";
 
   const filteredSlashCommands = availableSlashCommands.filter((cmd) =>
     cmd.command.slice(1).toLowerCase().startsWith(slashQuery.toLowerCase())
@@ -452,10 +466,6 @@ export function GlobalChatbot() {
     }, 0);
   };
 
-  const removeContext = (id: string) => {
-    setSelectedContexts(prev => prev.filter(c => c.id !== id));
-  };
-
   const insertSlashCommand = (cmd: SlashCommand) => {
     const prompt = cmd.buildPrompt(effectivePageContext);
     setSlashMenuOpen(false);
@@ -473,6 +483,13 @@ export function GlobalChatbot() {
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(prompt.length, prompt.length);
     }, 0);
+  };
+
+  const togglePageContextVisibility = () => {
+    if (!ambientPageContextKey) return;
+    setDisabledPageContextKey((currentKey) =>
+      currentKey === ambientPageContextKey ? null : ambientPageContextKey
+    );
   };
 
   const sendMessage = async (overrideContent?: string) => {
@@ -562,7 +579,7 @@ export function GlobalChatbot() {
             <PopoverContent
               align="end"
               sideOffset={8}
-              className={`p-0 bg-surface-1 border border-border shadow-xl rounded-xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? 'w-[600px] h-[600px]' : 'w-[400px] h-[412px]'}`}
+              className={`p-0 bg-surface-1 border border-border shadow-xl rounded-xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? 'w-[680px] h-[600px]' : 'w-[460px] h-[412px]'}`}
             >
               {/* Chat Header */}
               <div className="flex items-center justify-between h-[48px] px-4 shrink-0">
@@ -625,36 +642,47 @@ export function GlobalChatbot() {
               </div>
 
               {/* Chat Input Section */}
-              <div className="px-2 pb-2 shrink-0">
-                {ambientContextDisplay && (
-                  <div className="mb-1.5 flex min-h-[28px] items-center rounded-t-[8px] bg-surface-2 px-2 py-1 text-[13px] font-medium text-ink">
-                    <div
-                      aria-label="Active page context"
-                      title={`${ambientContextDisplay.pageLabel}: ${ambientContextDisplay.title}`}
-                      className="flex min-w-0 flex-1 items-center gap-1.5"
-                    >
-                      <span className="relative flex size-4 shrink-0 items-center justify-center rounded-full bg-[#34c759]/10 ring-1 ring-[#34c759]/20">
-                        <span className="size-2 rounded-full bg-[#34c759]" />
-                      </span>
-                      <span className="shrink-0 text-[12px] text-ink-muted">{ambientContextDisplay.pageLabel}</span>
-                      <span className="min-w-0 truncate">{ambientContextDisplay.title}</span>
-                      {ambientContextDisplay.status && (
-                        <span className="shrink-0 rounded-[6px] bg-surface-1 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle ring-1 ring-border">
-                          {ambientContextDisplay.status}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      aria-label="Remove page context"
-                      title="Remove page context"
-                      onClick={() => setDisabledPageContextKey(ambientPageContextKey)}
-                      className="ml-2 flex size-5 shrink-0 items-center justify-center rounded-[6px] text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    >
-                      <X size={12} weight="bold" />
-                    </button>
-                  </div>
-                )}
-                <div className="relative rounded-[8px] border border-border bg-surface-1">
+              <div className="relative px-2 pb-2 shrink-0">
+                  <AnimatePresence initial={false}>
+                    {ambientContextDisplay && (
+                      <motion.div
+                        key="page-context-shell"
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        className={`${contextComposerShellClassName} absolute left-[7px] right-[7px] bottom-2 z-0 h-[118px]`}
+                      >
+                        <div className="flex min-h-[30px] items-center rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium text-ink">
+                          <div
+                            aria-label="Active page context"
+                            title={`${ambientContextDisplay.pageLabel}: ${ambientContextDisplay.title}`}
+                            className="flex min-w-0 flex-1 items-center gap-1.5"
+                          >
+                            <span className="flex size-5 shrink-0 items-center justify-center rounded-[6px] bg-surface-1 text-ink-muted ring-1 ring-border/80">
+                              {ambientContextDisplay.icon}
+                            </span>
+                            <span className="shrink-0 text-[12px] text-ink-muted">{ambientContextDisplay.pageLabel}</span>
+                            <span className="min-w-0 truncate">{ambientContextDisplay.title}</span>
+                            {ambientContextDisplay.status && (
+                              <span className="shrink-0 rounded-[6px] bg-surface-1 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle ring-1 ring-border">
+                                {ambientContextDisplay.status}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            aria-label="Remove page context"
+                            title="Remove page context"
+                            onClick={() => setDisabledPageContextKey(ambientPageContextKey)}
+                            className="ml-2 flex size-5 shrink-0 items-center justify-center rounded-[6px] text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                          >
+                            <X size={12} weight="bold" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                <div className={`${contextInputShellClassName} relative z-10`}>
 
                   {/* Slash Command Dropdown */}
                   <AnimatePresence>
@@ -815,6 +843,15 @@ export function GlobalChatbot() {
                     </Popover>
 
                     <div className="flex items-center gap-1">
+                      <button
+                        aria-label={isPageContextVisible ? "Hide page context" : "Show page context"}
+                        title={isPageContextVisible ? "Hide page context" : "Show page context"}
+                        onClick={togglePageContextVisibility}
+                        disabled={!ambientPageContextKey}
+                        className="flex items-center justify-center size-7 rounded-full bg-surface-2 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+                      >
+                        {isPageContextVisible ? <CornersIn size={14} /> : <ArrowsOutSimple size={14} />}
+                      </button>
                       <button className="flex items-center justify-center size-7 rounded-md text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors">
                         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M7.5 2C5.567 2 4 3.567 4 5.5v5a2.5 2.5 0 0 0 5 0v-4.5a1 1 0 0 0-2 0V10.5a.5.5 0 0 1-1 0v-5a1.5 1.5 0 0 1 3 0v5a3.5 3.5 0 0 1-7 0v-5A4.5 4.5 0 0 1 12 5.5v4.5a1 1 0 0 1-2 0V5.5A2.5 2.5 0 0 0 7.5 2Z"/></svg>
                       </button>

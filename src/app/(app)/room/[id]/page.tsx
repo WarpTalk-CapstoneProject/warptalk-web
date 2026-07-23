@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { LiveKitRoom } from "@livekit/components-react";
 import "@livekit/components-styles";
+import { HubConnectionState } from "@microsoft/signalr";
 import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
+import { resolveTranscriptSpeakerName } from "@/lib/transcript-display";
 import { useJoinMeeting } from "@/hooks/use-meeting";
 import {
   useStartTranslationRoom,
@@ -20,7 +22,7 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
-import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto, TranslationTextDto } from "@/types/realtime";
+import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto, TranslationTextDto, VoiceOptionDto } from "@/types/realtime";
 import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
@@ -105,6 +107,10 @@ export default function RoomDetailPage() {
   // with 403, so the auto-start below must gate on true host identity — not workspace role.
   const isRoomHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id));
   const participants = liveParticipants.length ? mergeParticipants(apiParticipants, liveParticipants) : apiParticipants;
+  const participantsRef = useRef(participants);
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
   const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
   const joinLink = room?.translationRoomCode ? getJoinLink(room.translationRoomCode) : "";
   const liveSegments = useMemo(() => dedupeSegments(transcriptSegments), [transcriptSegments]);
@@ -124,11 +130,194 @@ export default function RoomDetailPage() {
   const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
   const roomSourceLanguage = room?.sourceLanguage || "auto";
   const sourceLanguage = savedJoinConfig.speakLanguage || "auto";
-  const targetLanguage =
-    savedJoinConfig.listenLanguage ||
-    room?.targetLanguages?.find((language) => normalizeLanguageCode(language) !== normalizeLanguageCode(roomSourceLanguage)) ||
-    room?.targetLanguages?.[0] ||
-    "en";
+  // Listen (output) language is now a live, user-changeable choice — see the media bar's
+  // language dropdown + TranslationRoomHub.SetListenLanguage — instead of a value fixed
+  // for the whole meeting at setup time. State auto-initializes ONCE (guarded by the
+  // null check in the effect below) from the saved join config or the room's configured
+  // targets; after that, a manual pick always wins even as `room` refetches.
+  const [listenLanguage, setListenLanguageState] = useState<string | null>(
+    savedJoinConfig.listenLanguage ? normalizeLanguageCode(savedJoinConfig.listenLanguage) : null
+  );
+  useEffect(() => {
+    if (listenLanguage || !room) return;
+    const initial =
+      room.targetLanguages?.find((language) => normalizeLanguageCode(language) !== normalizeLanguageCode(roomSourceLanguage)) ||
+      room.targetLanguages?.[0] ||
+      "en";
+    setListenLanguageState(normalizeLanguageCode(initial));
+  }, [listenLanguage, room, roomSourceLanguage]);
+  const targetLanguage = listenLanguage || "en";
+
+  // Read inside the TranslationTextReceived handler below instead of closing over
+  // targetLanguage directly — the gateway broadcasts every listener's target language to
+  // the whole room group (see AiResultConsumerService.ConsumeTranslationResultsAsync), so
+  // without this filter a Vietnamese listener would render every other participant's
+  // Chinese/Japanese/English translation bubbles too ("loạn ngôn ngữ"). A ref keeps the
+  // filter reading the latest value without forcing the SignalR effect to reconnect on
+  // every language change.
+  const targetLanguageRef = useRef(targetLanguage);
+  useEffect(() => {
+    targetLanguageRef.current = targetLanguage;
+  }, [targetLanguage]);
+
+  // Live handle to the translation-room hub connection — set inside the SignalR effect
+  // below, read here so a dropdown pick can call SetListenLanguage without tearing down
+  // and reconnecting the whole hub connection (which would wipe transcriptSegments/chat
+  // history via resetLiveRoom() and re-broadcast ParticipantJoined for no reason).
+  const translationConnectionRef = useRef<import("@microsoft/signalr").HubConnection | null>(null);
+  // Last listen language actually sent to the hub — skips a redundant SetListenLanguage
+  // call when this effect re-runs without the value having changed.
+  const appliedListenLanguageRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!listenLanguage || appliedListenLanguageRef.current === listenLanguage) return;
+    appliedListenLanguageRef.current = listenLanguage;
+
+    let cancelled = false;
+    (async () => {
+      // The hub connection may still be mid-handshake (e.g. this is the freshly-resolved
+      // room default, arriving a beat after the SignalR connection kicked off) — retry
+      // briefly rather than silently dropping the language on the floor. Same backoff
+      // shape as the join retry below.
+      for (const delay of [0, 300, 800, 1500]) {
+        if (cancelled) return;
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        const connection = translationConnectionRef.current;
+        if (connection?.state === HubConnectionState.Connected) {
+          try {
+            await connection.invoke("SetListenLanguage", roomId, listenLanguage);
+          } catch {
+            toast.error("Could not update listen language.");
+          }
+          return;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listenLanguage, roomId]);
+
+  // Which TTS voice this listener wants to hear the AI interpreter speak in — like
+  // listenLanguage, a live, in-meeting-changeable choice (media bar voice dropdown +
+  // TranslationRoomHub.SetVoicePreference), NOT set up front outside the meeting.
+  // null = no preference, use the automatic per-speaker default (see
+  // TTSWorker._resolve_voice_variants). A real Cartesia voice id when set.
+  const [voicePreference, setVoicePreference] = useState<string | null>(null);
+  const [voiceCatalog, setVoiceCatalog] = useState<VoiceOptionDto[]>([]);
+
+  // Voices are language-specific (Cartesia's own voice table), so switching listen
+  // language must both clear any voice pick made for the PREVIOUS language (it may not
+  // even exist for the new one) and refetch the picker's option list for the new one.
+  useEffect(() => {
+    setVoicePreference(null);
+    setVoiceCatalog([]);
+
+    let cancelled = false;
+    (async () => {
+      for (const delay of [0, 300, 800, 1500]) {
+        if (cancelled) return;
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        const connection = translationConnectionRef.current;
+        if (connection?.state === HubConnectionState.Connected) {
+          try {
+            const catalog = await connection.invoke<VoiceOptionDto[]>("GetVoiceCatalog", targetLanguage);
+            if (!cancelled) setVoiceCatalog(catalog ?? []);
+          } catch {
+            // Non-critical — the picker just shows no extra options; the automatic
+            // per-speaker default voice keeps working regardless.
+          }
+          return;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [targetLanguage]);
+
+  // Last voice preference actually sent to the hub (including "" for "cleared") — null
+  // means "nothing sent yet", distinct from "" ("explicitly cleared"), so a fresh
+  // mount doesn't fire a no-op SetVoicePreference("") before the user has touched
+  // anything.
+  const appliedVoicePreferenceRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (appliedVoicePreferenceRef.current === voicePreference) return;
+    appliedVoicePreferenceRef.current = voicePreference;
+
+    let cancelled = false;
+    (async () => {
+      for (const delay of [0, 300, 800, 1500]) {
+        if (cancelled) return;
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        const connection = translationConnectionRef.current;
+        if (connection?.state === HubConnectionState.Connected) {
+          try {
+            await connection.invoke("SetVoicePreference", roomId, voicePreference || "");
+          } catch {
+            toast.error("Could not update voice preference.");
+          }
+          return;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [voicePreference, roomId]);
+
+  // Choices for the media bar's language dropdown: the room's spoken language plus every
+  // configured target — always includes whatever is currently selected so a value coming
+  // from an older/ad-hoc join config never renders as a dropdown option with no match.
+  const availableListenLanguages = useMemo(() => {
+    const codes = new Set<string>();
+    if (room?.sourceLanguage) codes.add(normalizeLanguageCode(room.sourceLanguage));
+    room?.targetLanguages?.forEach((language) => codes.add(normalizeLanguageCode(language)));
+    codes.add(normalizeLanguageCode(targetLanguage));
+    return Array.from(codes);
+  }, [room?.sourceLanguage, room?.targetLanguages, targetLanguage]);
+
+  // Every OTHER participant's speak language, normalized — lets FilteredRoomAudio mute a
+  // real participant's raw microphone track for a listener whose chosen language differs
+  // from that speaker's, so the listener hears ONLY the AI interpreter dub instead of the
+  // original layered underneath it. speakLanguage/targetLanguage can each independently be
+  // a bare code ("vi") or locale-tagged ("vi-VN") depending on where the value came from —
+  // normalizeLanguageCode (this file's, not @/lib/languages' — that one doesn't strip
+  // locale tags) is what makes the comparison correct regardless of which form either side
+  // happens to be in.
+  const speakerLanguageByUserId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const participant of participants) {
+      if (participant.speakLanguage) {
+        map[participant.userId] = normalizeLanguageCode(participant.speakLanguage);
+      }
+    }
+    return map;
+  }, [participants]);
+  const targetLanguageNormalized = normalizeLanguageCode(targetLanguage);
+
+  function handleChangeListenLanguage(language: string) {
+    const normalizedLanguage = normalizeLanguageCode(language);
+    setListenLanguageState(normalizedLanguage);
+    try {
+      const config = JSON.parse(window.sessionStorage.getItem("warptalk.join.preview") || "{}");
+      window.sessionStorage.setItem(
+        "warptalk.join.preview",
+        JSON.stringify({ ...config, listenLanguage: normalizedLanguage })
+      );
+    } catch {
+      // Non-critical — worst case the picked language doesn't survive a page refresh.
+    }
+  }
+
+  /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
+  function handleChangeVoicePreference(voiceId: string) {
+    setVoicePreference(voiceId || null);
+  }
 
   useRegisterAssistantContext(
     room
@@ -197,6 +386,7 @@ export default function RoomDetailPage() {
     if (!roomId) return;
     resetLiveRoom();
     const connection = createHubConnection("/hubs/translation-room");
+    translationConnectionRef.current = connection;
 
     connection.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => setLiveState(state));
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
@@ -207,8 +397,21 @@ export default function RoomDetailPage() {
       removeLiveParticipant(userId);
       void refetchParticipants();
     });
-    connection.on("TranscriptSegmentReceived", (segment: TranscriptSegmentDto) => addTranscriptSegment(segment));
-    connection.on("TranslationTextReceived", (translation: TranslationTextDto) => addOrMergeTranslationText(translation));
+    connection.on("TranscriptSegmentReceived", (segment: TranscriptSegmentDto) =>
+      addTranscriptSegment({
+        ...segment,
+        speakerName: resolveTranscriptSpeakerName(segment, participantsRef.current),
+      })
+    );
+    connection.on("TranslationTextReceived", (translation: TranslationTextDto) => {
+      // Only render the translation into MY chosen listen language — the gateway fans
+      // out every participant's target language to the whole room group, so without this
+      // check the transcript panel mixes in every other listener's language too.
+      if (normalizeLanguageCode(translation.targetLang) !== normalizeLanguageCode(targetLanguageRef.current)) {
+        return;
+      }
+      addOrMergeTranslationText(translation);
+    });
     connection.on("TranslationRoomEnded", () => refetchRoom());
 
     // BR-159: Backend initiated disconnections
@@ -227,8 +430,14 @@ export default function RoomDetailPage() {
 
     const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const joinCurrentRoom = () =>
+      // targetLanguageRef.current (not the closed-over targetLanguage) so a language
+      // picked via the dropdown before a reconnect (e.g. after a network drop) is what
+      // gets rejoined with, and so this effect's dependency array below doesn't need
+      // targetLanguage — including it there would tear down and recreate this whole
+      // connection (wiping transcriptSegments/chat via resetLiveRoom()) on every language
+      // change instead of just calling SetListenLanguage.
       connection
-        .invoke("JoinTranslationRoom", roomId, displayName, sourceLanguage, targetLanguage)
+        .invoke("JoinTranslationRoom", roomId, displayName, sourceLanguage, targetLanguageRef.current)
         .catch(() => undefined);
     const startAndJoin = async () => {
       for (const delay of retryDelays) {
@@ -253,9 +462,15 @@ export default function RoomDetailPage() {
     return () => {
       cancelled = true;
       connection.stop().catch(() => undefined);
+      if (translationConnectionRef.current === connection) {
+        translationConnectionRef.current = null;
+      }
       resetLiveRoom();
     };
-  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, roomId, setLiveState, sourceLanguage, targetLanguage]);
+    // targetLanguage intentionally excluded — see joinCurrentRoom's comment above;
+    // runtime language changes go through SetListenLanguage, not a reconnect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, roomId, setLiveState, sourceLanguage]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -481,7 +696,11 @@ export default function RoomDetailPage() {
                 layoutMode={meetingLayout}
                 onRetry={retryMeetingConnection}
               />
-              <FilteredRoomAudio targetLanguage={targetLanguage} />
+              <FilteredRoomAudio
+                targetLanguageNormalized={targetLanguageNormalized}
+                speakerLanguageByUserId={speakerLanguageByUserId}
+                voicePreference={voicePreference}
+              />
 
               {/* Live captions — real pipeline segments only */}
               <LiveSubtitleOverlay enabled={warptalkStarted} />
@@ -496,11 +715,17 @@ export default function RoomDetailPage() {
                   layoutMode={meetingLayout}
                   roomCode={room.translationRoomCode}
                   joinLink={joinLink}
+                  listenLanguage={targetLanguage}
+                  availableListenLanguages={availableListenLanguages}
+                  voicePreference={voicePreference}
+                  voiceCatalog={voiceCatalog}
                   onCopyText={copyText}
                   onToggleCamera={() => setCameraEnabled((current) => !current)}
                   onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
                   onToggleScreenShare={handleToggleScreenShare}
                   onLayoutChange={setMeetingLayout}
+                  onChangeListenLanguage={handleChangeListenLanguage}
+                  onChangeVoicePreference={handleChangeVoicePreference}
                 />
               </div>
             </div>
