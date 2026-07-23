@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Copy, Fingerprint, HandPalm, Layout, Play, Screencast, CheckCircle, Microphone, MicrophoneSlash, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react/dist/ssr";
+import { Copy, Fingerprint, HandPalm, Layout, Play, Screencast, CheckCircle, Microphone, MicrophoneSlash, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getLanguageName } from "@/lib/languages";
@@ -28,6 +28,8 @@ export function MeetingControlBar({
   meetingEnabled,
   cameraEnabled,
   microphoneEnabled,
+  noiseSuppressionEnabled,
+  backgroundBlurEnabled,
   isScreenSharing,
   layoutMode,
   roomCode,
@@ -44,6 +46,8 @@ export function MeetingControlBar({
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
+  onToggleNoiseSuppression,
+  onToggleBackgroundBlur,
   onToggleScreenShare,
   onLayoutChange,
   onStartWarptalk,
@@ -58,6 +62,10 @@ export function MeetingControlBar({
   meetingEnabled: boolean;
   cameraEnabled: boolean;
   microphoneEnabled: boolean;
+  /** Krisp noise-filter processor state for the local mic track. */
+  noiseSuppressionEnabled: boolean;
+  /** Background-blur processor state for the local camera track. */
+  backgroundBlurEnabled: boolean;
   isScreenSharing: boolean;
   layoutMode: MeetingLayoutMode;
   roomCode: string;
@@ -83,6 +91,8 @@ export function MeetingControlBar({
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
+  onToggleNoiseSuppression: () => void;
+  onToggleBackgroundBlur: () => void;
   onToggleScreenShare: () => void;
   onLayoutChange: (layout: MeetingLayoutMode) => void;
   /** Starts the AI translation pipeline for the room. Host-only; omit to hide the control. */
@@ -140,6 +150,20 @@ export function MeetingControlBar({
           <NetworkQualityIcon />
         </span>
       ) : null}
+
+      <MeetControl
+        label={noiseSuppressionEnabled ? "Turn off noise suppression" : "Turn on noise suppression"}
+        active={noiseSuppressionEnabled}
+        icon={<WaveSine className="h-[18px] w-[18px]" />}
+        onClick={onToggleNoiseSuppression}
+      />
+
+      <MeetControl
+        label={backgroundBlurEnabled ? "Turn off background blur" : "Turn on background blur"}
+        active={backgroundBlurEnabled}
+        icon={<UserFocus className="h-[18px] w-[18px]" />}
+        onClick={onToggleBackgroundBlur}
+      />
 
       <div className="h-6 w-[1px] bg-surface-3 mx-1" />
 

@@ -33,6 +33,7 @@ import { MeetingTopBar } from "@/components/rooms/live/meeting-top-bar";
 import { MeetingControlBar, type MeetingLayoutMode } from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
+import { TrackProcessorsController, writeTrackEffectsPreferences } from "@/hooks/use-track-processors";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import { MeetingSidePanel, type SidePanelMode } from "@/components/rooms/live/side-panel/meeting-side-panel";
 import { WaitingRoomView, StatePanel } from "@/components/rooms/live/waiting-room-view";
@@ -91,6 +92,24 @@ export default function RoomDetailPage() {
   const savedJoinConfig = typeof window !== 'undefined' ? JSON.parse(window.sessionStorage.getItem('warptalk.join.preview') || '{}') : {};
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(savedDevices.cameraEnabled ?? savedJoinConfig.cameraEnabled ?? true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState<boolean>(savedDevices.microphoneEnabled ?? savedJoinConfig.microphoneEnabled ?? true);
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState<boolean>(savedDevices.noiseSuppressionEnabled ?? savedJoinConfig.noiseSuppressionEnabled ?? true);
+  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState<boolean>(savedDevices.backgroundBlurEnabled ?? savedJoinConfig.backgroundBlurEnabled ?? false);
+
+  function handleToggleNoiseSuppression() {
+    setNoiseSuppressionEnabled((current) => {
+      const next = !current;
+      writeTrackEffectsPreferences({ noiseSuppressionEnabled: next });
+      return next;
+    });
+  }
+
+  function handleToggleBackgroundBlur() {
+    setBackgroundBlurEnabled((current) => {
+      const next = !current;
+      writeTrackEffectsPreferences({ backgroundBlurEnabled: next });
+      return next;
+    });
+  }
 
   const liveParticipants = useTranslationRoomStore((state) => state.participants);
   const transcriptSegments = useTranslationRoomStore((state) => state.transcriptSegments);
@@ -814,6 +833,10 @@ export default function RoomDetailPage() {
                 voicePreference={voicePreference}
                 voiceEnabled={voiceEnabled}
               />
+              <TrackProcessorsController
+                noiseSuppressionEnabled={noiseSuppressionEnabled}
+                backgroundBlurEnabled={backgroundBlurEnabled}
+              />
 
               {/* Live captions — real pipeline segments only */}
               <LiveSubtitleOverlay enabled={warptalkStarted} />
@@ -827,6 +850,8 @@ export default function RoomDetailPage() {
                   meetingEnabled={Boolean(meetingSession?.token)}
                   cameraEnabled={cameraEnabled}
                   microphoneEnabled={microphoneEnabled}
+                  noiseSuppressionEnabled={noiseSuppressionEnabled}
+                  backgroundBlurEnabled={backgroundBlurEnabled}
                   isScreenSharing={Boolean(screenStream)}
                   layoutMode={meetingLayout}
                   roomCode={room.translationRoomCode}
@@ -843,6 +868,8 @@ export default function RoomDetailPage() {
                   onCopyText={copyText}
                   onToggleCamera={() => setCameraEnabled((current) => !current)}
                   onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
+                  onToggleNoiseSuppression={handleToggleNoiseSuppression}
+                  onToggleBackgroundBlur={handleToggleBackgroundBlur}
                   onToggleScreenShare={handleToggleScreenShare}
                   onLayoutChange={setMeetingLayout}
                   onStartWarptalk={handleStartWarptalk}

@@ -19,6 +19,23 @@ export const meetingService = {
     return apiClient.post<import("@/types/realtime").ChatMessageDto>(API.meetings.chatSend(roomId), data);
   },
 
+  chatSendFile(roomId: string, file: File, onUploadProgress?: (percent: number) => void) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.post<import("@/types/meeting-chat-file").ChatFileMessageDto>(
+      API.meetings.chatSendFile(roomId),
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (event) => {
+          if (onUploadProgress && event.total) {
+            onUploadProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        },
+      }
+    );
+  },
+
   chatTranslate(roomId: string, messageId: string, targetLanguage: string) {
     return apiClient.post<import("@/types/realtime").ChatMessageTranslationDto>(
       API.meetings.chatTranslate(roomId, messageId),

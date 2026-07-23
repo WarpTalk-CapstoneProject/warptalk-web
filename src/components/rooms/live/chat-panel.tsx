@@ -1,15 +1,17 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { useMeetingChat, useSendMeetingChat, useTranslateMeetingChat } from "@/hooks/use-meeting";
+import { useMeetingChat, useSendMeetingChat, useSendMeetingChatFile, useTranslateMeetingChat } from "@/hooks/use-meeting";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
+import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName, SUPPORTED_LANGUAGES } from "@/lib/languages";
+import apiClient from "@/lib/api/client";
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Mention from '@tiptap/extension-mention';
 import Placeholder from '@tiptap/extension-placeholder';
 import { suggestion } from './mentions';
-import { LoaderCircle, Send, Languages } from "lucide-react";
+import { LoaderCircle, Send, Languages, Paperclip, FileText, FileImage, FileArchive, Download } from "lucide-react";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 
@@ -21,6 +23,20 @@ interface MessageTranslationState {
   loading: boolean;
   visible: boolean;
   error?: string;
+}
+
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileTypeIcon({ contentType }: { contentType?: string }) {
+  if (contentType?.startsWith("image/")) return <FileImage className="h-4 w-4" />;
+  if (contentType === "application/zip" || contentType?.includes("compressed")) return <FileArchive className="h-4 w-4" />;
+  return <FileText className="h-4 w-4" />;
 }
 
 export function ChatPanel({
@@ -38,11 +54,16 @@ export function ChatPanel({
   const setChatMessages = useTranslationRoomStore((state) => state.setChatMessages);
   const addChatMessage = useTranslationRoomStore((state) => state.addChatMessage);
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const historyQuery = useMeetingChat(roomId);
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
+  const { mutate: sendFileAPI, isPending: isUploadingFile } = useSendMeetingChatFile();
   const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [translations, setTranslations] = useState<Record<string, MessageTranslationState>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // User-facing "translate messages into" choice — defaults to the viewer's own listen
   // language but can be overridden per session via the dropdown, since the viewer may
   // not know (or want) the language it was inferred to.
@@ -194,6 +215,44 @@ export function ChatPanel({
     );
   }
 
+  function handleFileButtonClick() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setFileError("File exceeds the 25 MB limit.");
+      return;
+    }
+
+    setFileError(null);
+    setUploadProgress(0);
+    sendFileAPI(
+      { roomId, file, onUploadProgress: setUploadProgress },
+      {
+        onSuccess: (message) => {
+          addChatMessage(message);
+          setUploadProgress(null);
+        },
+        onError: () => {
+          setFileError("File could not be uploaded. Try again.");
+          setUploadProgress(null);
+        },
+      }
+    );
+  }
+
+  function getFileDownloadHref(fileUrl?: string) {
+    if (!fileUrl) return "#";
+    const base = apiClient.defaults.baseURL ?? "";
+    const token = accessToken ? `?access_token=${encodeURIComponent(accessToken)}` : "";
+    return `${base}${fileUrl}${token}`;
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -269,7 +328,7 @@ export function ChatPanel({
                     <span className="text-[11px] font-medium text-ink-subtle">
                       {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
-                    {selectedTargetLanguage.toLowerCase() !== message.originalLanguage.toLowerCase() ? (
+                    {message.messageType !== "file" && selectedTargetLanguage.toLowerCase() !== message.originalLanguage.toLowerCase() ? (
                       <button
                         type="button"
                         onClick={() => toggleTranslation(message.id)}
@@ -285,9 +344,28 @@ export function ChatPanel({
                       </button>
                     ) : null}
                   </div>
-                  <p className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-brand-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}>
-                    {message.originalText}
-                  </p>
+                  {message.messageType === "file" ? (
+                    <a
+                      href={getFileDownloadHref((message as ChatFileMessageDto).fileUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      download={(message as ChatFileMessageDto).fileName}
+                      className={`mt-0.5 flex items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2 text-[13px] text-ink hover:bg-surface-3 ${isMine ? "flex-row-reverse text-right" : "text-left"}`}
+                    >
+                      <FileTypeIcon contentType={(message as ChatFileMessageDto).contentType} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{(message as ChatFileMessageDto).fileName || message.originalText}</span>
+                        {(message as ChatFileMessageDto).fileSizeBytes != null ? (
+                          <span className="block text-[11px] text-ink-subtle">{formatFileSize((message as ChatFileMessageDto).fileSizeBytes!)}</span>
+                        ) : null}
+                      </span>
+                      <Download className="h-3.5 w-3.5 shrink-0 text-ink-subtle" />
+                    </a>
+                  ) : (
+                    <p className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-brand-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}>
+                      {message.originalText}
+                    </p>
+                  )}
                   {translations[message.id]?.visible && translations[message.id]?.text ? (
                     <p className={`mt-1 rounded-md bg-surface-2 px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap text-ink ${isMine ? "text-right" : "text-left"}`}>
                       {translations[message.id]!.text}
@@ -307,7 +385,22 @@ export function ChatPanel({
       </div>
       <div className="p-3 bg-transparent">
         {sendError ? <p className="mb-2 text-[12px] text-red-600">{sendError}</p> : null}
+        {fileError ? <p className="mb-2 text-[12px] text-red-600">{fileError}</p> : null}
+        {uploadProgress != null ? (
+          <p className="mb-2 text-[12px] text-ink-subtle">Uploading file… {uploadProgress}%</p>
+        ) : null}
+        <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} />
         <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-brand-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0">
+          <button
+            type="button"
+            onClick={handleFileButtonClick}
+            disabled={isUploadingFile}
+            aria-label="Attach file"
+            title="Attach file"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isUploadingFile ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          </button>
           <EditorContent editor={editor} className="min-w-0 flex-1" />
           <button
             type="button"

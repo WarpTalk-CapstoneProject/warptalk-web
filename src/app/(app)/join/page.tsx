@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
 
 const languages = [
   { value: "en-US", label: "English" },
@@ -77,6 +78,11 @@ function JoinMeetingContent() {
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [noiseSuppression, setNoiseSuppression] = useState(true);
+
+  // Krisp noise filter / background blur — applied as LiveKit track processors once in
+  // the room (see src/hooks/use-track-processors.ts), not to this raw preview stream.
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
+  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
   const [microphoneDevices, setMicrophoneDevices] = useState<MediaDeviceInfo[]>([]);
@@ -255,6 +261,8 @@ function JoinMeetingContent() {
         window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
           cameraEnabled,
           microphoneEnabled,
+          noiseSuppressionEnabled,
+          backgroundBlurEnabled,
         }));
         
         toast.success("Joined room successfully.");
@@ -340,6 +348,15 @@ function JoinMeetingContent() {
             >
               {cameraEnabled ? <VideoCamera className="w-4 h-4" /> : <VideoCameraSlash className="w-4 h-4" />}
             </button>
+
+            <div className="h-6 w-[1px] bg-border/60 mx-0.5" />
+
+            <AvEffectsToggle
+              noiseSuppressionEnabled={noiseSuppressionEnabled}
+              onToggleNoiseSuppression={() => setNoiseSuppressionEnabled((current) => !current)}
+              backgroundBlurEnabled={backgroundBlurEnabled}
+              onToggleBackgroundBlur={() => setBackgroundBlurEnabled((current) => !current)}
+            />
 
             {/* Mic Meter */}
             {microphoneEnabled && (

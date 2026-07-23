@@ -42,6 +42,23 @@ export function useSendMeetingChat() {
   });
 }
 
+export function useSendMeetingChatFile() {
+  return useMutation({
+    mutationFn: async ({
+      roomId,
+      file,
+      onUploadProgress,
+    }: {
+      roomId: string;
+      file: File;
+      onUploadProgress?: (percent: number) => void;
+    }) => {
+      const response = await meetingService.chatSendFile(roomId, file, onUploadProgress);
+      return response.data;
+    },
+  });
+}
+
 export function useTranslateMeetingChat(roomId: string) {
   return useMutation({
     mutationFn: async ({ messageId, targetLanguage }: { messageId: string; targetLanguage: string }) => {
