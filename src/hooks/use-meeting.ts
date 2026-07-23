@@ -103,3 +103,30 @@ export function useEndMeetingForAll(roomId: string) {
     },
   });
 }
+
+export function useSetRoomLock(roomId: string) {
+  return useMutation({
+    mutationFn: async (locked: boolean) => {
+      const { data } = await meetingService.setLock(roomId, locked);
+      return data;
+    },
+  });
+}
+
+export function useSetMuteOnEntry(roomId: string) {
+  return useMutation({
+    mutationFn: async (muteOnEntry: boolean) => {
+      const { data } = await meetingService.setMuteOnEntry(roomId, muteOnEntry);
+      return data;
+    },
+  });
+}
+
+export function useSetRecording(roomId: string) {
+  return useMutation({
+    mutationFn: async (action: "start" | "stop") => {
+      const { data } = await meetingService.setRecording(roomId, action);
+      return data;
+    },
+  });
+}

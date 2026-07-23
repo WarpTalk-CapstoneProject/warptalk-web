@@ -3,6 +3,13 @@ export interface JoinMeetingResponseDto {
   providerRoomName: string;
   participantIdentity: string;
   isWaitingRoom?: boolean;
+  /** WT-04: room's mute-on-entry setting — frontend defaults the local mic to muted on first mount when true. */
+  muteOnEntry?: boolean;
+}
+
+export interface RecordingStateDto {
+  recording: boolean;
+  egressId?: string | null;
 }
 
 export interface TriggerAiRequest {

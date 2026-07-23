@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Broadcast, SignOut } from "@phosphor-icons/react/dist/ssr";
+import { Broadcast, Lock, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -30,6 +30,7 @@ export function MeetingTopBar({
   targetLanguage,
   onExit,
   warptalkStarted,
+  isLocked,
 }: {
   room: TranslationRoomDto;
   isHost: boolean;
@@ -37,6 +38,8 @@ export function MeetingTopBar({
   targetLanguage: string;
   onExit: (action: "leave" | "end") => void;
   warptalkStarted: boolean;
+  /** WT-04: shows a 🔒 chip when the host has locked the room. */
+  isLocked?: boolean;
 }) {
   const endForAll = useEndMeetingForAll(room.id);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
@@ -63,6 +66,15 @@ export function MeetingTopBar({
           {isHost ? (
             <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle border border-border">
               Host
+            </span>
+          ) : null}
+          {isLocked ? (
+            <span
+              title="Room is locked — new joiners are blocked"
+              className="flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200"
+            >
+              <Lock className="h-3 w-3" weight="fill" />
+              Locked
             </span>
           ) : null}
         </div>

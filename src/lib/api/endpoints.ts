@@ -87,6 +87,9 @@ export const API = {
     transferHost: (roomId: string, newHostId: string) => `/meetings/rooms/${roomId}/transfer-host/${newHostId}`,
     kickParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/kick`,
     endMeeting: (roomId: string) => `/meetings/rooms/${roomId}/end`,
+    setLock: (roomId: string) => `/meetings/rooms/${roomId}/lock`,
+    setMuteOnEntry: (roomId: string) => `/meetings/rooms/${roomId}/mute-on-entry`,
+    setRecording: (roomId: string) => `/meetings/rooms/${roomId}/recording`,
   },
   workspaces: {
     base: "/workspaces",

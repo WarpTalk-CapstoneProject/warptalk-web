@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Copy, Fingerprint, HandPalm, Layout, Play, Screencast, CheckCircle, Microphone, MicrophoneSlash, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
+import { Copy, Fingerprint, HandPalm, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getLanguageName } from "@/lib/languages";
@@ -43,6 +43,9 @@ export function MeetingControlBar({
   voiceCloneEnabled,
   voiceEnabled,
   handRaised,
+  isLocked,
+  muteOnEntry,
+  isRecording,
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
@@ -58,6 +61,10 @@ export function MeetingControlBar({
   onChangeVoiceEnabled,
   onToggleRaiseHand,
   onSendReaction,
+  onToggleLock,
+  onToggleMuteOnEntry,
+  onMuteAll,
+  onToggleRecording,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -88,6 +95,12 @@ export function MeetingControlBar({
   voiceEnabled?: boolean;
   /** Whether THIS participant's hand is currently raised. Omit (or omit onToggleRaiseHand) to hide the control. */
   handRaised?: boolean;
+  /** WT-04: whether the room is currently locked to new joiners. */
+  isLocked?: boolean;
+  /** WT-04: whether new joiners default to a muted mic. */
+  muteOnEntry?: boolean;
+  /** WT-06: whether a LiveKit Egress recording is currently in progress. */
+  isRecording?: boolean;
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
@@ -111,11 +124,20 @@ export function MeetingControlBar({
   onToggleRaiseHand?: () => void;
   /** Sends an emoji reaction (must be one of ALLOWED_REACTION_EMOJIS). Omit to hide the picker. */
   onSendReaction?: (emoji: string) => void;
+  /** WT-04, host-only: toggles the room lock. Omit to hide the "Host controls" panel entirely. */
+  onToggleLock?: (locked: boolean) => void;
+  /** WT-04, host-only: toggles whether new joiners start muted. */
+  onToggleMuteOnEntry?: (enabled: boolean) => void;
+  /** WT-04, host-only: force-mutes every other participant (they can unmute themselves). */
+  onMuteAll?: () => void;
+  /** WT-06, host-only: starts/stops LiveKit Egress recording for the room. Omit to hide the record button. */
+  onToggleRecording?: () => void;
 }) {
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
+  const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
 
   return (
     <div className="flex h-12 items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2 shadow-sm backdrop-blur-xl">
@@ -135,6 +157,65 @@ export function MeetingControlBar({
           </button>
           <div className="h-6 w-[1px] bg-surface-3 mx-1" />
         </>
+      ) : null}
+
+      {isHost && onToggleLock ? (
+        <div className="relative">
+          <MeetControl
+            label="Host controls"
+            active={Boolean(isLocked) || isHostControlsMenuOpen}
+            icon={<ShieldCheck className="h-[18px] w-[18px]" weight={isLocked ? "fill" : "regular"} />}
+            onClick={() => setIsHostControlsMenuOpen((current) => !current)}
+          />
+          <AnimatePresence>
+            {isHostControlsMenuOpen ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="absolute bottom-14 left-0 z-50 w-64 overflow-hidden rounded-lg border border-border bg-surface-1 p-1 shadow-lg origin-bottom-left"
+              >
+                <HostControlRow
+                  label={isLocked ? "Room locked" : "Lock room"}
+                  description="Blocks new joiners while active."
+                  icon={isLocked ? <Lock className="h-4 w-4" weight="fill" /> : <LockOpen className="h-4 w-4" />}
+                  active={Boolean(isLocked)}
+                  onClick={() => onToggleLock(!isLocked)}
+                />
+                {onToggleMuteOnEntry ? (
+                  <HostControlRow
+                    label="Mute on entry"
+                    description="New joiners start with mic muted."
+                    icon={<MicrophoneSlash className="h-4 w-4" />}
+                    active={Boolean(muteOnEntry)}
+                    onClick={() => onToggleMuteOnEntry(!muteOnEntry)}
+                  />
+                ) : null}
+                {onMuteAll ? (
+                  <HostControlRow
+                    label="Mute all"
+                    description="Everyone but you — they can unmute themselves."
+                    icon={<Microphone className="h-4 w-4" />}
+                    onClick={() => {
+                      onMuteAll();
+                      setIsHostControlsMenuOpen(false);
+                    }}
+                  />
+                ) : null}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      ) : null}
+
+      {isHost && onToggleRecording ? (
+        <MeetControl
+          label={isRecording ? "Stop recording" : "Start recording"}
+          active={isRecording}
+          icon={<Record className="h-[18px] w-[18px]" weight={isRecording ? "fill" : "regular"} />}
+          onClick={onToggleRecording}
+        />
       ) : null}
 
       <LiveKitTrackControls
@@ -350,6 +431,36 @@ export function MeetingControlBar({
         </>
       ) : null}
     </div>
+  );
+}
+
+function HostControlRow({
+  label,
+  description,
+  icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  icon: ReactNode;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors ${
+        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-canvas"
+      }`}
+    >
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">{icon}</span>
+      <span className="flex flex-col">
+        <span className="font-medium">{label}</span>
+        <span className="text-[11px] text-ink-muted">{description}</span>
+      </span>
+    </button>
   );
 }
 

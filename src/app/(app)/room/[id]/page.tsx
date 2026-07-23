@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { LiveKitRoom } from "@livekit/components-react";
+import { LiveKitRoom, useRoomContext } from "@livekit/components-react";
 import "@livekit/components-styles";
+import { RoomEvent } from "livekit-client";
 import { HubConnectionState } from "@microsoft/signalr";
 import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import { resolveTranscriptSpeakerName } from "@/lib/transcript-display";
-import { useJoinMeeting } from "@/hooks/use-meeting";
+import { useJoinMeeting, useSetMuteOnEntry, useSetRecording, useSetRoomLock } from "@/hooks/use-meeting";
 import {
   useStartTranslationRoom,
   useEndTranslationRoom,
@@ -134,11 +135,38 @@ export default function RoomDetailPage() {
   const refetchRoom = roomQuery.refetch;
   const apiParticipants = participantsQuery.data ?? (isPreviewRoom ? getPreviewLiveParticipants(roomId) : []);
   const role = useWorkspaceRole();
-  const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id) || role === "admin" || role === "owner");
+  // WT-08: HostChanged (broadcast after MeetingRoomService.HandleHostOfflineAsync elects a
+  // replacement) overrides the room DTO's original host once it fires — the DTO itself is
+  // never refetched just for this, so without this override a promoted participant's
+  // host-only UI would stay hidden until their next full room refetch.
+  const [liveHostUserId, setLiveHostUserId] = useState<string | null>(null);
+  const isHost = Boolean(
+    (liveHostUserId ? user?.id === liveHostUserId : room?.isHost || (user?.id && room?.hostId === user.id)) ||
+      role === "admin" ||
+      role === "owner"
+  );
   // Only the actual host may START the room. Workspace admins/owners get host-like
   // UI privileges (isHost) but the backend rejects a start from anyone whose id != room.hostId
   // with 403, so the auto-start below must gate on true host identity — not workspace role.
-  const isRoomHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id));
+  const isRoomHost = Boolean(
+    liveHostUserId ? user?.id === liveHostUserId : room?.isHost || (user?.id && room?.hostId === user.id)
+  );
+
+  // WT-04/WT-06: host controls + recording state, synced live via TranslationRoomHub's
+  // RoomLockChanged/RecordingStateChanged broadcasts (see the SignalR effect below).
+  const [isRoomLocked, setIsRoomLocked] = useState(false);
+  const [muteOnEntryEnabled, setMuteOnEntryEnabled] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const setLockMutation = useSetRoomLock(roomId);
+  const setMuteOnEntryMutation = useSetMuteOnEntry(roomId);
+  const setRecordingMutation = useSetRecording(roomId);
+
+  // WT-08: application-level reconnect state — the hub connection itself already
+  // auto-reconnects at the transport level (see createHubConnection/withAutomaticReconnect),
+  // this just reflects that + LiveKit's own reconnect cycle in a single user-facing banner.
+  const [isSignalRReconnecting, setIsSignalRReconnecting] = useState(false);
+  const [isLiveKitReconnecting, setIsLiveKitReconnecting] = useState(false);
+  const isReconnecting = isSignalRReconnecting || isLiveKitReconnecting;
   const participants = liveParticipants.length ? mergeParticipants(apiParticipants, liveParticipants) : apiParticipants;
   const participantsRef = useRef(participants);
   useEffect(() => {
@@ -426,6 +454,8 @@ export default function RoomDetailPage() {
       .then((session) => {
         setMeetingError(null);
         setMeetingSession(session);
+        // WT-04: default the local mic to muted when the host has mute-on-entry enabled.
+        if (session.muteOnEntry) setMicrophoneEnabled(false);
       })
       .catch((error) => {
         setMeetingSession(null);
@@ -456,6 +486,8 @@ export default function RoomDetailPage() {
         .then((session) => {
           setMeetingError(null);
           setMeetingSession(session);
+          // WT-04: default the local mic to muted when the host has mute-on-entry enabled.
+          if (session.muteOnEntry) setMicrophoneEnabled(false);
         })
         .catch((error) => {
           setMeetingSession(null);
@@ -507,6 +539,23 @@ export default function RoomDetailPage() {
       setSpotlightedUserId(on ? targetUserId : null);
     });
 
+    // WT-04
+    connection.on("RoomLockChanged", (locked: boolean) => {
+      setIsRoomLocked(locked);
+    });
+    connection.on("ForceMuted", () => {
+      setMicrophoneEnabled(false);
+      toast.error("You were muted by the host.");
+    });
+    // WT-06
+    connection.on("RecordingStateChanged", (recording: boolean) => {
+      setIsRecording(recording);
+    });
+    // WT-08
+    connection.on("HostChanged", (newHostUserId: string) => {
+      setLiveHostUserId(newHostUserId);
+    });
+
     // BR-159: Backend initiated disconnections
     connection.on("ForceDisconnected", (reason?: string) => {
       toast.error(reason || "This room has been forcibly closed or you were disconnected from another device.");
@@ -546,8 +595,39 @@ export default function RoomDetailPage() {
       }
     };
 
+    // WT-08: the hub connection auto-reconnects at the transport level (see
+    // createHubConnection), but SignalR has no memory of prior group membership across a
+    // reconnect — a NEW connection id is issued, so the client must explicitly rejoin the
+    // room's group, and re-apply any non-default listen language / voice preference it had
+    // set (read from the "last applied" refs so this doesn't depend on stale closed-over
+    // state).
+    connection.onreconnecting(() => {
+      setIsSignalRReconnecting(true);
+    });
+
     connection.onreconnected(() => {
-      void joinCurrentRoom();
+      setIsSignalRReconnecting(false);
+      void (async () => {
+        await joinCurrentRoom();
+
+        const currentListenLanguage = appliedListenLanguageRef.current;
+        if (currentListenLanguage) {
+          try {
+            await connection.invoke("SetListenLanguage", roomId, currentListenLanguage);
+          } catch {
+            // Best-effort — the client's own local listenLanguage state is unaffected.
+          }
+        }
+
+        const currentVoicePreference = appliedVoicePreferenceRef.current;
+        if (currentVoicePreference) {
+          try {
+            await connection.invoke("SetVoicePreference", roomId, currentVoicePreference);
+          } catch {
+            // Best-effort — the client's own local voicePreference state is unaffected.
+          }
+        }
+      })();
     });
 
     void startAndJoin();
@@ -769,6 +849,41 @@ export default function RoomDetailPage() {
     });
   }
 
+  // WT-04: room lock is confirmed via the RoomLockChanged broadcast the REST call triggers
+  // (see MeetingRoomService.SetLockAsync) — no optimistic local update needed.
+  function handleToggleLock(locked: boolean) {
+    setLockMutation.mutate(locked, {
+      onError: () => toast.error("Could not update room lock."),
+    });
+  }
+
+  function handleToggleMuteOnEntry(enabled: boolean) {
+    const previous = muteOnEntryEnabled;
+    setMuteOnEntryEnabled(enabled); // optimistic — not broadcast live, see MeetingRoomService.SetMuteOnEntryAsync
+    setMuteOnEntryMutation.mutate(enabled, {
+      onError: () => {
+        setMuteOnEntryEnabled(previous);
+        toast.error("Could not update mute-on-entry.");
+      },
+    });
+  }
+
+  function handleMuteAll() {
+    const connection = translationConnectionRef.current;
+    if (connection?.state !== HubConnectionState.Connected) return;
+    connection.invoke("MuteAll", roomId).catch(() => {
+      toast.error("Could not mute all participants.");
+    });
+  }
+
+  // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
+  // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
+  function handleToggleRecording() {
+    setRecordingMutation.mutate(isRecording ? "stop" : "start", {
+      onError: () => toast.error("Could not update recording."),
+    });
+  }
+
   if (roomQuery.isLoading && !isPreviewRoom) {
     return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
   }
@@ -798,6 +913,11 @@ export default function RoomDetailPage() {
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
+        <LiveKitReconnectWatcher
+          onReconnecting={() => setIsLiveKitReconnecting(true)}
+          onReconnected={() => setIsLiveKitReconnecting(false)}
+        />
+
         <MeetingTopBar
           room={room}
           isHost={isHost}
@@ -805,11 +925,32 @@ export default function RoomDetailPage() {
           targetLanguage={targetLanguage}
           onExit={handleExit}
           warptalkStarted={warptalkStarted}
+          isLocked={isRoomLocked}
         />
+
+        {isReconnecting ? (
+          <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-1.5 text-xs font-medium text-white">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            Reconnecting…
+          </div>
+        ) : null}
+
+        {isRecording ? (
+          <div className="flex items-center justify-center gap-2 bg-red-600 px-4 py-1.5 text-xs font-medium text-white">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            This meeting is being recorded
+          </div>
+        ) : null}
 
         <main className="flex min-h-0 flex-1 gap-4 p-4 pt-0">
           <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface-1 shadow-sm">
             <div className="relative flex-1 min-h-0 w-full">
+              {isRecording ? (
+                <div className="absolute left-4 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                  REC
+                </div>
+              ) : null}
               <LiveKitMeetingStage
                 fallbackName={user?.fullName || user?.email || room.title}
                 currentUserId={user?.id}
@@ -880,6 +1021,13 @@ export default function RoomDetailPage() {
                   onChangeVoiceEnabled={handleChangeVoiceEnabled}
                   onToggleRaiseHand={handleToggleRaiseHand}
                   onSendReaction={handleSendReaction}
+                  isLocked={isRoomLocked}
+                  muteOnEntry={muteOnEntryEnabled}
+                  isRecording={isRecording}
+                  onToggleLock={isHost ? handleToggleLock : undefined}
+                  onToggleMuteOnEntry={isHost ? handleToggleMuteOnEntry : undefined}
+                  onMuteAll={isHost ? handleMuteAll : undefined}
+                  onToggleRecording={isHost ? handleToggleRecording : undefined}
                 />
               </div>
             </div>
@@ -913,6 +1061,27 @@ export default function RoomDetailPage() {
 }
 
 // Helpers
+
+// WT-08: useRoomContext() only works INSIDE <LiveKitRoom>'s provider tree — RoomDetailPage
+// itself renders <LiveKitRoom> rather than being inside it, so this tiny child component is
+// what actually reaches the LiveKit Room instance to observe RoomEvent.Reconnecting/
+// Reconnected, mirroring how prior rounds' LiveKit-aware components (e.g. FilteredRoomAudio)
+// are children of <LiveKitRoom> rather than living in the parent page.
+function LiveKitReconnectWatcher({ onReconnecting, onReconnected }: { onReconnecting: () => void; onReconnected: () => void }) {
+  const room = useRoomContext();
+
+  useEffect(() => {
+    room.on(RoomEvent.Reconnecting, onReconnecting);
+    room.on(RoomEvent.Reconnected, onReconnected);
+    return () => {
+      room.off(RoomEvent.Reconnecting, onReconnecting);
+      room.off(RoomEvent.Reconnected, onReconnected);
+    };
+  }, [room, onReconnecting, onReconnected]);
+
+  return null;
+}
+
 function mergeParticipants(apiParticipants: TranslationRoomParticipantDto[], liveParticipants: ParticipantInfoDto[]): TranslationRoomParticipantDto[] {
   const mappedLive = liveParticipants.map((participant) => ({
     id: participant.userId,
