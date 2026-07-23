@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Broadcast, Stop, Play, SignOut } from "@phosphor-icons/react/dist/ssr";
+import { Broadcast, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -29,8 +29,6 @@ export function MeetingTopBar({
   targetLanguage,
   onExit,
   warptalkStarted,
-  onStartWarptalk,
-  onStopWarptalk,
 }: {
   room: TranslationRoomDto;
   isHost: boolean;
@@ -38,8 +36,6 @@ export function MeetingTopBar({
   targetLanguage: string;
   onExit: (action: "leave" | "end") => void;
   warptalkStarted: boolean;
-  onStartWarptalk: () => void;
-  onStopWarptalk: () => void;
 }) {
   const endForAll = useEndMeetingForAll(room.id);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
@@ -69,20 +65,6 @@ export function MeetingTopBar({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {isHost && (
-            <button
-              type="button"
-              onClick={warptalkStarted ? onStopWarptalk : onStartWarptalk}
-              className={`flex h-7 items-center gap-1.5 rounded-[6px] px-3 text-[13px] font-medium transition-colors shadow-sm ${
-                warptalkStarted
-                  ? "bg-surface-3 text-ink hover:bg-surface-4"
-                  : "bg-primary text-white hover:bg-primary-hover"
-              }`}
-            >
-              {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
-              {warptalkStarted ? "Stop Translation" : "Start Translation"}
-            </button>
-          )}
           <div className="h-4 w-[1px] bg-surface-3 mx-1" />
           <DropdownMenu>
             <DropdownMenuTrigger

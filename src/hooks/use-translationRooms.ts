@@ -102,6 +102,16 @@ export function useStartTranslationRoom() {
   });
 }
 
+/** Self-service consent (or withdrawal) to have MY OWN voice cloned in this room —
+ * see TranslationRoomAudioRouteController.SetVoiceCloneConsent. */
+export function useSetVoiceCloneConsent(roomId: string) {
+  return useMutation({
+    mutationFn: async (enabled: boolean) => {
+      await translationRoomService.setVoiceCloneConsent(roomId, enabled);
+    },
+  });
+}
+
 /** End translationRoom mutation */
 export function useEndTranslationRoom() {
   const queryClient = useQueryClient();

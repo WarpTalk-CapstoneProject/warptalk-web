@@ -195,6 +195,13 @@ export const translationRoomService = {
     return apiClient.post<void>(API.translationRooms.generateAudioRoutes(id));
   },
 
+  /** Consent (or withdraw consent) to have MY OWN voice cloned for every listener I
+   * currently speak to in this room — see TranslationRoomAudioRouteController.
+   * SetVoiceCloneConsent. Biometric data: only ever called from an explicit user action. */
+  async setVoiceCloneConsent(id: string, enabled: boolean) {
+    return apiClient.post<void>(API.translationRooms.voiceCloneConsent(id), { enabled });
+  },
+
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };

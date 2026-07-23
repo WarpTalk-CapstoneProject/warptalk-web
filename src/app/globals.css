@@ -13,6 +13,7 @@
   
   /* Linear Palette */
   --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
   --color-on-primary: var(--primary-foreground);
   --color-primary-hover: #828fff;
   --color-primary-focus: var(--ring);

@@ -40,11 +40,18 @@ const AI_INTERPRETER_PREFIX = "ai-interpreter-";
  * explicitly-picked voice (identity has "-voice-{id8}-" before the speakerId — see
  * TTSWorker._resolve_voice_variants / LiveKitTTSPublisher). A GUID speakerId never
  * starts with "voice-", so the two shapes can't collide.
+ *
+ * `voiceEnabled = false` is the "transcript only" mode: every track this listener
+ * would otherwise hear — the AI interpreter dub AND any same-language raw mic — is
+ * unsubscribed, so no audio plays at all. TranslationTextDto keeps arriving over
+ * SignalR regardless (that path doesn't touch LiveKit tracks), so captions are
+ * unaffected — this only silences playback.
  */
 export function FilteredRoomAudio({
   targetLanguageNormalized,
   speakerLanguageByUserId,
   voicePreference,
+  voiceEnabled = true,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
   targetLanguageNormalized: string;
@@ -52,6 +59,8 @@ export function FilteredRoomAudio({
   speakerLanguageByUserId: Record<string, string>;
   /** A real Cartesia voice id this listener explicitly chose, or null for the automatic default. */
   voicePreference: string | null;
+  /** false = transcript-only mode: no audio track is ever wanted, regardless of language/voice. Defaults to true. */
+  voiceEnabled?: boolean;
 }) {
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], {
     onlySubscribed: false,
@@ -71,6 +80,7 @@ export function FilteredRoomAudio({
   const languagePrefix = `${AI_INTERPRETER_PREFIX}${targetLanguageNormalized}-`;
   const voiceSegmentPrefix = voicePreference ? `voice-${voicePreference.slice(0, 8)}-` : "";
   const isWanted = (identity: string) => {
+    if (!voiceEnabled) return false;
     if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
       if (!identity.startsWith(languagePrefix)) return false;
       const rest = identity.slice(languagePrefix.length); // "{speakerId}" or "voice-{id8}-{speakerId}"
@@ -103,7 +113,7 @@ export function FilteredRoomAudio({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, trackIdentityFingerprint]);
+  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, trackIdentityFingerprint]);
 
   const audibleTracks = trackRefs.filter((trackRef) => isWanted(trackRef.participant.identity));
 

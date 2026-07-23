@@ -12,6 +12,7 @@ import {
   Microphone,
   MicrophoneSlash,
   SpeakerHigh,
+  SpeakerSlash,
 } from "@phosphor-icons/react/dist/ssr";
 
 import { cn } from "@/lib/utils";
@@ -71,6 +72,7 @@ function JoinMeetingContent() {
   const [roomCode] = useState(searchParams.get("code") ?? "");
   const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
   const [listenLanguage, setListenLanguage] = useState("en-US");
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
@@ -242,6 +244,7 @@ function JoinMeetingContent() {
             roomCode: normalizedCode,
             speakLanguage,
             listenLanguage,
+            voiceEnabled,
             cameraEnabled,
             microphoneEnabled,
             speakerEnabled: true,
@@ -397,6 +400,40 @@ function JoinMeetingContent() {
                 </Select>
 
               </div>
+            </div>
+
+            {/* Audio Output Section */}
+            <div className="space-y-4">
+              <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">Audio Output</h4>
+              <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
+                <button
+                  type="button"
+                  onClick={() => setVoiceEnabled(true)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-[3px] rounded-full font-medium transition-colors",
+                    voiceEnabled ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2"
+                  )}
+                >
+                  <SpeakerHigh className="w-3.5 h-3.5" />
+                  Voice + Text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVoiceEnabled(false)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-[3px] rounded-full font-medium transition-colors",
+                    !voiceEnabled ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2"
+                  )}
+                >
+                  <SpeakerSlash className="w-3.5 h-3.5" />
+                  Text only
+                </button>
+              </div>
+              <p className="text-[12px] text-ink-muted">
+                {voiceEnabled
+                  ? "You'll hear the AI interpreter and see the transcript."
+                  : "You'll only see the live transcript — no AI voice will play."}
+              </p>
             </div>
 
             {/* Devices Section */}

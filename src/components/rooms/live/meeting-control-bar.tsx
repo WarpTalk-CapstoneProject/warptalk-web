@@ -1,10 +1,19 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Copy, Layout, Screencast, CheckCircle, Microphone, MicrophoneSlash, SpeakerHigh, Translate, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react/dist/ssr";
+import { Copy, Fingerprint, Layout, Play, Screencast, CheckCircle, Microphone, MicrophoneSlash, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getLanguageName } from "@/lib/languages";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { VoiceOptionDto } from "@/types/realtime";
 
 export type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
@@ -19,17 +28,25 @@ export function MeetingControlBar({
   layoutMode,
   roomCode,
   joinLink,
+  isHost,
+  warptalkStarted,
   listenLanguage,
   availableListenLanguages,
   voicePreference,
   voiceCatalog,
+  voiceCloneEnabled,
+  voiceEnabled,
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
   onToggleScreenShare,
   onLayoutChange,
+  onStartWarptalk,
+  onStopWarptalk,
   onChangeListenLanguage,
   onChangeVoicePreference,
+  onChangeVoiceCloneConsent,
+  onChangeVoiceEnabled,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -38,6 +55,10 @@ export function MeetingControlBar({
   layoutMode: MeetingLayoutMode;
   roomCode: string;
   joinLink: string;
+  /** Whether THIS participant can start/stop translation for the room. Omit (or omit onStartWarptalk/onStopWarptalk) to hide the control. */
+  isHost?: boolean;
+  /** Whether the AI translation pipeline is currently running for this room. */
+  warptalkStarted?: boolean;
   /** The language this participant currently hears translations/captions in. */
   listenLanguage?: string;
   /** Languages selectable in the dropdown — omit or pass a single-item list to hide it. */
@@ -46,15 +67,27 @@ export function MeetingControlBar({
   voicePreference?: string | null;
   /** Voices offered for the CURRENT listenLanguage — empty/omit hides the picker. */
   voiceCatalog?: VoiceOptionDto[];
+  /** Whether THIS participant has consented to have their own voice cloned for dubbing. Omit to hide the toggle. */
+  voiceCloneEnabled?: boolean;
+  /** false = this listener wants transcript only, no AI/original audio played. Omit to hide the toggle. */
+  voiceEnabled?: boolean;
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
   onToggleScreenShare: () => void;
   onLayoutChange: (layout: MeetingLayoutMode) => void;
+  /** Starts the AI translation pipeline for the room. Host-only; omit to hide the control. */
+  onStartWarptalk?: () => void;
+  /** Stops the AI translation pipeline for the room. Host-only; omit to hide the control. */
+  onStopWarptalk?: () => void;
   /** Called when the participant picks a different listen language from the dropdown. */
   onChangeListenLanguage?: (language: string) => void;
   /** Called with a voice id, or "" to clear back to the automatic default. */
   onChangeVoicePreference?: (voiceId: string) => void;
+  /** Called with the new consent value after the participant confirms (or turns it off). */
+  onChangeVoiceCloneConsent?: (enabled: boolean) => void;
+  /** Called with the new value when the participant toggles transcript-only mode. */
+  onChangeVoiceEnabled?: (enabled: boolean) => void;
 }) {
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
@@ -62,6 +95,24 @@ export function MeetingControlBar({
 
   return (
     <div className="flex h-12 items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2 shadow-sm backdrop-blur-xl">
+      {isHost && onStartWarptalk && onStopWarptalk ? (
+        <>
+          <button
+            type="button"
+            onClick={warptalkStarted ? onStopWarptalk : onStartWarptalk}
+            className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors ${
+              warptalkStarted
+                ? "bg-surface-2 text-ink hover:bg-surface-3"
+                : "bg-primary text-primary-foreground hover:bg-primary/80"
+            }`}
+          >
+            {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
+            {warptalkStarted ? "Stop Translation" : "Start Translation"}
+          </button>
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
+        </>
+      ) : null}
+
       <LiveKitTrackControls
         enabled={meetingEnabled}
         cameraEnabled={cameraEnabled}
@@ -146,7 +197,19 @@ export function MeetingControlBar({
         </>
       ) : null}
 
-      {onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0 ? (
+      {onChangeVoiceEnabled ? (
+        <>
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
+          <MeetControl
+            label={voiceEnabled === false ? "Transcript only — click to hear voice" : "Voice on — click for transcript only"}
+            active={voiceEnabled === false}
+            icon={voiceEnabled === false ? <SpeakerSlash className="h-[18px] w-[18px]" /> : <SpeakerHigh className="h-[18px] w-[18px]" />}
+            onClick={() => onChangeVoiceEnabled(voiceEnabled === false)}
+          />
+        </>
+      ) : null}
+
+      {onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0 && voiceEnabled !== false ? (
         <>
           <div className="h-6 w-[1px] bg-surface-3 mx-1" />
           <div className="relative">
@@ -191,7 +254,78 @@ export function MeetingControlBar({
           </div>
         </>
       ) : null}
+
+      {onChangeVoiceCloneConsent ? (
+        <>
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
+          <VoiceCloneToggle enabled={Boolean(voiceCloneEnabled)} onToggle={onChangeVoiceCloneConsent} />
+        </>
+      ) : null}
     </div>
+  );
+}
+
+function VoiceCloneToggle({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: (next: boolean) => void;
+}) {
+  const [showConsentDialog, setShowConsentDialog] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          if (enabled) {
+            onToggle(false);
+          } else {
+            setShowConsentDialog(true);
+          }
+        }}
+        title={enabled ? "Đang dùng giọng thật của bạn — bấm để tắt" : "Dùng giọng thật của bạn khi dịch"}
+        className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors ${
+          enabled
+            ? "bg-primary/10 text-primary hover:bg-primary/15"
+            : "bg-transparent text-ink-muted hover:bg-surface-2"
+        }`}
+      >
+        <Fingerprint className="h-[18px] w-[18px]" weight={enabled ? "fill" : "regular"} />
+        Voice Clone
+      </button>
+
+      <Dialog open={showConsentDialog} onOpenChange={setShowConsentDialog}>
+        <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Dùng giọng thật của bạn?</DialogTitle>
+            <DialogDescription className="text-ink-subtle pt-2">
+              WarpTalk sẽ ghi lại khoảng 10 giây giọng nói của bạn trong cuộc họp này để tạo bản sao giọng nói
+              (voice clone) qua Cartesia, dùng để đọc bản dịch thay cho giọng AI mặc định. Dữ liệu giọng nói này
+              chỉ dùng cho phiên họp hiện tại — bạn có thể tắt bất cứ lúc nào.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowConsentDialog(false)}
+              className="bg-surface-2 hover:bg-surface-3 text-ink border-border"
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={() => {
+                onToggle(true);
+                setShowConsentDialog(false);
+              }}
+            >
+              Đồng ý, dùng giọng của tôi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

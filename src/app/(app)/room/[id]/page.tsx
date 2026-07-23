@@ -13,6 +13,7 @@ import {
   useStartTranslationRoom,
   useEndTranslationRoom,
   useLeaveTranslationRoom,
+  useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
 } from "@/hooks/use-translationRooms";
@@ -58,6 +59,7 @@ export default function RoomDetailPage() {
   const startRoom = useStartTranslationRoom();
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
+  const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } = useJoinMeeting();
   
   const autoStartedRef = useRef(false);
@@ -317,6 +319,47 @@ export default function RoomDetailPage() {
   /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
   function handleChangeVoicePreference(voiceId: string) {
     setVoicePreference(voiceId || null);
+  }
+
+  // Whether THIS participant has consented to have their OWN voice cloned for dubbing
+  // (see TranslationRoomAudioRouteController.SetVoiceCloneConsent). Local-only: there's
+  // no cheap way to derive "is my consent currently on" without an extra fetch that
+  // cross-references the audio-routes list against my own participant id, so this
+  // resets to false on refresh/rejoin even if the server-side consent from an earlier
+  // visit is technically still on — a known, accepted display-only limitation (voice
+  // cloning itself keeps working correctly either way; only the toggle's initial
+  // display can be stale until the participant touches it again).
+  const [voiceCloneEnabled, setVoiceCloneEnabled] = useState(false);
+
+  function handleChangeVoiceCloneConsent(enabled: boolean) {
+    const previous = voiceCloneEnabled;
+    setVoiceCloneEnabled(enabled); // optimistic
+    setVoiceCloneConsent.mutate(enabled, {
+      onError: () => {
+        setVoiceCloneEnabled(previous);
+        toast.error("Could not update voice clone consent.");
+      },
+    });
+  }
+
+  // Transcript-only mode: this listener wants captions but no audio at all (neither
+  // the AI dub nor a same-language original mic) — see FilteredRoomAudio's
+  // voiceEnabled prop. Purely a client-side track-subscription choice, so it's free to
+  // flip live in-meeting just like listenLanguage/voicePreference, and persists the
+  // same way (join-preview sessionStorage) so it survives a refresh.
+  const [voiceEnabled, setVoiceEnabledState] = useState<boolean>(savedJoinConfig.voiceEnabled ?? true);
+
+  function handleChangeVoiceEnabled(enabled: boolean) {
+    setVoiceEnabledState(enabled);
+    try {
+      const config = JSON.parse(window.sessionStorage.getItem("warptalk.join.preview") || "{}");
+      window.sessionStorage.setItem(
+        "warptalk.join.preview",
+        JSON.stringify({ ...config, voiceEnabled: enabled })
+      );
+    } catch {
+      // Non-critical — worst case the picked mode doesn't survive a page refresh.
+    }
   }
 
   useRegisterAssistantContext(
@@ -669,15 +712,13 @@ export default function RoomDetailPage() {
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
-        <MeetingTopBar 
-          room={room} 
-          isHost={isHost} 
+        <MeetingTopBar
+          room={room}
+          isHost={isHost}
           sourceLanguage={sourceLanguage}
           targetLanguage={targetLanguage}
           onExit={handleExit}
           warptalkStarted={warptalkStarted}
-          onStartWarptalk={handleStartWarptalk}
-          onStopWarptalk={handleStopWarptalk}
         />
 
         <main className="flex min-h-0 flex-1 gap-4 p-4 pt-0">
@@ -700,6 +741,7 @@ export default function RoomDetailPage() {
                 targetLanguageNormalized={targetLanguageNormalized}
                 speakerLanguageByUserId={speakerLanguageByUserId}
                 voicePreference={voicePreference}
+                voiceEnabled={voiceEnabled}
               />
 
               {/* Live captions — real pipeline segments only */}
@@ -715,17 +757,25 @@ export default function RoomDetailPage() {
                   layoutMode={meetingLayout}
                   roomCode={room.translationRoomCode}
                   joinLink={joinLink}
+                  isHost={isHost}
+                  warptalkStarted={warptalkStarted}
                   listenLanguage={targetLanguage}
                   availableListenLanguages={availableListenLanguages}
                   voicePreference={voicePreference}
                   voiceCatalog={voiceCatalog}
+                  voiceCloneEnabled={voiceCloneEnabled}
+                  voiceEnabled={voiceEnabled}
                   onCopyText={copyText}
                   onToggleCamera={() => setCameraEnabled((current) => !current)}
                   onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
                   onToggleScreenShare={handleToggleScreenShare}
                   onLayoutChange={setMeetingLayout}
+                  onStartWarptalk={handleStartWarptalk}
+                  onStopWarptalk={handleStopWarptalk}
                   onChangeListenLanguage={handleChangeListenLanguage}
                   onChangeVoicePreference={handleChangeVoicePreference}
+                  onChangeVoiceCloneConsent={handleChangeVoiceCloneConsent}
+                  onChangeVoiceEnabled={handleChangeVoiceEnabled}
                 />
               </div>
             </div>

@@ -49,6 +49,7 @@ export const API = {
     feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
+    voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
   },
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
