@@ -55,12 +55,12 @@ export default function RoomDetailPage() {
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } = useJoinMeeting();
-  
+
   const autoStartedRef = useRef(false);
   const meetingJoinedRef = useRef(false);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  
+
   const [meetingSession, setMeetingSession] = useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [warptalkStarted, setWarptalkStarted] = useState(false);
@@ -96,19 +96,29 @@ export default function RoomDetailPage() {
   const room = roomQuery.data ?? (isPreviewRoom ? getPreviewLiveRoom(roomId) : undefined);
   const refetchRoom = roomQuery.refetch;
   const apiParticipants = participantsQuery.data ?? (isPreviewRoom ? getPreviewLiveParticipants(roomId) : []);
-  const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id));
+  const role = useWorkspaceRole();
+  const isHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id) || role === "Admin" || role === "Owner");
+  // Only the actual host may START the room. Workspace admins/owners get host-like
+  // UI privileges (isHost) but the backend rejects a start from anyone whose id != room.hostId
+  // with 403, so the auto-start below must gate on true host identity — not workspace role.
+  const isRoomHost = Boolean(room?.isHost || (user?.id && room?.hostId === user.id));
   const participants = liveParticipants.length ? mergeParticipants(apiParticipants, liveParticipants) : apiParticipants;
   const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
   const joinLink = room?.translationRoomCode ? getJoinLink(room.translationRoomCode) : "";
   const liveSegments = useMemo(() => dedupeSegments(transcriptSegments), [transcriptSegments]);
-  
+  // Transcript history persists whether or not translation is currently running:
+  // "Stop Translation" only halts new live captions (LiveSubtitleOverlay below); it must
+  // NOT wipe what was already transcribed. Segments stay in the store until the room is
+  // left. Preview rooms fall back to sample content when nothing real has arrived yet.
+  const panelSegments = isPreviewRoom && !liveSegments.length ? getPreviewTranscriptSegments() : liveSegments;
+
   const canConnectMeeting =
     Boolean(room) &&
     room?.status !== "ended" &&
     room?.status !== "cancelled" &&
     room?.status !== "expired" &&
     room?.status !== "failed";
-    
+
   const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
   const sourceLanguage = savedJoinConfig.speakLanguage || room?.sourceLanguage || "vi";
   const targetLanguage = savedJoinConfig.listenLanguage || room?.targetLanguages?.[0] || "en";
@@ -130,7 +140,7 @@ export default function RoomDetailPage() {
   }
 
   useEffect(() => {
-    if (!room || !isHost || autoStartedRef.current) return;
+    if (!room || !isRoomHost || autoStartedRef.current) return;
     if (room.status !== "waiting" || !isInstantRoom(room)) return;
 
     autoStartedRef.current = true;
@@ -140,7 +150,7 @@ export default function RoomDetailPage() {
         // Removed autoStartedRef reset to prevent infinite loops if start fails
       },
     });
-  }, [isHost, room, startRoom]);
+  }, [isRoomHost, room, startRoom]);
 
   const retryMeetingConnectionRef = useRef(retryMeetingConnection);
   useEffect(() => {
@@ -193,7 +203,7 @@ export default function RoomDetailPage() {
       toast.error(reason || "This room has been forcibly closed or you were disconnected from another device.");
       router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
     });
-    
+
     connection.on("ParticipantKicked", () => {
       toast.error("You have been permanently removed from this room.");
       router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
@@ -393,9 +403,9 @@ export default function RoomDetailPage() {
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
-        <MeetingTopBar 
-          room={room} 
-          isHost={isHost} 
+        <MeetingTopBar
+          room={room}
+          isHost={isHost}
           sourceLanguage={sourceLanguage}
           targetLanguage={targetLanguage}
           onExit={handleExit}
@@ -456,7 +466,7 @@ export default function RoomDetailPage() {
               participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
               participantsError={participantsQuery.isError && !isPreviewRoom}
               activeCount={activeCount}
-              segments={warptalkStarted ? (isPreviewRoom && !liveSegments.length ? getPreviewTranscriptSegments() : liveSegments) : []}
+              segments={panelSegments}
               onCopyText={copyText}
               joinLink={joinLink}
               meetingStarted={room?.status === "in_progress"}

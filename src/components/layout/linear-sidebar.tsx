@@ -4,9 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   SquaresFour,
-  ClockCounterClockwise,
   Sparkle,
-  BookBookmark,
   Waveform,
   GearSix,
   MagnifyingGlass,
@@ -30,11 +28,11 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useWorkspaces } from "@/hooks/use-workspace";
+import { useInviteWorkspaceMember, useWorkspaces } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,7 +40,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -61,13 +58,6 @@ interface NavItem {
     title?: string;
   }>;
 }
-
-const configNav: NavItem[] = [
-  { icon: BookBookmark, label: "Terminology", href: "/terminology" },
-  { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
-  { icon: CreditCard, label: "Wallet", href: "/workspace/wallet" },
-  { icon: GearSix, label: "Settings", href: "/settings" },
-];
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -124,6 +114,10 @@ export function LinearSidebar() {
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRoleName, setInviteRoleName] = useState("Member");
+  const [inviteMembershipType, setInviteMembershipType] = useState("Internal");
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -147,8 +141,8 @@ export function LinearSidebar() {
         { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
       ]
     },
-    { icon: ClockCounterClockwise, label: "History", href: `/${slug}/history` },
-    { icon: Sparkle, label: "AI Summaries", href: `/${slug}/ai-summaries` },
+    { icon: Sparkle, label: "Artifacts", href: `/${slug}/ai-summaries` },
+    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -160,6 +154,7 @@ export function LinearSidebar() {
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
   const selectWorkspaceMutation = useSelectWorkspace();
+  const inviteMemberMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
 
   const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
     try {
@@ -167,8 +162,30 @@ export function LinearSidebar() {
       setActiveWorkspace(workspaceId, name, slug, roleName, membershipType, res.defaultLanguage || defaultLanguage);
       toast.success(`Switched to workspace "${name}"`);
       router.push(`/${slug}/home`);
-    } catch (err) {
+    } catch {
       toast.error("Failed to switch workspace");
+    }
+  };
+
+  const handleInviteMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = inviteEmail.trim();
+    if (!activeWorkspaceId || !email) return;
+
+    try {
+      await inviteMemberMutation.mutateAsync({
+        email,
+        roleName: inviteRoleName,
+        membershipType: inviteMembershipType,
+      });
+      toast.success(`Invitation sent to ${email}`);
+      setInviteEmail("");
+      setInviteRoleName("Member");
+      setInviteMembershipType("Internal");
+      setIsInviteModalOpen(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to send invitation";
+      toast.error(message);
     }
   };
 
@@ -184,8 +201,7 @@ export function LinearSidebar() {
   const workspaceNav: NavItem[] = [];
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members` },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents` },
-    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" }
+    { icon: FileText, label: "Documents", href: `/${slug}/documents` }
   );
 
   if (role === "Owner" || role === "Admin") {
@@ -357,7 +373,7 @@ export function LinearSidebar() {
                   </DropdownMenuItem>
                 );
               })}
-            </div >
+            </div>
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={() => router.push("/workspace/create")}
@@ -403,6 +419,24 @@ export function LinearSidebar() {
           ))}
         </div>
       </nav >
+
+      {isOwnerOrAdmin && activeWorkspaceId && (
+        <div className="px-3 pb-2 pt-3">
+          <button
+            type="button"
+            onClick={() => setIsInviteModalOpen(true)}
+            className="group w-full rounded-[14px] border border-border bg-surface-1 p-3 text-left shadow-linear transition hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
+              <PaperPlaneTilt size={17} weight="duotone" />
+            </span>
+            <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
+            <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
+              Bring your team in to collaborate and share workspace rooms.
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* User Account Panel */}
       {
@@ -476,6 +510,95 @@ export function LinearSidebar() {
           </form>
         </DialogContent>
       </Dialog>
-    </aside >
+
+      <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
+        <DialogContent className="overflow-hidden p-0 sm:max-w-[520px]">
+          <div className="h-36 border-b border-border bg-[radial-gradient(circle_at_28%_18%,rgba(94,106,210,0.30),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(16,185,129,0.18),transparent_30%),linear-gradient(135deg,var(--surface-2),var(--surface-1))]">
+            <div className="flex h-full items-end p-5">
+              <span className="grid size-12 place-items-center rounded-[14px] border border-white/35 bg-white/40 text-primary shadow-[0_12px_28px_rgba(16,24,40,0.12)] backdrop-blur">
+                <PaperPlaneTilt size={24} weight="duotone" />
+              </span>
+            </div>
+          </div>
+
+          <form onSubmit={handleInviteMember} className="grid gap-4 p-5 pt-4">
+            <DialogHeader>
+              <DialogTitle>Invite team members</DialogTitle>
+              <DialogDescription>
+                Send an invitation to join {activeWorkspaceName || "this workspace"} and collaborate on rooms, documents, and summaries.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <Label htmlFor="invite-email" className="text-[13px] font-medium text-foreground">
+                Email address
+              </Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="teammate@company.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                autoComplete="email"
+                className="bg-surface-1"
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="invite-role" className="text-[13px] font-medium text-foreground">
+                  Role
+                </Label>
+                <select
+                  id="invite-role"
+                  value={inviteRoleName}
+                  onChange={(e) => setInviteRoleName(e.target.value)}
+                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="Member">Member</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="invite-membership" className="text-[13px] font-medium text-foreground">
+                  Access type
+                </Label>
+                <select
+                  id="invite-membership"
+                  value={inviteMembershipType}
+                  onChange={(e) => setInviteMembershipType(e.target.value)}
+                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="Internal">Internal</option>
+                  <option value="External">External</option>
+                </select>
+              </div>
+            </div>
+
+            <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-[12px] leading-5 text-ink-muted">
+              Invited members receive workspace access based on the role and access type selected here.
+            </p>
+
+            <DialogFooter className="-mx-5 -mb-5 mt-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsInviteModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!inviteEmail.trim() || inviteMemberMutation.isPending}
+                className="min-w-[92px] text-white disabled:bg-surface-3 disabled:text-ink-muted disabled:opacity-100"
+              >
+                {inviteMemberMutation.isPending ? "Inviting..." : "Invite"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </aside>
   );
 }

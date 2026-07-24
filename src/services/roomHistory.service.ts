@@ -20,9 +20,16 @@ function normalizeArtifactType(type: string): EndedRoomHistoryItem["artifacts"][
 }
 
 function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHistoryItem["artifacts"][number] {
+  const type = normalizeArtifactType(artifact.type);
+  const backendSource = type === "summary_export"
+    ? "translation_room_summaries"
+    : type === "transcript_export"
+      ? "transcript_exports"
+      : "translation_room_recordings";
+
   return {
     id: artifact.id,
-    type: normalizeArtifactType(artifact.type),
+    type,
     title: artifact.title,
     description: artifact.fileUrl ? "Generated room artifact." : "Artifact metadata is available, but no file is linked yet.",
     status: normalizeArtifactStatus(artifact.status),
@@ -33,7 +40,7 @@ function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHistoryItem
     expiresAt: artifact.retentionUntil,
     consentRequired: artifact.consentRequired,
     consentStatus: artifact.consentRequired ? "granted" : "not_required",
-    backendSource: "translation_room_recordings",
+    backendSource,
   };
 }
 

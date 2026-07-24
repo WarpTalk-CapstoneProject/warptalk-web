@@ -235,6 +235,14 @@ export const translationRoomService = {
     return apiClient.get<TranslationRoomArtifactDto[]>(API.translationRooms.artifacts(id));
   },
 
+  artifactDownload(id: string) {
+    return apiClient.get<{ url: string }>(API.roomArtifacts.download(id));
+  },
+
+  approveArtifactConsent(id: string) {
+    return apiClient.post<void>(API.roomArtifacts.consent(id));
+  },
+
   async invitations(id: string) {
     return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
   },

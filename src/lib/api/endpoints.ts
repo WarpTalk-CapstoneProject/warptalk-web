@@ -14,6 +14,11 @@ export const API = {
     changePassword: "/auth/change-password",
     settings: "/auth/settings",
   },
+  voiceProfiles: {
+    list: "/auth/voice-profiles",
+    create: "/auth/voice-profiles",
+    delete: (id: string) => `/auth/voice-profiles/${id}`,
+  },
   translationRooms: {
     create: "/translation-rooms",
     list: "/translation-rooms",
@@ -37,6 +42,10 @@ export const API = {
     feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
+  },
+  roomArtifacts: {
+    download: (id: string) => `/room-artifacts/${id}/download`,
+    consent: (id: string) => `/room-artifacts/${id}/consent`,
   },
   transcripts: {
     start: "/transcripts",
@@ -101,5 +110,10 @@ export const API = {
     byWorkspace: (workspaceId: string) => `/glossaries/workspace/${workspaceId}`,
     terms: (id: string) => `/glossaries/${id}/terms`,
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
+  },
+  assistant: {
+    conversations: "/assistant/conversations",
+    conversation: (id: string) => `/assistant/conversations/${id}`,
+    sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
   },
 } as const;
