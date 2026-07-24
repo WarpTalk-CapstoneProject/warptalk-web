@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { LiveKitRoom, useRoomContext } from "@livekit/components-react";
 import "@livekit/components-styles";
 import { RoomEvent } from "livekit-client";
@@ -39,6 +40,10 @@ import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overl
 import { MeetingSidePanel, type SidePanelMode } from "@/components/rooms/live/side-panel/meeting-side-panel";
 import { WaitingRoomView, StatePanel } from "@/components/rooms/live/waiting-room-view";
 import { ReactionOverlay, type FloatingReaction } from "@/components/rooms/live/reaction-overlay";
+import { pollsQueryKey } from "@/hooks/use-polls";
+import { questionsQueryKey } from "@/hooks/use-qa";
+import type { PollDto, PollTally } from "@/types/poll";
+import type { QuestionDto } from "@/types/question";
 
 function getJoinLink(code: string) {
   if (typeof window === "undefined") return code;
@@ -52,6 +57,7 @@ function isInstantRoom(room: TranslationRoomDto) {
 export default function RoomDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const roomId = params.id;
@@ -567,6 +573,48 @@ export default function RoomDetailPage() {
       router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
     });
 
+    // Polls + Q&A (WT-14/15) — PollsService/QuestionsService relay these via Redis into this
+    // hub (see TranslationRoomRedisSubscriberService); polls-panel.tsx/qa-panel.tsx read the
+    // same query-cache keys via usePolls/useQuestions, so writing here is all that's needed
+    // to keep every open panel instance in sync, including the panel that isn't mounted
+    // right now (tab not selected) — the cache persists independent of mount state.
+    connection.on("PollCreated", (poll: PollDto) => {
+      queryClient.setQueryData<PollDto[]>(pollsQueryKey(roomId), (current) =>
+        current?.some((p) => p.id === poll.id) ? current : [...(current ?? []), poll]
+      );
+    });
+    connection.on("PollVoted", (pollId: string, tally: PollTally) => {
+      queryClient.setQueryData<PollDto[]>(pollsQueryKey(roomId), (current) =>
+        (current ?? []).map((poll) =>
+          poll.id === pollId
+            ? { ...poll, options: poll.options.map((option) => ({ ...option, voteCount: tally[option.id] ?? option.voteCount })) }
+            : poll
+        )
+      );
+    });
+    connection.on("PollClosed", (pollId: string, finalResult: PollDto) => {
+      queryClient.setQueryData<PollDto[]>(pollsQueryKey(roomId), (current) =>
+        (current ?? []).map((poll) => (poll.id === pollId ? finalResult : poll))
+      );
+    });
+    connection.on("QuestionAsked", (question: QuestionDto) => {
+      queryClient.setQueryData<QuestionDto[]>(questionsQueryKey(roomId), (current) =>
+        current?.some((q) => q.id === question.id) ? current : [...(current ?? []), question]
+      );
+    });
+    connection.on("QuestionUpvoted", (questionId: string, upvoteCount: number) => {
+      queryClient.setQueryData<QuestionDto[]>(questionsQueryKey(roomId), (current) =>
+        (current ?? []).map((question) => (question.id === questionId ? { ...question, upvoteCount } : question))
+      );
+    });
+    connection.on("QuestionAnswered", (questionId: string) => {
+      queryClient.setQueryData<QuestionDto[]>(questionsQueryKey(roomId), (current) =>
+        (current ?? []).map((question) =>
+          question.id === questionId ? { ...question, status: "answered", answeredAt: new Date().toISOString() } : question
+        )
+      );
+    });
+
     let cancelled = false;
     const retryDelays = [0, 500, 1500, 3000];
 
@@ -643,7 +691,7 @@ export default function RoomDetailPage() {
     // targetLanguage intentionally excluded — see joinCurrentRoom's comment above;
     // runtime language changes go through SetListenLanguage, not a reconnect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, roomId, setLiveState, setHandRaisedInStore, sourceLanguage]);
+  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, queryClient, roomId, setLiveState, setHandRaisedInStore, sourceLanguage]);
 
   useEffect(() => {
     if (!roomId) return;

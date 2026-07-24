@@ -6,8 +6,12 @@ import type { TranscriptSegmentDto } from "@/types/realtime";
 import { TranscriptPanel } from "./transcript-panel";
 import { WarpBotPanel } from "./warpbot-panel";
 import { PeoplePanel } from "./people-panel";
+import { PollsPanel } from "./polls-panel";
+import { QaPanel } from "./qa-panel";
+import { usePolls } from "@/hooks/use-polls";
+import { useQuestions } from "@/hooks/use-qa";
 
-export type SidePanelMode = "transcript" | "chat" | "participants";
+export type SidePanelMode = "transcript" | "chat" | "participants" | "polls" | "qa";
 
 export function MeetingSidePanel({
   roomId,
@@ -50,13 +54,20 @@ export function MeetingSidePanel({
   /** Host-only: toggles spotlight for this participant. Omit to hide the control. */
   onToggleSpotlight?: (userId: string) => void;
 }) {
+  // Shared cache with polls-panel.tsx/qa-panel.tsx (same query key) — reused here only to
+  // size the tab badges, not an extra network round-trip once a panel has fetched it.
+  const openPollCount = usePolls(roomId).data?.filter((p) => p.status === "open").length ?? 0;
+  const openQuestionCount = useQuestions(roomId).data?.filter((q) => q.status === "open").length ?? 0;
+
   return (
     <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden xl:flex hidden">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-1 rounded-2xl border border-border shadow-sm">
-        <div className="flex items-center gap-4 px-4 pt-3 pb-2 shrink-0 border-b border-border">
+        <div className="flex items-center gap-4 px-4 pt-3 pb-2 shrink-0 border-b border-border overflow-x-auto">
           <TabButton active={mode === "transcript"} label="Transcript" onClick={() => onModeChange("transcript")} />
           <TabButton active={mode === "chat"} label="Chat" onClick={() => onModeChange("chat")} />
           <TabButton active={mode === "participants"} label="Participants" badge={activeCount} onClick={() => onModeChange("participants")} />
+          <TabButton active={mode === "polls"} label="Polls" badge={openPollCount || undefined} onClick={() => onModeChange("polls")} />
+          <TabButton active={mode === "qa"} label="Q&A" badge={openQuestionCount || undefined} onClick={() => onModeChange("qa")} />
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
@@ -78,6 +89,8 @@ export function MeetingSidePanel({
               onToggleSpotlight={onToggleSpotlight}
             />
           ) : null}
+          {mode === "polls" ? <PollsPanel roomId={roomId} isHost={isHost} /> : null}
+          {mode === "qa" ? <QaPanel roomId={roomId} isHost={isHost} /> : null}
         </div>
       </div>
     </aside>
