@@ -45,6 +45,7 @@ import { questionsQueryKey } from "@/hooks/use-qa";
 import type { PollDto, PollTally } from "@/types/poll";
 import type { QuestionDto } from "@/types/question";
 import { BreakoutSetupModal } from "@/components/rooms/live/breakout-setup-modal";
+import { LanguagePickerModal } from "@/components/rooms/live/language-picker-modal";
 import { fetchMyBreakoutAssignment, useEndBreakouts } from "@/hooks/use-breakouts";
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 
@@ -96,6 +97,12 @@ export default function RoomDetailPage() {
   const [handRaised, setHandRaisedState] = useState(false);
   const [reactions, setReactions] = useState<FloatingReaction[]>([]);
   const reactionIdRef = useRef(0);
+  // Shown once, right after this participant's LiveKit session is established (host and
+  // participant alike) — a dismissible nudge to pick speak/listen language up front
+  // instead of relying on a later dropdown pick or the "auto" default. Ref guards against
+  // re-showing on a later meetingSession change (reconnect, breakout token swap).
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const languagePickerShownRef = useRef(false);
 
   // Read config from sessionStorage
   const savedDevices = typeof window !== 'undefined' ? JSON.parse(window.sessionStorage.getItem('warptalk.devices.preview') || '{}') : {};
@@ -128,6 +135,7 @@ export default function RoomDetailPage() {
   const removeLiveParticipant = useTranslationRoomStore((state) => state.removeParticipant);
   const raisedHands = useTranslationRoomStore((state) => state.raisedHands);
   const setHandRaisedInStore = useTranslationRoomStore((state) => state.setHandRaised);
+  const updateParticipantSpeakLanguage = useTranslationRoomStore((state) => state.updateParticipantSpeakLanguage);
   const { rightSidebarOpen, setLeftSidebarOpen } = useUIStore();
 
   useEffect(() => {
@@ -236,7 +244,14 @@ export default function RoomDetailPage() {
     
   const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
   const roomSourceLanguage = room?.sourceLanguage || "auto";
-  const sourceLanguage = savedJoinConfig.speakLanguage || "auto";
+  // Spoken (source) language is now a live, user-changeable choice too — the counterpart
+  // to listenLanguage below — via the media bar's speak-language dropdown +
+  // TranslationRoomHub.SetSpeakLanguage, instead of a value fixed for the whole meeting at
+  // setup time. Initializes once from the saved join config (or "auto" if never set); after
+  // that a manual pick always wins.
+  const [sourceLanguage, setSourceLanguageState] = useState<string>(
+    savedJoinConfig.speakLanguage ? normalizeLanguageCode(savedJoinConfig.speakLanguage) : "auto"
+  );
   // Listen (output) language is now a live, user-changeable choice — see the media bar's
   // language dropdown + TranslationRoomHub.SetListenLanguage — instead of a value fixed
   // for the whole meeting at setup time. State auto-initializes ONCE (guarded by the
@@ -305,6 +320,43 @@ export default function RoomDetailPage() {
       cancelled = true;
     };
   }, [listenLanguage, roomId]);
+
+  // Read inside joinCurrentRoom/the reconnect handler below instead of closing over
+  // sourceLanguage directly — same reasoning as targetLanguageRef above: a live
+  // speak-language change goes through SetSpeakLanguage, not a hub reconnect, so the
+  // main SignalR effect's dependency array must not include sourceLanguage either.
+  const sourceLanguageRef = useRef(sourceLanguage);
+  useEffect(() => {
+    sourceLanguageRef.current = sourceLanguage;
+  }, [sourceLanguage]);
+  // Last speak language actually sent to the hub — mirrors appliedListenLanguageRef.
+  const appliedSpeakLanguageRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!sourceLanguage || sourceLanguage === "auto" || appliedSpeakLanguageRef.current === sourceLanguage) return;
+    appliedSpeakLanguageRef.current = sourceLanguage;
+
+    let cancelled = false;
+    (async () => {
+      for (const delay of [0, 300, 800, 1500]) {
+        if (cancelled) return;
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        const connection = translationConnectionRef.current;
+        if (connection?.state === HubConnectionState.Connected) {
+          try {
+            await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
+          } catch {
+            toast.error("Could not update speak language.");
+          }
+          return;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceLanguage, roomId]);
 
   // Which TTS voice this listener wants to hear the AI interpreter speak in — like
   // listenLanguage, a live, in-meeting-changeable choice (media bar voice dropdown +
@@ -415,6 +467,20 @@ export default function RoomDetailPage() {
       window.sessionStorage.setItem(
         "warptalk.join.preview",
         JSON.stringify({ ...config, listenLanguage: normalizedLanguage })
+      );
+    } catch {
+      // Non-critical — worst case the picked language doesn't survive a page refresh.
+    }
+  }
+
+  function handleChangeSpeakLanguage(language: string) {
+    const normalizedLanguage = normalizeLanguageCode(language);
+    setSourceLanguageState(normalizedLanguage);
+    try {
+      const config = JSON.parse(window.sessionStorage.getItem("warptalk.join.preview") || "{}");
+      window.sessionStorage.setItem(
+        "warptalk.join.preview",
+        JSON.stringify({ ...config, speakLanguage: normalizedLanguage })
       );
     } catch {
       // Non-critical — worst case the picked language doesn't survive a page refresh.
@@ -535,6 +601,18 @@ export default function RoomDetailPage() {
   }, [canConnectMeeting, joinMeetingAsync, room?.id]);
 
   useEffect(() => {
+    if (languagePickerShownRef.current) return;
+    if (!meetingSession?.token || isPreviewRoom) return;
+    languagePickerShownRef.current = true;
+    setShowLanguagePicker(true);
+  }, [meetingSession, isPreviewRoom]);
+
+  function handleConfirmLanguagePicker(speak: string, listen: string) {
+    handleChangeSpeakLanguage(speak);
+    handleChangeListenLanguage(listen);
+  }
+
+  useEffect(() => {
     if (!roomId) return;
     resetLiveRoom();
     const connection = createHubConnection("/hubs/translation-room");
@@ -575,6 +653,12 @@ export default function RoomDetailPage() {
     });
     connection.on("SpotlightChanged", (targetUserId: string, on: boolean) => {
       setSpotlightedUserId(on ? targetUserId : null);
+    });
+    // Live speak-language change from ANOTHER participant — keeps speakerLanguageByUserId
+    // (and therefore FilteredRoomAudio's mute-real-mic-if-different-language logic) correct
+    // without waiting for a refetchParticipants() round-trip.
+    connection.on("ParticipantSpeakLanguageChanged", (userId: string, speakLanguage: string) => {
+      updateParticipantSpeakLanguage(userId, speakLanguage);
     });
 
     // WT-04
@@ -700,7 +784,7 @@ export default function RoomDetailPage() {
       // connection (wiping transcriptSegments/chat via resetLiveRoom()) on every language
       // change instead of just calling SetListenLanguage.
       connection
-        .invoke("JoinTranslationRoom", roomId, displayName, sourceLanguage, targetLanguageRef.current)
+        .invoke("JoinTranslationRoom", roomId, displayName, sourceLanguageRef.current, targetLanguageRef.current)
         .catch(() => undefined);
     const startAndJoin = async () => {
       for (const delay of retryDelays) {
@@ -748,6 +832,15 @@ export default function RoomDetailPage() {
             // Best-effort — the client's own local voicePreference state is unaffected.
           }
         }
+
+        const currentSpeakLanguage = appliedSpeakLanguageRef.current;
+        if (currentSpeakLanguage) {
+          try {
+            await connection.invoke("SetSpeakLanguage", roomId, currentSpeakLanguage);
+          } catch {
+            // Best-effort — the client's own local sourceLanguage state is unaffected.
+          }
+        }
       })();
     });
 
@@ -761,10 +854,11 @@ export default function RoomDetailPage() {
       }
       resetLiveRoom();
     };
-    // targetLanguage intentionally excluded — see joinCurrentRoom's comment above;
-    // runtime language changes go through SetListenLanguage, not a reconnect.
+    // targetLanguage/sourceLanguage intentionally excluded — see joinCurrentRoom's comment
+    // above; runtime language changes go through SetListenLanguage/SetSpeakLanguage, not a
+    // reconnect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, queryClient, roomId, setLiveState, setHandRaisedInStore, sourceLanguage, user?.id]);
+  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, queryClient, roomId, setLiveState, setHandRaisedInStore, updateParticipantSpeakLanguage, user?.id]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -1141,6 +1235,8 @@ export default function RoomDetailPage() {
                   warptalkStarted={warptalkStarted}
                   listenLanguage={targetLanguage}
                   availableListenLanguages={availableListenLanguages}
+                  speakLanguage={sourceLanguage}
+                  availableSpeakLanguages={availableListenLanguages}
                   voicePreference={voicePreference}
                   voiceCatalog={voiceCatalog}
                   voiceCloneEnabled={voiceCloneEnabled}
@@ -1156,6 +1252,7 @@ export default function RoomDetailPage() {
                   onStartWarptalk={handleStartWarptalk}
                   onStopWarptalk={handleStopWarptalk}
                   onChangeListenLanguage={handleChangeListenLanguage}
+                  onChangeSpeakLanguage={handleChangeSpeakLanguage}
                   onChangeVoicePreference={handleChangeVoicePreference}
                   onChangeVoiceCloneConsent={handleChangeVoiceCloneConsent}
                   onChangeVoiceEnabled={handleChangeVoiceEnabled}
@@ -1208,6 +1305,19 @@ export default function RoomDetailPage() {
           participants={participants}
         />
       ) : null}
+
+      <LanguagePickerModal
+        open={showLanguagePicker}
+        onOpenChange={setShowLanguagePicker}
+        availableLanguages={availableListenLanguages}
+        defaultSpeakLanguage={sourceLanguage !== "auto" ? sourceLanguage : undefined}
+        defaultListenLanguage={listenLanguage ?? undefined}
+        onConfirm={handleConfirmLanguagePicker}
+        onSkip={() => {
+          // No-op: leaving speak/listen exactly as they already are (STT auto-detect +
+          // the room's default listen language) IS the existing pre-modal behavior.
+        }}
+      />
     </div>
   );
 }

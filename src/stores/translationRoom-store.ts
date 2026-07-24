@@ -25,6 +25,7 @@ interface TranslationRoomStoreState {
   addParticipant: (participant: ParticipantInfoDto) => void;
   removeParticipant: (userId: string) => void;
   updateParticipantMute: (userId: string, isMuted: boolean) => void;
+  updateParticipantSpeakLanguage: (userId: string, speakLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
   setChatMessages: (messages: ChatMessageDto[]) => void;
@@ -71,6 +72,13 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
     set((s) => ({
       participants: s.participants.map((p) =>
         p.userId === userId ? { ...p, isMuted } : p
+      ),
+    })),
+
+  updateParticipantSpeakLanguage: (userId, speakLanguage) =>
+    set((s) => ({
+      participants: s.participants.map((p) =>
+        p.userId === userId ? { ...p, speakLanguage } : p
       ),
     })),
 

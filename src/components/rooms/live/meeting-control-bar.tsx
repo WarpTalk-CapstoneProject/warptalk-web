@@ -38,6 +38,8 @@ export function MeetingControlBar({
   warptalkStarted,
   listenLanguage,
   availableListenLanguages,
+  speakLanguage,
+  availableSpeakLanguages,
   voicePreference,
   voiceCatalog,
   voiceCloneEnabled,
@@ -56,6 +58,7 @@ export function MeetingControlBar({
   onStartWarptalk,
   onStopWarptalk,
   onChangeListenLanguage,
+  onChangeSpeakLanguage,
   onChangeVoicePreference,
   onChangeVoiceCloneConsent,
   onChangeVoiceEnabled,
@@ -88,6 +91,12 @@ export function MeetingControlBar({
   listenLanguage?: string;
   /** Languages selectable in the dropdown — omit or pass a single-item list to hide it. */
   availableListenLanguages?: string[];
+  /** The language THIS participant is currently declaring they speak — "auto" means no
+   * explicit pick yet (STT falls back to free auto-detect, with a weaker hallucination
+   * guard). Distinct from listenLanguage, which is what they hear. */
+  speakLanguage?: string;
+  /** Languages selectable in the speak-language dropdown — omit or pass a single-item list to hide it. */
+  availableSpeakLanguages?: string[];
   /** A real Cartesia voice id this listener explicitly chose, or null/undefined for the automatic default. */
   voicePreference?: string | null;
   /** Voices offered for the CURRENT listenLanguage — empty/omit hides the picker. */
@@ -117,6 +126,8 @@ export function MeetingControlBar({
   onStopWarptalk?: () => void;
   /** Called when the participant picks a different listen language from the dropdown. */
   onChangeListenLanguage?: (language: string) => void;
+  /** Called when the participant picks the language they're speaking from the dropdown. */
+  onChangeSpeakLanguage?: (language: string) => void;
   /** Called with a voice id, or "" to clear back to the automatic default. */
   onChangeVoicePreference?: (voiceId: string) => void;
   /** Called with the new consent value after the participant confirms (or turns it off). */
@@ -144,6 +155,7 @@ export function MeetingControlBar({
 }) {
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+  const [isSpeakLanguageMenuOpen, setIsSpeakLanguageMenuOpen] = useState(false);
   const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
   const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
@@ -396,6 +408,39 @@ export function MeetingControlBar({
             </AnimatePresence>
           </div>
         </>
+      ) : null}
+
+      {onChangeSpeakLanguage && availableSpeakLanguages && availableSpeakLanguages.length > 1 ? (
+        <div className="relative">
+          <MeetControl
+            label={speakLanguage && speakLanguage !== "auto" ? `Speaking ${getLanguageName(speakLanguage)}` : "Speaking language: Auto-detect"}
+            active={!speakLanguage || speakLanguage === "auto"}
+            icon={<Microphone className="h-[18px] w-[18px]" />}
+            onClick={() => setIsSpeakLanguageMenuOpen((current) => !current)}
+          />
+          <AnimatePresence>
+            {isSpeakLanguageMenuOpen ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="absolute bottom-14 right-0 z-50 w-48 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg origin-bottom-right"
+              >
+                {availableSpeakLanguages.map((language) => (
+                  <LanguageOption
+                    key={language}
+                    label={getLanguageName(language)}
+                    value={language}
+                    active={speakLanguage === language}
+                    onSelect={onChangeSpeakLanguage}
+                    close={() => setIsSpeakLanguageMenuOpen(false)}
+                  />
+                ))}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
       ) : null}
 
       {onChangeVoiceEnabled ? (
