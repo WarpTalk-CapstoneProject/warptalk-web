@@ -28,6 +28,7 @@ import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto, TranslationTextDto, VoiceOptionDto } from "@/types/realtime";
 import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { FloatingEmojiReactions } from "@/components/rooms/live/floating-emoji-reactions";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
 // Import Refactored Components
@@ -1269,6 +1270,7 @@ export default function RoomDetailPage() {
                   onOpenBreakoutSetup={isHost ? () => setShowBreakoutSetup(true) : undefined}
                   onEndBreakoutRooms={isHost ? handleEndBreakoutRooms : undefined}
                 />
+                <FloatingEmojiReactions connection={translationConnectionRef.current} roomId={roomId} />
               </div>
             </div>
           </section>
@@ -1292,6 +1294,7 @@ export default function RoomDetailPage() {
               raisedHandUserIds={raisedHandUserIds}
               spotlightedUserId={spotlightedUserId}
               onToggleSpotlight={handleToggleSpotlight}
+              connection={translationConnectionRef.current}
             />
           )}
         </main>

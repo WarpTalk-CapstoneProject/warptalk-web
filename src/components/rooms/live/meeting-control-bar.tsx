@@ -17,10 +17,10 @@ import {
 import { NetworkQualityIcon } from "@/components/rooms/live/network-quality-icon";
 import type { VoiceOptionDto } from "@/types/realtime";
 
-export type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
+import { ALLOWED_REACTION_EMOJIS } from "@/constants/realtime";
+export { ALLOWED_REACTION_EMOJIS };
 
-// Kept in sync with TranslationRoomHub.AllowedReactionEmojis on the Gateway.
-export const ALLOWED_REACTION_EMOJIS = ["👍", "❤️", "😂", "🎉", "👏", "😮"];
+export type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
 
 import { motion, AnimatePresence } from "motion/react";
 
