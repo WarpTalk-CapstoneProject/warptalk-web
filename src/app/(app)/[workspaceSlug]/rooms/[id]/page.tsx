@@ -217,9 +217,9 @@ export default function RoomInformationPage() {
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid min-h-full w-full max-w-[1500px] grid-cols-1 gap-8 px-6 py-8 xl:grid-cols-[minmax(0,1fr)_300px] xl:px-10">
-          <main className="min-w-0">
+      <div className="min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
+        <div className="mx-auto grid min-h-full w-full max-w-[1500px] grid-cols-1 gap-8 px-6 py-8 xl:h-full xl:grid-cols-[minmax(0,1fr)_300px] xl:px-10">
+          <main className="min-w-0 pr-1 xl:min-h-0 xl:overflow-y-auto xl:pr-2">
             <div className="mb-8 flex flex-col gap-5 border-b border-border/60 pb-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -278,38 +278,23 @@ export default function RoomInformationPage() {
               onSave={(html) => updateRoomSettings.mutateAsync({ id: room.id, data: { description: html } })}
             />
 
-            {isEnded || transcriptSegments.length > 0 ? (
-              <MeetingTranscriptArtifact
-                segments={transcriptSegments}
-                baseTime={transcriptQuery.data?.createdAt || room.startedAt || room.createdAt}
-                isEnded={isEnded}
-                onCopy={handleCopy}
-              />
-            ) : null}
+            <MeetingTranscriptArtifact
+              segments={transcriptSegments}
+              baseTime={transcriptQuery.data?.createdAt || room.startedAt || room.createdAt}
+              isEnded={isEnded}
+              isLoading={transcriptQuery.isLoading || segmentsQuery.isLoading}
+              onCopy={handleCopy}
+            />
 
             <RoomThread events={threadEvents} />
           </main>
 
-          <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
+          <aside className="flex min-w-0 flex-col gap-3 pr-1 xl:sticky xl:top-8 xl:min-h-0 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto xl:pr-0">
             <PropertyPanel title="Tracking">
               <PropertyLine label="Organizer">
                 <UserChip user={hostUser} compact />
               </PropertyLine>
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-                  <ChevronDown className="size-3" />
-                  Attendees: {participants.filter((participant) => participant.id !== hostUser.id).length}
-                </div>
-                <div className="space-y-1.5">
-                  {participants.filter((participant) => participant.id !== hostUser.id).length > 0 ? (
-                    participants
-                      .filter((participant) => participant.id !== hostUser.id)
-                      .map((participant) => <UserRow key={participant.id} user={participant} />)
-                  ) : (
-                    <p className="text-[12px] text-muted-foreground">No attendees yet.</p>
-                  )}
-                </div>
-              </div>
+              <AttendeesList attendees={participants.filter((participant) => participant.id !== hostUser.id)} />
             </PropertyPanel>
 
             <PropertyPanel title="Actions">
@@ -370,40 +355,57 @@ export default function RoomInformationPage() {
 }
 
 function RoomThread({ events }: { events: ThreadEvent[] }) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
   return (
     <section className="relative mt-8">
-      <div className="mb-2 flex items-center justify-between">
-        <div>
-          <h2 className="text-[17px] font-semibold">Activity</h2>
-          <p className="mt-0.5 text-[12px] text-muted-foreground">Room events and participant changes.</p>
+      <button
+        type="button"
+        onClick={() => setIsExpanded((prev) => !prev)}
+        className="mb-2 flex w-full cursor-pointer items-center justify-between gap-3 rounded-md py-1 text-left transition-colors hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        aria-expanded={isExpanded}
+        aria-controls="room-activity-panel"
+      >
+        <div className="flex min-w-0 items-start gap-2">
+          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground">
+            <ChevronDown
+              className={cn("size-4 transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
+            />
+          </span>
+          <div>
+            <h2 className="text-[17px] font-semibold text-ink">Activity</h2>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">Room events and participant changes.</p>
+          </div>
         </div>
         <InlineChip icon={<MessageSquareText className="size-3.5" />}>{events.length} updates</InlineChip>
-      </div>
+      </button>
 
-      <div className="relative mt-4 border-l border-border pl-5">
-        <div className="space-y-1">
-          {events.length === 0 ? (
-            <ThreadEmptyState />
-          ) : (
-            events.map((event) => (
-              <article
-                key={event.id}
-                className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
-              >
-                <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
-                <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                  <KindChip kind={event.kind} />
-                  <UserChip user={event.actor} compact />
-                  <span className="font-medium text-ink">{event.title}</span>
-                  {event.at ? <span className="text-muted-foreground">{event.at}</span> : null}
-                  {event.metadata?.map((item) => <InlineChip key={item}>{item}</InlineChip>)}
-                </div>
-                {event.content ? <MarkdownContent content={event.content} /> : null}
-              </article>
-            ))
-          )}
+      {isExpanded ? (
+        <div id="room-activity-panel" className="relative mt-4 border-l border-border pl-5">
+          <div className="space-y-1">
+            {events.length === 0 ? (
+              <ThreadEmptyState />
+            ) : (
+              events.map((event) => (
+                <article
+                  key={event.id}
+                  className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
+                >
+                  <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
+                  <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                    <KindChip kind={event.kind} />
+                    <UserChip user={event.actor} compact />
+                    <span className="font-medium text-ink">{event.title}</span>
+                    {event.at ? <span className="text-muted-foreground">{event.at}</span> : null}
+                    {event.metadata?.map((item) => <InlineChip key={item}>{item}</InlineChip>)}
+                  </div>
+                  {event.content ? <MarkdownContent content={event.content} /> : null}
+                </article>
+              ))
+            )}
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }
@@ -426,13 +428,16 @@ function MeetingTranscriptArtifact({
   segments,
   baseTime,
   isEnded,
+  isLoading,
   onCopy,
 }: {
   segments: TranscriptSegmentDto[];
   baseTime?: string;
   isEnded: boolean;
+  isLoading: boolean;
   onCopy: (text: string, label: string) => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(true);
   const ordered = [...segments].sort((left, right) => left.sequenceOrder - right.sequenceOrder);
   const base = baseTime ? new Date(baseTime) : null;
 
@@ -446,12 +451,23 @@ function MeetingTranscriptArtifact({
   return (
     <section className="mt-8 border-b border-border/60 pb-7">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-[15px] font-semibold text-ink">Meeting transcript</h2>
+        <button
+          type="button"
+          onClick={() => setIsExpanded((prev) => !prev)}
+          className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md py-1 pr-2 text-left transition-colors hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          aria-expanded={isExpanded}
+          aria-controls="meeting-transcript-panel"
+        >
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground">
+            <ChevronDown
+              className={cn("size-4 transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
+            />
+          </span>
+          <h2 className="shrink-0 text-[15px] font-semibold text-ink">Meeting transcript</h2>
           <InlineChip icon={<FileText className="size-3.5" />}>
-            {isEnded ? "Saved" : "Live"} · {ordered.length} {ordered.length === 1 ? "entry" : "entries"}
+            {isEnded ? "Saved" : "Live"} - {ordered.length} {ordered.length === 1 ? "entry" : "entries"}
           </InlineChip>
-        </div>
+        </button>
         {ordered.length > 0 ? (
           <button
             type="button"
@@ -464,26 +480,35 @@ function MeetingTranscriptArtifact({
         ) : null}
       </div>
 
-      {ordered.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
-          {isEnded
-            ? "No transcript was captured for this meeting."
-            : "The transcript is saved here as the meeting is transcribed."}
-        </div>
-      ) : (
-        <div className="space-y-3 rounded-xl border border-border bg-surface-1 p-4">
-          {ordered.map((segment) => (
-            <div key={segment.id} className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                <span className="font-semibold text-ink">{segment.speakerName || "Unknown speaker"}</span>
-                <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
-                {base ? <span className="text-muted-foreground">{segmentTime(segment.startTimeMs)}</span> : null}
+      {isExpanded ? (
+        <div id="meeting-transcript-panel">
+          {isLoading ? (
+          <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            Loading transcript...
+          </div>
+        ) : ordered.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+            {isEnded
+              ? "No transcript was captured for this meeting."
+              : "Transcript entries will appear here during the meeting."}
+          </div>
+        ) : (
+          <div className="max-h-[480px] space-y-3 overflow-y-auto rounded-lg border border-border bg-surface-1 p-4 shadow-inner">
+            {ordered.map((segment) => (
+              <div key={segment.id} className="flex flex-col gap-1 border-b border-border/30 pb-2.5 last:border-b-0 last:pb-0">
+                <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                  <span className="font-semibold text-ink">{segment.speakerName || "Unknown speaker"}</span>
+                  <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
+                  {base ? <span className="text-muted-foreground">{segmentTime(segment.startTimeMs)}</span> : null}
+                </div>
+                <p className="text-[13px] leading-6 text-ink-subtle">{segment.originalText}</p>
               </div>
-              <p className="text-[13px] leading-6 text-ink-subtle">{segment.originalText}</p>
-            </div>
-          ))}
+            ))}
+          </div>
+        )}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -621,12 +646,26 @@ function RoomNotesEditor({
         : null,
   });
 
+  const [isExpanded, setIsExpanded] = useState(true);
+
   return (
     <section className="border-b border-border/60 pb-7">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold text-ink">Room notes</h2>
+        <button
+          type="button"
+          onClick={() => setIsExpanded((prev) => !prev)}
+          className="flex items-center gap-2 text-left transition-colors hover:opacity-80 focus:outline-none"
+        >
+          <ChevronDown
+            className={cn("size-4 text-muted-foreground transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
+          />
+          <h2 className="text-[15px] font-semibold text-ink">Room notes</h2>
+        </button>
         <SaveIndicator state={saveState} />
       </div>
+
+      {isExpanded ? (
+        <>
 
       {editor && canEdit ? (
         <BubbleMenu
@@ -676,6 +715,8 @@ function RoomNotesEditor({
       >
         <EditorContent editor={editor} />
       </div>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -795,7 +836,7 @@ function UserChip({ user, compact = false }: { user: UserIdentity; compact?: boo
     <Popover>
       <PopoverTrigger
         className={cn(
-          "inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-border bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
           compact ? "h-6 px-1.5 pr-2 text-[11px]" : "h-7 px-2 pr-2.5 text-[12px]"
         )}
       >
@@ -1131,17 +1172,78 @@ function MetadataRow({ icon, label, children }: { icon: ReactNode; label: string
   );
 }
 
-function PropertyPanel({ title, children }: { title: string; children: ReactNode }) {
+function PropertyPanel({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
   return (
-    <div className="rounded-[10px] border border-border bg-surface-1 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="flex items-center gap-1 px-0.5 text-[12px] font-medium text-muted-foreground">
-          {title}
-          <ChevronDown className="size-3" />
-        </span>
-        <MoreHorizontal className="size-4 text-muted-foreground" />
+    <div className="flex max-h-[min(560px,calc(100vh-5rem))] min-h-0 flex-col overflow-hidden rounded-[10px] border border-border bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all">
+      <div className="flex min-h-11 shrink-0 items-center justify-between px-3">
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md px-0.5 text-left text-[12px] font-semibold text-ink transition-colors hover:bg-surface-2 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          aria-expanded={isOpen}
+          aria-controls={`room-property-panel-${title.toLowerCase().replace(/\s+/g, "-")}`}
+        >
+          <span className="truncate">{title}</span>
+          <ChevronDown
+            className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform duration-200", isOpen ? "" : "-rotate-90")}
+          />
+        </button>
+        <button
+          type="button"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+          aria-label={`${title} options`}
+        >
+          <MoreHorizontal className="size-4" />
+        </button>
       </div>
-      <div className="space-y-3">{children}</div>
+      {isOpen ? (
+        <div
+          id={`room-property-panel-${title.toLowerCase().replace(/\s+/g, "-")}`}
+          className="min-h-0 space-y-3 overflow-y-auto px-3 pb-3"
+        >
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AttendeesList({ attendees }: { attendees: UserIdentity[] }) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        aria-expanded={isOpen}
+        aria-controls="room-attendees-panel"
+      >
+        <span>Attendees: {attendees.length}</span>
+        <ChevronDown
+          className={cn("size-3 transition-transform duration-200", isOpen ? "" : "-rotate-90")}
+        />
+      </button>
+      {isOpen ? (
+        <div id="room-attendees-panel" className="max-h-[320px] space-y-1.5 overflow-y-auto pr-1">
+          {attendees.length > 0 ? (
+            attendees.map((participant) => <UserRow key={participant.id} user={participant} />)
+          ) : (
+            <p className="text-[12px] text-muted-foreground">No attendees yet.</p>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1157,9 +1259,11 @@ function PropertyLine({ label, children }: { label: string; children: ReactNode 
 
 function UserRow({ user }: { user: UserIdentity }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-2/70">
-      <UserChip user={user} compact />
-      {user.status ? <span className="truncate text-[11px] text-muted-foreground">{user.status}</span> : null}
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-2/70">
+      <div className="min-w-0 flex-1">
+        <UserChip user={user} compact />
+      </div>
+      {user.status ? <span className="max-w-[76px] shrink-0 truncate text-right text-[11px] text-muted-foreground">{user.status}</span> : null}
     </div>
   );
 }
@@ -1244,7 +1348,7 @@ function InlineChip({ children, icon }: { children: ReactNode; icon?: ReactNode 
   return (
     <span className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       {icon}
-      <span className="truncate">{children}</span>
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }
