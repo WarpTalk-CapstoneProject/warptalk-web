@@ -4,6 +4,7 @@ export interface WorkspaceDto {
   slug: string;
   logoUrl?: string | null;
   role: string;
+  membershipType?: string | null;
   createdAt: string;
   defaultLanguage?: string;
 }
@@ -77,6 +78,10 @@ export interface WorkspaceInvitationDto {
   roleName: string;
   status: string;
   membershipType: string;
+  deliveryStatus: string;
+  providerMessageId?: string | null;
+  lastSentAt?: string | null;
+  sentCount: number;
   expiresAt: string;
   createdAt: string;
   acceptedAt?: string | null;
@@ -84,8 +89,8 @@ export interface WorkspaceInvitationDto {
 
 export interface InviteMemberResponse {
   invitation: WorkspaceInvitationDto;
-  rawToken: string;
   emailLanguage: string;
+  warning?: string | null;
 }
 
 export interface PreviewInvitationResponse {
@@ -112,7 +117,6 @@ export interface WorkspaceDocumentDto {
   ingestionStatus: string;
   aiEligible: boolean;
   isAiAllowed: boolean;
-  isSensitive: boolean;
   confidentialityLevel: string;
   retentionState: string;
   status: string;

@@ -16,7 +16,7 @@ export function NotificationPopover() {
   const { data, isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => notificationService.getNotifications(1, 10),
-    refetchInterval: 30000, // Refetch every 30s as a fallback to SignalR
+    retry: false,
   });
 
   const markAllReadMutation = useMutation({

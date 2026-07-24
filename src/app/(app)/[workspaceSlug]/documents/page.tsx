@@ -34,10 +34,16 @@ import {
   FileCsv,
   FileDoc,
   FileImage,
-  Users
+  Users,
+  Info
 } from "@phosphor-icons/react";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
-
+import {
+  WORKSPACE_DOCUMENT_STATUS,
+  WORKSPACE_DOCUMENT_INGESTION_STATUS,
+  WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL,
+  WORKSPACE_DOCUMENT_SOURCE_TYPE,
+} from "@/constants/workspace-document";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -52,16 +58,19 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const uploadSchema = z.object({
   name: z.string().min(2, "Document name must be at least 2 characters"),
-  isSensitive: z.boolean(),
   isAiAllowed: z.boolean(),
 });
 
+const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"];
+const ACCEPTED_UPLOAD_EXTENSIONS = ".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.webp,.bmp,.gif";
+
 type UploadFormData = z.infer<typeof uploadSchema>;
-type FilterCategory = "all" | "ai" | "admin" | "sensitive";
+type FilterCategory = "all" | "pending" | "ai" | "admin" | "sensitive";
 type ViewMode = "list" | "grid";
 
 export default function WorkspaceDocumentsPage() {
@@ -78,6 +87,7 @@ export default function WorkspaceDocumentsPage() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFileIsImage, setSelectedFileIsImage] = useState(false);
   const [docToDelete, setDocToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // TanStack Query list
@@ -102,7 +112,6 @@ export default function WorkspaceDocumentsPage() {
     resolver: zodResolver(uploadSchema),
     defaultValues: {
       name: "",
-      isSensitive: false,
       isAiAllowed: true,
     },
   });
@@ -111,8 +120,6 @@ export default function WorkspaceDocumentsPage() {
 
   const isOwnerOrAdmin = role === "Owner" || role === "Admin";
 
-  const [classificationMode, setClassificationMode] = useState<"AiKnowledge" | "General" | "InternalOnly" | "Restricted">("AiKnowledge");
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
@@ -120,20 +127,20 @@ export default function WorkspaceDocumentsPage() {
         toast.error("File size exceeds 10MB limit.");
         e.target.value = "";
         setSelectedFile(null);
+        setSelectedFileIsImage(false);
         return;
       }
       setSelectedFile(file);
       const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
-      const isImg = [".png", ".jpg", ".jpeg", ".webp", ".bmp"].includes(ext);
+      const isImg = IMAGE_EXTENSIONS.includes(ext);
+      setSelectedFileIsImage(isImg);
       
       const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
       setValue("name", nameWithoutExt);
+      setValue("isAiAllowed", !isImg);
 
       if (isImg) {
-        setClassificationMode("General");
-        setValue("isAiAllowed", false, { shouldValidate: true });
-        setValue("isSensitive", false, { shouldValidate: true });
-        toast.info("Image file selected: set to General Files mode (AI ingestion skipped).");
+        toast.info("Image file selected: AI indexing disabled.");
       }
     }
   };
@@ -149,36 +156,23 @@ export default function WorkspaceDocumentsPage() {
     }
 
     try {
-      const isAi = classificationMode === "AiKnowledge";
-      const isSens = classificationMode === "Restricted";
-
-      const newDoc = await uploadMutation.mutateAsync({
+      await uploadMutation.mutateAsync({
         name: formData.name,
-        sourceType: "Upload",
+        sourceType: WORKSPACE_DOCUMENT_SOURCE_TYPE.UPLOAD,
         sourceId: null,
-        isSensitive: isSens,
-        isAiAllowed: isAi,
+        confidentialityLevel: WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.GENERAL,
+        isAiAllowed: formData.isAiAllowed,
         file: selectedFile,
       });
 
-      // If InternalOnly selected, automatically register access policy blocking External members
-      if (classificationMode === "InternalOnly" && newDoc?.id) {
-        try {
-          await apiClient.post(API.workspaces.documentPolicies(activeWorkspaceId, newDoc.id), {
-            subjectType: "MembershipType",
-            subjectKey: "External",
-            permission: "View",
-            effect: "DENY"
-          });
-        } catch (policyErr) {
-          console.error("Failed to add InternalOnly access policy automatically", policyErr);
-        }
-      }
-
-      toast.success("Document uploaded and registered successfully!");
+      toast.success(
+        isOwnerOrAdmin
+          ? "Document uploaded & published successfully!"
+          : "Document uploaded! Submitted to Workspace Admin for approval."
+      );
       setSelectedFile(null);
-      reset({ name: "", isSensitive: false, isAiAllowed: true });
-      setClassificationMode("AiKnowledge");
+      setSelectedFileIsImage(false);
+      reset({ name: "", isAiAllowed: true });
       setIsUploadModalOpen(false);
       const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
       if (fileInput) fileInput.value = "";
@@ -211,6 +205,17 @@ export default function WorkspaceDocumentsPage() {
     }
   };
 
+  const handleApproveQuick = async (docId: string, approve: boolean) => {
+    try {
+      await approveMutation.mutateAsync({ docId, approve });
+      toast.success(approve ? "Document approved successfully!" : "Document rejected.");
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
+        || "Failed to process approval.";
+      toast.error(errorMsg);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     if (!docToDelete) return;
     try {
@@ -232,9 +237,9 @@ export default function WorkspaceDocumentsPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return "N/A";
-    const d = new Date(dateStr);
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "";
+    const d = new Date(dateString);
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} ${d.getDate()} ${months[d.getMonth()]}`;
   };
@@ -250,10 +255,23 @@ export default function WorkspaceDocumentsPage() {
 
   // Filter raw documents list based on Category Pills
   const rawDocsList = documentsQuery.data?.items || [];
+  const pendingCount = rawDocsList.filter(
+    (doc) => doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending")
+  ).length;
+
   const filteredDocs = rawDocsList.filter((doc) => {
-    if (activeCategory === "ai") return doc.isAiAllowed && !doc.isSensitive;
-    if (activeCategory === "admin") return !doc.isAiAllowed && !doc.isSensitive;
-    if (activeCategory === "sensitive") return doc.isSensitive;
+    if (activeCategory === "pending") {
+      return doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending");
+    }
+    if (activeCategory === "ai") {
+      return doc.isAiAllowed && doc.confidentialityLevel !== WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED;
+    }
+    if (activeCategory === "admin") {
+      return !doc.isAiAllowed && doc.confidentialityLevel !== WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED;
+    }
+    if (activeCategory === "sensitive") {
+      return doc.confidentialityLevel === WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED;
+    }
     return true; // "all"
   });
 
@@ -309,6 +327,24 @@ export default function WorkspaceDocumentsPage() {
           >
             All
           </button>
+          {isOwnerOrAdmin && (
+            <button
+              onClick={() => setActiveCategory("pending")}
+              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                activeCategory === "pending"
+                  ? "bg-amber-500/10 text-amber-600 border border-amber-500/20 shadow-sm"
+                  : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+              }`}
+            >
+              <Info className="h-3.5 w-3.5 text-amber-500" />
+              <span>Pending Approval</span>
+              {pendingCount > 0 && (
+                <span className="ml-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white px-1">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => setActiveCategory("ai")}
             className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
@@ -434,24 +470,29 @@ export default function WorkspaceDocumentsPage() {
                       </div>
                     </td>
 
-                    {/* Classification Badge */}
+                    {/* Classification / Status Badge */}
                     <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
-                      {doc.isSensitive ? (
+                      {doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending") ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                          <Info className="h-3 w-3 text-amber-500" />
+                          <span>Pending Approval</span>
+                        </span>
+                      ) : doc.confidentialityLevel === WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full">
                           <Lock className="h-3 w-3" />
                           <span>Restricted</span>
                         </span>
-                      ) : !doc.isAiAllowed || doc.ingestionStatus?.toLowerCase() === "skipped" ? (
+                      ) : !doc.isAiAllowed || doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.SKIPPED ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-muted bg-surface-3 border border-hairline px-2 py-0.5 rounded-full">
                           <FileText className="h-3 w-3" />
                           <span>Administrative</span>
                         </span>
-                      ) : doc.ingestionStatus?.toLowerCase() === "completed" ? (
+                      ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                           <Sparkle className="h-3 w-3 text-emerald-500" />
                           <span>AI Ready</span>
                         </span>
-                      ) : doc.ingestionStatus?.toLowerCase() === "failed" ? (
+                      ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full">
                           <ShieldWarning className="h-3 w-3" />
                           <span>AI Failed</span>
@@ -476,6 +517,27 @@ export default function WorkspaceDocumentsPage() {
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
+                        {isOwnerOrAdmin && (doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending")) && (
+                          <div className="flex items-center gap-1.5 mr-1">
+                            <button
+                              onClick={() => handleApproveQuick(doc.id, true)}
+                              disabled={approveMutation.isPending}
+                              className="inline-flex h-7 px-2.5 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 text-[11px] font-bold transition disabled:opacity-50 cursor-pointer"
+                              title="Approve Document"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleApproveQuick(doc.id, false)}
+                              disabled={approveMutation.isPending}
+                              className="inline-flex h-7 px-2 items-center justify-center rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 text-[11px] font-bold transition disabled:opacity-50 cursor-pointer"
+                              title="Reject Document"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+
                         <button
                           onClick={() => router.push(`/${workspaceSlug}/documents/${doc.id}`)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-3 hover:text-ink transition-colors"
@@ -534,7 +596,7 @@ export default function WorkspaceDocumentsPage() {
                 <div className="p-2 rounded-lg bg-surface-2 group-hover:bg-surface-3 transition-colors">
                   {getFileIcon(doc.fileExtension)}
                 </div>
-                {doc.isSensitive ? (
+                {doc.confidentialityLevel === "restricted" ? (
                   <span className="p-1 text-destructive bg-destructive/10 rounded-full" title="Restricted">
                     <Lock className="h-3.5 w-3.5" />
                   </span>
@@ -592,172 +654,152 @@ export default function WorkspaceDocumentsPage() {
 
       {/* ─── Upload Modal ("New" Document Upload Modal) ─── */}
       <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-        <DialogContent className="border-hairline bg-surface-1 max-w-lg rounded-2xl shadow-xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-ink">Upload New Document</DialogTitle>
-            <DialogDescription className="text-xs text-ink-muted">
-              Register reference file into workspace library and select classification mode.
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-3xl w-full rounded-2xl shadow-2xl p-6 sm:p-8 flex flex-col max-h-[92vh]">
+          <DialogHeader className="pb-4 border-b border-hairline/40 shrink-0">
+            <DialogTitle className="text-xl font-bold text-ink flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Upload className="h-5 w-5" />
+              </div>
+              <span>Upload New Document</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-ink-muted mt-1">
+              Add reference documents to your workspace library. Configure AI search context and member access permissions.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(handleUploadSubmit)} className="flex flex-col gap-4 mt-2">
-            {/* Dropzone File Upload */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-ink">Select Document File</label>
-              <div className="flex items-center justify-center w-full">
-                <label className="flex flex-col items-center justify-center w-full h-28 border border-dashed border-hairline rounded-xl cursor-pointer bg-surface-2/60 hover:bg-surface-2 transition">
-                  <div className="flex flex-col items-center justify-center pt-3 pb-3">
-                    <Upload className="h-7 w-7 text-primary mb-2" />
-                    <p className="text-xs text-ink font-semibold">
-                      {selectedFile ? selectedFile.name : "Click to select a file from computer"}
-                    </p>
-                    <p className="text-[10px] text-ink-muted mt-1">
-                      {selectedFile ? formatBytes(selectedFile.size) : "PDF, PNG, JPG, WEBP, TXT, CSV, DOCX up to 10MB limit"}
-                    </p>
-                  </div>
-                  <input
-                    id="file-upload-input"
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.csv,.txt,.json,.docx"
-                    className="hidden"
-                    onChange={handleFileChange}
-                    disabled={isSubmitting}
-                  />
+          <form onSubmit={handleSubmit(handleUploadSubmit)} className="flex flex-col gap-6 overflow-y-auto pr-1.5 pt-5 flex-1">
+            {/* Step 1: File Selection & Document Name */}
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-ink flex items-center justify-between">
+                  <span>1. Select Reference File</span>
+                  <span className="text-[11px] font-normal text-ink-muted">Supported: PDF, DOCX, DOC, TXT, CSV, MD, JSON, PNG, JPG, JPEG, WEBP (Max 10MB)</span>
                 </label>
-              </div>
-            </div>
 
-            {/* Document Display Name Input */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-ink">Document Display Name</label>
-              <Input
-                type="text"
-                placeholder="e.g. Legal Glossaries 2026"
-                className="h-10 border-hairline focus:ring-1 focus:ring-primary text-xs rounded-lg"
-                {...register("name")}
-                disabled={isSubmitting}
-              />
-              {errors.name && (
-                <p className="text-[11px] text-destructive mt-0.5">{errors.name.message}</p>
-              )}
-            </div>
-
-            {/* 4 Classification Cards */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-ink">Classification & Access Purpose</label>
-              <div className="grid grid-cols-1 gap-2">
-                {/* Card 1: AI Knowledge Base */}
-                <div
-                  onClick={() => {
-                    setClassificationMode("AiKnowledge");
-                    setValue("isAiAllowed", true, { shouldValidate: true });
-                    setValue("isSensitive", false, { shouldValidate: true });
-                  }}
-                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    classificationMode === "AiKnowledge"
-                      ? "border-emerald-500/50 bg-emerald-500/5 shadow-sm ring-1 ring-emerald-500/30"
-                      : "border-hairline bg-surface-2/50 hover:bg-surface-2 opacity-75"
-                  }`}
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mt-0.5">
-                    <Brain className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-ink">🧠 AI Knowledge Base</span>
-                      <span className="text-[9px] font-mono uppercase bg-emerald-500/10 text-emerald-600 px-1.5 py-0.2 rounded-full font-bold">Recommended</span>
+                {!selectedFile ? (
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-hairline hover:border-primary/60 rounded-2xl cursor-pointer bg-surface-2/40 hover:bg-surface-2/80 transition-all p-4 text-center group">
+                    <div className="flex flex-col items-center justify-center gap-1.5">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                        <Upload className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs text-ink font-semibold mt-1">
+                        Click or drag a file to upload from your computer
+                      </p>
+                      <p className="text-[11px] text-ink-muted">
+                        Maximum file size: 10MB
+                      </p>
                     </div>
-                    <span className="text-[10px] text-ink-muted leading-tight">
-                      Allow AI search context & RAG ingestion to answer questions. Accessible to workspace members.
-                    </span>
+                    <input
+                      id="file-upload-input"
+                      type="file"
+                      accept={ACCEPTED_UPLOAD_EXTENSIONS}
+                      className="hidden"
+                      onChange={handleFileChange}
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                ) : (
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl border border-emerald-500/40 bg-emerald-500/5 transition-all">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
+                        {getFileIcon(selectedFile.name.substring(selectedFile.name.lastIndexOf(".")))}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-bold text-ink truncate">{selectedFile.name}</span>
+                        <span className="text-[11px] text-ink-muted font-mono">{formatBytes(selectedFile.size)}</span>
+                        {selectedFileIsImage && (
+                          <Badge
+                            variant="outline"
+                            className="mt-2 w-fit border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
+                          >
+                            <Info className="mr-1 h-3 w-3" />
+                            File hinh anh se duoc luu tru nhu dinh kem hanh chinh
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <label className="h-8 px-3 rounded-lg border border-hairline bg-surface-1 text-xs font-semibold text-ink hover:bg-surface-2 transition cursor-pointer flex items-center shrink-0">
+                      Change File
+                      <input
+                        id="file-upload-input"
+                        type="file"
+                        accept={ACCEPTED_UPLOAD_EXTENSIONS}
+                        className="hidden"
+                        onChange={handleFileChange}
+                        disabled={isSubmitting}
+                      />
+                    </label>
                   </div>
-                </div>
+                )}
+              </div>
 
-                {/* Card 2: General Files */}
-                <div
-                  onClick={() => {
-                    setClassificationMode("General");
-                    setValue("isAiAllowed", false, { shouldValidate: true });
-                    setValue("isSensitive", false, { shouldValidate: true });
-                  }}
-                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    classificationMode === "General"
-                      ? "border-primary/50 bg-primary/5 shadow-sm ring-1 ring-primary/30"
-                      : "border-hairline bg-surface-2/50 hover:bg-surface-2 opacity-75"
-                  }`}
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary mt-0.5">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-bold text-ink">📦 General Files</span>
-                    <span className="text-[10px] text-ink-muted leading-tight">
-                      Standard file & media storage (contracts, images, manuals). Skipped from AI ingestion.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card 3: Internal Members Only */}
-                <div
-                  onClick={() => {
-                    setClassificationMode("InternalOnly");
-                    setValue("isAiAllowed", false, { shouldValidate: true });
-                    setValue("isSensitive", false, { shouldValidate: true });
-                  }}
-                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    classificationMode === "InternalOnly"
-                      ? "border-amber-500/50 bg-amber-500/5 shadow-sm ring-1 ring-amber-500/30"
-                      : "border-hairline bg-surface-2/50 hover:bg-surface-2 opacity-75"
-                  }`}
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mt-0.5">
-                    <Users className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-bold text-ink">👥 Internal Members Only</span>
-                    <span className="text-[10px] text-ink-muted leading-tight">
-                      Restricted to internal team members. Automatically blocks Guest & External member access.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card 4: Restricted & Sensitive */}
-                <div
-                  onClick={() => {
-                    setClassificationMode("Restricted");
-                    setValue("isAiAllowed", false, { shouldValidate: true });
-                    setValue("isSensitive", true, { shouldValidate: true });
-                  }}
-                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    classificationMode === "Restricted"
-                      ? "border-destructive/50 bg-destructive/5 shadow-sm ring-1 ring-destructive/30"
-                      : "border-hairline bg-surface-2/50 hover:bg-surface-2 opacity-75"
-                  }`}
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive mt-0.5">
-                    <Lock className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-bold text-ink">🔴 Restricted & Sensitive</span>
-                    <span className="text-[10px] text-ink-muted leading-tight">
-                      Confidential data. Skip AI ingestion & restrict access to Owner, Admin, or Uploader.
-                    </span>
-                  </div>
-                </div>
+              {/* Document Display Name */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-ink">Document Display Name</label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Legal Glossaries 2026"
+                  className="h-10 border-hairline focus:ring-1 focus:ring-primary text-xs rounded-xl px-3"
+                  {...register("name")}
+                  disabled={isSubmitting}
+                />
+                {errors.name && (
+                  <p className="text-[11px] text-destructive mt-0.5">{errors.name.message}</p>
+                )}
               </div>
             </div>
 
-            <DialogFooter className="mt-2 flex gap-2">
+            {/* Step 2: Options & AI Permission Toggle */}
+            <div className="flex flex-col gap-3 pt-3 border-t border-hairline/40">
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-hairline bg-surface-2/40">
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-emerald-500" />
+                    <span className="text-xs font-bold text-ink">Allow AI Assistant indexing</span>
+                  </div>
+                  <span className="text-[11px] text-ink-muted leading-relaxed">
+                    Enables RAG context search for meeting translation & Q&A.
+                  </span>
+                </div>
+                <Switch
+                  checked={watch("isAiAllowed")}
+                  disabled={selectedFileIsImage}
+                  onCheckedChange={(checked: boolean) => setValue("isAiAllowed", checked, { shouldValidate: true })}
+                />
+              </div>
+
+              {selectedFileIsImage && (
+                <Badge
+                  variant="outline"
+                  className="w-fit border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold text-sky-700"
+                >
+                  <Info className="mr-1 h-3.5 w-3.5" />
+                  File hinh anh se duoc luu tru duoi dang dinh kem hanh chinh. AI ingestion se tu dong bo qua.
+                </Badge>
+              )}
+
+              {/* Approval Policy Banner */}
+              <div className="flex items-start gap-2.5 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-700 dark:text-amber-400">
+                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                <p className="text-[11px] leading-relaxed">
+                  {isOwnerOrAdmin
+                    ? "As Workspace Owner/Admin, your upload will be automatically published."
+                    : "Member uploads enter Pending Approval. Security AI will audit for PII upon upload, but AI indexing requires Admin approval."}
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-4 pt-4 border-t border-hairline/40 flex justify-end gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsUploadModalOpen(false)}
-                className="h-10 px-4 rounded-xl border border-hairline bg-surface-1 text-xs font-semibold text-ink hover:bg-surface-2 transition"
+                className="h-10 px-5 rounded-xl border border-hairline bg-surface-1 text-xs font-semibold text-ink hover:bg-surface-2 transition"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="h-10 px-5 rounded-xl bg-primary text-xs font-semibold text-white hover:bg-primary-hover transition flex items-center justify-center gap-2 disabled:opacity-50"
+                className="h-10 px-6 rounded-xl bg-primary text-xs font-semibold text-white hover:bg-primary-hover transition flex items-center justify-center gap-2 disabled:opacity-50 shadow-md"
                 disabled={isSubmitting || !selectedFile}
               >
                 {isSubmitting ? (

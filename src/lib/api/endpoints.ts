@@ -1,13 +1,6 @@
 /**
  * Centralized API endpoints matching Gateway YARP routes.
  * Base URL is set in apiClient (NEXT_PUBLIC_API_URL).
- *
- * Gateway routing:
- *   /api/v1/auth/*          → AuthService :5101  (transforms to /api/auth/*)
- *   /api/v1/translation-rooms/*      → TranslationRoomService :5102
- *   /api/v1/transcripts/*   → TranscriptService :5103
- *   /api/v1/notifications/* → NotificationService :5104
- *   /api/v1/meetings/*      → MeetingService :5105
  */
 export const API = {
   auth: {
@@ -88,9 +81,12 @@ export const API = {
     memberRole: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role`,
     transferOwnership: (workspaceId: string) => `/workspaces/${workspaceId}/members/transfer-ownership`,
     invitations: (workspaceId: string) => `/workspaces/${workspaceId}/invitations`,
+    retryInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}/retry-delivery`,
     revokeInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}`,
     previewInvitation: (token: string) => `/workspaces/invitations/preview?token=${encodeURIComponent(token)}`,
+    pendingInvitations: "/workspaces/invitations/pending",
     acceptInvitation: "/workspaces/invitations/accept",
+    acceptInvitationById: (inviteId: string) => `/workspaces/invitations/${inviteId}/accept`,
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
     documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,

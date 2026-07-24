@@ -13,6 +13,7 @@ export const WORKSPACE_KEYS = {
     ["workspaces", "members", workspaceId, { page, pageSize, search }] as const,
   invitations: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "invitations", workspaceId, { page, pageSize, search }] as const,
+  pendingInvitations: () => ["workspaces", "invitations", "pending"] as const,
   invitationPreview: (token: string) => ["workspaces", "invitation-preview", token] as const,
   documents: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "documents", workspaceId, { page, pageSize, search }] as const,
@@ -187,6 +188,25 @@ export function useAcceptWorkspaceInvitation() {
   });
 }
 
+export function usePendingWorkspaceInvitations() {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.pendingInvitations(),
+    queryFn: WorkspaceService.getPendingInvitations,
+    staleTime: 30000,
+  });
+}
+
+export function useAcceptWorkspaceInvitationById() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: WorkspaceService.acceptInvitationById,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.pendingInvitations() });
+    },
+  });
+}
+
 // ─── Documents ───
 
 export function useUploadWorkspaceDocument(workspaceId: string) {
@@ -264,7 +284,7 @@ export function useUpdateWorkspaceDocumentExtractedText(workspaceId: string, doc
 export function usePatchWorkspaceDocumentMetadata(workspaceId: string, docId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (request: { name?: string; isSensitive?: boolean }) =>
+    mutationFn: (request: { name?: string; confidentialityLevel?: string; isAiAllowed?: boolean }) =>
       WorkspaceService.patchDocumentMetadata(workspaceId, docId, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });

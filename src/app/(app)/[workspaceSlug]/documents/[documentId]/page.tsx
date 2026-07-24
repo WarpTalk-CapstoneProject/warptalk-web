@@ -16,7 +16,6 @@ import {
   Info,
   User,
   Users,
-  Eye,
   Download,
   Lock,
   Check,
@@ -27,6 +26,11 @@ import {
   PencilSimple
 } from "@phosphor-icons/react";
 
+import {
+  WORKSPACE_DOCUMENT_STATUS,
+  WORKSPACE_DOCUMENT_INGESTION_STATUS,
+  WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL,
+} from "@/constants/workspace-document";
 import apiClient from "@/lib/api/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -350,15 +354,15 @@ export default function DocumentDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Main Grid: Left Center (Preview) vs Right (Properties Sidebar) */}
+      {/* Main Grid: Left Center (Content View) vs Right (Properties Sidebar) */}
       <div className="grid gap-6 lg:grid-cols-[1fr_360px] items-start">
-        {/* Central panel - content preview */}
+        {/* Central panel - content view */}
         <div className="flex flex-col gap-6 min-w-0">
           <Card className="border-hairline bg-surface-1 rounded-xl shadow-sm overflow-hidden">
             <CardHeader className="border-b border-hairline px-5 py-4 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
-                <CardTitle className="text-sm font-semibold">Document Content Preview</CardTitle>
+                <CardTitle className="text-sm font-semibold">Document Content View</CardTitle>
               </div>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-hairline bg-surface-2 uppercase font-mono text-ink-muted">
                 {doc.fileExtension.replace(".", "") || "DOC"}
@@ -366,7 +370,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
             </CardHeader>
             <CardContent className="p-6">
               {/* Document status banners */}
-              {doc.status === "Pending approval" && (
+              {(doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending")) && (
                 <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-ink">
                   <div className="flex gap-2.5 items-start">
                     <Info className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
@@ -398,7 +402,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
                 </div>
               )}
 
-              {/* Preview Viewer Box */}
+              {/* Content Viewer Box */}
               <div className="relative rounded-xl border border-hairline bg-surface-2 p-6 min-h-[300px] flex flex-col justify-between">
                 <div className="flex flex-col gap-4">
                   {/* Info header */}
@@ -412,7 +416,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
                     <div className="flex flex-col gap-1">
                       <h3 className="text-sm font-bold text-ink">{doc.name}</h3>
                       <p className="text-xs text-ink-muted leading-relaxed">
-                        {doc.isSensitive ? (
+                        {doc.confidentialityLevel === WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED ? (
                           <span className="text-destructive/90 font-semibold inline-block mr-2">
                             ⚠️ Sensitive Document
                           </span>
@@ -470,7 +474,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
                     </div>
                   </div>
 
-                  {/* Text Editor Box or Preview */}
+                  {/* Text Editor Box or Content View */}
                   {isEditingContent ? (
                     <div className="flex flex-col gap-2 mt-4">
                       <div className="flex items-center gap-1 p-1 bg-surface-3 border border-hairline rounded-t-lg">

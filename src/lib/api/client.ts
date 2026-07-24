@@ -8,9 +8,33 @@ import type { AuthResponse } from "@/types/auth";
  */
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200/api/v1",
-  headers: { "Content-Type": "application/json" },
   timeout: 30_000,
 });
+
+function isFormDataLike(value: unknown): value is Record<string | symbol, unknown> {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  if (typeof FormData !== "undefined" && value instanceof FormData) {
+    return true;
+  }
+
+  const candidate = value as {
+    append?: unknown;
+    getHeaders?: unknown;
+    [Symbol.toStringTag]?: unknown;
+  };
+
+  return (
+    typeof candidate.append === "function" &&
+    (
+      candidate[Symbol.toStringTag] === "FormData" ||
+      Object.prototype.toString.call(candidate) === "[object FormData]" ||
+      typeof candidate.getHeaders === "function"
+    )
+  );
+}
 
 // ─── Request interceptor: attach access token ───
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -18,6 +42,22 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // If request body is FormData, ensure Content-Type is deleted so browser sets boundary automatically
+  if (isFormDataLike(config.data)) {
+    if (config.headers) {
+      const headers = config.headers as Record<string, unknown> & {
+        setContentType?: (value?: string | false) => void;
+        delete?: (name: string) => void;
+      };
+      headers.setContentType?.(undefined);
+      headers.delete?.("Content-Type");
+      headers.delete?.("content-type");
+      delete headers["Content-Type"];
+      delete headers["content-type"];
+    }
+  }
+
   return config;
 });
 
@@ -91,7 +131,7 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     } catch (refreshError) {
       processQueue(refreshError, null);
-      
+
       const isAxiosError = axios.isAxiosError(refreshError);
       const isAuthError = isAxiosError && refreshError.response && refreshError.response.status >= 400 && refreshError.response.status < 500;
 

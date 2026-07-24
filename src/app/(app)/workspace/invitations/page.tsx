@@ -40,14 +40,15 @@ type InviteFormData = z.infer<typeof inviteSchema>;
 
 export default function WorkspaceInvitationsPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
+  const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const currentRole = useWorkspaceStore((s) => s.role);
   const currentMembership = useWorkspaceStore((s) => s.membershipType);
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
 
-  // Success Link Dialog state
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<{ email: string; previewUrl: string; warning?: string | null } | null>(null);
   const [inviteToRevoke, setInviteToRevoke] = useState<{ id: string; email: string } | null>(null);
 
   // Queries & Mutations
@@ -126,11 +127,22 @@ export default function WorkspaceInvitationsPage() {
         membershipType: formData.membershipType,
       });
 
-      // Construct and show the raw preview link
-      const previewLink = `${window.location.origin}/invitations/${result.rawToken}`;
-      setGeneratedLink(previewLink);
+      const params = new URLSearchParams({
+        invitationId: result.invitation.id,
+        workspaceId: result.invitation.workspaceId,
+        workspaceName: activeWorkspaceName || "WarpTalk Workspace",
+        workspaceSlug: activeWorkspaceSlug || "workspace",
+        email: result.invitation.email,
+        roleName: result.invitation.roleName,
+        membershipType: result.invitation.membershipType,
+      });
+      setInviteNotice({
+        email: result.invitation.email,
+        previewUrl: `${window.location.origin}/dev/email/workspace-invite?${params.toString()}`,
+        warning: result.warning,
+      });
       reset();
-      toast.success("Invitation generated!");
+      toast.success(result.warning ? "Invitation created, but email delivery failed." : "Invitation sent.");
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(error?.response?.data?.error || "Failed to create invitation");
@@ -149,19 +161,19 @@ export default function WorkspaceInvitationsPage() {
     }
   };
 
+  const invitesList = invitationsQuery.data?.items || [];
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success("Invitation link copied to clipboard!");
+    toast.success("Email preview URL copied.");
   };
-
-  const invitesList = invitationsQuery.data?.items || [];
 
   return (
     <div className="flex min-h-full flex-col gap-6 pb-6 text-ink">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold tracking-tight">Invitations</h1>
         <p className="text-sm text-ink-muted">
-          Invite members to join your workspace. Since email services are manual, generate the invitation link and share it directly.
+          Invite members to join your workspace. Invitees accept pending invitations after signing in with the invited email.
         </p>
       </div>
 
@@ -172,7 +184,7 @@ export default function WorkspaceInvitationsPage() {
             <div>
               <CardTitle className="text-base font-semibold">Active Invitations</CardTitle>
               <CardDescription className="text-xs">
-                List of pending invitations. Invitees must open the link to join.
+                List of pending invitations. Invitees must sign in with the matching email to join.
               </CardDescription>
             </div>
             <div className="relative w-64">
@@ -279,7 +291,7 @@ export default function WorkspaceInvitationsPage() {
           <CardHeader>
             <CardTitle className="text-base font-semibold">Invite Member</CardTitle>
             <CardDescription className="text-xs">
-              Generate a secure join link for users.
+              Send an email-bound invitation to a user.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -346,7 +358,7 @@ export default function WorkspaceInvitationsPage() {
                 ) : (
                   <>
                     <Plus className="h-4 w-4" />
-                    <span>Generate Invitation</span>
+                    <span>Invite member</span>
                   </>
                 )}
               </button>
@@ -364,7 +376,7 @@ export default function WorkspaceInvitationsPage() {
             </div>
             <DialogTitle className="text-center font-bold text-base">Revoke Invitation?</DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Revoking the invitation for <span className="font-semibold text-ink">{inviteToRevoke?.email}</span> will invalidate their secure join token. They will not be able to join using that link.
+              Revoking the invitation for <span className="font-semibold text-ink">{inviteToRevoke?.email}</span> will remove the pending invitation. They will not be able to accept it with that email.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
@@ -385,37 +397,44 @@ export default function WorkspaceInvitationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Generated Link Share Dialog */}
-      <Dialog open={!!generatedLink} onOpenChange={(open) => !open && setGeneratedLink(null)}>
+      <Dialog open={!!inviteNotice} onOpenChange={(open) => !open && setInviteNotice(null)}>
         <DialogContent className="border-hairline bg-surface-1 max-w-md">
           <DialogHeader className="flex flex-col gap-1.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto">
               <Check className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-center font-bold text-base">Invitation Link Ready</DialogTitle>
+            <DialogTitle className="text-center font-bold text-base">Invitation Created</DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Copy and share this link with the invitee manually so they can review and accept the invitation.
+              The invite is bound to <span className="font-semibold text-ink">{inviteNotice?.email}</span>. Open this dev email URL to simulate the mailbox message.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="my-4 flex gap-2">
-            <Input
-              readOnly
-              value={generatedLink || ""}
-              className="h-9 text-xs bg-surface-2 border-hairline flex-1 select-all cursor-text font-mono"
-            />
-            <button
-              onClick={() => generatedLink && copyToClipboard(generatedLink)}
-              className="h-9 px-3 flex items-center justify-center rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 transition text-xs font-semibold gap-1"
-            >
-              <Copy className="h-4 w-4" />
-              <span>Copy</span>
-            </button>
-          </div>
+          {inviteNotice?.previewUrl && (
+            <div className="my-4 flex gap-2">
+              <Input
+                readOnly
+                value={inviteNotice.previewUrl}
+                className="h-9 flex-1 select-all border-hairline bg-surface-2 font-mono text-xs"
+              />
+              <button
+                onClick={() => inviteNotice.previewUrl && copyToClipboard(inviteNotice.previewUrl)}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-hairline bg-surface-1 px-3 text-xs font-semibold transition hover:bg-surface-2"
+              >
+                <Copy className="h-4 w-4" />
+                <span>Copy</span>
+              </button>
+            </div>
+          )}
+
+          {inviteNotice?.warning && (
+            <div className="my-4 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-600">
+              {inviteNotice.warning}
+            </div>
+          )}
 
           <DialogFooter>
             <button
-              onClick={() => setGeneratedLink(null)}
+              onClick={() => setInviteNotice(null)}
               className="w-full h-9 rounded-md bg-primary hover:bg-primary-hover text-xs font-semibold text-white transition"
             >
               Done

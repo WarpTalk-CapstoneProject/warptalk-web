@@ -88,10 +88,20 @@ export const WorkspaceService = {
     return data;
   },
 
+  async retryInvitation(workspaceId: string, inviteId: string): Promise<WorkspaceInvitationDto> {
+    const { data } = await apiClient.post<WorkspaceInvitationDto>(API.workspaces.retryInvitation(workspaceId, inviteId));
+    return data;
+  },
+
   async listInvitations(workspaceId: string, page = 1, pageSize = 10, search = ""): Promise<PagedResult<WorkspaceInvitationDto>> {
     const { data } = await apiClient.get<PagedResult<WorkspaceInvitationDto>>(API.workspaces.invitations(workspaceId), {
       params: { page, pageSize, search },
     });
+    return data;
+  },
+
+  async getPendingInvitations(): Promise<WorkspaceInvitationDto[]> {
+    const { data } = await apiClient.get<WorkspaceInvitationDto[]>(API.workspaces.pendingInvitations);
     return data;
   },
 
@@ -104,8 +114,12 @@ export const WorkspaceService = {
     return data;
   },
 
-  async acceptInvitation(token: string): Promise<void> {
+  async acceptInvitation(token?: string): Promise<void> {
     await apiClient.post(API.workspaces.acceptInvitation, { token });
+  },
+
+  async acceptInvitationById(inviteId: string): Promise<void> {
+    await apiClient.post(API.workspaces.acceptInvitationById(inviteId));
   },
 
   // ─── Documents ───
@@ -115,7 +129,7 @@ export const WorkspaceService = {
       name: string;
       sourceType: string;
       sourceId?: string | null;
-      isSensitive: boolean;
+      confidentialityLevel?: string;
       isAiAllowed?: boolean;
       file: File;
     }
@@ -126,18 +140,15 @@ export const WorkspaceService = {
     if (request.sourceId) {
       formData.append("sourceId", request.sourceId);
     }
-    formData.append("isSensitive", String(request.isSensitive));
+    if (request.confidentialityLevel) {
+      formData.append("confidentialityLevel", request.confidentialityLevel);
+    }
     formData.append("isAiAllowed", String(request.isAiAllowed ?? true));
     formData.append("file", request.file);
 
-    const { data } = await apiClient.post<WorkspaceDocumentDto>(
+    const { data } = await apiClient.postForm<WorkspaceDocumentDto>(
       API.workspaces.documents(workspaceId),
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
+      formData
     );
     return data;
   },
@@ -177,7 +188,7 @@ export const WorkspaceService = {
     docId: string,
     request: {
       name?: string;
-      isSensitive?: boolean;
+      confidentialityLevel?: string;
       isAiAllowed?: boolean;
     }
   ): Promise<WorkspaceDocumentDto> {
