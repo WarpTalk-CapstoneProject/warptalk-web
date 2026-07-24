@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Copy, Fingerprint, HandPalm, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
+import { Copy, Fingerprint, HandPalm, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getLanguageName } from "@/lib/languages";
@@ -65,6 +65,9 @@ export function MeetingControlBar({
   onToggleMuteOnEntry,
   onMuteAll,
   onToggleRecording,
+  breakoutActive,
+  onOpenBreakoutSetup,
+  onEndBreakoutRooms,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -132,6 +135,12 @@ export function MeetingControlBar({
   onMuteAll?: () => void;
   /** WT-06, host-only: starts/stops LiveKit Egress recording for the room. Omit to hide the record button. */
   onToggleRecording?: () => void;
+  /** Whether breakout rooms are currently in progress for this meeting. */
+  breakoutActive?: boolean;
+  /** Host-only: opens the breakout room setup modal. Omit to hide the row. */
+  onOpenBreakoutSetup?: () => void;
+  /** Host-only: ends all active breakout rooms, returning everyone to the main room. Shown only while breakoutActive. */
+  onEndBreakoutRooms?: () => void;
 }) {
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
@@ -199,6 +208,29 @@ export function MeetingControlBar({
                     icon={<Microphone className="h-4 w-4" />}
                     onClick={() => {
                       onMuteAll();
+                      setIsHostControlsMenuOpen(false);
+                    }}
+                  />
+                ) : null}
+                {onOpenBreakoutSetup ? (
+                  <HostControlRow
+                    label={breakoutActive ? "Manage breakout rooms" : "Breakout rooms"}
+                    description={breakoutActive ? "Breakouts are in progress." : "Split participants into smaller groups."}
+                    icon={<UsersFour className="h-4 w-4" />}
+                    active={Boolean(breakoutActive)}
+                    onClick={() => {
+                      onOpenBreakoutSetup();
+                      setIsHostControlsMenuOpen(false);
+                    }}
+                  />
+                ) : null}
+                {breakoutActive && onEndBreakoutRooms ? (
+                  <HostControlRow
+                    label="End breakout rooms"
+                    description="Move everyone back to the main room now."
+                    icon={<Stop className="h-4 w-4" weight="fill" />}
+                    onClick={() => {
+                      onEndBreakoutRooms();
                       setIsHostControlsMenuOpen(false);
                     }}
                   />

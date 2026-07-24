@@ -50,6 +50,7 @@ export const API = {
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
     voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
+    calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
   },
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
@@ -98,6 +99,9 @@ export const API = {
     questionsAsk: (roomId: string) => `/meetings/rooms/${roomId}/questions`,
     questionsUpvote: (roomId: string, questionId: string) => `/meetings/rooms/${roomId}/questions/${questionId}/upvote`,
     questionsAnswer: (roomId: string, questionId: string) => `/meetings/rooms/${roomId}/questions/${questionId}/answer`,
+    breakoutsStart: (roomId: string) => `/meetings/rooms/${roomId}/breakouts`,
+    breakoutsEnd: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/end`,
+    breakoutsMyAssignment: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/my-assignment`,
   },
   workspaces: {
     base: "/workspaces",

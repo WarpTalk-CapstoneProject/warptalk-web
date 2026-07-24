@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Broadcast, Lock, SignOut } from "@phosphor-icons/react/dist/ssr";
+import { useEffect, useRef, useState } from "react";
+import { Broadcast, Lock, SignOut, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -31,6 +31,8 @@ export function MeetingTopBar({
   onExit,
   warptalkStarted,
   isLocked,
+  breakoutInfo,
+  onBreakoutFinalMinute,
 }: {
   room: TranslationRoomDto;
   isHost: boolean;
@@ -40,6 +42,11 @@ export function MeetingTopBar({
   warptalkStarted: boolean;
   /** WT-04: shows a 🔒 chip when the host has locked the room. */
   isLocked?: boolean;
+  /** Breakout rooms (scoped-down): shows a persistent "Breakout: Group X — N:NN remaining"
+   * chip while active. null/undefined hides it. */
+  breakoutInfo?: { label: string; startedAt: string | null; durationSeconds: number | null } | null;
+  /** Fired once, the moment the breakout countdown crosses into its final minute. */
+  onBreakoutFinalMinute?: () => void;
 }) {
   const endForAll = useEndMeetingForAll(room.id);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
@@ -76,6 +83,14 @@ export function MeetingTopBar({
               <Lock className="h-3 w-3" weight="fill" />
               Locked
             </span>
+          ) : null}
+          {breakoutInfo ? (
+            <BreakoutIndicator
+              label={breakoutInfo.label}
+              startedAt={breakoutInfo.startedAt}
+              durationSeconds={breakoutInfo.durationSeconds}
+              onEnterFinalMinute={onBreakoutFinalMinute}
+            />
           ) : null}
         </div>
 
@@ -141,5 +156,65 @@ export function MeetingTopBar({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * Persistent "Breakout: Group X — N:NN remaining" chip. Ticks its own countdown from
+ * startedAt + durationSeconds (same self-ticking pattern as MeetingTimer) rather than relying
+ * on the parent to re-render every second. Fires onEnterFinalMinute exactly once when the
+ * countdown crosses into its last 60 seconds — the parent uses that to surface a
+ * "returning to main room soon" toast.
+ */
+function BreakoutIndicator({
+  label,
+  startedAt,
+  durationSeconds,
+  onEnterFinalMinute,
+}: {
+  label: string;
+  startedAt: string | null;
+  durationSeconds: number | null;
+  onEnterFinalMinute?: () => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!startedAt || !durationSeconds) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [startedAt, durationSeconds]);
+
+  const remainingSeconds =
+    startedAt && durationSeconds
+      ? Math.max(0, Math.floor((new Date(startedAt).getTime() + durationSeconds * 1000 - now) / 1000))
+      : null;
+
+  const firedFinalMinuteRef = useRef(false);
+  useEffect(() => {
+    firedFinalMinuteRef.current = false;
+  }, [startedAt, durationSeconds]);
+  useEffect(() => {
+    if (remainingSeconds !== null && remainingSeconds <= 60 && !firedFinalMinuteRef.current) {
+      firedFinalMinuteRef.current = true;
+      onEnterFinalMinute?.();
+    }
+  }, [remainingSeconds, onEnterFinalMinute]);
+
+  const remainingLabel =
+    remainingSeconds !== null
+      ? `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, "0")} remaining`
+      : null;
+
+  return (
+    <span
+      title="Breakout rooms are in progress"
+      className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary border border-primary/20"
+      style={{ fontVariantNumeric: "tabular-nums" }}
+    >
+      <UsersFour className="h-3 w-3" weight="fill" />
+      Breakout: {label}
+      {remainingLabel ? ` — ${remainingLabel}` : ""}
+    </span>
   );
 }

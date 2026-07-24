@@ -44,6 +44,9 @@ import { pollsQueryKey } from "@/hooks/use-polls";
 import { questionsQueryKey } from "@/hooks/use-qa";
 import type { PollDto, PollTally } from "@/types/poll";
 import type { QuestionDto } from "@/types/question";
+import { BreakoutSetupModal } from "@/components/rooms/live/breakout-setup-modal";
+import { fetchMyBreakoutAssignment, useEndBreakouts } from "@/hooks/use-breakouts";
+import type { BreakoutAssignmentRelay } from "@/types/breakout";
 
 function getJoinLink(code: string) {
   if (typeof window === "undefined") return code;
@@ -166,6 +169,35 @@ export default function RoomDetailPage() {
   const setLockMutation = useSetRoomLock(roomId);
   const setMuteOnEntryMutation = useSetMuteOnEntry(roomId);
   const setRecordingMutation = useSetRecording(roomId);
+
+  // Breakout rooms (scoped-down): `breakoutState` describes THIS viewer's own current
+  // assignment/connection (drives the LiveKit token swap + top-bar countdown chip below).
+  // `breakoutsRunning` is room-wide — true from the first BreakoutsStarted broadcast to the
+  // last BreakoutsEnded one, regardless of whether THIS viewer has an assignment (e.g. the
+  // host, who stays in the main room) — drives the host-controls flyout's active state.
+  const [showBreakoutSetup, setShowBreakoutSetup] = useState(false);
+  const [breakoutsRunning, setBreakoutsRunning] = useState(false);
+  const [breakoutState, setBreakoutState] = useState<{
+    active: boolean;
+    label: string | null;
+    startedAt: string | null;
+    durationSeconds: number | null;
+  }>({ active: false, label: null, startedAt: null, durationSeconds: null });
+  const breakoutActiveRef = useRef(false);
+  useEffect(() => {
+    breakoutActiveRef.current = breakoutState.active;
+  }, [breakoutState.active]);
+  // The main room's own LiveKit session, remembered so BreakoutsEnded can reconnect back to
+  // it — only updated while NOT in a breakout (see the LiveKitRoom's token-swap comment
+  // further down for why simply swapping `meetingSession.token` is enough to move the
+  // LiveKitRoom component between provider rooms without a full remount).
+  const mainMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
+  useEffect(() => {
+    if (!breakoutState.active) {
+      mainMeetingSessionRef.current = meetingSession;
+    }
+  }, [meetingSession, breakoutState.active]);
+  const endBreakoutsMutation = useEndBreakouts(roomId);
 
   // WT-08: application-level reconnect state — the hub connection itself already
   // auto-reconnects at the transport level (see createHubConnection/withAutomaticReconnect),
@@ -615,6 +647,47 @@ export default function RoomDetailPage() {
       );
     });
 
+    // Breakout rooms (scoped-down) — BreakoutsStarted/BreakoutsEnded relayed by
+    // BreakoutsService via the same Redis command channel Polls/Q&A above use (see
+    // TranslationRoomRedisSubscriberService on the Gateway). Assignments carries no LiveKit
+    // token (see BreakoutAssignmentRelayDto's doc on the backend) — an assigned client mints
+    // its own via GET .../breakouts/my-assignment, then swaps meetingSession.token to move
+    // the already-mounted <LiveKitRoom> from the main room to the sub-room in place (see
+    // useLiveKitRoom's connect/token effect: changing `token` while `connect` stays true
+    // just calls room.connect() again with the new token, no remount needed).
+    connection.on("BreakoutsStarted", (assignments: BreakoutAssignmentRelay[] | null, durationSeconds: number | null, startedAt: string | null) => {
+      setBreakoutsRunning(true);
+      const mine = user?.id ? (assignments ?? []).find((a) => a.userId === user.id) : undefined;
+      if (!mine) return;
+
+      setBreakoutState({ active: true, label: mine.label, startedAt, durationSeconds });
+      void fetchMyBreakoutAssignment(roomId)
+        .then((info) => {
+          setMeetingSession({
+            token: info.token,
+            providerRoomName: info.providerRoomName,
+            participantIdentity: info.participantIdentity,
+            isWaitingRoom: false,
+            muteOnEntry: false,
+          });
+          toast.success(`You've been moved to ${mine.label}.`);
+        })
+        .catch(() => {
+          toast.error("Could not join your breakout room.");
+          setBreakoutState({ active: false, label: null, startedAt: null, durationSeconds: null });
+        });
+    });
+    connection.on("BreakoutsEnded", () => {
+      setBreakoutsRunning(false);
+      if (!breakoutActiveRef.current) return;
+
+      setBreakoutState({ active: false, label: null, startedAt: null, durationSeconds: null });
+      if (mainMeetingSessionRef.current) {
+        setMeetingSession(mainMeetingSessionRef.current);
+      }
+      toast.success("Breakout rooms ended — you're back in the main room.");
+    });
+
     let cancelled = false;
     const retryDelays = [0, 500, 1500, 3000];
 
@@ -691,7 +764,7 @@ export default function RoomDetailPage() {
     // targetLanguage intentionally excluded — see joinCurrentRoom's comment above;
     // runtime language changes go through SetListenLanguage, not a reconnect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, queryClient, roomId, setLiveState, setHandRaisedInStore, sourceLanguage]);
+  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, queryClient, roomId, setLiveState, setHandRaisedInStore, sourceLanguage, user?.id]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -932,6 +1005,19 @@ export default function RoomDetailPage() {
     });
   }
 
+  // Breakout rooms: local state updates happen from the BreakoutsStarted/BreakoutsEnded hub
+  // broadcasts (see the SignalR effect above), not optimistically here — same pattern as
+  // room lock/recording.
+  function handleEndBreakoutRooms() {
+    endBreakoutsMutation.mutate(undefined, {
+      onError: () => toast.error("Could not end breakout rooms."),
+    });
+  }
+
+  function handleBreakoutFinalMinute() {
+    toast("Returning to the main room soon.", { description: "The host can also end breakouts early from the host controls menu." });
+  }
+
   if (roomQuery.isLoading && !isPreviewRoom) {
     return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
   }
@@ -974,6 +1060,12 @@ export default function RoomDetailPage() {
           onExit={handleExit}
           warptalkStarted={warptalkStarted}
           isLocked={isRoomLocked}
+          breakoutInfo={
+            breakoutState.active
+              ? { label: breakoutState.label ?? "", startedAt: breakoutState.startedAt, durationSeconds: breakoutState.durationSeconds }
+              : null
+          }
+          onBreakoutFinalMinute={handleBreakoutFinalMinute}
         />
 
         {isReconnecting ? (
@@ -1076,6 +1168,9 @@ export default function RoomDetailPage() {
                   onToggleMuteOnEntry={isHost ? handleToggleMuteOnEntry : undefined}
                   onMuteAll={isHost ? handleMuteAll : undefined}
                   onToggleRecording={isHost ? handleToggleRecording : undefined}
+                  breakoutActive={breakoutsRunning}
+                  onOpenBreakoutSetup={isHost ? () => setShowBreakoutSetup(true) : undefined}
+                  onEndBreakoutRooms={isHost ? handleEndBreakoutRooms : undefined}
                 />
               </div>
             </div>
@@ -1104,6 +1199,15 @@ export default function RoomDetailPage() {
           )}
         </main>
       </LiveKitRoom>
+
+      {isHost ? (
+        <BreakoutSetupModal
+          open={showBreakoutSetup}
+          onOpenChange={setShowBreakoutSetup}
+          roomId={roomId}
+          participants={participants}
+        />
+      ) : null}
     </div>
   );
 }
