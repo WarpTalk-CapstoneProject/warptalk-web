@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Microphone, MicrophoneSlash, UserCheck, UserMinus, CheckCircle } from "@phosphor-icons/react/dist/ssr";
+import { Microphone, MicrophoneSlash, Star, UserCheck, UserMinus, CheckCircle } from "@phosphor-icons/react/dist/ssr";
+import { HandRaiseBadge } from "@/components/rooms/live/hand-raise-badge";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,9 @@ export function PeoplePanel({
   participantsError,
   onCopyText,
   joinLink,
+  raisedHandUserIds,
+  spotlightedUserId,
+  onToggleSpotlight,
 }: {
   roomId: string;
   room: TranslationRoomDto;
@@ -42,6 +46,9 @@ export function PeoplePanel({
   activeCount: number;
   onCopyText: (value: string, label: string) => void;
   joinLink: string;
+  raisedHandUserIds?: Set<string>;
+  spotlightedUserId?: string | null;
+  onToggleSpotlight?: (userId: string) => void;
 }) {
   const lkParticipants = useParticipants();
   const lkParticipantIds = new Set(lkParticipants.map(p => p.identity));
@@ -71,6 +78,9 @@ export function PeoplePanel({
             roomId={roomId}
             isRoomHost={participant.userId === room.hostId}
             isInRoom={lkParticipantIds.has(participant.userId)}
+            handRaised={raisedHandUserIds?.has(participant.userId) ?? false}
+            isSpotlighted={spotlightedUserId === participant.userId}
+            onToggleSpotlight={isHost ? onToggleSpotlight : undefined}
           />
         ))}
       </div>
@@ -84,12 +94,19 @@ function ParticipantRow({
   roomId,
   isRoomHost,
   isInRoom,
+  handRaised,
+  isSpotlighted,
+  onToggleSpotlight,
 }: {
   participant: TranslationRoomParticipantDto;
   isHost: boolean;
   roomId: string;
   isRoomHost: boolean;
   isInRoom: boolean;
+  handRaised?: boolean;
+  isSpotlighted?: boolean;
+  /** Host-only: spotlight this participant for everyone. Omit (or !isHost) to hide the control. */
+  onToggleSpotlight?: (userId: string) => void;
 }) {
   const updateAudio = useUpdateParticipantAudio(roomId);
   const admit = useAdmitParticipant(roomId);
@@ -149,6 +166,7 @@ function ParticipantRow({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <p className="truncate text-[13px] font-medium text-ink">{participant.displayName}</p>
+              {handRaised ? <HandRaiseBadge className="h-4 w-4 text-[10px]" /> : null}
               {participant.isExternal && (
                 <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">External</span>
               )}
@@ -174,6 +192,15 @@ function ParticipantRow({
           <span className="grid h-6 w-6 place-items-center rounded-sm bg-canvas text-ink-subtle group-hover:hidden">
             {audioEnabled ? <Microphone className="h-3.5 w-3.5" /> : <MicrophoneSlash className="h-3.5 w-3.5" />}
           </span>
+          {onToggleSpotlight && isInRoom && (
+            <button
+              onClick={() => onToggleSpotlight(participant.userId)}
+              className={`hidden h-6 w-6 place-items-center rounded-sm group-hover:grid ${isSpotlighted ? "text-primary" : "text-ink-muted hover:bg-surface-2"}`}
+              title={isSpotlighted ? "Remove spotlight" : "Spotlight for everyone"}
+            >
+              <Star className="h-3.5 w-3.5" weight={isSpotlighted ? "fill" : "regular"} />
+            </button>
+          )}
           {canManage && (
             <div className="hidden group-hover:flex items-center">
               {participant.status === "waiting" ? (

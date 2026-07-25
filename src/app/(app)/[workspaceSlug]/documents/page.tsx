@@ -44,6 +44,8 @@ import {
   WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL,
   WORKSPACE_DOCUMENT_SOURCE_TYPE,
 } from "@/constants/workspace-document";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+
 import apiClient from "@/lib/api/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -116,6 +118,19 @@ export default function WorkspaceDocumentsPage() {
       isAiAllowed: true,
     },
   });
+
+  useRegisterAssistantContext(
+    activeWorkspaceId
+      ? {
+          pageType: "documents",
+          workspaceId: activeWorkspaceId,
+          snapshot: {
+            query,
+            count: String(documentsQuery.data?.items?.length ?? 0),
+          },
+        }
+      : null
+  );
 
   if (!activeWorkspaceId) return null;
 

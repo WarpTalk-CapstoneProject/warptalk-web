@@ -187,6 +187,9 @@ export interface TranslationRoomArtifactDto {
   retentionUntil?: string;
   status: string;
   createdAt: string;
+  /** Inline artifact payload (e.g. the AI meeting-summary JSON). Null for artifact types
+   * that only carry a fileUrl (transcript export, recording). */
+  content?: string | null;
 }
 
 export interface TranslationRoomHistoryItemDto {

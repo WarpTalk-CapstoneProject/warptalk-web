@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster } from "@/components/ui/sonner";
 import { useState, type ReactNode } from "react";
+import { RealtimeNotificationProvider } from "@/components/providers/realtime-notification-provider";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
@@ -31,8 +32,10 @@ export function Providers({ children }: { children: ReactNode }) {
           enableSystem={true}
           disableTransitionOnChange
         >
-          {children}
-          <Toaster />
+          <RealtimeNotificationProvider>
+            {children}
+            <Toaster position="top-right" />
+          </RealtimeNotificationProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </GoogleOAuthProvider>
