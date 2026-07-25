@@ -18,6 +18,7 @@ import {
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
+import type { WorkspaceSettingsDto } from "@/types/workspace";
 import {
   useWorkspace,
   useWorkspaceSettings,
@@ -72,6 +73,77 @@ const languages = [
   { code: "ja", label: "Japanese" },
 ];
 
+const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
+  defaultLanguage: "en",
+  timezone: "UTC",
+  maxActiveRooms: 5,
+  artifactRetentionDays: 30,
+  enforceHostApprovalDefault: true,
+  voiceCloningEnabled: true,
+  isProfanityFilterEnabled: false,
+  allowedTargetLanguages: [],
+  verifiedDomains: [],
+  allowExternalCollaboration: true,
+  requireVerifiedDomainForInternal: true,
+  aiUsagePolicy: {
+    allowExternalLlm: true,
+    redactPii: {
+      enabled: true,
+    },
+    dlp: {
+      enabled: false,
+      keywordsBlacklist: [],
+    },
+    translationProfile: {
+      translationTone: "professional",
+      languageSpecificRules: {
+        vietnameseHonorificStyle: "formal_hierarchical",
+        japaneseHonorificStyle: "keigo_teineigo",
+      },
+    },
+  },
+};
+
+function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
+  return {
+    ...DEFAULT_SETTINGS_FORM_DATA,
+    defaultLanguage: settings.defaultLanguage || DEFAULT_SETTINGS_FORM_DATA.defaultLanguage,
+    timezone: settings.timezone || DEFAULT_SETTINGS_FORM_DATA.timezone,
+    maxActiveRooms: settings.maxActiveRooms ?? DEFAULT_SETTINGS_FORM_DATA.maxActiveRooms,
+    artifactRetentionDays: settings.artifactRetentionDays ?? DEFAULT_SETTINGS_FORM_DATA.artifactRetentionDays,
+    enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
+    voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
+    isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
+    allowedTargetLanguages: settings.allowedTargetLanguages || [],
+    verifiedDomains: settings.verifiedDomains || [],
+    allowExternalCollaboration: settings.allowExternalCollaboration ?? DEFAULT_SETTINGS_FORM_DATA.allowExternalCollaboration,
+    requireVerifiedDomainForInternal: settings.requireVerifiedDomainForInternal ?? DEFAULT_SETTINGS_FORM_DATA.requireVerifiedDomainForInternal,
+    aiUsagePolicy: {
+      allowExternalLlm: true,
+      redactPii: {
+        enabled: settings.aiUsagePolicy?.redactPii?.enabled ?? DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.redactPii.enabled,
+      },
+      dlp: {
+        enabled: settings.aiUsagePolicy?.dlp?.enabled ?? DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.dlp.enabled,
+        keywordsBlacklist: settings.aiUsagePolicy?.dlp?.keywordsBlacklist || [],
+      },
+      translationProfile: {
+        translationTone:
+          settings.aiUsagePolicy?.translationProfile?.translationTone
+          || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.translationTone,
+        languageSpecificRules: {
+          vietnameseHonorificStyle:
+            settings.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle
+            || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle,
+          japaneseHonorificStyle:
+            settings.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle
+            || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle,
+        },
+      },
+    },
+  };
+}
+
 export default function WorkspaceSettingsPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const role = useWorkspaceStore((s) => s.role);
@@ -96,42 +168,14 @@ export default function WorkspaceSettingsPage() {
     formState: { isSubmitting },
   } = useForm<SettingsFormData>({
     resolver: zodResolver(settingsSchema),
+    defaultValues: DEFAULT_SETTINGS_FORM_DATA,
   });
 
   const watchAll = watch();
 
   useEffect(() => {
     if (settingsQuery.data) {
-      reset({
-        defaultLanguage: settingsQuery.data.defaultLanguage || "en",
-        timezone: settingsQuery.data.timezone || "UTC",
-        maxActiveRooms: settingsQuery.data.maxActiveRooms ?? 5,
-        artifactRetentionDays: settingsQuery.data.artifactRetentionDays ?? 30,
-        enforceHostApprovalDefault: settingsQuery.data.enforceHostApprovalDefault ?? true,
-        voiceCloningEnabled: settingsQuery.data.voiceCloningEnabled ?? true,
-        isProfanityFilterEnabled: settingsQuery.data.isProfanityFilterEnabled ?? false,
-        allowedTargetLanguages: settingsQuery.data.allowedTargetLanguages || [],
-        verifiedDomains: settingsQuery.data.verifiedDomains || [],
-        allowExternalCollaboration: settingsQuery.data.allowExternalCollaboration ?? true,
-        requireVerifiedDomainForInternal: settingsQuery.data.requireVerifiedDomainForInternal ?? true,
-        aiUsagePolicy: {
-          allowExternalLlm: true,
-          redactPii: {
-            enabled: settingsQuery.data.aiUsagePolicy?.redactPii?.enabled ?? false,
-          },
-          dlp: {
-            enabled: settingsQuery.data.aiUsagePolicy?.dlp?.enabled ?? false,
-            keywordsBlacklist: settingsQuery.data.aiUsagePolicy?.dlp?.keywordsBlacklist || [],
-          },
-          translationProfile: {
-            translationTone: settingsQuery.data.aiUsagePolicy?.translationProfile?.translationTone || "professional",
-            languageSpecificRules: {
-              vietnameseHonorificStyle: settingsQuery.data.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle || "formal_hierarchical",
-              japaneseHonorificStyle: settingsQuery.data.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle || "keigo_teineigo",
-            }
-          }
-        }
-      });
+      reset(toSettingsFormData(settingsQuery.data));
     }
   }, [settingsQuery.data, reset]);
 
@@ -342,7 +386,13 @@ export default function WorkspaceSettingsPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(handleSettingsSubmit)} className="flex flex-col gap-8">
+      <form
+        onSubmit={handleSubmit(
+          handleSettingsSubmit,
+          () => toast.error("Please complete required workspace settings before saving.")
+        )}
+        className="flex flex-col gap-8"
+      >
 
         {/* Section 1: General */}
         <div className="flex flex-col gap-3">
@@ -592,7 +642,7 @@ export default function WorkspaceSettingsPage() {
                 <span className="text-[11px] text-ink-muted">Automatically detect and mask sensitive identifiers (e.g. emails, phone numbers, SSNs).</span>
               </div>
               <Switch
-                checked={watchAll.aiUsagePolicy?.redactPii?.enabled}
+                checked={watchAll.aiUsagePolicy?.redactPii?.enabled ?? false}
                 onCheckedChange={(val) => setValue("aiUsagePolicy.redactPii.enabled", val, { shouldDirty: true })}
                 disabled={isSubmitting}
               />
@@ -605,7 +655,7 @@ export default function WorkspaceSettingsPage() {
                 <span className="text-[11px] text-ink-muted">Block or flag designated restricted terminology or sensitive keywords.</span>
               </div>
               <Switch
-                checked={watchAll.aiUsagePolicy?.dlp?.enabled}
+                checked={watchAll.aiUsagePolicy?.dlp?.enabled ?? false}
                 onCheckedChange={(val) => setValue("aiUsagePolicy.dlp.enabled", val, { shouldDirty: true })}
                 disabled={isSubmitting}
               />
@@ -671,7 +721,10 @@ export default function WorkspaceSettingsPage() {
                 <span className="text-[11px] text-ink-muted">Choose translation delivery tone.</span>
               </div>
               <Select
-                value={watchAll.aiUsagePolicy?.translationProfile?.translationTone}
+                value={
+                  watchAll.aiUsagePolicy?.translationProfile?.translationTone
+                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.translationTone
+                }
                 onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.translationTone", val || "", { shouldDirty: true })}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
@@ -692,7 +745,10 @@ export default function WorkspaceSettingsPage() {
                 <span className="text-[11px] text-ink-muted">Control the pronouns and social markers for Vietnamese translations.</span>
               </div>
               <Select
-                value={watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle}
+                value={
+                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle
+                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle
+                }
                 onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle", val || "", { shouldDirty: true })}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
@@ -712,7 +768,10 @@ export default function WorkspaceSettingsPage() {
                 <span className="text-[11px] text-ink-muted">Set specific politeness rule sets (e.g. Keigo/Teineigo) for Japanese translations.</span>
               </div>
               <Select
-                value={watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle}
+                value={
+                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle
+                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle
+                }
                 onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle", val || "", { shouldDirty: true })}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">

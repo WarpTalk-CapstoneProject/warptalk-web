@@ -2,9 +2,6 @@
 
 import { use, useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { toast } from "sonner";
 import {
   ShieldCheck,
@@ -37,29 +34,16 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useWorkspaceDocument,
-  useWorkspaceDocumentAccessPolicies,
-  useAddWorkspaceDocumentAccessPolicy,
-  useRemoveWorkspaceDocumentAccessPolicy,
-  useWorkspaceMembers,
   useDownloadWorkspaceDocument,
   useApproveWorkspaceDocument,
   useWorkspaceDocumentExtractedText,
   useUpdateWorkspaceDocumentExtractedText
 } from "@/hooks/use-workspace";
+import { useDocumentAccessPolicy } from "@/hooks/use-document-access-policy";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const policySchema = z.object({
-  subjectType: z.enum(["Role", "MembershipType", "User"]),
-  subjectValue: z.string().min(1, "Please specify a subject value (e.g. Admin, External, or User ID)"),
-  permission: z.enum(["View", "Download"]),
-  effect: z.enum(["ALLOW", "DENY"]),
-});
-
-type PolicyFormData = z.infer<typeof policySchema>;
 
 interface PageProps {
   params: Promise<{ documentId: string }>;
@@ -84,23 +68,32 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const role = useWorkspaceStore((s) => s.role);
   const currentUser = useAuthStore((s) => s.user);
 
-  const [policyPage, setPolicyPage] = useState(1);
-  const [builderMode, setBuilderMode] = useState<"AllowExternal" | "AllowUser" | "BlockUser" | "Custom">("AllowExternal");
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
 
   useEffect(() => {
     setActiveSheetIndex(0);
   }, [documentId]);
 
-  // Queries
+  // Queries & Hooks
   const documentQuery = useWorkspaceDocument(activeWorkspaceId || "", documentId);
   const extractedTextQuery = useWorkspaceDocumentExtractedText(activeWorkspaceId || "", documentId);
-  const policiesQuery = useWorkspaceDocumentAccessPolicies(activeWorkspaceId || "", documentId, policyPage, 10);
-  const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
+  
+  // Custom Document Access Policy Hook
+  const {
+    policiesList,
+    membersList,
+    isExternalAllowed,
+    showAllowedDropdown,
+    showBlockedDropdown,
+    setShowAllowedDropdown,
+    setShowBlockedDropdown,
+    toggleExternalAccess,
+    allowUser,
+    blockUser,
+    removePolicy,
+  } = useDocumentAccessPolicy(activeWorkspaceId || "", documentId);
 
   // Mutations
-  const addPolicyMutation = useAddWorkspaceDocumentAccessPolicy(activeWorkspaceId || "", documentId);
-  const removePolicyMutation = useRemoveWorkspaceDocumentAccessPolicy(activeWorkspaceId || "", documentId);
   const downloadMutation = useDownloadWorkspaceDocument(activeWorkspaceId || "");
   const approveMutation = useApproveWorkspaceDocument(activeWorkspaceId || "");
   const [isEditingContent, setIsEditingContent] = useState(false);
@@ -115,91 +108,13 @@ export default function DocumentDetailPage({ params }: PageProps) {
     }
   }, [extractedTextQuery.data]);
 
-  const [showAllowedDropdown, setShowAllowedDropdown] = useState(false);
-  const [showBlockedDropdown, setShowBlockedDropdown] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<PolicyFormData>({
-    resolver: zodResolver(policySchema),
-    defaultValues: {
-      subjectType: "MembershipType",
-      subjectValue: "External",
-      permission: "View",
-      effect: "ALLOW",
-    },
-  });
-
-  const subjectTypeVal = watch("subjectType");
   const doc = documentQuery.data;
-
-  // Sync Form Defaults with Selected Builder Mode Preset
-  useEffect(() => {
-    if (builderMode === "AllowExternal") {
-      setValue("subjectType", "MembershipType");
-      setValue("subjectValue", "External");
-      setValue("effect", "ALLOW");
-    } else if (builderMode === "AllowUser") {
-      setValue("subjectType", "User");
-      setValue("subjectValue", "");
-      setValue("effect", "ALLOW");
-    } else if (builderMode === "BlockUser") {
-      setValue("subjectType", "User");
-      setValue("subjectValue", "");
-      setValue("effect", "DENY");
-    } else if (builderMode === "Custom") {
-      setValue("subjectType", "Role");
-      setValue("subjectValue", "");
-      setValue("effect", "ALLOW");
-    }
-  }, [builderMode, setValue]);
 
   if (!activeWorkspaceId) return null;
 
   const isOwnerOrAdmin = role === "Owner" || role === "Admin";
   const isDocOwner = doc ? (doc.ownerId === currentUser?.id || doc.uploadedBy === currentUser?.id) : false;
   const canManagePolicies = isOwnerOrAdmin || isDocOwner;
-
-  const handleAddPolicy = async (formData: PolicyFormData) => {
-    try {
-      const isUserType = formData.subjectType === "User";
-      await addPolicyMutation.mutateAsync({
-        subjectType: formData.subjectType,
-        subjectId: isUserType ? formData.subjectValue : null,
-        subjectKey: !isUserType ? formData.subjectValue : null,
-        permission: formData.permission,
-        effect: formData.effect,
-      });
-
-      toast.success("Access policy registered successfully!");
-      reset({
-        subjectType: builderMode === "AllowExternal" ? "MembershipType" : builderMode === "Custom" ? "Role" : "User",
-        subjectValue: builderMode === "AllowExternal" ? "External" : "",
-        permission: "View",
-        effect: builderMode === "BlockUser" ? "DENY" : "ALLOW",
-      });
-    } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
-        || "Failed to add policy.";
-      toast.error(errorMsg);
-    }
-  };
-
-  const handleRemovePolicy = async (policyId: string) => {
-    try {
-      await removePolicyMutation.mutateAsync(policyId);
-      toast.success("Access policy removed.");
-    } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
-        || "Failed to remove policy.";
-      toast.error(errorMsg);
-    }
-  };
 
   const handleDownloadDefault = async () => {
     if (!doc) return;
@@ -303,9 +218,6 @@ export default function DocumentDetailPage({ params }: PageProps) {
       </div>
     );
   }
-
-  const policiesList = policiesQuery.data?.items || [];
-  const membersList = membersQuery.data?.items || [];
 
   return (
     <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-8 text-ink animate-fade-in max-w-7xl mx-auto w-full">
@@ -734,43 +646,8 @@ export default function DocumentDetailPage({ params }: PageProps) {
                       </span>
                     </div>
                     <Switch
-                      checked={policiesList.some(
-                        (p) =>
-                          p.subjectType === "MembershipType" &&
-                          p.subjectKey === "External" &&
-                          p.permission === "View" &&
-                          p.effect === "ALLOW"
-                      )}
-                      onCheckedChange={async (checked) => {
-                        const extPolicy = policiesList.find(
-                          (p) =>
-                            p.subjectType === "MembershipType" &&
-                            p.subjectKey === "External" &&
-                            p.permission === "View" &&
-                            p.effect === "ALLOW"
-                        );
-                        if (checked) {
-                          try {
-                            await addPolicyMutation.mutateAsync({
-                              subjectType: "MembershipType",
-                              subjectKey: "External",
-                              subjectId: null,
-                              permission: "View",
-                              effect: "ALLOW",
-                            });
-                            toast.success("External access enabled.");
-                          } catch (err) {
-                            toast.error("Failed to enable external access.");
-                          }
-                        } else if (extPolicy) {
-                          try {
-                            await removePolicyMutation.mutateAsync(extPolicy.id);
-                            toast.success("External access disabled.");
-                          } catch (err) {
-                            toast.error("Failed to disable external access.");
-                          }
-                        }
-                      }}
+                      checked={isExternalAllowed}
+                      onCheckedChange={(checked) => toggleExternalAccess(checked)}
                     />
                   </div>
 
@@ -778,17 +655,17 @@ export default function DocumentDetailPage({ params }: PageProps) {
                   <div className="flex flex-col gap-1.5 relative">
                     <label className="text-xs font-semibold text-ink-muted">Allowed Users List</label>
                     <div className="flex flex-wrap gap-1 border border-hairline rounded-md bg-surface-2 p-1.5 min-h-9 items-center">
-                      {policiesList.filter(p => p.subjectType === "User" && p.effect === "ALLOW").length === 0 ? (
+                      {policiesList.filter((p) => p.subjectType === "User" && p.effect === "ALLOW").length === 0 ? (
                         <span className="text-[10px] text-ink-muted pl-1">Inherited only</span>
                       ) : (
                         policiesList
-                          .filter(p => p.subjectType === "User" && p.effect === "ALLOW")
-                          .map(p => {
-                            const m = membersList.find(member => member.userId === p.subjectId);
+                          .filter((p) => p.subjectType === "User" && p.effect === "ALLOW")
+                          .map((p) => {
+                            const m = membersList.find((member) => member.userId === p.subjectId);
                             return (
                               <Badge key={p.id} className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 gap-1 px-1.5 py-0.5 rounded text-[9px]">
                                 <span>{m ? m.fullName : "User"}</span>
-                                <X className="h-2.5 w-2.5 cursor-pointer hover:text-destructive" onClick={() => handleRemovePolicy(p.id)} />
+                                <X className="h-2.5 w-2.5 cursor-pointer hover:text-destructive" onClick={() => removePolicy(p.id)} />
                               </Badge>
                             );
                           })
@@ -798,7 +675,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
                           setShowAllowedDropdown(!showAllowedDropdown);
                           setShowBlockedDropdown(false);
                         }}
-                        className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-hairline text-ink-muted hover:bg-surface-3 transition"
+                        className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-hairline text-ink-muted hover:bg-surface-3 transition cursor-pointer"
                         title="Add Allowed User"
                       >
                         <Plus className="h-3 w-3" />
@@ -817,27 +694,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
                             return (
                               <div
                                 key={m.userId}
-                                onClick={async () => {
-                                  const policy = policiesList.find(
-                                    (p) => p.subjectType === "User" && p.subjectId === m.userId && p.effect === "ALLOW"
-                                  );
-                                  if (isAllowed && policy) {
-                                    await handleRemovePolicy(policy.id);
-                                  } else {
-                                    try {
-                                      await addPolicyMutation.mutateAsync({
-                                        subjectType: "User",
-                                        subjectId: m.userId,
-                                        subjectKey: null,
-                                        permission: "View",
-                                        effect: "ALLOW",
-                                      });
-                                      toast.success(`Allowed ${m.fullName}`);
-                                    } catch (e) {
-                                      toast.error("Failed to allow user.");
-                                    }
-                                  }
-                                }}
+                                onClick={() => allowUser(m.userId, m.fullName)}
                                 className="flex items-center justify-between px-3 py-2 text-xs hover:bg-surface-2 cursor-pointer transition-colors"
                               >
                                 <div className="flex flex-col min-w-0">
@@ -857,17 +714,17 @@ export default function DocumentDetailPage({ params }: PageProps) {
                   <div className="flex flex-col gap-1.5 relative mt-1.5">
                     <label className="text-xs font-semibold text-ink-muted">Blocked Users List</label>
                     <div className="flex flex-wrap gap-1 border border-hairline rounded-md bg-surface-2 p-1.5 min-h-9 items-center">
-                      {policiesList.filter(p => p.subjectType === "User" && p.effect === "DENY").length === 0 ? (
+                      {policiesList.filter((p) => p.subjectType === "User" && p.effect === "DENY").length === 0 ? (
                         <span className="text-[10px] text-ink-muted pl-1">No blocks active</span>
                       ) : (
                         policiesList
-                          .filter(p => p.subjectType === "User" && p.effect === "DENY")
-                          .map(p => {
-                            const m = membersList.find(member => member.userId === p.subjectId);
+                          .filter((p) => p.subjectType === "User" && p.effect === "DENY")
+                          .map((p) => {
+                            const m = membersList.find((member) => member.userId === p.subjectId);
                             return (
                               <Badge key={p.id} className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 gap-1 px-1.5 py-0.5 rounded text-[9px]">
                                 <span>{m ? m.fullName : "User"}</span>
-                                <X className="h-2.5 w-2.5 cursor-pointer hover:text-destructive" onClick={() => handleRemovePolicy(p.id)} />
+                                <X className="h-2.5 w-2.5 cursor-pointer hover:text-destructive" onClick={() => removePolicy(p.id)} />
                               </Badge>
                             );
                           })
@@ -877,7 +734,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
                           setShowBlockedDropdown(!showBlockedDropdown);
                           setShowAllowedDropdown(false);
                         }}
-                        className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-hairline text-ink-muted hover:bg-surface-3 transition"
+                        className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-hairline text-ink-muted hover:bg-surface-3 transition cursor-pointer"
                         title="Add Blocked User"
                       >
                         <Plus className="h-3 w-3" />
@@ -896,27 +753,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
                             return (
                               <div
                                 key={m.userId}
-                                onClick={async () => {
-                                  const policy = policiesList.find(
-                                    (p) => p.subjectType === "User" && p.subjectId === m.userId && p.effect === "DENY"
-                                  );
-                                  if (isBlocked && policy) {
-                                    await handleRemovePolicy(policy.id);
-                                  } else {
-                                    try {
-                                      await addPolicyMutation.mutateAsync({
-                                        subjectType: "User",
-                                        subjectId: m.userId,
-                                        subjectKey: null,
-                                        permission: "View",
-                                        effect: "DENY",
-                                      });
-                                      toast.success(`Blocked ${m.fullName}`);
-                                    } catch (e) {
-                                      toast.error("Failed to block user.");
-                                    }
-                                  }
-                                }}
+                                onClick={() => blockUser(m.userId, m.fullName)}
                                 className="flex items-center justify-between px-3 py-2 text-xs hover:bg-surface-2 cursor-pointer transition-colors"
                               >
                                 <div className="flex flex-col min-w-0">

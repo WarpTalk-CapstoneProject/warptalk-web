@@ -45,7 +45,7 @@ import {
   WORKSPACE_DOCUMENT_SOURCE_TYPE,
 } from "@/constants/workspace-document";
 import apiClient from "@/lib/api/client";
-import { API } from "@/lib/api/endpoints";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useWorkspaceDocuments,
@@ -70,7 +70,7 @@ const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"];
 const ACCEPTED_UPLOAD_EXTENSIONS = ".pdf,.docx,.xlsx,.md,.png,.jpg,.jpeg,.webp,.bmp,.gif";
 
 type UploadFormData = z.infer<typeof uploadSchema>;
-type FilterCategory = "all" | "pending" | "ai" | "admin" | "sensitive";
+type FilterCategory = "all" | "pending" | "ai" | "admin" | "sensitive" | "archived";
 type ViewMode = "list" | "grid";
 
 export default function WorkspaceDocumentsPage() {
@@ -79,6 +79,7 @@ export default function WorkspaceDocumentsPage() {
   const workspaceSlug = params.workspaceSlug;
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const role = useWorkspaceStore((s) => s.role);
+  const currentUser = useAuthStore((s) => s.user);
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -118,7 +119,7 @@ export default function WorkspaceDocumentsPage() {
 
   if (!activeWorkspaceId) return null;
 
-  const isOwnerOrAdmin = role === "Owner" || role === "Admin";
+  const isOwnerOrAdmin = role?.toLowerCase() === "owner" || role?.toLowerCase() === "admin";
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -258,8 +259,18 @@ export default function WorkspaceDocumentsPage() {
   const pendingCount = rawDocsList.filter(
     (doc) => doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending")
   ).length;
+  const archivedCount = rawDocsList.filter(
+    (doc) => doc.status?.toLowerCase() === "archived"
+  ).length;
 
   const filteredDocs = rawDocsList.filter((doc) => {
+    const isArchived = doc.status?.toLowerCase() === "archived";
+    if (activeCategory === "archived") {
+      return isArchived;
+    }
+    // Filter out archived documents from all other category views
+    if (isArchived) return false;
+
     if (activeCategory === "pending") {
       return doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending");
     }
@@ -301,15 +312,13 @@ export default function WorkspaceDocumentsPage() {
           </div>
 
           {/* New Document Button */}
-          {isOwnerOrAdmin && (
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full bg-surface-3 hover:bg-surface-3/80 text-ink font-semibold text-xs shadow-sm transition-all border border-hairline/40"
-            >
-              <span>New</span>
-              <CaretDown className="h-3.5 w-3.5 text-ink-muted" />
-            </button>
-          )}
+          <button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full bg-surface-3 hover:bg-surface-3/80 text-ink font-semibold text-xs shadow-sm transition-all border border-hairline/40 cursor-pointer"
+          >
+            <span>New</span>
+            <CaretDown className="h-3.5 w-3.5 text-ink-muted" />
+          </button>
         </div>
       </div>
 
@@ -378,6 +387,22 @@ export default function WorkspaceDocumentsPage() {
             <Lock className="h-3.5 w-3.5 text-destructive" />
             <span>Restricted</span>
           </button>
+          {archivedCount > 0 && (
+            <button
+              onClick={() => setActiveCategory("archived")}
+              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                activeCategory === "archived"
+                  ? "bg-amber-500/10 text-amber-600 border border-amber-500/20 shadow-sm"
+                  : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+              }`}
+            >
+              <Archive className="h-3.5 w-3.5 text-amber-500" />
+              <span>Archived</span>
+              <span className="ml-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-600 px-1">
+                {archivedCount}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Right Side: Action Icons (Filter & Grid/List Toggle) */}
@@ -449,6 +474,9 @@ export default function WorkspaceDocumentsPage() {
             </thead>
             <tbody className="divide-y divide-hairline/20">
               {filteredDocs.map((doc) => {
+                const isDocOwner = doc.uploadedBy === currentUser?.id || doc.ownerId === currentUser?.id;
+                const canManageDoc = isOwnerOrAdmin || isDocOwner;
+
                 return (
                   <tr
                     key={doc.id}
@@ -540,17 +568,17 @@ export default function WorkspaceDocumentsPage() {
 
                         <button
                           onClick={() => router.push(`/${workspaceSlug}/documents/${doc.id}`)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-3 hover:text-ink transition-colors"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-3 hover:text-ink transition-colors cursor-pointer"
                           title="View Details"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
 
-                        {isOwnerOrAdmin && (
+                        {canManageDoc && (
                           doc.status?.toLowerCase() === "archived" ? (
                             <button
                               onClick={() => handleRestore(doc.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-primary/10 hover:text-primary transition-colors"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
                               title="Restore Document"
                             >
                               <ArrowCounterClockwise className="h-4 w-4" />
@@ -558,7 +586,7 @@ export default function WorkspaceDocumentsPage() {
                           ) : (
                             <button
                               onClick={() => handleArchive(doc.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-amber-500/10 hover:text-amber-500 transition-colors"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-amber-500/10 hover:text-amber-500 transition-colors cursor-pointer"
                               title="Archive Document"
                             >
                               <Archive className="h-4 w-4" />
@@ -566,10 +594,10 @@ export default function WorkspaceDocumentsPage() {
                           )
                         )}
 
-                        {isOwnerOrAdmin && (
+                        {canManageDoc && (
                           <button
                             onClick={() => setDocToDelete({ id: doc.id, name: doc.name })}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
                             title="Delete Permanently"
                           >
                             <Trash className="h-4 w-4" />

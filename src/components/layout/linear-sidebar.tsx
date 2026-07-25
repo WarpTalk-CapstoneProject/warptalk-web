@@ -149,7 +149,7 @@ export function LinearSidebar() {
   const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
-  const isOwnerOrAdmin = role === "Owner" || role === "Admin";
+  const isOwnerOrAdmin = role?.toLowerCase() === "owner" || role?.toLowerCase() === "admin";
 
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
@@ -204,7 +204,7 @@ export function LinearSidebar() {
     { icon: FileText, label: "Documents", href: `/${slug}/documents` }
   );
 
-  if (role === "Owner" || role === "Admin") {
+  if (isOwnerOrAdmin) {
     workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
@@ -274,7 +274,7 @@ export function LinearSidebar() {
                     </span>
                   </Link>
                 </div>
-                {role === "Owner" && (
+                {role?.toLowerCase() === "owner" && (
                   <div className={cn(
                     "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
                     pathname === `/${activeWorkspaceSlug}/advanced` ? "bg-surface-2 text-destructive" : "hover:bg-surface-2 hover:text-destructive"
