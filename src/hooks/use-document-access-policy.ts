@@ -5,7 +5,7 @@ import {
   useAddWorkspaceDocumentAccessPolicy,
   useRemoveWorkspaceDocumentAccessPolicy,
   useWorkspaceMembers,
-} from "@/hooks/use-workspace";
+} from "./use-workspace";
 
 export interface DocumentAccessPolicyHookReturn {
   policiesList: any[];
@@ -38,11 +38,11 @@ export function useDocumentAccessPolicy(
   const addPolicyMutation = useAddWorkspaceDocumentAccessPolicy(workspaceId, documentId);
   const removePolicyMutation = useRemoveWorkspaceDocumentAccessPolicy(workspaceId, documentId);
 
-  const policiesList = policiesQuery.data?.items || [];
-  const membersList = membersQuery.data?.items || [];
+  const policiesList: any[] = policiesQuery.data?.items || [];
+  const membersList: any[] = membersQuery.data?.items || [];
 
   const isExternalAllowed = policiesList.some(
-    (p) =>
+    (p: any) =>
       p.subjectType === "MembershipType" &&
       p.subjectKey === "External" &&
       p.permission === "View" &&
@@ -51,7 +51,7 @@ export function useDocumentAccessPolicy(
 
   const toggleExternalAccess = async (checked: boolean) => {
     const extPolicy = policiesList.find(
-      (p) =>
+      (p: any) =>
         p.subjectType === "MembershipType" &&
         p.subjectKey === "External" &&
         p.permission === "View" &&
@@ -95,7 +95,7 @@ export function useDocumentAccessPolicy(
 
   const allowUser = async (userId: string, userName?: string) => {
     const existingPolicy = policiesList.find(
-      (p) => p.subjectType === "User" && p.subjectId === userId && p.effect === "ALLOW"
+      (p: any) => p.subjectType === "User" && p.subjectId === userId && p.effect === "ALLOW"
     );
 
     if (existingPolicy) {
@@ -119,7 +119,7 @@ export function useDocumentAccessPolicy(
 
   const blockUser = async (userId: string, userName?: string) => {
     const existingPolicy = policiesList.find(
-      (p) => p.subjectType === "User" && p.subjectId === userId && p.effect === "DENY"
+      (p: any) => p.subjectType === "User" && p.subjectId === userId && p.effect === "DENY"
     );
 
     if (existingPolicy) {
