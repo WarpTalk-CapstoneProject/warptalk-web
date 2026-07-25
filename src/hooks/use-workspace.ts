@@ -439,6 +439,14 @@ export function useGlossaryTerms(glossaryId: string) {
   });
 }
 
+export function usePublishedGlobalGlossaryTerms() {
+  return useQuery({
+    queryKey: ["glossaries", "global-published"] as const,
+    queryFn: () => WorkspaceService.getPublishedGlobalTerms(),
+    staleTime: 60000,
+  });
+}
+
 export function useUpdateGlossaryTerm(glossaryId: string) {
   const queryClient = useQueryClient();
   return useMutation({

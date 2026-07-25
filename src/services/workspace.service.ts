@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 import type {
   WorkspaceDto,
   CreateWorkspaceRequest,
@@ -237,11 +238,14 @@ export const WorkspaceService = {
   },
 
   // ─── Glossaries (Terminology) ───
+  // Field names below match the real backend DTOs (WarpTalk.TranscriptService.Application.DTOs
+  // GlossaryDtos.cs) exactly — a previous version of this file used a different, unused shape
+  // (businessDomain/term/preferredTranslation/definition/usageNote/status) that never matched
+  // what GlossariesController actually accepts/returns. See docs/global-glossary-plan.md §1.2/§1.3.
   async createGlossary(request: {
     workspaceId: string;
     name: string;
     description?: string | null;
-    businessDomain: string;
     sourceLanguage: string;
     targetLanguage: string;
   }): Promise<void> {
@@ -261,9 +265,6 @@ export const WorkspaceService = {
   async updateGlossary(id: string, request: {
     name: string;
     description?: string | null;
-    businessDomain: string;
-    sourceLanguage: string;
-    targetLanguage: string;
     isActive: boolean;
   }): Promise<void> {
     await apiClient.put(API.glossaries.get(id), request);
@@ -274,10 +275,14 @@ export const WorkspaceService = {
   },
 
   async addTerm(glossaryId: string, request: {
-    term: string;
-    preferredTranslation: string;
+    sourceTerm: string;
+    targetTerm: string;
+    context?: string | null;
+    domain?: string | null;
     definition?: string | null;
     usageNote?: string | null;
+    partOfSpeech?: string | null;
+    priority?: number;
   }): Promise<void> {
     await apiClient.post(API.glossaries.terms(glossaryId), request);
   },
@@ -288,16 +293,25 @@ export const WorkspaceService = {
   },
 
   async updateTerm(glossaryId: string, termId: string, request: {
-    term: string;
-    preferredTranslation: string;
+    sourceTerm: string;
+    targetTerm: string;
+    context?: string | null;
+    domain?: string | null;
     definition?: string | null;
     usageNote?: string | null;
-    status: string;
+    partOfSpeech?: string | null;
+    priority: number;
+    isActive: boolean;
   }): Promise<void> {
     await apiClient.put(API.glossaries.termDetail(glossaryId, termId), request);
   },
 
   async deleteTerm(glossaryId: string, termId: string): Promise<void> {
     await apiClient.delete(API.glossaries.termDetail(glossaryId, termId));
+  },
+
+  async getPublishedGlobalTerms(): Promise<GlobalGlossaryTermDto[]> {
+    const { data } = await apiClient.get<GlobalGlossaryTermDto[]>(API.glossaries.global);
+    return data;
   },
 };

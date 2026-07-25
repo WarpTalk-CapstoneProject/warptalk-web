@@ -19,6 +19,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { toast } from "sonner";
 import { DeviceSelect } from "@/components/rooms/setup/device-select";
 import { LanguageRoleConfirm } from "@/components/rooms/setup/language-role-confirm";
+import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
@@ -65,6 +66,11 @@ export function SetupRoomModal() {
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [noiseSuppression, setNoiseSuppression] = useState(true);
+
+  // Krisp noise filter / background blur — applied as LiveKit track processors once in
+  // the room (see src/hooks/use-track-processors.ts), not to this raw preview stream.
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
+  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
   const [microphoneDevices, setMicrophoneDevices] = useState<MediaDeviceInfo[]>([]);
@@ -242,6 +248,8 @@ export function SetupRoomModal() {
       window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
         cameraEnabled,
         microphoneEnabled,
+        noiseSuppressionEnabled,
+        backgroundBlurEnabled,
       }));
 
       setIsOpen(false);
@@ -320,6 +328,15 @@ export function SetupRoomModal() {
               >
                 {cameraEnabled ? <VideoCamera className="w-4 h-4" /> : <VideoCameraSlash className="w-4 h-4" />}
               </button>
+
+              <div className="h-6 w-[1px] bg-border/60 mx-0.5" />
+
+              <AvEffectsToggle
+                noiseSuppressionEnabled={noiseSuppressionEnabled}
+                onToggleNoiseSuppression={() => setNoiseSuppressionEnabled((current) => !current)}
+                backgroundBlurEnabled={backgroundBlurEnabled}
+                onToggleBackgroundBlur={() => setBackgroundBlurEnabled((current) => !current)}
+              />
 
               {/* Mic Meter */}
               {microphoneEnabled && (

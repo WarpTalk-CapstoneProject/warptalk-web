@@ -42,6 +42,23 @@ export function useSendMeetingChat() {
   });
 }
 
+export function useSendMeetingChatFile() {
+  return useMutation({
+    mutationFn: async ({
+      roomId,
+      file,
+      onUploadProgress,
+    }: {
+      roomId: string;
+      file: File;
+      onUploadProgress?: (percent: number) => void;
+    }) => {
+      const response = await meetingService.chatSendFile(roomId, file, onUploadProgress);
+      return response.data;
+    },
+  });
+}
+
 export function useTranslateMeetingChat(roomId: string) {
   return useMutation({
     mutationFn: async ({ messageId, targetLanguage }: { messageId: string; targetLanguage: string }) => {
@@ -82,6 +99,33 @@ export function useEndMeetingForAll(roomId: string) {
   return useMutation({
     mutationFn: async () => {
       const { data } = await meetingService.endMeeting(roomId);
+      return data;
+    },
+  });
+}
+
+export function useSetRoomLock(roomId: string) {
+  return useMutation({
+    mutationFn: async (locked: boolean) => {
+      const { data } = await meetingService.setLock(roomId, locked);
+      return data;
+    },
+  });
+}
+
+export function useSetMuteOnEntry(roomId: string) {
+  return useMutation({
+    mutationFn: async (muteOnEntry: boolean) => {
+      const { data } = await meetingService.setMuteOnEntry(roomId, muteOnEntry);
+      return data;
+    },
+  });
+}
+
+export function useSetRecording(roomId: string) {
+  return useMutation({
+    mutationFn: async (action: "start" | "stop") => {
+      const { data } = await meetingService.setRecording(roomId, action);
       return data;
     },
   });

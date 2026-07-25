@@ -183,8 +183,8 @@ export default function WorkspaceHomePage() {
       href: `/${slug}/history`,
     },
     {
-      title: "AI summaries",
-      description: "Read decisions, tasks, and key moments.",
+      title: "Transcripts",
+      description: "Read the transcript, AI summary, and artifacts.",
       icon: Sparkle,
       href: `/${slug}/ai-summaries`,
     },
@@ -233,8 +233,8 @@ export default function WorkspaceHomePage() {
       href: `/${slug}/rooms`,
     },
     {
-      title: "Summaries",
-      description: "Turn discussion into decisions and follow-ups.",
+      title: "Transcripts",
+      description: "Full dialogue, AI summary, and retained artifacts.",
       icon: Sparkle,
       href: `/${slug}/ai-summaries`,
     },

@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
@@ -58,6 +59,19 @@ export default function HistoryPage() {
   }, [filter, history.data?.rooms, query]);
 
   const selected = rooms.find((room) => room.id === selectedId) ?? rooms[0];
+
+  useRegisterAssistantContext({
+    pageType: "history",
+    entityId: selected?.id,
+    workspaceId: selected?.workspaceId,
+    snapshot: selected
+      ? {
+          title: selected.title,
+          status: selected.status,
+          participantCount: String(selected.participantCount),
+        }
+      : undefined,
+  });
 
   async function downloadArtifact(artifact: RoomHistoryArtifact) {
     if (artifact.status !== "ready") {

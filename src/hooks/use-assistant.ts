@@ -2,10 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assistantService } from "@/services/assistant.service";
+import type { AssistantMentionDto, AssistantPageContextDto } from "@/types/assistant";
 
 export const ASSISTANT_KEYS = {
   conversations: (workspaceId: string) => ["assistant", "conversations", workspaceId] as const,
   conversation: (id: string) => ["assistant", "conversation", id] as const,
+  skills: ["assistant", "skills"] as const,
 };
 
 export function useAssistantConversations(workspaceId: string | null) {
@@ -39,11 +41,32 @@ export function useCreateAssistantConversation() {
   });
 }
 
+export function useAssistantSkills() {
+  return useQuery({
+    queryKey: ASSISTANT_KEYS.skills,
+    queryFn: async () => {
+      const { data } = await assistantService.getSkills();
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useSendAssistantMessage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ conversationId, content }: { conversationId: string; content: string }) => {
-      const { data } = await assistantService.sendMessage(conversationId, content);
+    mutationFn: async ({
+      conversationId,
+      content,
+      pageContext,
+      mentions,
+    }: {
+      conversationId: string;
+      content: string;
+      pageContext?: AssistantPageContextDto | null;
+      mentions?: AssistantMentionDto[];
+    }) => {
+      const { data } = await assistantService.sendMessage(conversationId, content, pageContext, mentions);
       return data;
     },
     onSuccess: (_data, variables) => {

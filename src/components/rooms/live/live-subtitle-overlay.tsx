@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { groupTranscriptSegments } from "@/lib/transcript-display";
+import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 
 const HIDE_AFTER_MS = 6000;
@@ -16,7 +18,8 @@ const HIDE_AFTER_MS = 6000;
  */
 export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
   const segments = useTranslationRoomStore((state) => state.transcriptSegments);
-  const latest = useMemo(() => pickLatest(segments), [segments]);
+  const utterances = useMemo(() => groupTranscriptSegments(segments), [segments]);
+  const latest = useMemo(() => pickLatest(utterances), [utterances]);
   // Tracks the caption that has already auto-hidden. Visibility is derived from
   // it (never set synchronously in the effect) so the caption shows the instant
   // fresh content arrives and hides once the idle timer fires.
@@ -42,7 +45,7 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
       <AnimatePresence>
         {visible && latest && (original || translated) ? (
           <motion.div
-            key={contentKey}
+            key={latest.segmentId}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
@@ -54,8 +57,10 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
                 {latest.speakerName}
               </span>
             ) : null}
-            {showTranslated ? (
-              <p className="text-[18px] font-semibold leading-snug text-white">{translated}</p>
+            {translated ? (
+              <p className="text-[18px] font-semibold leading-snug text-white">
+                <AnimatedWords text={translated} maxCharacters={96} />
+              </p>
             ) : null}
             {original ? (
               <p
@@ -65,7 +70,7 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
                     : "text-[18px] font-semibold leading-snug text-white"
                 }
               >
-                {original}
+                <AnimatedWords text={original} maxCharacters={96} />
               </p>
             ) : null}
           </motion.div>

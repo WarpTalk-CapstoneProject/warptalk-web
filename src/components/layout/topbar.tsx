@@ -3,7 +3,7 @@ import type { IconProps } from "@phosphor-icons/react";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Buildings, BookOpen, Question, FileText, SquaresFour, SignOut, ChatCircle, Microphone, Moon, SidebarSimple, Plus, MagnifyingGlass, HardDrives, GearSix, Sparkle, Star, Flask, User, Users } from "@phosphor-icons/react/dist/ssr";
+import { Bell, Buildings, BookOpen, Question, FileText, SquaresFour, SignOut, ChatCircle, Microphone, Moon, SidebarSimple, Plus, MagnifyingGlass, HardDrives, GearSix, Scroll, Star, Flask, User, Users } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   Command,
@@ -35,7 +35,7 @@ const routeLabels: Record<string, string> = {
   rooms: "Rooms",
   create: "Create Room",
   history: "History",
-  "ai-summaries": "AI Summaries",
+  "ai-summaries": "Transcripts",
   "ai-chat": "AI Chat",
   feedback: "Feedback",
   terminology: "Terminology",
@@ -60,7 +60,7 @@ const searchItems: Array<{
   { title: "Rooms", url: "/rooms", group: "Workspace", icon: SquaresFour, shortcut: "R" },
   { title: "Create Room", url: "/rooms/create", group: "Workspace", icon: Plus, shortcut: "N" },
   { title: "History & Transcripts", url: "/history", group: "Workspace", icon: FileText, shortcut: "H" },
-  { title: "AI Summaries", url: "/ai-summaries", group: "AI", icon: Sparkle },
+  { title: "Transcripts", url: "/ai-summaries", group: "AI", icon: Scroll },
   { title: "Chat with AI", url: "/ai-chat", group: "AI", icon: Question },
   { title: "Terminology", url: "/terminology", group: "Configuration", icon: BookOpen },
   { title: "Voice Profiles", url: "/voice-profiles", group: "Configuration", icon: Microphone },

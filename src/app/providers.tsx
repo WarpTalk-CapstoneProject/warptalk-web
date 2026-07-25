@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useState, type ReactNode } from "react";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "6182426697-sdfuh3o6dq2lhbmb8rre0j6b46m2jnte.apps.googleusercontent.com";
+import { RealtimeNotificationProvider } from "@/components/providers/realtime-notification-provider";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -36,5 +37,18 @@ export function Providers({ children }: { children: ReactNode }) {
         </ThemeProvider>
       </QueryClientProvider>
     </GoogleOAuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem={true}
+        disableTransitionOnChange
+      >
+        <RealtimeNotificationProvider>
+          {children}
+          <Toaster position="top-right" />
+        </RealtimeNotificationProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

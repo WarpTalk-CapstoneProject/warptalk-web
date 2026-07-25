@@ -10,7 +10,7 @@ const checks = [
   ["thread events include user chips", page.includes("<UserChip user={event.actor}")],
   ["user chips open a popover profile dropdown", page.includes("function UserChip(") && page.includes("<PopoverContent")],
   ["thread content is rendered through markdown", page.includes("function MarkdownContent(")],
-  ["room description has a markdown editor", page.includes("function RoomMarkdownEditor(") && page.includes("Room notes") && page.includes("MarkdownContent content={draft}")],
+  ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes("Room notes") && page.includes("useEditor(")],
   ["markdown renderer supports tables", page.includes("case \"table\"") && page.includes("<thead") && page.includes("<td")],
   ["markdown renderer supports headings and emphasis", page.includes("case \"h1\"") && page.includes("startsWith(\"**\")") && page.includes("startsWith(\"*\")")],
   ["room logs name the actor with a chip", page.includes("Meeting scheduled") && page.includes("actor: hostUser")],

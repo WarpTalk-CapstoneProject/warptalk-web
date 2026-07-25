@@ -12,6 +12,7 @@ import {
   Microphone,
   MicrophoneSlash,
   SpeakerHigh,
+  SpeakerSlash,
 } from "@phosphor-icons/react/dist/ssr";
 
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ import { toast } from "sonner";
 import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
 
 const languages = [
   { value: "en-US", label: "English" },
@@ -71,10 +73,16 @@ function JoinMeetingContent() {
   const [roomCode] = useState(searchParams.get("code") ?? "");
   const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
   const [listenLanguage, setListenLanguage] = useState("en-US");
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [noiseSuppression, setNoiseSuppression] = useState(true);
+
+  // Krisp noise filter / background blur — applied as LiveKit track processors once in
+  // the room (see src/hooks/use-track-processors.ts), not to this raw preview stream.
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
+  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
   const [microphoneDevices, setMicrophoneDevices] = useState<MediaDeviceInfo[]>([]);
@@ -242,6 +250,7 @@ function JoinMeetingContent() {
             roomCode: normalizedCode,
             speakLanguage,
             listenLanguage,
+            voiceEnabled,
             cameraEnabled,
             microphoneEnabled,
             speakerEnabled: true,
@@ -252,6 +261,8 @@ function JoinMeetingContent() {
         window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
           cameraEnabled,
           microphoneEnabled,
+          noiseSuppressionEnabled,
+          backgroundBlurEnabled,
         }));
         
         toast.success("Joined room successfully.");
@@ -338,6 +349,15 @@ function JoinMeetingContent() {
               {cameraEnabled ? <VideoCamera className="w-4 h-4" /> : <VideoCameraSlash className="w-4 h-4" />}
             </button>
 
+            <div className="h-6 w-[1px] bg-border/60 mx-0.5" />
+
+            <AvEffectsToggle
+              noiseSuppressionEnabled={noiseSuppressionEnabled}
+              onToggleNoiseSuppression={() => setNoiseSuppressionEnabled((current) => !current)}
+              backgroundBlurEnabled={backgroundBlurEnabled}
+              onToggleBackgroundBlur={() => setBackgroundBlurEnabled((current) => !current)}
+            />
+
             {/* Mic Meter */}
             {microphoneEnabled && (
               <div className="w-1.5 h-8 bg-surface-2 rounded-full overflow-hidden flex items-end ml-1 mr-2">
@@ -397,6 +417,40 @@ function JoinMeetingContent() {
                 </Select>
 
               </div>
+            </div>
+
+            {/* Audio Output Section */}
+            <div className="space-y-4">
+              <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">Audio Output</h4>
+              <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
+                <button
+                  type="button"
+                  onClick={() => setVoiceEnabled(true)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-[3px] rounded-full font-medium transition-colors",
+                    voiceEnabled ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2"
+                  )}
+                >
+                  <SpeakerHigh className="w-3.5 h-3.5" />
+                  Voice + Text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVoiceEnabled(false)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-[3px] rounded-full font-medium transition-colors",
+                    !voiceEnabled ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2"
+                  )}
+                >
+                  <SpeakerSlash className="w-3.5 h-3.5" />
+                  Text only
+                </button>
+              </div>
+              <p className="text-[12px] text-ink-muted">
+                {voiceEnabled
+                  ? "You'll hear the AI interpreter and see the transcript."
+                  : "You'll only see the live transcript — no AI voice will play."}
+              </p>
             </div>
 
             {/* Devices Section */}

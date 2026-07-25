@@ -83,8 +83,8 @@ export function SearchMeetingDialog() {
       onSelect: () => closeAndRun(() => router.push(`/${slug}/rooms`)),
     },
     {
-      title: "AI summaries",
-      description: "Review decisions and follow-ups",
+      title: "Transcripts",
+      description: "Review transcript, summary, and artifacts",
       icon: Sparkle,
       onSelect: () => closeAndRun(() => router.push(`/${slug}/ai-summaries`)),
     },

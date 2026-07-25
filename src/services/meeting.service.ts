@@ -1,6 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
-import type { JoinMeetingResponseDto, TriggerAiRequest } from "@/types/meeting";
+import type { JoinMeetingResponseDto, RecordingStateDto, TriggerAiRequest } from "@/types/meeting";
 
 export const meetingService = {
   join(translationRoomId: string, displayName?: string) {
@@ -17,6 +17,23 @@ export const meetingService = {
 
   chatSend(roomId: string, data: { originalText: string; originalLanguage: string; translationEnabled: boolean; mentions?: import("@/types/realtime").ChatMentionDto[] }) {
     return apiClient.post<import("@/types/realtime").ChatMessageDto>(API.meetings.chatSend(roomId), data);
+  },
+
+  chatSendFile(roomId: string, file: File, onUploadProgress?: (percent: number) => void) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.post<import("@/types/meeting-chat-file").ChatFileMessageDto>(
+      API.meetings.chatSendFile(roomId),
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (event) => {
+          if (onUploadProgress && event.total) {
+            onUploadProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        },
+      }
+    );
   },
 
   chatTranslate(roomId: string, messageId: string, targetLanguage: string) {
@@ -44,5 +61,17 @@ export const meetingService = {
 
   endMeeting(roomId: string) {
     return apiClient.post<{ message: string }>(API.meetings.endMeeting(roomId));
+  },
+
+  setLock(roomId: string, locked: boolean) {
+    return apiClient.post<{ message: string }>(API.meetings.setLock(roomId), { locked });
+  },
+
+  setMuteOnEntry(roomId: string, muteOnEntry: boolean) {
+    return apiClient.post<{ message: string }>(API.meetings.setMuteOnEntry(roomId), { muteOnEntry });
+  },
+
+  setRecording(roomId: string, action: "start" | "stop") {
+    return apiClient.post<RecordingStateDto>(API.meetings.setRecording(roomId), { action });
   },
 };

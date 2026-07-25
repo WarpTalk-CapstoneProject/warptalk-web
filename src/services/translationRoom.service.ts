@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { useAuthStore } from "@/stores/auth-store";
 import type {
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
@@ -195,6 +196,13 @@ export const translationRoomService = {
     return apiClient.post<void>(API.translationRooms.generateAudioRoutes(id));
   },
 
+  /** Consent (or withdraw consent) to have MY OWN voice cloned for every listener I
+   * currently speak to in this room — see TranslationRoomAudioRouteController.
+   * SetVoiceCloneConsent. Biometric data: only ever called from an explicit user action. */
+  async setVoiceCloneConsent(id: string, enabled: boolean) {
+    return apiClient.post<void>(API.translationRooms.voiceCloneConsent(id), { enabled });
+  },
+
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };
@@ -258,4 +266,42 @@ export const translationRoomService = {
   submitFeedback(id: string, data: SubmitTranslationRoomFeedbackRequest) {
     return apiClient.post<TranslationRoomFeedbackDto>(API.translationRooms.feedback(id), data);
   },
+
+  /**
+   * WT-14: opened as a plain link/download (calendar apps can't attach an Authorization
+   * header), so the access token travels as "?access_token=" instead — see the matching
+   * JwtBearerEvents.OnMessageReceived fallback in the translation-room service's Program.cs.
+   */
+  getCalendarIcsUrl(id: string): string {
+    const baseURL = apiClient.defaults.baseURL ?? "";
+    const token = useAuthStore.getState().accessToken;
+    const query = token ? `?access_token=${encodeURIComponent(token)}` : "";
+    return `${baseURL}${API.translationRooms.calendarIcs(id)}${query}`;
+  },
 };
+
+/** WT-14: "Add to Google Calendar" quick-add link — pure URL template, no backend call. */
+export function buildGoogleCalendarUrl(params: {
+  title: string;
+  scheduledAt: string;
+  joinLink: string;
+  description?: string;
+  durationMinutes?: number;
+}): string {
+  const start = new Date(params.scheduledAt);
+  const end = new Date(start.getTime() + (params.durationMinutes ?? 60) * 60_000);
+  const toGoogleDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+
+  const details = params.description
+    ? `${params.description}\n\nJoin link: ${params.joinLink}`
+    : `Join link: ${params.joinLink}`;
+
+  const search = new URLSearchParams({
+    action: "TEMPLATE",
+    text: params.title,
+    dates: `${toGoogleDate(start)}/${toGoogleDate(end)}`,
+    details,
+  });
+
+  return `https://calendar.google.com/calendar/render?${search.toString()}`;
+}
