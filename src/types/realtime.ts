@@ -38,6 +38,12 @@ export interface TranslationTextDto {
   translatedText: string;
   sourceLang: string;
   targetLang: string;
+  startTimeMs?: number;
+  endTimeMs?: number;
+  /** Links back to the TranscriptSegmentDto.segmentId this translation belongs to. */
+  sourceSegmentId?: string;
+  /** Position within the source segment's sentence split — 0 for the first (usual) sentence. */
+  chunkIndex?: number;
 }
 
 export interface TranslatedAudioDto {
@@ -91,4 +97,12 @@ export interface TranslationRoomStateDto {
   translationRoomCode: string;
   status: string;
   participants: ParticipantInfoDto[];
+}
+
+/** One selectable TTS voice — from TranslationRoomHub.GetVoiceCatalog. `id` is a real
+ * Cartesia voice id, safe to round-trip straight into SetVoicePreference. */
+export interface VoiceOptionDto {
+  id: string;
+  name: string;
+  gender: string;
 }

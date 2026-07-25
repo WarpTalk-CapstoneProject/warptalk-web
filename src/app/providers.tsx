@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { useState, type ReactNode } from "react";
+import { RealtimeNotificationProvider } from "@/components/providers/realtime-notification-provider";
+
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -26,8 +28,10 @@ export function Providers({ children }: { children: ReactNode }) {
         enableSystem={true}
         disableTransitionOnChange
       >
-        {children}
-        <Toaster />
+        <RealtimeNotificationProvider>
+          {children}
+          <Toaster position="top-right" />
+        </RealtimeNotificationProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

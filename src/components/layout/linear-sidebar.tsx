@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   SquaresFour,
-  Sparkle,
+  Scroll,
   Waveform,
   GearSix,
   MagnifyingGlass,
@@ -20,12 +20,14 @@ import {
   Warning,
   House,
   PaperPlaneTilt,
+  Globe,
 } from "@phosphor-icons/react/dist/ssr";
 import type { IconProps } from "@phosphor-icons/react";
 type IconType = React.ElementType<IconProps>;
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useInviteWorkspaceMember, useWorkspaces } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -110,6 +112,7 @@ export function LinearSidebar() {
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const isSystemAdmin = useIsSystemAdmin();
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -140,7 +143,7 @@ export function LinearSidebar() {
         { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
       ]
     },
-    { icon: Sparkle, label: "Artifacts", href: `/${slug}/ai-summaries` },
+    { icon: Scroll, label: "Transcripts", href: `/${slug}/ai-summaries` },
     { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
   ];
 
@@ -408,6 +411,20 @@ export function LinearSidebar() {
             <NavLink key={item.href} item={item} pathname={pathname} />
           ))}
         </div>
+
+        {isSystemAdmin && (
+          <>
+            <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
+              <span className="text-[12px] font-medium text-ink-subtle">Platform</span>
+            </div>
+            <div className="flex flex-col gap-px">
+              <NavLink
+                item={{ icon: Globe, label: "Global Glossary", href: "/admin/global-glossary" }}
+                pathname={pathname}
+              />
+            </div>
+          </>
+        )}
       </nav>
 
       {isOwnerOrAdmin && activeWorkspaceId && (

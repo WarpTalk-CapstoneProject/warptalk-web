@@ -32,7 +32,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Admin, workspace, and participant sidebars keep their existing collapsible behavior while sharing the updated logo treatment.
 - Command search now includes the full review route set: dashboard, rooms, create room, history, AI summaries, AI chat, terminology, feedback, workspace, admin, and dev test.
 - `/rooms` and `/history` were compacted to match `/dashboard` density at 100% zoom: smaller section gaps, smaller headings, 82px metric cards, compact table rows, and tighter detail panels.
-- The global `Ask WarpTalk` popover shows ambient page context as a separate Linear-style strip above the chat editor, not inside the editor text row. The strip includes the current page/entity label, status when available, and an `x` control that disables sending page context for the active page/entity.
+- The global `Ask WarpTalk` popover shows ambient page context as a Linear-style gray shell that is tall enough to wrap both the context row and the chat input when context is visible. The compact chat width is wider than before, and the input remains a white inset surface with a subtle shadow on a separate `z-10` layer. The gray shell/context row animates up/down when hidden or shown while the input stays in place. The context card includes the current page/entity label, status when available, a type-specific context icon, and an `x` control that disables sending page context for the active page/entity. The four-corner toolbar icon inside the composer toggles the gray page-context card; when the card is hidden, the outgoing assistant message sends `pageContext: null`. The header resize icon continues to resize the whole chat popover.
 
 ## Files Affected
 
@@ -73,4 +73,4 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Open representative host, admin, participant, and workspace routes to confirm the logo and navigation alignment.
 - Verify active navigation states on nested routes.
 - Check narrow desktop widths to ensure the fixed host sidebar and topbar actions do not overlap page content.
-- Open Ask WarpTalk on a page with registered assistant context, confirm the context strip appears above the editor, remove it with `x`, and confirm messages no longer include ambient page context.
+- Open Ask WarpTalk on a page with registered assistant context, confirm the softer gray shell wraps both the context row and the input, confirm toggling it animates only the gray shell/context row while the input stays fixed, confirm the strip uses a page-type icon instead of a generic green dot, confirm hidden context sends `pageContext: null`, and confirm the header resize icon still resizes the whole chat popover.

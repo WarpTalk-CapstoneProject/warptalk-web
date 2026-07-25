@@ -5,12 +5,14 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   ArrowRight,
   Bold,
+  CalendarPlus,
   Check,
   ChevronDown,
   Clock,
   Code,
   Code2,
   Copy,
+  Download,
   FileText,
   Hash,
   Italic,
@@ -61,6 +63,7 @@ import {
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { buildGoogleCalendarUrl, translationRoomService } from "@/services/translationRoom.service";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 import type { UserDto } from "@/types/auth";
 import type {
@@ -318,6 +321,7 @@ export default function RoomInformationPage() {
                   Copy invite link
                 </ActionButton>
               ) : null}
+              {isUpcomingScheduledRoom(room) ? <AddToCalendarMenu room={room} /> : null}
               <ActionButton icon={<Star className="size-3.5" />}>Add to favorites</ActionButton>
               {isHost && !isEnded && room.status !== "cancelled" ? (
                 <ActionButton
@@ -378,25 +382,37 @@ function RoomThread({ events }: { events: ThreadEvent[] }) {
 
       <div className="relative mt-4 border-l border-border pl-5">
         <div className="space-y-1">
-          {events.map((event) => (
-            <article
-              key={event.id}
-              className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
-            >
-              <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
-              <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                <KindChip kind={event.kind} />
-                <UserChip user={event.actor} compact />
-                <span className="font-medium text-ink">{event.title}</span>
-                {event.at ? <span className="text-muted-foreground">{event.at}</span> : null}
-                {event.metadata?.map((item) => <InlineChip key={item}>{item}</InlineChip>)}
-              </div>
-              {event.content ? <MarkdownContent content={event.content} /> : null}
-            </article>
-          ))}
+          {events.length === 0 ? (
+            <ThreadEmptyState />
+          ) : (
+            events.map((event) => (
+              <article
+                key={event.id}
+                className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
+              >
+                <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
+                <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                  <KindChip kind={event.kind} />
+                  <UserChip user={event.actor} compact />
+                  <span className="font-medium text-ink">{event.title}</span>
+                  {event.at ? <span className="text-muted-foreground">{event.at}</span> : null}
+                  {event.metadata?.map((item) => <InlineChip key={item}>{item}</InlineChip>)}
+                </div>
+                {event.content ? <MarkdownContent content={event.content} /> : null}
+              </article>
+            ))
+          )}
         </div>
       </div>
     </section>
+  );
+}
+
+function ThreadEmptyState() {
+  return (
+    <div className="-ml-5 py-6 text-center text-[12px] text-muted-foreground">
+      No activity yet.
+    </div>
   );
 }
 
@@ -1162,6 +1178,52 @@ function ActionButton({ children, icon, destructive, disabled, onClick }: { chil
       {icon}
       <span className={cn("text-foreground", destructive && "text-red-500")}>{children}</span>
     </button>
+  );
+}
+
+/** WT-14: only offer calendar export for a room that is still SCHEDULED and hasn't started yet. */
+function isUpcomingScheduledRoom(room: TranslationRoomDto): boolean {
+  return room.status === "scheduled" && Boolean(room.scheduledAt) && new Date(room.scheduledAt!).getTime() > Date.now();
+}
+
+function AddToCalendarMenu({ room }: { room: TranslationRoomDto }) {
+  const joinLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
+
+  function handleDownloadIcs() {
+    const url = translationRoomService.getCalendarIcsUrl(room.id);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "meeting.ics";
+    link.click();
+  }
+
+  function handleAddToGoogleCalendar() {
+    const url = buildGoogleCalendarUrl({
+      title: room.title,
+      scheduledAt: room.scheduledAt!,
+      joinLink,
+      description: room.description,
+    });
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] text-muted-foreground outline-none transition-colors hover:bg-surface-2">
+        <CalendarPlus className="size-3.5" />
+        <span className="text-foreground">Add to calendar</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuItem onClick={handleDownloadIcs}>
+          <Download className="mr-2 size-3.5" />
+          Download .ics
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleAddToGoogleCalendar}>
+          <CalendarPlus className="mr-2 size-3.5" />
+          Add to Google Calendar
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
