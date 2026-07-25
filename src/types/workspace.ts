@@ -134,9 +134,9 @@ export interface GlossaryDto {
   workspaceId: string;
   name: string;
   description?: string | null;
-  businessDomain: string;
   sourceLanguage: string;
   targetLanguage: string;
+  termCount: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -145,11 +145,15 @@ export interface GlossaryDto {
 export interface GlossaryTermDto {
   id: string;
   glossaryId: string;
-  term: string;
-  preferredTranslation: string;
+  sourceTerm: string;
+  targetTerm: string;
+  context?: string | null;
+  domain?: string | null;
   definition?: string | null;
   usageNote?: string | null;
-  status: string;
+  partOfSpeech?: string | null;
+  priority: number;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
