@@ -67,7 +67,7 @@ const uploadSchema = z.object({
 });
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"];
-const ACCEPTED_UPLOAD_EXTENSIONS = ".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.webp,.bmp,.gif";
+const ACCEPTED_UPLOAD_EXTENSIONS = ".pdf,.docx,.xlsx,.md,.png,.jpg,.jpeg,.webp,.bmp,.gif";
 
 type UploadFormData = z.infer<typeof uploadSchema>;
 type FilterCategory = "all" | "pending" | "ai" | "admin" | "sensitive";
@@ -248,7 +248,7 @@ export default function WorkspaceDocumentsPage() {
     const cleanExt = ext?.toLowerCase().replace(".", "");
     if (cleanExt === "pdf") return <FilePdf className="h-6 w-6 text-red-500 shrink-0" />;
     if (cleanExt === "csv") return <FileCsv className="h-6 w-6 text-emerald-500 shrink-0" />;
-    if (cleanExt === "txt" || cleanExt === "json") return <FileCode className="h-6 w-6 text-blue-500 shrink-0" />;
+    if (cleanExt === "txt" || cleanExt === "json" || cleanExt === "md") return <FileCode className="h-6 w-6 text-blue-500 shrink-0" />;
     if (["png", "jpg", "jpeg", "webp", "bmp"].includes(cleanExt || "")) return <FileImage className="h-6 w-6 text-purple-500 shrink-0" />;
     return <FileDoc className="h-6 w-6 text-primary shrink-0" />;
   };
@@ -264,10 +264,10 @@ export default function WorkspaceDocumentsPage() {
       return doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending");
     }
     if (activeCategory === "ai") {
-      return doc.isAiAllowed && doc.confidentialityLevel !== WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED;
+      return doc.isAiAllowed;
     }
     if (activeCategory === "admin") {
-      return !doc.isAiAllowed && doc.confidentialityLevel !== WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED;
+      return !doc.isAiAllowed;
     }
     if (activeCategory === "sensitive") {
       return doc.confidentialityLevel === WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED;
@@ -477,12 +477,7 @@ export default function WorkspaceDocumentsPage() {
                           <Info className="h-3 w-3 text-amber-500" />
                           <span>Pending Approval</span>
                         </span>
-                      ) : doc.confidentialityLevel === WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full">
-                          <Lock className="h-3 w-3" />
-                          <span>Restricted</span>
-                        </span>
-                      ) : !doc.isAiAllowed || doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.SKIPPED ? (
+                      ) : !doc.isAiAllowed ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-muted bg-surface-3 border border-hairline px-2 py-0.5 rounded-full">
                           <FileText className="h-3 w-3" />
                           <span>Administrative</span>
@@ -497,9 +492,14 @@ export default function WorkspaceDocumentsPage() {
                           <ShieldWarning className="h-3 w-3" />
                           <span>AI Failed</span>
                         </span>
-                      ) : (
+                      ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING || doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full animate-pulse">
                           <span>Processing AI...</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+                          <Brain className="h-3 w-3" />
+                          <span>AI Context</span>
                         </span>
                       )}
                     </td>
@@ -596,17 +596,25 @@ export default function WorkspaceDocumentsPage() {
                 <div className="p-2 rounded-lg bg-surface-2 group-hover:bg-surface-3 transition-colors">
                   {getFileIcon(doc.fileExtension)}
                 </div>
-                {doc.confidentialityLevel === "restricted" ? (
-                  <span className="p-1 text-destructive bg-destructive/10 rounded-full" title="Restricted">
-                    <Lock className="h-3.5 w-3.5" />
-                  </span>
-                ) : doc.isAiAllowed ? (
-                  <span className="p-1 text-emerald-500 bg-emerald-500/10 rounded-full" title="AI Ready">
-                    <Sparkle className="h-3.5 w-3.5" />
-                  </span>
-                ) : (
+                {!doc.isAiAllowed ? (
                   <span className="p-1 text-ink-muted bg-surface-3 rounded-full" title="Administrative">
                     <FileText className="h-3.5 w-3.5" />
+                  </span>
+                ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
+                  <span className="p-1 text-emerald-500 bg-emerald-500/10 rounded-full" title="AI Ready">
+                    <Sparkle className="h-3.5 w-3.5 text-emerald-500" />
+                  </span>
+                ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
+                  <span className="p-1 text-destructive bg-destructive/10 rounded-full" title="AI Ingestion Failed">
+                    <ShieldWarning className="h-3.5 w-3.5" />
+                  </span>
+                ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING || doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
+                  <span className="p-1 text-amber-500 bg-amber-500/10 rounded-full" title="Processing AI...">
+                    <Spinner className="h-3.5 w-3.5 animate-spin" />
+                  </span>
+                ) : (
+                  <span className="p-1 text-primary bg-primary/10 rounded-full" title="AI Context">
+                    <Brain className="h-3.5 w-3.5" />
                   </span>
                 )}
               </CardHeader>
@@ -713,7 +721,7 @@ export default function WorkspaceDocumentsPage() {
                             className="mt-2 w-fit border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
                           >
                             <Info className="mr-1 h-3 w-3" />
-                            File hinh anh se duoc luu tru nhu dinh kem hanh chinh
+                            Image files will be stored as administrative attachments
                           </Badge>
                         )}
                       </div>
@@ -774,7 +782,7 @@ export default function WorkspaceDocumentsPage() {
                   className="w-fit border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold text-sky-700"
                 >
                   <Info className="mr-1 h-3.5 w-3.5" />
-                  File hinh anh se duoc luu tru duoi dang dinh kem hanh chinh. AI ingestion se tu dong bo qua.
+                  Image files are stored as administrative attachments. AI ingestion will be automatically skipped.
                 </Badge>
               )}
 

@@ -23,7 +23,8 @@ import {
   FileText,
   FolderOpen,
   FloppyDisk,
-  PencilSimple
+  PencilSimple,
+  Sparkle
 } from "@phosphor-icons/react";
 
 import {
@@ -369,7 +370,44 @@ export default function DocumentDetailPage({ params }: PageProps) {
               </Badge>
             </CardHeader>
             <CardContent className="p-6">
-              {/* Document status banners */}
+              {/* AI Ingestion Status Contextual Banners */}
+              {doc.isAiAllowed && (doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING || doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING) && (
+                <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 flex items-center gap-3 text-amber-600 dark:text-amber-400">
+                  <Spinner className="h-4 w-4 animate-spin shrink-0 text-amber-500" />
+                  <div className="flex flex-col gap-0.5 text-xs">
+                    <span className="font-semibold">AI Ingestion in Progress (Vector Indexing)...</span>
+                    <span className="text-[11px] opacity-80 leading-relaxed">
+                      Text extraction and vector embedding indexing are in progress. AI Assistant will retrieve context from this document once completed.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {doc.isAiAllowed && doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED && (
+                <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+                  <Sparkle className="h-4 w-4 shrink-0 text-emerald-500" />
+                  <div className="flex flex-col gap-0.5 text-xs">
+                    <span className="font-semibold">Ready for AI Assistant</span>
+                    <span className="text-[11px] opacity-80 leading-relaxed">
+                      This document has been successfully indexed into vector storage (Qdrant). You can now use AI Assistant for Q&A and context retrieval.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {doc.isAiAllowed && doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED && (
+                <div className="mb-4 rounded-xl border border-destructive/20 bg-destructive/5 p-3.5 flex items-center gap-3 text-destructive">
+                  <ShieldWarning className="h-4 w-4 shrink-0" />
+                  <div className="flex flex-col gap-0.5 text-xs">
+                    <span className="font-semibold">AI Ingestion Failed</span>
+                    <span className="text-[11px] opacity-80 leading-relaxed">
+                      Failed to extract text or generate vector embeddings for this document. Please check the file format or try uploading again.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Document approval status banners */}
               {(doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending")) && (
                 <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-ink">
                   <div className="flex gap-2.5 items-start">

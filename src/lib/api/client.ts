@@ -11,6 +11,25 @@ const apiClient = axios.create({
   timeout: 30_000,
 });
 
+function getCookieValue(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split("; ")) {
+    if (part.startsWith(prefix)) {
+      return decodeURIComponent(part.slice(prefix.length));
+    }
+  }
+
+  return null;
+}
+
+function getAccessToken(): string | null {
+  return getCookieValue("access_token") ?? useAuthStore.getState().accessToken;
+}
+
 function isFormDataLike(value: unknown): value is Record<string | symbol, unknown> {
   if (!value || typeof value !== "object") {
     return false;
@@ -38,7 +57,7 @@ function isFormDataLike(value: unknown): value is Record<string | symbol, unknow
 
 // ─── Request interceptor: attach access token ───
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = useAuthStore.getState().accessToken;
+  const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

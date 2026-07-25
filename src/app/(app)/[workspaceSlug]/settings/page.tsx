@@ -60,6 +60,11 @@ const settingsSchema = z.object({
 });
 
 type SettingsFormData = z.infer<typeof settingsSchema>;
+type ApiErrorLike = {
+  response?: {
+    status?: number;
+  };
+};
 
 const languages = [
   { code: "en", label: "English" },
@@ -110,7 +115,7 @@ export default function WorkspaceSettingsPage() {
         allowExternalCollaboration: settingsQuery.data.allowExternalCollaboration ?? true,
         requireVerifiedDomainForInternal: settingsQuery.data.requireVerifiedDomainForInternal ?? true,
         aiUsagePolicy: {
-          allowExternalLlm: settingsQuery.data.aiUsagePolicy?.allowExternalLlm ?? true,
+          allowExternalLlm: true,
           redactPii: {
             enabled: settingsQuery.data.aiUsagePolicy?.redactPii?.enabled ?? false,
           },
@@ -144,10 +149,12 @@ export default function WorkspaceSettingsPage() {
   const isOwner = currentRole === "Owner";
   const isAdmin = currentRole === "Admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
+  const workspaceError = workspaceQuery.error as ApiErrorLike | undefined;
+  const settingsError = settingsQuery.error as ApiErrorLike | undefined;
 
   const isForbidden =
-    (workspaceQuery.error as any)?.response?.status === 403 ||
-    (settingsQuery.error as any)?.response?.status === 403 ||
+    workspaceError?.response?.status === 403 ||
+    settingsError?.response?.status === 403 ||
     !isOwnerOrAdmin;
 
   if (isForbidden) {
@@ -170,10 +177,18 @@ export default function WorkspaceSettingsPage() {
 
   const handleSettingsSubmit = async (formData: SettingsFormData) => {
     if (!settingsQuery.data) return;
+    const normalizedFormData: SettingsFormData = {
+      ...formData,
+      aiUsagePolicy: {
+        ...formData.aiUsagePolicy,
+        allowExternalLlm: true,
+      },
+    };
+
     try {
       await updateSettingsMutation.mutateAsync({
         ...settingsQuery.data,
-        ...formData,
+        ...normalizedFormData,
       });
       setActiveWorkspace(
         activeWorkspaceId,
@@ -181,7 +196,7 @@ export default function WorkspaceSettingsPage() {
         activeWorkspaceSlug,
         currentRole,
         membershipType,
-        formData.defaultLanguage
+        normalizedFormData.defaultLanguage
       );
       toast.success("Workspace settings updated successfully.");
     } catch (err: unknown) {
@@ -569,19 +584,6 @@ export default function WorkspaceSettingsPage() {
         <div className="flex flex-col gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">AI Ingestion & Security Guardrails</div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
-
-            {/* Allow External LLM */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Allow External LLM Ingestion</span>
-                <span className="text-[11px] text-ink-muted">Let workspace data flow through registered external Large Language Models.</span>
-              </div>
-              <Switch
-                checked={watchAll.aiUsagePolicy?.allowExternalLlm}
-                onCheckedChange={(val) => setValue("aiUsagePolicy.allowExternalLlm", val, { shouldDirty: true })}
-                disabled={isSubmitting}
-              />
-            </div>
 
             {/* Redact PII */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">

@@ -8,6 +8,7 @@ import { Eye, EyeClosed, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useGoogleLogin } from "@react-oauth/google";
 
 import {
   CinematicAuthShell,
@@ -63,6 +64,28 @@ function RegisterForm() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(getRegisterSchema(hasToken)) as Resolver<RegisterFormData>,
+  });
+
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        const idToken = tokenResponse.access_token;
+        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, { idToken });
+        const { user, accessToken, refreshToken } = res.data;
+
+        login(user, accessToken, refreshToken);
+        setAccessTokenCookie(accessToken);
+
+        toast.success("Google sign-in successful!");
+        router.replace(callbackUrl);
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
+      }
+    },
+    onError: () => {
+      toast.error("Google authentication failed.");
+    },
   });
 
   const onSubmit = async (data: RegisterFormData) => {
@@ -209,7 +232,7 @@ function RegisterForm() {
         </span>
       </div>
 
-      <SocialButton icon={<GoogleAuthIcon />} label="Google" />
+      <SocialButton icon={<GoogleAuthIcon />} label="Google" onClick={() => handleGoogleLogin()} />
     </CinematicAuthShell>
   );
 }

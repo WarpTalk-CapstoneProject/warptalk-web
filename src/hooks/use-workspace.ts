@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
+import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
 // Query Keys
 export const WORKSPACE_KEYS = {
@@ -248,7 +249,16 @@ export function useWorkspaceDocuments(workspaceId: string, page = 1, pageSize = 
     queryFn: () => WorkspaceService.listDocuments(workspaceId, page, pageSize, search),
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
-    staleTime: 10000, // lower stale time to help track ingestion state
+    staleTime: 3000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data || !data.items) return false;
+      const hasActiveProcessing = data.items.some((doc: { ingestionStatus?: string }) => {
+        const status = doc.ingestionStatus?.toLowerCase();
+        return status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING || status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING;
+      });
+      return hasActiveProcessing ? 3000 : false;
+    },
   });
 }
 
@@ -257,7 +267,12 @@ export function useWorkspaceDocument(workspaceId: string, docId: string) {
     queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId),
     queryFn: () => WorkspaceService.getDocumentById(workspaceId, docId),
     enabled: !!workspaceId && !!docId,
-    staleTime: 30000,
+    staleTime: 3000,
+    refetchInterval: (query) => {
+      const status = query.state.data?.ingestionStatus?.toLowerCase();
+      const isProcessing = status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING || status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING;
+      return isProcessing ? 3000 : false;
+    },
   });
 }
 
