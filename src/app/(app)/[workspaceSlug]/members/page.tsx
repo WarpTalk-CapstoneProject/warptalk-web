@@ -239,7 +239,7 @@ export default function WorkspaceMembersPage() {
           </div>
 
           {/* Role Filter */}
-          <Select value={roleFilter} onValueChange={(val: string) => setRoleFilter(val || "all")}>
+          <Select value={roleFilter} onValueChange={(val: string | null) => setRoleFilter(val || "all")}>
             <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
               <SelectValue placeholder="All Roles" />
             </SelectTrigger>
@@ -252,7 +252,7 @@ export default function WorkspaceMembersPage() {
           </Select>
 
           {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={(val: string) => setStatusFilter(val || "all")}>
+          <Select value={statusFilter} onValueChange={(val: string | null) => setStatusFilter(val || "all")}>
             <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
@@ -466,7 +466,9 @@ export default function WorkspaceMembersPage() {
               <label className="text-xs font-semibold">Workspace Role</label>
               <Select
                 value={selectedInviteRole}
-                onValueChange={(val: string) => setValueInvite("roleName", val as "Admin" | "Member")}
+                onValueChange={(val: string | null) => {
+                  if (val) setValueInvite("roleName", val as "Admin" | "Member");
+                }}
               >
                 <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
                   <SelectValue />
