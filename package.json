@@ -10,6 +10,8 @@
     "test:routes": "node scripts/check-dashboard-routes.mjs",
     "test:meeting-chat": "node scripts/check-meeting-chat-contract.mjs",
     "test:meeting-ai-trigger": "node scripts/check-meeting-ai-trigger-contract.mjs",
+    "test:recording-control": "node scripts/check-recording-control-contract.mjs",
+    "test:track-processors": "node scripts/check-track-processors-contract.mjs",
     "test:room-detail-thread": "node scripts/check-room-detail-thread-flow.mjs",
     "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript-display.test.ts"
   },

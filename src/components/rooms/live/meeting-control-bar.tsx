@@ -48,6 +48,7 @@ export function MeetingControlBar({
   isLocked,
   muteOnEntry,
   isRecording,
+  recordingPending,
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
@@ -113,6 +114,8 @@ export function MeetingControlBar({
   muteOnEntry?: boolean;
   /** WT-06: whether a LiveKit Egress recording is currently in progress. */
   isRecording?: boolean;
+  /** True while the start/stop Egress request is awaiting confirmation. */
+  recordingPending?: boolean;
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
@@ -255,9 +258,21 @@ export function MeetingControlBar({
 
       {isHost && onToggleRecording ? (
         <MeetControl
-          label={isRecording ? "Stop recording" : "Start recording"}
+          label={
+            recordingPending
+              ? "Recording request in progress"
+              : isRecording
+                ? "Stop recording"
+                : "Start recording"
+          }
           active={isRecording}
-          icon={<Record className="h-[18px] w-[18px]" weight={isRecording ? "fill" : "regular"} />}
+          disabled={recordingPending}
+          icon={
+            <Record
+              className={`h-[18px] w-[18px] ${recordingPending ? "animate-pulse" : ""}`}
+              weight={isRecording ? "fill" : "regular"}
+            />
+          }
           onClick={onToggleRecording}
         />
       ) : null}

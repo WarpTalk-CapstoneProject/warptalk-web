@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { LiveKitRoom, useRoomContext } from "@livekit/components-react";
@@ -119,6 +119,14 @@ export default function RoomDetailPage() {
       return next;
     });
   }
+
+  const handleNoiseSuppressionError = useCallback(() => {
+    setNoiseSuppressionEnabled(false);
+    writeTrackEffectsPreferences({ noiseSuppressionEnabled: false });
+    toast.error("Enhanced noise suppression is unavailable.", {
+      description: "Browser noise suppression remains enabled.",
+    });
+  }, []);
 
   function handleToggleBackgroundBlur() {
     setBackgroundBlurEnabled((current) => {
@@ -1094,8 +1102,14 @@ export default function RoomDetailPage() {
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
   function handleToggleRecording() {
-    setRecordingMutation.mutate(isRecording ? "stop" : "start", {
-      onError: () => toast.error("Could not update recording."),
+    const action = isRecording ? "stop" : "start";
+    setRecordingMutation.mutate(action, {
+      onSuccess: (state) => {
+        setIsRecording(state.recording);
+        toast.success(state.recording ? "Recording started." : "Recording stopped.");
+      },
+      onError: () =>
+        toast.error(action === "start" ? "Could not start recording." : "Could not stop recording."),
     });
   }
 
@@ -1211,6 +1225,7 @@ export default function RoomDetailPage() {
               <TrackProcessorsController
                 noiseSuppressionEnabled={noiseSuppressionEnabled}
                 backgroundBlurEnabled={backgroundBlurEnabled}
+                onNoiseSuppressionError={handleNoiseSuppressionError}
               />
 
               {/* Live captions — real pipeline segments only */}
@@ -1261,6 +1276,7 @@ export default function RoomDetailPage() {
                   isLocked={isRoomLocked}
                   muteOnEntry={muteOnEntryEnabled}
                   isRecording={isRecording}
+                  recordingPending={setRecordingMutation.isPending}
                   onToggleLock={isHost ? handleToggleLock : undefined}
                   onToggleMuteOnEntry={isHost ? handleToggleMuteOnEntry : undefined}
                   onMuteAll={isHost ? handleMuteAll : undefined}
