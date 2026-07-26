@@ -52,7 +52,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           activeWorkspaceId: id,
           activeWorkspaceName: name,
           activeWorkspaceSlug: slug,
-          role: role,
+          role: role ? role.toLowerCase() : null,
           membershipType: membershipType,
           defaultLanguage: defaultLanguage,
         });

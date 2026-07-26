@@ -5,6 +5,7 @@ export interface WorkspaceDto {
   logoUrl?: string | null;
   role: string;
   membershipType?: string | null;
+  canApproveDocuments?: boolean;
   createdAt: string;
   defaultLanguage?: string;
 }

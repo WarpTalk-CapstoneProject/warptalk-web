@@ -120,7 +120,6 @@ export function LinearSidebar() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRoleName, setInviteRoleName] = useState("Member");
-  const [inviteMembershipType, setInviteMembershipType] = useState("Internal");
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -149,6 +148,7 @@ export function LinearSidebar() {
   ];
 
   const role = useWorkspaceStore((state) => state.role);
+  const membershipType = useWorkspaceStore((state) => state.membershipType);
   const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
@@ -179,12 +179,10 @@ export function LinearSidebar() {
       await inviteMemberMutation.mutateAsync({
         email,
         roleName: inviteRoleName,
-        membershipType: inviteMembershipType,
       });
       toast.success(`Invitation sent to ${email}`);
       setInviteEmail("");
       setInviteRoleName("Member");
-      setInviteMembershipType("Internal");
       setIsInviteModalOpen(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to send invitation";
@@ -314,6 +312,13 @@ export function LinearSidebar() {
                 </span>
                 <span className="text-[11px] text-ink-muted truncate leading-tight mt-0.5">
                   {user.email}
+                </span>
+                <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
+                  {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+                  {" · "}
+                  {membershipType
+                    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
+                    : "Internal"}
                 </span>
               </div>
               <button
@@ -476,6 +481,13 @@ export function LinearSidebar() {
                 <span className="text-[11px] text-ink-muted truncate leading-tight mt-0.5">
                   {user.email}
                 </span>
+                <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
+                  {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+                  {" · "}
+                  {membershipType
+                    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
+                    : "Internal"}
+                </span>
               </div>
               <button
                 onClick={(e) => {
@@ -561,7 +573,7 @@ export function LinearSidebar() {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="invite-role" className="text-[13px] font-medium text-foreground">
                   Role
@@ -577,24 +589,10 @@ export function LinearSidebar() {
                 </select>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="invite-membership" className="text-[13px] font-medium text-foreground">
-                  Access type
-                </Label>
-                <select
-                  id="invite-membership"
-                  value={inviteMembershipType}
-                  onChange={(e) => setInviteMembershipType(e.target.value)}
-                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
-                >
-                  <option value="Internal">Internal</option>
-                  <option value="External">External</option>
-                </select>
-              </div>
             </div>
 
             <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-[12px] leading-5 text-ink-muted">
-              Invited members receive workspace access based on the role and access type selected here.
+              Internal or External access is assigned automatically from verified email domains.
             </p>
 
             <DialogFooter className="-mx-5 -mb-5 mt-1">

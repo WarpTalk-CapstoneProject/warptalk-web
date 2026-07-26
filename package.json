@@ -12,7 +12,7 @@
     "test:meeting-ai-trigger": "node scripts/check-meeting-ai-trigger-contract.mjs",
     "test:room-detail-thread": "node scripts/check-room-detail-thread-flow.mjs",
     "email:dev": "email dev --dir src/emails --port 3001",
-    "email:render": "npx tsx scripts/render-email-templates.ts"
+    "email:render": "npx tsx scripts/render-email-templates.ts",
     "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript-display.test.ts"
   },
   "dependencies": {

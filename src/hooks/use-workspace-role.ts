@@ -1,12 +1,17 @@
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
-export type WorkspaceRole = "Owner" | "Admin" | "Member";
+export type WorkspaceRole = "owner" | "admin" | "member";
 
 /**
  * Custom hook to get the current user's role in the active workspace.
- * Fetches the role directly from the workspace store, which is synchronized with the database.
+ * Always normalizes the role string to lowercase ("owner" | "admin" | "member").
  */
 export function useWorkspaceRole(): WorkspaceRole {
   const role = useWorkspaceStore((state) => state.role);
-  return (role as WorkspaceRole) || "Member";
+  if (!role) return "member";
+  const lower = role.toLowerCase();
+  if (lower === "owner" || lower === "admin") {
+    return lower as WorkspaceRole;
+  }
+  return "member";
 }

@@ -51,6 +51,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useWorkspaceDocuments,
+  useWorkspace,
   useUploadWorkspaceDocument,
   useApproveWorkspaceDocument,
   useDeleteWorkspaceDocument,
@@ -80,7 +81,6 @@ export default function WorkspaceDocumentsPage() {
   const params = useParams<{ workspaceSlug: string }>();
   const workspaceSlug = params.workspaceSlug;
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const role = useWorkspaceStore((s) => s.role);
   const currentUser = useAuthStore((s) => s.user);
 
   const [query, setQuery] = useState("");
@@ -95,6 +95,7 @@ export default function WorkspaceDocumentsPage() {
 
   // TanStack Query list
   const documentsQuery = useWorkspaceDocuments(activeWorkspaceId || "", page, 20, query);
+  const workspaceQuery = useWorkspace(activeWorkspaceId || "");
   const roomsQuery = useTranslationRooms({ pageSize: 100 });
 
   // Mutations
@@ -134,7 +135,7 @@ export default function WorkspaceDocumentsPage() {
 
   if (!activeWorkspaceId) return null;
 
-  const isOwnerOrAdmin = role?.toLowerCase() === "owner" || role?.toLowerCase() === "admin";
+  const canApproveDocuments = Boolean(workspaceQuery.data?.canApproveDocuments);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -172,7 +173,7 @@ export default function WorkspaceDocumentsPage() {
     }
 
     try {
-      await uploadMutation.mutateAsync({
+      const uploadedDocument = await uploadMutation.mutateAsync({
         name: formData.name,
         sourceType: WORKSPACE_DOCUMENT_SOURCE_TYPE.UPLOAD,
         sourceId: null,
@@ -182,9 +183,11 @@ export default function WorkspaceDocumentsPage() {
       });
 
       toast.success(
-        isOwnerOrAdmin
+        uploadedDocument.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL
+          ? "Document uploaded! Submitted for approval."
+          : canApproveDocuments
           ? "Document uploaded & published successfully!"
-          : "Document uploaded! Submitted to Workspace Admin for approval."
+          : "Document uploaded successfully."
       );
       setSelectedFile(null);
       setSelectedFileIsImage(false);
@@ -193,8 +196,12 @@ export default function WorkspaceDocumentsPage() {
       const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
       if (fileInput) fileInput.value = "";
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
-        || "Failed to upload document.";
+      const response = (err as { response?: { status?: number; data?: { error?: string } } })?.response;
+      const errorMsg = response?.status === 401
+        ? "Your session expired. Please sign in again."
+        : response?.status === 403
+          ? "You do not have permission to upload documents to this workspace."
+          : response?.data?.error || "Failed to upload document.";
       toast.error(errorMsg);
     }
   };
@@ -351,7 +358,7 @@ export default function WorkspaceDocumentsPage() {
           >
             All
           </button>
-          {isOwnerOrAdmin && (
+          {canApproveDocuments && (
             <button
               onClick={() => setActiveCategory("pending")}
               className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
@@ -468,7 +475,7 @@ export default function WorkspaceDocumentsPage() {
           <div className="flex flex-col gap-1">
             <p className="text-sm font-semibold text-ink">No documents found</p>
             <p className="text-xs text-ink-muted">
-              {isOwnerOrAdmin
+              {canApproveDocuments
                 ? "Click the 'New' button above to upload reference documents."
                 : "No reference documents have been uploaded to this workspace yet."}
             </p>
@@ -490,7 +497,7 @@ export default function WorkspaceDocumentsPage() {
             <tbody className="divide-y divide-hairline/20">
               {filteredDocs.map((doc) => {
                 const isDocOwner = doc.uploadedBy === currentUser?.id || doc.ownerId === currentUser?.id;
-                const canManageDoc = isOwnerOrAdmin || isDocOwner;
+                const canManageDoc = canApproveDocuments || isDocOwner;
 
                 return (
                   <tr
@@ -560,27 +567,6 @@ export default function WorkspaceDocumentsPage() {
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
-                        {isOwnerOrAdmin && (doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending")) && (
-                          <div className="flex items-center gap-1.5 mr-1">
-                            <button
-                              onClick={() => handleApproveQuick(doc.id, true)}
-                              disabled={approveMutation.isPending}
-                              className="inline-flex h-7 px-2.5 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 text-[11px] font-bold transition disabled:opacity-50 cursor-pointer"
-                              title="Approve Document"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleApproveQuick(doc.id, false)}
-                              disabled={approveMutation.isPending}
-                              className="inline-flex h-7 px-2 items-center justify-center rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 text-[11px] font-bold transition disabled:opacity-50 cursor-pointer"
-                              title="Reject Document"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
-
                         <button
                           onClick={() => router.push(`/${workspaceSlug}/documents/${doc.id}`)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-3 hover:text-ink transition-colors cursor-pointer"
@@ -806,10 +792,14 @@ export default function WorkspaceDocumentsPage() {
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-2">
                     <Brain className="h-4 w-4 text-emerald-500" />
-                    <span className="text-xs font-bold text-ink">Allow AI Assistant indexing</span>
+                    <span className="text-xs font-bold text-ink">
+                      {canApproveDocuments ? "Allow AI Assistant indexing" : "Request AI Assistant indexing"}
+                    </span>
                   </div>
                   <span className="text-[11px] text-ink-muted leading-relaxed">
-                    Enables RAG context search for meeting translation & Q&A.
+                    {canApproveDocuments
+                      ? "Enables RAG context search after security processing."
+                      : "AI processing starts only after a workspace Owner or Admin approves this document."}
                   </span>
                 </div>
                 <Switch
@@ -833,9 +823,9 @@ export default function WorkspaceDocumentsPage() {
               <div className="flex items-start gap-2.5 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-700 dark:text-amber-400">
                 <Info className="h-4 w-4 shrink-0 mt-0.5" />
                 <p className="text-[11px] leading-relaxed">
-                  {isOwnerOrAdmin
+                  {canApproveDocuments
                     ? "As Workspace Owner/Admin, your upload will be automatically published."
-                    : "Member uploads enter Pending Approval. Security AI will audit for PII upon upload, but AI indexing requires Admin approval."}
+                    : "Your upload will enter Pending Approval. Security and AI processing start only after a workspace Owner or Admin approves it."}
                 </p>
               </div>
             </div>

@@ -32,7 +32,7 @@ export default function WorkspaceAdminDashboardPage() {
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const role = useWorkspaceRole();
 
-  const isOwnerOrAdmin = role === "Owner" || role === "Admin";
+  const isOwnerOrAdmin = role === "owner" || role === "admin";
 
   // Fetch metrics and stats (React hooks at the top level)
   const { data: members, isLoading: isLoadingMembers } = useWorkspaceMembers(

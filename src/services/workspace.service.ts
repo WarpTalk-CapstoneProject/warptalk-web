@@ -80,11 +80,10 @@ export const WorkspaceService = {
   },
 
   // ─── Invitations ───
-  async invite(workspaceId: string, email: string, roleName: string, membershipType: string): Promise<InviteMemberResponse> {
+  async invite(workspaceId: string, email: string, roleName: string): Promise<InviteMemberResponse> {
     const { data } = await apiClient.post<InviteMemberResponse>(API.workspaces.invitations(workspaceId), {
       email,
       roleName,
-      membershipType,
     });
     return data;
   },

@@ -189,9 +189,10 @@ export default function WorkspaceSettingsPage() {
     );
   }
 
-  const currentRole = workspaceQuery.data?.role || role;
-  const isOwner = currentRole === "Owner";
-  const isAdmin = currentRole === "Admin";
+  const rawRole = workspaceQuery.data?.role || role || "";
+  const currentRole = rawRole.toLowerCase();
+  const isOwner = currentRole === "owner";
+  const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
   const workspaceError = workspaceQuery.error as ApiErrorLike | undefined;
   const settingsError = settingsQuery.error as ApiErrorLike | undefined;

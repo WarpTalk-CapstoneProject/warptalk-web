@@ -1,6 +1,10 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
+import {
+  chooseNewestAccessToken,
+  isAccessTokenExpiring,
+} from "@/lib/api/token-lifecycle";
 
 /**
  * Client-side Axios instance with token interceptors.
@@ -26,8 +30,59 @@ function getCookieValue(name: string): string | null {
   return null;
 }
 
+function getPersistedAuthState(): {
+  accessToken?: string | null;
+  refreshToken?: string | null;
+} | null {
+  if (typeof localStorage === "undefined") {
+    return null;
+  }
+
+  try {
+    const persisted = localStorage.getItem("warptalk-auth");
+    if (!persisted) return null;
+    const parsed = JSON.parse(persisted) as {
+      state?: {
+        accessToken?: string | null;
+        refreshToken?: string | null;
+      };
+    };
+    return parsed.state ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function getAccessToken(): string | null {
-  return getCookieValue("access_token") ?? useAuthStore.getState().accessToken;
+  const storeToken = useAuthStore.getState().accessToken;
+  const persistedToken = getPersistedAuthState()?.accessToken;
+  const cookieToken = getCookieValue("access_token");
+
+  return chooseNewestAccessToken(
+    chooseNewestAccessToken(storeToken, persistedToken),
+    cookieToken,
+  );
+}
+
+function getRefreshToken(): string | null {
+  return getPersistedAuthState()?.refreshToken
+    ?? useAuthStore.getState().refreshToken;
+}
+
+function persistTokens(accessToken: string, refreshToken: string) {
+  useAuthStore.getState().setTokens(accessToken, refreshToken);
+
+  if (typeof document !== "undefined") {
+    document.cookie = `access_token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+  }
+}
+
+function isAuthEndpoint(url?: string) {
+  return Boolean(
+    url?.includes("/auth/login")
+    || url?.includes("/auth/refresh")
+    || url?.includes("/auth/register"),
+  );
 }
 
 function isFormDataLike(value: unknown): value is Record<string | symbol, unknown> {
@@ -56,10 +111,75 @@ function isFormDataLike(value: unknown): value is Record<string | symbol, unknow
 }
 
 // ─── Request interceptor: attach access token ───
-apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+let refreshPromise: Promise<string> | null = null;
+
+async function requestNewAccessToken(failedAccessToken?: string | null): Promise<string> {
+  const refreshInsideLock = async () => {
+    const latestAccessToken = getAccessToken();
+    const anotherRequestAlreadyRefreshed = Boolean(
+      failedAccessToken
+      && latestAccessToken
+      && latestAccessToken !== failedAccessToken
+      && !isAccessTokenExpiring(latestAccessToken, Date.now(), 5_000),
+    );
+    const proactiveRefreshAlreadyCompleted = Boolean(
+      !failedAccessToken
+      && latestAccessToken
+      && !isAccessTokenExpiring(latestAccessToken),
+    );
+
+    if (anotherRequestAlreadyRefreshed || proactiveRefreshAlreadyCompleted) {
+      return latestAccessToken!;
+    }
+
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      throw new Error("No refresh token");
+    }
+
+    const { data } = await axios.post<AuthResponse>(
+      `${apiClient.defaults.baseURL}/auth/refresh`,
+      { refreshToken },
+    );
+
+    persistTokens(data.accessToken, data.refreshToken);
+    return data.accessToken;
+  };
+
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return navigator.locks.request("warptalk-auth-refresh", refreshInsideLock);
+  }
+
+  return refreshInsideLock();
+}
+
+function refreshAccessToken(failedAccessToken?: string | null): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = requestNewAccessToken(failedAccessToken)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+async function getUsableAccessToken(): Promise<string | null> {
   const token = getAccessToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (token && !isAccessTokenExpiring(token)) {
+    return token;
+  }
+  if (!getRefreshToken()) {
+    return token;
+  }
+  return refreshAccessToken(token);
+}
+
+apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  if (!isAuthEndpoint(config.url)) {
+    const token = await getUsableAccessToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
 
   // If request body is FormData, ensure Content-Type is deleted so browser sets boundary automatically
@@ -81,22 +201,35 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 // ─── Response interceptor: refresh on 401 ───
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (error: unknown) => void;
-}> = [];
+function normalizeResponseRoles(data: unknown): unknown {
+  if (!data || typeof data !== "object") return data;
+  if (Array.isArray(data)) return data.map(normalizeResponseRoles);
 
-function processQueue(error: unknown, token: string | null) {
-  failedQueue.forEach((p) => {
-    if (error) p.reject(error);
-    else if (token) p.resolve(token);
-  });
-  failedQueue = [];
+  const obj = data as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (
+      (key === "role" || key === "roleName" || key === "currentRole" || key === "workspaceRole") &&
+      typeof val === "string"
+    ) {
+      result[key] = val.toLowerCase();
+    } else if (typeof val === "object" && val !== null) {
+      result[key] = normalizeResponseRoles(val);
+    } else {
+      result[key] = val;
+    }
+  }
+  return result;
 }
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.data) {
+      response.data = normalizeResponseRoles(response.data);
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
@@ -105,52 +238,22 @@ apiClient.interceptors.response.use(
     if (
       error.response?.status !== 401 ||
       originalRequest._retry ||
-      originalRequest.url?.includes("/auth/login") ||
-      originalRequest.url?.includes("/auth/refresh") ||
-      originalRequest.url?.includes("/auth/register")
+      isAuthEndpoint(originalRequest.url)
     ) {
       return Promise.reject(error);
     }
 
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        failedQueue.push({
-          resolve: (token: string) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            resolve(apiClient(originalRequest));
-          },
-          reject,
-        });
-      });
-    }
-
     originalRequest._retry = true;
-    isRefreshing = true;
 
     try {
-      const refreshToken = useAuthStore.getState().refreshToken;
-      if (!refreshToken) throw new Error("No refresh token");
-
-      // Backend endpoint: POST /api/v1/auth/refresh
-      // Returns flat AuthResponse: { accessToken, refreshToken, expiresAt, user }
-      const { data } = await axios.post<AuthResponse>(
-        `${apiClient.defaults.baseURL}/auth/refresh`,
-        { refreshToken }
-      );
-
-      useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
-
-      if (typeof document !== "undefined") {
-        document.cookie = `access_token=${data.accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-      }
-
-      originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
-      processQueue(null, data.accessToken);
-
+      const failedAuthorization = originalRequest.headers.Authorization;
+      const failedAccessToken = typeof failedAuthorization === "string"
+        ? failedAuthorization.replace(/^Bearer\s+/i, "")
+        : null;
+      const accessToken = await refreshAccessToken(failedAccessToken);
+      originalRequest.headers.Authorization = `Bearer ${accessToken}`;
       return apiClient(originalRequest);
     } catch (refreshError) {
-      processQueue(refreshError, null);
-
       const isAxiosError = axios.isAxiosError(refreshError);
       const isAuthError = isAxiosError && refreshError.response && refreshError.response.status >= 400 && refreshError.response.status < 500;
 
@@ -163,8 +266,6 @@ apiClient.interceptors.response.use(
         }
       }
       return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
     }
   }
 );

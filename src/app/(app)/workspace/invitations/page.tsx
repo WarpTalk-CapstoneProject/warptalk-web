@@ -18,11 +18,11 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import {
   useWorkspaceInvitations,
   useInviteWorkspaceMember,
-  useRevokeWorkspaceInvitation,
-  useWorkspaceSettings
+  useRevokeWorkspaceInvitation
 } from "@/hooks/use-workspace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 const inviteSchema = z.object({
   email: z.string().email("Invalid email address"),
   roleName: z.enum(["Admin", "Member"]),
-  membershipType: z.enum(["Internal", "External"]),
 });
 
 type InviteFormData = z.infer<typeof inviteSchema>;
@@ -42,7 +41,7 @@ export default function WorkspaceInvitationsPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
-  const currentRole = useWorkspaceStore((s) => s.role);
+  const currentRole = useWorkspaceRole();
   const currentMembership = useWorkspaceStore((s) => s.membershipType);
 
   const [query, setQuery] = useState("");
@@ -52,7 +51,6 @@ export default function WorkspaceInvitationsPage() {
   const [inviteToRevoke, setInviteToRevoke] = useState<{ id: string; email: string } | null>(null);
 
   // Queries & Mutations
-  const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
   const invitationsQuery = useWorkspaceInvitations(activeWorkspaceId || "", page, 10, query);
   const inviteMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
   const revokeMutation = useRevokeWorkspaceInvitation(activeWorkspaceId || "");
@@ -69,20 +67,18 @@ export default function WorkspaceInvitationsPage() {
     defaultValues: {
       email: "",
       roleName: "Member",
-      membershipType: "Internal",
     },
   });
 
   const selectedRole = watch("roleName");
-  const selectedMembership = watch("membershipType");
 
   if (!activeWorkspaceId) return null;
 
   // RBAC Access Control
-  const isOwner = currentRole === "Owner";
-  const isAdmin = currentRole === "Admin";
+  const isOwner = currentRole === "owner";
+  const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
-  const isExternal = currentMembership === "External";
+  const isExternal = currentMembership?.toLowerCase() === "external";
 
   if (!isOwnerOrAdmin || isExternal) {
     return (
@@ -103,28 +99,10 @@ export default function WorkspaceInvitationsPage() {
   }
 
   const handleInvite = async (formData: InviteFormData) => {
-    // Check external collaboration policy
-    const settings = settingsQuery.data;
-    if (formData.membershipType === "External" && settings && !settings.allowExternalCollaboration) {
-      toast.error("External collaboration is disabled by workspace security policy.");
-      return;
-    }
-
-    // Check verified domain requirement for internal members
-    if (formData.membershipType === "Internal" && settings?.requireVerifiedDomainForInternal && settings.verifiedDomains.length > 0) {
-      const emailDomain = formData.email.split("@")[1]?.toLowerCase();
-      const isVerified = settings.verifiedDomains.some((d) => d.toLowerCase() === emailDomain);
-      if (!isVerified) {
-        toast.error(`Internal members must have an email domain matching verified domains: ${settings.verifiedDomains.join(", ")}`);
-        return;
-      }
-    }
-
     try {
       const result = await inviteMutation.mutateAsync({
         email: formData.email,
         roleName: formData.roleName,
-        membershipType: formData.membershipType,
       });
 
       const params = new URLSearchParams({
@@ -329,24 +307,9 @@ export default function WorkspaceInvitationsPage() {
                 )}
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold">Membership Type</label>
-                <Select
-                  value={selectedMembership}
-                  onValueChange={(val) => setValue("membershipType", val as "Internal" | "External")}
-                >
-                  <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Internal" className="text-xs">Internal (Employee)</SelectItem>
-                    <SelectItem value="External" className="text-xs">External (Partner/Client)</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.membershipType && (
-                  <p className="text-[11px] text-destructive mt-0.5">{errors.membershipType.message}</p>
-                )}
-              </div>
+              <p className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-5 text-ink-muted">
+                Access type is assigned automatically from the workspace&apos;s verified domains.
+              </p>
 
               <button
                 type="submit"

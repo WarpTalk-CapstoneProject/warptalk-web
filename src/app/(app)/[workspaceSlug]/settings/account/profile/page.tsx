@@ -16,7 +16,19 @@ export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const updateUser = useAuthStore((s) => s.updateUser);
-  const { activeWorkspaceId } = useWorkspaceStore();
+  const {
+    activeWorkspaceId,
+    activeWorkspaceName,
+    role,
+    membershipType,
+  } = useWorkspaceStore();
+  const displayRole = role
+    ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}`
+    : "Member";
+  const displayMembershipType = membershipType
+    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
+    : "Internal";
+  const isOwner = role?.toLowerCase() === "owner";
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -225,16 +237,35 @@ export default function SettingsPage() {
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <span className="text-xs font-semibold text-ink">Workspace</span>
+              <span className="max-w-[240px] truncate text-xs font-medium text-ink-muted">
+                {activeWorkspaceName || "Current workspace"}
+              </span>
+            </div>
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <span className="text-xs font-semibold text-ink">Workspace role</span>
+              <span className="rounded-[4px] border border-hairline bg-surface-2 px-2 py-1 text-[11px] font-semibold text-ink">
+                {displayRole}
+              </span>
+            </div>
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <span className="text-xs font-semibold text-ink">Membership type</span>
+              <span className="rounded-[4px] border border-primary/20 bg-primary/5 px-2 py-1 text-[11px] font-semibold text-primary">
+                {displayMembershipType}
+              </span>
+            </div>
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Remove yourself from workspace</span>
               </div>
               <button
                 type="button"
                 onClick={handleLeaveWorkspace}
-                disabled={saving}
+                disabled={saving || isOwner}
+                title={isOwner ? "Transfer workspace ownership before leaving" : "Leave workspace"}
                 className="text-xs font-semibold text-destructive hover:text-red-600 transition-colors cursor-pointer"
               >
-                Leave workspace
+                {isOwner ? "Transfer ownership first" : "Leave workspace"}
               </button>
             </div>
           </div>

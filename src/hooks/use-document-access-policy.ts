@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { isExternalViewPolicy } from "@/lib/document-access-policy";
+import type { WorkspaceDocumentAccessPolicyDto, WorkspaceMemberDto } from "@/types/workspace";
 import {
   useWorkspaceDocumentAccessPolicies,
   useAddWorkspaceDocumentAccessPolicy,
@@ -8,8 +10,8 @@ import {
 } from "./use-workspace";
 
 export interface DocumentAccessPolicyHookReturn {
-  policiesList: any[];
-  membersList: any[];
+  policiesList: WorkspaceDocumentAccessPolicyDto[];
+  membersList: WorkspaceMemberDto[];
   isExternalAllowed: boolean;
   isLoading: boolean;
   isSubmitting: boolean;
@@ -38,25 +40,18 @@ export function useDocumentAccessPolicy(
   const addPolicyMutation = useAddWorkspaceDocumentAccessPolicy(workspaceId, documentId);
   const removePolicyMutation = useRemoveWorkspaceDocumentAccessPolicy(workspaceId, documentId);
 
-  const policiesList: any[] = policiesQuery.data?.items || [];
-  const membersList: any[] = membersQuery.data?.items || [];
+  const policiesList: WorkspaceDocumentAccessPolicyDto[] = policiesQuery.data?.items || [];
+  const membersList: WorkspaceMemberDto[] = membersQuery.data?.items || [];
 
-  const isExternalAllowed = policiesList.some(
-    (p: any) =>
-      p.subjectType === "MembershipType" &&
-      p.subjectKey === "External" &&
-      p.permission === "View" &&
-      p.effect === "ALLOW"
-  );
+  const serverExternalAllowed = policiesList.some(isExternalViewPolicy);
+  const [pendingExternalAccess, setPendingExternalAccess] = useState<boolean | null>(null);
+  const isExternalAllowed = pendingExternalAccess ?? serverExternalAllowed;
 
   const toggleExternalAccess = async (checked: boolean) => {
-    const extPolicy = policiesList.find(
-      (p: any) =>
-        p.subjectType === "MembershipType" &&
-        p.subjectKey === "External" &&
-        p.permission === "View" &&
-        p.effect === "ALLOW"
-    );
+    if (checked === serverExternalAllowed && pendingExternalAccess === null) return;
+
+    const extPolicy = policiesList.find(isExternalViewPolicy);
+    setPendingExternalAccess(checked);
 
     if (checked) {
       try {
@@ -67,19 +62,25 @@ export function useDocumentAccessPolicy(
           permission: "View",
           effect: "ALLOW",
         });
+        setPendingExternalAccess(null);
         toast.success("External member access enabled.");
       } catch (err: unknown) {
+        setPendingExternalAccess(null);
         const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to enable external access.";
         toast.error(errorMsg);
       }
     } else if (extPolicy) {
       try {
         await removePolicyMutation.mutateAsync(extPolicy.id);
+        setPendingExternalAccess(null);
         toast.success("External member access disabled.");
       } catch (err: unknown) {
+        setPendingExternalAccess(null);
         const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to disable external access.";
         toast.error(errorMsg);
       }
+    } else {
+      setPendingExternalAccess(null);
     }
   };
 
@@ -95,7 +96,7 @@ export function useDocumentAccessPolicy(
 
   const allowUser = async (userId: string, userName?: string) => {
     const existingPolicy = policiesList.find(
-      (p: any) => p.subjectType === "User" && p.subjectId === userId && p.effect === "ALLOW"
+      (p) => p.subjectType === "User" && p.subjectId === userId && p.effect === "ALLOW"
     );
 
     if (existingPolicy) {
@@ -119,7 +120,7 @@ export function useDocumentAccessPolicy(
 
   const blockUser = async (userId: string, userName?: string) => {
     const existingPolicy = policiesList.find(
-      (p: any) => p.subjectType === "User" && p.subjectId === userId && p.effect === "DENY"
+      (p) => p.subjectType === "User" && p.subjectId === userId && p.effect === "DENY"
     );
 
     if (existingPolicy) {

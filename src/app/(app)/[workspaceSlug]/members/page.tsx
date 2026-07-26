@@ -7,25 +7,26 @@ import { z } from "zod";
 import { toast } from "sonner";
 import {
   Users,
-  Trash,
+  UserMinus,
   MagnifyingGlass,
   Spinner,
   Warning,
   Plus,
   Check,
-  Copy
+  Copy,
+  Download,
 } from "@phosphor-icons/react";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
-import { WorkspaceMemberDto } from "@/types/workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useWorkspaceMembers,
   useRemoveWorkspaceMember,
-  useChangeWorkspaceMemberRole,
   useUpdateWorkspaceMember,
   useInviteWorkspaceMember,
-  useWorkspaceSettings
 } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -34,12 +35,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const ROLES = ["Owner", "Admin", "Member"];
-
 const inviteSchema = z.object({
   email: z.string().email("Invalid email address"),
   roleName: z.enum(["Admin", "Member"]),
-  membershipType: z.enum(["Internal", "External"]),
 });
 
 type InviteFormData = z.infer<typeof inviteSchema>;
@@ -48,7 +46,7 @@ export default function WorkspaceMembersPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
-  const currentRole = useWorkspaceStore((s) => s.role);
+  const currentRole = useWorkspaceRole();
   const currentUser = useAuthStore((s) => s.user);
 
   const [query, setQuery] = useState("");
@@ -64,10 +62,8 @@ export default function WorkspaceMembersPage() {
   // TanStack Query Hooks
   const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", page, 10, query);
   const removeMemberMutation = useRemoveWorkspaceMember(activeWorkspaceId || "");
-  const changeRoleMutation = useChangeWorkspaceMemberRole(activeWorkspaceId || "");
   const updateMemberMutation = useUpdateWorkspaceMember(activeWorkspaceId || "");
   const inviteMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
-  const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
 
   // Invite form setup
   const {
@@ -82,20 +78,20 @@ export default function WorkspaceMembersPage() {
     defaultValues: {
       email: "",
       roleName: "Member",
-      membershipType: "Internal",
     },
   });
 
   const selectedInviteRole = watchInvite("roleName");
-  const selectedInviteMembership = watchInvite("membershipType");
 
   if (!activeWorkspaceId) return null;
 
-  const isOwner = currentRole === "Owner";
-  const isAdmin = currentRole === "Admin";
+  const isOwner = currentRole === "owner";
+  const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
 
   const membersList = membersQuery.data?.items || [];
+
+  const [isExporting, setIsExporting] = useState(false);
 
   // Client-side filtering for Role and Status
   const filteredMembers = membersList.filter((member) => {
@@ -104,6 +100,58 @@ export default function WorkspaceMembersPage() {
     return matchesRole && matchesStatus;
   });
 
+  const handleExportXlsx = async () => {
+    try {
+      setIsExporting(true);
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Members");
+
+      worksheet.columns = [
+        { header: "Full Name", key: "fullName", width: 25 },
+        { header: "Email", key: "email", width: 30 },
+        { header: "Role", key: "roleName", width: 15 },
+        { header: "Membership Type", key: "membershipType", width: 18 },
+        { header: "Status", key: "status", width: 12 },
+        { header: "Joined Date", key: "joinedAt", width: 20 },
+        { header: "Host Meetings Permission", key: "canCreateMeetings", width: 22 },
+      ];
+
+      // Style header row
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFF" } };
+      headerRow.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "1E293B" },
+      };
+
+      filteredMembers.forEach((m) => {
+        worksheet.addRow({
+          fullName: m.fullName || "N/A",
+          email: m.email || "N/A",
+          roleName: m.roleName || "Member",
+          membershipType: m.membershipType || "Internal",
+          status: m.status || "Active",
+          joinedAt: m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "N/A",
+          canCreateMeetings: m.canCreateMeetings ? "Yes" : "No",
+        });
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const dateStr = new Date().toISOString().split("T")[0];
+      const fileName = `${activeWorkspaceName || "Workspace"}_Members_${dateStr}.xlsx`;
+      saveAs(blob, fileName);
+      toast.success("Members list exported successfully!");
+    } catch {
+      toast.error("Failed to export members list.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleToggleCanCreateMeetings = async (userId: string, currentVal: boolean) => {
     try {
       await updateMemberMutation.mutateAsync({ userId, canCreateMeetings: !currentVal });
@@ -111,16 +159,6 @@ export default function WorkspaceMembersPage() {
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(error?.response?.data?.error || "Failed to update meeting permission");
-    }
-  };
-
-  const handleRoleChange = async (userId: string, newRole: string) => {
-    try {
-      await changeRoleMutation.mutateAsync({ userId, roleName: newRole });
-      toast.success(`Role updated to ${newRole}`);
-    } catch (err) {
-      const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Failed to update role");
     }
   };
 
@@ -137,26 +175,10 @@ export default function WorkspaceMembersPage() {
   };
 
   const handleInvite = async (formData: InviteFormData) => {
-    const settings = settingsQuery.data;
-    if (formData.membershipType === "External" && settings && !settings.allowExternalCollaboration) {
-      toast.error("External collaboration is disabled by workspace security policy.");
-      return;
-    }
-
-    if (formData.membershipType === "Internal" && settings?.requireVerifiedDomainForInternal && settings.verifiedDomains.length > 0) {
-      const emailDomain = formData.email.split("@")[1]?.toLowerCase();
-      const isVerified = settings.verifiedDomains.some((d) => d.toLowerCase() === emailDomain);
-      if (!isVerified) {
-        toast.error(`Internal members must have an email domain matching verified domains: ${settings.verifiedDomains.join(", ")}`);
-        return;
-      }
-    }
-
     try {
       const result = await inviteMutation.mutateAsync({
         email: formData.email,
         roleName: formData.roleName,
-        membershipType: formData.membershipType,
       });
 
       const params = new URLSearchParams({
@@ -180,14 +202,6 @@ export default function WorkspaceMembersPage() {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(error?.response?.data?.error || "Failed to create invitation");
     }
-  };
-
-  const canModifyRole = (targetMember: WorkspaceMemberDto) => {
-    if (isOwner) return true;
-    if (isAdmin) {
-      return targetMember.roleName !== "Owner" && targetMember.roleName !== "Admin";
-    }
-    return false;
   };
 
   const copyToClipboard = (text: string) => {
@@ -225,7 +239,7 @@ export default function WorkspaceMembersPage() {
           </div>
 
           {/* Role Filter */}
-          <Select value={roleFilter} onValueChange={(val) => setRoleFilter(val || "all")}>
+          <Select value={roleFilter} onValueChange={(val: string) => setRoleFilter(val || "all")}>
             <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
               <SelectValue placeholder="All Roles" />
             </SelectTrigger>
@@ -238,7 +252,7 @@ export default function WorkspaceMembersPage() {
           </Select>
 
           {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || "all")}>
+          <Select value={statusFilter} onValueChange={(val: string) => setStatusFilter(val || "all")}>
             <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
@@ -249,18 +263,29 @@ export default function WorkspaceMembersPage() {
           </Select>
         </div>
 
-        {/* Invite button next to filters */}
+        {/* Export & Invite buttons for Owner/Admin only */}
         {isOwnerOrAdmin && (
-          <button
-            onClick={() => {
-              resetInvite();
-              setIsInviteOpen(true);
-            }}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-3 text-xs font-semibold text-white transition duration-150 cursor-pointer shrink-0"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Invite</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportXlsx}
+              disabled={isExporting}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 px-3 text-xs font-semibold text-ink transition duration-150 cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              {isExporting ? <Spinner className="h-3.5 w-3.5 animate-spin text-primary" /> : <Download className="h-3.5 w-3.5 text-primary" />}
+              <span>{isExporting ? "Exporting..." : "Export (.xlsx)"}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                resetInvite();
+                setIsInviteOpen(true);
+              }}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-3 text-xs font-semibold text-white transition duration-150 cursor-pointer shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Invite</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -279,9 +304,10 @@ export default function WorkspaceMembersPage() {
         ) : (
           <div className="min-w-[750px] divide-y divide-hairline/40">
             {/* Header row */}
-            <div className="grid grid-cols-[2.5fr_120px_100px_120px_110px_48px] items-center gap-4 px-2 py-2 text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
+            <div className="grid grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px] items-center gap-4 px-2 py-2 text-[11px] font-semibold uppercase text-ink-muted">
               <span>Name</span>
               <span>Role</span>
+              <span>Membership Type</span>
               <span>Status</span>
               <span>Joined</span>
               <span className="text-center">Host meetings</span>
@@ -291,12 +317,13 @@ export default function WorkspaceMembersPage() {
             {/* Data rows */}
             {filteredMembers.map((member) => {
               const isSelf = member.userId === currentUser?.id;
-              const canModifyThisMember = canModifyRole(member) && !isSelf;
+              const memberRole = member.roleName.toLowerCase();
+              const memberStatus = member.status.toLowerCase();
 
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[2.5fr_120px_100px_120px_110px_48px] items-center gap-4 px-2 py-3 hover:bg-surface-2/30 transition-colors rounded-md"
+                  className="grid grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px] items-center gap-4 rounded-md px-2 py-3 transition-colors hover:bg-surface-2/40"
                 >
                   {/* User name, email & avatar */}
                   <div className="flex items-center gap-3 min-w-0">
@@ -322,36 +349,30 @@ export default function WorkspaceMembersPage() {
                     </div>
                   </div>
 
-                  {/* Role selector */}
+                  {/* Role Badge */}
                   <div>
-                    {canModifyThisMember ? (
-                      <Select
-                        value={member.roleName}
-                        onValueChange={(val) => handleRoleChange(member.userId, val || "")}
-                      >
-                        <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ROLES.filter((r) => isOwner || r !== "Admin").map((r) => (
-                            <SelectItem key={r} value={r} className="text-xs">
-                              {r}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <span className="text-xs font-medium text-ink bg-surface-3/60 border border-hairline/80 px-2 py-0.8 rounded-[4px]">
-                        {member.roleName}
-                      </span>
-                    )}
+                    <Badge variant="outline" className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink">
+                      {member.roleName}
+                    </Badge>
+                  </div>
+
+                  {/* Membership Type Badge */}
+                  <div>
+                    <Badge
+                      variant="outline"
+                      className={member.membershipType.toLowerCase() === "external"
+                        ? "rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                        : "rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"}
+                    >
+                      {member.membershipType}
+                    </Badge>
                   </div>
 
                   {/* Status from Backend */}
                   <div>
                     <Badge
                       variant="outline"
-                      className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${member.status === "Active"
+                      className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${memberStatus === "active"
                           ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20"
                           : "bg-surface-3/50 border-hairline text-ink-muted"
                         }`}
@@ -369,7 +390,7 @@ export default function WorkspaceMembersPage() {
                   <div className="flex justify-center">
                     <Switch
                       checked={member.canCreateMeetings}
-                      disabled={!isOwnerOrAdmin || isSelf || member.roleName === "Owner"}
+                      disabled={!isOwnerOrAdmin || isSelf || memberRole === "owner"}
                       onCheckedChange={() =>
                         handleToggleCanCreateMeetings(member.userId, member.canCreateMeetings)
                       }
@@ -380,11 +401,12 @@ export default function WorkspaceMembersPage() {
                   <div className="flex justify-end">
                     <button
                       onClick={() => setMemberToRemove({ id: member.userId, name: member.fullName })}
-                      disabled={!isOwnerOrAdmin || isSelf || member.roleName === "Owner" || (isAdmin && member.roleName === "Admin")}
+                      disabled={!isOwnerOrAdmin || isSelf || memberRole === "owner" || (isAdmin && memberRole === "admin")}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
-                      title="Remove Member"
+                      title="Remove from workspace"
+                      aria-label={`Remove ${member.fullName} from workspace`}
                     >
-                      <Trash className="h-4 w-4" />
+                      <UserMinus className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -444,7 +466,7 @@ export default function WorkspaceMembersPage() {
               <label className="text-xs font-semibold">Workspace Role</label>
               <Select
                 value={selectedInviteRole}
-                onValueChange={(val) => setValueInvite("roleName", val as "Admin" | "Member")}
+                onValueChange={(val: string) => setValueInvite("roleName", val as "Admin" | "Member")}
               >
                 <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
                   <SelectValue />
@@ -459,24 +481,9 @@ export default function WorkspaceMembersPage() {
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold">Membership Type</label>
-              <Select
-                value={selectedInviteMembership}
-                onValueChange={(val) => setValueInvite("membershipType", val as "Internal" | "External")}
-              >
-                <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Internal" className="text-xs">Internal (Employee)</SelectItem>
-                  <SelectItem value="External" className="text-xs">External (Partner/Client)</SelectItem>
-                </SelectContent>
-              </Select>
-              {inviteErrors.membershipType && (
-                <p className="text-[11px] text-destructive mt-0.5">{inviteErrors.membershipType.message}</p>
-              )}
-            </div>
+            <p className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-5 text-ink-muted">
+              Internal or External access is assigned automatically from the workspace&apos;s verified domains.
+            </p>
 
             <DialogFooter className="mt-4 flex gap-2">
               <button
@@ -503,7 +510,7 @@ export default function WorkspaceMembersPage() {
       </Dialog>
 
       {/* Generated Link Share Dialog */}
-      <Dialog open={!!inviteNotice} onOpenChange={(open) => !open && setInviteNotice(null)}>
+      <Dialog open={!!inviteNotice} onOpenChange={(open: boolean) => !open && setInviteNotice(null)}>
         <DialogContent className="border-hairline bg-surface-1 max-w-md">
           <DialogHeader className="flex flex-col gap-1.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto">
@@ -550,7 +557,7 @@ export default function WorkspaceMembersPage() {
       </Dialog>
 
       {/* Remove Confirmation Dialog */}
-      <Dialog open={!!memberToRemove} onOpenChange={(open) => !open && setMemberToRemove(null)}>
+      <Dialog open={!!memberToRemove} onOpenChange={(open: boolean) => !open && setMemberToRemove(null)}>
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader className="flex flex-col gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive mx-auto">
