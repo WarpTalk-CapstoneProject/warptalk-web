@@ -3,11 +3,20 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
-import { CaretRight, CaretDown, CheckCircle, Circle, Copy, Calendar as CalendarIcon, Funnel, SlidersHorizontal, SidebarSimple, Plus, Keyboard } from "@phosphor-icons/react/dist/ssr";
+import { CaretRight, CaretDown, CheckCircle, Circle, Copy, Calendar as CalendarIcon, SidebarSimple, Plus, Keyboard } from "@phosphor-icons/react/dist/ssr";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  FilterDock,
+  FilterDockRow,
+  FilterDockSection,
+  filterDockSelectContentClass,
+  filterDockSelectItemClass,
+  filterDockSelectTriggerClass,
+} from "@/components/ui/filter-dock";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
@@ -353,6 +362,7 @@ export default function MeetingsPageLinear() {
     if (activeTab === "history") return rooms.filter(r => r.status === "ended" || r.status === "cancelled" || r.status === "timeout");
     return rooms;
   }, [rooms, activeTab, selectedDate]);
+  const activeRoomsFilterCount = activeTab !== "active" ? 1 : 0;
 
   return (
     <div className="flex flex-col h-full bg-surface-1">
@@ -372,12 +382,81 @@ export default function MeetingsPageLinear() {
         </div>
 
         <div className="flex items-center gap-2 pl-4 shrink-0">
-          <button className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm" title="Filter">
-            <Funnel weight="bold" size={13} />
-          </button>
-          <button className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm" title="Display Options">
-            <SlidersHorizontal weight="bold" size={13} />
-          </button>
+          <FilterDock activeCount={activeRoomsFilterCount} label="Room filters" className="size-7">
+            <FilterDockSection title="Room filters">
+              <FilterDockRow label="Status" icon={<Circle size={15} />}>
+                <Select value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
+                  <SelectTrigger aria-label="Room status" className={filterDockSelectTriggerClass}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className={filterDockSelectContentClass}>
+                    <SelectItem value="active" className={filterDockSelectItemClass}>Active now</SelectItem>
+                    <SelectItem value="scheduled" className={filterDockSelectItemClass}>Scheduled</SelectItem>
+                    <SelectItem value="history" className={filterDockSelectItemClass}>History</SelectItem>
+                    <SelectItem value="all" className={filterDockSelectItemClass}>All rooms</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterDockRow>
+
+              <FilterDockRow label="Scheduled date" icon={<CalendarIcon size={15} />}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(new Date());
+                    setActiveTab("scheduled");
+                  }}
+                  className="h-8 rounded-md border border-neutral-800 bg-neutral-900 px-3 text-[12px] font-medium text-neutral-100 transition-colors hover:bg-neutral-800"
+                >
+                  Today
+                </button>
+              </FilterDockRow>
+            </FilterDockSection>
+          </FilterDock>
+
+          <FilterDock mode="view" label="Display options" className="size-7">
+            <div className="grid grid-cols-2 gap-2 p-1">
+              <button
+                type="button"
+                onClick={() => setIsGroupOpen(true)}
+                className="h-9 rounded-full bg-neutral-800 text-[13px] font-semibold text-neutral-100 transition-colors hover:bg-neutral-700"
+              >
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("scheduled")}
+                className="h-9 rounded-full border border-neutral-800 text-[13px] font-semibold text-neutral-500 transition-colors hover:bg-neutral-900 hover:text-neutral-200"
+              >
+                Calendar
+              </button>
+            </div>
+
+            <FilterDockSection title="List options">
+              <FilterDockRow label="Grouping" icon={<SidebarSimple size={15} />}>
+                <button
+                  type="button"
+                  onClick={() => setIsGroupOpen((open) => !open)}
+                  className="h-8 w-[148px] rounded-md border border-neutral-800 bg-neutral-900 px-3 text-left text-[12px] font-medium text-neutral-100 transition-colors hover:bg-neutral-800"
+                >
+                  {isGroupOpen ? "Expanded" : "Collapsed"}
+                </button>
+              </FilterDockRow>
+              <FilterDockRow label="Ordering" icon={<CaretDown size={15} />}>
+                <span className="inline-flex h-8 w-[148px] items-center rounded-md border border-neutral-800 bg-neutral-900 px-3 text-[12px] font-medium text-neutral-400">
+                  Recency
+                </span>
+              </FilterDockRow>
+              <FilterDockRow label="Completed rooms" icon={<CheckCircle size={15} />}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("history")}
+                  className="h-8 w-[148px] rounded-md border border-neutral-800 bg-neutral-900 px-3 text-left text-[12px] font-medium text-neutral-100 transition-colors hover:bg-neutral-800"
+                >
+                  Show history
+                </button>
+              </FilterDockRow>
+            </FilterDockSection>
+          </FilterDock>
           
           <div className="h-4 w-[1px] bg-border mx-1" />
           

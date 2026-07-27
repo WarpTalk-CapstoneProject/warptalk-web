@@ -11,7 +11,6 @@ import {
   Clock,
   Copy,
   DownloadSimple,
-  MagnifyingGlass,
   Scroll,
   SpinnerGap,
   Translate,
@@ -21,7 +20,6 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
@@ -40,23 +38,24 @@ type QueueItem = {
 
 type TranscriptData = { transcript: TranscriptDto; segments: TranscriptSegmentDto[] } | null;
 
+const QUEUE_PAGE_SIZE = 5;
+
 const transcriptFilters: Array<{ value: TranscriptFilter; label: string }> = [
-  { value: "all", label: "All meetings" },
-  { value: "ready", label: "Export ready" },
+  { value: "all", label: "All summaries" },
+  { value: "ready", label: "Ready" },
   { value: "processing", label: "Processing" },
   { value: "attention", label: "Needs attention" },
 ];
 
 export default function TranscriptsPage() {
-  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TranscriptFilter>("all");
+  const [queuePage, setQueuePage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("transcript");
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
   const history = useRoomHistory();
 
   const items = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
     return (history.data?.rooms ?? [])
       .map((room): QueueItem => {
         const transcriptArtifact = room.artifacts.find((artifact) => artifact.type === "transcript_export");
@@ -66,16 +65,22 @@ export default function TranscriptsPage() {
         const needsAttention =
           ["failed", "expired"].includes(item.status) || item.room.artifacts.some((artifact) => artifact.consentRequired);
         const matchesFilter = filter === "all" || item.status === filter || (filter === "attention" && needsAttention);
-        const matchesQuery =
-          !normalized ||
-          [item.room.title, item.room.translationRoomCode, item.room.hostName].some((value) =>
-            value.toLowerCase().includes(normalized)
-          );
-        return matchesFilter && matchesQuery;
+        return matchesFilter;
       });
-  }, [filter, history.data?.rooms, query]);
+  }, [filter, history.data?.rooms]);
+
+  const queuePageCount = Math.max(1, Math.ceil(items.length / QUEUE_PAGE_SIZE));
+  const pagedItems = items.slice((queuePage - 1) * QUEUE_PAGE_SIZE, queuePage * QUEUE_PAGE_SIZE);
 
   const selected = items.find((item) => item.room.id === selectedId) ?? items[0];
+
+  useEffect(() => {
+    setQueuePage(1);
+  }, [filter]);
+
+  useEffect(() => {
+    setQueuePage((current) => Math.min(current, queuePageCount));
+  }, [queuePageCount]);
 
   const transcriptQuery = useQuery({
     queryKey: ["room-transcript", selected?.room.id],
@@ -123,29 +128,8 @@ export default function TranscriptsPage() {
 
   return (
     <main className="min-h-full bg-canvas text-ink">
-      <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">
-        <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
-              <Scroll size={14} /> Meeting records
-            </div>
-            <h1 className="text-[30px] font-semibold leading-none">Transcripts</h1>
-            <p className="mt-2 text-[13px] text-ink-muted">
-              Read the full transcript, AI summary, and retained artifacts for every finished meeting.
-            </p>
-          </div>
-          <div className="relative w-full lg:w-[360px]">
-            <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search meeting, code, or host"
-              className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none"
-            />
-          </div>
-        </header>
-
-        <div className="flex items-center gap-1 border-b border-border py-3" role="tablist" aria-label="Transcript filters">
+      <div className="mx-auto w-full max-w-[1480px] px-5 py-4 lg:px-8">
+        <div className="flex items-center gap-1 border-b border-border pb-3" role="tablist" aria-label="Summary filters">
           {transcriptFilters.map((item) => (
             <button
               key={item.value}
@@ -170,16 +154,16 @@ export default function TranscriptsPage() {
           ) : history.isError ? (
             <ErrorState onRetry={() => history.refetch()} />
           ) : items.length === 0 ? (
-            <EmptyState hasQuery={Boolean(query)} />
+            <EmptyState />
           ) : (
             <div className="grid min-h-[600px] lg:grid-cols-[360px_minmax(0,1fr)]">
-              <div className="border-b border-border lg:border-b-0 lg:border-r">
+              <div className="flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r">
                 <div className="flex h-10 items-center justify-between border-b border-border bg-surface-2/45 px-4">
-                  <span className="text-[10px] font-medium text-ink-subtle">TRANSCRIPT QUEUE</span>
+                  <span className="text-[10px] font-medium text-ink-subtle">SUMMARY QUEUE</span>
                   <span className="text-[10px] tabular-nums text-ink-subtle">{items.length}</span>
                 </div>
                 <div className="divide-y divide-border">
-                  {items.map((item) => (
+                  {pagedItems.map((item) => (
                     <QueueRow
                       key={item.room.id}
                       item={item}
@@ -187,6 +171,33 @@ export default function TranscriptsPage() {
                       onSelect={() => selectRoom(item.room.id)}
                     />
                   ))}
+                </div>
+                <div className="mt-auto flex h-12 items-center justify-between border-t border-border bg-surface-1 px-4">
+                  <span className="text-[10px] tabular-nums text-ink-subtle">
+                    Page {queuePage} / {queuePageCount}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={queuePage <= 1}
+                      onClick={() => setQueuePage((page) => Math.max(1, page - 1))}
+                      className="h-7 rounded-md px-2 text-[10px] shadow-none"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={queuePage >= queuePageCount}
+                      onClick={() => setQueuePage((page) => Math.min(queuePageCount, page + 1))}
+                      className="h-7 rounded-md px-2 text-[10px] shadow-none"
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               </div>
               {selected ? (
@@ -663,15 +674,13 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function EmptyState({ hasQuery }: { hasQuery: boolean }) {
+function EmptyState() {
   return (
     <div className="grid min-h-[480px] place-items-center text-center">
       <div>
         <Scroll size={22} className="mx-auto text-ink-muted" />
-        <p className="mt-3 text-[12px] font-medium">{hasQuery ? "No meetings match this search" : "No finished meetings yet"}</p>
-        <p className="mt-1 text-[11px] text-ink-muted">
-          {hasQuery ? "Try a different meeting title, code, or host." : "Transcripts appear here after a meeting ends."}
-        </p>
+        <p className="mt-3 text-[12px] font-medium">No finished meetings yet</p>
+        <p className="mt-1 text-[11px] text-ink-muted">Summaries appear here after a meeting ends.</p>
       </div>
     </div>
   );

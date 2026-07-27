@@ -9,8 +9,6 @@ import {
   Question,
   SidebarSimple,
   Spinner,
-  Command,
-  MagnifyingGlass,
 } from "@phosphor-icons/react/dist/ssr";
 import { useUIStore } from "@/stores/ui-store";
 import { CreateRoomDialog } from "@/components/rooms/create-room-dialog";
@@ -18,6 +16,7 @@ import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
 import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
+import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
@@ -31,7 +30,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     toggleRightSidebar,
     leftSidebarOpen,
     toggleLeftSidebar,
-    setSearchMeetingModalOpen,
   } = useUIStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
@@ -105,7 +103,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main content box */}
         <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-surface-1 shadow-sm">
           {/* Top bar */}
-        <header className="h-[44px] border-b border-border grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 shrink-0">
+        <header className="h-[44px] border-b border-border grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 shrink-0">
           <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-muted">
             <button
               onClick={toggleLeftSidebar}
@@ -189,29 +187,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             })()}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setSearchMeetingModalOpen(true)}
-            className="hidden h-8 w-[min(34vw,420px)] min-w-[260px] items-center gap-2 rounded-full border border-border bg-canvas px-3 text-left text-[12px] text-ink-muted shadow-[0_1px_2px_rgba(16,24,40,0.03)] transition hover:border-hairline-strong hover:bg-surface-2 md:flex"
-          >
-            <MagnifyingGlass size={14} />
-            <span className="flex-1 truncate">Search meetings, rooms, or notes</span>
-            <span className="flex items-center gap-1 rounded-md border border-border bg-surface-1 px-1.5 py-0.5 text-[10px] text-ink-subtle">
-              <Command size={9} weight="bold" /> K
-            </span>
-          </button>
-
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
-            <button
-              type="button"
-              onClick={() => setSearchMeetingModalOpen(true)}
-              className="flex size-6 items-center justify-center rounded-[6px] border border-transparent transition-colors hover:bg-surface-2 hover:text-ink md:hidden"
-              aria-label="Search meetings"
-            >
-              <MagnifyingGlass size={13} weight="bold" />
-            </button>
             <NotificationPopover />
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
+            <ThemeToggleButton />
             <div className="w-[1px] h-3.5 bg-border mx-1" />
             <button
               onClick={toggleRightSidebar}

@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   Users,
   Trash,
-  MagnifyingGlass,
   Spinner,
   Warning,
   Plus,
@@ -18,6 +17,7 @@ import {
 import { WorkspaceMemberDto } from "@/types/workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import {
   useWorkspaceMembers,
   useRemoveWorkspaceMember,
@@ -32,6 +32,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  FilterDock,
+  FilterDockRow,
+  FilterDockSection,
+  filterDockSelectContentClass,
+  filterDockSelectItemClass,
+  filterDockSelectTriggerClass,
+} from "@/components/ui/filter-dock";
 
 const ROLES = ["Owner", "Admin", "Member"];
 
@@ -93,6 +101,7 @@ export default function WorkspaceMembersPage() {
   const isOwnerOrAdmin = isOwner || isAdmin;
 
   const membersList = membersQuery.data?.items || [];
+  const activeFilterCount = [roleFilter !== "all", statusFilter !== "all"].filter(Boolean).length;
 
   // Client-side filtering for Role and Status
   const filteredMembers = membersList.filter((member) => {
@@ -193,45 +202,58 @@ export default function WorkspaceMembersPage() {
     <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink">
       {/* Filter, Search, and Action triggers - Unified horizontal design */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-hairline gap-4 pt-2">
-        <div className="flex items-center flex-1 gap-2 max-w-xl">
-          <div className="relative flex-1">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted">
-              <MagnifyingGlass className="h-4 w-4" />
-            </span>
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
+        <div className="flex flex-wrap items-center flex-1 gap-2 max-w-2xl">
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            placeholder="Search by name or email"
+            ariaLabel="Search members"
+          />
+
+          <FilterDock activeCount={activeFilterCount} label="Member filters">
+            <FilterDockSection title="Member filters">
+              <FilterDockRow label="Role" icon={<Users size={15} />}>
+                <Select value={roleFilter} onValueChange={(val) => setRoleFilter(val || "all")}>
+                  <SelectTrigger aria-label="Role" className={filterDockSelectTriggerClass}>
+                    <SelectValue placeholder="All Roles" />
+                  </SelectTrigger>
+                  <SelectContent className={filterDockSelectContentClass}>
+                    <SelectItem value="all" className={filterDockSelectItemClass}>All Roles</SelectItem>
+                    <SelectItem value="owner" className={filterDockSelectItemClass}>Owner</SelectItem>
+                    <SelectItem value="admin" className={filterDockSelectItemClass}>Admin</SelectItem>
+                    <SelectItem value="member" className={filterDockSelectItemClass}>Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterDockRow>
+
+              <FilterDockRow label="Status" icon={<Check size={15} />}>
+                <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || "all")}>
+                  <SelectTrigger aria-label="Status" className={filterDockSelectTriggerClass}>
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent className={filterDockSelectContentClass}>
+                    <SelectItem value="all" className={filterDockSelectItemClass}>All Statuses</SelectItem>
+                    <SelectItem value="active" className={filterDockSelectItemClass}>Active</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterDockRow>
+            </FilterDockSection>
+
+            <button
+              type="button"
+              onClick={() => {
+                setRoleFilter("all");
+                setStatusFilter("all");
                 setPage(1);
               }}
-              placeholder="Search by name or email"
-              className="h-8 pl-8 pr-3 text-xs bg-surface-2/60 border-hairline focus:ring-1 focus:ring-primary focus-visible:ring-1 focus-visible:ring-primary w-full"
-            />
-          </div>
-
-          {/* Role Filter */}
-          <Select value={roleFilter} onValueChange={(val) => setRoleFilter(val || "all")}>
-            <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
-              <SelectValue placeholder="All Roles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Roles</SelectItem>
-              <SelectItem value="owner" className="text-xs">Owner</SelectItem>
-              <SelectItem value="admin" className="text-xs">Admin</SelectItem>
-              <SelectItem value="member" className="text-xs">Member</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || "all")}>
-            <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Statuses</SelectItem>
-              <SelectItem value="active" className="text-xs">Active</SelectItem>
-            </SelectContent>
-          </Select>
+              className="mt-2 h-8 w-full rounded-lg border border-neutral-800 text-[12px] font-medium text-neutral-300 transition-colors hover:bg-neutral-900 hover:text-neutral-50"
+            >
+              Reset filters
+            </button>
+          </FilterDock>
         </div>
 
         {/* Invite button next to filters */}

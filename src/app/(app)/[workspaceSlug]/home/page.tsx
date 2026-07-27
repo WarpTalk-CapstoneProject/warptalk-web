@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowRight,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { TranslationRoomDto } from "@/types/translationRoom";
 
 type QuickAction = {
   title: string;
@@ -33,12 +35,55 @@ type QuickAction = {
   featured?: boolean;
 };
 
-type ServiceCard = {
-  title: string;
-  description: string;
+type Metric = {
+  label: string;
+  value: string;
+  helper: string;
   icon: React.ElementType;
-  href?: string;
 };
+
+type TimeRange = "day" | "week" | "month" | "year";
+
+const TIME_RANGES: Array<{ value: TimeRange; label: string }> = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+  { value: "year", label: "Year" },
+];
+
+function formatRoomDate(value?: string) {
+  const date = new Date(value || Date.now());
+  return {
+    day: date.getDate().toString().padStart(2, "0"),
+    weekday: date.toLocaleDateString("en-US", { weekday: "short" }),
+    month: date.toLocaleDateString("en-US", { month: "short" }),
+    time: date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
+  };
+}
+
+function MetricCard({ metric, index }: { metric: Metric; index: number }) {
+  const Icon = metric.icon;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, delay: index * 0.025 }}
+      className="rounded-lg border border-border bg-surface-1 p-4 text-ink shadow-[0_8px_22px_rgba(15,15,15,0.04)] transition-colors hover:bg-neutral-100 dark:hover:bg-surface-2"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-medium text-ink-muted">{metric.label}</p>
+          <p className="mt-3 text-[24px] font-semibold leading-none tracking-normal">{metric.value}</p>
+        </div>
+        <span className="grid size-8 place-items-center rounded-md border border-border bg-canvas text-ink-muted">
+          <Icon size={15} />
+        </span>
+      </div>
+      <p className="mt-3 text-[11px] text-ink-muted">{metric.helper}</p>
+    </motion.div>
+  );
+}
 
 function QuickActionCard({ action, index }: { action: QuickAction; index: number }) {
   const Icon = action.icon;
@@ -46,34 +91,29 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, delay: index * 0.025 }}
-      whileTap={{ y: 2 }}
+      transition={{ duration: 0.22, delay: index * 0.02 }}
+      whileTap={{ y: 1 }}
       className={cn(
-        "group flex h-full min-h-[92px] items-start gap-3 rounded-[12px] border p-3 text-left transition-all",
+        "group flex h-full min-h-[96px] items-start gap-3 rounded-lg border p-3 text-left transition",
         action.featured
-          ? "border-primary bg-primary text-on-primary shadow-[0_12px_26px_rgba(94,106,210,0.24)] hover:bg-primary-hover"
-          : "border-border bg-surface-1 shadow-linear hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2",
+          ? "border-neutral-950 bg-neutral-950 text-white shadow-[0_10px_24px_rgba(15,15,15,0.14)] hover:bg-neutral-800"
+          : "border-border bg-surface-1 hover:border-neutral-400 hover:bg-canvas",
         action.href || action.onClick ? "cursor-pointer" : ""
       )}
     >
       <span
         className={cn(
-          "grid size-9 shrink-0 place-items-center rounded-[9px] border transition-colors",
-          action.featured
-            ? "border-white/20 bg-white/12 text-white"
-            : "border-border bg-canvas text-primary group-hover:border-primary/30 group-hover:bg-primary/10"
+          "grid size-9 shrink-0 place-items-center rounded-md border",
+          action.featured ? "border-white/14 bg-white/10 text-white" : "border-border bg-canvas text-ink-muted group-hover:text-ink"
         )}
       >
-        <Icon size={18} weight="duotone" />
+        <Icon size={17} weight="duotone" />
       </span>
-      <span className="min-w-0">
-        <span className={cn("block text-[13px] font-semibold leading-5", action.featured ? "text-white" : "text-ink")}>
-          {action.title}
-        </span>
-        <span className={cn("mt-1 block text-[12px] leading-5", action.featured ? "text-white/72" : "text-ink-muted")}>
-          {action.description}
-        </span>
+      <span className="min-w-0 flex-1">
+        <span className={cn("block text-[13px] font-semibold leading-5", action.featured ? "text-white" : "text-ink")}>{action.title}</span>
+        <span className={cn("mt-1 block text-[12px] leading-5", action.featured ? "text-white/64" : "text-ink-muted")}>{action.description}</span>
       </span>
+      <ArrowRight size={14} className={cn("shrink-0 transition group-hover:translate-x-0.5", action.featured ? "text-white/70" : "text-ink-subtle group-hover:text-ink")} />
     </motion.div>
   );
 
@@ -86,69 +126,191 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
   }
 
   return (
-    <button
-      type="button"
-      onClick={action.onClick}
-      className="h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-    >
+    <button type="button" onClick={action.onClick} className="h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
       {content}
     </button>
   );
 }
 
-function ServiceCard({ service, index }: { service: ServiceCard; index: number }) {
-  const Icon = service.icon;
-  const content = (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, delay: 0.08 + index * 0.03 }}
-      className="group flex h-full min-h-[118px] flex-col justify-between rounded-[14px] border border-border bg-surface-1 p-4 shadow-linear transition hover:-translate-y-0.5 hover:border-hairline-strong"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span className="grid size-10 place-items-center rounded-[10px] border border-border bg-canvas text-primary">
-          <Icon size={20} weight="duotone" />
-        </span>
-        <ArrowRight size={15} className="text-ink-subtle transition group-hover:translate-x-0.5 group-hover:text-ink" />
-      </div>
-      <div>
-        <h3 className="text-[13px] font-semibold text-ink">{service.title}</h3>
-        <p className="mt-1 text-[12px] leading-5 text-ink-muted">{service.description}</p>
-      </div>
-    </motion.div>
-  );
-
-  if (!service.href) return content;
+function WorkloadChart({ rooms, timeRange }: { rooms: TranslationRoomDto[]; timeRange: TimeRange }) {
+  const data = buildActivityData(rooms, timeRange);
+  const max = Math.max(1, ...data.map((item) => item.count));
+  const rangeLabel = TIME_RANGES.find((range) => range.value === timeRange)?.label.toLowerCase() ?? "month";
 
   return (
-    <Link href={service.href} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-      {content}
+    <section className="rounded-lg border border-border bg-surface-1 p-4 shadow-[0_8px_22px_rgba(15,15,15,0.04)]">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-semibold text-ink">Room activity</h2>
+          <p className="mt-1 text-[12px] text-ink-muted">Recent meeting volume by {rangeLabel}.</p>
+        </div>
+        <span className="grid size-8 place-items-center rounded-md border border-border bg-canvas text-ink-muted">
+          <ChartBar size={15} />
+        </span>
+      </div>
+
+      <div className="flex h-[220px] items-end gap-4 border-b border-border px-2 pb-4">
+        {data.map((item, index) => (
+          <div key={item.label} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2">
+            <div className="flex flex-1 items-end">
+              <div
+                className={cn(
+                  "w-full rounded-t-md transition",
+                  index === data.length - 1 ? "bg-neutral-950 dark:bg-neutral-200" : item.count > 0 ? "bg-neutral-700 dark:bg-neutral-500" : "bg-neutral-200 dark:bg-neutral-800"
+                )}
+                style={{ height: `${Math.max(8, (item.count / max) * 100)}%` }}
+              />
+            </div>
+            <span className="truncate text-center text-[11px] text-ink-muted">{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WeekPanel({
+  selectedDate,
+  onSelectDate,
+  rooms,
+}: {
+  selectedDate: Date;
+  onSelectDate: (date: Date) => void;
+  rooms: TranslationRoomDto[];
+}) {
+  const days = getWeekDays();
+  const selectedDay = selectedDate.toDateString();
+  const selectedRooms = rooms.filter((room) => {
+    const roomDate = new Date(room.scheduledAt || room.createdAt);
+    return roomDate.toDateString() === selectedDay;
+  });
+
+  return (
+    <section className="rounded-lg border border-border bg-surface-1 p-4 shadow-[0_8px_22px_rgba(15,15,15,0.04)]">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold text-ink">{selectedDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h2>
+        <CalendarBlank size={16} className="text-ink-muted" />
+      </div>
+      <div className="grid grid-cols-5 gap-2">
+        {days.map((date) => {
+          const active = date.toDateString() === selectedDay;
+          return (
+            <button
+              type="button"
+              key={date.toISOString()}
+              onClick={() => onSelectDate(date)}
+              className={cn(
+                "rounded-lg border px-2 py-3 text-center transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35 dark:hover:bg-surface-2",
+                active ? "border-neutral-950 bg-neutral-950 text-white shadow-[0_10px_24px_rgba(15,15,15,0.18)] hover:bg-neutral-950 dark:border-neutral-200 dark:bg-neutral-200 dark:text-neutral-950 dark:hover:bg-neutral-200" : "border-border bg-canvas text-ink"
+              )}
+              aria-pressed={active}
+            >
+              <p className={cn("text-[11px]", active ? "text-white/70 dark:text-neutral-700" : "text-ink-muted")}>{date.toLocaleDateString("en-US", { weekday: "short" })}</p>
+              <p className="mt-3 text-[15px] font-semibold">{date.getDate()}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-border bg-canvas p-3">
+        <div className="mb-3 border-b border-border pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[12px] font-semibold text-ink">Selected day</p>
+              <p className="mt-1 text-[11px] text-ink-muted">
+                {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+              </p>
+            </div>
+            <span className="rounded-full border border-border bg-surface-1 px-2 py-1 text-[11px] font-medium text-ink">
+              {selectedRooms.length} rooms
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[12px] font-semibold text-ink">Workspace readiness</p>
+            <p className="mt-1 text-[11px] text-ink-muted">Rooms, transcripts, documents, and members.</p>
+          </div>
+          <div className="grid size-12 place-items-center rounded-full border-4 border-neutral-950 text-[12px] font-semibold text-ink dark:border-neutral-200">65%</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RoomRow({ room, slug }: { room: TranslationRoomDto; slug: string }) {
+  const roomDate = formatRoomDate(room.scheduledAt || room.createdAt);
+  const isLive = room.status === "in_progress";
+
+  return (
+    <Link href={`/${slug}/rooms/${room.id}`} className="block">
+      <div className="grid min-h-[58px] grid-cols-[minmax(0,1.2fr)_110px_110px_28px] items-center gap-3 border-t border-border px-4 py-3 transition hover:bg-canvas">
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-semibold text-ink">{room.title || "Untitled meeting"}</p>
+          <p className="mt-1 truncate text-[11px] text-ink-muted">{room.translationRoomCode || "No code"}</p>
+        </div>
+        <span className="text-[12px] text-ink-muted">{roomDate.month} {roomDate.day}</span>
+        <span
+          className={cn(
+            "inline-flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium capitalize",
+            isLive ? "border-neutral-950 bg-neutral-950 text-white" : "border-border bg-canvas text-ink-muted"
+          )}
+        >
+          {isLive ? <span className="size-1.5 rounded-full bg-white" /> : null}
+          {isLive ? "Live" : room.status.replace("_", " ")}
+        </span>
+        <ArrowRight size={14} className="text-ink-subtle" />
+      </div>
     </Link>
   );
 }
 
-function formatRoomDate(value?: string) {
-  const date = new Date(value || Date.now());
-  return {
-    day: date.getDate().toString().padStart(2, "0"),
-    month: date.toLocaleDateString("en-US", { month: "short" }),
-    time: date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
-  };
-}
-
 export default function WorkspaceHomePage() {
-  const user = useAuthStore((s) => s.user);
-  const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
-  const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
-  const role = useWorkspaceStore((s) => s.role);
-  const setCreateRoomModalOpen = useUIStore((s) => s.setCreateRoomModalOpen);
-  const setSearchMeetingModalOpen = useUIStore((s) => s.setSearchMeetingModalOpen);
+  const user = useAuthStore((state) => state.user);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
+  const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const role = useWorkspaceStore((state) => state.role);
+  const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
+  const [timeRange, setTimeRange] = useState<TimeRange>("month");
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
 
-  const { data: roomsData, isLoading: isLoadingRooms } = useTranslationRooms({ pageSize: 6 });
-  const recentRooms = roomsData?.rooms || [];
+  const { data: roomsData, isLoading: isLoadingRooms } = useTranslationRooms({ pageSize: 8 });
+  const rooms = roomsData?.rooms || [];
   const slug = activeWorkspaceSlug || "workspace";
   const displayName = user?.fullName || "User";
   const isOwnerOrAdmin = role === "Owner" || role === "Admin";
+
+  const liveRooms = rooms.filter((room) => room.status === "in_progress").length;
+  const scheduledRooms = rooms.filter((room) => room.status === "scheduled" || room.status === "waiting").length;
+  const endedRooms = rooms.filter((room) => room.status === "ended").length;
+
+  const metrics: Metric[] = [
+    {
+      label: "Total rooms",
+      value: String(roomsData?.total ?? rooms.length),
+      helper: "Workspace meeting records",
+      icon: VideoCamera,
+    },
+    {
+      label: "Live now",
+      value: String(liveRooms),
+      helper: "Currently in progress",
+      icon: Sparkle,
+    },
+    {
+      label: "Scheduled",
+      value: String(scheduledRooms),
+      helper: "Waiting or planned rooms",
+      icon: CalendarBlank,
+    },
+    {
+      label: "Finished",
+      value: String(endedRooms),
+      helper: "Ready for transcripts",
+      icon: ClockCounterClockwise,
+    },
+  ];
 
   const quickActions: QuickAction[] = [
     {
@@ -184,7 +346,7 @@ export default function WorkspaceHomePage() {
     },
     {
       title: "Transcripts",
-      description: "Read the transcript, AI summary, and artifacts.",
+      description: "Read transcripts, summaries, and artifacts.",
       icon: Sparkle,
       href: `/${slug}/ai-summaries`,
     },
@@ -206,219 +368,203 @@ export default function WorkspaceHomePage() {
     quickActions.push(
       {
         title: "Billing",
-        description: "Manage plan, seats, and workspace invoices.",
+        description: "Manage plan, seats, and invoices.",
         icon: CreditCard,
         href: `/${slug}/billing`,
       },
       {
         title: "Dashboard",
-        description: "Track usage, activity, and workspace health.",
+        description: "Track usage and workspace health.",
         icon: ChartBar,
         href: `/${slug}/dashboard`,
       },
       {
         title: "Settings",
-        description: "Control workspace profile and access rules.",
+        description: "Control workspace profile and access.",
         icon: GearSix,
         href: `/${slug}/settings`,
       }
     );
   }
 
-  const services: ServiceCard[] = [
-    {
-      title: "Live rooms",
-      description: "Speak, translate, and capture every session.",
-      icon: VideoCamera,
-      href: `/${slug}/rooms`,
-    },
-    {
-      title: "Transcripts",
-      description: "Full dialogue, AI summary, and retained artifacts.",
-      icon: Sparkle,
-      href: `/${slug}/ai-summaries`,
-    },
-    {
-      title: "Knowledge",
-      description: "Keep team terms and documents close to the call.",
-      icon: FileText,
-      href: `/${slug}/documents`,
-    },
-  ];
-
   return (
-    <div className="min-h-full bg-canvas px-4 py-5 text-ink sm:px-5 lg:px-6">
-      <div className="mx-auto flex w-full max-w-[1220px] flex-col gap-5 pb-8">
-        <motion.section
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-          className="overflow-hidden rounded-[18px] border border-border bg-surface-1 shadow-linear"
-        >
-          <div className="grid gap-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-            <div className="relative min-h-[318px] border-b border-border p-5 sm:p-7 lg:border-b-0 lg:border-r">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_20%_0%,rgba(94,106,210,0.16),transparent_34%),linear-gradient(180deg,rgba(94,106,210,0.08),transparent)]" />
-              <div className="relative">
-                <p className="mb-3 text-[12px] font-medium text-ink-muted">{activeWorkspaceName || "My Workspace"}</p>
-                <h1 className="max-w-[640px] text-[34px] font-semibold leading-[1.04] tracking-normal text-ink sm:text-[44px]">
-                  Welcome,{" "}
-                  <span className="font-normal italic" style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}>
-                    {displayName}
-                  </span>
-                </h1>
-                <p className="mt-3 max-w-[560px] text-[13px] leading-6 text-ink-muted sm:text-[14px]">
-                  Start the next conversation, pick up a transcript, or open the workspace tools your team uses most.
-                </p>
-              </div>
-
-              <div className="relative mt-7 rounded-[16px] border border-border bg-canvas p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
-                <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-                  {[
-                    { label: "Speech", icon: VideoCamera, active: true },
-                    { label: "Notes", icon: FileText },
-                    { label: "AI", icon: Sparkle },
-                    { label: "Team", icon: Users },
-                  ].map((item) => (
-                    <span
-                      key={item.label}
-                      className={cn(
-                        "inline-flex h-8 items-center gap-2 rounded-[8px] px-3 text-[12px] font-semibold",
-                        item.active ? "bg-surface-1 text-ink shadow-linear" : "text-ink-muted"
-                      )}
-                    >
-                      <item.icon size={15} weight="duotone" />
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
+    <main className="min-h-full bg-canvas px-4 py-4 text-ink sm:px-5 lg:px-6">
+      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 pb-8">
+        <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[12px] font-medium text-ink-muted">{activeWorkspaceName || "Workspace dashboard"}</p>
+            <h1 className="mt-1 text-[26px] font-semibold tracking-normal text-ink">Dashboard</h1>
+            <p className="mt-1 text-[13px] text-ink-muted">Welcome back, {displayName}. Manage rooms, records, and workspace actions from one place.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {TIME_RANGES.map((range) => {
+              const active = timeRange === range.value;
+              return (
                 <button
+                  key={range.value}
                   type="button"
-                  onClick={() => setCreateRoomModalOpen(true)}
-                  className="group mt-3 flex min-h-[94px] w-full items-center justify-between gap-4 rounded-[12px] border border-dashed border-hairline-strong bg-surface-1 px-4 text-left transition hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  onClick={() => setTimeRange(range.value)}
+                  aria-pressed={active}
+                  className={cn(
+                    "h-8 rounded-full border px-3 text-[12px] font-medium shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
+                    active
+                      ? "border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 dark:border-neutral-200 dark:bg-neutral-200 dark:text-neutral-950 dark:hover:bg-neutral-200"
+                      : "border-border bg-surface-1 text-ink hover:bg-neutral-100 dark:hover:bg-surface-2"
+                  )}
                 >
-                  <span>
-                    <span className="block text-[14px] font-semibold text-ink">Start typing a meeting topic...</span>
-                    <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
-                      Create a room with translation, notes, and AI capture ready.
-                    </span>
-                  </span>
-                  <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-primary text-on-primary transition group-hover:bg-primary-hover">
-                    <ArrowRight size={18} weight="bold" />
-                  </span>
+                  {range.label}
                 </button>
-              </div>
-            </div>
-
-            <div className="p-5 sm:p-7">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-[15px] font-semibold text-ink">Workspace launchpad</h2>
-                  <p className="mt-1 text-[12px] text-ink-muted">Core flows for the first minute after login.</p>
-                </div>
-                <Link
-                  href={`/${slug}/rooms`}
-                  className="hidden items-center gap-1 text-[12px] font-semibold text-primary transition hover:text-ink sm:inline-flex"
-                >
-                  Open meetings <ArrowRight size={13} />
-                </Link>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                {services.map((service, index) => (
-                  <ServiceCard key={service.title} service={service} index={index} />
-                ))}
-              </div>
-            </div>
+              );
+            })}
           </div>
-        </motion.section>
+        </section>
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {metrics.map((metric, index) => (
+            <MetricCard key={metric.label} metric={metric} index={index} />
+          ))}
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_360px]">
+          <WorkloadChart rooms={rooms} timeRange={timeRange} />
+          <WeekPanel rooms={rooms} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+        </section>
+
+        <section className="rounded-lg border border-border bg-surface-1 shadow-[0_8px_22px_rgba(15,15,15,0.04)]">
+          <div className="flex items-center justify-between px-4 py-3">
             <div>
-              <h2 className="text-[15px] font-semibold text-ink">Quick jumps</h2>
-              <p className="mt-1 text-[12px] text-ink-muted">Shortcuts styled from the WarpTalk token system.</p>
+              <h2 className="text-[15px] font-semibold text-ink">Workspace shortcuts</h2>
+              <p className="mt-1 text-[12px] text-ink-muted">Core actions for rooms, transcripts, members, and admin tools.</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setCreateRoomModalOpen(true)}
+              className="hidden h-8 items-center gap-2 rounded-full border border-neutral-950 bg-neutral-950 px-3 text-[12px] font-semibold text-white transition hover:bg-neutral-800 sm:inline-flex"
+            >
+              <Plus size={13} weight="bold" />
+              New room
+            </button>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 border-t border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
             {quickActions.map((action, index) => (
               <QuickActionCard key={`${action.title}-${action.href || "action"}`} action={action} index={index} />
             ))}
           </div>
         </section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.34, delay: 0.12 }}
-          className="rounded-[16px] border border-border bg-surface-1 p-4 shadow-linear"
-        >
-          <div className="mb-4 flex items-center justify-between gap-3">
+        <section className="overflow-hidden rounded-lg border border-border bg-surface-1 shadow-[0_8px_22px_rgba(15,15,15,0.04)]">
+          <div className="flex items-center justify-between px-4 py-3">
             <div>
               <h2 className="text-[15px] font-semibold text-ink">Active and upcoming</h2>
               <p className="mt-1 text-[12px] text-ink-muted">The next rooms needing attention.</p>
             </div>
-            <Link
-              href={`/${slug}/rooms`}
-              className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary transition hover:text-ink"
-            >
+            <Link href={`/${slug}/rooms`} className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-muted transition hover:text-ink">
               View all <ArrowRight size={13} />
             </Link>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
-            {isLoadingRooms ? (
-              Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="flex h-[74px] animate-pulse items-center gap-3 rounded-[12px] border border-border bg-canvas p-3">
-                  <div className="size-11 rounded-[10px] bg-surface-3" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-3 w-1/3 rounded bg-surface-3" />
-                    <div className="h-3 w-2/3 rounded bg-surface-3" />
-                  </div>
-                </div>
-              ))
-            ) : recentRooms.length > 0 ? (
-              recentRooms.slice(0, 4).map((room) => {
-                const roomDate = formatRoomDate(room.scheduledAt || room.createdAt);
-                const isLive = room.status === "in_progress";
-
-                return (
-                  <Link href={`/${slug}/rooms/${room.id}`} key={room.id} className="group block">
-                    <div className="flex min-h-[74px] items-center gap-3 rounded-[12px] border border-border bg-canvas p-3 transition hover:border-hairline-strong hover:bg-surface-1">
-                      <div className="grid size-12 shrink-0 place-items-center rounded-[10px] border border-border bg-surface-1 text-center">
-                        <span className="text-[10px] font-semibold uppercase text-ink-muted">{roomDate.month}</span>
-                        <span className="-mt-1 text-[18px] font-semibold text-ink">{roomDate.day}</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                              isLive ? "bg-status-scheduled/10 text-status-scheduled" : "bg-surface-2 text-ink-muted"
-                            )}
-                          >
-                            {isLive ? <span className="size-1.5 rounded-full bg-status-scheduled" /> : null}
-                            {isLive ? "Live now" : roomDate.time}
-                          </span>
-                        </div>
-                        <h3 className="truncate text-[14px] font-semibold text-ink group-hover:text-primary">
-                          {room.title || "Untitled meeting"}
-                        </h3>
-                      </div>
-                      <ArrowRight size={15} className="text-ink-subtle transition group-hover:translate-x-0.5 group-hover:text-ink" />
-                    </div>
-                  </Link>
-                );
-              })
-            ) : (
-              <div className="rounded-[12px] border border-dashed border-border bg-canvas px-4 py-8 text-center lg:col-span-2">
-                <CalendarBlank size={26} className="mx-auto text-ink-subtle" weight="duotone" />
-                <p className="mt-3 text-[13px] font-medium text-ink">No rooms scheduled</p>
-                <p className="mt-1 text-[12px] text-ink-muted">Create a room when your team is ready to talk.</p>
+          <div className="overflow-x-auto">
+            <div className="min-w-[640px]">
+              <div className="grid grid-cols-[minmax(0,1.2fr)_110px_110px_28px] gap-3 border-t border-border bg-canvas px-4 py-2 text-[10px] font-medium uppercase tracking-normal text-ink-subtle">
+                <span>Room</span>
+                <span>Date</span>
+                <span>Status</span>
+                <span />
               </div>
-            )}
+
+              {isLoadingRooms ? (
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="grid h-[58px] animate-pulse grid-cols-[minmax(0,1.2fr)_110px_110px_28px] items-center gap-3 border-t border-border px-4">
+                    <div className="h-3 w-2/3 rounded bg-surface-3" />
+                    <div className="h-3 w-16 rounded bg-surface-3" />
+                    <div className="h-6 w-20 rounded bg-surface-3" />
+                    <div className="size-4 rounded bg-surface-3" />
+                  </div>
+                ))
+              ) : rooms.length > 0 ? (
+                rooms.slice(0, 5).map((room) => <RoomRow key={room.id} room={room} slug={slug} />)
+              ) : (
+                <div className="border-t border-border px-4 py-10 text-center">
+                  <CalendarBlank size={24} className="mx-auto text-ink-subtle" weight="duotone" />
+                  <p className="mt-3 text-[13px] font-medium text-ink">No rooms scheduled</p>
+                  <p className="mt-1 text-[12px] text-ink-muted">Create a room when your team is ready to talk.</p>
+                </div>
+              )}
+            </div>
           </div>
-        </motion.section>
+        </section>
       </div>
-    </div>
+    </main>
   );
+}
+
+function buildActivityData(rooms: TranslationRoomDto[], timeRange: TimeRange) {
+  const today = new Date();
+  if (timeRange === "day") {
+    return Array.from({ length: 6 }).map((_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (5 - index));
+      const label = date.toLocaleDateString("en-US", { weekday: "short" });
+      const count = rooms.filter((room) => {
+        const roomDate = new Date(room.scheduledAt || room.createdAt);
+        return roomDate.toDateString() === date.toDateString();
+      }).length;
+      return { label, count };
+    });
+  }
+
+  if (timeRange === "week") {
+    return Array.from({ length: 6 }).map((_, index) => {
+      const start = startOfWeek(today);
+      start.setDate(start.getDate() - (5 - index) * 7);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const label = `${start.getDate()}/${start.getMonth() + 1}`;
+      const count = rooms.filter((room) => {
+        const roomDate = new Date(room.scheduledAt || room.createdAt);
+        return roomDate >= start && roomDate <= end;
+      }).length;
+      return { label, count };
+    });
+  }
+
+  if (timeRange === "year") {
+    return Array.from({ length: 6 }).map((_, index) => {
+      const year = today.getFullYear() - (5 - index);
+      const count = rooms.filter((room) => {
+        const roomDate = new Date(room.scheduledAt || room.createdAt);
+        return roomDate.getFullYear() === year;
+      }).length;
+      return { label: String(year), count };
+    });
+  }
+
+  return Array.from({ length: 6 }).map((_, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth() - (5 - index), 1);
+    const label = date.toLocaleDateString("en-US", { month: "short" });
+    const count = rooms.filter((room) => {
+      const roomDate = new Date(room.scheduledAt || room.createdAt);
+      return roomDate.getMonth() === date.getMonth() && roomDate.getFullYear() === date.getFullYear();
+    }).length;
+    return { label, count };
+  });
+}
+
+function startOfWeek(value: Date) {
+  const date = new Date(value);
+  const day = date.getDay();
+  date.setDate(date.getDate() - day);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getWeekDays() {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(now.getDate() - 2);
+  return Array.from({ length: 5 }).map((_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
 }
