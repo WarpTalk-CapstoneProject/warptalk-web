@@ -197,7 +197,7 @@ export default function RoomInformationPage() {
     .filter((language): language is string => Boolean(language))
     .map(getLanguageName);
   const isEnded = room.status === "ended";
-  const isHost = room.hostId === user?.id || role === "admin" || role === "owner";
+  const isHost = room.hostId === user?.id || Boolean(room.isHost);
   const participants = buildUserList(room, apiParticipants, apiInvitations, membersArray, user);
   const hostUser = getHostUser(room, participants, membersArray, user);
   const threadEvents = buildThreadEvents(

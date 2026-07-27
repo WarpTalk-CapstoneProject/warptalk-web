@@ -22,6 +22,7 @@ import { billingService } from "@/services/billing.service";
 import type { UsageSummaryDto, InvoiceDto } from "@/types/billing";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { createHubConnection } from "@/lib/signalr";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
@@ -73,7 +74,7 @@ export default function WorkspaceBillingPage() {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const workspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug) || slug || "";
   const workspaceId = activeWorkspaceId || "";
-  const role = useWorkspaceStore((state) => state.role);
+  const role = useWorkspaceRole();
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -391,7 +392,7 @@ export default function WorkspaceBillingPage() {
     );
   }
 
-  if (role !== "Owner" && role !== "Admin") {
+  if (role !== "owner" && role !== "admin") {
     return (
       <div className="flex h-[80vh] items-center justify-center w-full">
         <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">

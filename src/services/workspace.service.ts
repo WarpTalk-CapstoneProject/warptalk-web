@@ -80,12 +80,16 @@ export const WorkspaceService = {
   },
 
   // ─── Invitations ───
-  async invite(workspaceId: string, email: string, roleName: string, membershipType: string): Promise<InviteMemberResponse> {
+  async invite(workspaceId: string, email: string, roleName: string): Promise<InviteMemberResponse> {
     const { data } = await apiClient.post<InviteMemberResponse>(API.workspaces.invitations(workspaceId), {
       email,
       roleName,
-      membershipType,
     });
+    return data;
+  },
+
+  async retryInvitation(workspaceId: string, inviteId: string): Promise<WorkspaceInvitationDto> {
+    const { data } = await apiClient.post<WorkspaceInvitationDto>(API.workspaces.retryInvitation(workspaceId, inviteId));
     return data;
   },
 
@@ -93,6 +97,11 @@ export const WorkspaceService = {
     const { data } = await apiClient.get<PagedResult<WorkspaceInvitationDto>>(API.workspaces.invitations(workspaceId), {
       params: { page, pageSize, search },
     });
+    return data;
+  },
+
+  async getPendingInvitations(): Promise<WorkspaceInvitationDto[]> {
+    const { data } = await apiClient.get<WorkspaceInvitationDto[]>(API.workspaces.pendingInvitations);
     return data;
   },
 
@@ -105,8 +114,12 @@ export const WorkspaceService = {
     return data;
   },
 
-  async acceptInvitation(token: string): Promise<void> {
+  async acceptInvitation(token?: string): Promise<void> {
     await apiClient.post(API.workspaces.acceptInvitation, { token });
+  },
+
+  async acceptInvitationById(inviteId: string): Promise<void> {
+    await apiClient.post(API.workspaces.acceptInvitationById(inviteId));
   },
 
   // ─── Documents ───
@@ -116,7 +129,8 @@ export const WorkspaceService = {
       name: string;
       sourceType: string;
       sourceId?: string | null;
-      isSensitive: boolean;
+      confidentialityLevel?: string;
+      isAiAllowed?: boolean;
       file: File;
     }
   ): Promise<WorkspaceDocumentDto> {
@@ -126,17 +140,15 @@ export const WorkspaceService = {
     if (request.sourceId) {
       formData.append("sourceId", request.sourceId);
     }
-    formData.append("isSensitive", String(request.isSensitive));
+    if (request.confidentialityLevel) {
+      formData.append("confidentialityLevel", request.confidentialityLevel);
+    }
+    formData.append("isAiAllowed", String(request.isAiAllowed ?? true));
     formData.append("file", request.file);
 
-    const { data } = await apiClient.post<WorkspaceDocumentDto>(
+    const { data } = await apiClient.postForm<WorkspaceDocumentDto>(
       API.workspaces.documents(workspaceId),
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
+      formData
     );
     return data;
   },
@@ -166,12 +178,18 @@ export const WorkspaceService = {
     return data;
   },
 
+  async updateExtractedText(workspaceId: string, docId: string, text: string): Promise<ExtractedTextDto> {
+    const { data } = await apiClient.put<ExtractedTextDto>(API.workspaces.documentExtractedText(workspaceId, docId), { text });
+    return data;
+  },
+
   async patchDocumentMetadata(
     workspaceId: string,
     docId: string,
     request: {
       name?: string;
-      isSensitive?: boolean;
+      confidentialityLevel?: string;
+      isAiAllowed?: boolean;
     }
   ): Promise<WorkspaceDocumentDto> {
     const { data } = await apiClient.patch<WorkspaceDocumentDto>(API.workspaces.documentDetail(workspaceId, docId), request);
@@ -182,8 +200,10 @@ export const WorkspaceService = {
     await apiClient.post(API.workspaces.documentApprove(workspaceId, docId), { approve });
   },
 
-  async downloadDocument(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {
-    const { data } = await apiClient.get<WorkspaceDocumentDto>(API.workspaces.documentDownload(workspaceId, docId));
+  async downloadDocument(workspaceId: string, docId: string): Promise<Blob> {
+    const { data } = await apiClient.get<Blob>(API.workspaces.documentDownload(workspaceId, docId), {
+      responseType: "blob",
+    });
     return data;
   },
 
