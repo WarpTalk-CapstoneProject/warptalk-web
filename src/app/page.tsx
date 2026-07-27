@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
+import { memo, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Hls from "hls.js";
@@ -10,8 +10,9 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
-import { getPlanDescription, buildFeatureList } from "@/lib/utils";
-import { createHubConnection } from "@/lib/signalr";
+import type { PlanDto, SalesPackagePricingEstimateDto } from "@/types/billing";
+import { BROADCAST_CHANNELS } from "@/constants/realtime";
+
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
@@ -25,6 +26,192 @@ const navLinks = [
 const badges = ["Real-time Translation", "AI Summary Analysis", "Human Voice Cloning"];
 const logos = ["NOVA", "AXIS", "ORBIT", "PRISM", "LUMA", "ECHO"];
 const loaderWords = ["Translation", "Clone Voice", "AI"];
+
+const sampleEnterprisePlan = {
+  name: "Enterprise",
+  price: 1900000,
+  currency: "VND",
+  creditsPerCycle: 700000,
+  overageCapCredits: 105000,
+  overagePricePerCredit: 4,
+  invoiceTermsDays: 15,
+  rolloverCapCredits: 700000,
+};
+
+const pricingVolumes = [
+  { label: "Under 50 hours", value: 35 },
+  { label: "50-250 hours", value: 150 },
+  { label: "250-1,000 hours", value: 500 },
+  { label: "1,000+ hours", value: 1000 },
+];
+
+const pricingCapabilities = ["Vietnamese", "English", "Japanese", "Translated audio / dubbing"];
+const pricingCapabilityOrder = new Map(pricingCapabilities.map((capability, index) => [capability, index]));
+
+const pricingCreditEstimate = {
+  sttCreditsPerHour: 4764,
+  translationCreditsPerOutputLanguageHour: 2510,
+  summaryCreditsPerHour: 30,
+  assistantCreditsPerHour: 198,
+  translatedAudioCreditsPerOutputLanguageHour: 24356,
+};
+
+function getPricingVolumeLabel(hours: number) {
+  if (hours < 50) return pricingVolumes[0].label;
+  if (hours <= 250) return pricingVolumes[1].label;
+  if (hours <= 1000) return pricingVolumes[2].label;
+  return pricingVolumes[3].label;
+}
+
+function calculatePricingEstimate(
+  targetLanguageCount: number,
+  selectedFeatures: string[],
+  includesTranslatedAudio: boolean
+) {
+  const hasTranslation = selectedFeatures.includes("translation") || includesTranslatedAudio;
+  const hasSummary = selectedFeatures.includes("summaries");
+  const hasAssistant = selectedFeatures.includes("assistant");
+  const hasVoicePreview = selectedFeatures.includes("voice") || includesTranslatedAudio;
+  const breakdown: string[] = [];
+  let creditsPerHour = 0;
+
+  if (hasTranslation) {
+    creditsPerHour += pricingCreditEstimate.sttCreditsPerHour;
+    breakdown.push("STT");
+
+    const translationCredits = pricingCreditEstimate.translationCreditsPerOutputLanguageHour * targetLanguageCount;
+    creditsPerHour += translationCredits;
+    breakdown.push(`Translation x${targetLanguageCount}`);
+  }
+
+  if (hasVoicePreview) {
+    const audioCredits = pricingCreditEstimate.translatedAudioCreditsPerOutputLanguageHour * targetLanguageCount;
+    creditsPerHour += audioCredits;
+    breakdown.push(`Translated audio x${targetLanguageCount}`);
+  }
+
+  if (hasSummary) {
+    creditsPerHour += pricingCreditEstimate.summaryCreditsPerHour;
+    breakdown.push("AI summaries");
+  }
+
+  if (hasAssistant) {
+    creditsPerHour += pricingCreditEstimate.assistantCreditsPerHour;
+    breakdown.push("AI Assistant");
+  }
+
+  return { creditsPerHour, breakdown };
+}
+
+const salesInquiryInitialState = {
+  firstName: "",
+  lastName: "",
+  workEmail: "",
+  company: "",
+  helpTopic: "",
+  currentMeetingVolume: "",
+  expectedMeetingVolume: "",
+  targetLanguages: [] as string[],
+  featureInterests: [] as string[],
+  message: "",
+  consent: false,
+};
+
+const salesLanguageOptions = [
+  { label: "Vietnamese", value: "vi" },
+  { label: "English", value: "en" },
+  { label: "Japanese", value: "ja" },
+];
+
+const salesFeatureOptions = [
+  { label: "Real-time translation", value: "translation" },
+  { label: "AI summaries", value: "summaries" },
+  { label: "AI Assistant", value: "assistant" },
+  { label: "Voice preview", value: "voice" },
+];
+
+const salesVolumeOptions = [
+  { label: "Under 50 hours", value: "under-50" },
+  { label: "50-250 hours", value: "50-250" },
+  { label: "250-1,000 hours", value: "250-1000" },
+  { label: "1,000+ hours", value: "1000-plus" },
+];
+
+const salesIntentStorageKey = "warptalk:sales-package-intent";
+const pricingIntentStorageKey = "warptalk:pricing-intent";
+
+function readOptionalString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function readOptionalNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readPricingEstimateIntent(): SalesPackagePricingEstimateDto | null {
+  try {
+    const rawIntent = window.sessionStorage.getItem(pricingIntentStorageKey);
+    if (!rawIntent) return null;
+
+    const intent = JSON.parse(rawIntent) as Record<string, unknown>;
+    const estimatedCredits = readOptionalNumber(intent.estimatedCredits);
+    const meetingHours = readOptionalNumber(intent.meetingHours);
+
+    if (estimatedCredits === null && meetingHours === null) return null;
+
+    return {
+      packageMode: readOptionalString(intent.packageMode),
+      selectedVolume: readOptionalString(intent.selectedVolume),
+      meetingHours,
+      estimatedCredits,
+      usagePercent: readOptionalNumber(intent.usagePercent),
+      creditsPerHour: readOptionalNumber(intent.creditsPerHour),
+      estimateBreakdown: Array.isArray(intent.estimateBreakdown)
+        ? intent.estimateBreakdown.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        : [],
+      targetLanguageCount: readOptionalNumber(intent.targetLanguageCount),
+      billableTargetLanguageCount: readOptionalNumber(intent.billableTargetLanguageCount),
+      includesTranslatedAudio: intent.includesTranslatedAudio === true,
+      planName: readOptionalString(intent.planName),
+      planPrice: readOptionalNumber(intent.planPrice),
+      creditsPerCycle: readOptionalNumber(intent.creditsPerCycle),
+    };
+  } catch {
+    window.sessionStorage.removeItem(pricingIntentStorageKey);
+    return null;
+  }
+}
+
+function readPricingContactDefaults() {
+  try {
+    const rawIntent = window.sessionStorage.getItem(pricingIntentStorageKey);
+    if (!rawIntent) return null;
+
+    const intent = JSON.parse(rawIntent) as Record<string, unknown>;
+    const selectedFeatures = Array.isArray(intent.selectedFeatures)
+      ? intent.selectedFeatures.filter((feature): feature is string =>
+          typeof feature === "string" && salesFeatureOptions.some((option) => option.value === feature)
+        )
+      : [];
+    const selectedCapabilities = Array.isArray(intent.selectedCapabilities)
+      ? intent.selectedCapabilities.filter((capability): capability is string => typeof capability === "string")
+      : [];
+    const targetLanguages = salesLanguageOptions
+      .filter((language) => selectedCapabilities.includes(language.label))
+      .map((language) => language.value);
+    const volumeLabel = readOptionalString(intent.selectedVolume);
+    const currentMonthlyMeetingVolume = salesVolumeOptions.find((option) => option.label === volumeLabel)?.value ?? "";
+
+    return {
+      featureInterests: selectedFeatures,
+      targetLanguages,
+      currentMonthlyMeetingVolume,
+    };
+  } catch {
+    window.sessionStorage.removeItem(pricingIntentStorageKey);
+    return null;
+  }
+}
 
 const featureSteps = [
   {
@@ -725,21 +912,144 @@ function FeatureTraceSection() {
 }
 
 function PricingSection() {
-  const router = useRouter();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const user = useAuthStore((state) => state.user);
+  const queryClient = useQueryClient();
+  const [meetingHours, setMeetingHours] = useState(pricingVolumes[0].value);
+  const [selectedPricingFeatures, setSelectedPricingFeatures] = useState<string[]>([
+    salesFeatureOptions[0].value,
+    salesFeatureOptions[1].value,
+  ]);
+  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([
+    pricingCapabilities[0],
+    pricingCapabilities[1],
+  ]);
 
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["landing-plans"],
     queryFn: () => billingService.getPlans(),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
-  const handleChoosePlan = () => {
-    if (!isAuthenticated || !user) {
-      router.push("/login?redirect=/workspace");
-    } else {
-      router.push("/workspace");
+  useEffect(() => {
+    const syncBroadcast = typeof window !== "undefined" && "BroadcastChannel" in window
+      ? new BroadcastChannel(BROADCAST_CHANNELS.NOTIFICATIONS_SYNC)
+      : null;
+
+    if (syncBroadcast) {
+      syncBroadcast.onmessage = (event) => {
+        if (event.data === "REFRESH_PLANS") {
+          queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
+        }
+      };
     }
+
+    return () => {
+      syncBroadcast?.close();
+    };
+  }, [queryClient]);
+
+  const activePlans = plans
+    .filter((plan: PlanDto) => plan.isActive !== false)
+    .sort((a: PlanDto, b: PlanDto) => a.sortOrder - b.sortOrder);
+  const primaryPlan = activePlans.find((plan: PlanDto) => plan.slug === "enterprise") ?? activePlans[0];
+  const displayPlan = primaryPlan ?? sampleEnterprisePlan;
+  const selectedLanguageCount = selectedCapabilities.filter((capability) =>
+    ["Vietnamese", "English", "Japanese"].includes(capability)
+  ).length;
+  const targetLanguageCount = Math.max(0, selectedLanguageCount - 1);
+  const billableTargetLanguageCount = Math.max(1, targetLanguageCount);
+  const includesTranslatedAudio =
+    selectedCapabilities.includes("Translated audio / dubbing") || selectedPricingFeatures.includes("voice");
+  const selectedVolumeLabel = getPricingVolumeLabel(meetingHours);
+  const pricingEstimate = calculatePricingEstimate(
+    billableTargetLanguageCount,
+    selectedPricingFeatures,
+    includesTranslatedAudio
+  );
+  const creditsPerHour = pricingEstimate.creditsPerHour;
+  const estimateBreakdownText = pricingEstimate.breakdown.length > 0
+    ? pricingEstimate.breakdown.join(" + ")
+    : "No AI billing features selected";
+  const estimatedCredits = Math.round(meetingHours * creditsPerHour);
+  const estimateLabel = meetingHours >= 1000 ? "Minimum estimated usage" : "Estimated monthly usage";
+  const usagePercent = Math.min(100, Math.round((estimatedCredits / Math.max(displayPlan.creditsPerCycle, 1)) * 100));
+  const overBaselineCredits = Math.max(0, estimatedCredits - displayPlan.creditsPerCycle);
+  const baselineCoveredHours = creditsPerHour > 0
+    ? Math.floor(displayPlan.creditsPerCycle / creditsPerHour)
+    : null;
+  const isCustomFit = overBaselineCredits > 0 || usagePercent >= 80 || meetingHours >= 1000;
+  const packageMode = isCustomFit ? "Custom Enterprise review" : "Enterprise baseline fit";
+  const sortedSelectedCapabilities = [...selectedCapabilities].sort(
+    (first, second) => (pricingCapabilityOrder.get(first) ?? 999) - (pricingCapabilityOrder.get(second) ?? 999)
+  );
+  const selectedCapabilitiesText = sortedSelectedCapabilities.length > 0
+    ? sortedSelectedCapabilities.join(", ")
+    : "No capability selected";
+  const selectedPricingFeatureLabels = salesFeatureOptions
+    .filter((feature) => selectedPricingFeatures.includes(feature.value))
+    .map((feature) => feature.label);
+  const selectedPricingFeaturesText = selectedPricingFeatureLabels.length > 0
+    ? selectedPricingFeatureLabels.join(", ")
+    : "No feature selected";
+  const contractHighlights = [
+    `Volume: ${meetingHours.toLocaleString()} hours/month (${selectedVolumeLabel})`,
+    `Estimated usage: ${estimatedCredits.toLocaleString()} credits`,
+    overBaselineCredits > 0
+      ? `Over baseline: ${overBaselineCredits.toLocaleString()} credits`
+      : "Within baseline allowance",
+    `${selectedLanguageCount} selected language${selectedLanguageCount > 1 ? "s" : ""}`,
+    `${targetLanguageCount} translated output language${targetLanguageCount !== 1 ? "s" : ""}`,
+    includesTranslatedAudio ? "Audio mode: translated audio/dubbing" : "Audio mode: captions only",
+    creditsPerHour > 0
+      ? `Cost basis: ${creditsPerHour.toLocaleString()} credits/hour`
+      : "Cost basis: no AI usage selected",
+    baselineCoveredHours !== null
+      ? `Baseline covers about ${baselineCoveredHours.toLocaleString()} hours/month for this setup`
+      : "Baseline is not consumed until AI features are enabled",
+    `Credit drivers: ${estimateBreakdownText}`,
+  ];
+
+  const handleContactSales = () => {
+    persistPricingIntent();
+    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.history.pushState(null, "", "#contact");
+  };
+
+  const persistPricingIntent = () => {
+    window.sessionStorage.setItem(
+      pricingIntentStorageKey,
+      JSON.stringify({
+        packageMode,
+        selectedVolume: selectedVolumeLabel,
+        meetingHours,
+        selectedFeatures: selectedPricingFeatures,
+        selectedCapabilities: sortedSelectedCapabilities,
+        estimatedCredits,
+        usagePercent,
+        creditsPerHour,
+        estimateBreakdown: pricingEstimate.breakdown,
+        targetLanguageCount,
+        billableTargetLanguageCount,
+        includesTranslatedAudio,
+        planName: displayPlan.name,
+        planPrice: displayPlan.price,
+        creditsPerCycle: displayPlan.creditsPerCycle,
+        capturedAt: new Date().toISOString(),
+      })
+    );
+    window.dispatchEvent(new Event("warptalk:pricing-intent-updated"));
+  };
+
+  const togglePricingChoice = (
+    value: string,
+    currentValues: string[],
+    setter: (values: string[]) => void
+  ) => {
+    setter(
+      currentValues.includes(value)
+        ? currentValues.filter((item) => item !== value)
+        : [...currentValues, value]
+    );
   };
 
   return (
@@ -757,61 +1067,160 @@ function PricingSection() {
 
       <div className="c3-watermark-container">
         <div className="c3-watermark-main">
-          <span className="c3-watermark-line-1">Translation</span>
-          <span className="c3-watermark-line-2">Native</span>
+          <span className="c3-watermark-line-1">Find the</span>
+          <span className="c3-watermark-line-2">Right Plan</span>
         </div>
+        <p className="c3-pricing-lede">
+          Estimate monthly usage against the Enterprise baseline before contract review.
+        </p>
       </div>
 
-      <div className="c3-grid">
-        {isLoading ? (
-          <div className="col-span-full flex justify-center py-20 text-white/50">Loading plans...</div>
-        ) : (
-          plans
-            .filter((p: any) => p.isActive !== false)
-            .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
-            .map((plan: any) => {
-              const featureList = buildFeatureList(plan);
-              
-              return (
-                <article className={plan.sortOrder > 1 ? "c3-card c3-card-pro" : "c3-card"} key={plan.id}>
-                  <p className="c3-tier-small">{plan.tier}</p>
-                  <h3 className="c3-tier-large">
-                    {plan.price === 0 ? "Free" : `${plan.price.toLocaleString()} ${plan.currency}/mo`}
-                  </h3>
-                  <p className="c3-desc">{getPlanDescription(plan.name)}</p>
-                  <ul className="c3-list">
-                    {featureList.map((feature: string) => (
-                      <li key={feature}>
-                        <span className="c3-check" aria-hidden="true">
-                          <svg viewBox="0 0 16 16" className="size-3.5">
-                            <path
-                              d="M13.5 4.25 6.25 11.5 2.5 7.75"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </span>
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button type="button" className="c3-btn cursor-pointer" onClick={handleChoosePlan}>
-                    Choose Plan
+      <div className="c3-pricing-shell">
+        <div className="c3-plan-builder">
+          <div className="c3-builder-step">
+            <div className="c3-step-marker">1</div>
+            <div className="c3-step-content">
+              <h3>Expected monthly meeting volume</h3>
+              <p>Use meeting hours to check whether the default Enterprise baseline is enough.</p>
+              <div className="c3-volume-control">
+                <div className="c3-volume-readout">
+                  <strong>{meetingHours.toLocaleString()} hours/month</strong>
+                  <span>{selectedVolumeLabel}</span>
+                </div>
+                <input
+                  type="range"
+                  min={10}
+                  max={1000}
+                  step={5}
+                  value={meetingHours}
+                  aria-label="Expected monthly meeting hours"
+                  onChange={(event) => setMeetingHours(Number(event.target.value))}
+                />
+                <div className="c3-volume-scale">
+                  <span>10h</span>
+                  <span>250h</span>
+                  <span>500h</span>
+                  <span>1,000h+</span>
+                </div>
+              </div>
+              <div className="c3-usage-meter">
+                <span style={{ width: `${usagePercent}%` }} />
+              </div>
+              <p className="c3-meter-caption">
+                {estimateLabel}: <strong>{estimatedCredits.toLocaleString()}</strong> / {displayPlan.creditsPerCycle.toLocaleString()} credits
+                {overBaselineCredits > 0 ? (
+                  <em>Over baseline by {overBaselineCredits.toLocaleString()} credits</em>
+                ) : null}
+                <small>
+                  {creditsPerHour > 0
+                    ? `Estimate uses ${creditsPerHour.toLocaleString()} credits/hour for ${billableTargetLanguageCount} billable output language${billableTargetLanguageCount > 1 ? "s" : ""}.`
+                    : "No AI usage is estimated until translation, summary, assistant, or voice mode is selected."}
+                </small>
+              </p>
+            </div>
+          </div>
+
+          <div className="c3-builder-step">
+            <div className="c3-step-marker">2</div>
+            <div className="c3-step-content">
+              <h3>Features to review</h3>
+              <p>Turn meeting modes on or off to update the usage estimate.</p>
+              <div className="c3-pill-row">
+                {salesFeatureOptions.map((feature) => (
+                  <button
+                    key={feature.value}
+                    type="button"
+                    className={selectedPricingFeatures.includes(feature.value) ? "selected" : ""}
+                    onClick={() => togglePricingChoice(feature.value, selectedPricingFeatures, setSelectedPricingFeatures)}
+                  >
+                    {feature.label}
                   </button>
-                </article>
-              );
-            })
-        )}
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="c3-builder-step">
+            <div className="c3-step-marker">3</div>
+            <div className="c3-step-content">
+              <h3>Languages and audio mode</h3>
+              <p>Select supported languages and whether translated audio/dubbing is required.</p>
+              <div className="c3-pill-row">
+                {pricingCapabilities.map((capability) => (
+                  <button
+                    key={capability}
+                    type="button"
+                    className={selectedCapabilities.includes(capability) ? "selected" : ""}
+                    onClick={() => togglePricingChoice(capability, selectedCapabilities, setSelectedCapabilities)}
+                  >
+                    {capability}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <article className="c3-contract-card">
+          <p className="c3-recommend-label">Estimate result</p>
+          <div className="c3-contract-main">
+            <div>
+              <p className="c3-tier-small">{isLoading ? "Loading plan" : packageMode}</p>
+              <h3 className="c3-contract-title">Enterprise</h3>
+              <p className="c3-contract-price">
+                Contract pricing after review
+              </p>
+              <p className="c3-desc">
+                {isCustomFit
+                  ? "Estimated usage is above the default baseline, so Sales should confirm credits, caps, and pricing before activation."
+                  : `Estimated usage fits the default ${displayPlan.creditsPerCycle.toLocaleString()}-credit baseline. Final terms are still confirmed before activation.`}
+              </p>
+              <div className="c3-selected-summary">
+                <span>Features to review</span>
+                <strong>{selectedPricingFeaturesText}</strong>
+                <span>Estimate basis</span>
+                <strong>{selectedCapabilitiesText}</strong>
+                <span>Baseline reference</span>
+                <strong>{displayPlan.creditsPerCycle.toLocaleString()} credits / month</strong>
+              </div>
+            </div>
+
+            <div className="c3-contract-includes">
+              <p className="c3-tier-small">Estimate includes</p>
+              <ul className="c3-list c3-contract-list">
+                {contractHighlights.map((feature) => (
+                  <li key={feature}>
+                    <span className="c3-check" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" className="size-3.5">
+                        <path
+                          d="M13.5 4.25 6.25 11.5 2.5 7.75"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <button type="button" className="c3-btn cursor-pointer" onClick={handleContactSales}>
+            Contact Sales
+          </button>
+
+          <p className="c3-pricing-note">
+            The baseline is a starting point only. Final price, credit volume, invoice terms, and enabled features are confirmed after review.
+          </p>
+        </article>
       </div>
     </section>
   );
 }
-
-const footerNavigation = ["How it works", "Features", "Pricing", "Testimonials", "FAQ"];
-const footerCompany = ["Blog", "About", "Terms and Condition", "Privacy Policy"];
 
 const footerSocialIcons = [
   {
@@ -847,6 +1256,31 @@ function FooterLogoMark({ large = false }: { large?: boolean }) {
 }
 
 function LandingFooter() {
+  const [salesInquiry, setSalesInquiry] = useState(salesInquiryInitialState);
+  const [salesInquiryStatus, setSalesInquiryStatus] = useState<"idle" | "submitting" | "sent">("idle");
+  const [salesStep, setSalesStep] = useState(1);
+
+  useEffect(() => {
+    const applyPricingDefaults = () => {
+      const defaults = readPricingContactDefaults();
+      if (!defaults) return;
+
+      setSalesInquiry((current) => ({
+        ...current,
+        featureInterests: defaults.featureInterests.length > 0 ? defaults.featureInterests : current.featureInterests,
+        targetLanguages: defaults.targetLanguages.length > 0 ? defaults.targetLanguages : current.targetLanguages,
+        currentMeetingVolume: defaults.currentMonthlyMeetingVolume || current.currentMeetingVolume,
+      }));
+    };
+
+    applyPricingDefaults();
+    window.addEventListener("warptalk:pricing-intent-updated", applyPricingDefaults);
+
+    return () => {
+      window.removeEventListener("warptalk:pricing-intent-updated", applyPricingDefaults);
+    };
+  }, []);
+
   useEffect(() => {
     function fitWatermark() {
       const svg = document.getElementById("watermarkSvg");
@@ -872,6 +1306,81 @@ function LandingFooter() {
       window.removeEventListener("resize", fitWatermark);
     };
   }, []);
+
+  const persistSalesIntent = () => {
+    window.sessionStorage.setItem(
+      salesIntentStorageKey,
+      JSON.stringify({
+        firstName: salesInquiry.firstName.trim(),
+        lastName: salesInquiry.lastName.trim(),
+        workEmail: salesInquiry.workEmail.trim().toLowerCase(),
+        company: salesInquiry.company.trim(),
+        requestType: salesInquiry.helpTopic,
+        featureInterests: salesInquiry.featureInterests,
+        targetLanguages: salesInquiry.targetLanguages,
+        currentMonthlyMeetingVolume: salesInquiry.currentMeetingVolume,
+        expectedMonthlyMeetingVolumeInSixMonths: salesInquiry.expectedMeetingVolume || null,
+        useCaseNotes: salesInquiry.message.trim() || null,
+        consent: salesInquiry.consent,
+        pricingEstimate: readPricingEstimateIntent(),
+        capturedAt: new Date().toISOString(),
+      })
+    );
+  };
+
+  const handleSalesInquirySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSubmitSalesInquiry) {
+      return;
+    }
+
+    setSalesInquiryStatus("submitting");
+    persistSalesIntent();
+
+    window.setTimeout(() => {
+      setSalesInquiryStatus("sent");
+    }, 300);
+  };
+
+  const toggleSalesLanguage = (language: string) => {
+    setSalesInquiry((current) => ({
+      ...current,
+      targetLanguages: current.targetLanguages.includes(language)
+        ? current.targetLanguages.filter((item) => item !== language)
+        : [...current.targetLanguages, language],
+    }));
+  };
+
+  const toggleSalesFeature = (feature: string) => {
+    setSalesInquiry((current) => ({
+      ...current,
+      featureInterests: current.featureInterests.includes(feature)
+        ? current.featureInterests.filter((item) => item !== feature)
+        : [...current.featureInterests, feature],
+    }));
+  };
+
+  const canGoToSalesStepTwo =
+    salesInquiry.firstName.trim().length > 0 &&
+    salesInquiry.lastName.trim().length > 0 &&
+    salesInquiry.workEmail.trim().length > 0 &&
+    salesInquiry.company.trim().length > 0;
+
+  const canGoToSalesStepThree =
+    salesInquiry.helpTopic.trim().length > 0 &&
+    salesInquiry.featureInterests.length > 0 &&
+    salesInquiry.targetLanguages.length > 0;
+
+  const canSubmitSalesInquiry =
+    canGoToSalesStepTwo &&
+    canGoToSalesStepThree &&
+    salesInquiry.currentMeetingVolume.trim().length > 0 &&
+    salesInquiry.consent;
+
+  const goToNextSalesStep = () => {
+    if (salesStep === 1 && canGoToSalesStepTwo) setSalesStep(2);
+    if (salesStep === 2 && canGoToSalesStepThree) setSalesStep(3);
+  };
 
   return (
     <section id="contact" className="footer-section">
@@ -912,56 +1421,237 @@ function LandingFooter() {
         </div>
 
         <div className="footer-right">
-          <div className="footer-lucky-graphic">
-            <div className="lucky-cube">
-              <span className="lucky-cube-mark">
-                <FooterLogoMark large />
-              </span>
-            </div>
-            <div className="lucky-text-row">
-              <svg className="lucky-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 20 C 6 14, 10 9, 18 5" />
-                <path d="M18 5 L 12 5" />
-                <path d="M18 5 L 18 11" />
-              </svg>
-              <span className="lucky-text">Feeling lucky?</span>
-            </div>
-          </div>
-
           <div className="footer-right-top">
-            <div className="footer-nav-cols">
-              <div className="footer-col">
-                <h3 className="footer-col-title">Navigation</h3>
-                {footerNavigation.map((item) => (
-                  <a href="#" key={item}>
-                    {item}
-                  </a>
-                ))}
+            <div className="sales-contact-panel">
+              <div className="sales-contact-copy">
+                <p className="sales-contact-kicker">Contact sales</p>
+                <h3>Tell us about your WarpTalk Enterprise package.</h3>
+                <p>
+                  Share your team details, target languages, and expected meeting usage. This request does not create
+                  an account automatically.
+                </p>
+                <div className="sales-contact-next">
+                  <span>What happens next</span>
+                  <ul>
+                    <li>We match the request with the right workspace flow.</li>
+                    <li>Pricing is confirmed only after the package fits.</li>
+                  </ul>
+                </div>
               </div>
-              <div className="footer-col">
-                <h3 className="footer-col-title">Company</h3>
-                {footerCompany.map((item) => (
-                  <a href="#" key={item}>
-                    {item}
-                  </a>
-                ))}
-              </div>
+
+              <form className="sales-contact-form" onSubmit={handleSalesInquirySubmit}>
+                <div className="sales-step-header">
+                  <span>Step {salesStep} of 3</span>
+                  <div className="sales-step-dots" aria-hidden="true">
+                    {[1, 2, 3].map((step) => (
+                      <i key={step} className={salesStep >= step ? "active" : ""} />
+                    ))}
+                  </div>
+                </div>
+
+                {salesStep === 1 ? (
+                  <div className="sales-form-section">
+                    <p className="sales-form-section-title">About you</p>
+                  <div className="sales-form-grid two-columns">
+                    <label>
+                      <span>First name</span>
+                      <input
+                        required
+                        value={salesInquiry.firstName}
+                        onChange={(event) => setSalesInquiry((current) => ({ ...current, firstName: event.target.value }))}
+                        placeholder="Janve"
+                      />
+                    </label>
+                    <label>
+                      <span>Last name</span>
+                      <input
+                        required
+                        value={salesInquiry.lastName}
+                        onChange={(event) => setSalesInquiry((current) => ({ ...current, lastName: event.target.value }))}
+                        placeholder="Sove"
+                      />
+                    </label>
+                  </div>
+                  <div className="sales-form-grid two-columns">
+                    <label>
+                      <span>Work email</span>
+                      <input
+                        required
+                        type="email"
+                        value={salesInquiry.workEmail}
+                        onChange={(event) => setSalesInquiry((current) => ({ ...current, workEmail: event.target.value }))}
+                        placeholder="name@company.com"
+                      />
+                    </label>
+                    <label>
+                      <span>Company</span>
+                      <input
+                        required
+                        value={salesInquiry.company}
+                        onChange={(event) => setSalesInquiry((current) => ({ ...current, company: event.target.value }))}
+                      placeholder="Company name"
+                    />
+                  </label>
+                </div>
+                  </div>
+                ) : null}
+
+                {salesStep === 2 ? (
+                  <div className="sales-form-section">
+                    <p className="sales-form-section-title">What do you need?</p>
+                  <label>
+                    <span>How can we help you?</span>
+                    <select
+                      required
+                      value={salesInquiry.helpTopic}
+                      onChange={(event) => setSalesInquiry((current) => ({ ...current, helpTopic: event.target.value }))}
+                    >
+                      <option value="" disabled hidden>Select a request type</option>
+                      <option value="enterprise-package">Request Enterprise package</option>
+                      <option value="billing-invoice">Discuss billing/invoice</option>
+                      <option value="support">Support issue</option>
+                      <option value="other">Other business request</option>
+                    </select>
+                  </label>
+
+                  <fieldset className="sales-choice-field">
+                    <span>Features interested in</span>
+                    <div className="sales-choice-options">
+                      {salesFeatureOptions.map((feature) => (
+                        <label key={feature.value}>
+                          <input
+                            type="checkbox"
+                            checked={salesInquiry.featureInterests.includes(feature.value)}
+                            onChange={() => toggleSalesFeature(feature.value)}
+                          />
+                          <span>{feature.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="sales-choice-field">
+                    <span>Target languages</span>
+                    <div className="sales-choice-options">
+                      {salesLanguageOptions.map((language) => (
+                        <label key={language.value}>
+                          <input
+                            type="checkbox"
+                            checked={salesInquiry.targetLanguages.includes(language.value)}
+                            onChange={() => toggleSalesLanguage(language.value)}
+                          />
+                          <span>{language.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  </div>
+                ) : null}
+
+                {salesStep === 3 ? (
+                  <div className="sales-form-section">
+                    <p className="sales-form-section-title">Usage</p>
+                    <div className="sales-form-grid two-columns">
+                      <label>
+                        <span>Current monthly meeting volume</span>
+                        <select
+                          required
+                          value={salesInquiry.currentMeetingVolume}
+                          onChange={(event) => setSalesInquiry((current) => ({ ...current, currentMeetingVolume: event.target.value }))}
+                        >
+                          <option value="" disabled hidden>Select a range</option>
+                          {salesVolumeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Expected volume in 6 months</span>
+                        <select
+                          value={salesInquiry.expectedMeetingVolume}
+                          onChange={(event) => setSalesInquiry((current) => ({ ...current, expectedMeetingVolume: event.target.value }))}
+                        >
+                          <option value="" disabled hidden>Select a range</option>
+                          {salesVolumeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <label>
+                      <span>Tell us more about your use case</span>
+                      <textarea
+                        value={salesInquiry.message}
+                        onChange={(event) => setSalesInquiry((current) => ({ ...current, message: event.target.value }))}
+                        placeholder="Team size, meeting type, trial goal, rollout timeline..."
+                        rows={4}
+                      />
+                    </label>
+
+                    <label className="sales-consent-row">
+                      <input
+                        required
+                        type="checkbox"
+                        checked={salesInquiry.consent}
+                        onChange={(event) => setSalesInquiry((current) => ({ ...current, consent: event.target.checked }))}
+                      />
+                    <span>I agree that WarpTalk may use this information to contact me about its products and services.</span>
+                  </label>
+                  </div>
+                ) : null}
+
+                <div className="sales-form-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={salesStep === 1 || salesInquiryStatus === "submitting"}
+                    onClick={() => setSalesStep((current) => Math.max(1, current - 1))}
+                  >
+                    Back
+                  </button>
+                  {salesStep < 3 ? (
+                    <button
+                      type="button"
+                      disabled={
+                        salesInquiryStatus === "submitting" ||
+                        (salesStep === 1 && !canGoToSalesStepTwo) ||
+                        (salesStep === 2 && !canGoToSalesStepThree)
+                      }
+                      onClick={goToNextSalesStep}
+                    >
+                      Next
+                    </button>
+                  ) : (
+                    <button type="submit" disabled={salesInquiryStatus === "submitting" || !canSubmitSalesInquiry}>
+                      {salesInquiryStatus === "submitting" ? "Sending..." : "Request pricing"}
+                    </button>
+                  )}
+                </div>
+                <div className="sales-contact-trial">
+                  <span>Want to try first?</span>
+                  <Link
+                    href="/register"
+                    onClick={() => {
+                      if (canSubmitSalesInquiry) {
+                        persistSalesIntent();
+                      }
+                    }}
+                  >
+                    Start a 14-day trial
+                  </Link>
+                </div>
+                {salesInquiryStatus === "sent" ? (
+                  <p className="sales-contact-success">
+                    Thank you. Thanks for reaching out. Our team will review your request and follow up within 1-2 business days.
+                  </p>
+                ) : null}
+              </form>
             </div>
           </div>
 
           <div className="footer-bottom">
             <p className="footer-copyright">© 2026 WarpTalk. All rights reserved.</p>
-            <div className="footer-cta-mini">
-              <h4>
-                AI moves fast.
-                <br />
-                <strong>Stay ahead with WarpTalk.</strong>
-              </h4>
-              <div className="footer-subscribe-row">
-                <input type="email" placeholder="Enter email address" />
-                <button type="button">Subscribe</button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -978,7 +1668,6 @@ function LandingFooter() {
 }
 
 export default function HomePage() {
-  const queryClient = useQueryClient();
   const [hasLoaderFinished, setHasLoaderFinished] = useState(false);
   const [hasShellLoaded, setHasShellLoaded] = useState(false);
   const [hasHeroVideoLoaded, setHasHeroVideoLoaded] = useState(false);
@@ -991,33 +1680,11 @@ export default function HomePage() {
 
   const handleGetStarted = () => {
     if (!isAuthenticated || !user) {
-      router.push("/login?redirect=/workspace");
+      router.push("/register");
     } else {
       router.push("/workspace");
     }
   };
-
-  // SignalR connection for real-time landing page pricing updates
-  useEffect(() => {
-    const connection = createHubConnection("/hubs/notification");
-
-    connection.on("NewNotification", (notification) => {
-      if (notification?.type === "billing.plan_changed") {
-        queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
-      }
-    });
-
-    let isMounted = true;
-    connection.start().catch((err) => {
-      if (!isMounted) return;
-      if (err?.message?.includes("stop() was called")) return;
-    });
-
-    return () => {
-      isMounted = false;
-      connection.stop();
-    };
-  }, [queryClient]);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,292 +1,392 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Loader2, AlertTriangle, Building2, User, Bot, Check, Copy, Shield, Search } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Building2, Check, Copy, Loader2, Search, Play, XCircle, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { billingService } from "@/services/billing.service";
-import Link from "next/link";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 
-function IdBadge({ id, type, name }: { id: string, type: "workspace" | "user" | "system" | "admin", name?: string | null }) {
+const DEFAULT_PAGE_SIZE = 10;
+
+function formatNumber(value: number | null | undefined) {
+  return typeof value === "number" ? value.toLocaleString() : "N/A";
+}
+
+function formatMoney(value: number | null | undefined) {
+  return typeof value === "number" ? `${value.toLocaleString()} VND` : "N/A";
+}
+
+function WorkspaceBadge({ id, name }: { id: string; name?: string | null }) {
   const [copied, setCopied] = useState(false);
+  const displayName = name && name.trim() !== "" ? name : id.substring(0, 8);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(id);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 1500);
   };
 
-  const shortId = id.substring(0, 8);
-  const displayName = name && name.trim() !== "" ? name : shortId;
-
   return (
-    <div className="flex items-center gap-1.5 min-w-[120px]">
-      <div className="p-1 rounded bg-surface-1/50 border border-border-dim border-b-border">
-        {type === "workspace" && <Building2 className="w-3.5 h-3.5 text-muted-foreground" />}
-        {type === "user" && <User className="w-3.5 h-3.5 text-muted-foreground" />}
-        {type === "admin" && <Shield className="w-3.5 h-3.5 text-primary" />}
-        {type === "system" && <Bot className="w-3.5 h-3.5 text-blue-400" />}
+    <div className="flex min-w-[180px] items-center gap-2">
+      <div className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline bg-surface-2">
+        <Building2 className="h-4 w-4 text-muted-foreground" />
       </div>
-      <div
-        className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-1 border border-border-dim border-b-border cursor-pointer hover:bg-surface-2 hover:border-border transition-colors group relative"
+      <button
+        type="button"
         onClick={handleCopy}
-        title={`Click to copy ID: ${id}`}
+        title="Copy workspace ID"
+        className="group min-w-0 rounded-md border border-hairline bg-surface-2 px-2 py-1 text-left transition hover:border-primary/40 hover:bg-surface-3"
       >
-        <span className={`text-xs font-mono font-medium ${type === "system" ? "text-blue-400" : type === "admin" ? "text-primary" : "text-foreground-muted"}`}>
-          {displayName}
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
+          {copied ? (
+            <Check className="h-3.5 w-3.5 shrink-0 text-semantic-success" />
+          ) : (
+            <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+          )}
         </span>
-        {copied ? (
-          <Check className="w-3 h-3 text-semantic-success" />
-        ) : (
-          <Copy className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-        )}
-      </div>
+      </button>
     </div>
   );
 }
 
 export function AdminSubscriptionsTab() {
-  const [page, setPage] = useState(1);
-  const [workspaceFilter, setWorkspaceFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [planFilter, setPlanFilter] = useState("ALL");
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [workspaceFilter, setWorkspaceFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const { data, isLoading } = useQuery({
     queryKey: ["global-subscriptions-list"],
-    queryFn: () => billingService.getGlobalSubscriptions(1, 200), // Fetch up to 200 for client-side filtering
+    queryFn: () => billingService.getGlobalSubscriptions(1, 200),
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: (workspaceId: string) => billingService.cancelSubscription(workspaceId, "Admin force cancel"),
+  const cancelSubscriptionMutation = useMutation({
+    mutationFn: (workspaceId: string) => billingService.cancelSubscription(workspaceId, "Cancelled by Admin"),
     onSuccess: () => {
-      toast.success("Subscription cancelled successfully");
+      toast.success("Subscription cancelled successfully.");
       queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || "Failed to cancel subscription"),
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to cancel subscription.");
+    },
   });
 
-  const subscriptions = data?.items || [];
+  const resumeSubscriptionMutation = useMutation({
+    mutationFn: (workspaceId: string) => billingService.resumeSubscription(workspaceId, "Resumed by Admin"),
+    onSuccess: () => {
+      toast.success("Subscription resumed successfully.");
+      queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to resume subscription.");
+    },
+  });
+
+  const subscriptions = useMemo(() => data?.items ?? [], [data?.items]);
 
   const filteredSubscriptions = useMemo(() => {
-    return subscriptions.filter(sub => {
-      const query = workspaceFilter.toLowerCase();
-      const matchWorkspace = workspaceFilter
-        ? (sub.workspaceId?.toLowerCase().includes(query) || sub.workspaceName?.toLowerCase().includes(query))
-        : true;
-      const matchStatus = statusFilter !== "ALL" ? sub.status?.toLowerCase() === statusFilter.toLowerCase() : true;
-      const matchPlan = planFilter !== "ALL" ? sub.planName?.toLowerCase().includes(planFilter.toLowerCase()) : true;
-      return matchWorkspace && matchStatus && matchPlan;
-    });
-  }, [subscriptions, workspaceFilter, statusFilter, planFilter]);
+    const query = workspaceFilter.trim().toLowerCase();
 
-  const displayTotalCount = filteredSubscriptions.length;
-  const totalPages = Math.ceil(displayTotalCount / 20);
-  const paginatedSubscriptions = useMemo(() => {
-    return filteredSubscriptions.slice((page - 1) * 20, page * 20);
-  }, [filteredSubscriptions, page]);
+    return subscriptions.filter((sub) => {
+      const matchesWorkspace = query
+        ? sub.workspaceId?.toLowerCase().includes(query)
+          || sub.workspaceName?.toLowerCase().includes(query)
+          || sub.billingContactEmail?.toLowerCase().includes(query)
+        : true;
+      const matchesStatus = statusFilter === "all" || sub.status?.toLowerCase() === statusFilter;
+
+      return matchesWorkspace && matchesStatus;
+    });
+  }, [statusFilter, subscriptions, workspaceFilter]);
+
+  const totalCount = filteredSubscriptions.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const pageItems = useMemo(
+    () => filteredSubscriptions.slice((page - 1) * pageSize, page * pageSize),
+    [filteredSubscriptions, page, pageSize]
+  );
 
   const activeFiltersCount = [
-    workspaceFilter !== "",
-    statusFilter !== "ALL",
-    planFilter !== "ALL",
+    workspaceFilter.trim() !== "",
+    statusFilter !== "all",
   ].filter(Boolean).length;
 
   const resetFilters = () => {
     setWorkspaceFilter("");
-    setStatusFilter("ALL");
-    setPlanFilter("ALL");
+    setStatusFilter("all");
     setPage(1);
   };
 
+  const showingFrom = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const showingTo = Math.min(page * pageSize, totalCount);
+
   return (
-    <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear flex flex-col h-[600px]">
-      <CardHeader className="p-4 border-b border-hairline bg-surface-1/50 flex-none">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <CardTitle className="text-lg">Global Subscriptions</CardTitle>
+    <Card className="flex flex-col rounded-xl border border-hairline bg-surface-1 shadow-linear">
+      <CardHeader className="border-b border-hairline bg-surface-1/50 p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <CardTitle className="text-lg">Workspace contracts</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Review Enterprise contract terms, billing contacts, service state, and invoice controls.
+            </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-hairline">
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Status</Label>
-            <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val || "ALL"); setPage(1); }}>
-              <SelectTrigger className="w-[140px] h-8 text-sm">
-                <SelectValue placeholder="All status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Plan Tier</Label>
-            <Select value={planFilter} onValueChange={(val) => { setPlanFilter(val || "ALL"); setPage(1); }}>
-              <SelectTrigger className="w-[140px] h-8 text-sm">
-                <SelectValue placeholder="All plans" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Plans</SelectItem>
-                <SelectItem value="pro">Pro</SelectItem>
-                <SelectItem value="enterprise">Enterprise</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Workspace</Label>
-            <Input type="text" placeholder="Name or ID..." className="h-8 text-sm w-[160px]"
+        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-hairline bg-surface-2/45 px-3 py-2.5 md:flex-row md:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
               value={workspaceFilter}
-              onChange={(e) => { setWorkspaceFilter(e.target.value); setPage(1); }} />
+              onChange={(event) => {
+                setWorkspaceFilter(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Search company, workspace ID, or finance email"
+              className="h-9 rounded-md border-transparent bg-surface-1 pl-8 pr-3 text-sm shadow-none focus-visible:border-primary/30"
+            />
           </div>
 
-          {activeFiltersCount > 0 && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground gap-1.5 self-end" onClick={resetFilters}>
-              <span>Clear</span>
-              <Badge className="h-4 px-1 text-[10px] font-semibold rounded-full">{activeFiltersCount}</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-md border border-hairline bg-surface-1 px-2 py-1">
+              <span className="text-[11px] font-medium text-muted-foreground">Status</span>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value ?? "all");
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-7 w-[112px] border-0 bg-transparent px-1 text-xs shadow-none focus:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-1.5 rounded-md border border-hairline bg-surface-1 px-2 py-1">
+              <span className="text-[11px] font-medium text-muted-foreground">Rows</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-7 w-[64px] border-0 bg-transparent px-1 text-xs shadow-none focus:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {activeFiltersCount > 0 && (
+              <Badge className="h-7 rounded-md px-2 text-[11px] font-semibold">{activeFiltersCount} active</Badge>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={resetFilters}
+              disabled={activeFiltersCount === 0}
+            >
+              Clear
             </Button>
-          )}
+          </div>
         </div>
       </CardHeader>
 
-      <CardContent className="p-0 flex-1 overflow-auto">
+      <CardContent className="p-0">
         <Table>
-          <TableHeader className="bg-surface-2 sticky top-0 z-10">
+          <TableHeader className="bg-surface-2">
             <TableRow className="border-hairline hover:bg-transparent">
               <TableHead>Workspace</TableHead>
-              <TableHead>Plan</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Billing Cycle End</TableHead>
-              <TableHead className="text-right">Credits Remaining</TableHead>
+              <TableHead>Credits</TableHead>
+              <TableHead>Cycle & invoice</TableHead>
+              <TableHead>Billing contact</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-32 text-center">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
-            ) : paginatedSubscriptions.length === 0 ? (
+            ) : pageItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                  No subscriptions found
+                <TableCell colSpan={6} className="h-32 text-center text-sm text-muted-foreground">
+                  No contracts match the current filters.
                 </TableCell>
               </TableRow>
-            ) : paginatedSubscriptions.map((sub) => (
-              <TableRow key={sub.id} className="border-hairline hover:bg-surface-2">
-                <TableCell>
-                  <Link href={`/billing/workspace/${sub.workspaceId}`} className="block hover:opacity-80 transition-opacity">
-                    <IdBadge id={sub.workspaceId!} type="workspace" name={sub.workspaceName} />
-                  </Link>
-                </TableCell>
-                <TableCell className="text-sm font-semibold text-ink">{sub.planName}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={
-                    sub.status === "active" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : 
-                    sub.status === "cancelled" ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30" : "bg-surface-3 text-ink"
-                  }>
-                    {sub.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-xs font-mono text-muted-foreground">
-                  {sub.currentPeriodEnd ? format(new Date(sub.currentPeriodEnd), "MMM d, yyyy HH:mm") : "N/A"}
-                </TableCell>
-                <TableCell className="text-right font-medium font-mono text-sm text-ink">
-                  {sub.creditsRemaining.toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right space-x-2">
-                  {sub.status === "active" && (
-                    <Dialog>
-                      <DialogTrigger render={<Button variant="destructive" size="sm" className="h-7 text-xs font-medium rounded-md px-2.5" />}>
-                        Force Cancel
-                      </DialogTrigger>
-                      <DialogContent className="bg-surface-1 border-hairline rounded-xl">
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-destructive" />
-                            Force Cancel Subscription
-                          </DialogTitle>
-                          <DialogDescription className="text-sm text-muted-foreground mt-2">
-                            Are you sure you want to cancel the subscription for Workspace <strong>{sub.workspaceId?.substring(0,8) || "Unknown"}</strong>? 
-                            This action cannot be undone.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter className="mt-4 gap-2">
-                          <Button variant="outline" size="sm" className="rounded-md">Close</Button>
-                          <Button variant="destructive" size="sm" className="rounded-md" onClick={() => cancelMutation.mutate(sub.workspaceId!)}>
-                            Confirm Cancel
+            ) : (
+              pageItems.map((sub) => {
+                const isTrial = !!sub.trialEndsAt;
+                const isSuspended = sub.serviceState === "suspended" || sub.status === "suspended";
+
+                return (
+                  <TableRow key={sub.id} className="border-hairline hover:bg-surface-2">
+                    <TableCell>
+                      <WorkspaceBadge id={sub.workspaceId!} name={sub.workspaceName} />
+                      <div className="mt-1 flex flex-col pl-10">
+                        <span className="text-xs font-medium text-muted-foreground">{sub.planName}</span>
+                        {isTrial && (
+                          <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">14-Day Trial</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          sub.status === "active" && !isSuspended
+                            ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                            : isSuspended
+                              ? "border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                              : sub.status === "cancelled"
+                                ? "border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                                : "bg-surface-3 text-ink"
+                        }
+                      >
+                        {isSuspended ? "suspended" : sub.status}
+                      </Badge>
+                      {!isSuspended && sub.serviceState && sub.serviceState !== "healthy" && (
+                        <div className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                          {sub.serviceState.replace("_", " ")}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5 text-xs">
+                        <div className="font-semibold text-ink">{formatNumber(sub.creditsRemaining)} remaining</div>
+                        <div className="text-muted-foreground">{formatNumber(sub.effectiveCreditsPerCycle)} committed / cycle</div>
+                        <div className="text-muted-foreground">{formatMoney(sub.effectiveContractPriceVnd)} before VAT</div>
+                        {(sub.overageCreditsThisCycle ?? 0) > 0 && (
+                          <div className="font-medium text-amber-600 dark:text-amber-400">
+                            {formatNumber(sub.overageCreditsThisCycle)} overage used
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      <div className="space-y-0.5">
+                        <div>
+                          Renews:{" "}
+                          <span className="font-mono text-ink">
+                            {sub.trialEndsAt
+                              ? format(new Date(sub.trialEndsAt), "MMM d, yyyy")
+                              : sub.currentPeriodEnd
+                                ? format(new Date(sub.currentPeriodEnd), "MMM d, yyyy")
+                                : "N/A"}
+                          </span>
+                        </div>
+                        <div>NET-{formatNumber(sub.effectiveInvoiceTermsDays)}</div>
+                        <div>Overage {formatNumber(sub.effectiveOveragePricePerCredit)} VND/cr</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5 text-xs">
+                        <div className="max-w-[180px] truncate font-medium text-ink" title={sub.billingContactEmail ?? undefined}>
+                          {sub.billingContactEmail || "No finance email"}
+                        </div>
+                        {sub.suspendedReason && (
+                          <div className="text-amber-600 dark:text-amber-400">{sub.suspendedReason}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {isSuspended ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-md px-2 text-xs font-medium text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10"
+                            onClick={() => sub.workspaceId && resumeSubscriptionMutation.mutate(sub.workspaceId)}
+                            title="Resume Suspended Contract"
+                          >
+                            <Play className="h-3.5 w-3.5 mr-1" /> Resume
                           </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+                        ) : sub.status === "active" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-md px-2 text-xs font-medium text-rose-600 border-rose-500/30 hover:bg-rose-500/10"
+                            onClick={() => sub.workspaceId && cancelSubscriptionMutation.mutate(sub.workspaceId)}
+                            title="Cancel Contract"
+                          >
+                            <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
+                          </Button>
+                        ) : null}
+
+                        <Link href={`/billing/workspace/${sub.workspaceId}`}>
+                          <Button variant="default" size="sm" className="h-8 rounded-md px-3 text-xs font-medium gap-1">
+                            Open <ArrowUpRight className="h-3.5 w-3.5" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </CardContent>
 
-      {/* Pagination */}
-      <div className="p-4 border-t border-hairline flex items-center justify-between bg-surface-1">
+      <div className="flex flex-col gap-3 border-t border-hairline bg-surface-1 p-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
-          {data ? (
-            <>Showing <strong>{(page - 1) * 20 + 1}–{Math.min(page * 20, displayTotalCount)}</strong> of <strong>{displayTotalCount}</strong> subscriptions</>
-          ) : "Loading..."}
+          {isLoading
+            ? "Loading contracts..."
+            : `Showing ${showingFrom}-${showingTo} of ${totalCount} contracts`}
         </p>
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" className="h-7 w-7 p-0 rounded-md"
-              disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</Button>
 
-            {(() => {
-              const pages: (number | "...")[] = [];
-              const delta = 2;
-              for (let i = 1; i <= totalPages; i++) {
-                if (i === 1 || i === totalPages || (i >= page - delta && i <= page + delta)) {
-                  pages.push(i);
-                } else if (pages[pages.length - 1] !== "...") {
-                  pages.push("...");
-                }
-              }
-              return pages.map((p, i) =>
-                p === "..." ? (
-                  <span key={`ellipsis-${i}`} className="h-7 w-7 flex items-center justify-center text-xs text-muted-foreground">…</span>
-                ) : (
-                  <Button key={p} variant={p === page ? "default" : "outline"} size="sm"
-                    className="h-7 w-7 p-0 rounded-md text-xs" onClick={() => setPage(p as number)}>{p}</Button>
-                )
-              );
-            })()}
-
-            <Button variant="outline" size="sm" className="h-7 w-7 p-0 rounded-md"
-              disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 rounded-md p-0"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={page <= 1}
+            aria-label="Previous page"
+          >
+            {"<"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 rounded-md p-0"
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={page >= totalPages}
+            aria-label="Next page"
+          >
+            {">"}
+          </Button>
+        </div>
       </div>
     </Card>
   );

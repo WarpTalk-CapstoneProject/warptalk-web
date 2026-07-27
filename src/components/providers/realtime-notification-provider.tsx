@@ -62,6 +62,31 @@ export function RealtimeNotificationProvider({ children }: { children: React.Rea
     }
   };
 
+  // Cross-Tab Broadcast Channel Sync (Active across all tabs)
+  useEffect(() => {
+    const syncBroadcast = typeof window !== "undefined" && "BroadcastChannel" in window
+      ? new BroadcastChannel(BROADCAST_CHANNELS.NOTIFICATIONS_SYNC)
+      : null;
+
+    if (syncBroadcast) {
+      syncBroadcast.onmessage = (event) => {
+        if (event.data === "REFRESH_NOTIFICATIONS") {
+          queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
+        }
+        if (event.data === "REFRESH_PLANS") {
+          queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
+          queryClient.invalidateQueries({ queryKey: ["billing", "plans"] });
+          queryClient.invalidateQueries({ queryKey: ["plans"] });
+        }
+      };
+    }
+
+    return () => {
+      syncBroadcast?.close();
+    };
+  }, [queryClient]);
+
   useEffect(() => {
     if (!accessToken) {
       if (connection) {
@@ -88,6 +113,24 @@ export function RealtimeNotificationProvider({ children }: { children: React.Rea
     // 1. Handle New Notifications
     hubConn.on(SIGNALR_EVENTS.NEW_NOTIFICATION, (notif: any) => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
+
+      const notifType = notif?.type || notif?.Type;
+      if (notifType === "billing.plan_changed" || (typeof notifType === "string" && notifType.startsWith("billing."))) {
+        queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
+        queryClient.invalidateQueries({ queryKey: ["billing", "plans"] });
+        queryClient.invalidateQueries({ queryKey: ["plans"] });
+
+        if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+          try {
+            const bc = new BroadcastChannel(BROADCAST_CHANNELS.NOTIFICATIONS_SYNC);
+            bc.postMessage("REFRESH_PLANS");
+            bc.close();
+          } catch {
+            // Ignored
+          }
+        }
+      }
 
       const title = notif.title || "New Notification";
       const message = notif.content || notif.message || "You have a new update.";
@@ -156,27 +199,26 @@ export function RealtimeNotificationProvider({ children }: { children: React.Rea
       }
     });
 
-    // 2. Handle Read & Cross-Tab Sync Events
-    const syncBroadcast = typeof window !== "undefined" && "BroadcastChannel" in window
-      ? new BroadcastChannel(BROADCAST_CHANNELS.NOTIFICATIONS_SYNC)
-      : null;
-
-    if (syncBroadcast) {
-      syncBroadcast.onmessage = (event) => {
-        if (event.data === "REFRESH_NOTIFICATIONS") {
-          queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
-        }
-      };
-    }
-
     hubConn.on(SIGNALR_EVENTS.NOTIFICATION_READ, () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
-      syncBroadcast?.postMessage("REFRESH_NOTIFICATIONS");
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        try {
+          const bc = new BroadcastChannel(BROADCAST_CHANNELS.NOTIFICATIONS_SYNC);
+          bc.postMessage("REFRESH_NOTIFICATIONS");
+          bc.close();
+        } catch {}
+      }
     });
 
     hubConn.on(SIGNALR_EVENTS.ALL_NOTIFICATIONS_READ, () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
-      syncBroadcast?.postMessage("REFRESH_NOTIFICATIONS");
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        try {
+          const bc = new BroadcastChannel(BROADCAST_CHANNELS.NOTIFICATIONS_SYNC);
+          bc.postMessage("REFRESH_NOTIFICATIONS");
+          bc.close();
+        } catch {}
+      }
     });
 
     // 3. Handle Workspace, Member & Settings Events

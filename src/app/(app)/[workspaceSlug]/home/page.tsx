@@ -206,7 +206,7 @@ export default function WorkspaceHomePage() {
     quickActions.push(
       {
         title: "Billing",
-        description: "Manage plan, seats, and workspace invoices.",
+        description: "Start trial, review contract status, and pay invoices.",
         icon: CreditCard,
         href: `/${slug}/billing`,
       },

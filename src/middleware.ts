@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/", "/pricing", "/about", "/login", "/register", "/forgot-password", "/dev-test", "/workspace/payment/plans"];
+const PUBLIC_ROUTES = ["/", "/pricing", "/about", "/login", "/register", "/forgot-password", "/dev-test"];
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password"];
 const ADMIN_PREFIX = "/billing";
 

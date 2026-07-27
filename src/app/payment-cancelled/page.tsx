@@ -9,7 +9,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 export default function PaymentCancelledPage() {
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const billingLink = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/billing` : "/";
-  const plansLink = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/payment/plans` : "/";
+  const contactBillingLink = "mailto:billing@warptalk.com?subject=WarpTalk%20Enterprise%20billing";
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
@@ -30,12 +30,12 @@ export default function PaymentCancelledPage() {
           </p>
 
           <div className="flex flex-col gap-3">
-            <Link href={plansLink} className="w-full">
+            <a href={contactBillingLink} className="w-full">
               <Button className="w-full rounded-md h-10 bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm cursor-pointer inline-flex items-center gap-2">
                 <ArrowCounterClockwise className="h-4 w-4" />
-                Try Again
+                Contact billing
               </Button>
-            </Link>
+            </a>
             <Link href={billingLink} className="w-full">
               <Button
                 variant="outline"

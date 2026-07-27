@@ -1,8 +1,9 @@
 "use client";
 
-import { Download, Robot, Coins, CreditCard, Translate, Users, Wallet, ArrowRight, ArrowUpRight, ArrowDownRight, Spinner, CaretLeft } from "@phosphor-icons/react/dist/ssr";
+import { Download, Coins, CreditCard, ArrowUpRight, ArrowDownRight, Spinner, CaretLeft } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import React, { useEffect, useState, useMemo, use } from "react";
 import ExcelJS from "exceljs";
@@ -14,24 +15,230 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { UsageSummaryDto, InvoiceDto } from "@/types/billing";
-import { createHubConnection } from "@/lib/signalr";
-import { UsageChart } from "@/components/admin/UsageChart";
-import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
+import type { UsageRateCardDto, InvoiceDto, SubscriptionDto, PlanDto, PlanRequest } from "@/types/billing";
 import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
+import { toast } from "sonner";
 
-const CURRENT_MONTH = new Date().getMonth() + 1;
-const CURRENT_YEAR = new Date().getFullYear();
+type ContractTermsFormState = {
+  creditsPerCycleOverride: string;
+  contractPriceVnd: string;
+  overageCapCreditsOverride: string;
+  overagePricePerCreditOverride: string;
+  invoiceTermsDaysOverride: string;
+  billingContactEmail: string;
+};
 
-function getIconForUsage(usageType: string) {
-  if (usageType.toLowerCase().includes("translation")) return Translate;
-  if (usageType.toLowerCase().includes("summary")) return Robot;
-  return Coins;
+const EMPTY_CONTRACT_TERMS_FORM: ContractTermsFormState = {
+  creditsPerCycleOverride: "",
+  contractPriceVnd: "",
+  overageCapCreditsOverride: "",
+  overagePricePerCreditOverride: "",
+  invoiceTermsDaysOverride: "",
+  billingContactEmail: "",
+};
+
+type PricingDraftRow = {
+  id: string;
+  chargeType: string;
+  unit: string;
+  provider: string;
+  model: string;
+  providerUnitCostUsd: number;
+  markupMultiplier: number;
+  enabled: boolean;
+};
+
+type PlanBaselineFormState = {
+  price: string;
+  creditsPerCycle: string;
+  overagePricePerCredit: string;
+  overageCapCredits: string;
+  rolloverCapCredits: string;
+  invoiceTermsDays: string;
+};
+
+const EMPTY_PLAN_BASELINE_FORM: PlanBaselineFormState = {
+  price: "1900000",
+  creditsPerCycle: "700000",
+  overagePricePerCredit: "4",
+  overageCapCredits: "105000",
+  rolloverCapCredits: "2000000",
+  invoiceTermsDays: "15",
+};
+
+const DEFAULT_PRICING_DRAFT_ROWS: PricingDraftRow[] = [
+  { id: "stt-second", chargeType: "STT", unit: "second", provider: "openai", model: "gpt-4o-transcribe", providerUnitCostUsd: 0.0001, markupMultiplier: 2.5, enabled: true },
+  { id: "translation-token-in", chargeType: "TRANSLATION", unit: "token_in", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000004, markupMultiplier: 2.5, enabled: true },
+  { id: "translation-token-cached", chargeType: "TRANSLATION", unit: "token_in_cached", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000001, markupMultiplier: 2.5, enabled: true },
+  { id: "translation-token-out", chargeType: "TRANSLATION", unit: "token_out", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000016, markupMultiplier: 2.5, enabled: true },
+  { id: "tts-standard", chargeType: "AUDIO_DUBBING_STANDARD", unit: "character", provider: "cartesia", model: "sonic-3.5", providerUnitCostUsd: 0.0000392, markupMultiplier: 3, enabled: true },
+  { id: "tts-clone", chargeType: "AUDIO_DUBBING_VOICE_CLONE", unit: "character", provider: "cartesia", model: "sonic-3.5-clone", providerUnitCostUsd: 0.0000588, markupMultiplier: 3.5, enabled: true },
+  { id: "voice-enrollment", chargeType: "VOICE_CLONE_ENROLLMENT", unit: "profile", provider: "cartesia", model: "cartesia-localizing-voice", providerUnitCostUsd: 0.00882, markupMultiplier: 3.5, enabled: true },
+  { id: "assistant-token-in", chargeType: "AI_ASSISTANT", unit: "token_in", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.000002, markupMultiplier: 2.5, enabled: true },
+  { id: "assistant-token-cached", chargeType: "AI_ASSISTANT", unit: "token_in_cached", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.0000005, markupMultiplier: 2.5, enabled: true },
+  { id: "assistant-token-out", chargeType: "AI_ASSISTANT", unit: "token_out", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.000008, markupMultiplier: 2.5, enabled: true },
+  { id: "summary-token-in", chargeType: "AI_SUMMARY", unit: "token_in", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.00000015, markupMultiplier: 2.5, enabled: true },
+  { id: "summary-token-cached", chargeType: "AI_SUMMARY", unit: "token_in_cached", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.000000075, markupMultiplier: 2.5, enabled: true },
+  { id: "summary-token-out", chargeType: "AI_SUMMARY", unit: "token_out", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.0000006, markupMultiplier: 2.5, enabled: true },
+];
+
+const RATE_CARD_SERVICE_DEFINITIONS = [
+  {
+    value: "STT",
+    label: "Speech to Text",
+    description: "Transcribes live meeting audio.",
+    provider: "openai",
+    units: ["second"],
+  },
+  {
+    value: "TRANSLATION",
+    label: "Translation",
+    description: "Translates meeting text with token billing.",
+    provider: "openai",
+    units: ["token_in", "token_in_cached", "token_out"],
+  },
+  {
+    value: "AUDIO_DUBBING_STANDARD",
+    label: "TTS standard",
+    description: "Generates speech with standard voices.",
+    provider: "cartesia",
+    units: ["character"],
+  },
+  {
+    value: "AUDIO_DUBBING_VOICE_CLONE",
+    label: "TTS voice clone",
+    description: "Generates speech with cloned voices.",
+    provider: "cartesia",
+    units: ["character"],
+  },
+  {
+    value: "VOICE_CLONE_ENROLLMENT",
+    label: "Voice enrollment",
+    description: "One-time voice profile/localizing charge.",
+    provider: "cartesia",
+    units: ["profile"],
+  },
+  {
+    value: "AI_ASSISTANT",
+    label: "AI Assistant",
+    description: "Workspace assistant and meeting Q&A.",
+    provider: "openai",
+    units: ["token_in", "token_in_cached", "token_out"],
+  },
+  {
+    value: "AI_SUMMARY",
+    label: "AI Summary",
+    description: "Meeting summary and action-item generation.",
+    provider: "openai",
+    units: ["token_in", "token_in_cached", "token_out"],
+  },
+];
+
+function getRateCardService(chargeType: string) {
+  return RATE_CARD_SERVICE_DEFINITIONS.find((service) => service.value === chargeType) ?? RATE_CARD_SERVICE_DEFINITIONS[0];
+}
+
+function calculateDraftUnitPrice(row: PricingDraftRow, fxRate: number, creditValueVnd: number): number {
+  if (!row.enabled || creditValueVnd <= 0) return 0;
+  return (row.providerUnitCostUsd * fxRate * row.markupMultiplier) / creditValueVnd;
+}
+
+function formatProviderCostUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  return value.toFixed(12).replace(/\.?0+$/, "");
+}
+
+function toPricingDraftRow(rate: UsageRateCardDto): PricingDraftRow {
+  return {
+    id: rate.id,
+    chargeType: rate.chargeType,
+    unit: rate.unit,
+    provider: rate.provider,
+    model: rate.model,
+    providerUnitCostUsd: rate.providerUnitCostUsd ?? 0,
+    markupMultiplier: rate.markupMultiplier ?? 0,
+    enabled: rate.isActive,
+  };
+}
+
+function toContractTermsForm(subscription?: SubscriptionDto | null): ContractTermsFormState {
+  if (!subscription) return EMPTY_CONTRACT_TERMS_FORM;
+
+  return {
+    creditsPerCycleOverride: subscription.creditsPerCycleOverride?.toString() ?? "",
+    contractPriceVnd: subscription.contractPriceVnd?.toString() ?? "",
+    overageCapCreditsOverride: subscription.overageCapCreditsOverride?.toString() ?? "",
+    overagePricePerCreditOverride: subscription.overagePricePerCreditOverride?.toString() ?? "",
+    invoiceTermsDaysOverride: subscription.invoiceTermsDaysOverride?.toString() ?? "",
+    billingContactEmail: subscription.billingContactEmail ?? "",
+  };
+}
+
+function toPlanBaselineForm(plan?: PlanDto | null): PlanBaselineFormState {
+  if (!plan) return EMPTY_PLAN_BASELINE_FORM;
+
+  return {
+    price: plan.price?.toString() ?? "",
+    creditsPerCycle: plan.creditsPerCycle?.toString() ?? "",
+    overagePricePerCredit: plan.overagePricePerCredit?.toString() ?? "",
+    overageCapCredits: plan.overageCapCredits?.toString() ?? "",
+    rolloverCapCredits: plan.rolloverCapCredits?.toString() ?? "",
+    invoiceTermsDays: plan.invoiceTermsDays?.toString() ?? "",
+  };
+}
+
+function toPlanRequest(plan: PlanDto, form: PlanBaselineFormState): PlanRequest {
+  return {
+    name: plan.name,
+    slug: plan.slug,
+    tier: plan.tier,
+    price: Number(form.price) || 0,
+    currency: plan.currency || "VND",
+    billingCycle: plan.billingCycle || "monthly",
+    creditsPerCycle: Number(form.creditsPerCycle) || 0,
+    maxParticipants: plan.maxParticipants ?? 0,
+    maxLanguages: plan.maxLanguages ?? 0,
+    voiceCloneEnabled: plan.voiceCloneEnabled ?? false,
+    aiAssistantEnabled: plan.aiAssistantEnabled ?? false,
+    glossaryEnabled: plan.glossaryEnabled ?? false,
+    dedicatedGpu: plan.dedicatedGpu ?? false,
+    features: plan.features || "{}",
+    sortOrder: plan.sortOrder ?? 0,
+    overageCapCredits: Number(form.overageCapCredits) || 0,
+    overagePricePerCredit: Number(form.overagePricePerCredit) || 0,
+    lowBalanceThresholdCredits: plan.lowBalanceThresholdCredits ?? 0,
+    rolloverCapCredits: Number(form.rolloverCapCredits) || 0,
+    invoiceTermsDays: Number(form.invoiceTermsDays) || 15,
+    invoiceGraceHours: plan.invoiceGraceHours ?? 360,
+    isActive: plan.isActive,
+  };
+}
+
+function toOptionalNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toOptionalOverrideNumber(value: string, inheritedValue: string): number | null {
+  const parsed = toOptionalNumber(value);
+  const inherited = toOptionalNumber(inheritedValue);
+  if (parsed === null) return null;
+  if (inherited !== null && parsed === inherited) return null;
+  return parsed;
+}
+
+function formatContractValue(value: number | null | undefined, inheritedValue: string): string {
+  if (value !== undefined && value !== null) return value.toLocaleString();
+  const inherited = toOptionalNumber(inheritedValue);
+  return inherited === null ? "N/A" : inherited.toLocaleString();
 }
 
 function getLabelForUsage(usageType: string) {
@@ -50,44 +257,104 @@ function getUnitSuffixForUsage(usageType: string): string {
   return "cr";
 }
 
-export default function AdminWorkspaceBillingPage({ params }: { params: Promise<{ id: string }> }) {
+function getInvoiceAmount(invoice: InvoiceDto): number {
+  return invoice.total ?? invoice.amount ?? 0;
+}
+
+function getInvoiceNumber(invoice: InvoiceDto): string {
+  if (invoice.invoiceNumber) return invoice.invoiceNumber;
+  if (invoice.stripeInvoiceId) {
+    const rawId = invoice.stripeInvoiceId;
+    const suffix = rawId.substring(Math.max(0, rawId.length - 8)).toUpperCase();
+    return rawId.startsWith("in_") ? `INV-${suffix}` : rawId;
+  }
+  return invoice.id;
+}
+
+function getInvoicePdfUrl(invoice: InvoiceDto): string | null {
+  return invoice.pdfUrl ?? invoice.invoicePdfUrl ?? null;
+}
+
+function isInvoicePaid(invoice: InvoiceDto): boolean {
+  return invoice.status?.toLowerCase() === "paid";
+}
+
+function isInvoiceOpen(invoice: InvoiceDto): boolean {
+  const status = invoice.status?.toLowerCase();
+  return status === "open" || status === "issued" || status === "pending";
+}
+
+function getInvoiceDueStage(invoice: InvoiceDto): "paid" | "issued" | "due_soon" | "due_tomorrow" | "overdue" | "seven_days_overdue" | "grace_expiring" | "unknown" {
+  if (isInvoicePaid(invoice)) return "paid";
+  if (!isInvoiceOpen(invoice) || !invoice.dueAt) return "unknown";
+
+  const now = Date.now();
+  const dueAt = new Date(invoice.dueAt).getTime();
+  const diffDays = (dueAt - now) / (24 * 60 * 60 * 1000);
+
+  if (diffDays <= -15) return "grace_expiring";
+  if (diffDays <= -7) return "seven_days_overdue";
+  if (diffDays <= 0) return "overdue";
+  if (diffDays <= 1) return "due_tomorrow";
+  if (diffDays <= 7) return "due_soon";
+  return "issued";
+}
+
+function getInvoiceStatusLabel(invoice: InvoiceDto): string {
+  if (isInvoicePaid(invoice)) return "Paid";
+  if (isInvoiceOpen(invoice)) {
+    const dueStage = getInvoiceDueStage(invoice);
+    if (dueStage === "issued") return "Issued";
+    if (dueStage === "due_soon") return "Due in 7 days";
+    if (dueStage === "due_tomorrow") return "Due tomorrow";
+    if (dueStage === "overdue") return "Overdue";
+    if (dueStage === "seven_days_overdue") return "7 days overdue";
+    if (dueStage === "grace_expiring") return "Suspend window";
+    return "Payment due";
+  }
+  return invoice.status || "Unknown";
+}
+
+function getInvoiceStatusClass(invoice: InvoiceDto): string {
+  if (isInvoicePaid(invoice)) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700";
+  if (isInvoiceOpen(invoice)) {
+    const dueStage = getInvoiceDueStage(invoice);
+    if (dueStage === "issued") return "border-sky-500/30 bg-sky-500/10 text-sky-700";
+    if (dueStage === "due_soon" || dueStage === "due_tomorrow") return "border-amber-500/30 bg-amber-500/10 text-amber-700";
+    if (dueStage === "overdue" || dueStage === "seven_days_overdue") return "border-orange-500/30 bg-orange-500/10 text-orange-700";
+    if (dueStage === "grace_expiring") return "border-red-500/30 bg-red-500/10 text-red-700";
+    return "border-amber-500/30 bg-amber-500/10 text-amber-700";
+  }
+  return "border-hairline bg-surface-2 text-muted-foreground";
+}
+
+function getInvoiceDueLabel(invoice: InvoiceDto): string {
+  if (!invoice.dueAt) return "No terms";
+  return format(new Date(invoice.dueAt), "MMM dd, yyyy HH:mm");
+}
+
+export default function AdminWorkspaceBillingPage({
+  params,
+  embedded = false,
+}: {
+  params: Promise<{ id: string }>;
+  embedded?: boolean;
+}) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
+  const [workspaceSearch, setWorkspaceSearch] = useState("");
+  const [contractTermsEdits, setContractTermsEdits] = useState<Partial<ContractTermsFormState>>({});
+  const [pricingDraftRows, setPricingDraftRows] = useState<PricingDraftRow[]>(DEFAULT_PRICING_DRAFT_ROWS);
+  const [pricingFxRate, setPricingFxRate] = useState("26300");
+  const [pricingCreditValueVnd, setPricingCreditValueVnd] = useState("4");
+  const [pricingDraftSavedAt, setPricingDraftSavedAt] = useState<string | null>(null);
+  const [planBaselineEdits, setPlanBaselineEdits] = useState<Partial<PlanBaselineFormState>>({});
 
   // In Next.js 15+, params is a Promise and must be unwrapped
   const resolvedParams = React.use(params);
   const workspaceId = resolvedParams.id;
-
-  useEffect(() => {
-    const connection = createHubConnection("/hubs/notification");
-
-    connection.on("NewNotification", (notification) => {
-      console.log("Realtime billing update:", notification);
-      if (notification?.type?.startsWith("billing.")) {
-        queryClient.invalidateQueries({ queryKey: ["billing"] });
-      }
-    });
-
-    let isMounted = true;
-
-    connection.start()
-      .then(() => {
-        if (isMounted && workspaceId) {
-          connection.invoke("JoinWorkspace", workspaceId)
-            .catch(err => console.error("Error joining workspace group:", err));
-        }
-      })
-      .catch((err) => {
-        if (!isMounted) return;
-        if (err?.message?.includes("stop() was called")) return;
-      });
-
-    return () => {
-      isMounted = false;
-      connection.stop();
-    };
-  }, [queryClient, workspaceId]);
 
   const { data: balance, isLoading: isBalanceLoading } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
@@ -103,10 +370,10 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
     retry: 1,
   });
 
-  const { data: report, isLoading: isReportLoading } = useQuery({
-    queryKey: ["billing", "report", workspaceId, CURRENT_YEAR, CURRENT_MONTH],
-    queryFn: () => billingService.getBillingReport(workspaceId, CURRENT_MONTH, CURRENT_YEAR),
-    enabled: !!workspaceId,
+  const { data: workspacePickerPage, isLoading: isWorkspacePickerLoading } = useQuery({
+    queryKey: ["admin", "billing-workspace-picker", workspaceSearch],
+    queryFn: () => WorkspaceService.list(1, 8, workspaceSearch.trim()),
+    enabled: embedded,
     retry: 1,
   });
 
@@ -121,6 +388,205 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
     retry: 1,
   });
 
+  const { data: plans = [], isError: isPlansLoadError } = useQuery({
+    queryKey: ["billing", "plans"],
+    queryFn: () => billingService.getPlans(),
+    enabled: embedded,
+    retry: 1,
+  });
+
+  const enterprisePlan = useMemo(
+    () => plans.find((plan) =>
+      plan.slug?.toLowerCase() === "enterprise" ||
+      plan.tier?.toLowerCase() === "enterprise"
+    ) ?? null,
+    [plans]
+  );
+
+  const { data: pricingConfig } = useQuery({
+    queryKey: ["billing", "pricing-config"],
+    queryFn: () => billingService.getPricingConfig(),
+    enabled: embedded,
+    retry: 1,
+  });
+
+  const { data: activeRateCards = [], isError: isRateCardLoadError } = useQuery({
+    queryKey: ["billing", "usage-rate-card"],
+    queryFn: () => billingService.getUsageRateCard(),
+    enabled: embedded,
+    retry: 1,
+  });
+
+  const contractTermsForm = useMemo(
+    () => ({ ...toContractTermsForm(subscription), ...contractTermsEdits }),
+    [subscription, contractTermsEdits]
+  );
+
+  const planBaselineForm = useMemo(
+    () => ({ ...toPlanBaselineForm(enterprisePlan), ...planBaselineEdits }),
+    [enterprisePlan, planBaselineEdits]
+  );
+
+  const contractTermsDisplayForm = useMemo(
+    () => ({
+      creditsPerCycleOverride: contractTermsForm.creditsPerCycleOverride || planBaselineForm.creditsPerCycle,
+      contractPriceVnd: contractTermsForm.contractPriceVnd || planBaselineForm.price,
+      overageCapCreditsOverride: contractTermsForm.overageCapCreditsOverride || planBaselineForm.overageCapCredits,
+      overagePricePerCreditOverride: contractTermsForm.overagePricePerCreditOverride || planBaselineForm.overagePricePerCredit,
+      invoiceTermsDaysOverride: contractTermsForm.invoiceTermsDaysOverride || planBaselineForm.invoiceTermsDays,
+      billingContactEmail: contractTermsForm.billingContactEmail,
+    }),
+    [contractTermsForm, planBaselineForm]
+  );
+
+  const updateEnterprisePlanMutation = useMutation({
+    mutationFn: () => {
+      if (!enterprisePlan) throw new Error("Enterprise baseline plan is unavailable");
+      return billingService.updatePlan(enterprisePlan.id, toPlanRequest(enterprisePlan, planBaselineForm));
+    },
+    onSuccess: () => {
+      toast.success("Enterprise baseline updated");
+      setPlanBaselineEdits({});
+      queryClient.invalidateQueries({ queryKey: ["billing", "plans"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to update Enterprise baseline");
+    },
+  });
+
+  const updateContractTermsMutation = useMutation({
+    mutationFn: () => billingService.updateSubscriptionContractTerms(workspaceId, {
+      creditsPerCycleOverride: toOptionalOverrideNumber(contractTermsForm.creditsPerCycleOverride, planBaselineForm.creditsPerCycle),
+      contractPriceVnd: toOptionalOverrideNumber(contractTermsForm.contractPriceVnd, planBaselineForm.price),
+      overageCapCreditsOverride: toOptionalOverrideNumber(contractTermsForm.overageCapCreditsOverride, planBaselineForm.overageCapCredits),
+      overagePricePerCreditOverride: toOptionalOverrideNumber(contractTermsForm.overagePricePerCreditOverride, planBaselineForm.overagePricePerCredit),
+      invoiceTermsDaysOverride: toOptionalOverrideNumber(contractTermsForm.invoiceTermsDaysOverride, planBaselineForm.invoiceTermsDays),
+      billingContactEmail: contractTermsForm.billingContactEmail.trim() || null,
+    }),
+    onSuccess: () => {
+      toast.success("Contract terms updated");
+      setContractTermsEdits({});
+      queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || "Failed to update contract terms");
+    },
+  });
+
+  const createSubscriptionMutation = useMutation({
+    mutationFn: async () => {
+      const plansList = plans.length > 0 ? plans : await billingService.getPlans();
+      const plan = plansList.find(
+        (p) => p.slug?.toLowerCase() === "enterprise" || p.tier?.toLowerCase() === "enterprise"
+      ) ?? plansList[0];
+      if (!plan) throw new Error("Enterprise plan is unavailable");
+      return billingService.createSubscription(workspaceId, plan.id);
+    },
+    onSuccess: () => {
+      toast.success("Enterprise contract initialized for workspace");
+      queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to initialize contract");
+    },
+  });
+
+  const createTrialMutation = useMutation({
+    mutationFn: async (ownerEmail: string) => {
+      return billingService.createTrialSubscription({
+        workspaceId,
+        userId: "00000000-0000-0000-0000-000000000000",
+        ownerEmail: ownerEmail || "admin@company.com",
+      });
+    },
+    onSuccess: () => {
+      toast.success("14-Day Enterprise Trial started for workspace");
+      queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to start trial");
+    },
+  });
+
+  const simulateCycleCloseMutation = useMutation({
+    mutationFn: () => billingService.simulateCycleClose(workspaceId),
+    onSuccess: () => {
+      toast.success("Billing cycle closed and invoice generated for this workspace");
+      queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "invoices", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "history", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "report", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["global-invoices-list"] });
+      queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
+      queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to simulate billing cycle close");
+    },
+  });
+
+  const markInvoicePaidMutation = useMutation({
+    mutationFn: (invoice: InvoiceDto) => billingService.markInvoicePaid(invoice.id),
+    onSuccess: () => {
+      toast.success("Invoice payment recorded");
+      queryClient.invalidateQueries({ queryKey: ["billing", "invoices", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "history", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["global-invoices-list"] });
+      queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to record invoice payment");
+    },
+  });
+
+  const updatePricingConfigMutation = useMutation({
+    mutationFn: () => billingService.updatePricingConfig({
+      fxRateUsdVnd: Number(pricingFxRate) || 0,
+      creditValueVnd: Number(pricingCreditValueVnd) || 0,
+    }),
+    onSuccess: (saved) => {
+      setPricingFxRate(saved.fxRateUsdVnd.toString());
+      setPricingCreditValueVnd(saved.creditValueVnd.toString());
+      queryClient.invalidateQueries({ queryKey: ["billing", "pricing-config"] });
+    },
+  });
+
+  const upsertUsageRateCardMutation = useMutation({
+    mutationFn: (row: PricingDraftRow) => {
+      const fxRate = Number(pricingFxRate) || 0;
+      const creditValue = Number(pricingCreditValueVnd) || 0;
+      return billingService.upsertUsageRateCard({
+        chargeType: row.chargeType.trim(),
+        unit: row.unit.trim(),
+        provider: row.provider.trim(),
+        model: row.model.trim(),
+        providerUnitCostUsd: row.providerUnitCostUsd,
+        markupMultiplier: row.markupMultiplier,
+        unitPrice: calculateDraftUnitPrice(row, fxRate, creditValue),
+        currency: "VND",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "usage-rate-card"] });
+    },
+  });
+
+  useEffect(() => {
+    if (!pricingConfig) return;
+    setPricingFxRate(pricingConfig.fxRateUsdVnd.toString());
+    setPricingCreditValueVnd(pricingConfig.creditValueVnd.toString());
+  }, [pricingConfig]);
+
+  useEffect(() => {
+    if (activeRateCards.length === 0) return;
+    setPricingDraftRows(activeRateCards.map(toPricingDraftRow));
+  }, [activeRateCards]);
+
   const { data: invoicesPage, isLoading: isInvoicesLoading } = useQuery({
     queryKey: ["billing", "invoices", workspaceId, invoicesPageNumber],
     queryFn: () => billingService.getWorkspaceInvoices(workspaceId, invoicesPageNumber, 20),
@@ -134,6 +600,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
   const [filterToDate, setFilterToDate] = useState("");
   const [filterMinAmount, setFilterMinAmount] = useState<number | "">("");
   const [filterMaxAmount, setFilterMaxAmount] = useState<number | "">("");
+  const [renderNowMs] = useState(() => Date.now());
 
   const activeFiltersCount = [
     historyTypeFilter !== "ALL",
@@ -150,6 +617,40 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
     setFilterMinAmount("");
     setFilterMaxAmount("");
     setHistoryPageNumber(1);
+  };
+
+  const updatePricingDraftRow = <K extends keyof PricingDraftRow>(
+    id: string,
+    key: K,
+    value: PricingDraftRow[K]
+  ) => {
+    setPricingDraftRows((rows) => rows.map((row) => row.id === id ? { ...row, [key]: value } : row));
+    setPricingDraftSavedAt(null);
+  };
+
+  const updatePlanBaselineField = <K extends keyof PlanBaselineFormState>(
+    key: K,
+    value: PlanBaselineFormState[K]
+  ) => {
+    setPlanBaselineEdits((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleSavePricingDraft = async () => {
+    try {
+      await updatePricingConfigMutation.mutateAsync();
+      await Promise.all(pricingDraftRows.filter((row) => row.enabled).map((row) => upsertUsageRateCardMutation.mutateAsync(row)));
+      setPricingDraftSavedAt(format(new Date(), "MMM dd, yyyy HH:mm"));
+      toast.success("Pricing changes applied");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to apply pricing changes");
+    }
+  };
+
+  const handleResetPricingDraftDefaults = () => {
+    setPricingFxRate("26300");
+    setPricingCreditValueVnd("4");
+    setPricingDraftRows(DEFAULT_PRICING_DRAFT_ROWS.map((row) => ({ ...row })));
+    setPricingDraftSavedAt(null);
   };
 
   const { data: historyPage, isLoading: isHistoryLoading } = useQuery({
@@ -203,17 +704,23 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
   const currentCredits = balance?.currentCredits ?? 0;
   const creditsUsed = balance?.creditsUsedThisCycle ?? 0;
   const totalCredits = currentCredits + creditsUsed;
-  const usagePercent = totalCredits > 0 ? Math.round((creditsUsed / totalCredits) * 100) : 0;
-  
   const renewsDate = balance?.currentPeriodEnd ? format(new Date(balance.currentPeriodEnd), "MMM dd, yyyy") : "N/A";
+  const trialEndsAt = subscription?.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
+  const isTrialSubscription = !!trialEndsAt && trialEndsAt.getTime() > renderNowMs;
+  const committedCredits = subscription?.effectiveCreditsPerCycle ?? toOptionalNumber(planBaselineForm.creditsPerCycle) ?? 0;
+  const effectiveOveragePrice = subscription?.effectiveOveragePricePerCredit ?? toOptionalNumber(planBaselineForm.overagePricePerCredit) ?? 0;
+  const effectiveInvoiceTerms = subscription?.effectiveInvoiceTermsDays ?? toOptionalNumber(planBaselineForm.invoiceTermsDays) ?? 15;
+  const subscriptionStatusLabel = subscription?.status
+    ? subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)
+    : "No contract";
   
   const displayPlanName = subscription?.planName || "Free Plan";
   const displayPlanPrice = subscription
     ? subscription.price.toLocaleString("vi-VN") + (subscription.price > 1000 ? "đ" : " VND")
     : "0đ";
-  
-  const usageBreakdown = report?.usageBreakdown || [];
-
+  const contractPriceBeforeVat = subscription?.effectiveContractPriceVnd ?? toOptionalNumber(planBaselineForm.price) ?? 0;
+  const contractVatAmount = Math.round(contractPriceBeforeVat * 0.1);
+  const contractTotalWithVat = contractPriceBeforeVat + contractVatAmount;
   const totalTopUp = historyPage?.items?.filter(t => t.type === 'top_up').reduce((s, t) => s + t.amount, 0) || 0;
   const totalConsumed = historyPage?.items?.filter(t => t.type !== 'top_up').reduce((s, t) => s + t.amount, 0) || 0;
   const netChange = totalTopUp + totalConsumed;
@@ -232,17 +739,17 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "WarpTalk";
-    const worksheet = workbook.addWorksheet("Wallet Transactions");
+    const worksheet = workbook.addWorksheet("Contract Transactions");
 
     worksheet.columns = [
-      { key: "id", width: 38 },
+      { key: "no", width: 8 },
       { key: "type", width: 15 },
       { key: "date", width: 22 },
       { key: "amount", width: 18 },
       { key: "balance", width: 15 }
     ];
 
-    worksheet.addRow(["WarpTalk - Wallet Transaction Report"]);
+    worksheet.addRow(["WarpTalk - Contract Billing Transaction Report"]);
     worksheet.getRow(1).font = { size: 16, bold: true };
     worksheet.mergeCells("A1:E1");
     
@@ -266,7 +773,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
     
     const headerRowIndex = currentRowOffset + 1;
     const headerRow = worksheet.getRow(headerRowIndex);
-    headerRow.values = ["Transaction ID", "Type", "Date", "Amount (Credits)", "Balance After"];
+    headerRow.values = ["No.", "Type", "Date", "Amount (Credits)", "Balance After"];
     
     headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
     headerRow.fill = {
@@ -287,10 +794,10 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
       headerRow.getCell(col).border = borderStyle;
     });
 
-    historyPage.items.forEach((tx) => {
+    historyPage.items.forEach((tx, index) => {
       const row = worksheet.addRow({
-        id: tx.id,
-        type: tx.type === "top_up" ? "Top-Up" : "Consumption",
+        no: index + 1,
+        type: tx.type === "top_up" ? "Contract Credits Added" : "Consumption",
         date: new Date(tx.createdAt),
         amount: tx.amount,
         balance: tx.balanceAfter
@@ -314,9 +821,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
 
     // Add Sum Rows
     worksheet.addRow([]);
-    const summaryStartRow = worksheet.lastRow!.number + 1;
-    
-    const sumRow1 = worksheet.addRow(["", "", "Total Top-Up:", totalTopUp]);
+    const sumRow1 = worksheet.addRow(["", "", "Contract Credits Added:", totalTopUp]);
     sumRow1.getCell(3).font = { bold: true };
     sumRow1.getCell(4).numFmt = "#,##0";
     sumRow1.getCell(4).font = { color: { argb: "FF16A34A" }, bold: true };
@@ -339,31 +844,640 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    saveAs(blob, `WarpTalk_Wallet_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    saveAs(blob, `WarpTalk_Contract_Billing_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
     setIsExportOpen(false);
   };
+
+  if (embedded) {
+    const isFreeOrMissingPlan = !subscription || displayPlanName.toLowerCase().includes("free");
+    const contractLabel = isFreeOrMissingPlan ? "No Enterprise contract" : displayPlanName;
+    const recentTransactions = groupedHistoryItems.slice(0, 5);
+    const recentInvoices = invoicesPage?.items?.slice(0, 5) ?? [];
+
+    return (
+      <div className="flex min-h-full flex-col gap-5 p-6">
+        <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <Badge variant="outline" className="mb-2 rounded-md bg-primary/10 text-primary">
+                  System Admin
+                </Badge>
+                <CardTitle className="text-lg font-semibold">Workspace contract management</CardTitle>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                  Select a company workspace before creating a trial, reviewing sales intent, or saving Enterprise contract terms.
+                </p>
+              </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 px-4 py-3 text-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Editing workspace</p>
+                <p className="mt-1 font-semibold text-foreground">{workspaceInfo?.name || "Loading workspace..."}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {subscription?.planName
+                    ? `${subscription.planName}${subscription.trialEndsAt ? ` trial until ${format(new Date(subscription.trialEndsAt), "MMM d, yyyy")}` : ""}`
+                    : "No active Enterprise contract"}
+                </p>
+                {!subscription && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs gap-1"
+                      disabled={createSubscriptionMutation.isPending}
+                      onClick={() => createSubscriptionMutation.mutate()}
+                    >
+                      Initialize Contract
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1"
+                      disabled={createTrialMutation.isPending}
+                      onClick={() => createTrialMutation.mutate("admin@company.com")}
+                    >
+                      Start 14-Day Trial
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground">Find workspace or company</Label>
+                <Input
+                  className="h-9 text-sm"
+                  value={workspaceSearch}
+                  onChange={(e) => setWorkspaceSearch(e.target.value)}
+                  placeholder="Search by workspace/company name"
+                />
+              </div>
+              <Button
+                variant="outline"
+                className="h-9 rounded-md"
+                onClick={() => router.push("/billing")}
+              >
+                Open billing overview
+              </Button>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              {isWorkspacePickerLoading && (
+                <div className="rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
+                  Loading workspaces...
+                </div>
+              )}
+              {!isWorkspacePickerLoading && workspacePickerPage?.items?.length === 0 && (
+                <div className="rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
+                  No matching workspace found.
+                </div>
+              )}
+              {workspacePickerPage?.items?.map((workspace) => {
+                const isCurrentWorkspace = workspace.id === workspaceId;
+                return (
+                  <button
+                    key={workspace.id}
+                    type="button"
+                    className={`rounded-lg border px-3 py-2 text-left transition ${
+                      isCurrentWorkspace
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-hairline bg-surface-2 hover:border-primary/60"
+                    }`}
+                    onClick={() => {
+                      if (!isCurrentWorkspace) router.push(`/billing/workspace/${workspace.id}`);
+                    }}
+                  >
+                    <p className="truncate text-sm font-semibold">{workspace.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">/{workspace.slug}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {isCurrentWorkspace ? "Current contract" : "Open contract"}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {subscription?.serviceState && subscription.serviceState !== "healthy" && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+            <p className="font-semibold">AI service state: {subscription.serviceState}</p>
+            <p className="text-xs opacity-80">
+              {subscription.suspendedReason || "Workspace AI usage may be blocked until billing is resolved."}
+            </p>
+          </div>
+        )}
+
+        <section>
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Default contract reference</h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              Use these defaults as the baseline for contract discussion. The final customer terms are saved as subscription overrides.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Price</Label>
+              <Input
+                type="number"
+                min={0}
+                className="mt-2 h-9 text-sm font-semibold"
+                value={planBaselineForm.price}
+                onChange={(e) => updatePlanBaselineField("price", e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Monthly baseline before VAT.</p>
+            </div>
+            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credits</Label>
+              <Input
+                type="number"
+                min={0}
+                className="mt-2 h-9 text-sm font-semibold"
+                value={planBaselineForm.creditsPerCycle}
+                onChange={(e) => updatePlanBaselineField("creditsPerCycle", e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Default committed monthly package.</p>
+            </div>
+            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trial</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">14 days</p>
+              <p className="mt-1 text-xs text-muted-foreground">20,000 credits. Trial policy is separate from plan baseline.</p>
+            </div>
+            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extra usage</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="mt-2 h-9 text-sm font-semibold"
+                value={planBaselineForm.overagePricePerCredit}
+                onChange={(e) => updatePlanBaselineField("overagePricePerCredit", e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">VND / credit. Charged on the next invoice, up to the agreed cap.</p>
+            </div>
+            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Invoice days</Label>
+              <Input
+                type="number"
+                min={1}
+                className="mt-2 h-9 text-sm font-semibold"
+                value={planBaselineForm.invoiceTermsDays}
+                onChange={(e) => updatePlanBaselineField("invoiceTermsDays", e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Adjustable per customer.</p>
+            </div>
+            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rollover cap</Label>
+              <Input
+                type="number"
+                min={0}
+                className="mt-2 h-9 text-sm font-semibold"
+                value={planBaselineForm.rolloverCapCredits}
+                onChange={(e) => updatePlanBaselineField("rolloverCapCredits", e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Default carry-over limit.</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-col gap-2 rounded-lg border border-hairline bg-surface-1 p-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              {isPlansLoadError
+                ? "Enterprise plan API is unavailable. Check backend status, admin token, and migration 040 seed."
+                : !enterprisePlan
+                  ? "Enterprise plan is not available yet. Showing fallback defaults from the billing master plan; apply migration 040 or seed the Enterprise plan before saving."
+                : "Saving changes updates the Enterprise baseline. Existing workspace contracts can still override these values."}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-md bg-surface-2"
+              disabled={!enterprisePlan || updateEnterprisePlanMutation.isPending || Object.keys(planBaselineEdits).length === 0}
+              onClick={() => updateEnterprisePlanMutation.mutate()}
+            >
+              {updateEnterprisePlanMutation.isPending ? "Saving..." : "Save baseline"}
+            </Button>
+          </div>
+        </section>
+
+        <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+          <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <CardTitle className="text-base font-medium">Pricing controls</CardTitle>
+              <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
+                Review runtime rates by provider, model, charge type, and unit. Service keys are locked to backend-supported
+                billing events; admins can adjust provider cost, markup, and active state.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                Rate card settings
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-md bg-surface-2"
+                disabled={updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending}
+                onClick={handleResetPricingDraftDefaults}
+              >
+                Reset to defaults
+              </Button>
+              {pricingDraftSavedAt && (
+                <Badge variant="outline" className="rounded-md">
+                  Applied {pricingDraftSavedAt}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground">USD/VND FX</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  className="h-9 text-sm"
+                  value={pricingFxRate}
+                  onChange={(e) => { setPricingFxRate(e.target.value); setPricingDraftSavedAt(null); }}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground">Credit value VND</Label>
+                <Input
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  className="h-9 text-sm"
+                  value={pricingCreditValueVnd}
+                  onChange={(e) => { setPricingCreditValueVnd(e.target.value); setPricingDraftSavedAt(null); }}
+                />
+              </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Formula</p>
+                <p className="mt-1 text-xs font-medium">provider cost x FX x markup / credit value</p>
+              </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Resolver key</p>
+                <p className="mt-1 text-xs font-medium">provider + model + charge_type + unit</p>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-hairline overflow-hidden">
+              <Table>
+                <TableHeader className="bg-surface-2">
+                  <TableRow>
+                    <TableHead className="w-[88px]">Active</TableHead>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead className="text-right">Provider cost (USD)</TableHead>
+                    <TableHead className="text-right">Markup</TableHead>
+                    <TableHead className="text-right">Unit price</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pricingDraftRows.map((row) => {
+                    const fxRate = Number(pricingFxRate) || 0;
+                    const creditValue = Number(pricingCreditValueVnd) || 0;
+                    const unitPrice = calculateDraftUnitPrice(row, fxRate, creditValue);
+                    const service = getRateCardService(row.chargeType);
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <Switch
+                            checked={row.enabled}
+                            onCheckedChange={(checked) => updatePricingDraftRow(row.id, "enabled", checked)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div
+                            className="min-w-[230px] rounded-md border border-hairline bg-muted/40 px-3 py-2"
+                            title={row.chargeType}
+                          >
+                            <p className="text-xs font-semibold text-foreground">{service.label}</p>
+                            <p className="mt-0.5 max-w-[210px] text-[11px] text-muted-foreground">{service.description}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex h-8 min-w-[130px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                            {row.unit}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex h-8 min-w-[120px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                            {row.provider}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex h-8 min-w-[190px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                            {row.model}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            className="h-8 min-w-[120px] text-right text-xs font-mono"
+                            value={formatProviderCostUsd(row.providerUnitCostUsd)}
+                            onChange={(e) => updatePricingDraftRow(row.id, "providerUnitCostUsd", Number(e.target.value) || 0)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            className="h-8 min-w-[86px] text-right text-xs font-mono"
+                            value={row.markupMultiplier}
+                            onChange={(e) => updatePricingDraftRow(row.id, "markupMultiplier", Number(e.target.value) || 0)}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-semibold font-mono">
+                          {unitPrice.toFixed(6)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 md:flex-row md:items-center md:justify-between">
+              <p>
+                {isRateCardLoadError
+                  ? "Rate-card data is unavailable. The table is showing master-plan fallback values; check service status, migration 042, and System Admin authorization before applying changes."
+                  : "Applying provider cost, markup, or active-state changes creates a new active rate-card version. Existing charged transactions keep their price snapshot."}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-md bg-surface-1"
+                disabled={updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending}
+                onClick={handleSavePricingDraft}
+              >
+                {updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending ? "Applying..." : "Apply pricing changes"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Enterprise contract terms</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Baseline values are pre-filled. Save only after business terms are confirmed.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                  <span className="text-muted-foreground">Monthly credits</span>
+                  <p className="mt-1 font-semibold">{formatContractValue(subscription?.effectiveCreditsPerCycle, planBaselineForm.creditsPerCycle)}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Baseline shown unless overridden.</p>
+                </div>
+                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                  <span className="text-muted-foreground">Contract price</span>
+                  <p className="mt-1 font-semibold">{formatContractValue(subscription?.effectiveContractPriceVnd, planBaselineForm.price)} VND</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Baseline shown unless overridden.</p>
+                </div>
+                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                  <span className="text-muted-foreground">Extra usage cap</span>
+                  <p className="mt-1 font-semibold">{formatContractValue(subscription?.effectiveOverageCapCredits, planBaselineForm.overageCapCredits)} cr</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Baseline shown unless overridden.</p>
+                </div>
+                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                  <span className="text-muted-foreground">Extra usage used</span>
+                  <p className="mt-1 font-semibold">{(subscription?.overageCreditsThisCycle ?? 0).toLocaleString()} cr</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">Monthly credits</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-9 text-sm"
+                    value={contractTermsDisplayForm.creditsPerCycleOverride}
+                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, creditsPerCycleOverride: e.target.value }))}
+                    placeholder={planBaselineForm.creditsPerCycle}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">Contract price VND</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-9 text-sm"
+                    value={contractTermsDisplayForm.contractPriceVnd}
+                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, contractPriceVnd: e.target.value }))}
+                    placeholder={planBaselineForm.price}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">Extra usage cap credits</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-9 text-sm"
+                    value={contractTermsDisplayForm.overageCapCreditsOverride}
+                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, overageCapCreditsOverride: e.target.value }))}
+                    placeholder={planBaselineForm.overageCapCredits}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">Extra usage price / credit</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="h-9 text-sm"
+                    value={contractTermsDisplayForm.overagePricePerCreditOverride}
+                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, overagePricePerCreditOverride: e.target.value }))}
+                    placeholder={planBaselineForm.overagePricePerCredit}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">Invoice terms days</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="h-9 text-sm"
+                    value={contractTermsDisplayForm.invoiceTermsDaysOverride}
+                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, invoiceTermsDaysOverride: e.target.value }))}
+                    placeholder={planBaselineForm.invoiceTermsDays}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs text-muted-foreground">Billing contact email</Label>
+                  <Input
+                    type="email"
+                    className="h-9 text-sm"
+                    value={contractTermsForm.billingContactEmail}
+                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, billingContactEmail: e.target.value }))}
+                    placeholder="billing@company.com"
+                  />
+                </div>
+              </div>
+
+              {!subscription && (
+                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                  Create or activate a workspace subscription before saving contract overrides.
+                </p>
+              )}
+
+              <Button
+                className="rounded-md"
+                disabled={updateContractTermsMutation.isPending || !subscription}
+                onClick={() => updateContractTermsMutation.mutate()}
+              >
+                {updateContractTermsMutation.isPending ? "Saving..." : "Save contract terms"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Workspace billing status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Contract</p>
+                <p className="mt-1 font-semibold">{isSubscriptionLoading ? "Loading..." : contractLabel}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                  <p className="text-xs text-muted-foreground">Remaining</p>
+                  <p className="mt-1 font-semibold">{isBalanceLoading ? "..." : currentCredits.toLocaleString()} cr</p>
+                </div>
+                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                  <p className="text-xs text-muted-foreground">Used this cycle</p>
+                  <p className="mt-1 font-semibold">{isBalanceLoading ? "..." : creditsUsed.toLocaleString()} cr</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Cycle renewal</p>
+                <p className="mt-1 font-semibold">{renewsDate}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Service state</p>
+                <Badge variant="outline" className="mt-1 rounded-md">
+                  {subscription?.serviceState ?? "Not active"}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-2">
+          <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Recent transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-hairline overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-surface-2">
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isHistoryLoading ? (
+                      <TableRow><TableCell colSpan={3} className="py-6 text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                    ) : recentTransactions.length === 0 ? (
+                      <TableRow><TableCell colSpan={3} className="py-6 text-center text-muted-foreground">No transactions yet.</TableCell></TableRow>
+                    ) : (
+                      recentTransactions.map((tx) => (
+                        <TableRow key={tx.id}>
+                          <TableCell className="capitalize">{tx.type.replace("_", " ")}</TableCell>
+                          <TableCell className="text-muted-foreground">{format(new Date(tx.createdAt), "MMM dd, yyyy HH:mm")}</TableCell>
+                          <TableCell className="text-right font-medium">{tx.amount.toLocaleString()} cr</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+            <CardHeader className="flex-row items-center justify-between gap-3">
+              <CardTitle className="text-base font-medium">Recent invoices</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-md text-xs"
+                disabled={!subscription || subscription.status !== "active" || simulateCycleCloseMutation.isPending}
+                onClick={() => simulateCycleCloseMutation.mutate()}
+              >
+                {simulateCycleCloseMutation.isPending ? "Closing..." : "Simulate Cycle Close"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-hairline overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-surface-2">
+                    <TableRow>
+                      <TableHead>Invoice</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isInvoicesLoading ? (
+                      <TableRow><TableCell colSpan={3} className="py-6 text-center text-muted-foreground">Loading...</TableCell></TableRow>
+                    ) : recentInvoices.length === 0 ? (
+                      <TableRow><TableCell colSpan={3} className="py-6 text-center text-muted-foreground">No invoices yet.</TableCell></TableRow>
+                    ) : (
+                      recentInvoices.map((invoice) => (
+                        <TableRow key={invoice.id}>
+                          <TableCell className="font-medium">{getInvoiceNumber(invoice)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`rounded-md text-[11px] ${getInvoiceStatusClass(invoice)}`}>
+                              {getInvoiceStatusLabel(invoice)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {getInvoiceAmount(invoice).toLocaleString("vi-VN")} VND
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-full flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-1">
-            <Link href="/billing">
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-ink">
-                <CaretLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Badge variant="outline" className="bg-surface-2 text-ink border-hairline">Workspace View</Badge>
+            {!embedded && (
+              <Link href="/billing">
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-ink">
+                  <CaretLeft className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
+            <Badge variant="outline" className="bg-surface-2 text-ink border-hairline">
+              {embedded ? "System Admin Contract" : "Workspace Contract"}
+            </Badge>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               {workspaceInfo?.name || workspaceId}
             </h1>
-            {workspaceInfo?.name && (
-              <span className="text-xs font-mono text-muted-foreground bg-surface-2 border border-hairline px-2 py-0.5 rounded select-all cursor-pointer" title="Click to select entire ID">
-                ID: {workspaceId}
-              </span>
-            )}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">Manage credit balance, view history, and monitor AI usage for this workspace.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage Enterprise contract terms, trial status, extra usage, invoices, and AI usage for this workspace.
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="rounded-md h-9 px-4" onClick={handleOpenExport}>
@@ -371,6 +1485,53 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
           </Button>
         </div>
       </div>
+
+      {subscription?.serviceState && subscription.serviceState !== "healthy" && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 inline-flex h-2 w-2 rounded-full bg-amber-500" />
+            <div>
+              <p className="font-semibold">AI service state: {subscription.serviceState}</p>
+              <p className="text-xs opacity-80">
+                {subscription.suspendedReason || "Workspace AI usage may be blocked until billing is resolved."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <section className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {isTrialSubscription ? "Trial" : "Contract status"}
+          </p>
+          <p className="mt-1 text-lg font-semibold text-foreground">
+            {isSubscriptionLoading ? "..." : isTrialSubscription ? "14 days" : subscriptionStatusLabel}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isTrialSubscription
+              ? "20,000 credits, no extra usage during trial."
+              : subscription
+                ? `${displayPlanName} contract is assigned to this workspace.`
+                : "Create an Enterprise contract before billing this workspace."}
+          </p>
+        </div>
+        <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Committed credits</p>
+          <p className="mt-1 text-lg font-semibold text-foreground">{committedCredits.toLocaleString()} credits</p>
+          <p className="mt-1 text-xs text-muted-foreground">Credits committed for each billing cycle.</p>
+        </div>
+        <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extra usage</p>
+          <p className="mt-1 text-lg font-semibold text-foreground">{effectiveOveragePrice.toLocaleString("vi-VN")} VND / credit</p>
+          <p className="mt-1 text-xs text-muted-foreground">Charged on the next invoice, up to the agreed cap.</p>
+        </div>
+        <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Invoice terms</p>
+          <p className="mt-1 text-lg font-semibold text-foreground">Net {effectiveInvoiceTerms}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Default due date, adjustable per customer.</p>
+        </div>
+      </section>
 
       <section className="grid gap-6 md:grid-cols-2">
         <BillingMetric 
@@ -408,95 +1569,179 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                 </p>
               </div>
             </div>
-            <span className="text-xs text-muted-foreground bg-surface-2 border border-hairline px-2.5 py-1 rounded-md font-medium select-none">
-              View Only
-            </span>
           </CardContent>
         </Card>
       </section>
 
-      <Tabs defaultValue="overview" className="w-full mt-2">
+      <Tabs defaultValue="contract" className="w-full mt-2">
         <TabsList className="bg-surface-2 p-1 rounded-lg">
-          <TabsTrigger value="overview" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Overview & Usage</TabsTrigger>
+          <TabsTrigger value="contract" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Contract Terms</TabsTrigger>
           <TabsTrigger value="history" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Transaction History</TabsTrigger>
           <TabsTrigger value="invoices" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Billing History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
-          <section className="grid gap-4 md:grid-cols-[1fr_380px]">
-            <UsageChart workspaceId={workspaceId} />
-            <FeatureBreakdownChart workspaceId={workspaceId} />
-          </section>
-          
-          <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <TabsContent value="contract" className="mt-6 outline-none">
+          <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
             <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
-              <CardHeader className="flex-row items-center justify-between space-y-0">
-                <div>
-                  <CardTitle className="text-base font-medium">Cost by AI service</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">Usage before the fixed Enterprise platform fee.</p>
-                </div>
-                <Badge variant="outline" className="rounded-md">{format(new Date(), "MMMM yyyy")}</Badge>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">Enterprise contract terms</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">Baseline values are pre-filled. Contract prices are before 10% VAT; invoices include VAT.</p>
               </CardHeader>
               <CardContent className="space-y-4">
-                {isReportLoading ? (
-                  <p className="text-sm text-muted-foreground py-4">Loading usage data...</p>
-                ) : usageBreakdown.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4">No usage data for this month.</p>
-                ) : (
-                  usageBreakdown.map((usage: UsageSummaryDto) => {
-                    const Icon = getIconForUsage(usage.usageType);
-                    const name = getLabelForUsage(usage.usageType);
-                    const percent = report?.totalConsumedCredits ? Math.round((usage.totalCreditsConsumed / report.totalConsumedCredits) * 100) : 0;
-                    
-                    return (
-                      <div key={usage.usageType} className="rounded-lg border border-hairline-tertiary bg-surface-2 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-canvas text-ink border border-hairline"><Icon className="h-4 w-4" /></span>
-                            <div><p className="text-sm font-medium">{name}</p><p className="text-xs text-muted-foreground">{percent}% of variable AI spend</p></div>
-                          </div>
-                          <p className="text-lg font-medium">{usage.totalCreditsConsumed.toLocaleString()} cr</p>
-                        </div>
-                        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3">
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                
-                <div className="grid gap-3 sm:grid-cols-2 mt-2">
-                  <div className="rounded-lg border border-hairline bg-surface-2 p-4">
-                    <p className="text-xs text-muted-foreground">Average translation cost</p>
-                    <p className="text-lg font-medium mt-1">
-                      {report?.averageTranslationCostPerMinute !== undefined && report?.averageTranslationCostPerMinute !== null ? `${report.averageTranslationCostPerMinute} cr / minute` : '--'}
-                    </p>
+                <div className="grid gap-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Monthly credits</span>
+                    <strong>{formatContractValue(subscription?.effectiveCreditsPerCycle, planBaselineForm.creditsPerCycle)}</strong>
                   </div>
-                  <div className="rounded-lg border border-hairline bg-surface-2 p-4">
-                    <p className="text-xs text-muted-foreground">Average cost per meeting</p>
-                    <p className="text-lg font-medium mt-1">
-                      {report?.averageCostPerMeeting !== undefined && report?.averageCostPerMeeting !== null ? `${report.averageCostPerMeeting} cr` : '--'}
-                    </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Effective contract price before VAT</span>
+                    <strong>{formatContractValue(subscription?.effectiveContractPriceVnd, planBaselineForm.price)} VND</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Effective extra usage cap</span>
+                    <strong>{formatContractValue(subscription?.effectiveOverageCapCredits, planBaselineForm.overageCapCredits)} cr</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Extra usage this cycle</span>
+                    <strong>{(subscription?.overageCreditsThisCycle ?? 0).toLocaleString()} cr</strong>
                   </div>
                 </div>
+
+                <div className="grid gap-3">
+                  <div className="grid gap-1">
+                    <Label className="text-xs text-muted-foreground">Monthly credits</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="h-8 text-sm"
+                      value={contractTermsDisplayForm.creditsPerCycleOverride}
+                      onChange={(e) => setContractTermsEdits((current) => ({ ...current, creditsPerCycleOverride: e.target.value }))}
+                      placeholder={planBaselineForm.creditsPerCycle}
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs text-muted-foreground">Contract price before VAT (VND)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="h-8 text-sm"
+                      value={contractTermsDisplayForm.contractPriceVnd}
+                      onChange={(e) => setContractTermsEdits((current) => ({ ...current, contractPriceVnd: e.target.value }))}
+                      placeholder={planBaselineForm.price}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1">
+                      <Label className="text-xs text-muted-foreground">Extra usage cap</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-8 text-sm"
+                        value={contractTermsDisplayForm.overageCapCreditsOverride}
+                        onChange={(e) => setContractTermsEdits((current) => ({ ...current, overageCapCreditsOverride: e.target.value }))}
+                        placeholder={planBaselineForm.overageCapCredits}
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs text-muted-foreground">Extra usage price/credit</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="h-8 text-sm"
+                        value={contractTermsDisplayForm.overagePricePerCreditOverride}
+                        onChange={(e) => setContractTermsEdits((current) => ({ ...current, overagePricePerCreditOverride: e.target.value }))}
+                        placeholder={planBaselineForm.overagePricePerCredit}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1">
+                      <Label className="text-xs text-muted-foreground">Invoice terms days</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        className="h-8 text-sm"
+                        value={contractTermsDisplayForm.invoiceTermsDaysOverride}
+                        onChange={(e) => setContractTermsEdits((current) => ({ ...current, invoiceTermsDaysOverride: e.target.value }))}
+                        placeholder={planBaselineForm.invoiceTermsDays}
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs text-muted-foreground">Billing contact</Label>
+                      <Input
+                        type="email"
+                        className="h-8 text-sm"
+                        value={contractTermsForm.billingContactEmail}
+                        onChange={(e) => setContractTermsEdits((current) => ({ ...current, billingContactEmail: e.target.value }))}
+                        placeholder="billing@example.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full rounded-md"
+                  disabled={updateContractTermsMutation.isPending || !subscription}
+                  onClick={() => updateContractTermsMutation.mutate()}
+                >
+                  {updateContractTermsMutation.isPending ? "Saving..." : "Save contract terms"}
+                </Button>
               </CardContent>
             </Card>
 
-            <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
-              <CardHeader><CardTitle className="text-base font-medium">Credit allocation</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full" style={{ background: `conic-gradient(#5e6ad2 0 ${usagePercent}%, var(--color-surface-3) ${usagePercent}% 100%)` }}>
-                  <div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-surface-1">
-                    <p className="text-2xl font-semibold">{usagePercent}%</p><p className="text-xs text-muted-foreground">used</p>
+            <div className="grid gap-4 content-start">
+              <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+                <CardHeader>
+                  <CardTitle className="text-base font-medium">Billing snapshot</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">Current cycle and invoice-facing amounts for this contract.</p>
+                </CardHeader>
+                <CardContent className="grid gap-3 text-xs">
+                  <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface-2 p-3">
+                    <span className="text-muted-foreground">Credits remaining</span>
+                    <strong>{currentCredits.toLocaleString()} cr</strong>
                   </div>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Monthly allowance</span><strong className="font-medium">{totalCredits.toLocaleString()}</strong></div>
-                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Consumed</span><strong className="font-medium">{creditsUsed.toLocaleString()}</strong></div>
-                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Remaining</span><strong className="font-medium text-primary">{currentCredits.toLocaleString()}</strong></div>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface-2 p-3">
+                    <span className="text-muted-foreground">Used this cycle</span>
+                    <strong>{creditsUsed.toLocaleString()} cr</strong>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface-2 p-3">
+                    <span className="text-muted-foreground">Cycle renewal</span>
+                    <strong>{renewsDate}</strong>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface-2 p-3">
+                    <span className="text-muted-foreground">Service state</span>
+                    <Badge variant="outline" className="rounded-md">
+                      {subscription?.serviceState ?? "Not active"}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+                <CardHeader>
+                  <CardTitle className="text-base font-medium">Invoice estimate</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">Contract price is stored before VAT; invoices include VAT.</p>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Contract price before VAT</span>
+                    <strong>{contractPriceBeforeVat.toLocaleString("vi-VN")} VND</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">VAT 10%</span>
+                    <strong>{contractVatAmount.toLocaleString("vi-VN")} VND</strong>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-hairline pt-3 text-sm">
+                    <span className="font-medium text-foreground">Estimated invoice total</span>
+                    <strong>{contractTotalWithVat.toLocaleString("vi-VN")} VND</strong>
+                  </div>
+                  <p className="rounded-md bg-surface-2 px-3 py-2 text-muted-foreground">
+                    Extra usage is added at cycle close if this workspace exceeds committed credits.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           </section>
         </TabsContent>
 
@@ -517,16 +1762,14 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                         <SelectTrigger className="h-8 text-sm w-[140px]">
                           <SelectValue placeholder="All types">
                             {historyTypeFilter === "ALL" && "All types"}
-                            {historyTypeFilter === "top_up" && "Top-Up"}
+                            {historyTypeFilter === "top_up" && "Credits Added"}
                             {historyTypeFilter === "consumption" && "Consumption"}
-                            {historyTypeFilter === "reserve" && "Reserve"}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ALL">All types</SelectItem>
-                          <SelectItem value="top_up">Top-Up</SelectItem>
+                          <SelectItem value="top_up">Credits Added</SelectItem>
                           <SelectItem value="consumption">Consumption</SelectItem>
-                          <SelectItem value="reserve">Reserve</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -603,9 +1846,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                {tx.type === "reserve"
-                                  ? <Spinner className="h-4 w-4 text-amber-500 animate-spin" />
-                                  : tx.amount > 0
+                                {tx.amount > 0
                                   ? <ArrowUpRight className="h-4 w-4 text-emerald-500" />
                                   : <ArrowDownRight className="h-4 w-4 text-rose-500" />}
                                 <span className="capitalize">{tx.type.replace('_', '-')}</span>
@@ -639,10 +1880,10 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                 </Table>
               </div>
               {/* Pagination */}
-              <div className="flex items-center justify-between mt-4">
+              <div className={`items-center justify-between mt-4 ${groupedHistoryItems.length === 0 ? "hidden" : "flex"}`}>
                 <p className="text-xs text-muted-foreground">
                   {historyPage ? (
-                    <>Showing <strong>1–{groupedHistoryItems.length}</strong> of <strong>{groupedHistoryItems.length}</strong> grouped sessions (from <strong>{historyPage.items.length}</strong> transactions)</>
+                    <>Showing <strong>{groupedHistoryItems.length}</strong> grouped sessions from <strong>{historyPage.items.length}</strong> transactions</>
                   ) : "Loading..."}
                 </p>
                 {totalPages > 1 && (
@@ -693,8 +1934,22 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
 
         <TabsContent value="invoices" className="mt-6 outline-none">
           <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear">
-            <CardHeader className="pb-4 border-b border-hairline px-5 pt-5">
-              <CardTitle className="text-base font-semibold">Billing History</CardTitle>
+            <CardHeader className="flex-row items-center justify-between gap-3 border-b border-hairline px-5 pb-4 pt-5">
+              <div>
+                <CardTitle className="text-base font-semibold">Billing History</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Cycle close issues an open NET invoice. Admins record payment only after finance confirms settlement.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-md text-xs"
+                disabled={!subscription || subscription.status !== "active" || simulateCycleCloseMutation.isPending}
+                onClick={() => simulateCycleCloseMutation.mutate()}
+              >
+                {simulateCycleCloseMutation.isPending ? "Closing..." : "Simulate Cycle Close"}
+              </Button>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -703,7 +1958,9 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                     <TableRow className="border-hairline hover:bg-transparent">
                       <TableHead className="w-[60px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-5 py-2.5">No.</TableHead>
                       <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Invoice ID</TableHead>
-                      <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Date</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Issued</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Due date</TableHead>
+                      <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Status</TableHead>
                       <TableHead className="text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5">Amount</TableHead>
                       <TableHead className="text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pr-5 py-2.5">Action</TableHead>
                     </TableRow>
@@ -711,34 +1968,51 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                   <TableBody className="divide-y divide-hairline">
                     {isInvoicesLoading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-8 text-xs text-muted-foreground">
                           <Spinner className="h-4 w-4 animate-spin inline mr-2 text-primary" />
                           Loading invoices...
                         </TableCell>
                       </TableRow>
                     ) : !invoicesPage?.items?.length ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">No invoices found.</TableCell>
+                        <TableCell colSpan={7} className="text-center py-8 text-xs text-muted-foreground">No invoices found.</TableCell>
                       </TableRow>
                     ) : (
-                      invoicesPage.items.map((invoice: any, index: number) => {
+                      invoicesPage.items.map((invoice: InvoiceDto, index: number) => {
                         const rowIndex = (invoicesPageNumber - 1) * 20 + index + 1;
+                        const pdfUrl = getInvoicePdfUrl(invoice);
                         return (
                           <TableRow key={invoice.id} className="border-hairline hover:bg-surface-2/20">
                             <TableCell className="font-mono text-xs text-muted-foreground pl-5 py-3">
                               {rowIndex}
                             </TableCell>
                             <TableCell className="text-xs font-mono text-ink py-3">
-                              {invoice.stripeInvoiceId ? (invoice.stripeInvoiceId.startsWith("in_") ? `INV-${invoice.stripeInvoiceId.substring(invoice.stripeInvoiceId.length - 8).toUpperCase()}` : invoice.stripeInvoiceId) : ""}
+                              {getInvoiceNumber(invoice)}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground py-3">
                               {format(new Date(invoice.createdAt), "MMM dd, yyyy HH:mm")}
                             </TableCell>
+                            <TableCell className="text-xs text-muted-foreground py-3">
+                              {getInvoiceDueLabel(invoice)}
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Badge variant="outline" className={`rounded-md text-[11px] ${getInvoiceStatusClass(invoice)}`}>
+                                {getInvoiceStatusLabel(invoice)}
+                              </Badge>
+                            </TableCell>
                             <TableCell className="text-right text-xs font-semibold text-ink py-3">
-                              {invoice.amount.toLocaleString("vi-VN")}{invoice.currency === "vnd" ? "đ" : ` ${invoice.currency.toUpperCase()}`}
+                              {getInvoiceAmount(invoice).toLocaleString("vi-VN")}{invoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${invoice.currency.toUpperCase()}`}
                             </TableCell>
                             <TableCell className="text-right text-xs pr-5 py-3 space-x-3">
-                              {invoice.hostedInvoiceUrl && invoice.hostedInvoiceUrl.startsWith("http") ? (
+                              {isInvoiceOpen(invoice) ? (
+                                <button
+                                  onClick={() => markInvoicePaidMutation.mutate(invoice)}
+                                  disabled={markInvoicePaidMutation.isPending}
+                                  className="text-primary hover:underline font-semibold cursor-pointer bg-transparent border-none p-0 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {markInvoicePaidMutation.isPending ? "Recording..." : "Mark paid"}
+                                </button>
+                              ) : invoice.hostedInvoiceUrl && invoice.hostedInvoiceUrl.startsWith("http") ? (
                                 <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">
                                   View Stripe Receipt
                                 </a>
@@ -750,8 +2024,8 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                                   View Details
                                 </button>
                               )}
-                              {invoice.invoicePdfUrl && invoice.invoicePdfUrl.startsWith("http") && (
-                                <a href={invoice.invoicePdfUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">
+                              {pdfUrl && pdfUrl.startsWith("http") && (
+                                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">
                                   Download PDF
                                 </a>
                               )}
@@ -771,13 +2045,19 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
       <Dialog open={!!selectedInvoice} onOpenChange={(open) => !open && setSelectedInvoice(null)}>
         <DialogContent id="invoice-print-area" className="sm:max-w-[420px] border-hairline bg-surface-1 shadow-lg rounded-xl overflow-hidden p-0 print:hidden">
           <div className="bg-gradient-to-br from-primary/10 via-canvas to-canvas px-6 pt-6 pb-4 text-center border-b border-hairline/30 relative">
-            <div className="absolute top-4 right-4 text-[9px] uppercase font-mono tracking-widest text-ink-muted no-print">Receipt</div>
+            <div className="absolute top-4 right-4 text-[9px] uppercase font-mono tracking-widest text-ink-muted no-print">
+              {selectedInvoice && isInvoicePaid(selectedInvoice) ? "Receipt" : "Invoice"}
+            </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-white mx-auto mb-2 shadow-md shadow-emerald-500/25">
               <span className="text-lg font-bold">✓</span>
             </div>
-            <h3 className="text-base font-extrabold text-ink tracking-tight">Payment Successful</h3>
+            <h3 className="text-base font-extrabold text-ink tracking-tight">
+              {selectedInvoice && isInvoicePaid(selectedInvoice) ? "Payment Successful" : "Invoice Awaiting Payment"}
+            </h3>
             <p className="text-[11px] text-ink-muted mt-0.5">
-              Thank you for your subscription payment
+              {selectedInvoice && isInvoicePaid(selectedInvoice)
+                ? "Thank you for your subscription payment"
+                : "Await online checkout payment or offline settlement under the agreed invoice terms"}
             </p>
           </div>
           
@@ -787,7 +2067,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Invoice Number</span>
                   <span className="font-mono font-bold text-ink uppercase tracking-wider">
-                    {selectedInvoice.stripeInvoiceId.startsWith("in_") ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}` : selectedInvoice.stripeInvoiceId}
+                    {getInvoiceNumber(selectedInvoice)}
                   </span>
                 </div>
                 
@@ -798,21 +2078,27 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
 
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Workspace ID</span>
-                  <span className="text-ink font-mono font-semibold">{selectedInvoice.workspaceId}</span>
+                  <span className="text-ink font-mono font-semibold">{selectedInvoice.workspaceId ?? "unknown"}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Payment Method</span>
-                  <span className="text-ink font-semibold">Stripe Gateway</span>
+                  <span className="text-ink font-semibold">
+                    {isInvoicePaid(selectedInvoice) ? "Recorded settlement" : "Online or offline settlement"}
+                  </span>
                 </div>
 
                 <div className="border-t border-dashed border-hairline/60 my-4 pt-4 flex justify-between items-center">
                   <div>
-                    <span className="text-xs text-ink-muted font-medium block">Amount Paid</span>
-                    <span className="text-[9px] text-emerald-600 font-bold bg-emerald-100 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded uppercase mt-0.5 inline-block">Status: Paid</span>
+                    <span className="text-xs text-ink-muted font-medium block">
+                      {isInvoicePaid(selectedInvoice) ? "Amount Paid" : "Amount Due"}
+                    </span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase mt-0.5 inline-block ${isInvoicePaid(selectedInvoice) ? "text-emerald-600 bg-emerald-100 dark:bg-emerald-950/40" : "text-amber-700 bg-amber-100 dark:bg-amber-950/40"}`}>
+                      Status: {getInvoiceStatusLabel(selectedInvoice)}
+                    </span>
                   </div>
                   <span className="text-lg font-extrabold text-ink tracking-tight">
-                    {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                    {getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
                   </span>
                 </div>
               </div>
@@ -826,7 +2112,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
               }}
               className="flex-1 inline-flex h-9 items-center justify-center rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 px-3 text-xs font-semibold text-ink cursor-pointer transition duration-150"
             >
-              Print Receipt
+              {selectedInvoice && isInvoicePaid(selectedInvoice) ? "Print Receipt" : "Print Invoice"}
             </button>
             <button 
               onClick={() => setSelectedInvoice(null)}
@@ -876,9 +2162,11 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
             <p className="text-[10px] text-gray-500 mt-1">AI-Powered Translation Platform</p>
           </div>
           <div className="text-right">
-            <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Official Receipt</h2>
+            <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">
+              {selectedInvoice && isInvoicePaid(selectedInvoice) ? "Official Receipt" : "Official Invoice"}
+            </h2>
             <p className="text-xs font-mono font-bold text-gray-700 mt-1.5">
-              No: {selectedInvoice && (selectedInvoice.stripeInvoiceId.startsWith("in_") ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}` : selectedInvoice.stripeInvoiceId)}
+              No: {selectedInvoice && getInvoiceNumber(selectedInvoice)}
             </p>
             <p className="text-[10px] text-gray-500 mt-1">Date: {selectedInvoice && format(new Date(selectedInvoice.createdAt), "MMMM dd, yyyy")}</p>
           </div>
@@ -896,8 +2184,14 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
           <div>
             <h3 className="font-bold text-gray-500 uppercase text-[9px] tracking-wider mb-2">To</h3>
             <p className="font-bold text-gray-900 text-xs font-mono mt-1">Workspace ID: {selectedInvoice?.workspaceId}</p>
-            <p className="text-gray-600 mt-1">Status: <span className="text-emerald-600 font-extrabold uppercase">Paid</span></p>
-            <p className="text-gray-600">Payment Gateway: Stripe</p>
+            <p className="text-gray-600 mt-1">
+              Status: <span className={`${selectedInvoice && isInvoicePaid(selectedInvoice) ? "text-emerald-600" : "text-amber-600"} font-extrabold uppercase`}>
+                {selectedInvoice ? getInvoiceStatusLabel(selectedInvoice) : "Unknown"}
+              </span>
+            </p>
+            <p className="text-gray-600">
+              Payment Gateway: {selectedInvoice && isInvoicePaid(selectedInvoice) ? "Recorded settlement" : "Online or offline settlement"}
+            </p>
           </div>
         </div>
 
@@ -915,15 +2209,15 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
             {selectedInvoice && (
               <tr>
                 <td className="py-4 px-3">
-                  <span className="font-bold text-gray-900 block text-xs">WarpTalk Startup Plan Subscription</span>
+                  <span className="font-bold text-gray-900 block text-xs">WarpTalk Plan Subscription</span>
                   <span className="text-[10px] text-gray-500 mt-1 block">High-quality real-time audio translation & meeting summaries (1 Month)</span>
                 </td>
                 <td className="py-4 px-3 text-center text-gray-700">1</td>
                 <td className="py-4 px-3 text-right text-gray-700 font-mono">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
                 </td>
                 <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
                 </td>
               </tr>
             )}
@@ -936,7 +2230,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Subtotal:</span>
               <span className="font-semibold text-gray-900 font-mono">
-                {selectedInvoice && selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
               </span>
             </div>
             <div className="flex justify-between text-xs">
@@ -944,9 +2238,9 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
               <span className="text-gray-900 font-mono">0đ</span>
             </div>
             <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
-              <span className="text-gray-900">Total Paid:</span>
+              <span className="text-gray-900">{selectedInvoice && isInvoicePaid(selectedInvoice) ? "Total Paid:" : "Total Due:"}</span>
               <span className="text-gray-950 font-mono text-base">
-                {selectedInvoice && selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
               </span>
             </div>
           </div>
@@ -967,7 +2261,11 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
         {/* Footer */}
         <div className="border-t border-gray-200 pt-6 mt-16 text-center text-[9px] text-gray-400 space-y-1">
           <p className="font-bold text-gray-500">Thank you for choosing WarpTalk!</p>
-          <p>This is a system-generated electronic receipt. No physical signature or stamp is required.</p>
+          <p>
+            {selectedInvoice && isInvoicePaid(selectedInvoice)
+              ? "This is a system-generated electronic receipt. No physical signature or stamp is required."
+              : "This is a system-generated invoice awaiting payment. No physical signature or stamp is required."}
+          </p>
           <p>For support, please contact billing@warptalk.com or visit our Help Center.</p>
         </div>
       </div>
@@ -988,7 +2286,7 @@ export default function AdminWorkspaceBillingPage({ params }: { params: Promise<
                 <span className="text-sm font-semibold">{historyPage?.items?.length || 0}</span>
               </div>
               <div className="flex justify-between mb-2">
-                <span className="text-sm font-medium text-muted-foreground">Total Top-Ups:</span>
+                <span className="text-sm font-medium text-muted-foreground">Contract Credits Added:</span>
                 <span className="text-sm font-semibold text-green-600">+{totalTopUp.toLocaleString()}</span>
               </div>
               <div className="flex justify-between mb-2">

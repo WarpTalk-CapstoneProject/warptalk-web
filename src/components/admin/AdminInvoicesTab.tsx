@@ -24,15 +24,36 @@ import {
 
 interface InvoiceDto {
   id: string;
-  stripeInvoiceId: string;
-  amount: number;
+  invoiceNumber?: string | null;
+  stripeInvoiceId?: string | null;
+  amount?: number | null;
+  total?: number | null;
+  pdfUrl?: string | null;
   currency: string;
   status: string;
   invoicePdfUrl?: string;
   hostedInvoiceUrl?: string;
   createdAt: string;
-  workspaceId: string;
+  workspaceId?: string | null;
   workspaceName?: string | null;
+}
+
+function getInvoiceAmount(invoice: InvoiceDto): number {
+  return invoice.total ?? invoice.amount ?? 0;
+}
+
+function getInvoiceNumber(invoice: InvoiceDto): string {
+  if (invoice.invoiceNumber) return invoice.invoiceNumber;
+  if (invoice.stripeInvoiceId) {
+    const rawId = invoice.stripeInvoiceId;
+    const suffix = rawId.substring(Math.max(0, rawId.length - 8)).toUpperCase();
+    return rawId.startsWith("in_") ? `INV-${suffix}` : rawId;
+  }
+  return invoice.id;
+}
+
+function getInvoicePdfUrl(invoice: InvoiceDto): string | null {
+  return invoice.pdfUrl ?? invoice.invoicePdfUrl ?? null;
 }
 
 function IdBadge({ id, type, name }: { id: string, type: "workspace" | "user" | "system" | "admin", name?: string | null }) {
@@ -95,14 +116,15 @@ export function AdminInvoicesTab() {
         ? (inv.workspaceId?.toLowerCase().includes(query) || inv.workspaceName?.toLowerCase().includes(query))
         : true;
       const matchStatus = statusFilter !== "ALL" ? inv.status?.toLowerCase() === statusFilter.toLowerCase() : true;
-      const matchMin = minAmountFilter !== "" ? inv.amount >= minAmountFilter : true;
-      const matchMax = maxAmountFilter !== "" ? inv.amount <= maxAmountFilter : true;
+      const amount = getInvoiceAmount(inv);
+      const matchMin = minAmountFilter !== "" ? amount >= minAmountFilter : true;
+      const matchMax = maxAmountFilter !== "" ? amount <= maxAmountFilter : true;
       return matchWorkspace && matchStatus && matchMin && matchMax;
     });
   }, [invoices, workspaceFilter, statusFilter, minAmountFilter, maxAmountFilter]);
 
   const displayTotalCount = filteredInvoices.length;
-  const totalPages = Math.ceil(displayTotalCount / 20);
+  const totalPages = Math.max(1, Math.ceil(displayTotalCount / 20));
   const paginatedInvoices = useMemo(() => {
     return filteredInvoices.slice((page - 1) * 20, page * 20);
   }, [filteredInvoices, page]);
@@ -123,11 +145,14 @@ export function AdminInvoicesTab() {
   };
 
   return (
-    <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear flex flex-col h-[600px]">
+    <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear flex flex-col">
       <CardHeader className="p-4 border-b border-hairline bg-surface-1/50 flex-none">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <CardTitle className="text-lg">Global Invoices</CardTitle>
+            <CardTitle className="text-lg">Contract invoices</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Invoices are created by paid checkout events or when a workspace billing cycle closes.
+            </p>
           </div>
         </div>
 
@@ -199,40 +224,54 @@ export function AdminInvoicesTab() {
             ) : paginatedInvoices.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                  No invoices found
+                  No invoices have been issued yet.
                 </TableCell>
               </TableRow>
-            ) : paginatedInvoices.map((inv) => (
+            ) : paginatedInvoices.map((inv) => {
+              const workspaceId = inv.workspaceId ?? "";
+              const hostedInvoiceUrl = inv.hostedInvoiceUrl;
+              const pdfUrl = getInvoicePdfUrl(inv);
+              return (
               <TableRow key={inv.id} className="border-hairline hover:bg-surface-2">
                 <TableCell className="text-xs font-mono text-muted-foreground">
                   {format(new Date(inv.createdAt), "MMM d, yyyy HH:mm")}
                 </TableCell>
                 <TableCell>
-                  <Link href={`/billing/workspace/${inv.workspaceId}`} className="block hover:opacity-80 transition-opacity">
-                    <IdBadge id={inv.workspaceId} type="workspace" name={inv.workspaceName} />
-                  </Link>
+                  {workspaceId ? (
+                    <Link href={`/billing/workspace/${workspaceId}`} className="block hover:opacity-80 transition-opacity">
+                      <IdBadge id={workspaceId} type="workspace" name={inv.workspaceName} />
+                    </Link>
+                  ) : (
+                    <IdBadge id="unknown" type="workspace" name={inv.workspaceName ?? "Unknown"} />
+                  )}
                 </TableCell>
-                <TableCell className="text-xs font-mono text-muted-foreground">{inv.stripeInvoiceId}</TableCell>
+                <TableCell className="text-xs font-mono text-muted-foreground">{getInvoiceNumber(inv)}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className={inv.status === "paid" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : "bg-surface-3 text-ink"}>
                     {inv.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {inv.amount.toLocaleString()} {inv.currency.toUpperCase()}
+                  {getInvoiceAmount(inv).toLocaleString()} {inv.currency.toUpperCase()}
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button variant="outline" size="sm" className="h-7 text-xs font-medium rounded-md px-2.5" onClick={() => setSelectedInvoice(inv)}>
                     View Receipt
                   </Button>
-                  {inv.hostedInvoiceUrl && (
-                    <a href={inv.hostedInvoiceUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline text-xs font-semibold">
+                  {hostedInvoiceUrl && (
+                    <a href={hostedInvoiceUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline text-xs font-semibold">
                       Stripe Invoice
+                    </a>
+                  )}
+                  {pdfUrl && (
+                    <a href={pdfUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline text-xs font-semibold">
+                      PDF
                     </a>
                   )}
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>
@@ -240,9 +279,9 @@ export function AdminInvoicesTab() {
       {/* Pagination */}
       <div className="p-4 border-t border-hairline flex items-center justify-between bg-surface-1">
         <p className="text-xs text-muted-foreground">
-          {data ? (
-            <>Showing <strong>{(page - 1) * 20 + 1}–{Math.min(page * 20, displayTotalCount)}</strong> of <strong>{displayTotalCount}</strong> invoices</>
-          ) : "Loading..."}
+          {data && displayTotalCount > 0 ? (
+            <>Showing <strong>{(page - 1) * 20 + 1}-{Math.min(page * 20, displayTotalCount)}</strong> of <strong>{displayTotalCount}</strong> invoices</>
+          ) : data ? "0 invoices issued" : "Loading invoices..."}
         </p>
         {totalPages > 1 && (
           <div className="flex items-center gap-1">
@@ -294,7 +333,7 @@ export function AdminInvoicesTab() {
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Invoice Number</span>
                   <span className="font-mono font-bold text-ink uppercase tracking-wider">
-                    {selectedInvoice.stripeInvoiceId.startsWith("in_") ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}` : selectedInvoice.stripeInvoiceId}
+                    {getInvoiceNumber(selectedInvoice)}
                   </span>
                 </div>
                 
@@ -305,7 +344,7 @@ export function AdminInvoicesTab() {
 
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Workspace ID</span>
-                  <span className="text-ink font-mono font-semibold">{selectedInvoice.workspaceId}</span>
+                  <span className="text-ink font-mono font-semibold">{selectedInvoice.workspaceId ?? "unknown"}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs">
@@ -319,7 +358,7 @@ export function AdminInvoicesTab() {
                     <span className="text-[9px] text-emerald-600 font-bold bg-emerald-100 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded uppercase mt-0.5 inline-block">Status: Paid</span>
                   </div>
                   <span className="text-lg font-extrabold text-ink tracking-tight">
-                    {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                    {getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
                   </span>
                 </div>
               </div>
@@ -385,7 +424,7 @@ export function AdminInvoicesTab() {
           <div className="text-right">
             <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Official Receipt</h2>
             <p className="text-xs font-mono font-bold text-gray-700 mt-1.5">
-              No: {selectedInvoice && (selectedInvoice.stripeInvoiceId.startsWith("in_") ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}` : selectedInvoice.stripeInvoiceId)}
+              No: {selectedInvoice && getInvoiceNumber(selectedInvoice)}
             </p>
             <p className="text-[10px] text-gray-500 mt-1">Date: {selectedInvoice && format(new Date(selectedInvoice.createdAt), "MMMM dd, yyyy")}</p>
           </div>
@@ -402,7 +441,7 @@ export function AdminInvoicesTab() {
           </div>
           <div>
             <h3 className="font-bold text-gray-500 uppercase text-[9px] tracking-wider mb-2">To</h3>
-            <p className="font-bold text-gray-900 text-xs font-mono mt-1">Workspace ID: {selectedInvoice?.workspaceId}</p>
+            <p className="font-bold text-gray-900 text-xs font-mono mt-1">Workspace ID: {selectedInvoice?.workspaceId ?? "unknown"}</p>
             <p className="text-gray-600 mt-1">Status: <span className="text-emerald-600 font-extrabold uppercase">Paid</span></p>
             <p className="text-gray-600">Payment Gateway: Stripe</p>
           </div>
@@ -422,15 +461,15 @@ export function AdminInvoicesTab() {
             {selectedInvoice && (
               <tr>
                 <td className="py-4 px-3">
-                  <span className="font-bold text-gray-900 block text-xs">WarpTalk Startup Plan Subscription</span>
+                  <span className="font-bold text-gray-900 block text-xs">WarpTalk Plan Subscription</span>
                   <span className="text-[10px] text-gray-500 mt-1 block">High-quality real-time audio translation & meeting summaries (1 Month)</span>
                 </td>
                 <td className="py-4 px-3 text-center text-gray-700">1</td>
                 <td className="py-4 px-3 text-right text-gray-700 font-mono">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
                 </td>
                 <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
                 </td>
               </tr>
             )}
@@ -443,7 +482,7 @@ export function AdminInvoicesTab() {
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Subtotal:</span>
               <span className="font-semibold text-gray-900 font-mono">
-                {selectedInvoice && selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
               </span>
             </div>
             <div className="flex justify-between text-xs">
@@ -453,7 +492,7 @@ export function AdminInvoicesTab() {
             <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
               <span className="text-gray-900">Total Paid:</span>
               <span className="text-gray-950 font-mono text-base">
-                {selectedInvoice && selectedInvoice.amount.toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
               </span>
             </div>
           </div>
@@ -481,3 +520,5 @@ export function AdminInvoicesTab() {
     </Card>
   );
 }
+
+

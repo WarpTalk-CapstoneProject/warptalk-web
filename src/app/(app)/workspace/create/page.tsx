@@ -28,6 +28,7 @@ import {
   slugPreviewFromName,
 } from "@/features/workspace/lib/email-domain";
 import { useCreateWorkspace, useSelectWorkspace } from "@/hooks/use-workspace";
+import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { WorkspaceDto } from "@/types/workspace";
@@ -58,6 +59,35 @@ interface ApiErrorShape {
   message?: string;
 }
 
+const salesIntentStorageKey = "warptalk:sales-package-intent";
+
+interface SalesPackageIntent {
+  workEmail?: string;
+  company?: string;
+  requestType?: string;
+  featureInterests?: string[];
+  targetLanguages?: string[];
+  currentMonthlyMeetingVolume?: string;
+  expectedMonthlyMeetingVolumeInSixMonths?: string | null;
+  useCaseNotes?: string | null;
+  pricingEstimate?: {
+    estimatedCredits?: number | null;
+    creditsPerCycle?: number | null;
+    planPrice?: number | null;
+  } | null;
+}
+
+function readSalesPackageIntent(): SalesPackageIntent | null {
+  try {
+    const rawIntent = window.sessionStorage.getItem(salesIntentStorageKey);
+    if (!rawIntent) return null;
+    return JSON.parse(rawIntent) as SalesPackageIntent;
+  } catch {
+    window.sessionStorage.removeItem(salesIntentStorageKey);
+    return null;
+  }
+}
+
 export default function CreateWorkspaceDemoPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -70,6 +100,7 @@ export default function CreateWorkspaceDemoPage() {
   const [serverError, setServerError] = useState<ServerErrorState | null>(null);
   const [createdWorkspace, setCreatedWorkspace] = useState<WorkspaceDto | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [salesIntent, setSalesIntent] = useState<SalesPackageIntent | null>(null);
 
   const rawDomain = extractEmailDomain(user?.email);
   const emailDomain = getDomainFromEmail(user?.email);
@@ -94,6 +125,15 @@ export default function CreateWorkspaceDemoPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const intent = readSalesPackageIntent();
+    setSalesIntent(intent);
+    if (intent?.company && !form.getValues("name")) {
+      form.setValue("name", intent.company, { shouldDirty: true, shouldValidate: true });
+    }
+  }, [mounted, form]);
 
   useEffect(() => {
     if (mounted && !isAuthenticated) router.replace("/login");
@@ -125,14 +165,33 @@ export default function CreateWorkspaceDemoPage() {
       });
 
       setCreatedWorkspace(workspace);
+      await provisionTrialSubscription(workspace.id);
       await selectWorkspace.mutateAsync(workspace.id);
       setActiveWorkspace(workspace.id, workspace.name, workspace.slug, workspace.role || "Owner", "Internal");
-      toast.success(`Workspace "${workspace.name}" created.`);
+      toast.success(`Workspace "${workspace.name}" created with an Enterprise free trial.`);
       router.push(`/${workspace.slug}/home`);
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);
       toast.error(nextError.message);
+    }
+  }
+
+  async function provisionTrialSubscription(workspaceId: string) {
+    if (!user?.id || !user.email) return;
+
+    const billingContactEmail = salesIntent?.workEmail?.trim().toLowerCase() || user.email;
+
+    try {
+      await billingService.createTrialSubscription({
+        workspaceId,
+        userId: user.id,
+        ownerEmail: billingContactEmail,
+      });
+    } catch {
+      toast.info("Workspace created. Enterprise trial setup can be completed by WarpTalk billing.");
+    } finally {
+      window.sessionStorage.removeItem(salesIntentStorageKey);
     }
   }
 

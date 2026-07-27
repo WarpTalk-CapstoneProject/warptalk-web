@@ -1,5 +1,8 @@
 import apiClient from "@/lib/api/client";
-import type { CreditBalanceDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto, UsageAlertDto, TopWorkspaceDto, UsageChartDto } from "@/types/billing";
+import type { CreditBalanceDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto, UsageAlertDto, TopWorkspaceDto, UsageChartDto, UpdateSubscriptionContractTermsRequest, PricingConfigDto, UpdatePricingConfigRequest, UsageRateCardDto, UpsertUsageRateCardRequest, PlanRequest, TrialSubscriptionRequest, CreateWorkspaceContractSubscriptionRequest } from "@/types/billing";
+
+const DIRECT_TOP_UP_DISABLED_MESSAGE =
+  "Direct credit top-up is disabled. Use Stripe Checkout for credit top-ups.";
 
 export const billingService = {
   /**
@@ -165,6 +168,16 @@ export const billingService = {
     return data;
   },
 
+  markInvoicePaid: async (invoiceId: string): Promise<InvoiceDto> => {
+    const { data } = await apiClient.post<InvoiceDto>(`/invoices/${invoiceId}/mark-paid`);
+    return data;
+  },
+
+  createInvoiceCheckout: async (invoiceId: string): Promise<{ url: string }> => {
+    const { data } = await apiClient.post<{ url: string }>(`/invoices/${invoiceId}/checkout`);
+    return data;
+  },
+
   /**
    * Get all active subscription plans from the backend.
    */
@@ -193,10 +206,51 @@ export const billingService = {
     return data;
   },
 
+  createSubscription: async (workspaceId: string, planId: string): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.post<SubscriptionDto>(`/subscriptions`, { workspaceId, planId });
+    return data;
+  },
+
+  createWorkspaceContractSubscription: async (
+    request: CreateWorkspaceContractSubscriptionRequest
+  ): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.post<SubscriptionDto>(`/subscriptions/contract`, request);
+    return data;
+  },
+
+  createTrialSubscription: async (request: TrialSubscriptionRequest): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.post<SubscriptionDto>(`/subscriptions/trial`, request);
+    return data;
+  },
+
+  /**
+   * Update enterprise contract terms for a workspace subscription (Admin only).
+   */
+  updateSubscriptionContractTerms: async (
+    workspaceId: string,
+    terms: UpdateSubscriptionContractTermsRequest
+  ): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.put<SubscriptionDto>(
+      `/subscriptions/workspace/${workspaceId}/contract-terms`,
+      terms
+    );
+    return data;
+  },
+
+  resumeSubscription: async (workspaceId: string, reason?: string): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.post<SubscriptionDto>(`/subscriptions/workspace/${workspaceId}/resume`, { reason });
+    return data;
+  },
+
+  simulateCycleClose: async (workspaceId: string): Promise<{ closedCycles: number }> => {
+    const { data } = await apiClient.post<{ closedCycles: number }>(`/subscriptions/workspace/${workspaceId}/simulate-cycle-close`);
+    return data;
+  },
+
   /**
    * Create a new subscription plan (Admin only).
    */
-  createPlan: async (plan: any): Promise<import("@/types/billing").PlanDto> => {
+  createPlan: async (plan: PlanRequest): Promise<import("@/types/billing").PlanDto> => {
     const { data } = await apiClient.post<import("@/types/billing").PlanDto>(`/plans`, plan);
     return data;
   },
@@ -204,7 +258,7 @@ export const billingService = {
   /**
    * Update an existing subscription plan (Admin only).
    */
-  updatePlan: async (id: string, plan: any): Promise<import("@/types/billing").PlanDto> => {
+  updatePlan: async (id: string, plan: PlanRequest): Promise<import("@/types/billing").PlanDto> => {
     const { data } = await apiClient.put<import("@/types/billing").PlanDto>(`/plans/${id}`, plan);
     return data;
   },
@@ -225,11 +279,14 @@ export const billingService = {
   },
 
   /**
-   * Top up credits to a workspace subscription.
+   * Legacy direct credit grant endpoint is disabled. Use paymentService.createCheckoutSession
+   * with the credit top-up payment type so credits are granted only after Stripe confirms payment.
    */
   topUpCredits: async (workspaceId: string, amount: number, referenceType: string): Promise<any> => {
-    const { data } = await apiClient.post(`/credits/workspace/${workspaceId}/topup`, { amount, referenceType });
-    return data;
+    void workspaceId;
+    void amount;
+    void referenceType;
+    throw new Error(DIRECT_TOP_UP_DISABLED_MESSAGE);
   },
 
   /**
@@ -260,19 +317,23 @@ export const billingService = {
     return data;
   },
 
-  /**
-   * Get current AI service credit rates (Admin only).
-   */
-  getServiceRates: async (): Promise<import("@/types/billing").ServiceRatesDto> => {
-    const { data } = await apiClient.get<import("@/types/billing").ServiceRatesDto>(`/usages/rates`);
+  getPricingConfig: async (): Promise<PricingConfigDto> => {
+    const { data } = await apiClient.get<PricingConfigDto>(`/usages/pricing-config`);
     return data;
   },
 
-  /**
-   * Update AI service credit rates (Admin only).
-   */
-  updateServiceRates: async (rates: import("@/types/billing").ServiceRatesDto): Promise<import("@/types/billing").ServiceRatesDto> => {
-    const { data } = await apiClient.put<import("@/types/billing").ServiceRatesDto>(`/usages/rates`, rates);
+  updatePricingConfig: async (config: UpdatePricingConfigRequest): Promise<PricingConfigDto> => {
+    const { data } = await apiClient.put<PricingConfigDto>(`/usages/pricing-config`, config);
+    return data;
+  },
+
+  getUsageRateCard: async (): Promise<UsageRateCardDto[]> => {
+    const { data } = await apiClient.get<UsageRateCardDto[]>(`/usages/rate-card`);
+    return data;
+  },
+
+  upsertUsageRateCard: async (rate: UpsertUsageRateCardRequest): Promise<UsageRateCardDto> => {
+    const { data } = await apiClient.put<UsageRateCardDto>(`/usages/rate-card`, rate);
     return data;
   }
 };

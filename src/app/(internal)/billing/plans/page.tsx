@@ -1,284 +1,475 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit2, Trash2, ArrowLeft, Loader2, Sparkles, Shield, User, Globe, FileText, CheckCircle2, AlertCircle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CheckCircle2, Loader2, Save, SlidersHorizontal, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { billingService } from "@/services/billing.service";
-import Link from "next/link";
-import { createHubConnection } from "@/lib/signalr";
-import { toast } from "sonner";
+import type { PlanDto, PlanRequest, UsageRateCardDto } from "@/types/billing";
+import { BROADCAST_CHANNELS } from "@/constants/realtime";
 
-interface PlanFormState {
-  name: string;
-  slug: string;
-  tier: string;
-  price: number;
-  currency: string;
-  billingCycle: string;
-  creditsPerCycle: number;
-  maxParticipants: number;
+type BaselinePlan = PlanDto & {
+  voiceCloneEnabled?: boolean;
+  aiAssistantEnabled?: boolean;
+  glossaryEnabled?: boolean;
+  dedicatedGpu?: boolean;
+};
+
+type BaselineFormState = {
+  price: string;
+  creditsPerCycle: string;
+  overageCapCredits: string;
+  overagePricePerCredit: string;
+  lowBalanceThresholdCredits: string;
+  rolloverCapCredits: string;
+  invoiceTermsDays: string;
+  invoiceGraceHours: string;
+  maxParticipants: string;
+  maxLanguages: string;
+  voiceCloneEnabled: boolean;
+  aiAssistantEnabled: boolean;
+  glossaryEnabled: boolean;
+  dedicatedGpu: boolean;
+  isActive: boolean;
+};
+
+type PricingDraftRow = {
+  id: string;
+  chargeType: string;
+  unit: string;
+  provider: string;
+  model: string;
+  providerUnitCostUsd: number;
+  markupMultiplier: number;
+  enabled: boolean;
+};
+
+type BaselinePlanRequest = PlanRequest & {
   maxLanguages: number;
   voiceCloneEnabled: boolean;
   aiAssistantEnabled: boolean;
   glossaryEnabled: boolean;
   dedicatedGpu: boolean;
-  features: string;
-  featuresText: string;
-  sortOrder: number;
-  isActive: boolean;
-}
+};
 
-const initialFormState: PlanFormState = {
-  name: "",
-  slug: "",
-  tier: "Startup",
-  price: 0,
-  currency: "VND",
-  billingCycle: "monthly",
-  creditsPerCycle: 1000,
-  maxParticipants: 5,
-  maxLanguages: 3,
+const DEFAULT_PRICING_DRAFT_ROWS: PricingDraftRow[] = [
+  { id: "stt-second", chargeType: "STT", unit: "second", provider: "openai", model: "gpt-4o-transcribe", providerUnitCostUsd: 0.0001, markupMultiplier: 2.5, enabled: true },
+  { id: "translation-token-in", chargeType: "TRANSLATION", unit: "token_in", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000004, markupMultiplier: 2.5, enabled: true },
+  { id: "translation-token-cached", chargeType: "TRANSLATION", unit: "token_in_cached", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000001, markupMultiplier: 2.5, enabled: true },
+  { id: "translation-token-out", chargeType: "TRANSLATION", unit: "token_out", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000016, markupMultiplier: 2.5, enabled: true },
+  { id: "tts-standard", chargeType: "AUDIO_DUBBING_STANDARD", unit: "character", provider: "cartesia", model: "sonic-3.5", providerUnitCostUsd: 0.0000392, markupMultiplier: 3, enabled: true },
+  { id: "tts-clone", chargeType: "AUDIO_DUBBING_VOICE_CLONE", unit: "character", provider: "cartesia", model: "sonic-3.5-clone", providerUnitCostUsd: 0.0000588, markupMultiplier: 3.5, enabled: true },
+  { id: "voice-enrollment", chargeType: "VOICE_CLONE_ENROLLMENT", unit: "profile", provider: "cartesia", model: "cartesia-localizing-voice", providerUnitCostUsd: 0.00882, markupMultiplier: 3.5, enabled: true },
+  { id: "assistant-token-in", chargeType: "AI_ASSISTANT", unit: "token_in", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.000002, markupMultiplier: 2.5, enabled: true },
+  { id: "assistant-token-cached", chargeType: "AI_ASSISTANT", unit: "token_in_cached", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.0000005, markupMultiplier: 2.5, enabled: true },
+  { id: "assistant-token-out", chargeType: "AI_ASSISTANT", unit: "token_out", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.000008, markupMultiplier: 2.5, enabled: true },
+  { id: "summary-token-in", chargeType: "AI_SUMMARY", unit: "token_in", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.00000015, markupMultiplier: 2.5, enabled: true },
+  { id: "summary-token-cached", chargeType: "AI_SUMMARY", unit: "token_in_cached", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.000000075, markupMultiplier: 2.5, enabled: true },
+  { id: "summary-token-out", chargeType: "AI_SUMMARY", unit: "token_out", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.0000006, markupMultiplier: 2.5, enabled: true },
+];
+
+const SERVICE_LABELS: Record<string, string> = {
+  STT: "Speech to Text",
+  TRANSLATION: "Translation",
+  AUDIO_DUBBING_STANDARD: "TTS standard",
+  AUDIO_DUBBING_VOICE_CLONE: "TTS voice clone",
+  VOICE_CLONE_ENROLLMENT: "Voice enrollment",
+  AI_ASSISTANT: "AI Assistant",
+  AI_SUMMARY: "AI Summary",
+};
+
+const EMPTY_FORM: BaselineFormState = {
+  price: "",
+  creditsPerCycle: "",
+  overageCapCredits: "",
+  overagePricePerCredit: "",
+  lowBalanceThresholdCredits: "",
+  rolloverCapCredits: "",
+  invoiceTermsDays: "",
+  invoiceGraceHours: "",
+  maxParticipants: "",
+  maxLanguages: "",
   voiceCloneEnabled: false,
   aiAssistantEnabled: false,
   glossaryEnabled: false,
   dedicatedGpu: false,
-  features: "[]",
-  featuresText: "",
-  sortOrder: 0,
   isActive: true,
 };
 
+const PRICE_FLOOR_PER_CREDIT_VND = 2.6;
+const MIN_VND_PLAN_PRICE = 15000;
+
+function parseBaselineNumber(
+  rawValue: string,
+  label: string,
+  options: { integer?: boolean; min?: number; max?: number; minExclusive?: number } = {}
+): { value: number; error: null } | { value: null; error: string } {
+  const value = rawValue.trim();
+  if (!value) return { value: null, error: `${label} is required.` };
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return { value: null, error: `${label} must be a valid number.` };
+  if (options.integer && !Number.isInteger(parsed)) return { value: null, error: `${label} must be a whole number.` };
+  if (options.min !== undefined && parsed < options.min) return { value: null, error: `${label} must be at least ${options.min}.` };
+  if (options.max !== undefined && parsed > options.max) return { value: null, error: `${label} must be at most ${options.max}.` };
+  if (options.minExclusive !== undefined && parsed <= options.minExclusive) return { value: null, error: `${label} must be greater than ${options.minExclusive}.` };
+
+  return { value: parsed, error: null };
+}
+
+function validateBaselineForm(form: BaselineFormState): string | null {
+  const priceResult = parseBaselineNumber(form.price, "Price", { min: MIN_VND_PLAN_PRICE });
+  if (priceResult.error) return priceResult.error;
+
+  const creditsResult = parseBaselineNumber(form.creditsPerCycle, "Credits per cycle", { integer: true, minExclusive: 0 });
+  if (creditsResult.error) return creditsResult.error;
+
+  const warningResult = parseBaselineNumber(form.lowBalanceThresholdCredits, "Warning credits", { integer: true, min: 0 });
+  if (warningResult.error) return warningResult.error;
+
+  const overageCapResult = parseBaselineNumber(form.overageCapCredits, "Extra usage cap", { integer: true, min: 0 });
+  if (overageCapResult.error) return overageCapResult.error;
+
+  const overagePriceResult = parseBaselineNumber(form.overagePricePerCredit, "Extra usage price per credit", { min: 0 });
+  if (overagePriceResult.error) return overagePriceResult.error;
+
+  const rolloverResult = parseBaselineNumber(form.rolloverCapCredits, "Rollover cap", { integer: true, min: 0 });
+  if (rolloverResult.error) return rolloverResult.error;
+
+  const invoiceTermsResult = parseBaselineNumber(form.invoiceTermsDays, "Invoice terms days", { integer: true, minExclusive: 0 });
+  if (invoiceTermsResult.error) return invoiceTermsResult.error;
+
+  const invoiceGraceResult = parseBaselineNumber(form.invoiceGraceHours, "Invoice grace hours", { integer: true, minExclusive: 0 });
+  if (invoiceGraceResult.error) return invoiceGraceResult.error;
+
+  const maxParticipantsResult = parseBaselineNumber(form.maxParticipants, "Max participants", { integer: true, min: 2 });
+  if (maxParticipantsResult.error) return maxParticipantsResult.error;
+
+  const maxLanguagesResult = parseBaselineNumber(form.maxLanguages, "Max languages", { integer: true, min: 1, max: 3 });
+  if (maxLanguagesResult.error) return maxLanguagesResult.error;
+
+  const price = priceResult.value!;
+  const credits = creditsResult.value!;
+  const warningCredits = warningResult.value!;
+  const overageCap = overageCapResult.value!;
+  const overagePrice = overagePriceResult.value!;
+  const rolloverCap = rolloverResult.value!;
+
+  if (price / credits < PRICE_FLOOR_PER_CREDIT_VND) {
+    return `Effective price per credit must be at least ${PRICE_FLOOR_PER_CREDIT_VND.toFixed(2)} VND.`;
+  }
+
+  if (overageCap > credits) return "Extra usage cap must not exceed credits per cycle.";
+  if (overageCap > 0 && overagePrice <= 0) return "Extra usage price per credit must be greater than 0 when extra usage is enabled.";
+  if (overageCap > 0 && warningCredits <= overageCap) return "Warning credits must be greater than extra usage cap.";
+  if (warningCredits >= credits) return "Warning credits must be lower than credits per cycle.";
+  if (rolloverCap > credits) return "Rollover cap must not exceed credits per cycle.";
+
+  return null;
+}
+
+function isEnterprisePlan(plan: BaselinePlan) {
+  return [plan.slug, plan.tier, plan.name].some((value) => value?.toLowerCase().includes("enterprise"));
+}
+
+function toBaselineForm(plan: BaselinePlan): BaselineFormState {
+  return {
+    price: plan.price?.toString() ?? "0",
+    creditsPerCycle: plan.creditsPerCycle?.toString() ?? "0",
+    overageCapCredits: plan.overageCapCredits?.toString() ?? "0",
+    overagePricePerCredit: plan.overagePricePerCredit?.toString() ?? "0",
+    lowBalanceThresholdCredits: plan.lowBalanceThresholdCredits?.toString() ?? "0",
+    rolloverCapCredits: plan.rolloverCapCredits?.toString() ?? "0",
+    invoiceTermsDays: plan.invoiceTermsDays?.toString() ?? "15",
+    invoiceGraceHours: plan.invoiceGraceHours?.toString() ?? "360",
+    maxParticipants: plan.maxParticipants?.toString() ?? "0",
+    maxLanguages: plan.maxLanguages?.toString() ?? "0",
+    voiceCloneEnabled: plan.voiceCloneEnabled ?? false,
+    aiAssistantEnabled: plan.aiAssistantEnabled ?? false,
+    glossaryEnabled: plan.glossaryEnabled ?? false,
+    dedicatedGpu: plan.dedicatedGpu ?? false,
+    isActive: plan.isActive !== false,
+  };
+}
+
+function toPlanPayload(plan: BaselinePlan, form: BaselineFormState): BaselinePlanRequest {
+  return {
+    name: plan.name,
+    slug: plan.slug,
+    tier: plan.tier,
+    price: Number(form.price) || 0,
+    currency: plan.currency || "VND",
+    billingCycle: plan.billingCycle || "monthly",
+    creditsPerCycle: Number(form.creditsPerCycle) || 0,
+    overageCapCredits: Number(form.overageCapCredits) || 0,
+    overagePricePerCredit: Number(form.overagePricePerCredit) || 0,
+    lowBalanceThresholdCredits: Number(form.lowBalanceThresholdCredits) || 0,
+    rolloverCapCredits: Number(form.rolloverCapCredits) || 0,
+    invoiceTermsDays: Number(form.invoiceTermsDays) || 15,
+    invoiceGraceHours: Number(form.invoiceGraceHours) || 360,
+    maxParticipants: Number(form.maxParticipants) || 0,
+    maxLanguages: Number(form.maxLanguages) || 0,
+    voiceCloneEnabled: form.voiceCloneEnabled,
+    aiAssistantEnabled: form.aiAssistantEnabled,
+    glossaryEnabled: form.glossaryEnabled,
+    dedicatedGpu: form.dedicatedGpu,
+    features: plan.features || "[]",
+    sortOrder: plan.sortOrder ?? 0,
+    isActive: form.isActive,
+  };
+}
+
+function toPricingDraftRow(rate: UsageRateCardDto): PricingDraftRow {
+  return {
+    id: rate.id,
+    chargeType: rate.chargeType,
+    unit: rate.unit,
+    provider: rate.provider,
+    model: rate.model,
+    providerUnitCostUsd: rate.providerUnitCostUsd ?? 0,
+    markupMultiplier: rate.markupMultiplier ?? 0,
+    enabled: rate.isActive,
+  };
+}
+
+function calculateDraftUnitPrice(row: PricingDraftRow, fxRate: number, creditValueVnd: number): number {
+  if (!row.enabled || creditValueVnd <= 0) return 0;
+  return (row.providerUnitCostUsd * fxRate * row.markupMultiplier) / creditValueVnd;
+}
+
+function formatProviderCostUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  return value.toFixed(12).replace(/\.?0+$/, "");
+}
+
+function renderEnabled(value?: boolean) {
+  return value ? "Enabled" : "Disabled";
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  const maybeError = error as {
+    message?: string;
+    response?: { data?: { message?: string; Message?: string } };
+  };
+
+  return maybeError?.response?.data?.message
+    || maybeError?.response?.data?.Message
+    || maybeError?.message
+    || fallback;
+}
+
 export default function AdminPlansPage() {
   const queryClient = useQueryClient();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
-  const [formState, setFormState] = useState<PlanFormState>(initialFormState);
+  const [editingPlan, setEditingPlan] = useState<BaselinePlan | null>(null);
+  const [formState, setFormState] = useState<BaselineFormState>(EMPTY_FORM);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
-  const [deactivatingPlanId, setDeactivatingPlanId] = useState<string | null>(null);
-  const [deactivatingPlanName, setDeactivatingPlanName] = useState("");
+  const [pricingDraftEdits, setPricingDraftEdits] = useState<Record<string, Partial<PricingDraftRow>>>({});
+  const [useDefaultPricingRows, setUseDefaultPricingRows] = useState(false);
+  const [pricingFxRateEdit, setPricingFxRateEdit] = useState<string | null>(null);
+  const [pricingCreditValueVndEdit, setPricingCreditValueVndEdit] = useState<string | null>(null);
+  const [pricingDraftSavedAt, setPricingDraftSavedAt] = useState<string | null>(null);
 
-  // SignalR for real-time plan updates in Admin panel
-  useEffect(() => {
-    const connection = createHubConnection("/hubs/notification");
-
-    connection.on("NewNotification", (notification) => {
-      if (notification?.type === "billing.plan_changed") {
-        toast.info(notification.content, { duration: 5000 });
-        queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
-      }
-    });
-
-    let isMounted = true;
-    connection.start().catch((err) => {
-      if (!isMounted) return;
-      if (err?.message?.includes("stop() was called")) return;
-    });
-
-    return () => {
-      isMounted = false;
-      connection.stop();
-    };
-  }, [queryClient]);
-
-  // Queries
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["admin-plans"],
     queryFn: () => billingService.getPlans(),
   });
 
-  // Mutations
-  const createMutation = useMutation({
-    mutationFn: (newPlan: any) => billingService.createPlan(newPlan),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
-      setIsDialogOpen(false);
-      setFormState(initialFormState);
-    },
-    onError: (err: any) => {
-      setErrorMsg(err.response?.data?.Message || "Failed to create plan.");
-    }
+  const enterprisePlan = useMemo(
+    () => (plans as BaselinePlan[]).find(isEnterprisePlan) ?? null,
+    [plans]
+  );
+
+  const displayedPlans = useMemo(
+    () => (enterprisePlan ? [enterprisePlan] : (plans as BaselinePlan[])),
+    [enterprisePlan, plans]
+  );
+
+  const { data: pricingConfig, isError: isPricingConfigError } = useQuery({
+    queryKey: ["billing", "pricing-config"],
+    queryFn: () => billingService.getPricingConfig(),
+    retry: 1,
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, plan }: { id: string; plan: any }) => billingService.updatePlan(id, plan),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
-      setIsDialogOpen(false);
-      setEditingPlanId(null);
-      setFormState(initialFormState);
-    },
-    onError: (err: any) => {
-      setErrorMsg(err.response?.data?.Message || "Failed to update plan.");
-    }
+  const { data: activeRateCards = [], isError: isRateCardLoadError } = useQuery({
+    queryKey: ["billing", "usage-rate-card"],
+    queryFn: () => billingService.getUsageRateCard(),
+    retry: 1,
   });
 
-  const deactivateMutation = useMutation({
-    mutationFn: (id: string) => billingService.deactivatePlan(id),
+  const basePricingDraftRows = useMemo(
+    () => useDefaultPricingRows || activeRateCards.length === 0
+      ? DEFAULT_PRICING_DRAFT_ROWS
+      : activeRateCards.map(toPricingDraftRow),
+    [activeRateCards, useDefaultPricingRows]
+  );
+
+  const pricingDraftRows = useMemo(
+    () => basePricingDraftRows.map((row) => ({ ...row, ...pricingDraftEdits[row.id] })),
+    [basePricingDraftRows, pricingDraftEdits]
+  );
+
+  const pricingFxRate = pricingFxRateEdit ?? pricingConfig?.fxRateUsdVnd.toString() ?? "26300";
+  const pricingCreditValueVnd = pricingCreditValueVndEdit ?? pricingConfig?.creditValueVnd.toString() ?? "4";
+  const canSaveServicePricing = true;
+
+  const updatePlanMutation = useMutation({
+    mutationFn: ({ id, plan }: { id: string; plan: BaselinePlanRequest }) => billingService.updatePlan(id, plan),
     onSuccess: () => {
+      toast.success("Enterprise baseline updated");
       queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
-    },
-    onError: (err: any) => {
-      alert(err.response?.data?.Message || "Failed to deactivate plan.");
-    }
-  });
-
-  const handleOpenCreate = () => {
-    setEditingPlanId(null);
-    setFormState(initialFormState);
-    setErrorMsg(null);
-    setIsDialogOpen(true);
-  };
-
-  const handleOpenEdit = (plan: any) => {
-    setEditingPlanId(plan.id);
-    setFormState({
-      name: plan.name,
-      slug: plan.slug,
-      tier: plan.tier || "Startup",
-      price: plan.price,
-      currency: plan.currency || "VND",
-      billingCycle: plan.billingCycle || "monthly",
-      creditsPerCycle: plan.creditsPerCycle || 0,
-      maxParticipants: plan.maxParticipants || 0,
-      maxLanguages: plan.maxLanguages || 0,
-      voiceCloneEnabled: plan.voiceCloneEnabled || false,
-      aiAssistantEnabled: plan.aiAssistantEnabled || false,
-      glossaryEnabled: plan.glossaryEnabled || false,
-      dedicatedGpu: plan.dedicatedGpu || false,
-      features: plan.features || "[]",
-      featuresText: (() => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "plans"] });
+      queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
         try {
-          const arr = JSON.parse(plan.features || "[]");
-          return Array.isArray(arr) ? arr.join("\n") : "";
-        } catch { return ""; }
-      })(),
-      sortOrder: plan.sortOrder || 0,
-      isActive: plan.isActive !== false,
-    });
+          new BroadcastChannel(BROADCAST_CHANNELS.NOTIFICATIONS_SYNC).postMessage("REFRESH_PLANS");
+        } catch {
+          // Ignored
+        }
+      }
+      setEditingPlan(null);
+      setErrorMsg(null);
+    },
+    onError: (err: unknown) => {
+      setErrorMsg(getErrorMessage(err, "Failed to update Enterprise baseline."));
+    },
+  });
+
+  const updatePricingConfigMutation = useMutation({
+    mutationFn: () => billingService.updatePricingConfig({
+      fxRateUsdVnd: Number(pricingFxRate) || 0,
+      creditValueVnd: Number(pricingCreditValueVnd) || 0,
+    }),
+    onSuccess: (saved) => {
+      setPricingFxRateEdit(saved.fxRateUsdVnd.toString());
+      setPricingCreditValueVndEdit(saved.creditValueVnd.toString());
+      queryClient.invalidateQueries({ queryKey: ["billing", "pricing-config"] });
+    },
+  });
+
+  const upsertUsageRateCardMutation = useMutation({
+    mutationFn: (row: PricingDraftRow) => {
+      const fxRate = Number(pricingFxRate) || 0;
+      const creditValue = Number(pricingCreditValueVnd) || 0;
+      return billingService.upsertUsageRateCard({
+        chargeType: row.chargeType,
+        unit: row.unit,
+        provider: row.provider,
+        model: row.model,
+        providerUnitCostUsd: row.providerUnitCostUsd,
+        markupMultiplier: row.markupMultiplier,
+        unitPrice: calculateDraftUnitPrice(row, fxRate, creditValue),
+        currency: "VND",
+        isActive: row.enabled,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "usage-rate-card"] });
+    },
+  });
+
+  const openEnterpriseEditor = (plan: BaselinePlan) => {
+    setEditingPlan(plan);
+    setFormState(toBaselineForm(plan));
     setErrorMsg(null);
-    setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const updateFormField = <K extends keyof BaselineFormState>(field: K, value: BaselineFormState[K]) => {
+    setFormState((current) => ({ ...current, [field]: value }));
+  };
+
+  const updatePricingDraftRow = <K extends keyof PricingDraftRow>(
+    id: string,
+    field: K,
+    value: PricingDraftRow[K]
+  ) => {
+    setPricingDraftEdits((current) => ({
+      ...current,
+      [id]: { ...current[id], [field]: value },
+    }));
+    setPricingDraftSavedAt(null);
+  };
+
+  const handleSaveBaseline = () => {
+    if (!editingPlan) return;
     setErrorMsg(null);
 
-    // Validation
-    if (!formState.name.trim()) { setErrorMsg("Name is required."); return; }
-    if (formState.name.length > 100) { setErrorMsg("Name must not exceed 100 characters."); return; }
-
-    if (!formState.slug.trim()) { setErrorMsg("Slug is required."); return; }
-    if (formState.slug.length > 50) { setErrorMsg("Slug must not exceed 50 characters."); return; }
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(formState.slug)) {
-      setErrorMsg("Slug must be lowercase alphanumeric characters and hyphens only (e.g., 'gold-tier').");
+    if (!isEnterprisePlan(editingPlan)) {
+      setErrorMsg("Only the Enterprise baseline can be edited from this screen.");
       return;
     }
 
-    if (!formState.tier.trim()) { setErrorMsg("Tier is required."); return; }
-    if (formState.tier.length > 20) { setErrorMsg("Tier must not exceed 20 characters."); return; }
-
-    const currency = (formState.currency || "").toUpperCase().trim();
-    if (currency.length !== 3) { setErrorMsg("Currency must be a 3-character ISO code."); return; }
-
-    const billingCycle = (formState.billingCycle || "").toLowerCase().trim();
-    if (billingCycle !== "monthly" && billingCycle !== "semiannual" && billingCycle !== "yearly") {
-      setErrorMsg("Billing cycle must be 'monthly', 'semiannual', or 'yearly'.");
+    const validationError = validateBaselineForm(formState);
+    if (validationError) {
+      setErrorMsg(validationError);
       return;
     }
 
-    // Stripe Minimum Charge Limits Validation
-    let minPrice = 0.50;
-    if (currency === "VND") minPrice = 15000;
-    else if (currency === "JPY") minPrice = 50;
-    else if (currency === "GBP") minPrice = 0.30;
-    else minPrice = 0.50;
+    updatePlanMutation.mutate({ id: editingPlan.id, plan: toPlanPayload(editingPlan, formState) });
+  };
 
-    if (formState.price < minPrice) {
-      setErrorMsg(`Price for ${currency} must be at least ${minPrice} due to Stripe payment constraints.`);
-      return;
-    }
-
-    if (formState.creditsPerCycle < 0) { setErrorMsg("Credits must be non-negative."); return; }
-    if (formState.maxParticipants < 2) { setErrorMsg("Max participants must be at least 2."); return; }
-    if (formState.maxLanguages < 1) { setErrorMsg("Max languages must be at least 1."); return; }
-    if (formState.sortOrder < 0) { setErrorMsg("Sort order must be non-negative."); return; }
-
-    // Convert lines to JSON array string
-    const lines = formState.featuresText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    const { featuresText, ...rest } = formState;
-    const payload = {
-      ...rest,
-      features: JSON.stringify(lines)
-    };
-
-    if (editingPlanId) {
-      updateMutation.mutate({ id: editingPlanId, plan: payload });
-    } else {
-      createMutation.mutate(payload);
+  const handleSavePricingDraft = async () => {
+    try {
+      await updatePricingConfigMutation.mutateAsync();
+      await Promise.all(pricingDraftRows.map((row) => upsertUsageRateCardMutation.mutateAsync(row)));
+      setPricingDraftSavedAt(new Date().toLocaleTimeString());
+      toast.success("Service pricing baseline updated");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to update service pricing baseline"));
     }
   };
 
-  const handleDeactivate = (id: string, name: string) => {
-    setDeactivatingPlanId(id);
-    setDeactivatingPlanName(name);
-    setShowDeactivateDialog(true);
-  };
-
-  const confirmDeactivate = () => {
-    if (deactivatingPlanId) {
-      deactivateMutation.mutate(deactivatingPlanId);
-      setShowDeactivateDialog(false);
-      setDeactivatingPlanId(null);
-      setDeactivatingPlanName("");
-    }
+  const handleResetPricingDraftDefaults = () => {
+    setUseDefaultPricingRows(true);
+    setPricingDraftEdits({});
+    setPricingFxRateEdit("26300");
+    setPricingCreditValueVndEdit("4");
+    setPricingDraftSavedAt(null);
   };
 
   return (
     <div className="flex min-h-full flex-col gap-6 p-6 pb-12">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-surface-1 p-6 rounded-xl border border-hairline shadow-linear">
+      <div className="rounded-xl border border-hairline bg-surface-1 p-6 shadow-linear">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="mb-1 flex items-center gap-3">
             <Link href="/billing">
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <Badge variant="outline" className="bg-surface-2 text-ink border-hairline">Admin Panel</Badge>
+            <Badge variant="outline" className="border-hairline bg-surface-2 text-ink">Admin Panel</Badge>
             <h1 className="text-2xl font-semibold tracking-tight">Subscription Plans</h1>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">Manage commercial packages, usage limits, and Stripe synchronization</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Manage Enterprise baseline, usage limits, and default service pricing.
+          </p>
         </div>
-        <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary-hover text-primary-foreground gap-2 rounded-md">
-          <Plus className="h-4 w-4" /> Add New Plan
-        </Button>
       </div>
 
-      {/* Plan list card */}
       <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
         <CardHeader>
-          <CardTitle>All Packages</CardTitle>
-          <CardDescription>View, modify, or deactivate user-facing packages.</CardDescription>
+          <CardTitle>Enterprise baseline</CardTitle>
+          <CardDescription>
+            The single system plan template. Workspace contracts inherit from Enterprise and store negotiated terms on subscriptions.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex h-32 items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : plans.length === 0 ? (
-            <div className="flex h-32 flex-col items-center justify-center gap-2 border border-dashed rounded-lg border-hairline p-6 text-center">
-              <p className="text-sm text-muted-foreground">No subscription packages found.</p>
-              <Button onClick={handleOpenCreate} variant="outline" size="sm">Create First Plan</Button>
+          ) : displayedPlans.length === 0 ? (
+            <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-hairline p-6 text-center text-sm text-muted-foreground">
+              Enterprise baseline was not found.
             </div>
           ) : (
             <Table>
@@ -288,41 +479,54 @@ export default function AdminPlansPage() {
                   <TableHead>Tier</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Credits/Cycle</TableHead>
+                  <TableHead>Billing Defaults</TableHead>
                   <TableHead>Limits (Voice / Glossary / ACL)</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {plans.map((plan: any) => (
+                {displayedPlans.map((plan) => (
                   <TableRow key={plan.id} className="border-hairline hover:bg-surface-2/20">
                     <TableCell className="font-medium">
                       <div>
                         <span className="text-sm">{plan.name}</span>
-                        <div className="text-xs text-muted-foreground font-mono">{plan.slug}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{plan.slug}</div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="bg-surface-2">{plan.tier}</Badge>
                     </TableCell>
                     <TableCell>
-                      <span className="font-semibold text-sm">
+                      <span className="text-sm font-semibold">
                         {plan.price === 0 ? "Free" : `${plan.price.toLocaleString()} ${plan.currency}`}
                       </span>
-                      <div className="text-xs text-muted-foreground capitalize">{plan.billingCycle}</div>
+                      <div className="text-xs capitalize text-muted-foreground">{plan.billingCycle}</div>
                     </TableCell>
                     <TableCell>
                       <span className="text-sm">{plan.creditsPerCycle?.toLocaleString()}</span>
                     </TableCell>
                     <TableCell>
+                      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                        <span>Extra usage: {(plan.overageCapCredits ?? 0).toLocaleString()} @ {plan.overagePricePerCredit ?? 0}/credit</span>
+                        <span>Warn: {(plan.lowBalanceThresholdCredits ?? 0).toLocaleString()}</span>
+                        <span>Rollover: {(plan.rolloverCapCredits ?? 0).toLocaleString()}</span>
+                        <span>Invoice: NET-{plan.invoiceTermsDays ?? 15}, grace {plan.invoiceGraceHours ?? 360}h</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex flex-col gap-1 text-xs">
                         <span className="flex items-center gap-1.5">
                           <CheckCircle2 className={`h-3.5 w-3.5 ${plan.voiceCloneEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
-                          Voice Clone: {plan.voiceCloneEnabled ? "Enabled" : "Disabled"}
+                          Voice Clone: {renderEnabled(plan.voiceCloneEnabled)}
                         </span>
                         <span className="flex items-center gap-1.5">
                           <CheckCircle2 className={`h-3.5 w-3.5 ${plan.glossaryEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
-                          Glossary Access: {plan.glossaryEnabled ? "Enabled" : "Disabled"}
+                          Glossary Access: {renderEnabled(plan.glossaryEnabled)}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className={`h-3.5 w-3.5 ${plan.aiAssistantEnabled ? "text-emerald-500" : "text-muted-foreground"}`} />
+                          AI Service ACL: {renderEnabled(plan.aiAssistantEnabled)}
                         </span>
                       </div>
                     </TableCell>
@@ -332,20 +536,14 @@ export default function AdminPlansPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button onClick={() => handleOpenEdit(plan)} size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-ink">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          onClick={() => handleDeactivate(plan.id, plan.name)}
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                          disabled={plan.isActive === false}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button
+                        onClick={() => openEnterpriseEditor(plan)}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 rounded-md px-3 text-xs font-medium"
+                      >
+                        Edit baseline
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -355,269 +553,273 @@ export default function AdminPlansPage() {
         </CardContent>
       </Card>
 
-      {/* Add / Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent style={{ maxWidth: '900px', width: '95vw' }} className="bg-surface-1 border-hairline text-ink rounded-lg shadow-linear max-h-[90vh] overflow-y-auto">
+      <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+        <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base font-medium">
+              <SlidersHorizontal className="h-4 w-4 text-primary" /> Default service pricing
+            </CardTitle>
+            <CardDescription>
+              Service keys are fixed to backend billing events. Admins can adjust cost, markup, and active state.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-md bg-surface-2"
+              disabled={!canSaveServicePricing || updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending}
+              onClick={handleResetPricingDraftDefaults}
+            >
+              Reset defaults
+            </Button>
+            {pricingDraftSavedAt && (
+              <Badge variant="outline" className="rounded-md">Applied {pricingDraftSavedAt}</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">USD/VND FX</Label>
+              <Input
+                type="number"
+                min={1}
+                className="h-9 text-sm"
+                value={pricingFxRate}
+                onChange={(e) => { setPricingFxRateEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Credit value VND</Label>
+              <Input
+                type="number"
+                min={0.01}
+                step="0.01"
+                className="h-9 text-sm"
+                value={pricingCreditValueVnd}
+                onChange={(e) => { setPricingCreditValueVndEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+              <p className="text-xs text-muted-foreground">Formula</p>
+              <p className="mt-1 text-xs font-medium">provider cost x FX x markup / credit value</p>
+            </div>
+            <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+              <p className="text-xs text-muted-foreground">Scope</p>
+              <p className="mt-1 text-xs font-medium">Default service baseline</p>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-md border border-hairline">
+            <Table>
+              <TableHeader className="bg-surface-2">
+                <TableRow>
+                  <TableHead className="w-[88px]">Active</TableHead>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead className="text-right">Provider cost (USD)</TableHead>
+                  <TableHead className="text-right">Markup</TableHead>
+                  <TableHead className="text-right">Unit price</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pricingDraftRows.map((row) => {
+                  const fxRate = Number(pricingFxRate) || 0;
+                  const creditValue = Number(pricingCreditValueVnd) || 0;
+                  const unitPrice = calculateDraftUnitPrice(row, fxRate, creditValue);
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <Switch
+                          checked={row.enabled}
+                          onCheckedChange={(checked) => updatePricingDraftRow(row.id, "enabled", checked)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="min-w-[210px] rounded-md border border-hairline bg-muted/40 px-3 py-2">
+                          <p className="text-xs font-semibold text-foreground">{SERVICE_LABELS[row.chargeType] ?? row.chargeType}</p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">{row.chargeType}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex h-8 min-w-[130px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                          {row.unit}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex h-8 min-w-[120px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                          {row.provider}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex h-8 min-w-[190px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                          {row.model}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          className="h-8 min-w-[120px] text-right font-mono text-xs"
+                          value={formatProviderCostUsd(row.providerUnitCostUsd)}
+                          onChange={(e) => updatePricingDraftRow(row.id, "providerUnitCostUsd", Number(e.target.value) || 0)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.1"
+                          className="h-8 min-w-[86px] text-right font-mono text-xs"
+                          value={row.markupMultiplier}
+                          onChange={(e) => updatePricingDraftRow(row.id, "markupMultiplier", Number(e.target.value) || 0)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs font-semibold">
+                        {unitPrice.toFixed(6)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 md:flex-row md:items-center md:justify-between">
+            <p>
+              {isPricingConfigError || isRateCardLoadError
+                ? "Default service pricing is shown from the Enterprise baseline."
+                : "Saving service changes updates the default rate-card baseline for future billing events."}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-md bg-surface-1"
+              disabled={!canSaveServicePricing || updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending}
+              onClick={handleSavePricingDraft}
+            >
+              {updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending ? "Saving..." : "Save service baseline"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!editingPlan} onOpenChange={(open) => !open && setEditingPlan(null)}>
+        <DialogContent style={{ maxWidth: "860px", width: "95vw" }} className="max-h-[90vh] overflow-y-auto rounded-lg border-hairline bg-surface-1 text-ink shadow-linear">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              {editingPlanId ? "Edit Subscription Plan" : "Create New Subscription Plan"}
+              Edit Enterprise baseline
             </DialogTitle>
             <DialogDescription>
-              Define plan pricing, limits, and specific AI feature flags.
+              These values are the default Enterprise terms used before a workspace-specific contract override is saved.
             </DialogDescription>
           </DialogHeader>
 
           {errorMsg && (
-            <div className="flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive text-sm p-3 rounded-lg">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{errorMsg}</span>
+            <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+              {errorMsg}
             </div>
           )}
 
           <div className="grid gap-5 py-4">
-            {/* General Info */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid gap-2">
-                <Label htmlFor="name">Plan Name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g. Startup, Enterprise"
-                  value={formState.name}
-                  onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                />
+                <Label>Price</Label>
+                <Input type="number" min={MIN_VND_PLAN_PRICE} step="1000" value={formState.price} onChange={(e) => updateFormField("price", e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="slug">Slug (URL identity)</Label>
-                <Input
-                  id="slug"
-                  placeholder="e.g. startup-plan, enterprise-tier"
-                  value={formState.slug}
-                  onChange={(e) => setFormState({ ...formState, slug: e.target.value })}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                />
+                <Label>Credits/Cycle</Label>
+                <Input type="number" min={1} step="1" value={formState.creditsPerCycle} onChange={(e) => updateFormField("creditsPerCycle", e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Warning credits</Label>
+                <Input type="number" min={0} step="1" value={formState.lowBalanceThresholdCredits} onChange={(e) => updateFormField("lowBalanceThresholdCredits", e.target.value)} />
               </div>
             </div>
 
-            {/* Pricing & Limits */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid gap-2">
-                <Label htmlFor="price">Price</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  value={formState.price}
-                  onChange={(e) => setFormState({ ...formState, price: parseFloat(e.target.value) || 0 })}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                />
+                <Label>Extra usage cap</Label>
+                <Input type="number" min={0} step="1" value={formState.overageCapCredits} onChange={(e) => updateFormField("overageCapCredits", e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="currency">Currency</Label>
-                <Select value={formState.currency} onValueChange={(val) => setFormState({ ...formState, currency: val || "" })}>
-                  <SelectTrigger className="w-full bg-surface-2 border-hairline focus:ring-primary-focus">
-                    <SelectValue placeholder="Select currency" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-surface-1 border-hairline text-ink">
-                    <SelectItem value="VND">VND</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Extra usage price/credit</Label>
+                <Input type="number" min={0} step="0.01" value={formState.overagePricePerCredit} onChange={(e) => updateFormField("overagePricePerCredit", e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="billingCycle">Billing Cycle</Label>
-                <Select value={formState.billingCycle} onValueChange={(val) => setFormState({ ...formState, billingCycle: val || "" })}>
-                  <SelectTrigger className="w-full bg-surface-2 border-hairline focus:ring-primary-focus">
-                    <SelectValue placeholder="Select cycle" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-surface-1 border-hairline text-ink">
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                    <SelectItem value="semiannual">6 Months</SelectItem>
-                    <SelectItem value="yearly">Yearly</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Rollover cap</Label>
+                <Input type="number" min={0} step="1" value={formState.rolloverCapCredits} onChange={(e) => updateFormField("rolloverCapCredits", e.target.value)} />
               </div>
             </div>
 
-            {/* Technical Limits */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid gap-4 sm:grid-cols-4">
               <div className="grid gap-2">
-                <Label htmlFor="credits">Credits/Cycle</Label>
-                <Input
-                  id="credits"
-                  type="number"
-                  value={formState.creditsPerCycle}
-                  onChange={(e) => setFormState({ ...formState, creditsPerCycle: parseInt(e.target.value) || 0 })}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                />
+                <Label>Invoice terms days</Label>
+                <Input type="number" min={1} step="1" value={formState.invoiceTermsDays} onChange={(e) => updateFormField("invoiceTermsDays", e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="tier">Tier Level</Label>
-                <Input
-                  id="tier"
-                  placeholder="e.g. Pro, Premium"
-                  value={formState.tier}
-                  onChange={(e) => setFormState({ ...formState, tier: e.target.value })}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                />
+                <Label>Invoice grace hours</Label>
+                <Input type="number" min={1} step="1" value={formState.invoiceGraceHours} onChange={(e) => updateFormField("invoiceGraceHours", e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="maxParticipants">Max Participants</Label>
-                <Input
-                  id="maxParticipants"
-                  type="number"
-                  value={formState.maxParticipants}
-                  onChange={(e) => setFormState({ ...formState, maxParticipants: parseInt(e.target.value) || 0 })}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                />
+                <Label>Max participants</Label>
+                <Input type="number" min={2} step="1" value={formState.maxParticipants} onChange={(e) => updateFormField("maxParticipants", e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="maxLanguages">Max Languages</Label>
-                <Input
-                  id="maxLanguages"
-                  type="number"
-                  min={1}
-                  max={3}
-                  value={formState.maxLanguages}
-                  onChange={(e) => {
-                    let val = parseInt(e.target.value) || 1;
-                    if (val > 3) val = 3;
-                    if (val < 1) val = 1;
-                    setFormState({ ...formState, maxLanguages: val });
-                  }}
-                  className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-                />
+                <Label>Max languages</Label>
+                <Input type="number" min={1} max={3} step="1" value={formState.maxLanguages} onChange={(e) => updateFormField("maxLanguages", e.target.value)} />
               </div>
             </div>
 
-            {/* Feature Flags */}
-            <div className="border border-hairline rounded-lg p-4 bg-surface-2/20 space-y-4">
-              <h3 className="text-sm font-semibold text-ink/80 mb-2 flex items-center gap-1.5">
-                <Shield className="h-4 w-4 text-primary" /> Feature Authorization Flags
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="voiceClone">Voice Cloning</Label>
-                    <p className="text-xs text-muted-foreground">Allows neural voice mimicking</p>
-                  </div>
-                  <Switch
-                    id="voiceClone"
-                    checked={formState.voiceCloneEnabled}
-                    onCheckedChange={(checked) => setFormState({ ...formState, voiceCloneEnabled: checked })}
-                  />
+            <div className="grid gap-4 rounded-lg border border-hairline bg-surface-2/40 p-4 sm:grid-cols-2">
+              <div className="flex items-center justify-between gap-4">
+                <Label>Voice Clone</Label>
+                <Switch checked={formState.voiceCloneEnabled} onCheckedChange={(checked) => updateFormField("voiceCloneEnabled", checked)} />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label>AI Service ACL</Label>
+                <Switch checked={formState.aiAssistantEnabled} onCheckedChange={(checked) => updateFormField("aiAssistantEnabled", checked)} />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label>Glossary Access</Label>
+                <Switch checked={formState.glossaryEnabled} onCheckedChange={(checked) => updateFormField("glossaryEnabled", checked)} />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label>Dedicated GPU</Label>
+                <Switch checked={formState.dedicatedGpu} onCheckedChange={(checked) => updateFormField("dedicatedGpu", checked)} />
+              </div>
+              <div className="flex items-center justify-between gap-4 sm:col-span-2">
+                <div>
+                  <Label>Active baseline</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">Use this template for new Enterprise contracts.</p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="aiAssistant">AI Assistant</Label>
-                    <p className="text-xs text-muted-foreground">Interactive AI in meetings</p>
-                  </div>
-                  <Switch
-                    id="aiAssistant"
-                    checked={formState.aiAssistantEnabled}
-                    onCheckedChange={(checked) => setFormState({ ...formState, aiAssistantEnabled: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="glossaryEnabled">Glossary Access</Label>
-                    <p className="text-xs text-muted-foreground">Define business specific terminology</p>
-                  </div>
-                  <Switch
-                    id="glossaryEnabled"
-                    checked={formState.glossaryEnabled}
-                    onCheckedChange={(checked) => setFormState({ ...formState, glossaryEnabled: checked })}
-                  />
-                </div>
+                <Switch checked={formState.isActive} onCheckedChange={(checked) => updateFormField("isActive", checked)} />
               </div>
             </div>
-
-            {/* Sub Limits & Features JSON */}
-            <div className="grid gap-2">
-              <Label htmlFor="sortOrder">Sort Order (display sequence)</Label>
-              <Input
-                id="sortOrder"
-                type="number"
-                value={formState.sortOrder}
-                onChange={(e) => setFormState({ ...formState, sortOrder: parseInt(e.target.value) || 0 })}
-                className="bg-surface-2 border-hairline focus-visible:ring-primary-focus"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="features">Plan Highlights (One per line)</Label>
-              <Textarea
-                id="features"
-                rows={4}
-                placeholder="e.g. Up to 5 participants&#10;Realtime Translation&#10;Standard neural TTS"
-                value={formState.featuresText}
-                onChange={(e) => setFormState({ ...formState, featuresText: e.target.value })}
-                className="bg-surface-2 border-hairline focus-visible:ring-primary-focus font-mono text-xs"
-              />
-            </div>
-            
-            {editingPlanId && (
-              <div className="flex items-center justify-between border-t border-hairline pt-3 mt-1">
-                <div className="space-y-0.5">
-                  <Label htmlFor="isActive">Active Status</Label>
-                  <p className="text-xs text-muted-foreground">Keep this enabled for users to view and purchase</p>
-                </div>
-                <Switch
-                  id="isActive"
-                  checked={formState.isActive}
-                  onCheckedChange={(checked) => setFormState({ ...formState, isActive: checked })}
-                />
-              </div>
-            )}
           </div>
 
-          <DialogFooter className="border-t border-hairline pt-4 gap-2">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="rounded-md">
+          <DialogFooter className="gap-2 border-t border-hairline pt-4">
+            <Button variant="outline" onClick={() => setEditingPlan(null)} className="rounded-md">
               Cancel
             </Button>
             <Button
-              onClick={handleSave}
-              className="bg-primary hover:bg-primary-hover text-primary-foreground rounded-md"
-              disabled={createMutation.isPending || updateMutation.isPending}
+              onClick={handleSaveBaseline}
+              className="rounded-md bg-primary text-primary-foreground hover:bg-primary-hover"
+              disabled={updatePlanMutation.isPending}
             >
-              {createMutation.isPending || updateMutation.isPending ? (
+              {updatePlanMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
                 </>
               ) : (
-                "Save Package"
+                <>
+                  <Save className="mr-2 h-4 w-4" /> Save baseline
+                </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Deactivate Plan confirmation dialog */}
-      <Dialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
-        <DialogContent className="sm:max-w-[440px] border-hairline bg-surface-1 shadow-lg rounded-xl text-ink">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold">Deactivate billing package?</DialogTitle>
-            <DialogDescription className="text-sm text-ink-muted mt-1">
-              Are you sure you want to deactivate and soft-delete the plan <strong>{deactivatingPlanName}</strong>? Active subscriptions will still refer to it, but new users won't be able to select it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2 flex-row justify-end mt-4">
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => setShowDeactivateDialog(false)}
-              className="rounded-md"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deactivateMutation.isPending}
-              onClick={confirmDeactivate}
-              className="rounded-md"
-            >
-              {deactivateMutation.isPending ? "Deactivating..." : "Deactivate Plan"}
             </Button>
           </DialogFooter>
         </DialogContent>

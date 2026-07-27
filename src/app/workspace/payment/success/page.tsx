@@ -11,6 +11,7 @@ import { CheckCircle, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { paymentService } from "@/services/payment.service";
 import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { PaymentType } from "@/constants/payment";
 
 const REDIRECT_SECONDS = 6;
 
@@ -83,28 +84,31 @@ function SuccessContent() {
   const rawAmount = session?.amountTotal ?? 0;
   const amountPaid = currency === "VND" ? rawAmount : rawAmount / 100;
   const formattedAmount = currency === "VND"
-    ? `${amountPaid.toLocaleString("vi-VN")}đ`
+    ? `${amountPaid.toLocaleString("vi-VN")} VND`
     : `$${amountPaid.toFixed(2)}`;
 
-  const paymentType = session?.metadata?.PaymentType || "CreditTopUp";
+  const paymentType = session?.metadata?.PaymentType || PaymentType.CreditTopUp;
   const transactionId = session?.paymentIntentId || session?.id || null;
+  const isInvoicePayment = paymentType === PaymentType.InvoicePayment;
+  const isSubscriptionPayment = paymentType === PaymentType.Subscription || paymentType === PaymentType.SubscriptionRenewal;
+  const isCreditTopUpPayment = paymentType === PaymentType.CreditTopUp;
 
   // Credits: prefer real subscription data, fallback to calculation
   let creditsAdded = 0;
   if (subscription?.creditsRemaining !== undefined) {
     // For subscription: show plan's credit allowance
-    if (paymentType === "Subscription" || paymentType === "SubscriptionRenewal") {
+    if (isSubscriptionPayment) {
       creditsAdded = subscription.creditsRemaining;
     }
   }
   // For top-up or subscription without sub data: calculate from amount
   if (creditsAdded === 0 && amountPaid > 0) {
-    if (paymentType === "Subscription" || paymentType === "SubscriptionRenewal") {
+    if (isSubscriptionPayment) {
       // Match plan by amount
       if (amountPaid === 190000 || amountPaid === 1800000) creditsAdded = 30000;
       else if (amountPaid === 490000 || amountPaid === 4800000) creditsAdded = 100000;
       else creditsAdded = 30000;
-    } else {
+    } else if (isCreditTopUpPayment) {
       // CreditTopUp volume discount
       if (amountPaid >= 400000) creditsAdded = Math.round(amountPaid / 8);
       else if (amountPaid >= 212500) creditsAdded = Math.round(amountPaid / 8.5);
@@ -136,7 +140,9 @@ function SuccessContent() {
         </div>
         <h1 className="text-2xl font-semibold text-ink">Payment Successful!</h1>
         <p className="text-sm text-muted-foreground mt-2">
-          {planName
+          {isInvoicePayment
+            ? "Your invoice has been paid. Enterprise credits are available for the current billing cycle."
+            : planName
             ? `Your workspace has been upgraded to the ${planName} plan.`
             : "Your workspace has been successfully updated."}
         </p>
@@ -155,10 +161,16 @@ function SuccessContent() {
                 : <span className="text-ink-muted italic text-xs">Pending</span>}
             </span>
           </div>
-          {planName && (
+          {planName && !isInvoicePayment && (
             <div className="flex justify-between items-center px-4 py-3 border-t border-hairline">
               <span className="text-sm text-muted-foreground">Plan</span>
               <span className="text-sm font-medium text-ink">{planName}</span>
+            </div>
+          )}
+          {isInvoicePayment && (
+            <div className="flex justify-between items-center px-4 py-3 border-t border-hairline">
+              <span className="text-sm text-muted-foreground">Payment Type</span>
+              <span className="text-sm font-medium text-ink">Enterprise invoice</span>
             </div>
           )}
           <div className="flex justify-between items-center px-4 py-3 border-t border-hairline">
@@ -167,12 +179,30 @@ function SuccessContent() {
               {amountPaid > 0 ? formattedAmount : <span className="text-ink-muted italic text-xs">Processing...</span>}
             </span>
           </div>
-          <div className="flex justify-between items-center px-4 py-3 border-t border-hairline">
-            <span className="text-sm text-muted-foreground">Credits Added</span>
-            <span className="text-sm font-semibold text-semantic-success">
-              {creditsAdded > 0 ? `+${creditsAdded.toLocaleString()}` : <span className="text-ink-muted italic text-xs">Processing...</span>}
-            </span>
-          </div>
+          {isInvoicePayment && (
+            <div className="flex justify-between items-center px-4 py-3 border-t border-hairline">
+              <span className="text-sm text-muted-foreground">Tax</span>
+              <span className="text-sm font-medium text-ink">Includes 10% VAT</span>
+            </div>
+          )}
+          {isInvoicePayment && (
+            <div className="flex justify-between items-center px-4 py-3 border-t border-hairline">
+              <span className="text-sm text-muted-foreground">Cycle Credits Available</span>
+              <span className="text-sm font-semibold text-semantic-success">
+                {subscription?.creditsRemaining !== undefined
+                  ? subscription.creditsRemaining.toLocaleString()
+                  : <span className="text-ink-muted italic text-xs">Processing...</span>}
+              </span>
+            </div>
+          )}
+          {!isInvoicePayment && (
+            <div className="flex justify-between items-center px-4 py-3 border-t border-hairline">
+              <span className="text-sm text-muted-foreground">Credits Added</span>
+              <span className="text-sm font-semibold text-semantic-success">
+                {creditsAdded > 0 ? `+${creditsAdded.toLocaleString()}` : <span className="text-ink-muted italic text-xs">Processing...</span>}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Countdown auto-redirect notice */}

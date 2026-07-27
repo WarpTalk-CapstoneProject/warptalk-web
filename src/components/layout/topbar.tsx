@@ -3,7 +3,7 @@ import type { IconProps } from "@phosphor-icons/react";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Buildings, BookOpen, Question, FileText, SquaresFour, SignOut, ChatCircle, Microphone, Moon, SidebarSimple, Plus, MagnifyingGlass, HardDrives, GearSix, Scroll, Star, Flask, User, Users } from "@phosphor-icons/react/dist/ssr";
+import { Buildings, BookOpen, Question, FileText, SquaresFour, SignOut, ChatCircle, Microphone, Moon, SidebarSimple, Plus, MagnifyingGlass, HardDrives, GearSix, Scroll, Star, Flask, User, Users } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   Command,
@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { NotificationPopover } from "@/components/notifications/notification-popover";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -44,7 +43,7 @@ const routeLabels: Record<string, string> = {
   workspace: "Workspace",
   admin: "Admin",
   "dev-test": "Dev Test",
-  billing: "Billing & Usage",
+  billing: "Enterprise Billing",
   payment: "Payment",
   plans: "Plans",
 };
@@ -212,7 +211,6 @@ export function Topbar() {
           <IconButton label="Help">
             <Question weight="light" className="h-4 w-4" />
           </IconButton>
-          <NotificationPopover />
           <IconButton label="Theme">
             <Moon weight="light" className="h-4 w-4" />
           </IconButton>

@@ -1,30 +1,33 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createHubConnection } from "@/lib/signalr";
+import React, { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Coins, Eye, EyeSlash, FileText, ChartLineUp, Download } from "@phosphor-icons/react/dist/ssr";
-import { Building2, User, Bot, Check, Copy, Loader2, Search, Shield, Settings } from "lucide-react";
+import { Coins, ChartLineUp, Download } from "@phosphor-icons/react/dist/ssr";
+import { Building2, User, Bot, Check, Copy, Loader2, MoreHorizontal, Search, Shield, Settings, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
-import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { AdminInvoicesTab } from "@/components/admin/AdminInvoicesTab";
 import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
 import { AdminAlertsTab } from "@/components/admin/AdminAlertsTab";
-import { AdminServiceRatesCard } from "@/components/admin/AdminServiceRatesCard";
+import { CreateWorkspaceContractModal } from "@/components/admin/CreateWorkspaceContractModal";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ExcelJS from "exceljs";
@@ -33,33 +36,6 @@ import { billingService } from "@/services/billing.service";
 
 export default function AdminBillingPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const connection = createHubConnection("/hubs/notification");
-
-    connection.on("NewNotification", (notification) => {
-      console.log("Realtime billing update:", notification);
-      if (notification?.type?.startsWith("billing.")) {
-        queryClient.invalidateQueries({ queryKey: ["global-billing-history"] });
-        queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
-        queryClient.invalidateQueries({ queryKey: ["global-subscriptions"] });
-        queryClient.invalidateQueries({ queryKey: ["global-invoices"] });
-      }
-    });
-
-    let isMounted = true;
-
-    connection.start().catch((err) => {
-      if (!isMounted) return;
-      if (err?.message?.includes("stop() was called")) return;
-    });
-
-    return () => {
-      isMounted = false;
-      connection.stop();
-    };
-  }, [queryClient]);
 
   const [searchWorkspaceId, setSearchWorkspaceId] = useState("");
   const [page, setPage] = useState(1);
@@ -73,6 +49,7 @@ export default function AdminBillingPage() {
   const [exportNote, setExportNote] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [selectedTxGroup, setSelectedTxGroup] = useState<any | null>(null);
+  const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
 
   const activeFiltersCount = [
     historyTypeFilter !== "ALL",
@@ -150,7 +127,6 @@ export default function AdminBillingPage() {
   const totalAdjusted = logs.filter(t => t.type === "adjustment").reduce((s, t) => s + t.amount, 0);
 
   const handleExport = async () => {
-    if (!logs.length) { alert("No data to export."); return; }
     setIsExporting(true);
     try {
       const workbook = new ExcelJS.Workbook();
@@ -173,7 +149,7 @@ export default function AdminBillingPage() {
         row.getCell("k").font = { color: { argb: "FF64748B" } };
       };
 
-      summary.addRow(["WarpTalk - Global Billing Summary Report"]);
+      summary.addRow(["WarpTalk - Contract Billing Report"]);
       summary.getRow(1).font = { size: 16, bold: true };
       summary.mergeCells("A1:B1");
       summary.addRow([`Generated: ${format(new Date(), "MMM dd, yyyy HH:mm:ss")}`]);
@@ -187,9 +163,9 @@ export default function AdminBillingPage() {
       }
 
       addSummaryHeader("📊 System Metrics");
-      addSummaryRow("Total Balance (All Workspaces)", metrics?.totalBalance?.toLocaleString() ?? "N/A");
-      addSummaryRow("Active Workspaces", metrics?.activeWorkspaces ?? "N/A");
-      addSummaryRow("Monthly Usage (Credits)", metrics?.monthlyUsage?.toLocaleString() ?? "N/A");
+      addSummaryRow("Total Available Contract Balance", metrics?.totalBalance?.toLocaleString() ?? "N/A");
+      addSummaryRow("Active Contract Workspaces", metrics?.activeWorkspaces ?? "N/A");
+      addSummaryRow("Billable Usage This Month", metrics?.monthlyUsage?.toLocaleString() ?? "N/A");
       addSummaryRow("Audit Events (Last 30 days)", metrics?.auditEventsLast30Days ?? "N/A");
       summary.addRow([]);
 
@@ -198,12 +174,12 @@ export default function AdminBillingPage() {
         ? `${filterFromDate || "All time"} → ${filterToDate || "Now"}`
         : "All time";
       addSummaryRow("Date Range", dateRange);
-      addSummaryRow("Type Filter", historyTypeFilter);
+      addSummaryRow("Billing Event Filter", historyTypeFilter);
       addSummaryRow("Workspace Filter", filterWorkspaceId || "All workspaces");
-      addSummaryRow("Total Transactions", totalCount);
+      addSummaryRow("Matching Billing Events", totalCount);
       summary.addRow([]);
-      addSummaryRow("Total Top-Up", `+${totalTopUp.toLocaleString()} credits`, "FF16A34A");
-      addSummaryRow("Total Consumption", `${totalConsumed.toLocaleString()} credits`, "FFDC2626");
+      addSummaryRow("Manual Credits Added", `+${totalTopUp.toLocaleString()} credits`, "FF16A34A");
+      addSummaryRow("Billable Usage Consumed", `${totalConsumed.toLocaleString()} credits`, "FFDC2626");
       addSummaryRow("Total Adjustments", `${totalAdjusted > 0 ? "+" : ""}${totalAdjusted.toLocaleString()} credits`,
         totalAdjusted >= 0 ? "FF2563EB" : "FFDC2626");
 
@@ -248,9 +224,21 @@ export default function AdminBillingPage() {
         ["A", "B", "C", "D", "E", "F"].forEach(c => row.getCell(c).border = border);
       });
 
+      if (!logs.length) {
+        const emptyRow = audit.addRow({
+          timestamp: "",
+          workspace: "No billing events matched the active filters.",
+          type: "",
+          description: "Contract portfolio metrics are still included in the Summary sheet.",
+          amount: "",
+          balance: "",
+        });
+        ["A", "B", "C", "D", "E", "F"].forEach(c => emptyRow.getCell(c).border = border);
+      }
+
       const buf = await workbook.xlsx.writeBuffer();
       saveAs(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-        `WarpTalk_BillingReport_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+        `WarpTalk_ContractBillingReport_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
       setIsExportOpen(false);
       setExportNote("");
     } finally {
@@ -259,79 +247,89 @@ export default function AdminBillingPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 pb-6">
+    <div className="flex min-h-full flex-col gap-4 pb-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-surface-1 p-6 rounded-xl border border-hairline shadow-linear gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold tracking-tight text-ink">System Billing Overview</h1>
-            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold uppercase tracking-wider">Admin</Badge>
+      <div className="grid gap-4 bg-surface-1 p-5 rounded-xl border border-hairline shadow-linear xl:grid-cols-[minmax(0,1fr)_520px] xl:items-center">
+        <div className="min-w-0">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-2xl font-bold tracking-tight text-ink">Company Contracts</h1>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold uppercase tracking-wider">Admin</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Manage Enterprise workspace contracts, trial status, invoices, extra usage, and billing alerts.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">Monitor system-wide credits, consumption, and active workspaces.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const term = searchWorkspaceId.trim();
-              if (!term) return;
 
-              // Check if term is a valid UUID
-              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-              if (uuidRegex.test(term)) {
-                router.push(`/billing/workspace/${term}`);
-              } else {
-                try {
-                  const { WorkspaceService } = await import("@/services/workspace.service");
-                  const result = await WorkspaceService.list(1, 1, term);
-                  if (result.items && result.items.length > 0) {
-                    router.push(`/billing/workspace/${result.items[0].id}`);
-                  } else {
-                    alert(`No workspace found matching name "${term}"`);
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const term = searchWorkspaceId.trim();
+                if (!term) return;
+
+                // Check if term is a valid UUID
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (uuidRegex.test(term)) {
+                  router.push(`/billing/workspace/${term}`);
+                } else {
+                  try {
+                    const { WorkspaceService } = await import("@/services/workspace.service");
+                    const result = await WorkspaceService.list(1, 1, term);
+                    if (result.items && result.items.length > 0) {
+                      router.push(`/billing/workspace/${result.items[0].id}`);
+                    } else {
+                      alert(`No workspace found matching name "${term}"`);
+                    }
+                  } catch (err) {
+                    console.error("Workspace name lookup failed:", err);
+                    alert("Could not perform workspace name search. Please use a valid Workspace ID.");
                   }
-                } catch (err) {
-                  console.error("Workspace name lookup failed:", err);
-                  alert("Could not perform workspace name search. Please use a valid Workspace ID.");
                 }
-              }
-            }}
-            className="relative hidden sm:flex items-center"
-          >
-            <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Jump to name or ID..."
-              value={searchWorkspaceId}
-              onChange={(e) => setSearchWorkspaceId(e.target.value)}
-              className="pl-9 w-[220px] h-9 bg-surface-2 border-hairline focus-visible:ring-primary-focus rounded-md text-sm"
-            />
-          </form>
-          <Button variant="outline" className="rounded-md h-9 px-4" onClick={() => setIsExportOpen(true)}>
-            <Download className="mr-2 h-4 w-4" weight="light" /> Export Report
-          </Button>
-          <Link href="/billing/plans">
-            <Button variant="outline" className="rounded-md h-9 px-4">
-              <Settings className="mr-2 h-4 w-4 text-primary" /> Manage Plans
+              }}
+              className="relative flex items-center"
+            >
+              <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Find company or workspace..."
+                value={searchWorkspaceId}
+                onChange={(e) => setSearchWorkspaceId(e.target.value)}
+                className="pl-9 w-[280px] h-9 bg-surface-2 border-hairline focus-visible:ring-primary-focus rounded-md text-sm"
+              />
+            </form>
+            <Button className="rounded-md h-9 px-4 gap-1.5" onClick={() => setIsCreateWorkspaceOpen(true)}>
+              <Plus className="h-4 w-4" /> New Workspace Contract
             </Button>
-          </Link>
-          <AdjustCreditModal />
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-hairline bg-surface-2 px-3 text-sm font-medium text-foreground transition hover:bg-surface-3 focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <MoreHorizontal className="h-4 w-4" />
+                More
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56 p-1">
+                <DropdownMenuItem className="cursor-pointer gap-2 px-2 py-2" onClick={() => setIsExportOpen(true)}>
+                  <Download className="h-4 w-4" weight="light" />
+                  Export report
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer gap-2 px-2 py-2" onClick={() => router.push("/billing/plans")}>
+                  <Settings className="h-4 w-4 text-primary" />
+                  Enterprise baseline
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
+
+        <section className="grid gap-3 sm:grid-cols-2">
+          <AdminMetric icon={ChartLineUp} label="Active Workspaces" value={metrics ? `${metrics.activeWorkspaces}` : "..."} detail="Company workspaces in the platform" isStatus />
+          <AdminMetric icon={Coins} label="Credits in Circulation" value={metrics ? metrics.totalBalance.toLocaleString() : "..."} detail="Remaining credits across active contracts" />
+        </section>
       </div>
 
-      {/* Metrics */}
-      <section className="grid gap-4 md:grid-cols-4">
-        <AdminMetric icon={Coins} label="Total Issued Credits" value={metrics ? metrics.totalBalance.toLocaleString() : "..."} detail="Circulating across workspaces" />
-        <AdminMetric icon={ChartLineUp} label="Active Workspaces" value={metrics ? `${metrics.activeWorkspaces}` : "..."} detail="Workspaces using the platform" isStatus />
-        <AdminMetric icon={FileText} label="Monthly Consumption" value={metrics ? metrics.monthlyUsage.toLocaleString() : "..."} detail="Total credits consumed this month" />
-        <AdminMetric icon={Eye} label="Transactions (30d)" value={metrics ? metrics.auditEventsLast30Days.toLocaleString() : "..."} detail="Credit transactions in the last 30 days" />
-      </section>
-
-      <Tabs defaultValue="overview" className="w-full mt-2">
+      <Tabs defaultValue="subscriptions" className="w-full">
         <TabsList className="bg-surface-2 p-1 rounded-lg">
-          <TabsTrigger value="overview" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Economics & Analytics</TabsTrigger>
-          <TabsTrigger value="ledger" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Global Transactions</TabsTrigger>
+          <TabsTrigger value="subscriptions" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Contracts</TabsTrigger>
+          <TabsTrigger value="alerts" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Review Queue</TabsTrigger>
           <TabsTrigger value="invoices" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Invoices</TabsTrigger>
-          <TabsTrigger value="subscriptions" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Subscriptions</TabsTrigger>
-          <TabsTrigger value="alerts" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Fraud Alerts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
@@ -347,10 +345,6 @@ export default function AdminBillingPage() {
 
           <section>
             <TopWorkspacesChart />
-          </section>
-
-          <section>
-            <AdminServiceRatesCard />
           </section>
         </TabsContent>
 
@@ -565,27 +559,45 @@ export default function AdminBillingPage() {
       <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
         <DialogContent className="sm:max-w-[520px] bg-surface-1 border-hairline rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-medium">Export Billing Report</DialogTitle>
+            <DialogTitle className="text-lg font-medium">Export Contract Billing Report</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              Exports a 2-sheet Excel file: <strong>Summary</strong> (system metrics + totals) and <strong>Audit Trail</strong> (all transactions on this page with active filters).
+              Exports a 2-sheet Excel file: <strong>Summary</strong> (live contract portfolio metrics and filtered billing-event totals) and <strong>Audit Trail</strong> (billing events in the active filters).
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Transactions</p>
+                <p className="text-xs text-muted-foreground">Active Contracts</p>
+                <p className="text-lg font-semibold mt-1">{(metrics?.activeWorkspaces ?? 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Contract Balance</p>
+                <p className="text-lg font-semibold mt-1">{(metrics?.totalBalance ?? 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Usage This Month</p>
+                <p className="text-lg font-semibold mt-1 text-rose-500">{(metrics?.monthlyUsage ?? 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Audit Events 30d</p>
+                <p className="text-lg font-semibold mt-1">{(metrics?.auditEventsLast30Days ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Filtered Events</p>
                 <p className="text-lg font-semibold mt-1">{totalCount.toLocaleString()}</p>
               </div>
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Net Top-Up</p>
+                <p className="text-xs text-muted-foreground">Manual Credits Added</p>
                 <p className="text-lg font-semibold mt-1 text-semantic-success">+{totalTopUp.toLocaleString()}</p>
               </div>
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Total Consumed</p>
+                <p className="text-xs text-muted-foreground">Billable Usage</p>
                 <p className="text-lg font-semibold mt-1 text-rose-500">{totalConsumed.toLocaleString()}</p>
               </div>
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Net Adjustments</p>
+                <p className="text-xs text-muted-foreground">Invoice Adjustments</p>
                 <p className={`text-lg font-semibold mt-1 ${totalAdjusted >= 0 ? "text-primary" : "text-rose-500"}`}>
                   {totalAdjusted > 0 ? "+" : ""}{totalAdjusted.toLocaleString()}
                 </p>
@@ -595,12 +607,12 @@ export default function AdminBillingPage() {
               <Label htmlFor="exportNoteAdmin" className="text-sm font-medium">Add a note (optional)</Label>
               <Textarea
                 id="exportNoteAdmin"
-                placeholder="e.g. Q2 2026 billing review for board meeting..."
+                placeholder="e.g. Q2 2026 contract true-up and invoice review..."
                 value={exportNote}
                 onChange={(e) => setExportNote(e.target.value)}
                 className="resize-none h-20 bg-surface-2 border-hairline"
               />
-              <p className="text-xs text-muted-foreground">This note will be printed at the top of the Summary sheet.</p>
+              <p className="text-xs text-muted-foreground">This note will appear at the top of the Summary sheet for finance or account review.</p>
             </div>
           </div>
           <DialogFooter>
@@ -707,6 +719,8 @@ export default function AdminBillingPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <CreateWorkspaceContractModal open={isCreateWorkspaceOpen} onOpenChange={setIsCreateWorkspaceOpen} />
     </div>
   );
 }
@@ -767,25 +781,25 @@ function IdBadge({ id, type, name }: { id: string, type: "workspace" | "user" | 
 
 function AdminMetric({ icon: Icon, label, value, detail, isStatus }: { icon: typeof Coins; label: string; value: string; detail: string; isStatus?: boolean }) {
   return (
-    <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear">
-      <CardContent className="flex items-center gap-4 p-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-ink border border-hairline">
-          <Icon className="h-5 w-5" />
+    <Card className="rounded-lg border border-hairline bg-surface-2/70 shadow-none">
+      <CardContent className="flex items-center gap-3 p-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-1 text-ink border border-hairline">
+          <Icon className="h-4 w-4" />
         </div>
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">{label}</p>
+        <div className="min-w-0">
+          <p className="truncate text-xs text-muted-foreground">{label}</p>
           {isStatus ? (
             <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
+              <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-semantic-success opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-semantic-success"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-semantic-success"></span>
               </span>
               <p className="text-lg font-semibold tracking-tight">{value}</p>
             </div>
           ) : (
-            <p className="text-xl font-semibold tracking-tight">{value}</p>
+            <p className="truncate text-lg font-semibold tracking-tight">{value}</p>
           )}
-          <p className="text-xs text-muted-foreground mt-1">{detail}</p>
+          <p className="line-clamp-2 text-xs text-muted-foreground">{detail}</p>
         </div>
       </CardContent>
     </Card>

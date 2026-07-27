@@ -24,6 +24,9 @@ export type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
 
 import { motion, AnimatePresence } from "motion/react";
 
+const STANDARD_DUBBING_ESTIMATE = "0.77 cr/character";
+const VOICE_CLONE_DUBBING_ESTIMATE = "1.35 cr/character";
+
 export function MeetingControlBar({
   meetingEnabled,
   cameraEnabled,
@@ -452,6 +455,11 @@ export function MeetingControlBar({
             icon={voiceEnabled === false ? <SpeakerSlash className="h-[18px] w-[18px]" /> : <SpeakerHigh className="h-[18px] w-[18px]" />}
             onClick={() => onChangeVoiceEnabled(voiceEnabled === false)}
           />
+          {voiceEnabled === false ? (
+            <span className="hidden max-w-[150px] text-[10px] leading-tight text-ink-muted md:inline">
+              Dubbing est. {voiceCloneEnabled ? VOICE_CLONE_DUBBING_ESTIMATE : STANDARD_DUBBING_ESTIMATE}
+            </span>
+          ) : null}
         </>
       ) : null}
 
@@ -581,6 +589,9 @@ function VoiceCloneToggle({
               (voice clone) qua Cartesia, dùng để đọc bản dịch thay cho giọng AI mặc định. Dữ liệu giọng nói này
               chỉ dùng cho phiên họp hiện tại — bạn có thể tắt bất cứ lúc nào.
             </DialogDescription>
+            <p className="rounded-md border border-border bg-surface-2 px-3 py-2 text-[12px] text-ink-muted">
+              Estimated dubbing cost: {VOICE_CLONE_DUBBING_ESTIMATE} for generated voice-clone characters.
+            </p>
           </DialogHeader>
           <DialogFooter>
             <Button

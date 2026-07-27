@@ -17,7 +17,6 @@ import { CreateRoomDialog } from "@/components/rooms/create-room-dialog";
 import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
 import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 import { GlobalChatbot } from "@/components/layout/global-chatbot";
-import { NotificationPopover } from "@/components/notifications/notification-popover";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
@@ -210,7 +209,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             >
               <MagnifyingGlass size={13} weight="bold" />
             </button>
-            <NotificationPopover />
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
             <div className="w-[1px] h-3.5 bg-border mx-1" />
             <button

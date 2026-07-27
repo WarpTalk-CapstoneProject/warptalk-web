@@ -30,8 +30,8 @@ export function Providers({ children }: { children: ReactNode }) {
       >
         <RealtimeNotificationProvider>
           {children}
-          <Toaster position="top-right" />
         </RealtimeNotificationProvider>
+        <Toaster position="top-right" />
       </ThemeProvider>
     </QueryClientProvider>
   );

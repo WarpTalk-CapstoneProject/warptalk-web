@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,6 +37,14 @@ type RegisterFormData = {
   password: string;
 };
 
+type SalesPackageIntent = {
+  firstName?: string;
+  lastName?: string;
+  workEmail?: string;
+};
+
+const salesIntentStorageKey = "warptalk:sales-package-intent";
+
 function setAccessTokenCookie(accessToken: string) {
   const maxAge = 7 * 24 * 60 * 60; // 7 days
   document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
@@ -54,10 +62,27 @@ function RegisterForm() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(getRegisterSchema(hasToken)) as any,
   });
+
+  useEffect(() => {
+    if (hasToken) return;
+
+    try {
+      const rawIntent = window.sessionStorage.getItem(salesIntentStorageKey);
+      if (!rawIntent) return;
+
+      const intent = JSON.parse(rawIntent) as SalesPackageIntent;
+      if (intent.firstName) setValue("firstName", intent.firstName);
+      if (intent.lastName) setValue("lastName", intent.lastName);
+      if (intent.workEmail) setValue("email", intent.workEmail);
+    } catch {
+      window.sessionStorage.removeItem(salesIntentStorageKey);
+    }
+  }, [hasToken, setValue]);
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
