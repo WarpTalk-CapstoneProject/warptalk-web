@@ -12,6 +12,7 @@ const BLUR_RADIUS = 10;
 export interface TrackEffectsPreferences {
   noiseSuppressionEnabled: boolean;
   backgroundBlurEnabled: boolean;
+  onNoiseSuppressionError?: (error: unknown) => void;
 }
 
 /**
@@ -37,7 +38,11 @@ export function writeTrackEffectsPreferences(prefs: Partial<TrackEffectsPreferen
  * video/audio> in page.tsx, so this hook only needs to react afterwards, whenever a
  * toggle changes or the underlying track is re-published (e.g. camera/mic turned back on).
  */
-export function useTrackProcessors({ noiseSuppressionEnabled, backgroundBlurEnabled }: TrackEffectsPreferences) {
+export function useTrackProcessors({
+  noiseSuppressionEnabled,
+  backgroundBlurEnabled,
+  onNoiseSuppressionError,
+}: TrackEffectsPreferences) {
   const { microphoneTrack, cameraTrack } = useLocalParticipant();
   const krispRef = useRef<KrispNoiseFilterProcessor | null>(null);
   const blurRef = useRef<BackgroundProcessorWrapper | null>(null);
@@ -47,15 +52,27 @@ export function useTrackProcessors({ noiseSuppressionEnabled, backgroundBlurEnab
   useEffect(() => {
     const track = microphoneTrack?.track;
     if (!(track instanceof LocalAudioTrack)) return;
+    const localAudioTrack = track;
 
-    if (noiseSuppressionEnabled && isKrispNoiseFilterSupported()) {
-      if (!krispRef.current) krispRef.current = KrispNoiseFilter();
-      void track.setProcessor(krispRef.current);
-    } else if (track.getProcessor()) {
-      void track.stopProcessor();
+    let cancelled = false;
+    async function applyNoiseProcessor() {
+      try {
+        if (noiseSuppressionEnabled && isKrispNoiseFilterSupported()) {
+          if (!krispRef.current) krispRef.current = KrispNoiseFilter();
+          await localAudioTrack.setProcessor(krispRef.current);
+        } else if (localAudioTrack.getProcessor()) {
+          await localAudioTrack.stopProcessor();
+        }
+      } catch (error) {
+        if (!cancelled) onNoiseSuppressionError?.(error);
+      }
     }
+    void applyNoiseProcessor();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noiseSuppressionEnabled, microphoneTrackSid]);
+  }, [noiseSuppressionEnabled, microphoneTrackSid, onNoiseSuppressionError]);
 
   useEffect(() => {
     const track = cameraTrack?.track;

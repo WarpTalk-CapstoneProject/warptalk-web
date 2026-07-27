@@ -131,11 +131,20 @@ export const API = {
     byWorkspace: (workspaceId: string) => `/glossaries/workspace/${workspaceId}`,
     terms: (id: string) => `/glossaries/${id}/terms`,
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
+    global: "/glossaries/global",
   },
   assistant: {
     conversations: "/assistant/conversations",
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
+  },
+  adminGlobalGlossary: {
+    base: "/admin/global-glossary",
+    detail: (id: string) => `/admin/global-glossary/${id}`,
+    publish: (id: string) => `/admin/global-glossary/${id}/publish`,
+    archive: (id: string) => `/admin/global-glossary/${id}/archive`,
+    bulkImport: "/admin/global-glossary/bulk-import",
+    audits: (id: string) => `/admin/global-glossary/${id}/audits`,
   },
 } as const;
