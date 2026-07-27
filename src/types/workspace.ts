@@ -4,7 +4,10 @@ export interface WorkspaceDto {
   slug: string;
   logoUrl?: string | null;
   role: string;
+  membershipType?: string | null;
+  canApproveDocuments?: boolean;
   createdAt: string;
+  defaultLanguage?: string;
 }
 
 export interface CreateWorkspaceRequest {
@@ -26,6 +29,7 @@ export interface WorkspaceSettingsDto {
   allowExternalCollaboration: boolean;
   requireVerifiedDomainForInternal: boolean;
   aiUsagePolicy?: AiUsagePolicyDto | null;
+  isProfanityFilterEnabled: boolean;
 }
 
 export interface AiUsagePolicyDto {
@@ -75,6 +79,10 @@ export interface WorkspaceInvitationDto {
   roleName: string;
   status: string;
   membershipType: string;
+  deliveryStatus: string;
+  providerMessageId?: string | null;
+  lastSentAt?: string | null;
+  sentCount: number;
   expiresAt: string;
   createdAt: string;
   acceptedAt?: string | null;
@@ -82,8 +90,8 @@ export interface WorkspaceInvitationDto {
 
 export interface InviteMemberResponse {
   invitation: WorkspaceInvitationDto;
-  rawToken: string;
   emailLanguage: string;
+  warning?: string | null;
 }
 
 export interface PreviewInvitationResponse {
@@ -108,7 +116,8 @@ export interface WorkspaceDocumentDto {
   sourceType: string;
   sourceId?: string | null;
   ingestionStatus: string;
-  isSensitive: boolean;
+  aiEligible: boolean;
+  isAiAllowed: boolean;
   confidentialityLevel: string;
   retentionState: string;
   status: string;
@@ -169,6 +178,7 @@ export interface SelectWorkspaceResponse {
   selectedWorkspaceId: string;
   name: string;
   slug: string;
+  defaultLanguage?: string;
 }
 
 export interface ExtractedPageDto {

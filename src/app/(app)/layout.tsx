@@ -36,7 +36,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
-
+  
   const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
   const selectWorkspace = useSelectWorkspace();
 
@@ -71,13 +71,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           "membershipType" in firstWs && typeof firstWs.membershipType === "string"
             ? firstWs.membershipType
             : "Internal";
+        const defaultLanguage =
+          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
+            ? firstWs.defaultLanguage
+            : "en";
         selectWorkspace.mutate(firstWs.id);
         setActiveWorkspace(
           firstWs.id,
           firstWs.name,
           firstWs.slug,
           firstWs.role || "Member",
-          membershipType
+          membershipType,
+          defaultLanguage
         );
       } else {
         router.replace("/workspace");
@@ -153,7 +158,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   } else if (feature === "documents") {
                     parts.push({ label: "Documents" });
                   } else if (feature === "settings") {
-                    parts.push({ label: "Settings" });
+                    const sub = segments[2];
+                    if (sub === "account") {
+                      parts.push({ label: "Settings", href: `/${slug}/settings` });
+                      const leaf = segments[3];
+                      if (leaf === "profile") {
+                        parts.push({ label: "Profile" });
+                      } else if (leaf === "preferences") {
+                        parts.push({ label: "Preferences" });
+                      } else {
+                        parts.push({ label: leaf || "Account" });
+                      }
+                    } else {
+                      parts.push({ label: "Settings" });
+                    }
                   } else if (feature === "billing") {
                     parts.push({ label: "Billing" });
                   } else if (feature === "payment") {
@@ -172,20 +190,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 parts.push({ label: "Workspace" });
               }
 
-              return parts.map((part, index) => (
-                <span key={index} className="flex items-center gap-1.5">
-                  {part.href && index < parts.length - 1 ? (
-                    <Link href={part.href} className="hover:text-ink cursor-pointer transition-colors">
-                      {part.label}
-                    </Link>
-                  ) : (
-                    <span className={index === parts.length - 1 ? "text-ink font-medium max-w-[300px] truncate" : "hover:text-ink cursor-pointer transition-colors capitalize"}>
-                      {part.label}
-                    </span>
-                  )}
-                  {index < parts.length - 1 && <span className="text-ink-muted/40">/</span>}
-                </span>
-              ));
+              return parts.map((part, index) => {
+                return (
+                  <span key={index} className="flex items-center gap-1.5">
+                    {part.href && index < parts.length - 1 ? (
+                      <Link href={part.href} className="hover:text-ink cursor-pointer transition-colors">
+                        {part.label}
+                      </Link>
+                    ) : (
+                      <span className={index === parts.length - 1 ? "text-ink font-medium max-w-[300px] truncate" : "hover:text-ink cursor-pointer transition-colors capitalize"}>
+                        {part.label}
+                      </span>
+                    )}
+                    {index < parts.length - 1 && <span className="text-ink-muted/40">/</span>}
+                  </span>
+                );
+              });
             })()}
           </div>
 

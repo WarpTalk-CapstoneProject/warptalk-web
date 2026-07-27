@@ -55,7 +55,7 @@ function LinearRow({ room }: { room: TranslationRoomDto }) {
   const workspaceSlug = params?.workspaceSlug as string;
   const user = useAuthStore((state) => state.user);
   const role = useWorkspaceRole();
-  const isCurrentUserHost = room.hostId === user?.id || role === "admin" || role === "owner" || room.isHost;
+  const isCurrentUserHost = room.hostId === user?.id || Boolean(room.isHost);
   const hostName = isCurrentUserHost && user?.fullName ? user.fullName : "Host";
   const hostAvatar = isCurrentUserHost ? user?.avatarUrl : undefined;
 

@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 
 type QuickAction = {
   title: string;
@@ -140,7 +141,7 @@ export default function WorkspaceHomePage() {
   const user = useAuthStore((s) => s.user);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
-  const role = useWorkspaceStore((s) => s.role);
+  const role = useWorkspaceRole();
   const setCreateRoomModalOpen = useUIStore((s) => s.setCreateRoomModalOpen);
   const setSearchMeetingModalOpen = useUIStore((s) => s.setSearchMeetingModalOpen);
 
@@ -148,7 +149,7 @@ export default function WorkspaceHomePage() {
   const recentRooms = roomsData?.rooms || [];
   const slug = activeWorkspaceSlug || "workspace";
   const displayName = user?.fullName || "User";
-  const isOwnerOrAdmin = role === "Owner" || role === "Admin";
+  const isOwnerOrAdmin = role === "owner" || role === "admin";
 
   const quickActions: QuickAction[] = [
     {
