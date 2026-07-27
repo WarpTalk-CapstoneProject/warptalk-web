@@ -2,18 +2,25 @@
 
 import { Moon, Sun } from "@phosphor-icons/react/dist/ssr";
 import { useTheme } from "next-themes";
+import { flushSync } from "react-dom";
 
 export function ThemeToggleButton() {
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
+  const nextTheme = isDark ? "light" : "dark";
 
   function switchTheme() {
-    setTheme(isDark ? "light" : "dark");
+    setTheme(nextTheme);
   }
 
   function handleToggle() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      switchTheme();
+      return;
+    }
+
     const documentWithTransition = document as Document & {
-      startViewTransition?: (callback: () => void) => void;
+      startViewTransition?: (callback: () => void) => ViewTransition;
     };
 
     if (!documentWithTransition.startViewTransition) {
@@ -21,7 +28,11 @@ export function ThemeToggleButton() {
       return;
     }
 
-    documentWithTransition.startViewTransition(switchTheme);
+    documentWithTransition.startViewTransition(() => {
+      flushSync(() => {
+        setTheme(nextTheme);
+      });
+    });
   }
 
   return (
