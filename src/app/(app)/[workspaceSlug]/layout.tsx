@@ -36,14 +36,16 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
       if (
         activeWorkspaceSlug !== workspaceSlug ||
         storedId !== targetWorkspace.id ||
-        storedRole !== (targetWorkspace.role || "Member")
+        storedRole !== (targetWorkspace.role || "Member") ||
+        useWorkspaceStore.getState().defaultLanguage !== (targetWorkspace.defaultLanguage || "en")
       ) {
         setActiveWorkspace(
           targetWorkspace.id,
           targetWorkspace.name,
           targetWorkspace.slug,
           targetWorkspace.role || "Member",
-          "Internal"
+          "Internal",
+          targetWorkspace.defaultLanguage || "en"
         );
       }
       setIsSyncing(false);

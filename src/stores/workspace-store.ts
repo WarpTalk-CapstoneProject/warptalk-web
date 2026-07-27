@@ -7,13 +7,15 @@ interface WorkspaceState {
   activeWorkspaceSlug: string | null;
   role: string | null;
   membershipType: string | null;
+  defaultLanguage: string | null;
 
   setActiveWorkspace: (
     id: string | null,
     name: string | null,
     slug: string | null,
     role: string | null,
-    membershipType: string | null
+    membershipType: string | null,
+    defaultLanguage: string | null
   ) => void;
   clearActiveWorkspace: () => void;
 }
@@ -26,8 +28,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       activeWorkspaceSlug: null,
       role: null,
       membershipType: null,
+      defaultLanguage: null,
 
-      setActiveWorkspace: (id, name, slug, role, membershipType) => {
+      setActiveWorkspace: (id, name, slug, role, membershipType, defaultLanguage) => {
         if (typeof document !== "undefined") {
           if (id) {
             document.cookie = `active_workspace_id=${id}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
@@ -39,13 +42,19 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           } else {
             document.cookie = "active_workspace_slug=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
           }
+          if (defaultLanguage) {
+            document.cookie = `active_workspace_lang=${defaultLanguage}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+          } else {
+            document.cookie = "active_workspace_lang=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          }
         }
         set({
           activeWorkspaceId: id,
           activeWorkspaceName: name,
           activeWorkspaceSlug: slug,
-          role: role,
+          role: role ? role.toLowerCase() : null,
           membershipType: membershipType,
+          defaultLanguage: defaultLanguage,
         });
       },
 
@@ -53,6 +62,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         if (typeof document !== "undefined") {
           document.cookie = "active_workspace_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
           document.cookie = "active_workspace_slug=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          document.cookie = "active_workspace_lang=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         }
         set({
           activeWorkspaceId: null,
@@ -60,6 +70,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           activeWorkspaceSlug: null,
           role: null,
           membershipType: null,
+          defaultLanguage: null,
         });
       },
     }),
@@ -71,6 +82,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         activeWorkspaceSlug: state.activeWorkspaceSlug,
         role: state.role,
         membershipType: state.membershipType,
+        defaultLanguage: state.defaultLanguage,
       }),
     }
   )
