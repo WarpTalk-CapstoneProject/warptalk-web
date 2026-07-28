@@ -195,6 +195,10 @@ function LoginForm() {
                   type="button"
                   onClick={() => {
                     console.log("[Google OAuth] Continue with Google button clicked");
+                    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+                      toast.error("Google Login is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env.local");
+                      return;
+                    }
                     handleGoogleLogin();
                   }}
                   className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"

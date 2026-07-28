@@ -232,7 +232,17 @@ function RegisterForm() {
         </span>
       </div>
 
-      <SocialButton icon={<GoogleAuthIcon />} label="Google" onClick={() => handleGoogleLogin()} />
+      <SocialButton
+        icon={<GoogleAuthIcon />}
+        label="Google"
+        onClick={() => {
+          if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+            toast.error("Google Login is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env.local");
+            return;
+          }
+          handleGoogleLogin();
+        }}
+      />
     </CinematicAuthShell>
   );
 }
