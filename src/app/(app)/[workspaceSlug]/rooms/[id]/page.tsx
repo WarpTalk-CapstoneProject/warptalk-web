@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowRight,
@@ -62,7 +62,6 @@ import {
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
-import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { buildGoogleCalendarUrl, translationRoomService } from "@/services/translationRoom.service";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 import type { UserDto } from "@/types/auth";
@@ -82,6 +81,8 @@ type UserIdentity = {
   name: string;
   email?: string;
   role?: string;
+  workspaceRole?: string;
+  membershipType?: string;
   status?: string;
   avatarUrl?: string;
   speakLanguage?: string;
@@ -119,7 +120,6 @@ const statusLabels: Record<TranslationRoomStatus, string> = {
 
 export default function RoomInformationPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const roomId = params.id;
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
@@ -131,7 +131,6 @@ export default function RoomInformationPage() {
   const liveParticipants = useTranslationRoomStore((state) => state.participants);
   const liveRoomState = useTranslationRoomStore((state) => state.translationRoomState);
   const user = useAuthStore((state) => state.user);
-  const role = useWorkspaceRole();
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
@@ -198,8 +197,9 @@ export default function RoomInformationPage() {
     .map(getLanguageName);
   const isEnded = room.status === "ended";
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
-  const participants = buildUserList(room, apiParticipants, apiInvitations, membersArray, user);
-  const hostUser = getHostUser(room, participants, membersArray, user);
+  const rawParticipants = buildUserList(room, apiParticipants, apiInvitations, membersArray, user);
+  const hostUser = getHostUser(room, rawParticipants, membersArray, user);
+  const participants = sortRoomPeople(rawParticipants, hostUser);
   const threadEvents = buildThreadEvents(
     room,
     hostUser,
@@ -210,7 +210,7 @@ export default function RoomInformationPage() {
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white text-ink">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
       {copiedText ? (
         <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md bg-black px-4 py-2 text-[13px] font-medium text-white shadow-lg">
           {copiedText}
@@ -223,17 +223,6 @@ export default function RoomInformationPage() {
             <div className="mb-8 flex flex-col gap-5 border-b border-border/60 pb-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-muted">
-                    <button
-                      type="button"
-                      onClick={() => router.back()}
-                      className="rounded-md px-1.5 py-1 hover:bg-surface-2"
-                    >
-                      Meetings
-                    </button>
-                    <span>/</span>
-                    <span className="truncate text-ink">{room.title}</span>
-                  </div>
                   <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground">{room.title}</h1>
                   <MeetingPropertiesPills room={room} apiParticipants={apiParticipants} activeParticipantCount={activeParticipantCount} user={user} />
                 </div>
@@ -257,9 +246,7 @@ export default function RoomInformationPage() {
 
               <div className="grid gap-2 border-y border-border/60 py-2 text-[13px]">
                 <MetadataRow icon={<Users className="size-4" />} label="People">
-                  <div className="flex flex-wrap gap-1.5">
-                    {participants.length > 0 ? participants.slice(0, 8).map((participant) => <UserChip key={participant.id} user={participant} />) : "No participants added"}
-                  </div>
+                  <PeopleSummary people={participants} />
                 </MetadataRow>
                 <MetadataRow icon={<Clock className="size-4" />} label="When">
                   <span>{formatDateTime(room.scheduledAt ?? room.createdAt)}</span>
@@ -328,7 +315,7 @@ export default function RoomInformationPage() {
 
             <PropertyPanel title="Meeting access">
               <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
-                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-white text-ink">
+                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-1 text-ink">
                   <Video className="size-4" />
                 </div>
                 <div className="min-w-0">
@@ -355,7 +342,7 @@ export default function RoomInformationPage() {
 }
 
 function RoomThread({ events }: { events: ThreadEvent[] }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <section className="relative mt-8">
@@ -437,7 +424,7 @@ function MeetingTranscriptArtifact({
   isLoading: boolean;
   onCopy: (text: string, label: string) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const ordered = [...segments].sort((left, right) => left.sequenceOrder - right.sequenceOrder);
   const base = baseTime ? new Date(baseTime) : null;
 
@@ -483,12 +470,12 @@ function MeetingTranscriptArtifact({
       {isExpanded ? (
         <div id="meeting-transcript-panel">
           {isLoading ? (
-          <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+          <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" />
             Loading transcript...
           </div>
         ) : ordered.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+          <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
             {isEnded
               ? "No transcript was captured for this meeting."
               : "Transcript entries will appear here during the meeting."}
@@ -646,7 +633,7 @@ function RoomNotesEditor({
         : null,
   });
 
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <section className="border-b border-border/60 pb-7">
@@ -820,7 +807,7 @@ function LinkToolbarButton({ editor, active }: { editor: Editor; active?: boolea
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             placeholder="Paste a link..."
-            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-white px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
           <Button type="submit" size="sm" className="h-8 shrink-0 rounded-md text-[12px] !text-white">
             Apply
@@ -828,6 +815,48 @@ function LinkToolbarButton({ editor, active }: { editor: Editor; active?: boolea
         </form>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function PeopleSummary({ people }: { people: UserIdentity[] }) {
+  const visiblePeople = people.slice(0, 4);
+  const hiddenPeople = people.slice(4);
+
+  if (people.length === 0) {
+    return <span className="text-[13px] text-muted-foreground">No participants added</span>;
+  }
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {visiblePeople.map((participant) => (
+        <UserChip key={participant.id} user={participant} />
+      ))}
+      {hiddenPeople.length > 0 ? (
+        <Popover>
+          <PopoverTrigger
+            className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            aria-label={`Show ${hiddenPeople.length} more people`}
+          >
+            <MoreHorizontal className="size-3.5" />
+            <span>+{hiddenPeople.length}</span>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[320px] rounded-xl border-border/70 p-3 shadow-xl">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <div>
+                <p className="text-[13px] font-semibold text-ink">People</p>
+                <p className="text-[11px] text-muted-foreground">{people.length} participants and invitees</p>
+              </div>
+              <InlineChip>{hiddenPeople.length} more</InlineChip>
+            </div>
+            <div className="mt-2 max-h-[320px] space-y-1 overflow-y-auto pr-1">
+              {people.map((participant) => (
+                <UserRow key={participant.id} user={participant} />
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : null}
+    </div>
   );
 }
 
@@ -851,6 +880,8 @@ function UserChip({ user, compact = false }: { user: UserIdentity; compact?: boo
             <p className="truncate text-[12px] text-muted-foreground">{user.email ?? user.id}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {user.role ? <InlineChip>{user.role}</InlineChip> : null}
+              {user.workspaceRole ? <InlineChip>{user.workspaceRole}</InlineChip> : null}
+              {user.membershipType ? <InlineChip>{normalizeLabel(user.membershipType)}</InlineChip> : null}
               {user.status ? <InlineChip>{user.status}</InlineChip> : null}
             </div>
           </div>
@@ -1104,11 +1135,14 @@ function buildUserList(
 ): UserIdentity[] {
   const mapped = participants.map((participant) => toUserIdentity(participant, membersArray, currentUser));
   if (!mapped.some((participant) => participant.id === room.hostId)) {
+    const hostMember = findWorkspaceMember(room.hostId, membersArray, currentUser);
     mapped.unshift({
       id: room.hostId,
       name: resolveUserName(room.hostId, membersArray, currentUser),
-      email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
+      email: hostMember?.email ?? (room.hostId === currentUser?.id ? currentUser?.email : undefined),
       role: "Organizer",
+      workspaceRole: hostMember?.roleName,
+      membershipType: hostMember?.membershipType,
       status: "Organizer",
     });
   }
@@ -1116,18 +1150,20 @@ function buildUserList(
   for (const invitation of invitations) {
     const member = membersArray.find((item) => item.userId === invitation.email || item.id === invitation.email || item.email === invitation.email);
     const name = member?.fullName || invitation.email;
-    if (!mapped.some((participant) => participant.email === invitation.email || participant.id === invitation.email)) {
+    if (!mapped.some((participant) => participant.email?.toLowerCase() === invitation.email.toLowerCase() || participant.id === invitation.email)) {
       mapped.push({
         id: invitation.id ?? invitation.email,
         name,
         email: invitation.email,
         role: "Invitee",
+        workspaceRole: member?.roleName,
+        membershipType: member?.membershipType,
         status: invitation.status ? invitation.status.toLowerCase() : "pending",
       });
     }
   }
 
-  return mapped;
+  return dedupeRoomPeople(mapped);
 }
 
 function toUserIdentity(
@@ -1135,11 +1171,15 @@ function toUserIdentity(
   membersArray: WorkspaceMemberDto[] = [],
   currentUser: UserDto | null = null
 ): UserIdentity {
+  const member = findWorkspaceMember(participant.userId, membersArray, currentUser);
   const role = participant.role.toLowerCase() === "host" ? "Organizer" : normalizeLabel(participant.role);
   return {
     id: participant.userId || participant.id,
     name: resolveUserName(participant.userId, membersArray, currentUser, participant.displayName),
+    email: member?.email,
     role,
+    workspaceRole: member?.roleName,
+    membershipType: member?.membershipType,
     status: normalizeLabel(participant.status),
     avatarUrl: participant.avatarUrl,
     speakLanguage: participant.speakLanguage,
@@ -1153,13 +1193,72 @@ function getHostUser(
   membersArray: WorkspaceMemberDto[],
   currentUser: UserDto | null
 ) {
+  const hostMember = findWorkspaceMember(room.hostId, membersArray, currentUser);
   return participants.find((participant) => participant.id === room.hostId) ?? {
     id: room.hostId,
     name: resolveUserName(room.hostId, membersArray, currentUser),
-    email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
+    email: hostMember?.email ?? (room.hostId === currentUser?.id ? currentUser?.email : undefined),
     role: "Organizer",
+    workspaceRole: hostMember?.roleName,
+    membershipType: hostMember?.membershipType,
     status: "Organizer",
   };
+}
+
+function findWorkspaceMember(
+  userId: string | undefined,
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null
+) {
+  if (!userId) return undefined;
+  return membersArray.find(
+    (item) =>
+      item.userId === userId ||
+      item.id === userId ||
+      item.email === userId ||
+      (userId === currentUser?.id && item.email === currentUser.email)
+  );
+}
+
+function dedupeRoomPeople(people: UserIdentity[]) {
+  const seen = new Set<string>();
+  const deduped: UserIdentity[] = [];
+
+  for (const person of people) {
+    const key = person.email?.toLowerCase() || person.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(person);
+  }
+
+  return deduped;
+}
+
+function sortRoomPeople(people: UserIdentity[], hostUser: UserIdentity) {
+  return dedupeRoomPeople(people).sort((left, right) => {
+    const leftRank = getRoomPeopleRank(left, hostUser);
+    const rightRank = getRoomPeopleRank(right, hostUser);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return left.name.localeCompare(right.name);
+  });
+}
+
+function getRoomPeopleRank(user: UserIdentity, hostUser: UserIdentity) {
+  if (
+    user.id === hostUser.id ||
+    (Boolean(user.email && hostUser.email) && user.email?.toLowerCase() === hostUser.email?.toLowerCase()) ||
+    user.role?.toLowerCase() === "organizer"
+  ) {
+    return 0;
+  }
+
+  const workspaceRole = user.workspaceRole?.toLowerCase() ?? "";
+  const membershipType = user.membershipType?.toLowerCase() ?? "";
+
+  if (workspaceRole === "owner") return 1;
+  if (workspaceRole === "admin") return 2;
+  if (membershipType === "internal" || workspaceRole) return 3;
+  return 4;
 }
 
 function MetadataRow({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
@@ -1175,7 +1274,7 @@ function MetadataRow({ icon, label, children }: { icon: ReactNode; label: string
 function PropertyPanel({
   title,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
 }: {
   title: string;
   children: ReactNode;
