@@ -11,6 +11,7 @@ import {
   Clock,
   Copy,
   DownloadSimple,
+  MagnifyingGlass,
   Scroll,
   SpinnerGap,
   Translate,
@@ -20,11 +21,17 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
+import { openArtifactDownload } from "@/lib/download-artifact";
 import { transcriptService } from "@/services/transcript.service";
-import type { EndedRoomHistoryItem, RoomHistoryArtifact, RoomArtifactStatus } from "@/types/roomHistory";
+import type {
+  EndedRoomHistoryItem,
+  RoomHistoryArtifact,
+  RoomArtifactStatus,
+} from "@/types/roomHistory";
 import type { TranscriptDto, TranscriptSegmentDto } from "@/types/transcript";
 
 type TranscriptFilter = "all" | "ready" | "processing" | "attention";
@@ -36,59 +43,73 @@ type QueueItem = {
   status: RoomArtifactStatus;
 };
 
-type TranscriptData = { transcript: TranscriptDto; segments: TranscriptSegmentDto[] } | null;
-
-const QUEUE_PAGE_SIZE = 5;
+type TranscriptData = {
+  transcript: TranscriptDto;
+  segments: TranscriptSegmentDto[];
+} | null;
 
 const transcriptFilters: Array<{ value: TranscriptFilter; label: string }> = [
-  { value: "all", label: "All summaries" },
-  { value: "ready", label: "Ready" },
+  { value: "all", label: "All meetings" },
+  { value: "ready", label: "Export ready" },
   { value: "processing", label: "Processing" },
   { value: "attention", label: "Needs attention" },
 ];
 
 export default function TranscriptsPage() {
+  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TranscriptFilter>("all");
-  const [queuePage, setQueuePage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("transcript");
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
   const history = useRoomHistory();
 
   const items = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
     return (history.data?.rooms ?? [])
       .map((room): QueueItem => {
-        const transcriptArtifact = room.artifacts.find((artifact) => artifact.type === "transcript_export");
-        return { room, transcriptArtifact, status: transcriptArtifact?.status ?? "missing" };
+        const transcriptArtifact = room.artifacts.find(
+          (artifact) => artifact.type === "transcript_export",
+        );
+        return {
+          room,
+          transcriptArtifact,
+          status: transcriptArtifact?.status ?? "missing",
+        };
       })
       .filter((item) => {
         const needsAttention =
-          ["failed", "expired"].includes(item.status) || item.room.artifacts.some((artifact) => artifact.consentRequired);
-        const matchesFilter = filter === "all" || item.status === filter || (filter === "attention" && needsAttention);
-        return matchesFilter;
+          ["failed", "expired"].includes(item.status) ||
+          item.room.artifacts.some((artifact) => artifact.consentRequired);
+        const matchesFilter =
+          filter === "all" ||
+          item.status === filter ||
+          (filter === "attention" && needsAttention);
+        const matchesQuery =
+          !normalized ||
+          [
+            item.room.title,
+            item.room.translationRoomCode,
+            item.room.hostName,
+          ].some((value) => value.toLowerCase().includes(normalized));
+        return matchesFilter && matchesQuery;
       });
-  }, [filter, history.data?.rooms]);
+  }, [filter, history.data?.rooms, query]);
 
-  const queuePageCount = Math.max(1, Math.ceil(items.length / QUEUE_PAGE_SIZE));
-  const pagedItems = items.slice((queuePage - 1) * QUEUE_PAGE_SIZE, queuePage * QUEUE_PAGE_SIZE);
-
-  const selected = items.find((item) => item.room.id === selectedId) ?? items[0];
-
-  useEffect(() => {
-    setQueuePage(1);
-  }, [filter]);
-
-  useEffect(() => {
-    setQueuePage((current) => Math.min(current, queuePageCount));
-  }, [queuePageCount]);
+  const selected =
+    items.find((item) => item.room.id === selectedId) ?? items[0];
 
   const transcriptQuery = useQuery({
     queryKey: ["room-transcript", selected?.room.id],
     queryFn: async (): Promise<TranscriptData> => {
       if (!selected) return null;
       try {
-        const { data: transcript } = await transcriptService.getByRoom(selected.room.id);
-        const { data: paged } = await transcriptService.segments(transcript.id, { skip: 0, take: 500 });
+        const { data: transcript } = await transcriptService.getByRoom(
+          selected.room.id,
+        );
+        const { data: paged } = await transcriptService.segments(
+          transcript.id,
+          { skip: 0, take: 500 },
+        );
         return { transcript, segments: paged.items };
       } catch {
         // No transcript row exists yet (or the room never had any speech) — an honest
@@ -114,13 +135,19 @@ export default function TranscriptsPage() {
 
     setBusyArtifactId(artifact.id);
     try {
-      if (artifact.consentRequired) await translationRoomService.approveArtifactConsent(artifact.id);
-      const { data } = await translationRoomService.artifactDownload(artifact.id);
-      if (!data.url) throw new Error("The download URL is unavailable.");
-      window.open(data.url, "_blank", "noopener,noreferrer");
+      if (artifact.consentRequired)
+        await translationRoomService.approveArtifactConsent(artifact.id);
+      const { data } = await translationRoomService.artifactDownload(
+        artifact.id,
+      );
+      openArtifactDownload(data);
       if (artifact.consentRequired) await history.refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not download this file.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not download this file.",
+      );
     } finally {
       setBusyArtifactId(null);
     }
@@ -128,8 +155,36 @@ export default function TranscriptsPage() {
 
   return (
     <main className="min-h-full bg-canvas text-ink">
-      <div className="mx-auto w-full max-w-[1480px] px-5 py-4 lg:px-8">
-        <div className="flex items-center gap-1 border-b border-border pb-3" role="tablist" aria-label="Summary filters">
+      <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">
+        <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
+              <Scroll size={14} /> Meeting records
+            </div>
+            <h1 className="text-[30px] font-semibold leading-none">
+              Transcripts
+            </h1>
+            <p className="mt-2 text-[13px] text-ink-muted">
+              Read the full transcript, AI summary, and retained artifacts for
+              every finished meeting.
+            </p>
+          </div>
+          <div className="relative w-full lg:w-[360px]">
+            <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search meeting, code, or host"
+              className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none"
+            />
+          </div>
+        </header>
+
+        <div
+          className="flex items-center gap-1 border-b border-border py-3"
+          role="tablist"
+          aria-label="Transcript filters"
+        >
           {transcriptFilters.map((item) => (
             <button
               key={item.value}
@@ -139,31 +194,42 @@ export default function TranscriptsPage() {
               onClick={() => setFilter(item.value)}
               className={cn(
                 "h-7 rounded-md px-3 text-[11px] font-medium transition-colors",
-                filter === item.value ? "bg-ink text-surface-1" : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                filter === item.value
+                  ? "bg-ink text-surface-1"
+                  : "text-ink-muted hover:bg-surface-2 hover:text-ink",
               )}
             >
               {item.label}
             </button>
           ))}
-          <span className="ml-auto text-[10px] tabular-nums text-ink-subtle">{items.length} results</span>
+          <span className="ml-auto text-[10px] tabular-nums text-ink-subtle">
+            {items.length} results
+          </span>
         </div>
 
-        <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Transcript review queue">
+        <section
+          className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1"
+          aria-label="Transcript review queue"
+        >
           {history.isLoading ? (
             <LoadingState />
           ) : history.isError ? (
             <ErrorState onRetry={() => history.refetch()} />
           ) : items.length === 0 ? (
-            <EmptyState />
+            <EmptyState hasQuery={Boolean(query)} />
           ) : (
             <div className="grid min-h-[600px] lg:grid-cols-[360px_minmax(0,1fr)]">
-              <div className="flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r">
+              <div className="border-b border-border lg:border-b-0 lg:border-r">
                 <div className="flex h-10 items-center justify-between border-b border-border bg-surface-2/45 px-4">
-                  <span className="text-[10px] font-medium text-ink-subtle">SUMMARY QUEUE</span>
-                  <span className="text-[10px] tabular-nums text-ink-subtle">{items.length}</span>
+                  <span className="text-[10px] font-medium text-ink-subtle">
+                    TRANSCRIPT QUEUE
+                  </span>
+                  <span className="text-[10px] tabular-nums text-ink-subtle">
+                    {items.length}
+                  </span>
                 </div>
                 <div className="divide-y divide-border">
-                  {pagedItems.map((item) => (
+                  {items.map((item) => (
                     <QueueRow
                       key={item.room.id}
                       item={item}
@@ -171,33 +237,6 @@ export default function TranscriptsPage() {
                       onSelect={() => selectRoom(item.room.id)}
                     />
                   ))}
-                </div>
-                <div className="mt-auto flex h-12 items-center justify-between border-t border-border bg-surface-1 px-4">
-                  <span className="text-[10px] tabular-nums text-ink-subtle">
-                    Page {queuePage} / {queuePageCount}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={queuePage <= 1}
-                      onClick={() => setQueuePage((page) => Math.max(1, page - 1))}
-                      className="h-7 rounded-md px-2 text-[10px] shadow-none"
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={queuePage >= queuePageCount}
-                      onClick={() => setQueuePage((page) => Math.min(queuePageCount, page + 1))}
-                      className="h-7 rounded-md px-2 text-[10px] shadow-none"
-                    >
-                      Next
-                    </Button>
-                  </div>
                 </div>
               </div>
               {selected ? (
@@ -218,28 +257,45 @@ export default function TranscriptsPage() {
   );
 }
 
-function QueueRow({ item, selected, onSelect }: { item: QueueItem; selected: boolean; onSelect: () => void }) {
+function QueueRow({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: QueueItem;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
         "group relative flex w-full gap-3 px-4 py-4 text-left outline-none transition-colors hover:bg-surface-2/55 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30",
-        selected && "bg-surface-2"
+        selected && "bg-surface-2",
       )}
     >
-      <span className={cn("absolute inset-y-0 left-0 w-0.5", selected ? "bg-ink" : "bg-transparent")} />
+      <span
+        className={cn(
+          "absolute inset-y-0 left-0 w-0.5",
+          selected ? "bg-ink" : "bg-transparent",
+        )}
+      />
       <span
         className={cn(
           "grid size-9 shrink-0 place-items-center rounded-md border",
-          selected ? "border-ink bg-ink text-surface-1" : "border-border bg-canvas text-ink-muted"
+          selected
+            ? "border-ink bg-ink text-surface-1"
+            : "border-border bg-canvas text-ink-muted",
         )}
       >
         <Scroll size={16} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-start justify-between gap-3">
-          <span className="truncate text-[12px] font-medium text-ink">{item.room.title}</span>
+          <span className="truncate text-[12px] font-medium text-ink">
+            {item.room.title}
+          </span>
           <StatusMark item={item} />
         </span>
         <span className="mt-1 block truncate text-[10px] text-ink-subtle">
@@ -247,7 +303,10 @@ function QueueRow({ item, selected, onSelect }: { item: QueueItem; selected: boo
         </span>
         <span className="mt-2 flex items-center justify-between text-[10px] text-ink-muted">
           <span className="truncate">{formatLanguageRoute(item.room)}</span>
-          <ArrowRight size={12} className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+          <ArrowRight
+            size={12}
+            className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+          />
         </span>
       </span>
     </button>
@@ -271,11 +330,15 @@ function TranscriptWorkspace({
 }) {
   const { room } = item;
   const segments = transcriptState.data?.segments ?? [];
-  const summaryArtifact = room.artifacts.find((artifact) => artifact.type === "summary_export");
+  const summaryArtifact = room.artifacts.find(
+    (artifact) => artifact.type === "summary_export",
+  );
 
   async function copyTranscriptAsText() {
     if (!segments.length) return;
-    const text = segments.map((segment) => `[${segment.speakerName}] ${segment.originalText}`).join("\n");
+    const text = segments
+      .map((segment) => `[${segment.speakerName}] ${segment.originalText}`)
+      .join("\n");
     try {
       await navigator.clipboard.writeText(text);
       toast.success("Transcript copied to clipboard.");
@@ -290,9 +353,13 @@ function TranscriptWorkspace({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusMark item={item} showLabel />
-            <span className="text-[10px] text-ink-subtle">{room.translationRoomCode}</span>
+            <span className="text-[10px] text-ink-subtle">
+              {room.translationRoomCode}
+            </span>
           </div>
-          <h2 className="mt-3 text-[20px] font-semibold leading-7">{room.title}</h2>
+          <h2 className="mt-3 text-[20px] font-semibold leading-7">
+            {room.title}
+          </h2>
           <p className="mt-1 text-[11px] text-ink-muted">
             Hosted by {room.hostName} · ended {formatDate(room.endedAt)}
           </p>
@@ -310,29 +377,83 @@ function TranscriptWorkspace({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1 border-b border-border px-5" role="tablist" aria-label="Meeting record sections">
-        <DetailTabButton active={tab === "transcript"} onClick={() => onTabChange("transcript")} icon={Scroll} label="Transcript" count={segments.length || undefined} />
-        <DetailTabButton active={tab === "summary"} onClick={() => onTabChange("summary")} icon={ChatCircleText} label="Summary" />
-        <DetailTabButton active={tab === "artifacts"} onClick={() => onTabChange("artifacts")} icon={Archive} label="Artifacts" count={room.artifacts.length} />
+      <div
+        className="flex items-center gap-1 border-b border-border px-5"
+        role="tablist"
+        aria-label="Meeting record sections"
+      >
+        <DetailTabButton
+          active={tab === "transcript"}
+          onClick={() => onTabChange("transcript")}
+          icon={Scroll}
+          label="Transcript"
+          count={segments.length || undefined}
+        />
+        <DetailTabButton
+          active={tab === "summary"}
+          onClick={() => onTabChange("summary")}
+          icon={ChatCircleText}
+          label="Summary"
+        />
+        <DetailTabButton
+          active={tab === "artifacts"}
+          onClick={() => onTabChange("artifacts")}
+          icon={Archive}
+          label="Artifacts"
+          count={room.artifacts.length}
+        />
       </div>
 
       <div className="grid xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="p-5 lg:p-7">
-          {tab === "transcript" ? <TranscriptPanel state={transcriptState} /> : null}
-          {tab === "summary" ? <SummaryPanel room={room} artifact={summaryArtifact} busy={busyArtifactId === summaryArtifact?.id} onDownload={onDownload} /> : null}
+          {tab === "transcript" ? (
+            <TranscriptPanel state={transcriptState} />
+          ) : null}
+          {tab === "summary" ? (
+            <SummaryPanel
+              room={room}
+              artifact={summaryArtifact}
+              busy={busyArtifactId === summaryArtifact?.id}
+              onDownload={onDownload}
+            />
+          ) : null}
           {tab === "artifacts" ? (
-            <ArtifactsPanel artifacts={room.artifacts} busyArtifactId={busyArtifactId} onDownload={onDownload} />
+            <ArtifactsPanel
+              artifacts={room.artifacts}
+              busyArtifactId={busyArtifactId}
+              onDownload={onDownload}
+            />
           ) : null}
         </div>
 
         <aside className="border-t border-border p-5 xl:border-l xl:border-t-0">
           <h3 className="text-[11px] font-semibold">Meeting context</h3>
-          {room.description ? <p className="mt-2 text-[11px] leading-5 text-ink-muted">{room.description}</p> : null}
+          {room.description ? (
+            <p className="mt-2 text-[11px] leading-5 text-ink-muted">
+              {room.description}
+            </p>
+          ) : null}
           <dl className="mt-4 divide-y divide-border border-y border-border">
-            <ContextRow icon={Users} label="Participants" value={String(room.participantCount)} />
-            <ContextRow icon={Clock} label="Duration" value={formatDuration(room.durationSeconds)} />
-            <ContextRow icon={Translate} label="Language route" value={formatLanguageRoute(room)} />
-            <ContextRow icon={Archive} label="Artifacts" value={String(room.artifacts.length)} />
+            <ContextRow
+              icon={Users}
+              label="Participants"
+              value={String(room.participantCount)}
+            />
+            <ContextRow
+              icon={Clock}
+              label="Duration"
+              value={formatDuration(room.durationSeconds)}
+            />
+            <ContextRow
+              icon={Translate}
+              label="Language route"
+              value={formatLanguageRoute(room)}
+            />
+            <ContextRow
+              icon={Archive}
+              label="Artifacts"
+              value={String(room.artifacts.length)}
+            />
           </dl>
         </aside>
       </div>
@@ -361,12 +482,16 @@ function DetailTabButton({
       onClick={onClick}
       className={cn(
         "flex h-10 items-center gap-1.5 border-b-2 px-3 text-[12px] font-medium transition-colors",
-        active ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"
+        active
+          ? "border-ink text-ink"
+          : "border-transparent text-ink-muted hover:text-ink",
       )}
     >
       <Icon size={14} />
       {label}
-      {typeof count === "number" ? <span className="text-[10px] text-ink-subtle">({count})</span> : null}
+      {typeof count === "number" ? (
+        <span className="text-[10px] text-ink-subtle">({count})</span>
+      ) : null}
     </button>
   );
 }
@@ -389,9 +514,12 @@ function TranscriptPanel({ state }: { state: UseQueryResult<TranscriptData> }) {
     return (
       <div className="flex min-h-[360px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
         <Scroll size={28} className="text-ink-muted" />
-        <h3 className="mt-4 text-[15px] font-semibold">No transcript recorded</h3>
+        <h3 className="mt-4 text-[15px] font-semibold">
+          No transcript recorded
+        </h3>
         <p className="mt-2 max-w-[360px] text-[11px] leading-5 text-ink-muted">
-          This meeting ended without any captured speech, or the transcript hasn&apos;t synced yet.
+          This meeting ended without any captured speech, or the transcript
+          hasn&apos;t synced yet.
         </p>
       </div>
     );
@@ -400,15 +528,23 @@ function TranscriptPanel({ state }: { state: UseQueryResult<TranscriptData> }) {
   return (
     <div className="flex min-h-[360px] flex-col border border-border bg-canvas">
       <div className="flex h-10 items-center justify-between border-b border-border px-4">
-        <span className="text-[10px] font-medium text-ink-subtle">DIALOGUE</span>
-        <span className="text-[10px] text-ink-subtle">{segments.length} lines</span>
+        <span className="text-[10px] font-medium text-ink-subtle">
+          DIALOGUE
+        </span>
+        <span className="text-[10px] text-ink-subtle">
+          {segments.length} lines
+        </span>
       </div>
       <div className="max-h-[560px] flex-1 space-y-4 overflow-y-auto p-5">
         {segments.map((segment) => (
           <div key={segment.id} className="text-[12px] leading-6">
             <span className="flex items-baseline gap-2">
-              <span className="font-medium text-ink">{segment.speakerName}</span>
-              <span className="text-[10px] text-ink-subtle">{formatTimestamp(segment.startTimeMs)}</span>
+              <span className="font-medium text-ink">
+                {segment.speakerName}
+              </span>
+              <span className="text-[10px] text-ink-subtle">
+                {formatTimestamp(segment.startTimeMs)}
+              </span>
             </span>
             <p className="mt-0.5 text-ink-muted">{segment.originalText}</p>
           </div>
@@ -432,7 +568,9 @@ function SummaryPanel({
   const summary = room.summary;
   const ready = artifact?.status === "ready";
   const hasStructuredContent = Boolean(
-    summary && !summary.insufficientData && (summary.summary || summary.decisions.length || summary.actionItems.length)
+    summary &&
+    !summary.insufficientData &&
+    (summary.summary || summary.decisions.length || summary.actionItems.length),
   );
   const recentlyEnded = useRecentlyEnded(room.endedAt);
   const isGenerating = !artifact && recentlyEnded;
@@ -446,11 +584,16 @@ function SummaryPanel({
       summary.summary || "(no overview)",
       "",
       "Decisions",
-      ...(summary.decisions.length ? summary.decisions.map((decision) => `- ${decision}`) : ["(none recorded)"]),
+      ...(summary.decisions.length
+        ? summary.decisions.map((decision) => `- ${decision}`)
+        : ["(none recorded)"]),
       "",
       "Action items",
       ...(summary.actionItems.length
-        ? summary.actionItems.map((action) => `- [ ] ${action.owner ? `${action.owner}: ` : ""}${action.task}`)
+        ? summary.actionItems.map(
+            (action) =>
+              `- [ ] ${action.owner ? `${action.owner}: ` : ""}${action.task}`,
+          )
         : ["(none recorded)"]),
     ];
     try {
@@ -464,10 +607,20 @@ function SummaryPanel({
   return (
     <div className="flex min-h-[360px] flex-col border border-border bg-canvas">
       <div className="flex h-10 items-center justify-between border-b border-border px-4">
-        <span className="text-[10px] font-medium text-ink-subtle">SUMMARY OUTPUT</span>
+        <span className="text-[10px] font-medium text-ink-subtle">
+          SUMMARY OUTPUT
+        </span>
         <span className="flex items-center gap-3">
-          <span className="text-[10px] text-ink-subtle">{artifact?.format || "No file"}</span>
-          <Button size="sm" variant="ghost" disabled={!hasStructuredContent} onClick={copyAsText} className="h-6 rounded px-2 text-[10px] shadow-none">
+          <span className="text-[10px] text-ink-subtle">
+            {artifact?.format || "No file"}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!hasStructuredContent}
+            onClick={copyAsText}
+            className="h-6 rounded px-2 text-[10px] shadow-none"
+          >
             <Copy size={12} /> Copy
           </Button>
         </span>
@@ -476,40 +629,63 @@ function SummaryPanel({
       {hasStructuredContent && summary ? (
         <div className="flex-1 space-y-6 p-6">
           <section>
-            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">Overview</h3>
-            <p className="mt-2 text-[12px] leading-6 text-ink">{summary.summary}</p>
+            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
+              Overview
+            </h3>
+            <p className="mt-2 text-[12px] leading-6 text-ink">
+              {summary.summary}
+            </p>
           </section>
           <section>
-            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">Decisions</h3>
+            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
+              Decisions
+            </h3>
             {summary.decisions.length ? (
               <ul className="mt-2 space-y-1.5">
                 {summary.decisions.map((decision, index) => (
-                  <li key={index} className="flex gap-2 text-[12px] leading-5 text-ink">
+                  <li
+                    key={index}
+                    className="flex gap-2 text-[12px] leading-5 text-ink"
+                  >
                     <span className="mt-1.5 size-1 shrink-0 rounded-full bg-ink-subtle" />
                     {decision}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-[11px] text-ink-muted">No decisions recorded.</p>
+              <p className="mt-2 text-[11px] text-ink-muted">
+                No decisions recorded.
+              </p>
             )}
           </section>
           <section>
-            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">Action items</h3>
+            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
+              Action items
+            </h3>
             {summary.actionItems.length ? (
               <ul className="mt-2 space-y-2">
                 {summary.actionItems.map((action, index) => (
-                  <li key={index} className="flex items-start gap-2 text-[12px] leading-5 text-ink">
-                    <CheckSquare size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+                  <li
+                    key={index}
+                    className="flex items-start gap-2 text-[12px] leading-5 text-ink"
+                  >
+                    <CheckSquare
+                      size={14}
+                      className="mt-0.5 shrink-0 text-ink-subtle"
+                    />
                     <span>
-                      {action.owner ? <span className="font-medium">{action.owner}: </span> : null}
+                      {action.owner ? (
+                        <span className="font-medium">{action.owner}: </span>
+                      ) : null}
                       {action.task}
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-[11px] text-ink-muted">No action items recorded.</p>
+              <p className="mt-2 text-[11px] text-ink-muted">
+                No action items recorded.
+              </p>
             )}
           </section>
         </div>
@@ -517,11 +693,16 @@ function SummaryPanel({
         <div className="flex flex-1 items-center justify-center p-8 text-center">
           <div className="max-w-[360px]">
             {isGenerating ? (
-              <SpinnerGap size={28} className="mx-auto animate-spin text-ink-muted" />
+              <SpinnerGap
+                size={28}
+                className="mx-auto animate-spin text-ink-muted"
+              />
             ) : (
               <ChatCircleText size={28} className="mx-auto text-ink-muted" />
             )}
-            <h3 className="mt-4 text-[15px] font-semibold">{isGenerating ? "Generating summary…" : "No summary output"}</h3>
+            <h3 className="mt-4 text-[15px] font-semibold">
+              {isGenerating ? "Generating summary…" : "No summary output"}
+            </h3>
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
               {isGenerating
                 ? "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute."
@@ -542,7 +723,12 @@ function SummaryPanel({
             onClick={() => onDownload(artifact)}
             className="h-8 rounded-md text-[11px] shadow-none"
           >
-            {busy ? <SpinnerGap size={14} className="animate-spin" /> : <DownloadSimple size={14} />} Download summary file
+            {busy ? (
+              <SpinnerGap size={14} className="animate-spin" />
+            ) : (
+              <DownloadSimple size={14} />
+            )}{" "}
+            Download summary file
           </Button>
         </div>
       ) : null}
@@ -563,7 +749,9 @@ function ArtifactsPanel({
     return (
       <div className="flex min-h-[360px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
         <Archive size={28} className="text-ink-muted" />
-        <h3 className="mt-4 text-[15px] font-semibold">No retained artifacts</h3>
+        <h3 className="mt-4 text-[15px] font-semibold">
+          No retained artifacts
+        </h3>
         <p className="mt-2 max-w-[360px] text-[11px] leading-5 text-ink-muted">
           Nothing has been generated or retained for this meeting yet.
         </p>
@@ -574,7 +762,9 @@ function ArtifactsPanel({
   return (
     <div className="min-h-[360px] border border-border bg-canvas">
       <div className="flex h-10 items-center justify-between border-b border-border px-4">
-        <span className="text-[10px] font-medium text-ink-subtle">RETAINED ARTIFACTS</span>
+        <span className="text-[10px] font-medium text-ink-subtle">
+          RETAINED ARTIFACTS
+        </span>
         <span className="text-[10px] text-ink-subtle">{artifacts.length}</span>
       </div>
       <div className="divide-y divide-border">
@@ -590,15 +780,21 @@ function ArtifactsPanel({
               <ArtifactIcon artifact={artifact} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12px] font-medium text-ink">{artifact.title || artifactLabel(artifact.type)}</span>
+              <span className="block truncate text-[12px] font-medium text-ink">
+                {artifact.title || artifactLabel(artifact.type)}
+              </span>
               <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                {artifactLabel(artifact.type)} · {artifact.format || "—"} · {artifactStatusLabel(artifact)}
+                {artifactLabel(artifact.type)} · {artifact.format || "—"} ·{" "}
+                {artifactStatusLabel(artifact)}
               </span>
             </span>
             {busyArtifactId === artifact.id ? (
               <SpinnerGap size={14} className="animate-spin text-ink-muted" />
             ) : (
-              <DownloadSimple size={14} className="text-ink-subtle transition-colors group-hover:text-ink" />
+              <DownloadSimple
+                size={14}
+                className="text-ink-subtle transition-colors group-hover:text-ink"
+              />
             )}
           </button>
         ))}
@@ -608,14 +804,23 @@ function ArtifactsPanel({
 }
 
 function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
-  if (artifact.status === "processing") return <SpinnerGap size={14} className="animate-spin text-ink-muted" />;
-  if (["failed", "missing", "expired"].includes(artifact.status)) return <WarningCircle size={14} className="text-ink-muted" />;
+  if (artifact.status === "processing")
+    return <SpinnerGap size={14} className="animate-spin text-ink-muted" />;
+  if (["failed", "missing", "expired"].includes(artifact.status))
+    return <WarningCircle size={14} className="text-ink-muted" />;
   return <CheckCircle size={14} className="text-primary" />;
 }
 
-function StatusMark({ item, showLabel = false }: { item: QueueItem; showLabel?: boolean }) {
+function StatusMark({
+  item,
+  showLabel = false,
+}: {
+  item: QueueItem;
+  showLabel?: boolean;
+}) {
   const attention =
-    ["failed", "expired"].includes(item.status) || item.room.artifacts.some((artifact) => artifact.consentRequired);
+    ["failed", "expired"].includes(item.status) ||
+    item.room.artifacts.some((artifact) => artifact.consentRequired);
   const label = attention
     ? item.room.artifacts.some((artifact) => artifact.consentRequired)
       ? "Consent required"
@@ -624,11 +829,20 @@ function StatusMark({ item, showLabel = false }: { item: QueueItem; showLabel?: 
       ? "Export not generated"
       : item.status;
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1.5 text-[10px] font-medium capitalize", attention ? "text-ink" : "text-ink-muted")}>
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 text-[10px] font-medium capitalize",
+        attention ? "text-ink" : "text-ink-muted",
+      )}
+    >
       <span
         className={cn(
           "size-1.5 rounded-full",
-          item.status === "ready" && !attention ? "bg-emerald-500" : item.status === "processing" ? "bg-amber-500" : "bg-ink-subtle"
+          item.status === "ready" && !attention
+            ? "bg-emerald-500"
+            : item.status === "processing"
+              ? "bg-amber-500"
+              : "bg-ink-subtle",
         )}
       />
       {showLabel ? label : null}
@@ -636,7 +850,15 @@ function StatusMark({ item, showLabel = false }: { item: QueueItem; showLabel?: 
   );
 }
 
-function ContextRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+function ContextRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="flex items-start justify-between gap-4 py-3 text-[10px]">
       <dt className="flex items-center gap-1.5 text-ink-subtle">
@@ -664,9 +886,18 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
     <div className="grid min-h-[480px] place-items-center text-center">
       <div>
         <WarningCircle size={22} className="mx-auto text-ink-muted" />
-        <p className="mt-3 text-[12px] font-medium">Transcripts could not be loaded</p>
-        <p className="mt-1 text-[11px] text-ink-muted">Check the translation-room service and try again.</p>
-        <Button variant="outline" size="sm" className="mt-4 h-8" onClick={onRetry}>
+        <p className="mt-3 text-[12px] font-medium">
+          Transcripts could not be loaded
+        </p>
+        <p className="mt-1 text-[11px] text-ink-muted">
+          Check the translation-room service and try again.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-4 h-8"
+          onClick={onRetry}
+        >
           Retry
         </Button>
       </div>
@@ -674,13 +905,21 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({ hasQuery }: { hasQuery: boolean }) {
   return (
     <div className="grid min-h-[480px] place-items-center text-center">
       <div>
         <Scroll size={22} className="mx-auto text-ink-muted" />
-        <p className="mt-3 text-[12px] font-medium">No finished meetings yet</p>
-        <p className="mt-1 text-[11px] text-ink-muted">Summaries appear here after a meeting ends.</p>
+        <p className="mt-3 text-[12px] font-medium">
+          {hasQuery
+            ? "No meetings match this search"
+            : "No finished meetings yet"}
+        </p>
+        <p className="mt-1 text-[11px] text-ink-muted">
+          {hasQuery
+            ? "Try a different meeting title, code, or host."
+            : "Transcripts appear here after a meeting ends."}
+        </p>
       </div>
     </div>
   );
@@ -692,11 +931,18 @@ function EmptyState() {
  * keeps the "still generating" spinner from flashing/hydration-mismatching.
  */
 function useRecentlyEnded(endedAt: string, windowMs = 10 * 60 * 1000): boolean {
-  const [recentlyEnded, setRecentlyEnded] = useState(false);
+  const endTime = new Date(endedAt).getTime() + windowMs;
+  const [observedNow, setObservedNow] = useState(() => Date.now());
   useEffect(() => {
-    setRecentlyEnded(Date.now() - new Date(endedAt).getTime() < windowMs);
-  }, [endedAt, windowMs]);
-  return recentlyEnded;
+    const remaining = endTime - Date.now();
+    if (remaining <= 0) return;
+    const timeout = window.setTimeout(
+      () => setObservedNow(Date.now()),
+      remaining + 1,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [endTime]);
+  return observedNow < endTime;
 }
 
 function artifactLabel(type: RoomHistoryArtifact["type"]) {
@@ -712,20 +958,29 @@ function artifactLabel(type: RoomHistoryArtifact["type"]) {
 }
 
 function artifactStatusLabel(artifact: RoomHistoryArtifact) {
-  return artifact.consentRequired ? "Consent required" : artifact.status.charAt(0).toUpperCase() + artifact.status.slice(1);
+  return artifact.consentRequired
+    ? "Consent required"
+    : artifact.status.charAt(0).toUpperCase() + artifact.status.slice(1);
 }
 
 function formatDuration(seconds: number) {
   if (!seconds) return "—";
   const minutes = Math.floor(seconds / 60);
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+  return minutes >= 60
+    ? `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+    : `${minutes}m`;
 }
 
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? "—"
-    : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+    : new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
 }
 
 function formatTimestamp(ms: number) {
@@ -736,6 +991,8 @@ function formatTimestamp(ms: number) {
 }
 
 function formatLanguageRoute(room: EndedRoomHistoryItem) {
-  const targets = room.targetLanguages.length ? room.targetLanguages.join(", ") : "—";
+  const targets = room.targetLanguages.length
+    ? room.targetLanguages.join(", ")
+    : "—";
   return `${room.sourceLanguage.toUpperCase()} → ${targets.toUpperCase()}`;
 }

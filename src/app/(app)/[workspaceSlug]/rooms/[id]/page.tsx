@@ -1,7 +1,16 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
+import Underline from "@tiptap/extension-underline";
+import {
+  EditorContent,
+  useEditor,
+  useEditorState,
+  type Editor,
+} from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
+import StarterKit from "@tiptap/starter-kit";
 import {
   ArrowRight,
   Bold,
@@ -31,29 +40,33 @@ import {
   Users,
   Video,
 } from "lucide-react";
-import { useEditor, useEditorState, EditorContent, type Editor } from "@tiptap/react";
-import { BubbleMenu } from "@tiptap/react/menus";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
-import Link from "@tiptap/extension-link";
-import Placeholder from "@tiptap/extension-placeholder";
+import { useParams, useRouter } from "next/navigation";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore } from "@/stores/ui-store";
-import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import { getLanguageName } from "@/lib/languages";
-import { cn } from "@/lib/utils";
-import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import {
+  useTranscriptByRoom,
+  useTranscriptSegments,
+} from "@/hooks/use-transcripts";
 import {
   useEndTranslationRoom,
   useTranslationRoom,
@@ -62,17 +75,26 @@ import {
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
-import { buildGoogleCalendarUrl, translationRoomService } from "@/services/translationRoom.service";
-import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
+import { getLanguageName } from "@/lib/languages";
+import { saveBlobDownload } from "@/lib/download-artifact";
+import { cn } from "@/lib/utils";
+import {
+  buildGoogleCalendarUrl,
+  translationRoomService,
+} from "@/services/translationRoom.service";
+import { useAuthStore } from "@/stores/auth-store";
+import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { useUIStore } from "@/stores/ui-store";
 import type { UserDto } from "@/types/auth";
+import type { TranscriptSegmentDto } from "@/types/transcript";
 import type {
   TranslationRoomDto,
   TranslationRoomInvitationDto,
   TranslationRoomParticipantDto,
   TranslationRoomStatus,
 } from "@/types/translationRoom";
-import type { TranscriptSegmentDto } from "@/types/transcript";
 import type { WorkspaceMemberDto } from "@/types/workspace";
+import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 
 type ThreadKind = "log" | "note" | "transcript" | "system";
 
@@ -81,8 +103,6 @@ type UserIdentity = {
   name: string;
   email?: string;
   role?: string;
-  workspaceRole?: string;
-  membershipType?: string;
   status?: string;
   avatarUrl?: string;
   speakLanguage?: string;
@@ -120,6 +140,7 @@ const statusLabels: Record<TranslationRoomStatus, string> = {
 
 export default function RoomInformationPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const roomId = params.id;
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
@@ -128,8 +149,12 @@ export default function RoomInformationPage() {
   const invitationsQuery = useTranslationRoomInvitations(roomId);
   const endRoomMutation = useEndTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
-  const liveParticipants = useTranslationRoomStore((state) => state.participants);
-  const liveRoomState = useTranslationRoomStore((state) => state.translationRoomState);
+  const liveParticipants = useTranslationRoomStore(
+    (state) => state.participants,
+  );
+  const liveRoomState = useTranslationRoomStore(
+    (state) => state.translationRoomState,
+  );
   const user = useAuthStore((state) => state.user);
 
   const transcriptQuery = useTranscriptByRoom(roomId);
@@ -141,26 +166,28 @@ export default function RoomInformationPage() {
   const apiInvitations = invitationsQuery.data ?? [];
   const { data: workspaces } = useWorkspaces();
   const validWorkspaceId =
-    room?.workspaceId && room.workspaceId !== "00000000-0000-0000-0000-000000000000"
+    room?.workspaceId &&
+    room.workspaceId !== "00000000-0000-0000-0000-000000000000"
       ? room.workspaceId
       : workspaces?.items?.[0]?.id;
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
   const activeApiParticipants = apiParticipants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status.toLowerCase())
+    ["joined", "connected"].includes(participant.status.toLowerCase()),
   );
   const activeLiveParticipants = liveParticipants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status?.toLowerCase() ?? "")
+    ["joined", "connected"].includes(participant.status?.toLowerCase() ?? ""),
   );
-  const liveStateMatchesRoom = !liveRoomState || liveRoomState.translationRoomId === roomId;
+  const liveStateMatchesRoom =
+    !liveRoomState || liveRoomState.translationRoomId === roomId;
   const activeParticipantCount =
     liveStateMatchesRoom && activeLiveParticipants.length > 0
       ? activeLiveParticipants.length
       : activeApiParticipants.length > 0
         ? activeApiParticipants.length
         : room?.status === "in_progress"
-          ? room.participantCount ?? 0
+          ? (room.participantCount ?? 0)
           : 0;
 
   useRegisterAssistantContext(
@@ -175,7 +202,7 @@ export default function RoomInformationPage() {
             participantCount: String(activeParticipantCount),
           },
         }
-      : null
+      : null,
   );
 
   function handleCopy(text: string, label: string) {
@@ -187,7 +214,9 @@ export default function RoomInformationPage() {
   if (!room) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-[13px] text-muted-foreground">Room information is unavailable.</p>
+        <p className="text-[13px] text-muted-foreground">
+          Room information is unavailable.
+        </p>
       </div>
     );
   }
@@ -197,38 +226,62 @@ export default function RoomInformationPage() {
     .map(getLanguageName);
   const isEnded = room.status === "ended";
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
-  const rawParticipants = buildUserList(room, apiParticipants, apiInvitations, membersArray, user);
-  const hostUser = getHostUser(room, rawParticipants, membersArray, user);
-  const participants = sortRoomPeople(rawParticipants, hostUser);
+  const participants = buildUserList(
+    room,
+    apiParticipants,
+    apiInvitations,
+    membersArray,
+    user,
+  );
+  const hostUser = getHostUser(room, participants, membersArray, user);
   const threadEvents = buildThreadEvents(
     room,
     hostUser,
     participants,
     apiParticipants,
     apiInvitations,
-    languageNames
+    languageNames,
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
+    <div className="flex h-full flex-col overflow-hidden bg-white text-ink">
       {copiedText ? (
         <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md bg-black px-4 py-2 text-[13px] font-medium text-white shadow-lg">
           {copiedText}
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
-        <div className="mx-auto grid min-h-full w-full max-w-[1500px] grid-cols-1 gap-8 px-6 py-8 xl:h-full xl:grid-cols-[minmax(0,1fr)_300px] xl:px-10">
-          <main className="min-w-0 pr-1 xl:min-h-0 xl:overflow-y-auto xl:pr-2">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto grid min-h-full w-full max-w-[1500px] grid-cols-1 gap-8 px-6 py-8 xl:grid-cols-[minmax(0,1fr)_300px] xl:px-10">
+          <main className="min-w-0">
             <div className="mb-8 flex flex-col gap-5 border-b border-border/60 pb-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground">{room.title}</h1>
-                  <MeetingPropertiesPills room={room} apiParticipants={apiParticipants} activeParticipantCount={activeParticipantCount} user={user} />
+                  <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-muted">
+                    <button
+                      type="button"
+                      onClick={() => router.back()}
+                      className="rounded-md px-1.5 py-1 hover:bg-surface-2"
+                    >
+                      Meetings
+                    </button>
+                    <span>/</span>
+                    <span className="truncate text-ink">{room.title}</span>
+                  </div>
+                  <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground">
+                    {room.title}
+                  </h1>
+                  <MeetingPropertiesPills
+                    room={room}
+                    apiParticipants={apiParticipants}
+                    activeParticipantCount={activeParticipantCount}
+                    user={user}
+                  />
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <StatusChip status={room.status} />
-                  {room.hostId === user?.id && (room.status === "scheduled" || room.status === "waiting") ? (
+                  {room.hostId === user?.id &&
+                  (room.status === "scheduled" || room.status === "waiting") ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -246,14 +299,30 @@ export default function RoomInformationPage() {
 
               <div className="grid gap-2 border-y border-border/60 py-2 text-[13px]">
                 <MetadataRow icon={<Users className="size-4" />} label="People">
-                  <PeopleSummary people={participants} />
+                  <div className="flex flex-wrap gap-1.5">
+                    {participants.length > 0
+                      ? participants
+                          .slice(0, 8)
+                          .map((participant) => (
+                            <UserChip key={participant.id} user={participant} />
+                          ))
+                      : "No participants added"}
+                  </div>
                 </MetadataRow>
                 <MetadataRow icon={<Clock className="size-4" />} label="When">
-                  <span>{formatDateTime(room.scheduledAt ?? room.createdAt)}</span>
-                  {room.endedAt ? <span className="text-muted-foreground">- {formatDateTime(room.endedAt)}</span> : null}
+                  <span>
+                    {formatDateTime(room.scheduledAt ?? room.createdAt)}
+                  </span>
+                  {room.endedAt ? (
+                    <span className="text-muted-foreground">
+                      - {formatDateTime(room.endedAt)}
+                    </span>
+                  ) : null}
                 </MetadataRow>
                 <MetadataRow icon={<MapPin className="size-4" />} label="Where">
-                  <InlineChip icon={<Video className="size-3.5" />}>Virtual Audio Bridge</InlineChip>
+                  <InlineChip icon={<Video className="size-3.5" />}>
+                    Virtual Audio Bridge
+                  </InlineChip>
                 </MetadataRow>
               </div>
             </div>
@@ -262,39 +331,91 @@ export default function RoomInformationPage() {
               key={room.id}
               initialContent={room.description ?? ""}
               canEdit={isHost}
-              onSave={(html) => updateRoomSettings.mutateAsync({ id: room.id, data: { description: html } })}
+              onSave={(html) =>
+                updateRoomSettings.mutateAsync({
+                  id: room.id,
+                  data: { description: html },
+                })
+              }
             />
 
-            <MeetingTranscriptArtifact
-              segments={transcriptSegments}
-              baseTime={transcriptQuery.data?.createdAt || room.startedAt || room.createdAt}
-              isEnded={isEnded}
-              isLoading={transcriptQuery.isLoading || segmentsQuery.isLoading}
-              onCopy={handleCopy}
-            />
+            {isEnded || transcriptSegments.length > 0 ? (
+              <MeetingTranscriptArtifact
+                segments={transcriptSegments}
+                baseTime={
+                  transcriptQuery.data?.createdAt ||
+                  room.startedAt ||
+                  room.createdAt
+                }
+                isEnded={isEnded}
+                onCopy={handleCopy}
+              />
+            ) : null}
 
             <RoomThread events={threadEvents} />
           </main>
 
-          <aside className="flex min-w-0 flex-col gap-3 pr-1 xl:sticky xl:top-8 xl:min-h-0 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto xl:pr-0">
+          <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
             <PropertyPanel title="Tracking">
               <PropertyLine label="Organizer">
                 <UserChip user={hostUser} compact />
               </PropertyLine>
-              <AttendeesList attendees={participants.filter((participant) => participant.id !== hostUser.id)} />
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+                  <ChevronDown className="size-3" />
+                  Attendees:{" "}
+                  {
+                    participants.filter(
+                      (participant) => participant.id !== hostUser.id,
+                    ).length
+                  }
+                </div>
+                <div className="space-y-1.5">
+                  {participants.filter(
+                    (participant) => participant.id !== hostUser.id,
+                  ).length > 0 ? (
+                    participants
+                      .filter((participant) => participant.id !== hostUser.id)
+                      .map((participant) => (
+                        <UserRow key={participant.id} user={participant} />
+                      ))
+                  ) : (
+                    <p className="text-[12px] text-muted-foreground">
+                      No attendees yet.
+                    </p>
+                  )}
+                </div>
+              </div>
             </PropertyPanel>
 
             <PropertyPanel title="Actions">
-              <ActionButton icon={<Copy className="size-3.5" />} onClick={() => handleCopy(room.translationRoomCode, "Room code")}>
+              <ActionButton
+                icon={<Copy className="size-3.5" />}
+                onClick={() =>
+                  handleCopy(room.translationRoomCode, "Room code")
+                }
+              >
                 Copy room code
               </ActionButton>
               {isHost ? (
-                <ActionButton icon={<LinkIcon className="size-3.5" />} onClick={() => handleCopy(`${window.location.origin}/join?code=${room.translationRoomCode}`, "Invite link")}>
+                <ActionButton
+                  icon={<LinkIcon className="size-3.5" />}
+                  onClick={() =>
+                    handleCopy(
+                      `${window.location.origin}/join?code=${room.translationRoomCode}`,
+                      "Invite link",
+                    )
+                  }
+                >
                   Copy invite link
                 </ActionButton>
               ) : null}
-              {isUpcomingScheduledRoom(room) ? <AddToCalendarMenu room={room} /> : null}
-              <ActionButton icon={<Star className="size-3.5" />}>Add to favorites</ActionButton>
+              {isUpcomingScheduledRoom(room) ? (
+                <AddToCalendarMenu room={room} />
+              ) : null}
+              <ActionButton icon={<Star className="size-3.5" />}>
+                Add to favorites
+              </ActionButton>
               {isHost && !isEnded && room.status !== "cancelled" ? (
                 <ActionButton
                   destructive
@@ -315,12 +436,14 @@ export default function RoomInformationPage() {
 
             <PropertyPanel title="Meeting access">
               <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
-                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-1 text-ink">
+                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-white text-ink">
                   <Video className="size-4" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[13px] font-semibold">WarpTalk Session</p>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{room.translationRoomCode}</p>
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                    {room.translationRoomCode}
+                  </p>
                 </div>
               </div>
               <Button
@@ -342,57 +465,50 @@ export default function RoomInformationPage() {
 }
 
 function RoomThread({ events }: { events: ThreadEvent[] }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   return (
     <section className="relative mt-8">
-      <button
-        type="button"
-        onClick={() => setIsExpanded((prev) => !prev)}
-        className="mb-2 flex w-full cursor-pointer items-center justify-between gap-3 rounded-md py-1 text-left transition-colors hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        aria-expanded={isExpanded}
-        aria-controls="room-activity-panel"
-      >
-        <div className="flex min-w-0 items-start gap-2">
-          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground">
-            <ChevronDown
-              className={cn("size-4 transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
-            />
-          </span>
-          <div>
-            <h2 className="text-[17px] font-semibold text-ink">Activity</h2>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Room events and participant changes.</p>
-          </div>
+      <div className="mb-2 flex items-center justify-between">
+        <div>
+          <h2 className="text-[17px] font-semibold">Activity</h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Room events and participant changes.
+          </p>
         </div>
-        <InlineChip icon={<MessageSquareText className="size-3.5" />}>{events.length} updates</InlineChip>
-      </button>
+        <InlineChip icon={<MessageSquareText className="size-3.5" />}>
+          {events.length} updates
+        </InlineChip>
+      </div>
 
-      {isExpanded ? (
-        <div id="room-activity-panel" className="relative mt-4 border-l border-border pl-5">
-          <div className="space-y-1">
-            {events.length === 0 ? (
-              <ThreadEmptyState />
-            ) : (
-              events.map((event) => (
-                <article
-                  key={event.id}
-                  className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
-                >
-                  <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
-                  <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                    <KindChip kind={event.kind} />
-                    <UserChip user={event.actor} compact />
-                    <span className="font-medium text-ink">{event.title}</span>
-                    {event.at ? <span className="text-muted-foreground">{event.at}</span> : null}
-                    {event.metadata?.map((item) => <InlineChip key={item}>{item}</InlineChip>)}
-                  </div>
-                  {event.content ? <MarkdownContent content={event.content} /> : null}
-                </article>
-              ))
-            )}
-          </div>
+      <div className="relative mt-4 border-l border-border pl-5">
+        <div className="space-y-1">
+          {events.length === 0 ? (
+            <ThreadEmptyState />
+          ) : (
+            events.map((event) => (
+              <article
+                key={event.id}
+                className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
+              >
+                <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
+                <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                  <KindChip kind={event.kind} />
+                  <UserChip user={event.actor} compact />
+                  <span className="font-medium text-ink">{event.title}</span>
+                  {event.at ? (
+                    <span className="text-muted-foreground">{event.at}</span>
+                  ) : null}
+                  {event.metadata?.map((item) => (
+                    <InlineChip key={item}>{item}</InlineChip>
+                  ))}
+                </div>
+                {event.content ? (
+                  <MarkdownContent content={event.content} />
+                ) : null}
+              </article>
+            ))
+          )}
         </div>
-      ) : null}
+      </div>
     </section>
   );
 }
@@ -415,17 +531,16 @@ function MeetingTranscriptArtifact({
   segments,
   baseTime,
   isEnded,
-  isLoading,
   onCopy,
 }: {
   segments: TranscriptSegmentDto[];
   baseTime?: string;
   isEnded: boolean;
-  isLoading: boolean;
   onCopy: (text: string, label: string) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const ordered = [...segments].sort((left, right) => left.sequenceOrder - right.sequenceOrder);
+  const ordered = [...segments].sort(
+    (left, right) => left.sequenceOrder - right.sequenceOrder,
+  );
   const base = baseTime ? new Date(baseTime) : null;
 
   function segmentTime(startMs: number) {
@@ -438,27 +553,21 @@ function MeetingTranscriptArtifact({
   return (
     <section className="mt-8 border-b border-border/60 pb-7">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => setIsExpanded((prev) => !prev)}
-          className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md py-1 pr-2 text-left transition-colors hover:bg-surface-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          aria-expanded={isExpanded}
-          aria-controls="meeting-transcript-panel"
-        >
-          <span className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground">
-            <ChevronDown
-              className={cn("size-4 transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
-            />
-          </span>
-          <h2 className="shrink-0 text-[15px] font-semibold text-ink">Meeting transcript</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-[15px] font-semibold text-ink">
+            Meeting transcript
+          </h2>
           <InlineChip icon={<FileText className="size-3.5" />}>
-            {isEnded ? "Saved" : "Live"} - {ordered.length} {ordered.length === 1 ? "entry" : "entries"}
+            {isEnded ? "Saved" : "Live"} · {ordered.length}{" "}
+            {ordered.length === 1 ? "entry" : "entries"}
           </InlineChip>
-        </button>
+        </div>
         {ordered.length > 0 ? (
           <button
             type="button"
-            onClick={() => onCopy(assembleTranscriptText(ordered), "Transcript")}
+            onClick={() =>
+              onCopy(assembleTranscriptText(ordered), "Transcript")
+            }
             className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
           >
             <Copy className="size-3.5" />
@@ -467,42 +576,46 @@ function MeetingTranscriptArtifact({
         ) : null}
       </div>
 
-      {isExpanded ? (
-        <div id="meeting-transcript-panel">
-          {isLoading ? (
-          <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" />
-            Loading transcript...
-          </div>
-        ) : ordered.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
-            {isEnded
-              ? "No transcript was captured for this meeting."
-              : "Transcript entries will appear here during the meeting."}
-          </div>
-        ) : (
-          <div className="max-h-[480px] space-y-3 overflow-y-auto rounded-lg border border-border bg-surface-1 p-4 shadow-inner">
-            {ordered.map((segment) => (
-              <div key={segment.id} className="flex flex-col gap-1 border-b border-border/30 pb-2.5 last:border-b-0 last:pb-0">
-                <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                  <span className="font-semibold text-ink">{segment.speakerName || "Unknown speaker"}</span>
-                  <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
-                  {base ? <span className="text-muted-foreground">{segmentTime(segment.startTimeMs)}</span> : null}
-                </div>
-                <p className="text-[13px] leading-6 text-ink-subtle">{segment.originalText}</p>
-              </div>
-            ))}
-          </div>
-        )}
+      {ordered.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+          {isEnded
+            ? "No transcript was captured for this meeting."
+            : "The transcript is saved here as the meeting is transcribed."}
         </div>
-      ) : null}
+      ) : (
+        <div className="space-y-3 rounded-xl border border-border bg-surface-1 p-4">
+          {ordered.map((segment) => (
+            <div key={segment.id} className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                <span className="font-semibold text-ink">
+                  {segment.speakerName || "Unknown speaker"}
+                </span>
+                <InlineChip>
+                  {segment.originalLanguage?.toUpperCase() || "?"}
+                </InlineChip>
+                {base ? (
+                  <span className="text-muted-foreground">
+                    {segmentTime(segment.startTimeMs)}
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-[13px] leading-6 text-ink-subtle">
+                {segment.originalText}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
 function assembleTranscriptText(segments: TranscriptSegmentDto[]): string {
   return segments
-    .map((segment) => `[${segment.speakerName || "Unknown"} (${(segment.originalLanguage || "").toUpperCase()})] ${segment.originalText}`)
+    .map(
+      (segment) =>
+        `[${segment.speakerName || "Unknown"} (${(segment.originalLanguage || "").toUpperCase()})] ${segment.originalText}`,
+    )
     .join("\n");
 }
 
@@ -510,7 +623,9 @@ type SaveState = "idle" | "saving" | "saved";
 
 // tiptap-markdown doesn't augment @tiptap/core's Storage type, so its storage key is untyped.
 function getMarkdown(editor: Editor): string {
-  return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
+  return (
+    editor.storage as unknown as { markdown: { getMarkdown(): string } }
+  ).markdown.getMarkdown();
 }
 
 function RoomNotesEditor({
@@ -544,7 +659,7 @@ function RoomNotesEditor({
           setSaveState("idle");
         });
     },
-    [onSave]
+    [onSave],
   );
 
   const editor = useEditor({
@@ -556,10 +671,14 @@ function RoomNotesEditor({
       Link.configure({
         openOnClick: "whenNotEditable",
         autolink: true,
-        HTMLAttributes: { class: "text-brand-primary underline underline-offset-2" },
+        HTMLAttributes: {
+          class: "text-brand-primary underline underline-offset-2",
+        },
       }),
       Placeholder.configure({
-        placeholder: canEdit ? "Add agenda, context, decisions, or review notes..." : "No room notes yet.",
+        placeholder: canEdit
+          ? "Add agenda, context, decisions, or review notes..."
+          : "No room notes yet.",
         showOnlyWhenEditable: false,
       }),
       Markdown.configure({
@@ -585,7 +704,10 @@ function RoomNotesEditor({
     },
     onUpdate: ({ editor }) => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => flushSave(getMarkdown(editor)), 900);
+      saveTimeoutRef.current = setTimeout(
+        () => flushSave(getMarkdown(editor)),
+        900,
+      );
     },
   });
 
@@ -597,7 +719,8 @@ function RoomNotesEditor({
   // so quickly navigating away doesn't drop the last edit.
   useEffect(() => {
     if (!editor) return;
-    const handleBlur = ({ editor: instance }: { editor: Editor }) => flushSave(getMarkdown(instance));
+    const handleBlur = ({ editor: instance }: { editor: Editor }) =>
+      flushSave(getMarkdown(instance));
     editor.on("blur", handleBlur);
     return () => {
       editor.off("blur", handleBlur);
@@ -633,26 +756,12 @@ function RoomNotesEditor({
         : null,
   });
 
-  const [isExpanded, setIsExpanded] = useState(false);
-
   return (
     <section className="border-b border-border/60 pb-7">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => setIsExpanded((prev) => !prev)}
-          className="flex items-center gap-2 text-left transition-colors hover:opacity-80 focus:outline-none"
-        >
-          <ChevronDown
-            className={cn("size-4 text-muted-foreground transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
-          />
-          <h2 className="text-[15px] font-semibold text-ink">Room notes</h2>
-        </button>
+        <h2 className="text-[15px] font-semibold text-ink">Room notes</h2>
         <SaveIndicator state={saveState} />
       </div>
-
-      {isExpanded ? (
-        <>
 
       {editor && canEdit ? (
         <BubbleMenu
@@ -665,19 +774,61 @@ function RoomNotesEditor({
               <ChevronDown className="size-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-36">
-              <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>Text</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>Heading 1</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>Heading 2</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>Heading 3</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => editor.chain().focus().setParagraph().run()}
+              >
+                Text
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 1 }).run()
+                }
+              >
+                Heading 1
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 2 }).run()
+                }
+              >
+                Heading 2
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 3 }).run()
+                }
+              >
+                Heading 3
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           <ToolbarSeparator />
 
-          <ToolbarButton label="Bold" icon={<Bold className="size-3.5" />} active={editorState?.bold} onClick={() => editor.chain().focus().toggleBold().run()} />
-          <ToolbarButton label="Italic" icon={<Italic className="size-3.5" />} active={editorState?.italic} onClick={() => editor.chain().focus().toggleItalic().run()} />
-          <ToolbarButton label="Underline" icon={<UnderlineIcon className="size-3.5" />} active={editorState?.underline} onClick={() => editor.chain().focus().toggleUnderline().run()} />
-          <ToolbarButton label="Strikethrough" icon={<Strikethrough className="size-3.5" />} active={editorState?.strike} onClick={() => editor.chain().focus().toggleStrike().run()} />
+          <ToolbarButton
+            label="Bold"
+            icon={<Bold className="size-3.5" />}
+            active={editorState?.bold}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+          />
+          <ToolbarButton
+            label="Italic"
+            icon={<Italic className="size-3.5" />}
+            active={editorState?.italic}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+          />
+          <ToolbarButton
+            label="Underline"
+            icon={<UnderlineIcon className="size-3.5" />}
+            active={editorState?.underline}
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+          />
+          <ToolbarButton
+            label="Strikethrough"
+            icon={<Strikethrough className="size-3.5" />}
+            active={editorState?.strike}
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+          />
 
           <ToolbarSeparator />
 
@@ -685,14 +836,39 @@ function RoomNotesEditor({
 
           <ToolbarSeparator />
 
-          <ToolbarButton label="Quote" icon={<Quote className="size-3.5" />} active={editorState?.blockquote} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
-          <ToolbarButton label="Inline code" icon={<Code className="size-3.5" />} active={editorState?.code} onClick={() => editor.chain().focus().toggleCode().run()} />
-          <ToolbarButton label="Code block" icon={<Code2 className="size-3.5" />} active={editorState?.codeBlock} onClick={() => editor.chain().focus().toggleCodeBlock().run()} />
+          <ToolbarButton
+            label="Quote"
+            icon={<Quote className="size-3.5" />}
+            active={editorState?.blockquote}
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          />
+          <ToolbarButton
+            label="Inline code"
+            icon={<Code className="size-3.5" />}
+            active={editorState?.code}
+            onClick={() => editor.chain().focus().toggleCode().run()}
+          />
+          <ToolbarButton
+            label="Code block"
+            icon={<Code2 className="size-3.5" />}
+            active={editorState?.codeBlock}
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          />
 
           <ToolbarSeparator />
 
-          <ToolbarButton label="Bullet list" icon={<List className="size-3.5" />} active={editorState?.bulletList} onClick={() => editor.chain().focus().toggleBulletList().run()} />
-          <ToolbarButton label="Numbered list" icon={<ListOrdered className="size-3.5" />} active={editorState?.orderedList} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+          <ToolbarButton
+            label="Bullet list"
+            icon={<List className="size-3.5" />}
+            active={editorState?.bulletList}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+          />
+          <ToolbarButton
+            label="Numbered list"
+            icon={<ListOrdered className="size-3.5" />}
+            active={editorState?.orderedList}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          />
         </BubbleMenu>
       ) : null}
 
@@ -702,8 +878,6 @@ function RoomNotesEditor({
       >
         <EditorContent editor={editor} />
       </div>
-        </>
-      ) : null}
     </section>
   );
 }
@@ -753,7 +927,7 @@ function ToolbarButton({
       onClick={onClick}
       className={cn(
         "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink",
-        active ? "bg-surface-2 text-ink" : ""
+        active ? "bg-surface-2 text-ink" : "",
       )}
     >
       {icon}
@@ -761,14 +935,25 @@ function ToolbarButton({
   );
 }
 
-function LinkToolbarButton({ editor, active }: { editor: Editor; active?: boolean }) {
+function LinkToolbarButton({
+  editor,
+  active,
+}: {
+  editor: Editor;
+  active?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
 
   function submitLink() {
     const trimmed = url.trim();
     if (trimmed) {
-      editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .setLink({ href: trimmed })
+        .run();
     } else {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
     }
@@ -787,7 +972,7 @@ function LinkToolbarButton({ editor, active }: { editor: Editor; active?: boolea
         onMouseDown={(event) => event.preventDefault()}
         className={cn(
           "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink",
-          active ? "bg-surface-2 text-ink" : ""
+          active ? "bg-surface-2 text-ink" : "",
         )}
         title="Link"
         aria-label="Link"
@@ -807,9 +992,13 @@ function LinkToolbarButton({ editor, active }: { editor: Editor; active?: boolea
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             placeholder="Paste a link..."
-            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-white px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
-          <Button type="submit" size="sm" className="h-8 shrink-0 rounded-md text-[12px] !text-white">
+          <Button
+            type="submit"
+            size="sm"
+            className="h-8 shrink-0 rounded-md text-[12px] !text-white"
+          >
             Apply
           </Button>
         </form>
@@ -818,70 +1007,44 @@ function LinkToolbarButton({ editor, active }: { editor: Editor; active?: boolea
   );
 }
 
-function PeopleSummary({ people }: { people: UserIdentity[] }) {
-  const visiblePeople = people.slice(0, 4);
-  const hiddenPeople = people.slice(4);
-
-  if (people.length === 0) {
-    return <span className="text-[13px] text-muted-foreground">No participants added</span>;
-  }
-
-  return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-      {visiblePeople.map((participant) => (
-        <UserChip key={participant.id} user={participant} />
-      ))}
-      {hiddenPeople.length > 0 ? (
-        <Popover>
-          <PopoverTrigger
-            className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-            aria-label={`Show ${hiddenPeople.length} more people`}
-          >
-            <MoreHorizontal className="size-3.5" />
-            <span>+{hiddenPeople.length}</span>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-[320px] rounded-xl border-border/70 p-3 shadow-xl">
-            <div className="flex items-center justify-between border-b border-border pb-2">
-              <div>
-                <p className="text-[13px] font-semibold text-ink">People</p>
-                <p className="text-[11px] text-muted-foreground">{people.length} participants and invitees</p>
-              </div>
-              <InlineChip>{hiddenPeople.length} more</InlineChip>
-            </div>
-            <div className="mt-2 max-h-[320px] space-y-1 overflow-y-auto pr-1">
-              {people.map((participant) => (
-                <UserRow key={participant.id} user={participant} />
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-      ) : null}
-    </div>
-  );
-}
-
-function UserChip({ user, compact = false }: { user: UserIdentity; compact?: boolean }) {
+function UserChip({
+  user,
+  compact = false,
+}: {
+  user: UserIdentity;
+  compact?: boolean;
+}) {
   return (
     <Popover>
       <PopoverTrigger
         className={cn(
-          "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-border bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          compact ? "h-6 px-1.5 pr-2 text-[11px]" : "h-7 px-2 pr-2.5 text-[12px]"
+          "inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          compact
+            ? "h-6 px-1.5 pr-2 text-[11px]"
+            : "h-7 px-2 pr-2.5 text-[12px]",
         )}
       >
-        <AvatarInitial user={user} className={compact ? "size-4 text-[9px]" : "size-5 text-[10px]"} />
+        <AvatarInitial
+          user={user}
+          className={compact ? "size-4 text-[9px]" : "size-5 text-[10px]"}
+        />
         <span className="truncate font-medium">{user.name}</span>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[260px] rounded-xl border-border/70 p-3 shadow-xl">
+      <PopoverContent
+        align="start"
+        className="w-[260px] rounded-xl border-border/70 p-3 shadow-xl"
+      >
         <div className="flex items-start gap-3">
           <AvatarInitial user={user} className="size-10 text-[14px]" />
           <div className="min-w-0">
-            <p className="truncate text-[14px] font-semibold text-ink">{user.name}</p>
-            <p className="truncate text-[12px] text-muted-foreground">{user.email ?? user.id}</p>
+            <p className="truncate text-[14px] font-semibold text-ink">
+              {user.name}
+            </p>
+            <p className="truncate text-[12px] text-muted-foreground">
+              {user.email ?? user.id}
+            </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {user.role ? <InlineChip>{user.role}</InlineChip> : null}
-              {user.workspaceRole ? <InlineChip>{user.workspaceRole}</InlineChip> : null}
-              {user.membershipType ? <InlineChip>{normalizeLabel(user.membershipType)}</InlineChip> : null}
               {user.status ? <InlineChip>{user.status}</InlineChip> : null}
             </div>
           </div>
@@ -889,11 +1052,19 @@ function UserChip({ user, compact = false }: { user: UserIdentity; compact?: boo
         <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
           <div>
             <p>Speaks</p>
-            <p className="mt-0.5 font-medium text-ink">{user.speakLanguage ? getLanguageName(user.speakLanguage) : "Not set"}</p>
+            <p className="mt-0.5 font-medium text-ink">
+              {user.speakLanguage
+                ? getLanguageName(user.speakLanguage)
+                : "Not set"}
+            </p>
           </div>
           <div>
             <p>Listens</p>
-            <p className="mt-0.5 font-medium text-ink">{user.listenLanguage ? getLanguageName(user.listenLanguage) : "Not set"}</p>
+            <p className="mt-0.5 font-medium text-ink">
+              {user.listenLanguage
+                ? getLanguageName(user.listenLanguage)
+                : "Not set"}
+            </p>
           </div>
         </div>
       </PopoverContent>
@@ -908,30 +1079,96 @@ function MarkdownContent({ content }: { content: string }) {
       {blocks.map((block, index) => {
         switch (block.type) {
           case "h1":
-            return <h1 key={index} className="text-[20px] font-semibold leading-7 text-ink">{renderInlineMarkdown(block.text)}</h1>;
+            return (
+              <h1
+                key={index}
+                className="text-[20px] font-semibold leading-7 text-ink"
+              >
+                {renderInlineMarkdown(block.text)}
+              </h1>
+            );
           case "h2":
-            return <h2 key={index} className="text-[17px] font-semibold leading-6 text-ink">{renderInlineMarkdown(block.text)}</h2>;
+            return (
+              <h2
+                key={index}
+                className="text-[17px] font-semibold leading-6 text-ink"
+              >
+                {renderInlineMarkdown(block.text)}
+              </h2>
+            );
           case "h3":
-            return <h3 key={index} className="text-[15px] font-semibold leading-6 text-ink">{renderInlineMarkdown(block.text)}</h3>;
+            return (
+              <h3
+                key={index}
+                className="text-[15px] font-semibold leading-6 text-ink"
+              >
+                {renderInlineMarkdown(block.text)}
+              </h3>
+            );
           case "ul":
-            return <ul key={index} className="list-disc space-y-1 pl-5">{block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}</ul>;
+            return (
+              <ul key={index} className="list-disc space-y-1 pl-5">
+                {block.items.map((item, itemIndex) => (
+                  <li key={itemIndex}>{renderInlineMarkdown(item)}</li>
+                ))}
+              </ul>
+            );
           case "ol":
-            return <ol key={index} className="list-decimal space-y-1 pl-5">{block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}</ol>;
+            return (
+              <ol key={index} className="list-decimal space-y-1 pl-5">
+                {block.items.map((item, itemIndex) => (
+                  <li key={itemIndex}>{renderInlineMarkdown(item)}</li>
+                ))}
+              </ol>
+            );
           case "quote":
-            return <blockquote key={index} className="border-l-2 border-primary/50 pl-3 text-muted-foreground">{renderInlineMarkdown(block.text)}</blockquote>;
+            return (
+              <blockquote
+                key={index}
+                className="border-l-2 border-primary/50 pl-3 text-muted-foreground"
+              >
+                {renderInlineMarkdown(block.text)}
+              </blockquote>
+            );
           case "code":
-            return <pre key={index} className="overflow-x-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-[12px] leading-5 text-ink"><code>{block.text}</code></pre>;
+            return (
+              <pre
+                key={index}
+                className="overflow-x-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-[12px] leading-5 text-ink"
+              >
+                <code>{block.text}</code>
+              </pre>
+            );
           case "table":
             return (
-              <div key={index} className="overflow-x-auto rounded-lg border border-border">
+              <div
+                key={index}
+                className="overflow-x-auto rounded-lg border border-border"
+              >
                 <table className="min-w-full border-collapse text-left text-[12px]">
                   <thead className="bg-surface-2 text-ink">
-                    <tr>{block.headers.map((header) => <th key={header} className="border-b border-border px-3 py-2 font-medium">{renderInlineMarkdown(header)}</th>)}</tr>
+                    <tr>
+                      {block.headers.map((header) => (
+                        <th
+                          key={header}
+                          className="border-b border-border px-3 py-2 font-medium"
+                        >
+                          {renderInlineMarkdown(header)}
+                        </th>
+                      ))}
+                    </tr>
                   </thead>
                   <tbody>
                     {block.rows.map((row, rowIndex) => (
-                      <tr key={rowIndex} className="border-b border-border last:border-b-0">
-                        {row.map((cell, cellIndex) => <td key={cellIndex} className="px-3 py-2 align-top">{renderInlineMarkdown(cell)}</td>)}
+                      <tr
+                        key={rowIndex}
+                        className="border-b border-border last:border-b-0"
+                      >
+                        {row.map((cell, cellIndex) => (
+                          <td key={cellIndex} className="px-3 py-2 align-top">
+                            {renderInlineMarkdown(cell)}
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
@@ -978,7 +1215,10 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
       index += 1;
       continue;
     }
-    if (/^\|.+\|$/.test(line) && /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(lines[index + 1] ?? "")) {
+    if (
+      /^\|.+\|$/.test(line) &&
+      /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(lines[index + 1] ?? "")
+    ) {
       const headers = splitTableRow(line);
       const rows: string[][] = [];
       index += 2;
@@ -1020,7 +1260,11 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
 
     const paragraph = [line];
     index += 1;
-    while (index < lines.length && lines[index].trim() && !/^#{1,3}\s|^[-*]\s+|^\d+\.\s+|^>\s+|^```|^\|.+\|$/.test(lines[index])) {
+    while (
+      index < lines.length &&
+      lines[index].trim() &&
+      !/^#{1,3}\s|^[-*]\s+|^\d+\.\s+|^>\s+|^```|^\|.+\|$/.test(lines[index])
+    ) {
       paragraph.push(lines[index]);
       index += 1;
     }
@@ -1031,27 +1275,52 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
 }
 
 function renderInlineMarkdown(text: string): ReactNode[] {
-  const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+  const tokens = text
+    .split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g)
+    .filter(Boolean);
   return tokens.map((token, index) => {
     if (token.startsWith("**") && token.endsWith("**")) {
-      return <strong key={index} className="font-semibold text-ink">{token.slice(2, -2)}</strong>;
+      return (
+        <strong key={index} className="font-semibold text-ink">
+          {token.slice(2, -2)}
+        </strong>
+      );
     }
     if (token.startsWith("*") && token.endsWith("*")) {
       return <em key={index}>{token.slice(1, -1)}</em>;
     }
     if (token.startsWith("`") && token.endsWith("`")) {
-      return <code key={index} className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[12px] text-ink">{token.slice(1, -1)}</code>;
+      return (
+        <code
+          key={index}
+          className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[12px] text-ink"
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
     }
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (link) {
-      return <a key={index} href={link[2]} className="font-medium text-primary underline underline-offset-3">{link[1]}</a>;
+      return (
+        <a
+          key={index}
+          href={link[2]}
+          className="font-medium text-primary underline underline-offset-3"
+        >
+          {link[1]}
+        </a>
+      );
     }
     return <span key={index}>{token}</span>;
   });
 }
 
 function splitTableRow(line: string) {
-  return line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+  return line
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
 }
 
 function buildThreadEvents(
@@ -1060,7 +1329,7 @@ function buildThreadEvents(
   participants: UserIdentity[],
   roomParticipants: TranslationRoomParticipantDto[],
   invitations: TranslationRoomInvitationDto[],
-  languageNames: string[]
+  languageNames: string[],
 ): ThreadEvent[] {
   const events: ThreadEvent[] = [
     {
@@ -1082,7 +1351,9 @@ function buildThreadEvents(
       kind: "log" as const,
       title: "Participant joined",
       at: formatDateTime(participant.joinedAt),
-      actor: participants.find((item) => item.id === participant.userId) ?? toUserIdentity(participant),
+      actor:
+        participants.find((item) => item.id === participant.userId) ??
+        toUserIdentity(participant),
       accent: "muted" as const,
       content: `Joined with **${getLanguageName(participant.speakLanguage)}** speaking and **${getLanguageName(participant.listenLanguage)}** listening.`,
       metadata: [normalizeLabel(participant.status) ?? "Joined"],
@@ -1131,55 +1402,67 @@ function buildUserList(
   participants: TranslationRoomParticipantDto[],
   invitations: TranslationRoomInvitationDto[],
   membersArray: WorkspaceMemberDto[],
-  currentUser: UserDto | null
+  currentUser: UserDto | null,
 ): UserIdentity[] {
-  const mapped = participants.map((participant) => toUserIdentity(participant, membersArray, currentUser));
+  const mapped = participants.map((participant) =>
+    toUserIdentity(participant, membersArray, currentUser),
+  );
   if (!mapped.some((participant) => participant.id === room.hostId)) {
-    const hostMember = findWorkspaceMember(room.hostId, membersArray, currentUser);
     mapped.unshift({
       id: room.hostId,
       name: resolveUserName(room.hostId, membersArray, currentUser),
-      email: hostMember?.email ?? (room.hostId === currentUser?.id ? currentUser?.email : undefined),
+      email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
       role: "Organizer",
-      workspaceRole: hostMember?.roleName,
-      membershipType: hostMember?.membershipType,
       status: "Organizer",
     });
   }
 
   for (const invitation of invitations) {
-    const member = membersArray.find((item) => item.userId === invitation.email || item.id === invitation.email || item.email === invitation.email);
+    const member = membersArray.find(
+      (item) =>
+        item.userId === invitation.email ||
+        item.id === invitation.email ||
+        item.email === invitation.email,
+    );
     const name = member?.fullName || invitation.email;
-    if (!mapped.some((participant) => participant.email?.toLowerCase() === invitation.email.toLowerCase() || participant.id === invitation.email)) {
+    if (
+      !mapped.some(
+        (participant) =>
+          participant.email === invitation.email ||
+          participant.id === invitation.email,
+      )
+    ) {
       mapped.push({
         id: invitation.id ?? invitation.email,
         name,
         email: invitation.email,
         role: "Invitee",
-        workspaceRole: member?.roleName,
-        membershipType: member?.membershipType,
         status: invitation.status ? invitation.status.toLowerCase() : "pending",
       });
     }
   }
 
-  return dedupeRoomPeople(mapped);
+  return mapped;
 }
 
 function toUserIdentity(
   participant: TranslationRoomParticipantDto,
   membersArray: WorkspaceMemberDto[] = [],
-  currentUser: UserDto | null = null
+  currentUser: UserDto | null = null,
 ): UserIdentity {
-  const member = findWorkspaceMember(participant.userId, membersArray, currentUser);
-  const role = participant.role.toLowerCase() === "host" ? "Organizer" : normalizeLabel(participant.role);
+  const role =
+    participant.role.toLowerCase() === "host"
+      ? "Organizer"
+      : normalizeLabel(participant.role);
   return {
     id: participant.userId || participant.id,
-    name: resolveUserName(participant.userId, membersArray, currentUser, participant.displayName),
-    email: member?.email,
+    name: resolveUserName(
+      participant.userId,
+      membersArray,
+      currentUser,
+      participant.displayName,
+    ),
     role,
-    workspaceRole: member?.roleName,
-    membershipType: member?.membershipType,
     status: normalizeLabel(participant.status),
     avatarUrl: participant.avatarUrl,
     speakLanguage: participant.speakLanguage,
@@ -1191,82 +1474,35 @@ function getHostUser(
   room: TranslationRoomDto,
   participants: UserIdentity[],
   membersArray: WorkspaceMemberDto[],
-  currentUser: UserDto | null
+  currentUser: UserDto | null,
 ) {
-  const hostMember = findWorkspaceMember(room.hostId, membersArray, currentUser);
-  return participants.find((participant) => participant.id === room.hostId) ?? {
-    id: room.hostId,
-    name: resolveUserName(room.hostId, membersArray, currentUser),
-    email: hostMember?.email ?? (room.hostId === currentUser?.id ? currentUser?.email : undefined),
-    role: "Organizer",
-    workspaceRole: hostMember?.roleName,
-    membershipType: hostMember?.membershipType,
-    status: "Organizer",
-  };
-}
-
-function findWorkspaceMember(
-  userId: string | undefined,
-  membersArray: WorkspaceMemberDto[],
-  currentUser: UserDto | null
-) {
-  if (!userId) return undefined;
-  return membersArray.find(
-    (item) =>
-      item.userId === userId ||
-      item.id === userId ||
-      item.email === userId ||
-      (userId === currentUser?.id && item.email === currentUser.email)
+  return (
+    participants.find((participant) => participant.id === room.hostId) ?? {
+      id: room.hostId,
+      name: resolveUserName(room.hostId, membersArray, currentUser),
+      email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
+      role: "Organizer",
+      status: "Organizer",
+    }
   );
 }
 
-function dedupeRoomPeople(people: UserIdentity[]) {
-  const seen = new Set<string>();
-  const deduped: UserIdentity[] = [];
-
-  for (const person of people) {
-    const key = person.email?.toLowerCase() || person.id;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(person);
-  }
-
-  return deduped;
-}
-
-function sortRoomPeople(people: UserIdentity[], hostUser: UserIdentity) {
-  return dedupeRoomPeople(people).sort((left, right) => {
-    const leftRank = getRoomPeopleRank(left, hostUser);
-    const rightRank = getRoomPeopleRank(right, hostUser);
-    if (leftRank !== rightRank) return leftRank - rightRank;
-    return left.name.localeCompare(right.name);
-  });
-}
-
-function getRoomPeopleRank(user: UserIdentity, hostUser: UserIdentity) {
-  if (
-    user.id === hostUser.id ||
-    (Boolean(user.email && hostUser.email) && user.email?.toLowerCase() === hostUser.email?.toLowerCase()) ||
-    user.role?.toLowerCase() === "organizer"
-  ) {
-    return 0;
-  }
-
-  const workspaceRole = user.workspaceRole?.toLowerCase() ?? "";
-  const membershipType = user.membershipType?.toLowerCase() ?? "";
-
-  if (workspaceRole === "owner") return 1;
-  if (workspaceRole === "admin") return 2;
-  if (membershipType === "internal" || workspaceRole) return 3;
-  return 4;
-}
-
-function MetadataRow({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+function MetadataRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <div className="grid min-h-9 grid-cols-[28px_90px_minmax(0,1fr)] items-center gap-2">
       <div className="flex justify-center text-muted-foreground">{icon}</div>
       <div className="text-[12px] text-muted-foreground">{label}</div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">{children}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">
+        {children}
+      </div>
     </div>
   );
 }
@@ -1274,80 +1510,31 @@ function MetadataRow({ icon, label, children }: { icon: ReactNode; label: string
 function PropertyPanel({
   title,
   children,
-  defaultOpen = false,
 }: {
   title: string;
   children: ReactNode;
-  defaultOpen?: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
   return (
-    <div className="flex max-h-[min(560px,calc(100vh-5rem))] min-h-0 flex-col overflow-hidden rounded-[10px] border border-border bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all">
-      <div className="flex min-h-11 shrink-0 items-center justify-between px-3">
-        <button
-          type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md px-0.5 text-left text-[12px] font-semibold text-ink transition-colors hover:bg-surface-2 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          aria-expanded={isOpen}
-          aria-controls={`room-property-panel-${title.toLowerCase().replace(/\s+/g, "-")}`}
-        >
-          <span className="truncate">{title}</span>
-          <ChevronDown
-            className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform duration-200", isOpen ? "" : "-rotate-90")}
-          />
-        </button>
-        <button
-          type="button"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
-          aria-label={`${title} options`}
-        >
-          <MoreHorizontal className="size-4" />
-        </button>
+    <div className="rounded-[10px] border border-border bg-surface-1 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="flex items-center gap-1 px-0.5 text-[12px] font-medium text-muted-foreground">
+          {title}
+          <ChevronDown className="size-3" />
+        </span>
+        <MoreHorizontal className="size-4 text-muted-foreground" />
       </div>
-      {isOpen ? (
-        <div
-          id={`room-property-panel-${title.toLowerCase().replace(/\s+/g, "-")}`}
-          className="min-h-0 space-y-3 overflow-y-auto px-3 pb-3"
-        >
-          {children}
-        </div>
-      ) : null}
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }
 
-function AttendeesList({ attendees }: { attendees: UserIdentity[] }) {
-  const [isOpen, setIsOpen] = useState(true);
-
-  return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        aria-expanded={isOpen}
-        aria-controls="room-attendees-panel"
-      >
-        <span>Attendees: {attendees.length}</span>
-        <ChevronDown
-          className={cn("size-3 transition-transform duration-200", isOpen ? "" : "-rotate-90")}
-        />
-      </button>
-      {isOpen ? (
-        <div id="room-attendees-panel" className="max-h-[320px] space-y-1.5 overflow-y-auto pr-1">
-          {attendees.length > 0 ? (
-            attendees.map((participant) => <UserRow key={participant.id} user={participant} />)
-          ) : (
-            <p className="text-[12px] text-muted-foreground">No attendees yet.</p>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function PropertyLine({ label, children }: { label: string; children: ReactNode }) {
+function PropertyLine({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <div className="space-y-1.5">
       <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
@@ -1358,16 +1545,30 @@ function PropertyLine({ label, children }: { label: string; children: ReactNode 
 
 function UserRow({ user }: { user: UserIdentity }) {
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-2/70">
-      <div className="min-w-0 flex-1">
-        <UserChip user={user} compact />
-      </div>
-      {user.status ? <span className="max-w-[76px] shrink-0 truncate text-right text-[11px] text-muted-foreground">{user.status}</span> : null}
+    <div className="flex items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-2/70">
+      <UserChip user={user} compact />
+      {user.status ? (
+        <span className="truncate text-[11px] text-muted-foreground">
+          {user.status}
+        </span>
+      ) : null}
     </div>
   );
 }
 
-function ActionButton({ children, icon, destructive, disabled, onClick }: { children: ReactNode; icon: ReactNode; destructive?: boolean; disabled?: boolean; onClick?: () => void }) {
+function ActionButton({
+  children,
+  icon,
+  destructive,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  destructive?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <button
       type="button"
@@ -1375,29 +1576,34 @@ function ActionButton({ children, icon, destructive, disabled, onClick }: { chil
       onClick={onClick}
       className={cn(
         "flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] transition-colors hover:bg-surface-2 disabled:opacity-50",
-        destructive ? "text-red-500 hover:bg-red-500/10" : "text-muted-foreground"
+        destructive
+          ? "text-red-500 hover:bg-red-500/10"
+          : "text-muted-foreground",
       )}
     >
       {icon}
-      <span className={cn("text-foreground", destructive && "text-red-500")}>{children}</span>
+      <span className={cn("text-foreground", destructive && "text-red-500")}>
+        {children}
+      </span>
     </button>
   );
 }
 
 /** WT-14: only offer calendar export for a room that is still SCHEDULED and hasn't started yet. */
 function isUpcomingScheduledRoom(room: TranslationRoomDto): boolean {
-  return room.status === "scheduled" && Boolean(room.scheduledAt) && new Date(room.scheduledAt!).getTime() > Date.now();
+  return (
+    room.status === "scheduled" &&
+    Boolean(room.scheduledAt) &&
+    new Date(room.scheduledAt!).getTime() > Date.now()
+  );
 }
 
 function AddToCalendarMenu({ room }: { room: TranslationRoomDto }) {
   const joinLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
 
-  function handleDownloadIcs() {
-    const url = translationRoomService.getCalendarIcsUrl(room.id);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "meeting.ics";
-    link.click();
+  async function handleDownloadIcs() {
+    const { data } = await translationRoomService.downloadCalendarIcs(room.id);
+    saveBlobDownload(data, "meeting.ics");
   }
 
   function handleAddToGoogleCalendar() {
@@ -1417,7 +1623,7 @@ function AddToCalendarMenu({ room }: { room: TranslationRoomDto }) {
         <span className="text-foreground">Add to calendar</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
-        <DropdownMenuItem onClick={handleDownloadIcs}>
+        <DropdownMenuItem onClick={() => void handleDownloadIcs()}>
           <Download className="mr-2 size-3.5" />
           Download .ics
         </DropdownMenuItem>
@@ -1440,14 +1646,27 @@ function StatusChip({ status }: { status: TranslationRoomStatus }) {
 
 function StatusDot({ status }: { status: string }) {
   const isLive = status === "in_progress";
-  return <span className={cn("size-2 rounded-full", isLive ? "bg-blue-500" : "bg-muted-foreground/50")} />;
+  return (
+    <span
+      className={cn(
+        "size-2 rounded-full",
+        isLive ? "bg-blue-500" : "bg-muted-foreground/50",
+      )}
+    />
+  );
 }
 
-function InlineChip({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
+function InlineChip({
+  children,
+  icon,
+}: {
+  children: ReactNode;
+  icon?: ReactNode;
+}) {
   return (
     <span className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       {icon}
-      <span className="min-w-0 truncate">{children}</span>
+      <span className="truncate">{children}</span>
     </span>
   );
 }
@@ -1456,15 +1675,29 @@ function KindChip({ kind }: { kind: ThreadKind }) {
   const config: Record<ThreadKind, { icon: ReactNode; label: string }> = {
     log: { icon: <Hash className="size-3.5" />, label: "Event" },
     note: { icon: <Hash className="size-3.5" />, label: "Note" },
-    transcript: { icon: <MessageSquareText className="size-3.5" />, label: "Transcript" },
+    transcript: {
+      icon: <MessageSquareText className="size-3.5" />,
+      label: "Transcript",
+    },
     system: { icon: <Hash className="size-3.5" />, label: "System" },
   };
   return <InlineChip icon={config[kind].icon}>{config[kind].label}</InlineChip>;
 }
 
-function AvatarInitial({ user, className }: { user: UserIdentity; className?: string }) {
+function AvatarInitial({
+  user,
+  className,
+}: {
+  user: UserIdentity;
+  className?: string;
+}) {
   return (
-    <span className={cn("flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold uppercase text-primary", className)}>
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold uppercase text-primary",
+        className,
+      )}
+    >
       {user.name?.charAt(0) || "U"}
     </span>
   );
@@ -1472,21 +1705,27 @@ function AvatarInitial({ user, className }: { user: UserIdentity; className?: st
 
 function normalizeLabel(value?: string) {
   if (!value) return undefined;
-  return value.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return value
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function resolveUserName(
   userId: string | undefined,
   membersArray: WorkspaceMemberDto[],
   currentUser: UserDto | null,
-  fallback?: string
+  fallback?: string,
 ) {
   if (userId && userId === currentUser?.id) {
     return currentUser.fullName || currentUser.email || "Current user";
   }
 
   const member = userId
-    ? membersArray.find((item) => item.userId === userId || item.id === userId || item.email === userId)
+    ? membersArray.find(
+        (item) =>
+          item.userId === userId || item.id === userId || item.email === userId,
+      )
     : undefined;
   if (member?.fullName) return member.fullName;
   if (member?.email) return member.email;
@@ -1511,7 +1750,14 @@ function formatDuration(room: TranslationRoomDto) {
   const seconds =
     room.durationSeconds ??
     (room.startedAt && room.endedAt
-      ? Math.max(0, Math.round((new Date(room.endedAt).getTime() - new Date(room.startedAt).getTime()) / 1000))
+      ? Math.max(
+          0,
+          Math.round(
+            (new Date(room.endedAt).getTime() -
+              new Date(room.startedAt).getTime()) /
+              1000,
+          ),
+        )
       : 0);
   if (!seconds) return "0m";
   const hours = Math.floor(seconds / 3600);

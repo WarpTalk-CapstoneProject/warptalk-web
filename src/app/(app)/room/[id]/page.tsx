@@ -10,7 +10,12 @@ import { HubConnectionState } from "@microsoft/signalr";
 import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import { resolveTranscriptSpeakerName } from "@/lib/transcript-display";
-import { useJoinMeeting, useSetMuteOnEntry, useSetRecording, useSetRoomLock } from "@/hooks/use-meeting";
+import {
+  useJoinMeeting,
+  useSetMuteOnEntry,
+  useSetRecording,
+  useSetRoomLock,
+} from "@/hooks/use-meeting";
 import {
   useStartTranslationRoom,
   useEndTranslationRoom,
@@ -25,28 +30,55 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
-import type { ParticipantInfoDto, TranscriptSegmentDto, TranslationRoomStateDto, TranslationTextDto, VoiceOptionDto } from "@/types/realtime";
-import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
+import type {
+  ParticipantInfoDto,
+  TranscriptSegmentDto,
+  TranslationRoomStateDto,
+  TranslationTextDto,
+  VoiceOptionDto,
+} from "@/types/realtime";
+import type {
+  TranslationRoomDto,
+  TranslationRoomParticipantDto,
+} from "@/types/translationRoom";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
 // Import Refactored Components
 import { MeetingTopBar } from "@/components/rooms/live/meeting-top-bar";
-import { MeetingControlBar, type MeetingLayoutMode } from "@/components/rooms/live/meeting-control-bar";
+import {
+  MeetingControlBar,
+  type MeetingLayoutMode,
+} from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
-import { TrackProcessorsController, writeTrackEffectsPreferences } from "@/hooks/use-track-processors";
+import {
+  TrackProcessorsController,
+  writeTrackEffectsPreferences,
+} from "@/hooks/use-track-processors";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
-import { MeetingSidePanel, type SidePanelMode } from "@/components/rooms/live/side-panel/meeting-side-panel";
-import { WaitingRoomView, StatePanel } from "@/components/rooms/live/waiting-room-view";
-import { ReactionOverlay, type FloatingReaction } from "@/components/rooms/live/reaction-overlay";
+import {
+  MeetingSidePanel,
+  type SidePanelMode,
+} from "@/components/rooms/live/side-panel/meeting-side-panel";
+import {
+  WaitingRoomView,
+  StatePanel,
+} from "@/components/rooms/live/waiting-room-view";
+import {
+  ReactionOverlay,
+  type FloatingReaction,
+} from "@/components/rooms/live/reaction-overlay";
 import { pollsQueryKey } from "@/hooks/use-polls";
 import { questionsQueryKey } from "@/hooks/use-qa";
 import type { PollDto, PollTally } from "@/types/poll";
 import type { QuestionDto } from "@/types/question";
 import { BreakoutSetupModal } from "@/components/rooms/live/breakout-setup-modal";
 import { LanguagePickerModal } from "@/components/rooms/live/language-picker-modal";
-import { fetchMyBreakoutAssignment, useEndBreakouts } from "@/hooks/use-breakouts";
+import {
+  fetchMyBreakoutAssignment,
+  useEndBreakouts,
+} from "@/hooks/use-breakouts";
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 
 function getJoinLink(code: string) {
@@ -55,15 +87,25 @@ function getJoinLink(code: string) {
 }
 
 function isInstantRoom(room: TranslationRoomDto) {
-  return ["instant", "group", "one_to_one", "webinar", "b2b_virtual_mic"].includes(room.translationRoomType);
+  return [
+    "instant",
+    "group",
+    "one_to_one",
+    "webinar",
+    "b2b_virtual_mic",
+  ].includes(room.translationRoomType);
 }
 
 export default function RoomDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
   const roomId = params.id;
   const user = useAuthStore((state) => state.user);
   const roomQuery = useTranslationRoom(roomId);
@@ -73,17 +115,20 @@ export default function RoomDetailPage() {
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
-  const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } = useJoinMeeting();
+  const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } =
+    useJoinMeeting();
 
   const autoStartedRef = useRef(false);
   const meetingJoinedRef = useRef(false);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
-  const [meetingSession, setMeetingSession] = useState<JoinMeetingResponseDto | null>(null);
+  const [meetingSession, setMeetingSession] =
+    useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [warptalkStarted, setWarptalkStarted] = useState(false);
-  const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>("transcript");
+  const [sidePanelMode, setSidePanelMode] =
+    useState<SidePanelMode>("transcript");
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [localMediaError, setLocalMediaError] = useState<string | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
@@ -91,7 +136,9 @@ export default function RoomDetailPage() {
   // Local-only tile pin (WT-03) — clicking a tile toggles it; overridden by spotlight below.
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
   // Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged.
-  const [spotlightedUserId, setSpotlightedUserId] = useState<string | null>(null);
+  const [spotlightedUserId, setSpotlightedUserId] = useState<string | null>(
+    null,
+  );
   // TranslationRoomHub.RaiseHand broadcasts via OthersInGroup, so the caller tracks its
   // own raised state locally — the store's raisedHands only ever holds OTHER userIds.
   const [handRaised, setHandRaisedState] = useState(false);
@@ -105,12 +152,35 @@ export default function RoomDetailPage() {
   const languagePickerShownRef = useRef(false);
 
   // Read config from sessionStorage
-  const savedDevices = typeof window !== 'undefined' ? JSON.parse(window.sessionStorage.getItem('warptalk.devices.preview') || '{}') : {};
-  const savedJoinConfig = typeof window !== 'undefined' ? JSON.parse(window.sessionStorage.getItem('warptalk.join.preview') || '{}') : {};
-  const [cameraEnabled, setCameraEnabled] = useState<boolean>(savedDevices.cameraEnabled ?? savedJoinConfig.cameraEnabled ?? true);
-  const [microphoneEnabled, setMicrophoneEnabled] = useState<boolean>(savedDevices.microphoneEnabled ?? savedJoinConfig.microphoneEnabled ?? true);
-  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState<boolean>(savedDevices.noiseSuppressionEnabled ?? savedJoinConfig.noiseSuppressionEnabled ?? true);
-  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState<boolean>(savedDevices.backgroundBlurEnabled ?? savedJoinConfig.backgroundBlurEnabled ?? false);
+  const savedDevices =
+    typeof window !== "undefined"
+      ? JSON.parse(
+          window.sessionStorage.getItem("warptalk.devices.preview") || "{}",
+        )
+      : {};
+  const savedJoinConfig =
+    typeof window !== "undefined"
+      ? JSON.parse(
+          window.sessionStorage.getItem("warptalk.join.preview") || "{}",
+        )
+      : {};
+  const [cameraEnabled, setCameraEnabled] = useState<boolean>(
+    savedDevices.cameraEnabled ?? savedJoinConfig.cameraEnabled ?? true,
+  );
+  const [microphoneEnabled, setMicrophoneEnabled] = useState<boolean>(
+    savedDevices.microphoneEnabled ?? savedJoinConfig.microphoneEnabled ?? true,
+  );
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] =
+    useState<boolean>(
+      savedDevices.noiseSuppressionEnabled ??
+        savedJoinConfig.noiseSuppressionEnabled ??
+        true,
+    );
+  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState<boolean>(
+    savedDevices.backgroundBlurEnabled ??
+      savedJoinConfig.backgroundBlurEnabled ??
+      false,
+  );
 
   function handleToggleNoiseSuppression() {
     setNoiseSuppressionEnabled((current) => {
@@ -136,29 +206,48 @@ export default function RoomDetailPage() {
     });
   }
 
-  const liveParticipants = useTranslationRoomStore((state) => state.participants);
-  const transcriptSegments = useTranslationRoomStore((state) => state.transcriptSegments);
-  const setLiveState = useTranslationRoomStore((state) => state.setTranslationRoomState);
-  const addLiveParticipant = useTranslationRoomStore((state) => state.addParticipant);
-  const removeLiveParticipant = useTranslationRoomStore((state) => state.removeParticipant);
+  const liveParticipants = useTranslationRoomStore(
+    (state) => state.participants,
+  );
+  const transcriptSegments = useTranslationRoomStore(
+    (state) => state.transcriptSegments,
+  );
+  const setLiveState = useTranslationRoomStore(
+    (state) => state.setTranslationRoomState,
+  );
+  const addLiveParticipant = useTranslationRoomStore(
+    (state) => state.addParticipant,
+  );
+  const removeLiveParticipant = useTranslationRoomStore(
+    (state) => state.removeParticipant,
+  );
   const raisedHands = useTranslationRoomStore((state) => state.raisedHands);
-  const setHandRaisedInStore = useTranslationRoomStore((state) => state.setHandRaised);
-  const updateParticipantSpeakLanguage = useTranslationRoomStore((state) => state.updateParticipantSpeakLanguage);
+  const setHandRaisedInStore = useTranslationRoomStore(
+    (state) => state.setHandRaised,
+  );
+  const updateParticipantSpeakLanguage = useTranslationRoomStore(
+    (state) => state.updateParticipantSpeakLanguage,
+  );
   const { rightSidebarOpen, setLeftSidebarOpen } = useUIStore();
 
   useEffect(() => {
     setLeftSidebarOpen(false);
   }, [setLeftSidebarOpen]);
 
-  const addTranscriptSegment = useTranslationRoomStore((state) => state.addTranscriptSegment);
-  const addOrMergeTranslationText = useTranslationRoomStore((state) => state.addOrMergeTranslationText);
+  const addTranscriptSegment = useTranslationRoomStore(
+    (state) => state.addTranscriptSegment,
+  );
+  const addOrMergeTranslationText = useTranslationRoomStore(
+    (state) => state.addOrMergeTranslationText,
+  );
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
-  const addChatMessage = useTranslationRoomStore((state) => state.addChatMessage);
+  const addChatMessage = useTranslationRoomStore(
+    (state) => state.addChatMessage,
+  );
 
-  const isPreviewRoom = roomId.startsWith("preview-");
-  const room = roomQuery.data ?? (isPreviewRoom ? getPreviewLiveRoom(roomId) : undefined);
+  const room = roomQuery.data;
   const refetchRoom = roomQuery.refetch;
-  const apiParticipants = participantsQuery.data ?? (isPreviewRoom ? getPreviewLiveParticipants(roomId) : []);
+  const apiParticipants = participantsQuery.data ?? [];
   const role = useWorkspaceRole();
   // WT-08: HostChanged (broadcast after MeetingRoomService.HandleHostOfflineAsync elects a
   // replacement) overrides the room DTO's original host once it fires — the DTO itself is
@@ -166,15 +255,19 @@ export default function RoomDetailPage() {
   // host-only UI would stay hidden until their next full room refetch.
   const [liveHostUserId, setLiveHostUserId] = useState<string | null>(null);
   const isHost = Boolean(
-    (liveHostUserId ? user?.id === liveHostUserId : room?.isHost || (user?.id && room?.hostId === user.id)) ||
-      role === "admin" ||
-      role === "owner"
+    (liveHostUserId
+      ? user?.id === liveHostUserId
+      : room?.isHost || (user?.id && room?.hostId === user.id)) ||
+    role === "admin" ||
+    role === "owner",
   );
   // Only the actual host may START the room. Workspace admins/owners get host-like
   // UI privileges (isHost) but the backend rejects a start from anyone whose id != room.hostId
   // with 403, so the auto-start below must gate on true host identity — not workspace role.
   const isRoomHost = Boolean(
-    liveHostUserId ? user?.id === liveHostUserId : room?.isHost || (user?.id && room?.hostId === user.id)
+    liveHostUserId
+      ? user?.id === liveHostUserId
+      : room?.isHost || (user?.id && room?.hostId === user.id),
   );
 
   // WT-04/WT-06: host controls + recording state, synced live via TranslationRoomHub's
@@ -221,13 +314,20 @@ export default function RoomDetailPage() {
   const [isSignalRReconnecting, setIsSignalRReconnecting] = useState(false);
   const [isLiveKitReconnecting, setIsLiveKitReconnecting] = useState(false);
   const isReconnecting = isSignalRReconnecting || isLiveKitReconnecting;
-  const participants = liveParticipants.length ? mergeParticipants(apiParticipants, liveParticipants) : apiParticipants;
+  const participants = liveParticipants.length
+    ? mergeParticipants(apiParticipants, liveParticipants)
+    : apiParticipants;
   const participantsRef = useRef(participants);
   useEffect(() => {
     participantsRef.current = participants;
   }, [participants]);
-  const activeCount = participants.filter((participant) => !["left", "removed", "kicked"].includes(participant.status)).length;
-  const joinLink = room?.translationRoomCode ? getJoinLink(room.translationRoomCode) : "";
+  const activeCount = participants.filter(
+    (participant) =>
+      !["left", "removed", "kicked"].includes(participant.status),
+  ).length;
+  const joinLink = room?.translationRoomCode
+    ? getJoinLink(room.translationRoomCode)
+    : "";
   // Store only ever holds OTHER users' raised hands (RaiseHand broadcasts via
   // OthersInGroup) — merge in this viewer's own local toggle so badges render
   // consistently everywhere (tiles, people panel) regardless of whose row it is.
@@ -235,13 +335,16 @@ export default function RoomDetailPage() {
     const ids = new Set(raisedHands);
     if (handRaised && user?.id) ids.add(user.id);
     return ids;
-  }, [raisedHands, handRaised, user?.id]);
-  const liveSegments = useMemo(() => dedupeSegments(transcriptSegments), [transcriptSegments]);
+  }, [raisedHands, handRaised, user]);
+  const liveSegments = useMemo(
+    () => dedupeSegments(transcriptSegments),
+    [transcriptSegments],
+  );
   // Transcript history persists whether or not translation is currently running:
   // "Stop Translation" only halts new live captions (LiveSubtitleOverlay below); it must
   // NOT wipe what was already transcribed. Segments stay in the store until the room is
-  // left. Preview rooms fall back to sample content when nothing real has arrived yet.
-  const panelSegments = isPreviewRoom && !liveSegments.length ? getPreviewTranscriptSegments() : liveSegments;
+  // left.
+  const panelSegments = liveSegments;
 
   const canConnectMeeting =
     Boolean(room) &&
@@ -250,7 +353,11 @@ export default function RoomDetailPage() {
     room?.status !== "expired" &&
     room?.status !== "failed";
 
-  const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
+  const displayName =
+    savedJoinConfig.displayName ||
+    user?.fullName ||
+    user?.email ||
+    "Participant";
   const roomSourceLanguage = room?.sourceLanguage || "auto";
   // Spoken (source) language is now a live, user-changeable choice too — the counterpart
   // to listenLanguage below — via the media bar's speak-language dropdown +
@@ -258,25 +365,35 @@ export default function RoomDetailPage() {
   // setup time. Initializes once from the saved join config (or "auto" if never set); after
   // that a manual pick always wins.
   const [sourceLanguage, setSourceLanguageState] = useState<string>(
-    savedJoinConfig.speakLanguage ? normalizeLanguageCode(savedJoinConfig.speakLanguage) : "auto"
+    savedJoinConfig.speakLanguage
+      ? normalizeLanguageCode(savedJoinConfig.speakLanguage)
+      : "auto",
   );
   // Listen (output) language is now a live, user-changeable choice — see the media bar's
   // language dropdown + TranslationRoomHub.SetListenLanguage — instead of a value fixed
   // for the whole meeting at setup time. State auto-initializes ONCE (guarded by the
   // null check in the effect below) from the saved join config or the room's configured
   // targets; after that, a manual pick always wins even as `room` refetches.
-  const [listenLanguage, setListenLanguageState] = useState<string | null>(
-    savedJoinConfig.listenLanguage ? normalizeLanguageCode(savedJoinConfig.listenLanguage) : null
+  const [listenLanguageOverride, setListenLanguageState] = useState<
+    string | null
+  >(
+    savedJoinConfig.listenLanguage
+      ? normalizeLanguageCode(savedJoinConfig.listenLanguage)
+      : null,
   );
-  useEffect(() => {
-    if (listenLanguage || !room) return;
-    const initial =
-      room.targetLanguages?.find((language) => normalizeLanguageCode(language) !== normalizeLanguageCode(roomSourceLanguage)) ||
-      room.targetLanguages?.[0] ||
-      "en";
-    setListenLanguageState(normalizeLanguageCode(initial));
-  }, [listenLanguage, room, roomSourceLanguage]);
-  const targetLanguage = listenLanguage || "en";
+  const roomDefaultListenLanguage = room
+    ? normalizeLanguageCode(
+        room.targetLanguages?.find(
+          (language) =>
+            normalizeLanguageCode(language) !==
+            normalizeLanguageCode(roomSourceLanguage),
+        ) ||
+          room.targetLanguages?.[0] ||
+          "en",
+      )
+    : "en";
+  const listenLanguage = listenLanguageOverride ?? roomDefaultListenLanguage;
+  const targetLanguage = listenLanguage;
 
   // Read inside the TranslationTextReceived handler below instead of closing over
   // targetLanguage directly — the gateway broadcasts every listener's target language to
@@ -294,13 +411,19 @@ export default function RoomDetailPage() {
   // below, read here so a dropdown pick can call SetListenLanguage without tearing down
   // and reconnecting the whole hub connection (which would wipe transcriptSegments/chat
   // history via resetLiveRoom() and re-broadcast ParticipantJoined for no reason).
-  const translationConnectionRef = useRef<import("@microsoft/signalr").HubConnection | null>(null);
+  const translationConnectionRef = useRef<
+    import("@microsoft/signalr").HubConnection | null
+  >(null);
+  const [translationConnection, setTranslationConnection] = useState<
+    import("@microsoft/signalr").HubConnection | null
+  >(null);
   // Last listen language actually sent to the hub — skips a redundant SetListenLanguage
   // call when this effect re-runs without the value having changed.
   const appliedListenLanguageRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!listenLanguage || appliedListenLanguageRef.current === listenLanguage) return;
+    if (!listenLanguage || appliedListenLanguageRef.current === listenLanguage)
+      return;
     appliedListenLanguageRef.current = listenLanguage;
 
     let cancelled = false;
@@ -311,11 +434,16 @@ export default function RoomDetailPage() {
       // shape as the join retry below.
       for (const delay of [0, 300, 800, 1500]) {
         if (cancelled) return;
-        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        if (delay)
+          await new Promise((resolve) => window.setTimeout(resolve, delay));
         const connection = translationConnectionRef.current;
         if (connection?.state === HubConnectionState.Connected) {
           try {
-            await connection.invoke("SetListenLanguage", roomId, listenLanguage);
+            await connection.invoke(
+              "SetListenLanguage",
+              roomId,
+              listenLanguage,
+            );
           } catch {
             toast.error("Could not update listen language.");
           }
@@ -341,14 +469,20 @@ export default function RoomDetailPage() {
   const appliedSpeakLanguageRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!sourceLanguage || sourceLanguage === "auto" || appliedSpeakLanguageRef.current === sourceLanguage) return;
+    if (
+      !sourceLanguage ||
+      sourceLanguage === "auto" ||
+      appliedSpeakLanguageRef.current === sourceLanguage
+    )
+      return;
     appliedSpeakLanguageRef.current = sourceLanguage;
 
     let cancelled = false;
     (async () => {
       for (const delay of [0, 300, 800, 1500]) {
         if (cancelled) return;
-        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        if (delay)
+          await new Promise((resolve) => window.setTimeout(resolve, delay));
         const connection = translationConnectionRef.current;
         if (connection?.state === HubConnectionState.Connected) {
           try {
@@ -371,26 +505,44 @@ export default function RoomDetailPage() {
   // TranslationRoomHub.SetVoicePreference), NOT set up front outside the meeting.
   // null = no preference, use the automatic per-speaker default (see
   // TTSWorker._resolve_voice_variants). A real Cartesia voice id when set.
-  const [voicePreference, setVoicePreference] = useState<string | null>(null);
-  const [voiceCatalog, setVoiceCatalog] = useState<VoiceOptionDto[]>([]);
+  const [voiceSelection, setVoiceSelection] = useState<{
+    language: string;
+    voiceId: string | null;
+  } | null>(null);
+  const voicePreference =
+    voiceSelection?.language === targetLanguage ? voiceSelection.voiceId : null;
+  const [voiceCatalogState, setVoiceCatalogState] = useState<{
+    language: string;
+    items: VoiceOptionDto[];
+  } | null>(null);
+  const voiceCatalog =
+    voiceCatalogState?.language === targetLanguage
+      ? voiceCatalogState.items
+      : [];
 
   // Voices are language-specific (Cartesia's own voice table), so switching listen
   // language must both clear any voice pick made for the PREVIOUS language (it may not
   // even exist for the new one) and refetch the picker's option list for the new one.
   useEffect(() => {
-    setVoicePreference(null);
-    setVoiceCatalog([]);
-
     let cancelled = false;
     (async () => {
       for (const delay of [0, 300, 800, 1500]) {
         if (cancelled) return;
-        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        if (delay)
+          await new Promise((resolve) => window.setTimeout(resolve, delay));
         const connection = translationConnectionRef.current;
         if (connection?.state === HubConnectionState.Connected) {
           try {
-            const catalog = await connection.invoke<VoiceOptionDto[]>("GetVoiceCatalog", targetLanguage);
-            if (!cancelled) setVoiceCatalog(catalog ?? []);
+            const catalog = await connection.invoke<VoiceOptionDto[]>(
+              "GetVoiceCatalog",
+              targetLanguage,
+            );
+            if (!cancelled) {
+              setVoiceCatalogState({
+                language: targetLanguage,
+                items: catalog ?? [],
+              });
+            }
           } catch {
             // Non-critical — the picker just shows no extra options; the automatic
             // per-speaker default voice keeps working regardless.
@@ -419,11 +571,16 @@ export default function RoomDetailPage() {
     (async () => {
       for (const delay of [0, 300, 800, 1500]) {
         if (cancelled) return;
-        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        if (delay)
+          await new Promise((resolve) => window.setTimeout(resolve, delay));
         const connection = translationConnectionRef.current;
         if (connection?.state === HubConnectionState.Connected) {
           try {
-            await connection.invoke("SetVoicePreference", roomId, voicePreference || "");
+            await connection.invoke(
+              "SetVoicePreference",
+              roomId,
+              voicePreference || "",
+            );
           } catch {
             toast.error("Could not update voice preference.");
           }
@@ -442,11 +599,14 @@ export default function RoomDetailPage() {
   // from an older/ad-hoc join config never renders as a dropdown option with no match.
   const availableListenLanguages = useMemo(() => {
     const codes = new Set<string>();
-    if (room?.sourceLanguage) codes.add(normalizeLanguageCode(room.sourceLanguage));
-    room?.targetLanguages?.forEach((language) => codes.add(normalizeLanguageCode(language)));
+    if (room?.sourceLanguage)
+      codes.add(normalizeLanguageCode(room.sourceLanguage));
+    room?.targetLanguages?.forEach((language) =>
+      codes.add(normalizeLanguageCode(language)),
+    );
     codes.add(normalizeLanguageCode(targetLanguage));
     return Array.from(codes);
-  }, [room?.sourceLanguage, room?.targetLanguages, targetLanguage]);
+  }, [room, targetLanguage]);
 
   // Every OTHER participant's speak language, normalized — lets FilteredRoomAudio mute a
   // real participant's raw microphone track for a listener whose chosen language differs
@@ -460,7 +620,9 @@ export default function RoomDetailPage() {
     const map: Record<string, string> = {};
     for (const participant of participants) {
       if (participant.speakLanguage) {
-        map[participant.userId] = normalizeLanguageCode(participant.speakLanguage);
+        map[participant.userId] = normalizeLanguageCode(
+          participant.speakLanguage,
+        );
       }
     }
     return map;
@@ -471,10 +633,12 @@ export default function RoomDetailPage() {
     const normalizedLanguage = normalizeLanguageCode(language);
     setListenLanguageState(normalizedLanguage);
     try {
-      const config = JSON.parse(window.sessionStorage.getItem("warptalk.join.preview") || "{}");
+      const config = JSON.parse(
+        window.sessionStorage.getItem("warptalk.join.preview") || "{}",
+      );
       window.sessionStorage.setItem(
         "warptalk.join.preview",
-        JSON.stringify({ ...config, listenLanguage: normalizedLanguage })
+        JSON.stringify({ ...config, listenLanguage: normalizedLanguage }),
       );
     } catch {
       // Non-critical — worst case the picked language doesn't survive a page refresh.
@@ -485,10 +649,12 @@ export default function RoomDetailPage() {
     const normalizedLanguage = normalizeLanguageCode(language);
     setSourceLanguageState(normalizedLanguage);
     try {
-      const config = JSON.parse(window.sessionStorage.getItem("warptalk.join.preview") || "{}");
+      const config = JSON.parse(
+        window.sessionStorage.getItem("warptalk.join.preview") || "{}",
+      );
       window.sessionStorage.setItem(
         "warptalk.join.preview",
-        JSON.stringify({ ...config, speakLanguage: normalizedLanguage })
+        JSON.stringify({ ...config, speakLanguage: normalizedLanguage }),
       );
     } catch {
       // Non-critical — worst case the picked language doesn't survive a page refresh.
@@ -497,7 +663,10 @@ export default function RoomDetailPage() {
 
   /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
   function handleChangeVoicePreference(voiceId: string) {
-    setVoicePreference(voiceId || null);
+    setVoiceSelection({
+      language: targetLanguage,
+      voiceId: voiceId || null,
+    });
   }
 
   // Whether THIS participant has consented to have their OWN voice cloned for dubbing
@@ -526,15 +695,19 @@ export default function RoomDetailPage() {
   // voiceEnabled prop. Purely a client-side track-subscription choice, so it's free to
   // flip live in-meeting just like listenLanguage/voicePreference, and persists the
   // same way (join-preview sessionStorage) so it survives a refresh.
-  const [voiceEnabled, setVoiceEnabledState] = useState<boolean>(savedJoinConfig.voiceEnabled ?? true);
+  const [voiceEnabled, setVoiceEnabledState] = useState<boolean>(
+    savedJoinConfig.voiceEnabled ?? true,
+  );
 
   function handleChangeVoiceEnabled(enabled: boolean) {
     setVoiceEnabledState(enabled);
     try {
-      const config = JSON.parse(window.sessionStorage.getItem("warptalk.join.preview") || "{}");
+      const config = JSON.parse(
+        window.sessionStorage.getItem("warptalk.join.preview") || "{}",
+      );
       window.sessionStorage.setItem(
         "warptalk.join.preview",
-        JSON.stringify({ ...config, voiceEnabled: enabled })
+        JSON.stringify({ ...config, voiceEnabled: enabled }),
       );
     } catch {
       // Non-critical — worst case the picked mode doesn't survive a page refresh.
@@ -554,10 +727,10 @@ export default function RoomDetailPage() {
             sourceLanguage: roomSourceLanguage,
           },
         }
-      : null
+      : null,
   );
 
-  function retryMeetingConnection() {
+  const retryMeetingConnection = useCallback(() => {
     if (!room?.id || !canConnectMeeting) return;
     meetingJoinedRef.current = true;
     setMeetingSession(null);
@@ -571,9 +744,19 @@ export default function RoomDetailPage() {
       })
       .catch((error) => {
         setMeetingSession(null);
-        setMeetingError(error instanceof Error ? error.message : "Could not connect to the LiveKit meeting.");
+        setMeetingError(
+          error instanceof Error
+            ? error.message
+            : "Could not connect to the LiveKit meeting.",
+        );
       });
-  }
+  }, [
+    canConnectMeeting,
+    displayName,
+    joinMeetingAsync,
+    room,
+    setMicrophoneEnabled,
+  ]);
 
   useEffect(() => {
     if (!room || !isRoomHost || autoStartedRef.current) return;
@@ -608,17 +791,21 @@ export default function RoomDetailPage() {
         })
         .catch((error) => {
           setMeetingSession(null);
-          setMeetingError(error instanceof Error ? error.message : "Could not connect to the LiveKit meeting.");
+          setMeetingError(
+            error instanceof Error
+              ? error.message
+              : "Could not connect to the LiveKit meeting.",
+          );
         });
     });
-  }, [canConnectMeeting, joinMeetingAsync, room?.id]);
+  }, [canConnectMeeting, displayName, joinMeetingAsync, room?.id]);
 
   useEffect(() => {
     if (languagePickerShownRef.current) return;
-    if (!meetingSession?.token || isPreviewRoom) return;
+    if (!meetingSession?.token) return;
     languagePickerShownRef.current = true;
-    setShowLanguagePicker(true);
-  }, [meetingSession, isPreviewRoom]);
+    queueMicrotask(() => setShowLanguagePicker(true));
+  }, [meetingSession]);
 
   function handleConfirmLanguagePicker(speak: string, listen: string) {
     handleChangeSpeakLanguage(speak);
@@ -630,13 +817,17 @@ export default function RoomDetailPage() {
     resetLiveRoom();
     const connection = createHubConnection("/hubs/translation-room");
     translationConnectionRef.current = connection;
+    queueMicrotask(() => setTranslationConnection(connection));
 
-    connection.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => {
-      setLiveState(state);
-      void refetchRoom().then(() => {
-        retryMeetingConnectionRef.current();
-      });
-    });
+    connection.on(
+      "TranslationRoomStarted",
+      (state: TranslationRoomStateDto) => {
+        setLiveState(state);
+        void refetchRoom().then(() => {
+          retryMeetingConnectionRef.current();
+        });
+      },
+    );
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
       addLiveParticipant(participant);
       void refetchParticipants();
@@ -645,21 +836,32 @@ export default function RoomDetailPage() {
       removeLiveParticipant(userId);
       void refetchParticipants();
     });
-    connection.on("TranscriptSegmentReceived", (segment: TranscriptSegmentDto) =>
-      addTranscriptSegment({
-        ...segment,
-        speakerName: resolveTranscriptSpeakerName(segment, participantsRef.current),
-      })
+    connection.on(
+      "TranscriptSegmentReceived",
+      (segment: TranscriptSegmentDto) =>
+        addTranscriptSegment({
+          ...segment,
+          speakerName: resolveTranscriptSpeakerName(
+            segment,
+            participantsRef.current,
+          ),
+        }),
     );
-    connection.on("TranslationTextReceived", (translation: TranslationTextDto) => {
-      // Only render the translation into MY chosen listen language — the gateway fans
-      // out every participant's target language to the whole room group, so without this
-      // check the transcript panel mixes in every other listener's language too.
-      if (normalizeLanguageCode(translation.targetLang) !== normalizeLanguageCode(targetLanguageRef.current)) {
-        return;
-      }
-      addOrMergeTranslationText(translation);
-    });
+    connection.on(
+      "TranslationTextReceived",
+      (translation: TranslationTextDto) => {
+        // Only render the translation into MY chosen listen language — the gateway fans
+        // out every participant's target language to the whole room group, so without this
+        // check the transcript panel mixes in every other listener's language too.
+        if (
+          normalizeLanguageCode(translation.targetLang) !==
+          normalizeLanguageCode(targetLanguageRef.current)
+        ) {
+          return;
+        }
+        addOrMergeTranslationText(translation);
+      },
+    );
     connection.on("TranslationRoomEnded", () => refetchRoom());
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
@@ -667,7 +869,10 @@ export default function RoomDetailPage() {
     });
     connection.on("ReactionReceived", (userId: string, emoji: string) => {
       reactionIdRef.current += 1;
-      setReactions((current) => [...current, { id: `reaction-${reactionIdRef.current}`, emoji }]);
+      setReactions((current) => [
+        ...current,
+        { id: `reaction-${reactionIdRef.current}`, emoji },
+      ]);
     });
     connection.on("SpotlightChanged", (targetUserId: string, on: boolean) => {
       setSpotlightedUserId(on ? targetUserId : null);
@@ -675,9 +880,12 @@ export default function RoomDetailPage() {
     // Live speak-language change from ANOTHER participant — keeps speakerLanguageByUserId
     // (and therefore FilteredRoomAudio's mute-real-mic-if-different-language logic) correct
     // without waiting for a refetchParticipants() round-trip.
-    connection.on("ParticipantSpeakLanguageChanged", (userId: string, speakLanguage: string) => {
-      updateParticipantSpeakLanguage(userId, speakLanguage);
-    });
+    connection.on(
+      "ParticipantSpeakLanguageChanged",
+      (userId: string, speakLanguage: string) => {
+        updateParticipantSpeakLanguage(userId, speakLanguage);
+      },
+    );
 
     // WT-04
     connection.on("RoomLockChanged", (locked: boolean) => {
@@ -698,13 +906,16 @@ export default function RoomDetailPage() {
 
     // BR-159: Backend initiated disconnections
     connection.on("ForceDisconnected", (reason?: string) => {
-      toast.error(reason || "This room has been forcibly closed or you were disconnected from another device.");
-      router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
+      toast.error(
+        reason ||
+          "This room has been forcibly closed or you were disconnected from another device.",
+      );
+      router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
     connection.on("ParticipantKicked", () => {
       toast.error("You have been permanently removed from this room.");
-      router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
+      router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
     // Polls + Q&A (WT-14/15) — PollsService/QuestionsService relay these via Redis into this
@@ -714,38 +925,69 @@ export default function RoomDetailPage() {
     // right now (tab not selected) — the cache persists independent of mount state.
     connection.on("PollCreated", (poll: PollDto) => {
       queryClient.setQueryData<PollDto[]>(pollsQueryKey(roomId), (current) =>
-        current?.some((p) => p.id === poll.id) ? current : [...(current ?? []), poll]
+        current?.some((p) => p.id === poll.id)
+          ? current
+          : [...(current ?? []), poll],
       );
     });
     connection.on("PollVoted", (pollId: string, tally: PollTally) => {
       queryClient.setQueryData<PollDto[]>(pollsQueryKey(roomId), (current) =>
         (current ?? []).map((poll) =>
           poll.id === pollId
-            ? { ...poll, options: poll.options.map((option) => ({ ...option, voteCount: tally[option.id] ?? option.voteCount })) }
-            : poll
-        )
+            ? {
+                ...poll,
+                options: poll.options.map((option) => ({
+                  ...option,
+                  voteCount: tally[option.id] ?? option.voteCount,
+                })),
+              }
+            : poll,
+        ),
       );
     });
     connection.on("PollClosed", (pollId: string, finalResult: PollDto) => {
       queryClient.setQueryData<PollDto[]>(pollsQueryKey(roomId), (current) =>
-        (current ?? []).map((poll) => (poll.id === pollId ? finalResult : poll))
+        (current ?? []).map((poll) =>
+          poll.id === pollId ? finalResult : poll,
+        ),
       );
     });
     connection.on("QuestionAsked", (question: QuestionDto) => {
-      queryClient.setQueryData<QuestionDto[]>(questionsQueryKey(roomId), (current) =>
-        current?.some((q) => q.id === question.id) ? current : [...(current ?? []), question]
+      queryClient.setQueryData<QuestionDto[]>(
+        questionsQueryKey(roomId),
+        (current) =>
+          current?.some((q) => q.id === question.id)
+            ? current
+            : [...(current ?? []), question],
       );
     });
-    connection.on("QuestionUpvoted", (questionId: string, upvoteCount: number) => {
-      queryClient.setQueryData<QuestionDto[]>(questionsQueryKey(roomId), (current) =>
-        (current ?? []).map((question) => (question.id === questionId ? { ...question, upvoteCount } : question))
-      );
-    });
+    connection.on(
+      "QuestionUpvoted",
+      (questionId: string, upvoteCount: number) => {
+        queryClient.setQueryData<QuestionDto[]>(
+          questionsQueryKey(roomId),
+          (current) =>
+            (current ?? []).map((question) =>
+              question.id === questionId
+                ? { ...question, upvoteCount }
+                : question,
+            ),
+        );
+      },
+    );
     connection.on("QuestionAnswered", (questionId: string) => {
-      queryClient.setQueryData<QuestionDto[]>(questionsQueryKey(roomId), (current) =>
-        (current ?? []).map((question) =>
-          question.id === questionId ? { ...question, status: "answered", answeredAt: new Date().toISOString() } : question
-        )
+      queryClient.setQueryData<QuestionDto[]>(
+        questionsQueryKey(roomId),
+        (current) =>
+          (current ?? []).map((question) =>
+            question.id === questionId
+              ? {
+                  ...question,
+                  status: "answered",
+                  answeredAt: new Date().toISOString(),
+                }
+              : question,
+          ),
       );
     });
 
@@ -757,33 +999,57 @@ export default function RoomDetailPage() {
     // the already-mounted <LiveKitRoom> from the main room to the sub-room in place (see
     // useLiveKitRoom's connect/token effect: changing `token` while `connect` stays true
     // just calls room.connect() again with the new token, no remount needed).
-    connection.on("BreakoutsStarted", (assignments: BreakoutAssignmentRelay[] | null, durationSeconds: number | null, startedAt: string | null) => {
-      setBreakoutsRunning(true);
-      const mine = user?.id ? (assignments ?? []).find((a) => a.userId === user.id) : undefined;
-      if (!mine) return;
+    connection.on(
+      "BreakoutsStarted",
+      (
+        assignments: BreakoutAssignmentRelay[] | null,
+        durationSeconds: number | null,
+        startedAt: string | null,
+      ) => {
+        setBreakoutsRunning(true);
+        const mine = user?.id
+          ? (assignments ?? []).find((a) => a.userId === user.id)
+          : undefined;
+        if (!mine) return;
 
-      setBreakoutState({ active: true, label: mine.label, startedAt, durationSeconds });
-      void fetchMyBreakoutAssignment(roomId)
-        .then((info) => {
-          setMeetingSession({
-            token: info.token,
-            providerRoomName: info.providerRoomName,
-            participantIdentity: info.participantIdentity,
-            isWaitingRoom: false,
-            muteOnEntry: false,
-          });
-          toast.success(`You've been moved to ${mine.label}.`);
-        })
-        .catch(() => {
-          toast.error("Could not join your breakout room.");
-          setBreakoutState({ active: false, label: null, startedAt: null, durationSeconds: null });
+        setBreakoutState({
+          active: true,
+          label: mine.label,
+          startedAt,
+          durationSeconds,
         });
-    });
+        void fetchMyBreakoutAssignment(roomId)
+          .then((info) => {
+            setMeetingSession({
+              token: info.token,
+              providerRoomName: info.providerRoomName,
+              participantIdentity: info.participantIdentity,
+              isWaitingRoom: false,
+              muteOnEntry: false,
+            });
+            toast.success(`You've been moved to ${mine.label}.`);
+          })
+          .catch(() => {
+            toast.error("Could not join your breakout room.");
+            setBreakoutState({
+              active: false,
+              label: null,
+              startedAt: null,
+              durationSeconds: null,
+            });
+          });
+      },
+    );
     connection.on("BreakoutsEnded", () => {
       setBreakoutsRunning(false);
       if (!breakoutActiveRef.current) return;
 
-      setBreakoutState({ active: false, label: null, startedAt: null, durationSeconds: null });
+      setBreakoutState({
+        active: false,
+        label: null,
+        startedAt: null,
+        durationSeconds: null,
+      });
       if (mainMeetingSessionRef.current) {
         setMeetingSession(mainMeetingSessionRef.current);
       }
@@ -793,7 +1059,8 @@ export default function RoomDetailPage() {
     let cancelled = false;
     const retryDelays = [0, 500, 1500, 3000];
 
-    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const wait = (ms: number) =>
+      new Promise((resolve) => window.setTimeout(resolve, ms));
     const joinCurrentRoom = () =>
       // targetLanguageRef.current (not the closed-over targetLanguage) so a language
       // picked via the dropdown before a reconnect (e.g. after a network drop) is what
@@ -802,7 +1069,13 @@ export default function RoomDetailPage() {
       // connection (wiping transcriptSegments/chat via resetLiveRoom()) on every language
       // change instead of just calling SetListenLanguage.
       connection
-        .invoke("JoinTranslationRoom", roomId, displayName, sourceLanguageRef.current, targetLanguageRef.current)
+        .invoke(
+          "JoinTranslationRoom",
+          roomId,
+          displayName,
+          sourceLanguageRef.current,
+          targetLanguageRef.current,
+        )
         .catch(() => undefined);
     const startAndJoin = async () => {
       for (const delay of retryDelays) {
@@ -836,7 +1109,11 @@ export default function RoomDetailPage() {
         const currentListenLanguage = appliedListenLanguageRef.current;
         if (currentListenLanguage) {
           try {
-            await connection.invoke("SetListenLanguage", roomId, currentListenLanguage);
+            await connection.invoke(
+              "SetListenLanguage",
+              roomId,
+              currentListenLanguage,
+            );
           } catch {
             // Best-effort — the client's own local listenLanguage state is unaffected.
           }
@@ -845,7 +1122,11 @@ export default function RoomDetailPage() {
         const currentVoicePreference = appliedVoicePreferenceRef.current;
         if (currentVoicePreference) {
           try {
-            await connection.invoke("SetVoicePreference", roomId, currentVoicePreference);
+            await connection.invoke(
+              "SetVoicePreference",
+              roomId,
+              currentVoicePreference,
+            );
           } catch {
             // Best-effort — the client's own local voicePreference state is unaffected.
           }
@@ -854,7 +1135,11 @@ export default function RoomDetailPage() {
         const currentSpeakLanguage = appliedSpeakLanguageRef.current;
         if (currentSpeakLanguage) {
           try {
-            await connection.invoke("SetSpeakLanguage", roomId, currentSpeakLanguage);
+            await connection.invoke(
+              "SetSpeakLanguage",
+              roomId,
+              currentSpeakLanguage,
+            );
           } catch {
             // Best-effort — the client's own local sourceLanguage state is unaffected.
           }
@@ -866,6 +1151,9 @@ export default function RoomDetailPage() {
 
     return () => {
       cancelled = true;
+      setTranslationConnection((current) =>
+        current === connection ? null : current,
+      );
       connection.stop().catch(() => undefined);
       if (translationConnectionRef.current === connection) {
         translationConnectionRef.current = null;
@@ -876,7 +1164,22 @@ export default function RoomDetailPage() {
     // above; runtime language changes go through SetListenLanguage/SetSpeakLanguage, not a
     // reconnect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addLiveParticipant, addOrMergeTranslationText, addTranscriptSegment, refetchParticipants, refetchRoom, removeLiveParticipant, resetLiveRoom, displayName, queryClient, roomId, setLiveState, setHandRaisedInStore, updateParticipantSpeakLanguage, user?.id]);
+  }, [
+    addLiveParticipant,
+    addOrMergeTranslationText,
+    addTranscriptSegment,
+    refetchParticipants,
+    refetchRoom,
+    removeLiveParticipant,
+    resetLiveRoom,
+    displayName,
+    queryClient,
+    roomId,
+    setLiveState,
+    setHandRaisedInStore,
+    updateParticipantSpeakLanguage,
+    user?.id,
+  ]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -885,14 +1188,19 @@ export default function RoomDetailPage() {
       useTranslationRoomStore.getState().hideChatMessage(messageId);
     });
 
-    chatConnection.on("ChatMessageReceived", (message: import("@/types/realtime").ChatMessageDto) => {
-      addChatMessage(message);
-    });
+    chatConnection.on(
+      "ChatMessageReceived",
+      (message: import("@/types/realtime").ChatMessageDto) => {
+        addChatMessage(message);
+      },
+    );
 
     let cancelled = false;
     const retryDelays = [0, 500, 1500, 3000];
-    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-    const joinChatRoom = () => chatConnection.invoke("JoinMeetingRoom", roomId).catch(() => undefined);
+    const wait = (ms: number) =>
+      new Promise((resolve) => window.setTimeout(resolve, ms));
+    const joinChatRoom = () =>
+      chatConnection.invoke("JoinMeetingRoom", roomId).catch(() => undefined);
     const startAndJoinChat = async () => {
       for (const delay of retryDelays) {
         if (cancelled) return;
@@ -924,7 +1232,9 @@ export default function RoomDetailPage() {
 
     async function startLocalMedia() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setLocalMediaError("This browser does not support camera and microphone access.");
+        setLocalMediaError(
+          "This browser does not support camera and microphone access.",
+        );
         return;
       }
 
@@ -940,7 +1250,9 @@ export default function RoomDetailPage() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: cameraEnabled ? true : false,
-          audio: microphoneEnabled ? { echoCancellation: true, noiseSuppression: true } : false,
+          audio: microphoneEnabled
+            ? { echoCancellation: true, noiseSuppression: true }
+            : false,
         });
 
         if (cancelled) {
@@ -953,7 +1265,11 @@ export default function RoomDetailPage() {
         setLocalMediaError(null);
       } catch (error) {
         if (cancelled) return;
-        setLocalMediaError(error instanceof Error ? error.message : "Unable to access camera or microphone.");
+        setLocalMediaError(
+          error instanceof Error
+            ? error.message
+            : "Unable to access camera or microphone.",
+        );
       }
     }
 
@@ -974,11 +1290,6 @@ export default function RoomDetailPage() {
 
   async function handleExit(action: "leave" | "end") {
     try {
-      if (isPreviewRoom) {
-        toast.success("Preview room ended.");
-        router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
-        return;
-      }
       if (action === "end") {
         if (room?.status !== "ended" && room?.status !== "cancelled") {
           await endRoom.mutateAsync(roomId);
@@ -990,9 +1301,11 @@ export default function RoomDetailPage() {
         }
         toast.success("You left the room.");
       }
-      router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
+      router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not leave the room.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not leave the room.",
+      );
     }
   }
 
@@ -1011,7 +1324,10 @@ export default function RoomDetailPage() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
       screenStreamRef.current = stream;
       setScreenStream(stream);
       stream.getVideoTracks()[0]?.addEventListener("ended", () => {
@@ -1020,24 +1336,28 @@ export default function RoomDetailPage() {
       });
       toast.success("Screen sharing started.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not start screen sharing.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not start screen sharing.",
+      );
     }
   }
 
   function handleStartWarptalk() {
-    if (!room?.id || isPreviewRoom) {
-      setWarptalkStarted(true);
-      toast.success("WarpTalk realtime translation started.");
-      return;
-    }
+    if (!room?.id) return;
     startRoom.mutate(room.id, {
       onSuccess: () => {
         setWarptalkStarted(true);
         toast.success("WarpTalk realtime translation started.");
       },
       onError: (error) => {
-        toast.error(error instanceof Error ? error.message : "Failed to start translation.");
-      }
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to start translation.",
+        );
+      },
     });
   }
 
@@ -1077,9 +1397,11 @@ export default function RoomDetailPage() {
     const connection = translationConnectionRef.current;
     if (connection?.state !== HubConnectionState.Connected) return;
     const next = spotlightedUserId !== userId;
-    connection.invoke("SpotlightParticipant", roomId, userId, next).catch(() => {
-      toast.error("Could not update spotlight.");
-    });
+    connection
+      .invoke("SpotlightParticipant", roomId, userId, next)
+      .catch(() => {
+        toast.error("Could not update spotlight.");
+      });
   }
 
   // WT-04: room lock is confirmed via the RoomLockChanged broadcast the REST call triggers
@@ -1116,10 +1438,16 @@ export default function RoomDetailPage() {
     setRecordingMutation.mutate(action, {
       onSuccess: (state) => {
         setIsRecording(state.recording);
-        toast.success(state.recording ? "Recording started." : "Recording stopped.");
+        toast.success(
+          state.recording ? "Recording started." : "Recording stopped.",
+        );
       },
       onError: () =>
-        toast.error(action === "start" ? "Could not start recording." : "Could not stop recording."),
+        toast.error(
+          action === "start"
+            ? "Could not start recording."
+            : "Could not stop recording.",
+        ),
     });
   }
 
@@ -1133,18 +1461,26 @@ export default function RoomDetailPage() {
   }
 
   function handleBreakoutFinalMinute() {
-    toast("Returning to the main room soon.", { description: "The host can also end breakouts early from the host controls menu." });
+    toast("Returning to the main room soon.", {
+      description:
+        "The host can also end breakouts early from the host controls menu.",
+    });
   }
 
-  if (roomQuery.isLoading && !isPreviewRoom) {
-    return <StatePanel title="Loading room..." description="Fetching room details from the TranslationRoom service." />;
+  if (roomQuery.isLoading) {
+    return (
+      <StatePanel
+        title="Loading room..."
+        description="Fetching room details from the TranslationRoom service."
+      />
+    );
   }
 
   if (meetingSession?.isWaitingRoom) {
     return <WaitingRoomView onRetry={retryMeetingConnection} />;
   }
 
-  if ((roomQuery.isError && !isPreviewRoom) || !room) {
+  if (roomQuery.isError || !room) {
     return (
       <StatePanel
         icon={<WarningCircle className="h-8 w-8" />}
@@ -1160,9 +1496,12 @@ export default function RoomDetailPage() {
         video={cameraEnabled}
         audio={microphoneEnabled}
         token={meetingSession?.token}
-        serverUrl={
-          process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace("localhost", typeof window !== "undefined" ? window.location.hostname : "localhost")
-        }
+        serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace(
+          "localhost",
+          typeof window !== "undefined"
+            ? window.location.hostname
+            : "localhost",
+        )}
         connect={Boolean(meetingSession?.token)}
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
@@ -1182,7 +1521,11 @@ export default function RoomDetailPage() {
           isLocked={isRoomLocked}
           breakoutInfo={
             breakoutState.active
-              ? { label: breakoutState.label ?? "", startedAt: breakoutState.startedAt, durationSeconds: breakoutState.durationSeconds }
+              ? {
+                  label: breakoutState.label ?? "",
+                  startedAt: breakoutState.startedAt,
+                  durationSeconds: breakoutState.durationSeconds,
+                }
               : null
           }
           onBreakoutFinalMinute={handleBreakoutFinalMinute}
@@ -1213,13 +1556,10 @@ export default function RoomDetailPage() {
               ) : null}
               <LiveKitMeetingStage
                 fallbackName={user?.fullName || user?.email || room.title}
-                currentUserId={user?.id}
                 isJoining={isMeetingJoining}
                 error={meetingError}
                 localStream={localStream}
                 localMediaError={localMediaError}
-                cameraEnabled={cameraEnabled}
-                participants={participants}
                 screenStream={screenStream}
                 layoutMode={meetingLayout}
                 pinnedUserId={pinnedUserId}
@@ -1244,7 +1584,10 @@ export default function RoomDetailPage() {
               <LiveSubtitleOverlay enabled={warptalkStarted} />
 
               {/* Emoji reactions — TranslationRoomHub.ReactionReceived */}
-              <ReactionOverlay reactions={reactions} onReactionExpired={handleReactionExpired} />
+              <ReactionOverlay
+                reactions={reactions}
+                onReactionExpired={handleReactionExpired}
+              />
 
               {/* Floating Control Bar */}
               <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity hover:opacity-100">
@@ -1271,7 +1614,9 @@ export default function RoomDetailPage() {
                   handRaised={handRaised}
                   onCopyText={copyText}
                   onToggleCamera={() => setCameraEnabled((current) => !current)}
-                  onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
+                  onToggleMicrophone={() =>
+                    setMicrophoneEnabled((current) => !current)
+                  }
                   onToggleNoiseSuppression={handleToggleNoiseSuppression}
                   onToggleBackgroundBlur={handleToggleBackgroundBlur}
                   onToggleScreenShare={handleToggleScreenShare}
@@ -1290,12 +1635,18 @@ export default function RoomDetailPage() {
                   isRecording={isRecording}
                   recordingPending={setRecordingMutation.isPending}
                   onToggleLock={isHost ? handleToggleLock : undefined}
-                  onToggleMuteOnEntry={isHost ? handleToggleMuteOnEntry : undefined}
+                  onToggleMuteOnEntry={
+                    isHost ? handleToggleMuteOnEntry : undefined
+                  }
                   onMuteAll={isHost ? handleMuteAll : undefined}
                   onToggleRecording={isHost ? handleToggleRecording : undefined}
                   breakoutActive={breakoutsRunning}
-                  onOpenBreakoutSetup={isHost ? () => setShowBreakoutSetup(true) : undefined}
-                  onEndBreakoutRooms={isHost ? handleEndBreakoutRooms : undefined}
+                  onOpenBreakoutSetup={
+                    isHost ? () => setShowBreakoutSetup(true) : undefined
+                  }
+                  onEndBreakoutRooms={
+                    isHost ? handleEndBreakoutRooms : undefined
+                  }
                 />
               </div>
             </div>
@@ -1309,18 +1660,17 @@ export default function RoomDetailPage() {
               mode={sidePanelMode}
               onModeChange={setSidePanelMode}
               participants={participants}
-              participantsLoading={participantsQuery.isLoading && !isPreviewRoom}
-              participantsError={participantsQuery.isError && !isPreviewRoom}
+              participantsLoading={participantsQuery.isLoading}
+              participantsError={participantsQuery.isError}
               activeCount={activeCount}
               segments={panelSegments}
               onCopyText={copyText}
               joinLink={joinLink}
-              meetingStarted={room?.status === "in_progress"}
               chatTargetLanguage={targetLanguage}
               raisedHandUserIds={raisedHandUserIds}
               spotlightedUserId={spotlightedUserId}
               onToggleSpotlight={handleToggleSpotlight}
-              connection={translationConnectionRef.current}
+              connection={translationConnection}
             />
           )}
         </main>
@@ -1339,7 +1689,9 @@ export default function RoomDetailPage() {
         open={showLanguagePicker}
         onOpenChange={setShowLanguagePicker}
         availableLanguages={availableListenLanguages}
-        defaultSpeakLanguage={sourceLanguage !== "auto" ? sourceLanguage : undefined}
+        defaultSpeakLanguage={
+          sourceLanguage !== "auto" ? sourceLanguage : undefined
+        }
         defaultListenLanguage={listenLanguage ?? undefined}
         onConfirm={handleConfirmLanguagePicker}
         onSkip={() => {
@@ -1358,7 +1710,13 @@ export default function RoomDetailPage() {
 // what actually reaches the LiveKit Room instance to observe RoomEvent.Reconnecting/
 // Reconnected, mirroring how prior rounds' LiveKit-aware components (e.g. FilteredRoomAudio)
 // are children of <LiveKitRoom> rather than living in the parent page.
-function LiveKitReconnectWatcher({ onReconnecting, onReconnected }: { onReconnecting: () => void; onReconnected: () => void }) {
+function LiveKitReconnectWatcher({
+  onReconnecting,
+  onReconnected,
+}: {
+  onReconnecting: () => void;
+  onReconnected: () => void;
+}) {
   const room = useRoomContext();
 
   useEffect(() => {
@@ -1373,7 +1731,10 @@ function LiveKitReconnectWatcher({ onReconnecting, onReconnected }: { onReconnec
   return null;
 }
 
-function mergeParticipants(apiParticipants: TranslationRoomParticipantDto[], liveParticipants: ParticipantInfoDto[]): TranslationRoomParticipantDto[] {
+function mergeParticipants(
+  apiParticipants: TranslationRoomParticipantDto[],
+  liveParticipants: ParticipantInfoDto[],
+): TranslationRoomParticipantDto[] {
   const mappedLive = liveParticipants.map((participant) => ({
     id: participant.userId,
     translationRoomId: "",
@@ -1382,14 +1743,19 @@ function mergeParticipants(apiParticipants: TranslationRoomParticipantDto[], liv
     role: participant.role ?? "participant",
     listenLanguage: participant.listenLanguage,
     speakLanguage: participant.speakLanguage,
-    status: participant.status === "connected" ? "connected" : participant.status ?? "connected",
+    status:
+      participant.status === "connected"
+        ? "connected"
+        : (participant.status ?? "connected"),
     isTranslationAudioEnabled: !participant.isMuted,
     isUsingVoiceClone: participant.isUsingVoiceClone,
     avatarUrl: participant.avatarUrl,
     joinedAt: participant.joinedAt,
   })) satisfies TranslationRoomParticipantDto[];
 
-  const byUserId = new Map(apiParticipants.map((participant) => [participant.userId, participant]));
+  const byUserId = new Map(
+    apiParticipants.map((participant) => [participant.userId, participant]),
+  );
   for (const participant of mappedLive) {
     byUserId.set(participant.userId, {
       ...byUserId.get(participant.userId),
@@ -1409,122 +1775,4 @@ function dedupeSegments(segments: TranscriptSegmentDto[]) {
 
 function normalizeLanguageCode(language: string) {
   return language.split("-")[0]?.toLowerCase() || language.toLowerCase();
-}
-
-function getPreviewLiveRoom(id: string): TranslationRoomDto {
-  const now = new Date();
-  return {
-    id,
-    workspaceId: "workspace-preview",
-    hostId: "host-preview",
-    title: id.includes("partner") ? "Partner Sync Room" : "Investor Q&A Translation",
-    description: "Preview meeting surface for live translation, captions, and AI notes.",
-    translationRoomCode: id.includes("partner") ? "SYNC-882" : "WARP-241",
-    status: "in_progress",
-    translationRoomType: "scheduled",
-    maxParticipants: 24,
-    sourceLanguage: "en-US",
-    targetLanguages: ["vi-VN", "ja-JP"],
-    scheduledAt: now.toISOString(),
-    startedAt: now.toISOString(),
-    createdAt: now.toISOString(),
-    settings: { requiresApproval: true },
-    participantCount: 4,
-    isHost: true,
-  };
-}
-
-function getPreviewLiveParticipants(roomId: string): TranslationRoomParticipantDto[] {
-  const now = new Date().toISOString();
-  return [
-    {
-      id: `${roomId}-host`,
-      translationRoomId: roomId,
-      userId: "host-preview",
-      displayName: "Host",
-      role: "host",
-      listenLanguage: "vi-VN",
-      speakLanguage: "en-US",
-      status: "connected",
-      isTranslationAudioEnabled: true,
-      joinedAt: now,
-    },
-    {
-      id: `${roomId}-investor`,
-      translationRoomId: roomId,
-      userId: "participant-investor",
-      displayName: "Mika Tanaka",
-      role: "participant",
-      listenLanguage: "ja-JP",
-      speakLanguage: "en-US",
-      status: "connected",
-      isTranslationAudioEnabled: true,
-      joinedAt: now,
-    },
-    {
-      id: `${roomId}-ops`,
-      translationRoomId: roomId,
-      userId: "participant-ops",
-      displayName: "Nguyen Linh",
-      role: "participant",
-      listenLanguage: "vi-VN",
-      speakLanguage: "vi-VN",
-      status: "connected",
-      isTranslationAudioEnabled: true,
-      joinedAt: now,
-    },
-    {
-      id: `${roomId}-interpreter`,
-      translationRoomId: roomId,
-      userId: "interpreter-preview",
-      displayName: "Interpreter Bot",
-      role: "interpreter",
-      listenLanguage: "en-US",
-      speakLanguage: "ja-JP",
-      status: "connected",
-      isTranslationAudioEnabled: true,
-      joinedAt: now,
-    },
-  ];
-}
-
-function getPreviewTranscriptSegments(): TranscriptSegmentDto[] {
-  return [
-    {
-      segmentId: "preview-segment-1",
-      speakerId: "host-preview",
-      speakerName: "Host",
-      originalText: "Let us start with the rollout risks and align on the terminology cleanup plan.",
-      originalLanguage: "en-US",
-      translatedText: "Chúng ta bắt đầu với các rủi ro triển khai và thống nhất kế hoạch làm sạch thuật ngữ.",
-      targetLanguage: "vi-VN",
-      confidence: 0.93,
-      startTimeMs: 1000,
-      endTimeMs: 5400,
-    },
-    {
-      segmentId: "preview-segment-2",
-      speakerId: "participant-investor",
-      speakerName: "Mika Tanaka",
-      originalText: "The Japanese team needs the glossary before the next review session.",
-      originalLanguage: "en-US",
-      translatedText: "チームは次回のレビュー前に用語集が必要です。",
-      targetLanguage: "ja-JP",
-      confidence: 0.9,
-      startTimeMs: 6200,
-      endTimeMs: 10400,
-    },
-    {
-      segmentId: "preview-segment-3",
-      speakerId: "participant-ops",
-      speakerName: "Nguyen Linh",
-      originalText: "We will attach the product terms and meeting notes after this call.",
-      originalLanguage: "en-US",
-      translatedText: "Chúng tôi sẽ đính kèm thuật ngữ sản phẩm và ghi chú cuộc họp sau cuộc gọi này.",
-      targetLanguage: "vi-VN",
-      confidence: 0.95,
-      startTimeMs: 11200,
-      endTimeMs: 15800,
-    },
-  ];
 }

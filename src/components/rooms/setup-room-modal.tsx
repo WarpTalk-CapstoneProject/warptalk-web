@@ -1,28 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
-  VideoCamera,
-  VideoCameraSlash,
   Microphone,
   MicrophoneSlash,
   SpeakerHigh,
+  VideoCamera,
+  VideoCameraSlash,
   X,
 } from "@phosphor-icons/react/dist/ssr";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
-import { cn } from "@/lib/utils";
-import { motion } from "motion/react";
-import { useTranslationRoom, useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
-import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore } from "@/stores/ui-store";
-import { toast } from "sonner";
+import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
 import { DeviceSelect } from "@/components/rooms/setup/device-select";
 import { LanguageRoleConfirm } from "@/components/rooms/setup/language-role-confirm";
-import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  useJoinTranslationRoomByCode,
+  useTranslationRoom,
+} from "@/hooks/use-translationRooms";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
+import { toast } from "sonner";
 
 type SinkVideoElement = HTMLVideoElement & {
   setSinkId?: (sinkId: string) => Promise<void>;
@@ -33,9 +35,11 @@ export function SetupRoomModal() {
   const roomId = useUIStore((state) => state.setupRoomId);
   const isOpen = useUIStore((state) => state.setupRoomModalOpen);
   const setIsOpen = useUIStore((state) => state.setSetupRoomModalOpen);
-  const user = useAuthStore(state => state.user);
-  
-  const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(roomId ?? "");
+  const user = useAuthStore((state) => state.user);
+
+  const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(
+    roomId ?? "",
+  );
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
   // Host is strictly the room owner (room.hostId). Workspace admins/owners are NOT the host:
@@ -49,23 +53,22 @@ export function SetupRoomModal() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationRef = useRef<number | null>(null);
+  const mediaGenerationRef = useRef(0);
 
   const [speakLanguage, setSpeakLanguage] = useState("vi");
   const [listenLanguage, setListenLanguage] = useState("vi");
-  
-  useEffect(() => {
-    if (room && room.targetLanguages?.length > 0) {
-      setListenLanguage(room.targetLanguages[0]);
-      setSpeakLanguage(room.targetLanguages[0]);
-    } else if (room) {
-      setListenLanguage(room.sourceLanguage || "en");
-      setSpeakLanguage(room.sourceLanguage || "en");
-    }
-  }, [room]);
-  
+  const [languageRoomId, setLanguageRoomId] = useState<string | null>(null);
+  if (room && room.id !== languageRoomId) {
+    const initialLanguage =
+      room.targetLanguages?.[0] ?? room.sourceLanguage ?? "en";
+    setLanguageRoomId(room.id);
+    setListenLanguage(initialLanguage);
+    setSpeakLanguage(initialLanguage);
+  }
+
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
-  const [noiseSuppression, setNoiseSuppression] = useState(true);
+  const [noiseSuppression] = useState(true);
 
   // Krisp noise filter / background blur — applied as LiveKit track processors once in
   // the room (see src/hooks/use-track-processors.ts), not to this raw preview stream.
@@ -73,7 +76,9 @@ export function SetupRoomModal() {
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
-  const [microphoneDevices, setMicrophoneDevices] = useState<MediaDeviceInfo[]>([]);
+  const [microphoneDevices, setMicrophoneDevices] = useState<MediaDeviceInfo[]>(
+    [],
+  );
   const [speakerDevices, setSpeakerDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState("");
   const [selectedMicrophoneId, setSelectedMicrophoneId] = useState("");
@@ -82,87 +87,119 @@ export function SetupRoomModal() {
   const [micLevel, setMicLevel] = useState(0);
 
   useEffect(() => {
-    let isMounted = true;
-    
-    async function init() {
-      if (!isOpen) return;
-      const stream = await startMedia();
-      if (!isMounted && stream) {
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    }
-    
-    void init();
-
-    return () => {
-      isMounted = false;
-      stopMedia();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraEnabled, microphoneEnabled, noiseSuppression, selectedCameraId, selectedMicrophoneId, isOpen]);
+    if (!videoRef.current?.setSinkId || !selectedSpeakerId) return;
+    void videoRef.current
+      .setSinkId(selectedSpeakerId)
+      .catch(() => setMediaError("Browser could not switch speaker output."));
+  }, [selectedSpeakerId, cameraEnabled, isOpen]);
 
   useEffect(() => {
-    if (!videoRef.current?.setSinkId || !selectedSpeakerId) return;
-    void videoRef.current.setSinkId(selectedSpeakerId).catch(() => setMediaError("Browser could not switch speaker output."));
-  }, [selectedSpeakerId]);
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.addEventListener) return;
+    const handleDeviceChange = () => {
+      void refreshDevices(mediaGenerationRef.current);
+    };
+    mediaDevices.addEventListener("devicechange", handleDeviceChange);
+    return () => mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+  }, []);
 
-  async function refreshDevices() {
-    if (!navigator.mediaDevices?.enumerateDevices) return;
+  async function refreshDevices(expectedGeneration?: number) {
+    if (!navigator.mediaDevices?.enumerateDevices) return true;
     const devices = await navigator.mediaDevices.enumerateDevices();
+    if (
+      expectedGeneration !== undefined &&
+      expectedGeneration !== mediaGenerationRef.current
+    ) {
+      return false;
+    }
     const cameras = devices.filter((device) => device.kind === "videoinput");
-    const microphones = devices.filter((device) => device.kind === "audioinput");
+    const microphones = devices.filter(
+      (device) => device.kind === "audioinput",
+    );
     const speakers = devices.filter((device) => device.kind === "audiooutput");
     setCameraDevices(cameras);
     setMicrophoneDevices(microphones);
     setSpeakerDevices(speakers);
-    
-    setSelectedCameraId((current) => current || (cameras.length > 0 ? cameras[0].deviceId : ""));
-    setSelectedMicrophoneId((current) => current || (microphones.length > 0 ? microphones[0].deviceId : ""));
-    setSelectedSpeakerId((current) => current || (speakers.length > 0 ? speakers[0].deviceId : ""));
+
+    setSelectedCameraId(
+      (current) => current || (cameras.length > 0 ? cameras[0].deviceId : ""),
+    );
+    setSelectedMicrophoneId(
+      (current) =>
+        current || (microphones.length > 0 ? microphones[0].deviceId : ""),
+    );
+    setSelectedSpeakerId(
+      (current) => current || (speakers.length > 0 ? speakers[0].deviceId : ""),
+    );
+    return true;
   }
 
   async function startMedia() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      setMediaError("This browser does not support camera and microphone preview.");
+      setMediaError(
+        "This browser does not support camera and microphone preview.",
+      );
       return null;
     }
 
     stopMedia();
+    const generation = mediaGenerationRef.current;
     setMediaError("");
 
     if (!cameraEnabled && !microphoneEnabled) {
       if (videoRef.current) videoRef.current.srcObject = null;
-      await refreshDevices();
+      await refreshDevices(generation);
       return null;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: cameraEnabled ? (selectedCameraId ? { deviceId: { exact: selectedCameraId } } : true) : false,
+        video: cameraEnabled
+          ? selectedCameraId
+            ? { deviceId: { exact: selectedCameraId } }
+            : true
+          : false,
         audio: microphoneEnabled
           ? {
-              deviceId: selectedMicrophoneId ? { exact: selectedMicrophoneId } : undefined,
+              deviceId: selectedMicrophoneId
+                ? { exact: selectedMicrophoneId }
+                : undefined,
               noiseSuppression,
               echoCancellation: true,
             }
           : false,
       });
 
+      if (generation !== mediaGenerationRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return null;
+      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-      await refreshDevices();
+      const isCurrent = await refreshDevices(generation);
+      if (!isCurrent || generation !== mediaGenerationRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        if (streamRef.current === stream) streamRef.current = null;
+        return null;
+      }
       startMicMeter(stream);
       return stream;
     } catch (error) {
-      setMediaError(error instanceof Error ? error.message : "Unable to access camera or microphone.");
+      if (generation !== mediaGenerationRef.current) return null;
+      setMediaError(
+        error instanceof Error
+          ? error.message
+          : "Unable to access camera or microphone.",
+      );
       if (videoRef.current) videoRef.current.srcObject = null;
       return null;
     }
   }
 
   function stopMedia() {
+    mediaGenerationRef.current += 1;
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
@@ -172,7 +209,7 @@ export function SetupRoomModal() {
       void audioContextRef.current.close();
     }
     audioContextRef.current = null;
-    
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
         track.stop();
@@ -210,6 +247,34 @@ export function SetupRoomModal() {
     tick();
   }
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function init() {
+      if (!isOpen) return;
+      const stream = await startMedia();
+      if (!isMounted && stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    }
+
+    void init();
+
+    return () => {
+      isMounted = false;
+      stopMedia();
+    };
+    // Media helpers intentionally restart the preview when these controls change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    cameraEnabled,
+    microphoneEnabled,
+    noiseSuppression,
+    selectedCameraId,
+    selectedMicrophoneId,
+    isOpen,
+  ]);
+
   async function handleConfirm() {
     if (!room || isJoining) return;
     const displayName = (user?.fullName || user?.email || "Participant").trim();
@@ -234,28 +299,36 @@ export function SetupRoomModal() {
         return;
       }
 
-      window.sessionStorage.setItem('warptalk.join.preview', JSON.stringify({
-        displayName,
-        roomCode: room.translationRoomCode,
-        speakLanguage,
-        listenLanguage,
-        cameraEnabled,
-        microphoneEnabled,
-        speakerEnabled: true,
-        roomId: result.room.id,
-        participantId: result.participant?.id,
-      }));
-      window.sessionStorage.setItem('warptalk.devices.preview', JSON.stringify({
-        cameraEnabled,
-        microphoneEnabled,
-        noiseSuppressionEnabled,
-        backgroundBlurEnabled,
-      }));
+      window.sessionStorage.setItem(
+        "warptalk.join.preview",
+        JSON.stringify({
+          displayName,
+          roomCode: room.translationRoomCode,
+          speakLanguage,
+          listenLanguage,
+          cameraEnabled,
+          microphoneEnabled,
+          speakerEnabled: true,
+          roomId: result.room.id,
+          participantId: result.participant?.id,
+        }),
+      );
+      window.sessionStorage.setItem(
+        "warptalk.devices.preview",
+        JSON.stringify({
+          cameraEnabled,
+          microphoneEnabled,
+          noiseSuppressionEnabled,
+          backgroundBlurEnabled,
+        }),
+      );
 
       setIsOpen(false);
       router.push(`/room/${result.room.id}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not join the room.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not join the room.",
+      );
     } finally {
       setIsJoining(false);
     }
@@ -265,13 +338,13 @@ export function SetupRoomModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent 
-        overlayClassName="!bg-black/40 !backdrop-blur-none" 
+      <DialogContent
+        overlayClassName="!bg-black/40 !backdrop-blur-none"
         className="max-w-[calc(100vw-2rem)] sm:max-w-[900px] w-full p-6 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden flex flex-col gap-6"
       >
         <DialogTitle className="sr-only">Setup Room</DialogTitle>
 
-        <button 
+        <button
           onClick={() => setIsOpen(false)}
           className="absolute top-4 right-4 p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors z-10"
         >
@@ -281,18 +354,32 @@ export function SetupRoomModal() {
         {/* Title Area */}
         <div className="w-full space-y-1">
           <h2 className="text-[20px] font-semibold tracking-tight text-foreground pr-8 flex items-center gap-3">
-            {isLoadingRoom ? <><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /> <span>Loading room...</span></> : room?.title || "Ready to join?"}
+            {isLoadingRoom ? (
+              <>
+                <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />{" "}
+                <span>Loading room...</span>
+              </>
+            ) : (
+              room?.title || "Ready to join?"
+            )}
           </h2>
-          <p className="text-[13px] text-ink-muted tracking-[-0.05px]">Room Code: {room?.translationRoomCode || roomId}</p>
+          <p className="text-[13px] text-ink-muted tracking-[-0.05px]">
+            Room Code: {room?.translationRoomCode || roomId}
+          </p>
         </div>
 
         {/* Main Container */}
         <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch min-h-[380px]">
-          
           {/* Left Side: Video Preview Panel (Surface 1) */}
           <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden relative flex flex-col">
             {cameraEnabled ? (
-              <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover -scale-x-100" autoPlay muted playsInline />
+              <video
+                ref={videoRef}
+                className="absolute inset-0 w-full h-full object-cover -scale-x-100"
+                autoPlay
+                muted
+                playsInline
+              />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-canvas">
                 <div className="flex flex-col items-center gap-3 text-ink-muted">
@@ -314,35 +401,51 @@ export function SetupRoomModal() {
                 onClick={() => setMicrophoneEnabled(!microphoneEnabled)}
                 className={cn(
                   "w-10 h-10 rounded-[8px] flex items-center justify-center transition-colors text-[14px]",
-                  microphoneEnabled ? "bg-surface-2 text-ink hover:bg-surface-3" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                  microphoneEnabled
+                    ? "bg-surface-2 text-ink hover:bg-surface-3"
+                    : "bg-red-500/10 text-red-500 hover:bg-red-500/20",
                 )}
               >
-                {microphoneEnabled ? <Microphone className="w-4 h-4" /> : <MicrophoneSlash className="w-4 h-4" />}
+                {microphoneEnabled ? (
+                  <Microphone className="w-4 h-4" />
+                ) : (
+                  <MicrophoneSlash className="w-4 h-4" />
+                )}
               </button>
               <button
                 onClick={() => setCameraEnabled(!cameraEnabled)}
                 className={cn(
                   "w-10 h-10 rounded-[8px] flex items-center justify-center transition-colors text-[14px]",
-                  cameraEnabled ? "bg-surface-2 text-ink hover:bg-surface-3" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                  cameraEnabled
+                    ? "bg-surface-2 text-ink hover:bg-surface-3"
+                    : "bg-red-500/10 text-red-500 hover:bg-red-500/20",
                 )}
               >
-                {cameraEnabled ? <VideoCamera className="w-4 h-4" /> : <VideoCameraSlash className="w-4 h-4" />}
+                {cameraEnabled ? (
+                  <VideoCamera className="w-4 h-4" />
+                ) : (
+                  <VideoCameraSlash className="w-4 h-4" />
+                )}
               </button>
 
               <div className="h-6 w-[1px] bg-border/60 mx-0.5" />
 
               <AvEffectsToggle
                 noiseSuppressionEnabled={noiseSuppressionEnabled}
-                onToggleNoiseSuppression={() => setNoiseSuppressionEnabled((current) => !current)}
+                onToggleNoiseSuppression={() =>
+                  setNoiseSuppressionEnabled((current) => !current)
+                }
                 backgroundBlurEnabled={backgroundBlurEnabled}
-                onToggleBackgroundBlur={() => setBackgroundBlurEnabled((current) => !current)}
+                onToggleBackgroundBlur={() =>
+                  setBackgroundBlurEnabled((current) => !current)
+                }
               />
 
               {/* Mic Meter */}
               {microphoneEnabled && (
                 <div className="w-1.5 h-8 bg-surface-2 rounded-full overflow-hidden flex items-end ml-1 mr-2">
-                  <div 
-                    className="w-full bg-semantic-success transition-all duration-75 ease-out rounded-full" 
+                  <div
+                    className="w-full bg-semantic-success transition-all duration-75 ease-out rounded-full"
                     style={{ height: `${micLevel}%` }}
                   />
                 </div>
@@ -352,26 +455,36 @@ export function SetupRoomModal() {
 
           {/* Right Side: Settings Panel (Surface 1) */}
           <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden flex flex-col">
-            
             <div className="flex-1 p-5 space-y-6 overflow-y-auto custom-scrollbar">
               {/* Devices Section */}
               <div className="space-y-3">
-                <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">Devices</h4>
+                <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">
+                  Devices
+                </h4>
                 <div className="space-y-3">
-                  <DeviceSelect 
-                    label="Camera" icon={<VideoCamera className="w-4 h-4 text-ink-muted" />} 
-                    value={selectedCameraId} onChange={setSelectedCameraId} 
-                    devices={cameraDevices} fallback="Default Camera" 
+                  <DeviceSelect
+                    label="Camera"
+                    icon={<VideoCamera className="w-4 h-4 text-ink-muted" />}
+                    value={selectedCameraId}
+                    onChange={setSelectedCameraId}
+                    devices={cameraDevices}
+                    fallback="Default Camera"
                   />
-                  <DeviceSelect 
-                    label="Microphone" icon={<Microphone className="w-4 h-4 text-ink-muted" />} 
-                    value={selectedMicrophoneId} onChange={setSelectedMicrophoneId} 
-                    devices={microphoneDevices} fallback="Default Microphone" 
+                  <DeviceSelect
+                    label="Microphone"
+                    icon={<Microphone className="w-4 h-4 text-ink-muted" />}
+                    value={selectedMicrophoneId}
+                    onChange={setSelectedMicrophoneId}
+                    devices={microphoneDevices}
+                    fallback="Default Microphone"
                   />
-                  <DeviceSelect 
-                    label="Speaker" icon={<SpeakerHigh className="w-4 h-4 text-ink-muted" />} 
-                    value={selectedSpeakerId} onChange={setSelectedSpeakerId} 
-                    devices={speakerDevices} fallback="Default Speaker" 
+                  <DeviceSelect
+                    label="Speaker"
+                    icon={<SpeakerHigh className="w-4 h-4 text-ink-muted" />}
+                    value={selectedSpeakerId}
+                    onChange={setSelectedSpeakerId}
+                    devices={speakerDevices}
+                    fallback="Default Speaker"
                   />
                 </div>
               </div>
@@ -396,8 +509,12 @@ export function SetupRoomModal() {
                 className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isJoining
-                  ? (isHost ? "Starting..." : "Joining...")
-                  : (isHost ? "Start Meeting" : "Join Meeting")}
+                  ? isHost
+                    ? "Starting..."
+                    : "Joining..."
+                  : isHost
+                    ? "Start Meeting"
+                    : "Join Meeting"}
               </button>
             </div>
           </div>

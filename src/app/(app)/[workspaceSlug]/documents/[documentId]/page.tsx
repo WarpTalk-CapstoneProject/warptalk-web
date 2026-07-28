@@ -1,36 +1,37 @@
 "use client";
 
-import { use, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { toast } from "sonner";
 import {
-  ShieldWarning,
   ArrowLeft,
-  Spinner,
-  Plus,
-  Download,
-  Lock,
   Check,
-  X,
+  Download,
   FileText,
+  ShieldWarning,
+  Spinner,
+  X,
 } from "@phosphor-icons/react";
+import { useParams, useRouter } from "next/navigation";
+import { use, useEffect } from "react";
+import { toast } from "sonner";
 
-import {
-  WORKSPACE_DOCUMENT_STATUS,
-} from "@/constants/workspace-document";
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import {
-  useWorkspaceDocument,
-  useDownloadWorkspaceDocument,
-  useApproveWorkspaceDocument,
-  useWorkspace,
-} from "@/hooks/use-workspace";
-import { useDocumentAccessPolicy } from "@/hooks/use-document-access-policy";
-import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import { downloadBlob } from "@/lib/download-blob";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { WORKSPACE_DOCUMENT_STATUS } from "@/constants/workspace-document";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { useDocumentAccessPolicy } from "@/hooks/use-document-access-policy";
+import {
+  useApproveWorkspaceDocument,
+  useDownloadWorkspaceDocument,
+  useWorkspace,
+  useWorkspaceDocument,
+} from "@/hooks/use-workspace";
+import { downloadBlob } from "@/lib/download-blob";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 import { DocumentAccessPolicyPanel } from "./components/DocumentAccessPolicyPanel";
 import { DocumentMetadataCard } from "./components/DocumentMetadataCard";
@@ -44,10 +45,13 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const router = useRouter();
   const routeParams = useParams<{ workspaceSlug: string }>();
   const workspaceSlug = routeParams.workspaceSlug;
-  const activeWorkspaceId = useWorkspaceStore((s: any) => s.activeWorkspaceId);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
   // Queries & Hooks
-  const documentQuery = useWorkspaceDocument(activeWorkspaceId || "", documentId);
+  const documentQuery = useWorkspaceDocument(
+    activeWorkspaceId || "",
+    documentId,
+  );
 
   // Graceful Failure: If document is deleted, archived, or not found, warn user and redirect back to list
   useEffect(() => {
@@ -74,28 +78,30 @@ export default function DocumentDetailPage({ params }: PageProps) {
   } = useDocumentAccessPolicy(activeWorkspaceId || "", documentId);
 
   // Mutations
-  const downloadMutation = useDownloadWorkspaceDocument(activeWorkspaceId || "");
+  const downloadMutation = useDownloadWorkspaceDocument(
+    activeWorkspaceId || "",
+  );
   const approveMutation = useApproveWorkspaceDocument(activeWorkspaceId || "");
   const doc = documentQuery.data;
   const canApproveDocuments = Boolean(workspaceQuery.data?.canApproveDocuments);
   const isPendingApproval = Boolean(
     doc?.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
-    doc?.status?.toLowerCase().includes("pending")
+    doc?.status?.toLowerCase().includes("pending"),
   );
 
   useRegisterAssistantContext(
     doc
       ? {
-        pageType: "document_detail",
-        entityId: documentId,
-        workspaceId: activeWorkspaceId ?? undefined,
-        snapshot: {
-          name: doc.name,
-          status: doc.status,
-          ingestionStatus: doc.ingestionStatus,
-        },
-      }
-      : null
+          pageType: "document_detail",
+          entityId: documentId,
+          workspaceId: activeWorkspaceId ?? undefined,
+          snapshot: {
+            name: doc.name,
+            status: doc.status,
+            ingestionStatus: doc.ingestionStatus,
+          },
+        }
+      : null,
   );
 
   if (!activeWorkspaceId) return null;
@@ -106,12 +112,16 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const handleDownload = async () => {
     if (!doc) return;
     try {
-      const result = await downloadBlob(() => downloadMutation.mutateAsync(doc.id), doc.fileName);
+      const result = await downloadBlob(
+        () => downloadMutation.mutateAsync(doc.id),
+        doc.fileName,
+      );
       if (result === "picker") toast.success("File saved successfully!");
       if (result === "download") toast.success("Downloading file...");
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || "Failed to download document.";
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to download document.";
       toast.error(errorMsg);
     }
   };
@@ -119,10 +129,13 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const handleApprove = async (approve: boolean) => {
     try {
       await approveMutation.mutateAsync({ docId: documentId, approve });
-      toast.success(approve ? "Document approved for ingestion." : "Document rejected.");
+      toast.success(
+        approve ? "Document approved for ingestion." : "Document rejected.",
+      );
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || "Action failed.";
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Action failed.";
       toast.error(errorMsg);
     }
   };
@@ -151,9 +164,12 @@ export default function DocumentDetailPage({ params }: PageProps) {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <ShieldWarning className="h-6 w-6" />
             </div>
-            <CardTitle className="text-lg font-bold">Document Not Found</CardTitle>
+            <CardTitle className="text-lg font-bold">
+              Document Not Found
+            </CardTitle>
             <CardDescription className="text-xs">
-              The requested document does not exist or has been deleted from this workspace.
+              The requested document does not exist or has been deleted from
+              this workspace.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -182,7 +198,9 @@ export default function DocumentDetailPage({ params }: PageProps) {
         </button>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-1">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-ink break-all">{doc.name}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-ink break-all">
+              {doc.name}
+            </h1>
             <p className="text-[11px] text-ink-muted mt-1 font-mono">
               ID: {doc.id}
             </p>
@@ -242,9 +260,14 @@ export default function DocumentDetailPage({ params }: PageProps) {
             <CardHeader className="border-b border-hairline px-5 py-4 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
-                <CardTitle className="text-sm font-semibold">Original File</CardTitle>
+                <CardTitle className="text-sm font-semibold">
+                  Original File
+                </CardTitle>
               </div>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-hairline bg-surface-2 uppercase font-mono text-ink-muted">
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0.5 border-hairline bg-surface-2 uppercase font-mono text-ink-muted"
+              >
                 {doc.fileExtension.replace(".", "") || "DOC"}
               </Badge>
             </CardHeader>
@@ -257,9 +280,13 @@ export default function DocumentDetailPage({ params }: PageProps) {
                       <FileText className="h-6 w-6" />
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-base text-ink truncate">{doc.fileName}</span>
+                      <span className="font-bold text-base text-ink truncate">
+                        {doc.fileName}
+                      </span>
                       <span className="text-xs text-ink-muted mt-0.5">
-                        {formatBytes(doc.sizeBytes)} • {doc.fileExtension.replace(".", "").toUpperCase() || "DOC"}
+                        {formatBytes(doc.sizeBytes)} •{" "}
+                        {doc.fileExtension.replace(".", "").toUpperCase() ||
+                          "DOC"}
                       </span>
                     </div>
                   </div>
@@ -281,17 +308,20 @@ export default function DocumentDetailPage({ params }: PageProps) {
                 {/* Status Monitoring Bar */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-hairline">
                   <div className="flex items-center justify-between bg-surface-1 border border-hairline rounded-lg px-3.5 py-2.5">
-                    <span className="text-xs font-semibold text-ink-muted">Document Status</span>
+                    <span className="text-xs font-semibold text-ink-muted">
+                      Document Status
+                    </span>
                     <Badge
                       variant="outline"
                       className={`text-[10px] font-mono uppercase rounded px-2 py-0.5 font-semibold ${
-                        doc.status?.toLowerCase() === "public" || doc.status?.toLowerCase() === "active"
+                        doc.status?.toLowerCase() === "public" ||
+                        doc.status?.toLowerCase() === "active"
                           ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
                           : doc.status?.toLowerCase().includes("pending")
-                          ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                          : doc.status?.toLowerCase() === "rejected"
-                          ? "bg-destructive/10 text-destructive border-destructive/20"
-                          : "bg-surface-3 border-hairline text-ink-muted"
+                            ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                            : doc.status?.toLowerCase() === "rejected"
+                              ? "bg-destructive/10 text-destructive border-destructive/20"
+                              : "bg-surface-3 border-hairline text-ink-muted"
                       }`}
                     >
                       {doc.status}
@@ -299,17 +329,19 @@ export default function DocumentDetailPage({ params }: PageProps) {
                   </div>
 
                   <div className="flex items-center justify-between bg-surface-1 border border-hairline rounded-lg px-3.5 py-2.5">
-                    <span className="text-xs font-semibold text-ink-muted">AI Ingestion Status</span>
+                    <span className="text-xs font-semibold text-ink-muted">
+                      AI Ingestion Status
+                    </span>
                     <Badge
                       variant="outline"
                       className={`text-[10px] font-mono uppercase rounded px-2 py-0.5 font-semibold ${
                         doc.ingestionStatus?.toLowerCase() === "completed"
                           ? "bg-primary/10 text-primary border-primary/20"
                           : doc.ingestionStatus?.toLowerCase() === "processing"
-                          ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
-                          : doc.ingestionStatus?.toLowerCase() === "failed"
-                          ? "bg-destructive/10 text-destructive border-destructive/20"
-                          : "bg-surface-3 border-hairline text-ink-muted"
+                            ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                            : doc.ingestionStatus?.toLowerCase() === "failed"
+                              ? "bg-destructive/10 text-destructive border-destructive/20"
+                              : "bg-surface-3 border-hairline text-ink-muted"
                       }`}
                     >
                       {doc.ingestionStatus || "Pending"}

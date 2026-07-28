@@ -1,17 +1,32 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { useMeetingChat, useSendMeetingChat, useSendMeetingChatFile, useTranslateMeetingChat } from "@/hooks/use-meeting";
+import {
+  useMeetingChat,
+  useSendMeetingChat,
+  useSendMeetingChatFile,
+  useTranslateMeetingChat,
+} from "@/hooks/use-meeting";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName, SUPPORTED_LANGUAGES } from "@/lib/languages";
-import apiClient from "@/lib/api/client";
-import { useEditor, EditorContent } from '@tiptap/react';
-import type { JSONContent } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import Mention from '@tiptap/extension-mention';
-import Placeholder from '@tiptap/extension-placeholder';
-import { suggestion } from './mentions';
-import { LoaderCircle, Send, Languages, Paperclip, FileText, FileImage, FileArchive, Download } from "lucide-react";
+import { downloadAuthenticatedFile } from "@/lib/download-artifact";
+import { useEditor, EditorContent } from "@tiptap/react";
+import type { JSONContent } from "@tiptap/core";
+import type { EditorView } from "@tiptap/pm/view";
+import StarterKit from "@tiptap/starter-kit";
+import Mention from "@tiptap/extension-mention";
+import Placeholder from "@tiptap/extension-placeholder";
+import { suggestion } from "./mentions";
+import {
+  LoaderCircle,
+  Send,
+  Languages,
+  Paperclip,
+  FileText,
+  FileImage,
+  FileArchive,
+  Download,
+} from "lucide-react";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 
@@ -34,8 +49,10 @@ function formatFileSize(bytes: number): string {
 }
 
 function FileTypeIcon({ contentType }: { contentType?: string }) {
-  if (contentType?.startsWith("image/")) return <FileImage className="h-4 w-4" />;
-  if (contentType === "application/zip" || contentType?.includes("compressed")) return <FileArchive className="h-4 w-4" />;
+  if (contentType?.startsWith("image/"))
+    return <FileImage className="h-4 w-4" />;
+  if (contentType === "application/zip" || contentType?.includes("compressed"))
+    return <FileArchive className="h-4 w-4" />;
   return <FileText className="h-4 w-4" />;
 }
 
@@ -51,24 +68,34 @@ export function ChatPanel({
 }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
   const participants = useTranslationRoomStore((state) => state.participants);
-  const setChatMessages = useTranslationRoomStore((state) => state.setChatMessages);
-  const addChatMessage = useTranslationRoomStore((state) => state.addChatMessage);
+  const setChatMessages = useTranslationRoomStore(
+    (state) => state.setChatMessages,
+  );
+  const addChatMessage = useTranslationRoomStore(
+    (state) => state.addChatMessage,
+  );
   const user = useAuthStore((state) => state.user);
-  const accessToken = useAuthStore((state) => state.accessToken);
   const historyQuery = useMeetingChat(roomId);
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
-  const { mutate: sendFileAPI, isPending: isUploadingFile } = useSendMeetingChatFile();
+  const { mutate: sendFileAPI, isPending: isUploadingFile } =
+    useSendMeetingChatFile();
   const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
   const [sendError, setSendError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [translations, setTranslations] = useState<Record<string, MessageTranslationState>>({});
+  const [translations, setTranslations] = useState<
+    Record<string, MessageTranslationState>
+  >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   // User-facing "translate messages into" choice — defaults to the viewer's own listen
   // language but can be overridden per session via the dropdown, since the viewer may
   // not know (or want) the language it was inferred to.
-  const [selectedTargetLanguage, setSelectedTargetLanguage] = useState(targetLanguage || "en");
+  const [selectedTargetLanguage, setSelectedTargetLanguage] = useState(
+    targetLanguage || "en",
+  );
   const containerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const previousTargetLanguageRef = useRef(targetLanguage);
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
@@ -83,26 +110,55 @@ export function ChatPanel({
   function toggleTranslation(messageId: string) {
     const current = translations[messageId];
     if (current?.text) {
-      setTranslations((prev) => ({ ...prev, [messageId]: { ...current, visible: !current.visible } }));
+      setTranslations((prev) => ({
+        ...prev,
+        [messageId]: { ...current, visible: !current.visible },
+      }));
       return;
     }
 
-    setTranslations((prev) => ({ ...prev, [messageId]: { loading: true, visible: true } }));
+    setTranslations((prev) => ({
+      ...prev,
+      [messageId]: { loading: true, visible: true },
+    }));
     translateMessageAPI(
       { messageId, targetLanguage: selectedTargetLanguage },
       {
         onSuccess: (dto) => {
-          setTranslations((prev) => ({ ...prev, [messageId]: { text: dto.translatedText, loading: false, visible: true } }));
+          setTranslations((prev) => ({
+            ...prev,
+            [messageId]: {
+              text: dto.translatedText,
+              loading: false,
+              visible: true,
+            },
+          }));
         },
         onError: () => {
           setTranslations((prev) => ({
             ...prev,
-            [messageId]: { loading: false, visible: true, error: "Could not translate message." },
+            [messageId]: {
+              loading: false,
+              visible: true,
+              error: "Could not translate message.",
+            },
           }));
         },
-      }
+      },
     );
   }
+
+  useEffect(() => {
+    if (
+      !targetLanguage ||
+      targetLanguage === previousTargetLanguageRef.current
+    ) {
+      return;
+    }
+    previousTargetLanguageRef.current = targetLanguage;
+    setSelectedTargetLanguage(targetLanguage);
+    setTranslations({});
+  }, [targetLanguage]);
 
   useEffect(() => {
     if (historyQuery.data) {
@@ -111,10 +167,18 @@ export function ChatPanel({
   }, [historyQuery.data, setChatMessages]);
 
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && shouldAutoScrollRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [messages]);
+
+  function handleMessagesScroll() {
+    const container = containerRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 80;
+  }
 
   const editor = useEditor({
     extensions: [
@@ -127,21 +191,23 @@ export function ChatPanel({
         horizontalRule: false,
       }),
       Placeholder.configure({
-        placeholder: 'Type a message or @agent for AI help...',
+        placeholder: "Type a message or @agent for AI help...",
       }),
       Mention.configure({
         HTMLAttributes: {
-          class: 'text-brand-primary font-medium bg-brand-primary/10 rounded px-1',
+          class:
+            "text-brand-primary font-medium bg-brand-primary/10 rounded px-1",
         },
         suggestion,
       }),
     ],
     editorProps: {
       attributes: {
-        class: 'min-h-[36px] max-h-[120px] overflow-y-auto custom-scrollbar w-full bg-transparent text-[13px] text-ink outline-none px-3 py-2',
+        class:
+          "min-h-[36px] max-h-[120px] overflow-y-auto custom-scrollbar w-full bg-transparent text-[13px] text-ink outline-none px-3 py-2",
       },
-      handleKeyDown: (view: any, event: any) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
+      handleKeyDown: (_view: EditorView, event: KeyboardEvent) => {
+        if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
           sendMessage();
           return true;
@@ -149,43 +215,43 @@ export function ChatPanel({
         return false;
       },
     },
-    content: '',
+    content: "",
   });
 
   function sendMessage() {
     if (!editor) return;
-    
+
     // Extract plain text and mentions
     const json = editor.getJSON();
-    let textContent = '';
+    let textContent = "";
     const mentions: ChatMentionDto[] = [];
 
     // A simple recursive function to extract text and mentions
     const parseNode = (node: JSONContent) => {
-      if (node.type === 'text') {
+      if (node.type === "text") {
         textContent += node.text;
-      } else if (node.type === 'mention') {
+      } else if (node.type === "mention") {
         const id = String(node.attrs?.id ?? "");
         const label = String(node.attrs?.label ?? "");
         textContent += `@${label}`;
         mentions.push({
           id,
           display: label,
-          type: 'agent' // Assuming all mentions are agents for now based on our mock
+          type: "agent",
         });
-      } else if (node.type === 'hardBreak') {
-        textContent += '\n';
+      } else if (node.type === "hardBreak") {
+        textContent += "\n";
       }
-      
+
       if (node.content) {
         node.content.forEach(parseNode);
       }
     };
 
     if (json.content) {
-      json.content.forEach((block: any) => {
+      json.content.forEach((block) => {
         parseNode(block);
-        textContent += '\n';
+        textContent += "\n";
       });
     }
 
@@ -211,7 +277,7 @@ export function ChatPanel({
         onError: () => {
           setSendError("Message could not be sent. Try again.");
         },
-      }
+      },
     );
   }
 
@@ -242,21 +308,30 @@ export function ChatPanel({
           setFileError("File could not be uploaded. Try again.");
           setUploadProgress(null);
         },
-      }
+      },
     );
   }
 
-  function getFileDownloadHref(fileUrl?: string) {
-    if (!fileUrl) return "#";
-    const base = apiClient.defaults.baseURL ?? "";
-    const token = accessToken ? `?access_token=${encodeURIComponent(accessToken)}` : "";
-    return `${base}${fileUrl}${token}`;
+  async function handleFileDownload(file: ChatFileMessageDto) {
+    if (!file.fileUrl) return;
+    setFileError(null);
+    try {
+      await downloadAuthenticatedFile(
+        file.fileUrl,
+        file.fileName || file.originalText || "download",
+      );
+    } catch {
+      setFileError("File could not be downloaded. Try again.");
+    }
   }
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <label htmlFor="chat-translate-target" className="text-[11px] font-medium text-ink-subtle">
+        <label
+          htmlFor="chat-translate-target"
+          className="text-[11px] font-medium text-ink-subtle"
+        >
           Translate to
         </label>
         <select
@@ -272,7 +347,11 @@ export function ChatPanel({
           ))}
         </select>
       </div>
-      <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
+      <div
+        ref={containerRef}
+        onScroll={handleMessagesScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth"
+      >
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
             <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
@@ -281,7 +360,9 @@ export function ChatPanel({
         ) : null}
         {historyQuery.isError && messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <p className="text-[13px] font-medium text-ink">Could not load chat history</p>
+            <p className="text-[13px] font-medium text-ink">
+              Could not load chat history
+            </p>
             <button
               type="button"
               onClick={() => void historyQuery.refetch()}
@@ -291,7 +372,9 @@ export function ChatPanel({
             </button>
           </div>
         ) : null}
-        {!historyQuery.isLoading && !historyQuery.isError && messages.length === 0 ? (
+        {!historyQuery.isLoading &&
+        !historyQuery.isError &&
+        messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
             No messages yet
           </div>
@@ -300,35 +383,52 @@ export function ChatPanel({
           {messages.map((message: ChatMessageDto) => {
             const isMine = message.senderUserId === user?.id;
             const isAssistant = message.messageType === "assistant";
-            
+
             let displayName = "";
             if (isMine && user) {
               displayName = user.fullName;
             } else if (isAssistant) {
               displayName = "WarpBot";
             } else {
-              const senderParticipant = participants.find(p => p.userId === message.senderUserId || p.displayName === message.senderDisplayName || (p as any).providerIdentity === message.senderDisplayName);
+              const senderParticipant = participants.find(
+                (p) =>
+                  p.userId === message.senderUserId ||
+                  p.displayName === message.senderDisplayName,
+              );
               displayName = senderParticipant?.displayName || "User";
             }
-            
+
             return (
-              <motion.div 
-                key={`${message.id}-${message.createdAt}`} 
+              <motion.div
+                key={`${message.id}-${message.createdAt}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2 }}
                 className={`flex gap-3 items-start group ${isMine ? "flex-row-reverse" : ""}`}
               >
-                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold shadow-sm ${isAssistant ? "bg-brand-primary text-white" : isMine ? "bg-ink text-white" : "bg-surface-3 text-ink"}`}>
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold shadow-sm ${isAssistant ? "bg-brand-primary text-white" : isMine ? "bg-ink text-white" : "bg-surface-3 text-ink"}`}
+                >
                   {displayName.substring(0, 2).toUpperCase()}
                 </div>
-                <div className={`flex min-w-0 flex-1 flex-col ${isMine ? "items-end" : "items-start"}`}>
-                  <div className={`flex items-baseline gap-2 ${isMine ? "flex-row-reverse" : ""}`}>
-                    <span className="text-[13px] font-semibold text-ink">{displayName}</span>
-                    <span className="text-[11px] font-medium text-ink-subtle">
-                      {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <div
+                  className={`flex min-w-0 flex-1 flex-col ${isMine ? "items-end" : "items-start"}`}
+                >
+                  <div
+                    className={`flex items-baseline gap-2 ${isMine ? "flex-row-reverse" : ""}`}
+                  >
+                    <span className="text-[13px] font-semibold text-ink">
+                      {displayName}
                     </span>
-                    {message.messageType !== "file" && selectedTargetLanguage.toLowerCase() !== message.originalLanguage.toLowerCase() ? (
+                    <span className="text-[11px] font-medium text-ink-subtle">
+                      {new Date(message.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {message.messageType !== "file" &&
+                    selectedTargetLanguage.toLowerCase() !==
+                      message.originalLanguage.toLowerCase() ? (
                       <button
                         type="button"
                         onClick={() => toggleTranslation(message.id)}
@@ -345,37 +445,57 @@ export function ChatPanel({
                     ) : null}
                   </div>
                   {message.messageType === "file" ? (
-                    <a
-                      href={getFileDownloadHref((message as ChatFileMessageDto).fileUrl)}
-                      target="_blank"
-                      rel="noreferrer"
-                      download={(message as ChatFileMessageDto).fileName}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleFileDownload(message as ChatFileMessageDto)
+                      }
                       className={`mt-0.5 flex items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2 text-[13px] text-ink hover:bg-surface-3 ${isMine ? "flex-row-reverse text-right" : "text-left"}`}
                     >
-                      <FileTypeIcon contentType={(message as ChatFileMessageDto).contentType} />
+                      <FileTypeIcon
+                        contentType={
+                          (message as ChatFileMessageDto).contentType
+                        }
+                      />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{(message as ChatFileMessageDto).fileName || message.originalText}</span>
-                        {(message as ChatFileMessageDto).fileSizeBytes != null ? (
-                          <span className="block text-[11px] text-ink-subtle">{formatFileSize((message as ChatFileMessageDto).fileSizeBytes!)}</span>
+                        <span className="block truncate font-medium">
+                          {(message as ChatFileMessageDto).fileName ||
+                            message.originalText}
+                        </span>
+                        {(message as ChatFileMessageDto).fileSizeBytes !=
+                        null ? (
+                          <span className="block text-[11px] text-ink-subtle">
+                            {formatFileSize(
+                              (message as ChatFileMessageDto).fileSizeBytes!,
+                            )}
+                          </span>
                         ) : null}
                       </span>
                       <Download className="h-3.5 w-3.5 shrink-0 text-ink-subtle" />
-                    </a>
+                    </button>
                   ) : (
-                    <p className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-brand-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}>
+                    <p
+                      className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-brand-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}
+                    >
                       {message.originalText}
                     </p>
                   )}
-                  {translations[message.id]?.visible && translations[message.id]?.text ? (
-                    <p className={`mt-1 rounded-md bg-surface-2 px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap text-ink ${isMine ? "text-right" : "text-left"}`}>
+                  {translations[message.id]?.visible &&
+                  translations[message.id]?.text ? (
+                    <p
+                      className={`mt-1 rounded-md bg-surface-2 px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap text-ink ${isMine ? "text-right" : "text-left"}`}
+                    >
                       {translations[message.id]!.text}
                       <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
                         {getLanguageName(selectedTargetLanguage)}
                       </span>
                     </p>
                   ) : null}
-                  {translations[message.id]?.visible && translations[message.id]?.error ? (
-                    <p className="mt-1 text-[12px] text-red-600">{translations[message.id]!.error}</p>
+                  {translations[message.id]?.visible &&
+                  translations[message.id]?.error ? (
+                    <p className="mt-1 text-[12px] text-red-600">
+                      {translations[message.id]!.error}
+                    </p>
                   ) : null}
                 </div>
               </motion.div>
@@ -384,12 +504,23 @@ export function ChatPanel({
         </AnimatePresence>
       </div>
       <div className="p-3 bg-transparent">
-        {sendError ? <p className="mb-2 text-[12px] text-red-600">{sendError}</p> : null}
-        {fileError ? <p className="mb-2 text-[12px] text-red-600">{fileError}</p> : null}
-        {uploadProgress != null ? (
-          <p className="mb-2 text-[12px] text-ink-subtle">Uploading file… {uploadProgress}%</p>
+        {sendError ? (
+          <p className="mb-2 text-[12px] text-red-600">{sendError}</p>
         ) : null}
-        <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} />
+        {fileError ? (
+          <p className="mb-2 text-[12px] text-red-600">{fileError}</p>
+        ) : null}
+        {uploadProgress != null ? (
+          <p className="mb-2 text-[12px] text-ink-subtle">
+            Uploading file… {uploadProgress}%
+          </p>
+        ) : null}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFileSelected}
+        />
         <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-brand-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0">
           <button
             type="button"
@@ -399,7 +530,11 @@ export function ChatPanel({
             title="Attach file"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isUploadingFile ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            {isUploadingFile ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Paperclip className="h-4 w-4" />
+            )}
           </button>
           <EditorContent editor={editor} className="min-w-0 flex-1" />
           <button
@@ -410,7 +545,11 @@ export function ChatPanel({
             title="Send message"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {isPending ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
           </button>
         </div>
       </div>
