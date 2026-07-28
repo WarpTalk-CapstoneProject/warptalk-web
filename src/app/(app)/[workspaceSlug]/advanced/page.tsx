@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Spinner } from "@phosphor-icons/react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceMembers, useTransferWorkspaceOwnership, useDeleteWorkspace } from "@/hooks/use-workspace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,7 @@ export default function AdvancedSettingsPage() {
   const router = useRouter();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
-  const role = useWorkspaceStore((state) => state.role);
+  const role = useWorkspaceRole();
   const currentUser = useAuthStore((state) => state.user);
 
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -29,7 +30,7 @@ export default function AdvancedSettingsPage() {
   const transferOwnershipMutation = useTransferWorkspaceOwnership(activeWorkspaceId || "");
   const deleteWorkspaceMutation = useDeleteWorkspace();
 
-  const isOwner = role === "Owner";
+  const isOwner = role === "owner";
   const membersList = membersQuery.data?.items || [];
 
   if (!activeWorkspaceId) return null;
@@ -143,7 +144,10 @@ export default function AdvancedSettingsPage() {
               </SelectTrigger>
               <SelectContent>
                 {membersList
-                  .filter((m) => m.userId !== currentUser?.id && m.status === "Active")
+                  .filter((m) =>
+                    m.userId !== currentUser?.id
+                    && m.status.toLowerCase() === "active"
+                    && m.membershipType.toLowerCase() === "internal")
                   .map((m) => (
                     <SelectItem key={m.userId} value={m.userId} className="text-xs">
                       {m.fullName} ({m.email})

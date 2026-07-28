@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { motion, AnimatePresence } from "motion/react";
 
+import { useGoogleLogin } from "@react-oauth/google";
+
 import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -64,6 +66,39 @@ function LoginForm() {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+  });
+
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      console.log("[Google OAuth] Token Response:", tokenResponse);
+      try {
+        const idToken = tokenResponse.access_token;
+        console.log("[Google OAuth] Sending token to backend /auth/google-login...");
+        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, { idToken });
+        console.log("[Google OAuth] Backend Response:", res.data);
+        const { user, accessToken, refreshToken } = res.data;
+
+        login(user, accessToken, refreshToken);
+        setAccessTokenCookie(accessToken);
+
+        toast.success("Google login successful!");
+
+        const isAdmin = user.roles?.some((r: string) => r.toLowerCase() === "admin");
+        if (isAdmin && callbackUrl === "/workspace/dashboard") {
+          router.replace("/dashboard");
+        } else {
+          router.replace(callbackUrl);
+        }
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        console.error("[Google OAuth] Backend verification error:", error);
+        toast.error(error?.response?.data?.error || "Google login failed. Please try again.");
+      }
+    },
+    onError: (errorResponse) => {
+      console.error("[Google OAuth] Popup / Client Error:", errorResponse);
+      toast.error("Google authentication failed or popup was closed.");
+    },
   });
 
   useEffect(() => {
@@ -158,7 +193,11 @@ function LoginForm() {
                 {/* Social Login */}
                 <button
                   type="button"
-                  className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50"
+                  onClick={() => {
+                    console.log("[Google OAuth] Continue with Google button clicked");
+                    handleGoogleLogin();
+                  }}
+                  className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
                 >
                   <GoogleAuthIcon className="size-5" />
                   Continue with Google

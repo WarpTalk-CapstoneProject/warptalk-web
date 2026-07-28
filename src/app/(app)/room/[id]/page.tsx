@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { LiveKitRoom, useRoomContext } from "@livekit/components-react";
@@ -74,12 +74,12 @@ export default function RoomDetailPage() {
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } = useJoinMeeting();
-  
+
   const autoStartedRef = useRef(false);
   const meetingJoinedRef = useRef(false);
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  
+
   const [meetingSession, setMeetingSession] = useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [warptalkStarted, setWarptalkStarted] = useState(false);
@@ -119,6 +119,14 @@ export default function RoomDetailPage() {
       return next;
     });
   }
+
+  const handleNoiseSuppressionError = useCallback(() => {
+    setNoiseSuppressionEnabled(false);
+    writeTrackEffectsPreferences({ noiseSuppressionEnabled: false });
+    toast.error("Enhanced noise suppression is unavailable.", {
+      description: "Browser noise suppression remains enabled.",
+    });
+  }, []);
 
   function handleToggleBackgroundBlur() {
     setBackgroundBlurEnabled((current) => {
@@ -234,14 +242,14 @@ export default function RoomDetailPage() {
   // NOT wipe what was already transcribed. Segments stay in the store until the room is
   // left. Preview rooms fall back to sample content when nothing real has arrived yet.
   const panelSegments = isPreviewRoom && !liveSegments.length ? getPreviewTranscriptSegments() : liveSegments;
-  
+
   const canConnectMeeting =
     Boolean(room) &&
     room?.status !== "ended" &&
     room?.status !== "cancelled" &&
     room?.status !== "expired" &&
     room?.status !== "failed";
-    
+
   const displayName = savedJoinConfig.displayName || user?.fullName || user?.email || "Participant";
   const roomSourceLanguage = room?.sourceLanguage || "auto";
   // Spoken (source) language is now a live, user-changeable choice too — the counterpart
@@ -580,6 +588,11 @@ export default function RoomDetailPage() {
     });
   }, [isRoomHost, room, startRoom]);
 
+  const retryMeetingConnectionRef = useRef(retryMeetingConnection);
+  useEffect(() => {
+    retryMeetingConnectionRef.current = retryMeetingConnection;
+  }, [retryMeetingConnection]);
+
   useEffect(() => {
     if (!room?.id || !canConnectMeeting || meetingJoinedRef.current) return;
     meetingJoinedRef.current = true;
@@ -618,7 +631,12 @@ export default function RoomDetailPage() {
     const connection = createHubConnection("/hubs/translation-room");
     translationConnectionRef.current = connection;
 
-    connection.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => setLiveState(state));
+    connection.on("TranslationRoomStarted", (state: TranslationRoomStateDto) => {
+      setLiveState(state);
+      void refetchRoom().then(() => {
+        retryMeetingConnectionRef.current();
+      });
+    });
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
       addLiveParticipant(participant);
       void refetchParticipants();
@@ -683,7 +701,7 @@ export default function RoomDetailPage() {
       toast.error(reason || "This room has been forcibly closed or you were disconnected from another device.");
       router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
     });
-    
+
     connection.on("ParticipantKicked", () => {
       toast.error("You have been permanently removed from this room.");
       router.push(`/${activeWorkspaceSlug || 'workspace'}/rooms`);
@@ -1094,8 +1112,14 @@ export default function RoomDetailPage() {
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
   function handleToggleRecording() {
-    setRecordingMutation.mutate(isRecording ? "stop" : "start", {
-      onError: () => toast.error("Could not update recording."),
+    const action = isRecording ? "stop" : "start";
+    setRecordingMutation.mutate(action, {
+      onSuccess: (state) => {
+        setIsRecording(state.recording);
+        toast.success(state.recording ? "Recording started." : "Recording stopped.");
+      },
+      onError: () =>
+        toast.error(action === "start" ? "Could not start recording." : "Could not stop recording."),
     });
   }
 
@@ -1136,7 +1160,9 @@ export default function RoomDetailPage() {
         video={cameraEnabled}
         audio={microphoneEnabled}
         token={meetingSession?.token}
-        serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+        serverUrl={
+          process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace("localhost", typeof window !== "undefined" ? window.location.hostname : "localhost")
+        }
         connect={Boolean(meetingSession?.token)}
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
@@ -1211,6 +1237,7 @@ export default function RoomDetailPage() {
               <TrackProcessorsController
                 noiseSuppressionEnabled={noiseSuppressionEnabled}
                 backgroundBlurEnabled={backgroundBlurEnabled}
+                onNoiseSuppressionError={handleNoiseSuppressionError}
               />
 
               {/* Live captions — real pipeline segments only */}
@@ -1261,6 +1288,7 @@ export default function RoomDetailPage() {
                   isLocked={isRoomLocked}
                   muteOnEntry={muteOnEntryEnabled}
                   isRecording={isRecording}
+                  recordingPending={setRecordingMutation.isPending}
                   onToggleLock={isHost ? handleToggleLock : undefined}
                   onToggleMuteOnEntry={isHost ? handleToggleMuteOnEntry : undefined}
                   onMuteAll={isHost ? handleMuteAll : undefined}

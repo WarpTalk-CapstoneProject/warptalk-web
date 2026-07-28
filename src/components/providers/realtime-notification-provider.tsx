@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { createHubConnection } from "@/lib/signalr";
+import { WORKSPACE_KEYS } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { Bell, Video, Calendar, FileText, Settings } from "lucide-react";
@@ -254,14 +255,30 @@ export function RealtimeNotificationProvider({ children }: { children: React.Rea
     });
 
     // 4. Handle Document Life-cycle & Status Events
+    const invalidateDocumentQueries = (payload: any) => {
+      const currentWorkspaceId = useWorkspaceStore.getState().activeWorkspaceId;
+      const eventWorkspaceId = payload?.workspaceId || currentWorkspaceId;
+      if (!eventWorkspaceId || (currentWorkspaceId && eventWorkspaceId !== currentWorkspaceId)) {
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(eventWorkspaceId) });
+
+      const documentId = payload?.documentId || payload?.id;
+      if (documentId) {
+        queryClient.invalidateQueries({
+          queryKey: WORKSPACE_KEYS.documentDetail(eventWorkspaceId, documentId),
+        });
+      }
+    };
+
     hubConn.on(SIGNALR_EVENTS.DOCUMENT_STATUS_CHANGED, (payload: any) => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] });
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENT_DETAIL] });
+      invalidateDocumentQueries(payload);
 
       const title = payload?.title || payload?.documentTitle || "Document";
-      const status = payload?.status || payload?.newStatus;
+      const status = (payload?.ingestionStatus || payload?.status || payload?.newStatus || "").toLowerCase();
 
-      if (status === "Ready" || status === "Completed") {
+      if (status === "ready" || status === "completed") {
         toast.success("Document Ready", {
           description: `"${title}" has finished processing and is ready to view.`,
           icon: <FileText className="h-4 w-4 text-emerald-500" />,
@@ -269,13 +286,12 @@ export function RealtimeNotificationProvider({ children }: { children: React.Rea
       }
     });
 
-    hubConn.on(SIGNALR_EVENTS.DOCUMENT_COMMENT_ADDED, () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] });
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENT_DETAIL] });
+    hubConn.on(SIGNALR_EVENTS.DOCUMENT_COMMENT_ADDED, (payload: any) => {
+      invalidateDocumentQueries(payload);
     });
 
-    hubConn.on(SIGNALR_EVENTS.DOCUMENT_DELETED, () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.DOCUMENTS] });
+    hubConn.on(SIGNALR_EVENTS.DOCUMENT_DELETED, (payload: any) => {
+      invalidateDocumentQueries(payload);
     });
 
     hubConn.on(SIGNALR_EVENTS.AI_SUMMARY_PROGRESS, () => {

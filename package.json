@@ -10,7 +10,11 @@
     "test:routes": "node scripts/check-dashboard-routes.mjs",
     "test:meeting-chat": "node scripts/check-meeting-chat-contract.mjs",
     "test:meeting-ai-trigger": "node scripts/check-meeting-ai-trigger-contract.mjs",
+    "test:recording-control": "node scripts/check-recording-control-contract.mjs",
+    "test:track-processors": "node scripts/check-track-processors-contract.mjs",
     "test:room-detail-thread": "node scripts/check-room-detail-thread-flow.mjs",
+    "email:dev": "email dev --dir src/emails --port 3001",
+    "email:render": "npx tsx scripts/render-email-templates.ts",
     "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript-display.test.ts"
   },
   "dependencies": {
@@ -22,6 +26,9 @@
     "@livekit/track-processors": "^0.7.2",
     "@microsoft/signalr": "^10.0.0",
     "@phosphor-icons/react": "^2.1.10",
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "@react-oauth/google": "^0.13.5",
     "@supabase/supabase-js": "^2.106.0",
     "@tanstack/react-query": "^5.95.2",
     "@tiptap/extension-link": "^3.26.1",

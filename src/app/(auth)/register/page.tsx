@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeClosed, Spinner } from "@phosphor-icons/react/dist/ssr";
-import { useForm } from "react-hook-form";
+import { Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useGoogleLogin } from "@react-oauth/google";
 
 import {
   CinematicAuthShell,
@@ -19,6 +20,11 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
+
+function getSafeCallbackUrl(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value === "/rooms") return "/workspace";
+  return value;
+}
 
 const getRegisterSchema = (hasToken: boolean) =>
   z.object({
@@ -55,6 +61,7 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const hasToken = Boolean(token);
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
 
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
@@ -65,7 +72,29 @@ function RegisterForm() {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
-    resolver: zodResolver(getRegisterSchema(hasToken)) as any,
+    resolver: zodResolver(getRegisterSchema(hasToken)) as Resolver<RegisterFormData>,
+  });
+
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        const idToken = tokenResponse.access_token;
+        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, { idToken });
+        const { user, accessToken, refreshToken } = res.data;
+
+        login(user, accessToken, refreshToken);
+        setAccessTokenCookie(accessToken);
+
+        toast.success("Google sign-in successful!");
+        router.replace(callbackUrl);
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
+      }
+    },
+    onError: () => {
+      toast.error("Google authentication failed.");
+    },
   });
 
   useEffect(() => {
@@ -107,7 +136,7 @@ function RegisterForm() {
       setAccessTokenCookie(accessToken);
 
       toast.success("Registration successful!");
-      router.replace("/workspace");
+      router.replace(callbackUrl);
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };
@@ -216,7 +245,7 @@ function RegisterForm() {
 
       <p className="text-center text-sm text-white/40">
         Member of the team?{" "}
-        <Link href="/login" className="font-medium text-white hover:underline">
+        <Link href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="font-medium text-white hover:underline">
           Log in
         </Link>
       </p>
@@ -228,7 +257,7 @@ function RegisterForm() {
         </span>
       </div>
 
-      <SocialButton icon={<GoogleAuthIcon />} label="Google" />
+      <SocialButton icon={<GoogleAuthIcon />} label="Google" onClick={() => handleGoogleLogin()} />
     </CinematicAuthShell>
   );
 }

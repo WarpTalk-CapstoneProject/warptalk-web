@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, EnvelopeSimple, SignIn, Spinner } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeft, Spinner } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,53 +15,23 @@ export default function JoinWorkspacePage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [token, setToken] = useState("");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (!isAuthenticated) router.replace("/login");
+  }, [isAuthenticated, router]);
 
   useEffect(() => {
-    if (mounted && !isAuthenticated) router.replace("/login");
-  }, [mounted, isAuthenticated, router]);
-
-  useEffect(() => {
-    if (mounted && activeWorkspaceId) {
+    if (activeWorkspaceId) {
       const activeSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
       router.replace(`/${activeSlug || "workspace"}/rooms`);
     }
-  }, [mounted, activeWorkspaceId, router]);
+  }, [activeWorkspaceId, router]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const inputVal = token.trim();
     if (!inputVal) return;
 
-    // 1. Check if it's an invitation URL or invitation token
-    let isInvitation = false;
-    let invitationToken = "";
-
-    if (inputVal.includes("/invitations/")) {
-      isInvitation = true;
-      const parts = inputVal.split("/invitations/");
-      const lastPart = parts[parts.length - 1];
-      if (lastPart) {
-        invitationToken = lastPart.split("?")[0].split("#")[0];
-      }
-    } else if (
-      // UUID pattern (standard token format)
-      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(inputVal)
-    ) {
-      isInvitation = true;
-      invitationToken = inputVal;
-    }
-
-    if (isInvitation && invitationToken) {
-      router.push(`/invitations/${encodeURIComponent(invitationToken)}`);
-      return;
-    }
-
-    // 2. Otherwise, treat it as a workspace slug or workspace URL
     let workspaceSlug = inputVal;
 
     if (workspaceSlug.includes("://")) {
@@ -75,7 +45,7 @@ export default function JoinWorkspacePage() {
             workspaceSlug = paths[0];
           }
         }
-      } catch (e) {
+      } catch {
         // Fallback if URL parsing fails
       }
     } else {
@@ -96,7 +66,7 @@ export default function JoinWorkspacePage() {
     }
   }
 
-  if (!mounted || !isAuthenticated || activeWorkspaceId) {
+  if (!isAuthenticated || activeWorkspaceId) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />

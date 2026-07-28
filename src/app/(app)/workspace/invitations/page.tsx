@@ -18,11 +18,11 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import {
   useWorkspaceInvitations,
   useInviteWorkspaceMember,
-  useRevokeWorkspaceInvitation,
-  useWorkspaceSettings
+  useRevokeWorkspaceInvitation
 } from "@/hooks/use-workspace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,25 +33,24 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 const inviteSchema = z.object({
   email: z.string().email("Invalid email address"),
   roleName: z.enum(["Admin", "Member"]),
-  membershipType: z.enum(["Internal", "External"]),
 });
 
 type InviteFormData = z.infer<typeof inviteSchema>;
 
 export default function WorkspaceInvitationsPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const currentRole = useWorkspaceStore((s) => s.role);
+  const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
+  const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
+  const currentRole = useWorkspaceRole();
   const currentMembership = useWorkspaceStore((s) => s.membershipType);
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
 
-  // Success Link Dialog state
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<{ email: string; previewUrl: string; warning?: string | null } | null>(null);
   const [inviteToRevoke, setInviteToRevoke] = useState<{ id: string; email: string } | null>(null);
 
   // Queries & Mutations
-  const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
   const invitationsQuery = useWorkspaceInvitations(activeWorkspaceId || "", page, 10, query);
   const inviteMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
   const revokeMutation = useRevokeWorkspaceInvitation(activeWorkspaceId || "");
@@ -68,20 +67,18 @@ export default function WorkspaceInvitationsPage() {
     defaultValues: {
       email: "",
       roleName: "Member",
-      membershipType: "Internal",
     },
   });
 
   const selectedRole = watch("roleName");
-  const selectedMembership = watch("membershipType");
 
   if (!activeWorkspaceId) return null;
 
   // RBAC Access Control
-  const isOwner = currentRole === "Owner";
-  const isAdmin = currentRole === "Admin";
+  const isOwner = currentRole === "owner";
+  const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
-  const isExternal = currentMembership === "External";
+  const isExternal = currentMembership?.toLowerCase() === "external";
 
   if (!isOwnerOrAdmin || isExternal) {
     return (
@@ -102,35 +99,28 @@ export default function WorkspaceInvitationsPage() {
   }
 
   const handleInvite = async (formData: InviteFormData) => {
-    // Check external collaboration policy
-    const settings = settingsQuery.data;
-    if (formData.membershipType === "External" && settings && !settings.allowExternalCollaboration) {
-      toast.error("External collaboration is disabled by workspace security policy.");
-      return;
-    }
-
-    // Check verified domain requirement for internal members
-    if (formData.membershipType === "Internal" && settings?.requireVerifiedDomainForInternal && settings.verifiedDomains.length > 0) {
-      const emailDomain = formData.email.split("@")[1]?.toLowerCase();
-      const isVerified = settings.verifiedDomains.some((d) => d.toLowerCase() === emailDomain);
-      if (!isVerified) {
-        toast.error(`Internal members must have an email domain matching verified domains: ${settings.verifiedDomains.join(", ")}`);
-        return;
-      }
-    }
-
     try {
       const result = await inviteMutation.mutateAsync({
         email: formData.email,
         roleName: formData.roleName,
-        membershipType: formData.membershipType,
       });
 
-      // Construct and show the raw preview link
-      const previewLink = `${window.location.origin}/invitations/${result.rawToken}`;
-      setGeneratedLink(previewLink);
+      const params = new URLSearchParams({
+        invitationId: result.invitation.id,
+        workspaceId: result.invitation.workspaceId,
+        workspaceName: activeWorkspaceName || "WarpTalk Workspace",
+        workspaceSlug: activeWorkspaceSlug || "workspace",
+        email: result.invitation.email,
+        roleName: result.invitation.roleName,
+        membershipType: result.invitation.membershipType,
+      });
+      setInviteNotice({
+        email: result.invitation.email,
+        previewUrl: `${window.location.origin}/dev/email/workspace-invite?${params.toString()}`,
+        warning: result.warning,
+      });
       reset();
-      toast.success("Invitation generated!");
+      toast.success(result.warning ? "Invitation created, but email delivery failed." : "Invitation sent.");
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(error?.response?.data?.error || "Failed to create invitation");
@@ -149,19 +139,19 @@ export default function WorkspaceInvitationsPage() {
     }
   };
 
+  const invitesList = invitationsQuery.data?.items || [];
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success("Invitation link copied to clipboard!");
+    toast.success("Email preview URL copied.");
   };
-
-  const invitesList = invitationsQuery.data?.items || [];
 
   return (
     <div className="flex min-h-full flex-col gap-6 pb-6 text-ink">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold tracking-tight">Invitations</h1>
         <p className="text-sm text-ink-muted">
-          Invite members to join your workspace. Since email services are manual, generate the invitation link and share it directly.
+          Invite members to join your workspace. Invitees accept pending invitations after signing in with the invited email.
         </p>
       </div>
 
@@ -172,7 +162,7 @@ export default function WorkspaceInvitationsPage() {
             <div>
               <CardTitle className="text-base font-semibold">Active Invitations</CardTitle>
               <CardDescription className="text-xs">
-                List of pending invitations. Invitees must open the link to join.
+                List of pending invitations. Invitees must sign in with the matching email to join.
               </CardDescription>
             </div>
             <div className="relative w-64">
@@ -279,7 +269,7 @@ export default function WorkspaceInvitationsPage() {
           <CardHeader>
             <CardTitle className="text-base font-semibold">Invite Member</CardTitle>
             <CardDescription className="text-xs">
-              Generate a secure join link for users.
+              Send an email-bound invitation to a user.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -317,24 +307,9 @@ export default function WorkspaceInvitationsPage() {
                 )}
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold">Membership Type</label>
-                <Select
-                  value={selectedMembership}
-                  onValueChange={(val) => setValue("membershipType", val as "Internal" | "External")}
-                >
-                  <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Internal" className="text-xs">Internal (Employee)</SelectItem>
-                    <SelectItem value="External" className="text-xs">External (Partner/Client)</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.membershipType && (
-                  <p className="text-[11px] text-destructive mt-0.5">{errors.membershipType.message}</p>
-                )}
-              </div>
+              <p className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-5 text-ink-muted">
+                Access type is assigned automatically from the workspace&apos;s verified domains.
+              </p>
 
               <button
                 type="submit"
@@ -346,7 +321,7 @@ export default function WorkspaceInvitationsPage() {
                 ) : (
                   <>
                     <Plus className="h-4 w-4" />
-                    <span>Generate Invitation</span>
+                    <span>Invite member</span>
                   </>
                 )}
               </button>
@@ -364,7 +339,7 @@ export default function WorkspaceInvitationsPage() {
             </div>
             <DialogTitle className="text-center font-bold text-base">Revoke Invitation?</DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Revoking the invitation for <span className="font-semibold text-ink">{inviteToRevoke?.email}</span> will invalidate their secure join token. They will not be able to join using that link.
+              Revoking the invitation for <span className="font-semibold text-ink">{inviteToRevoke?.email}</span> will remove the pending invitation. They will not be able to accept it with that email.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
@@ -385,37 +360,44 @@ export default function WorkspaceInvitationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Generated Link Share Dialog */}
-      <Dialog open={!!generatedLink} onOpenChange={(open) => !open && setGeneratedLink(null)}>
+      <Dialog open={!!inviteNotice} onOpenChange={(open) => !open && setInviteNotice(null)}>
         <DialogContent className="border-hairline bg-surface-1 max-w-md">
           <DialogHeader className="flex flex-col gap-1.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto">
               <Check className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-center font-bold text-base">Invitation Link Ready</DialogTitle>
+            <DialogTitle className="text-center font-bold text-base">Invitation Created</DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Copy and share this link with the invitee manually so they can review and accept the invitation.
+              The invite is bound to <span className="font-semibold text-ink">{inviteNotice?.email}</span>. Open this dev email URL to simulate the mailbox message.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="my-4 flex gap-2">
-            <Input
-              readOnly
-              value={generatedLink || ""}
-              className="h-9 text-xs bg-surface-2 border-hairline flex-1 select-all cursor-text font-mono"
-            />
-            <button
-              onClick={() => generatedLink && copyToClipboard(generatedLink)}
-              className="h-9 px-3 flex items-center justify-center rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 transition text-xs font-semibold gap-1"
-            >
-              <Copy className="h-4 w-4" />
-              <span>Copy</span>
-            </button>
-          </div>
+          {inviteNotice?.previewUrl && (
+            <div className="my-4 flex gap-2">
+              <Input
+                readOnly
+                value={inviteNotice.previewUrl}
+                className="h-9 flex-1 select-all border-hairline bg-surface-2 font-mono text-xs"
+              />
+              <button
+                onClick={() => inviteNotice.previewUrl && copyToClipboard(inviteNotice.previewUrl)}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-hairline bg-surface-1 px-3 text-xs font-semibold transition hover:bg-surface-2"
+              >
+                <Copy className="h-4 w-4" />
+                <span>Copy</span>
+              </button>
+            </div>
+          )}
+
+          {inviteNotice?.warning && (
+            <div className="my-4 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-600">
+              {inviteNotice.warning}
+            </div>
+          )}
 
           <DialogFooter>
             <button
-              onClick={() => setGeneratedLink(null)}
+              onClick={() => setInviteNotice(null)}
               className="w-full h-9 rounded-md bg-primary hover:bg-primary-hover text-xs font-semibold text-white transition"
             >
               Done

@@ -19,6 +19,7 @@ import {
   Shield,
   Warning,
   House,
+  Sliders,
   PaperPlaneTilt,
   Globe,
 } from "@phosphor-icons/react/dist/ssr";
@@ -119,7 +120,6 @@ export function LinearSidebar() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRoleName, setInviteRoleName] = useState("Member");
-  const [inviteMembershipType, setInviteMembershipType] = useState("Internal");
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -148,20 +148,21 @@ export function LinearSidebar() {
   ];
 
   const role = useWorkspaceStore((state) => state.role);
+  const membershipType = useWorkspaceStore((state) => state.membershipType);
   const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
-  const isOwnerOrAdmin = role === "Owner" || role === "Admin";
+  const isOwnerOrAdmin = role?.toLowerCase() === "owner" || role?.toLowerCase() === "admin";
 
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
   const selectWorkspaceMutation = useSelectWorkspace();
   const inviteMemberMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
 
-  const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string) => {
+  const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
     try {
-      await selectWorkspaceMutation.mutateAsync(workspaceId);
-      setActiveWorkspace(workspaceId, name, slug, roleName, membershipType);
+      const res = await selectWorkspaceMutation.mutateAsync(workspaceId);
+      setActiveWorkspace(workspaceId, name, slug, roleName, membershipType, res.defaultLanguage || defaultLanguage);
       toast.success(`Switched to workspace "${name}"`);
       router.push(`/${slug}/home`);
     } catch {
@@ -178,12 +179,10 @@ export function LinearSidebar() {
       await inviteMemberMutation.mutateAsync({
         email,
         roleName: inviteRoleName,
-        membershipType: inviteMembershipType,
       });
       toast.success(`Invitation sent to ${email}`);
       setInviteEmail("");
       setInviteRoleName("Member");
-      setInviteMembershipType("Internal");
       setIsInviteModalOpen(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to send invitation";
@@ -206,13 +205,13 @@ export function LinearSidebar() {
     { icon: FileText, label: "Documents", href: `/${slug}/documents` }
   );
 
-  if (role === "Owner" || role === "Admin") {
-    workspaceNav.push({ icon: CreditCard, label: "Billing", href: isSystemAdmin ? "/billing" : `/${slug}/billing` });
+  if (isOwnerOrAdmin) {
+    workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
   }
 
-  const isSettingsPage = pathname === "/settings" || pathname.startsWith("/settings/") || pathname.includes("/settings") || pathname.includes("/security") || pathname.includes("/advanced");
+  const isSettingsPage = pathname.includes("/settings") || pathname.includes("/advanced");
 
   if (isSettingsPage) {
     return (
@@ -237,11 +236,25 @@ export function LinearSidebar() {
           <div className="flex flex-col gap-px">
             <div className={cn(
               "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-              pathname === "/settings" ? "bg-surface-2" : "hover:bg-surface-2"
+              pathname === `/${activeWorkspaceSlug}/settings/account/preferences` ? "bg-surface-2" : "hover:bg-surface-2"
             )}>
-              <Link href="/settings" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+              <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/preferences` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                <Sliders size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                  Settings
+                </span>
+              </Link>
+            </div>
+
+            <div className={cn(
+              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+              pathname === `/${activeWorkspaceSlug}/settings/account/profile` ? "bg-surface-2" : "hover:bg-surface-2"
+            )}>
+              <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Profile</span>
+                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                  Profile
+                </span>
               </Link>
             </div>
 
@@ -257,26 +270,21 @@ export function LinearSidebar() {
                 )}>
                   <Link href={`/${activeWorkspaceSlug}/settings`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Workspace Settings</span>
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Workspace Settings
+                    </span>
                   </Link>
                 </div>
-                <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/security` ? "bg-surface-2" : "hover:bg-surface-2"
-                )}>
-                  <Link href={`/${activeWorkspaceSlug}/security`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                    <Shield size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Security</span>
-                  </Link>
-                </div>
-                {role === "Owner" && (
+                {role?.toLowerCase() === "owner" && (
                   <div className={cn(
                     "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
                     pathname === `/${activeWorkspaceSlug}/advanced` ? "bg-surface-2 text-destructive" : "hover:bg-surface-2 hover:text-destructive"
                   )}>
                     <Link href={`/${activeWorkspaceSlug}/advanced`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <Warning size={16} className="shrink-0 text-destructive/80 group-hover:text-destructive transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-destructive transition-colors truncate">Advanced</span>
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-destructive transition-colors truncate">
+                        Advanced
+                      </span>
                     </Link>
                   </div>
                 )}
@@ -289,7 +297,7 @@ export function LinearSidebar() {
         {user && (
           <div className="p-3 mt-auto shrink-0">
             <div
-              onClick={() => router.push("/settings")}
+              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
               className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
             >
               <Avatar className="size-8 rounded-lg border border-border/50">
@@ -304,6 +312,13 @@ export function LinearSidebar() {
                 </span>
                 <span className="text-[11px] text-ink-muted truncate leading-tight mt-0.5">
                   {user.email}
+                </span>
+                <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
+                  {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+                  {" · "}
+                  {membershipType
+                    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
+                    : "Internal"}
                 </span>
               </div>
               <button
@@ -353,7 +368,7 @@ export function LinearSidebar() {
                 return (
                   <DropdownMenuItem
                     key={ws.id}
-                    onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", membershipType)}
+                    onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", membershipType, ws.defaultLanguage || "en")}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2",
                       ws.id === activeWorkspaceId ? "bg-surface-2 text-primary font-medium" : "text-ink"
@@ -383,8 +398,8 @@ export function LinearSidebar() {
               <SignOut size={14} />
               <span>Sign out</span>
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenuContent >
+        </DropdownMenu >
         <div className="flex items-center gap-1.5 text-ink-muted shrink-0">
           <button
             onClick={() => setSearchMeetingModalOpen(true)}
@@ -393,10 +408,10 @@ export function LinearSidebar() {
             <MagnifyingGlass size={16} weight="regular" />
           </button>
         </div>
-      </div>
+      </div >
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3">
+      < nav className="flex-1 overflow-y-auto px-3" >
         <div className="flex flex-col gap-[2px]">
           {mainNav.map((item) => (
             <NavLink key={item.href} item={item} pathname={pathname} />
@@ -446,40 +461,49 @@ export function LinearSidebar() {
       )}
 
       {/* User Account Panel */}
-      {user && (
-        <div className="p-3 mt-auto shrink-0">
-          <div
-            onClick={() => router.push("/settings")}
-            className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
-          >
-            <Avatar className="size-8 rounded-lg border border-border/50">
-              <AvatarImage src={user.avatarUrl} alt={user.fullName} />
-              <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
-                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-[13px] font-medium text-ink truncate leading-tight">
-                {user.fullName}
-              </span>
-              <span className="text-[11px] text-ink-muted truncate leading-tight mt-0.5">
-                {user.email}
-              </span>
-            </div>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                logout();
-              }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
-              title="Sign out"
+      {
+        user && (
+          <div className="p-3 mt-auto shrink-0">
+            <div
+              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
+              className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path></svg>
-            </button>
+              <Avatar className="size-8 rounded-lg border border-border/50">
+                <AvatarImage src={user.avatarUrl} alt={user.fullName} />
+                <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
+                  {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-[13px] font-medium text-ink truncate leading-tight">
+                  {user.fullName}
+                </span>
+                <span className="text-[11px] text-ink-muted truncate leading-tight mt-0.5">
+                  {user.email}
+                </span>
+                <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
+                  {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+                  {" · "}
+                  {membershipType
+                    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
+                    : "Internal"}
+                </span>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  logout();
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
+                title="Sign out"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path></svg>
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Join Room Dialog */}
       <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
@@ -549,7 +573,7 @@ export function LinearSidebar() {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="invite-role" className="text-[13px] font-medium text-foreground">
                   Role
@@ -565,24 +589,10 @@ export function LinearSidebar() {
                 </select>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="invite-membership" className="text-[13px] font-medium text-foreground">
-                  Access type
-                </Label>
-                <select
-                  id="invite-membership"
-                  value={inviteMembershipType}
-                  onChange={(e) => setInviteMembershipType(e.target.value)}
-                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
-                >
-                  <option value="Internal">Internal</option>
-                  <option value="External">External</option>
-                </select>
-              </div>
             </div>
 
             <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-[12px] leading-5 text-ink-muted">
-              Invited members receive workspace access based on the role and access type selected here.
+              Internal or External access is assigned automatically from verified email domains.
             </p>
 
             <DialogFooter className="-mx-5 -mb-5 mt-1">

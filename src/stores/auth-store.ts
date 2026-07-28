@@ -28,7 +28,12 @@ export const useAuthStore = create<AuthState>()(
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
       login: (user, accessToken, refreshToken) =>
-        set({ user, accessToken, refreshToken, isAuthenticated: true }),
+        set((state) => {
+          if (state.user?.id && state.user.id !== user.id) {
+            useWorkspaceStore.getState().clearActiveWorkspace();
+          }
+          return { user, accessToken, refreshToken, isAuthenticated: true };
+        }),
       logout: () => {
         if (typeof document !== "undefined") {
           document.cookie = "access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";

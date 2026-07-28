@@ -39,6 +39,8 @@ The card displays:
 - `start`: moves a scheduled or waiting room into `in_progress`.
 - `end`: ends an active or in-progress room.
 - `cancel`: cancels a scheduled or waiting room.
+- `record`: the active host can start or stop LiveKit RoomComposite Egress from the
+  meeting control bar.
 
 Start and cancel currently use typed frontend mock adapters because backend endpoints are not available yet. End calls the existing backend endpoint `POST /translationRooms/{id}/end`.
 
@@ -58,6 +60,26 @@ Suggested endpoint shape:
 
 Both endpoints should validate host ownership and legal transitions.
 
+## Recording Control
+
+- The host sees one record control in the floating meeting control bar.
+- The control starts recording when inactive and stops the active Egress when recording.
+- While the API request is pending, the control is disabled and pulses so repeated clicks
+  cannot start duplicate Egress jobs.
+- A successful response updates the caller immediately; `RecordingStateChanged` remains the
+  authoritative SignalR broadcast for every other participant.
+- The red "This meeting is being recorded" banner is visible to everyone while active.
+- Failures keep the prior state and show a start/stop-specific toast.
+- Cloud Egress writes to the S3-compatible HTTPS destination configured by the backend.
+
+## LiveKit Cloud Media Effects
+
+- The room still requests browser `echoCancellation` and `noiseSuppression` during capture.
+- Krisp enhanced noise suppression is applied asynchronously after the local mic publishes.
+- If Krisp authentication or processor setup fails, the preference is turned off, the user
+  receives a toast, and browser-level noise suppression remains active instead of leaving an
+  unhandled promise rejection.
+
 ## Files Affected
 
 - `src/app/(app)/room/[id]/page.tsx`
@@ -65,6 +87,12 @@ Both endpoints should validate host ownership and legal transitions.
 - `src/services/translationRoom.service.ts`
 - `src/lib/api/endpoints.ts`
 - `src/types/translationRoom.ts`
+- `src/components/rooms/live/meeting-control-bar.tsx`
+- `src/hooks/use-meeting.ts`
+- `src/hooks/use-track-processors.ts`
+- `src/services/meeting.service.ts`
+- `scripts/check-recording-control-contract.mjs`
+- `scripts/check-track-processors-contract.mjs`
 - `.agents/page-docs/room-lifecycle-controls.md`
 
 ## Testing Checklist
@@ -76,3 +104,8 @@ Both endpoints should validate host ownership and legal transitions.
 - Confirm action confirmation appears before start/end/cancel.
 - Confirm successful start/cancel updates local room state.
 - Confirm end attempts the backend endpoint and reports failure if the backend is unavailable.
+- Confirm only the host sees the recording control.
+- Confirm the record control disables while Start/Stop Egress is pending.
+- Confirm all participants receive the recording banner through SignalR.
+- Run `npm run test:recording-control`.
+- Run `npm run test:track-processors`.

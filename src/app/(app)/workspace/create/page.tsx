@@ -167,7 +167,7 @@ export default function CreateWorkspaceDemoPage() {
       setCreatedWorkspace(workspace);
       await provisionTrialSubscription(workspace.id);
       await selectWorkspace.mutateAsync(workspace.id);
-      setActiveWorkspace(workspace.id, workspace.name, workspace.slug, workspace.role || "Owner", "Internal");
+      setActiveWorkspace(workspace.id, workspace.name, workspace.slug, workspace.role || "Owner", "Internal", "en");
       toast.success(`Workspace "${workspace.name}" created with an Enterprise free trial.`);
       router.push(`/${workspace.slug}/home`);
     } catch (error) {
