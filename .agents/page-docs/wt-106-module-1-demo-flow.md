@@ -19,10 +19,10 @@ Ticket links:
 ## Demo Navigation
 
 1. Host opens `/rooms/create`, configures meeting basics and room setup, then submits to the real backend `POST /translationRooms` endpoint.
-2. Successful creation stores the returned room in the typed Module 1 demo cache and navigates to `/rooms`.
-3. `/rooms` shows the existing schedule UI plus a WT-106 demo-flow room list sourced from the typed mock list adapter and local cache.
+2. Successful creation stores the returned room state and navigates to `/rooms`.
+3. `/rooms` loads the authenticated user's rooms from the real list endpoint.
 4. The user can open `/room/{id}` for room detail/live experience, or `/join?code={id}` to enter the join preflight.
-5. `/join` maps to mockup #1. A GUID room id uses real `GET /translationRooms/{id}` plus real `POST /translationRooms/{id}/join`; short room codes remain typed mock because the backend has no join-by-code lookup.
+5. `/join` maps to mockup #1 and resolves display codes through the real join-by-code endpoint.
 6. The preparing screen maps to mockup #4 and appears between a successful preflight join and the room route.
 7. `/room/{id}` maps to mockups #2/#3 for the in-meeting transcript, participant, AI/right-panel variants, language state, lifecycle controls, and SignalR events.
 8. Ended rooms expose links to `/history` for artifacts and `/feedback?roomId={id}` for post-room feedback.
@@ -30,34 +30,37 @@ Ticket links:
 ## Real Backend Contracts Wired
 
 - `POST /translationRooms` via `translationRoomService.create`.
+- `GET /translationRooms` via `translationRoomService.list`.
 - `GET /translationRooms/{id}` via `translationRoomService.get`.
-- `POST /translationRooms/{id}/join` via `translationRoomService.join`.
+- `POST /translationRooms/join` via `translationRoomService.joinByCode`.
+- `POST /translationRooms/{id}/start` and `/cancel`.
 - `POST /translationRooms/{id}/end` via `translationRoomService.end`.
+- `GET /translationRooms/history`, room artifacts and artifact download/consent.
+- `GET/POST /translationRooms/{id}/feedback`.
+- Participant admit/kick and audio controls.
 - Transcript service remains wired through `POST /transcripts`, `GET /transcripts/{id}`, `POST /transcripts/{id}/audio`, and `POST /transcripts/{id}/finalize`.
 - SignalR room hub uses `/hubs/translationRoom` with `JoinTranslationRoom`, `LeaveTranslationRoom`, `ToggleMute`, `SendAudioChunk`, and event handlers for participant, transcript, translation text, and room ended notifications.
 
-## Typed Mock Adapters Kept Intentionally
+## Deliberate Preview States
 
-- `translationRoomService.list`: TODO backend contract `GET /translationRooms?workspaceId=&status=&cursor=` returning rooms accessible to the authenticated user.
-- `translationRoomService.start`: TODO backend contract `POST /translationRooms/{id}/start -> TranslationRoomDto`.
-- `translationRoomService.cancel`: TODO backend contract `POST /translationRooms/{id}/cancel -> TranslationRoomDto`.
-- `translationRoomService.joinByCode` for non-GUID codes: TODO backend contract to resolve `translationRoomCode` to a room id or provide `POST /translationRooms/join-by-code`.
-- `roomHistoryService.listEndedRooms`: TODO backend contracts `GET /translationRooms/history?status=ended` and `GET /translationRooms/{id}/artifacts`.
-- `translationRoomService.getFeedbackState` and `submitFeedback`: TODO backend contracts `GET/POST /translationRooms/{id}/feedback`.
-- Host remote mute/remove actions are UI-only until participant management endpoints are available.
+- Loading, empty, permission-denied and error states remain deterministic UI
+  fixtures for visual testing; successful product paths use real service
+  contracts.
 
 ## Permission And State Rules
 
 - `/rooms/create` blocks participant-only users and directs them to the join preflight.
 - Room lifecycle controls are visible only for host-role users or the room host, and not for users who entered through participant preflight.
 - Participant controls show disabled states for non-host users.
-- Feedback is locked unless the room is `ended` or `archived`, and duplicate submission is blocked by the feedback mock state.
+- Feedback is locked unless the room is `ended` or `archived`, and duplicate submission is blocked by backend feedback state.
 - History supports loading, empty, permission denied, error, expired artifact, missing artifact, and ready states.
 
 ## Known Limitations
 
-- The backend currently requires auth for real room create/get/join/end, so unauthenticated local demos use mock preflight and contract preview states.
-- The backend does not expose list/start/cancel/artifact/feedback APIs yet; those are kept as typed mocks with contract TODOs in code.
-- The real backend joins by room id, not display room code. `/join?code={guid}` exercises the real join path; `/join?code=GSS-7X2Q` exercises the mock code path.
-- The room page uses SignalR when reachable and falls back to contract preview participants/transcripts when the hub is unavailable.
-- Artifact downloads point to mock URLs until storage/export endpoints are implemented.
+- Product API paths require authentication; unauthenticated component previews
+  may render deterministic visual states but cannot claim a successful backend
+  operation.
+- The room page uses SignalR for live state and reports transport failure
+  instead of presenting preview data as a successful live connection.
+- Artifact downloads use backend content or signed storage URLs and remain
+  subject to retention and consent policy.

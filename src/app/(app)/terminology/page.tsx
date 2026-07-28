@@ -73,10 +73,12 @@ export default function WorkspaceTerminologyPage() {
   const glossariesQuery = useGlossariesByWorkspace(activeWorkspaceId || "");
   const createGlossaryMutation = useCreateGlossary(activeWorkspaceId || "");
   const deleteGlossaryMutation = useDeleteGlossary(activeWorkspaceId || "");
+  const glossaries = glossariesQuery.data || [];
+  const effectiveGlossaryId = selectedGlossaryId || glossaries[0]?.id || null;
 
-  const termsQuery = useGlossaryTerms(selectedGlossaryId || "");
-  const addTermMutation = useAddGlossaryTerm(selectedGlossaryId || "");
-  const deleteTermMutation = useDeleteGlossaryTerm(selectedGlossaryId || "");
+  const termsQuery = useGlossaryTerms(effectiveGlossaryId || "");
+  const addTermMutation = useAddGlossaryTerm(effectiveGlossaryId || "");
+  const deleteTermMutation = useDeleteGlossaryTerm(effectiveGlossaryId || "");
   const globalTermsQuery = usePublishedGlobalGlossaryTerms();
 
   const {
@@ -113,13 +115,7 @@ export default function WorkspaceTerminologyPage() {
   if (!activeWorkspaceId) return null;
 
   const isOwnerOrAdmin = role === "Owner" || role === "Admin";
-  const glossaries = glossariesQuery.data || [];
-  const selectedGlossary = glossaries.find((g) => g.id === selectedGlossaryId) || glossaries[0];
-
-  // Auto-select first glossary if none is selected
-  if (glossaries.length > 0 && !selectedGlossaryId) {
-    setSelectedGlossaryId(glossaries[0].id);
-  }
+  const selectedGlossary = glossaries.find((g) => g.id === effectiveGlossaryId);
 
   // Global terms applicable to the selected glossary's language pair — language-agnostic
   // terms (sourceLanguage/targetLanguage both null on the global row) apply to every pair.
@@ -173,7 +169,7 @@ export default function WorkspaceTerminologyPage() {
   };
 
   const handleAddTerm = async (data: TermFormData) => {
-    if (!selectedGlossaryId) return;
+    if (!effectiveGlossaryId) return;
 
     // Check duplicate term locally first to prevent API collision
     const existingTerms = termsQuery.data || [];
@@ -202,7 +198,7 @@ export default function WorkspaceTerminologyPage() {
   };
 
   const handleDeleteTerm = async () => {
-    if (!termToDelete || !selectedGlossaryId) return;
+    if (!termToDelete || !effectiveGlossaryId) return;
     try {
       await deleteTermMutation.mutateAsync(termToDelete.id);
       toast.success(`Term "${termToDelete.term}" deleted.`);
@@ -214,7 +210,7 @@ export default function WorkspaceTerminologyPage() {
 
   // CSV Import parser
   const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedGlossaryId || !e.target.files || e.target.files.length === 0) return;
+    if (!effectiveGlossaryId || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
 
     const reader = new FileReader();
@@ -350,7 +346,7 @@ export default function WorkspaceTerminologyPage() {
               <div className="text-center py-6 text-xs text-ink-muted">No glossaries registered.</div>
             ) : (
               glossaries.map((g) => {
-                const isSelected = selectedGlossaryId === g.id;
+                const isSelected = effectiveGlossaryId === g.id;
                 return (
                   <div
                     key={g.id}
@@ -528,7 +524,7 @@ export default function WorkspaceTerminologyPage() {
                         <Badge variant="secondary" className="text-[10px]">
                           Overridden
                         </Badge>
-                      ) : isOwnerOrAdmin && selectedGlossaryId ? (
+                      ) : isOwnerOrAdmin && effectiveGlossaryId ? (
                         <button
                           onClick={() => handleOverrideGlobalTerm(term.term, term.preferredTranslation, term.definition, term.usageNote)}
                           className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline"

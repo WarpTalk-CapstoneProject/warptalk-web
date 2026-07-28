@@ -407,9 +407,11 @@ interface TranscriptDto {
 
 ### 3.4.1 WT-97 Room History & Artifacts Adapter
 
-Backend does not yet expose a dedicated room artifact endpoint, so the frontend uses a typed mock adapter in `src/services/roomHistory.service.ts`. The adapter mirrors these backend/schema sources and can be replaced by real API responses later.
+The backend exposes room history, artifact metadata, consent and download
+contracts. `src/services/roomHistory.service.ts` maps those real responses into
+the presentation model used by history and summary pages.
 
-**Proposed endpoints:**
+**Implemented endpoints:**
 
 | Method | Gateway Endpoint | Auth | Success Response |
 |---|---|---|---|

@@ -1,39 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { toast } from "sonner";
 import {
-  Lock,
-  Spinner,
+  Checks,
   Copy,
-  Plus,
-  Trash,
   Globe,
+  Lock,
+  Plus,
+  Spinner,
+  Trash,
   Warning,
-  Checks
 } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useAuthStore } from "@/stores/auth-store";
-import type { WorkspaceSettingsDto } from "@/types/workspace";
 import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import {
+  useUpdateWorkspaceSettings,
   useWorkspace,
   useWorkspaceSettings,
-  useUpdateWorkspaceSettings
 } from "@/hooks/use-workspace";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { WorkspaceSettingsDto } from "@/types/workspace";
 
 const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),
   timezone: z.string().min(1, "Please select timezone"),
   maxActiveRooms: z.number().min(1, "Must be at least 1 room"),
-  artifactRetentionDays: z.number().min(0, "Retention must be 0 (indefinite) or positive"),
+  artifactRetentionDays: z
+    .number()
+    .min(0, "Retention must be 0 (indefinite) or positive"),
   enforceHostApprovalDefault: z.boolean(),
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
@@ -107,37 +119,60 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
 function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
   return {
     ...DEFAULT_SETTINGS_FORM_DATA,
-    defaultLanguage: settings.defaultLanguage || DEFAULT_SETTINGS_FORM_DATA.defaultLanguage,
+    defaultLanguage:
+      settings.defaultLanguage || DEFAULT_SETTINGS_FORM_DATA.defaultLanguage,
     timezone: settings.timezone || DEFAULT_SETTINGS_FORM_DATA.timezone,
-    maxActiveRooms: settings.maxActiveRooms ?? DEFAULT_SETTINGS_FORM_DATA.maxActiveRooms,
-    artifactRetentionDays: settings.artifactRetentionDays ?? DEFAULT_SETTINGS_FORM_DATA.artifactRetentionDays,
-    enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
-    voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
-    isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
+    maxActiveRooms:
+      settings.maxActiveRooms ?? DEFAULT_SETTINGS_FORM_DATA.maxActiveRooms,
+    artifactRetentionDays:
+      settings.artifactRetentionDays ??
+      DEFAULT_SETTINGS_FORM_DATA.artifactRetentionDays,
+    enforceHostApprovalDefault:
+      settings.enforceHostApprovalDefault ??
+      DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
+    voiceCloningEnabled:
+      settings.voiceCloningEnabled ??
+      DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
+    isProfanityFilterEnabled:
+      settings.isProfanityFilterEnabled ??
+      DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
     allowedTargetLanguages: settings.allowedTargetLanguages || [],
     verifiedDomains: settings.verifiedDomains || [],
-    allowExternalCollaboration: settings.allowExternalCollaboration ?? DEFAULT_SETTINGS_FORM_DATA.allowExternalCollaboration,
-    requireVerifiedDomainForInternal: settings.requireVerifiedDomainForInternal ?? DEFAULT_SETTINGS_FORM_DATA.requireVerifiedDomainForInternal,
+    allowExternalCollaboration:
+      settings.allowExternalCollaboration ??
+      DEFAULT_SETTINGS_FORM_DATA.allowExternalCollaboration,
+    requireVerifiedDomainForInternal:
+      settings.requireVerifiedDomainForInternal ??
+      DEFAULT_SETTINGS_FORM_DATA.requireVerifiedDomainForInternal,
     aiUsagePolicy: {
       allowExternalLlm: true,
       redactPii: {
-        enabled: settings.aiUsagePolicy?.redactPii?.enabled ?? DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.redactPii.enabled,
+        enabled:
+          settings.aiUsagePolicy?.redactPii?.enabled ??
+          DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.redactPii.enabled,
       },
       dlp: {
-        enabled: settings.aiUsagePolicy?.dlp?.enabled ?? DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.dlp.enabled,
+        enabled:
+          settings.aiUsagePolicy?.dlp?.enabled ??
+          DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.dlp.enabled,
         keywordsBlacklist: settings.aiUsagePolicy?.dlp?.keywordsBlacklist || [],
       },
       translationProfile: {
         translationTone:
-          settings.aiUsagePolicy?.translationProfile?.translationTone
-          || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.translationTone,
+          settings.aiUsagePolicy?.translationProfile?.translationTone ||
+          DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile
+            .translationTone,
         languageSpecificRules: {
           vietnameseHonorificStyle:
-            settings.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle
-            || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle,
+            settings.aiUsagePolicy?.translationProfile?.languageSpecificRules
+              ?.vietnameseHonorificStyle ||
+            DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile
+              .languageSpecificRules.vietnameseHonorificStyle,
           japaneseHonorificStyle:
-            settings.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle
-            || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle,
+            settings.aiUsagePolicy?.translationProfile?.languageSpecificRules
+              ?.japaneseHonorificStyle ||
+            DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile
+              .languageSpecificRules.japaneseHonorificStyle,
         },
       },
     },
@@ -147,14 +182,18 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
 export default function WorkspaceSettingsPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const role = useWorkspaceStore((s) => s.role);
-  const currentUser = useAuthStore((s) => s.user);
-  const { setActiveWorkspace, activeWorkspaceSlug, defaultLanguage, membershipType } = useWorkspaceStore();
-  const lang = defaultLanguage || "en";
+  const {
+    setActiveWorkspace,
+    activeWorkspaceSlug,
+    membershipType,
+  } = useWorkspaceStore();
 
   // Queries & Mutations
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
   const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
-  const updateSettingsMutation = useUpdateWorkspaceSettings(activeWorkspaceId || "");
+  const updateSettingsMutation = useUpdateWorkspaceSettings(
+    activeWorkspaceId || "",
+  );
 
   const [newDomain, setNewDomain] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
@@ -163,7 +202,7 @@ export default function WorkspaceSettingsPage() {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     reset,
     formState: { isSubmitting },
   } = useForm<SettingsFormData>({
@@ -171,7 +210,7 @@ export default function WorkspaceSettingsPage() {
     defaultValues: DEFAULT_SETTINGS_FORM_DATA,
   });
 
-  const watchAll = watch();
+  const watchAll = useWatch({ control });
 
   useEffect(() => {
     if (settingsQuery.data) {
@@ -212,7 +251,8 @@ export default function WorkspaceSettingsPage() {
             </div>
             <CardTitle className="text-lg font-bold">Access Denied</CardTitle>
             <CardDescription className="text-xs">
-              Only workspace Owners and Administrators can view or modify workspace configurations.
+              Only workspace Owners and Administrators can view or modify
+              workspace configurations.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -241,12 +281,13 @@ export default function WorkspaceSettingsPage() {
         activeWorkspaceSlug,
         currentRole,
         membershipType,
-        normalizedFormData.defaultLanguage
+        normalizedFormData.defaultLanguage,
       );
       toast.success("Workspace settings updated successfully.");
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || "Failed to update settings.";
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to update settings.";
       toast.error(errorMsg);
     }
   };
@@ -257,10 +298,12 @@ export default function WorkspaceSettingsPage() {
       setValue(
         "allowedTargetLanguages",
         allowedLangs.filter((c) => c !== code),
-        { shouldDirty: true }
+        { shouldDirty: true },
       );
     } else {
-      setValue("allowedTargetLanguages", [...allowedLangs, code], { shouldDirty: true });
+      setValue("allowedTargetLanguages", [...allowedLangs, code], {
+        shouldDirty: true,
+      });
     }
   };
 
@@ -268,11 +311,20 @@ export default function WorkspaceSettingsPage() {
   const handleAddDomain = () => {
     const trimmed = newDomain.trim().toLowerCase();
     if (!trimmed) return;
-    if (!trimmed.includes(".") || trimmed.startsWith(".") || trimmed.endsWith(".")) {
+    if (
+      !trimmed.includes(".") ||
+      trimmed.startsWith(".") ||
+      trimmed.endsWith(".")
+    ) {
       toast.error("Invalid domain format.");
       return;
     }
-    const publicDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"];
+    const publicDomains = [
+      "gmail.com",
+      "yahoo.com",
+      "hotmail.com",
+      "outlook.com",
+    ];
     if (publicDomains.includes(trimmed)) {
       toast.error("Cannot verify public domain names.");
       return;
@@ -289,7 +341,7 @@ export default function WorkspaceSettingsPage() {
     setValue(
       "verifiedDomains",
       domains.filter((d) => d !== domainToRemove),
-      { shouldDirty: true }
+      { shouldDirty: true },
     );
   };
 
@@ -301,7 +353,9 @@ export default function WorkspaceSettingsPage() {
       toast.error("Keyword already in blacklist.");
       return;
     }
-    setValue("aiUsagePolicy.dlp.keywordsBlacklist", [...keywords, trimmed], { shouldDirty: true });
+    setValue("aiUsagePolicy.dlp.keywordsBlacklist", [...keywords, trimmed], {
+      shouldDirty: true,
+    });
     setNewKeyword("");
   };
 
@@ -309,29 +363,36 @@ export default function WorkspaceSettingsPage() {
     setValue(
       "aiUsagePolicy.dlp.keywordsBlacklist",
       keywords.filter((k) => k !== keywordToRemove),
-      { shouldDirty: true }
+      { shouldDirty: true },
     );
   };
 
   return (
     <div className="w-full max-w-2xl mx-auto py-8 px-4 flex flex-col gap-8 text-ink">
-
       {/* Page Header */}
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-bold tracking-tight text-ink">Settings</h1>
-        <p className="text-xs text-ink-muted">Configure your workspace defaults, collaboration boundaries, and AI scanning policies.</p>
+        <p className="text-xs text-ink-muted">
+          Configure your workspace defaults, collaboration boundaries, and AI
+          scanning policies.
+        </p>
       </div>
 
       {/* Workspace Link & Slug Card */}
       <div className="flex flex-col gap-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">Workspace Info</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
+          Workspace Info
+        </div>
         <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
-
           {/* Slug Row */}
           <div className="py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-ink">Workspace Slug</span>
-              <span className="text-[11px] text-ink-muted">The unique handle for identifying this workspace.</span>
+              <span className="text-xs font-semibold text-ink">
+                Workspace Slug
+              </span>
+              <span className="text-[11px] text-ink-muted">
+                The unique handle for identifying this workspace.
+              </span>
             </div>
             <div className="relative flex items-center w-full sm:w-[240px]">
               <Input
@@ -358,13 +419,21 @@ export default function WorkspaceSettingsPage() {
           {/* URL Row */}
           <div className="py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-ink">Workspace URL</span>
-              <span className="text-[11px] text-ink-muted">The direct landing link for members to access this workspace.</span>
+              <span className="text-xs font-semibold text-ink">
+                Workspace URL
+              </span>
+              <span className="text-[11px] text-ink-muted">
+                The direct landing link for members to access this workspace.
+              </span>
             </div>
             <div className="relative flex items-center w-full sm:w-[240px]">
               <Input
                 readOnly
-                value={workspaceQuery.data ? `${window.location.origin}/${workspaceQuery.data.slug}` : ""}
+                value={
+                  workspaceQuery.data
+                    ? `${window.location.origin}/${workspaceQuery.data.slug}`
+                    : ""
+                }
                 className="h-8 text-xs bg-surface-2 border-hairline pr-8 select-all font-mono w-full"
               />
               <button
@@ -383,39 +452,51 @@ export default function WorkspaceSettingsPage() {
               </button>
             </div>
           </div>
-
         </div>
       </div>
 
       <form
-        onSubmit={handleSubmit(
-          handleSettingsSubmit,
-          () => toast.error("Please complete required workspace settings before saving.")
+        onSubmit={handleSubmit(handleSettingsSubmit, () =>
+          toast.error(
+            "Please complete required workspace settings before saving.",
+          ),
         )}
         className="flex flex-col gap-8"
       >
-
         {/* Section 1: General */}
         <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">Localization & General</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
+            Localization & General
+          </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
-
             {/* Default Language */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Default Language</span>
-                <span className="text-[11px] text-ink-muted">The default language used for translation and transcription features in this workspace if a user or room does not specify one.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Default Language
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  The default language used for translation and transcription
+                  features in this workspace if a user or room does not specify
+                  one.
+                </span>
               </div>
               <Select
                 value={watchAll.defaultLanguage}
-                onValueChange={(val) => setValue("defaultLanguage", val || "", { shouldDirty: true })}
+                onValueChange={(val) =>
+                  setValue("defaultLanguage", val || "", { shouldDirty: true })
+                }
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select language..." />
                 </SelectTrigger>
                 <SelectContent>
                   {languages.map((l) => (
-                    <SelectItem key={l.code} value={l.code} className="text-xs cursor-pointer">
+                    <SelectItem
+                      key={l.code}
+                      value={l.code}
+                      className="text-xs cursor-pointer"
+                    >
                       {l.label}
                     </SelectItem>
                   ))}
@@ -427,19 +508,29 @@ export default function WorkspaceSettingsPage() {
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Timezone</span>
-                <span className="text-[11px] text-ink-muted">Select the default timezone context for calculations.</span>
+                <span className="text-[11px] text-ink-muted">
+                  Select the default timezone context for calculations.
+                </span>
               </div>
               <Select
                 value={watchAll.timezone}
-                onValueChange={(val) => setValue("timezone", val || "", { shouldDirty: true })}
+                onValueChange={(val) =>
+                  setValue("timezone", val || "", { shouldDirty: true })
+                }
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select timezone..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="UTC" className="text-xs cursor-pointer">UTC (Greenwich Mean Time)</SelectItem>
-                  <SelectItem value="GMT+7" className="text-xs cursor-pointer">GMT+7 (Indochina Time)</SelectItem>
-                  <SelectItem value="GMT+9" className="text-xs cursor-pointer">GMT+9 (Japan Standard Time)</SelectItem>
+                  <SelectItem value="UTC" className="text-xs cursor-pointer">
+                    UTC (Greenwich Mean Time)
+                  </SelectItem>
+                  <SelectItem value="GMT+7" className="text-xs cursor-pointer">
+                    GMT+7 (Indochina Time)
+                  </SelectItem>
+                  <SelectItem value="GMT+9" className="text-xs cursor-pointer">
+                    GMT+9 (Japan Standard Time)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -447,8 +538,12 @@ export default function WorkspaceSettingsPage() {
             {/* Max Active Rooms */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Max Active Rooms</span>
-                <span className="text-[11px] text-ink-muted">Limit the number of concurrent active translation rooms.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Max Active Rooms
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Limit the number of concurrent active translation rooms.
+                </span>
               </div>
               <Input
                 type="number"
@@ -461,8 +556,13 @@ export default function WorkspaceSettingsPage() {
             {/* Artifact Retention */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Artifact Retention (Days)</span>
-                <span className="text-[11px] text-ink-muted">Specify how long translation transcripts and audios are kept. Set to 0 for indefinite retention.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Artifact Retention (Days)
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Specify how long translation transcripts and audios are kept.
+                  Set to 0 for indefinite retention.
+                </span>
               </div>
               <Input
                 type="number"
@@ -475,14 +575,21 @@ export default function WorkspaceSettingsPage() {
             {/* Allowed Languages */}
             <div className="py-3.5 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Allowed Target Languages</span>
-                <span className="text-[11px] text-ink-muted">Limit which translation languages are active.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Allowed Target Languages
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Limit which translation languages are active.
+                </span>
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end mt-1 sm:mt-0">
                 {languages.map((l) => {
                   const isChecked = allowedLangs.includes(l.code);
                   return (
-                    <label key={l.code} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                    <label
+                      key={l.code}
+                      className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
+                    >
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -490,7 +597,9 @@ export default function WorkspaceSettingsPage() {
                         disabled={isSubmitting}
                         className="rounded border-hairline text-primary focus:ring-primary h-3.5 w-3.5 bg-surface-2 cursor-pointer"
                       />
-                      <span className="font-medium text-ink-muted">{l.label}</span>
+                      <span className="font-medium text-ink-muted">
+                        {l.label}
+                      </span>
                     </label>
                   );
                 })}
@@ -500,12 +609,21 @@ export default function WorkspaceSettingsPage() {
             {/* Enforce Host Admission */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enforce Host Admission</span>
-                <span className="text-[11px] text-ink-muted">Require host permission for participants to join rooms by default.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Enforce Host Admission
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Require host permission for participants to join rooms by
+                  default.
+                </span>
               </div>
               <Switch
                 checked={watchAll.enforceHostApprovalDefault}
-                onCheckedChange={(val) => setValue("enforceHostApprovalDefault", val, { shouldDirty: true })}
+                onCheckedChange={(val) =>
+                  setValue("enforceHostApprovalDefault", val, {
+                    shouldDirty: true,
+                  })
+                }
                 disabled={isSubmitting}
               />
             </div>
@@ -513,12 +631,18 @@ export default function WorkspaceSettingsPage() {
             {/* Voice Cloning */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Voice Cloning</span>
-                <span className="text-[11px] text-ink-muted">Enable voice clone features inside meetings.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Voice Cloning
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Enable voice clone features inside meetings.
+                </span>
               </div>
               <Switch
                 checked={watchAll.voiceCloningEnabled}
-                onCheckedChange={(val) => setValue("voiceCloningEnabled", val, { shouldDirty: true })}
+                onCheckedChange={(val) =>
+                  setValue("voiceCloningEnabled", val, { shouldDirty: true })
+                }
                 disabled={isSubmitting}
               />
             </div>
@@ -526,29 +650,41 @@ export default function WorkspaceSettingsPage() {
             {/* Profanity Filter */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enable Profanity Filter</span>
-                <span className="text-[11px] text-ink-muted">Automatically censor bad words and slang in transcripts.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Enable Profanity Filter
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Automatically censor bad words and slang in transcripts.
+                </span>
               </div>
               <Switch
                 checked={watchAll.isProfanityFilterEnabled}
-                onCheckedChange={(val) => setValue("isProfanityFilterEnabled", val, { shouldDirty: true })}
+                onCheckedChange={(val) =>
+                  setValue("isProfanityFilterEnabled", val, {
+                    shouldDirty: true,
+                  })
+                }
                 disabled={isSubmitting}
               />
             </div>
-
           </div>
         </div>
 
         {/* Section 2: Collaboration & Security */}
         <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">Enterprise & External Collaboration</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
+            Enterprise & External Collaboration
+          </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
-
             {/* Allow External Collaboration */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5 max-w-[70%]">
-                <span className="text-xs font-semibold text-ink">Allow External Collaboration</span>
-                <span className="text-[11px] text-ink-muted">Allow external participants to join rooms.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Allow External Collaboration
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Allow external participants to join rooms.
+                </span>
                 {isAdmin && (
                   <span className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
                     <Warning size={12} />
@@ -558,7 +694,11 @@ export default function WorkspaceSettingsPage() {
               </div>
               <Switch
                 checked={watchAll.allowExternalCollaboration}
-                onCheckedChange={(val) => setValue("allowExternalCollaboration", val, { shouldDirty: true })}
+                onCheckedChange={(val) =>
+                  setValue("allowExternalCollaboration", val, {
+                    shouldDirty: true,
+                  })
+                }
                 disabled={isSubmitting || isAdmin}
               />
             </div>
@@ -566,12 +706,20 @@ export default function WorkspaceSettingsPage() {
             {/* Require Verified Domain */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Require Verified Domain for Internal Members</span>
-                <span className="text-[11px] text-ink-muted">Enforce internal members to use verified domains.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Require Verified Domain for Internal Members
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Enforce internal members to use verified domains.
+                </span>
               </div>
               <Switch
                 checked={watchAll.requireVerifiedDomainForInternal}
-                onCheckedChange={(val) => setValue("requireVerifiedDomainForInternal", val, { shouldDirty: true })}
+                onCheckedChange={(val) =>
+                  setValue("requireVerifiedDomainForInternal", val, {
+                    shouldDirty: true,
+                  })
+                }
                 disabled={isSubmitting}
               />
             </div>
@@ -579,8 +727,13 @@ export default function WorkspaceSettingsPage() {
             {/* Verified Email Domains */}
             <div className="py-4 px-4 flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Verified Domains</span>
-                <span className="text-[11px] text-ink-muted">Manage specific corporate email domains allowed in this workspace.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Verified Domains
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Manage specific corporate email domains allowed in this
+                  workspace.
+                </span>
               </div>
               <div className="flex gap-2">
                 <Input
@@ -591,7 +744,7 @@ export default function WorkspaceSettingsPage() {
                   disabled={isSubmitting}
                   className="h-8 text-xs bg-surface-2 border-hairline flex-1"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === "Enter") {
                       e.preventDefault();
                       handleAddDomain();
                     }
@@ -608,12 +761,19 @@ export default function WorkspaceSettingsPage() {
               </div>
               <div className="flex flex-wrap gap-2 mt-1">
                 {domains.length === 0 ? (
-                  <span className="text-[10px] text-ink-muted italic">No verified domains. Add one above.</span>
+                  <span className="text-[10px] text-ink-muted italic">
+                    No verified domains. Add one above.
+                  </span>
                 ) : (
                   domains.map((d) => (
-                    <div key={d} className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs">
+                    <div
+                      key={d}
+                      className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs"
+                    >
                       <Globe size={11} className="text-primary" />
-                      <span className="font-mono text-[10px] text-ink">{d}</span>
+                      <span className="font-mono text-[10px] text-ink">
+                        {d}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleRemoveDomain(d)}
@@ -627,24 +787,33 @@ export default function WorkspaceSettingsPage() {
                 )}
               </div>
             </div>
-
           </div>
         </div>
 
         {/* Section 3: AI Policy & Advanced */}
         <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">AI Ingestion & Security Guardrails</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
+            AI Ingestion & Security Guardrails
+          </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
-
             {/* Redact PII */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Redact Personal Identifiable Information (PII)</span>
-                <span className="text-[11px] text-ink-muted">Automatically detect and mask sensitive identifiers (e.g. emails, phone numbers, SSNs).</span>
+                <span className="text-xs font-semibold text-ink">
+                  Redact Personal Identifiable Information (PII)
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Automatically detect and mask sensitive identifiers (e.g.
+                  emails, phone numbers, SSNs).
+                </span>
               </div>
               <Switch
                 checked={watchAll.aiUsagePolicy?.redactPii?.enabled ?? false}
-                onCheckedChange={(val) => setValue("aiUsagePolicy.redactPii.enabled", val, { shouldDirty: true })}
+                onCheckedChange={(val) =>
+                  setValue("aiUsagePolicy.redactPii.enabled", val, {
+                    shouldDirty: true,
+                  })
+                }
                 disabled={isSubmitting}
               />
             </div>
@@ -652,12 +821,21 @@ export default function WorkspaceSettingsPage() {
             {/* Data Loss Prevention */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Data Loss Prevention (DLP)</span>
-                <span className="text-[11px] text-ink-muted">Block or flag designated restricted terminology or sensitive keywords.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Data Loss Prevention (DLP)
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Block or flag designated restricted terminology or sensitive
+                  keywords.
+                </span>
               </div>
               <Switch
                 checked={watchAll.aiUsagePolicy?.dlp?.enabled ?? false}
-                onCheckedChange={(val) => setValue("aiUsagePolicy.dlp.enabled", val, { shouldDirty: true })}
+                onCheckedChange={(val) =>
+                  setValue("aiUsagePolicy.dlp.enabled", val, {
+                    shouldDirty: true,
+                  })
+                }
                 disabled={isSubmitting}
               />
             </div>
@@ -666,8 +844,12 @@ export default function WorkspaceSettingsPage() {
             {watchAll.aiUsagePolicy?.dlp?.enabled && (
               <div className="py-4 px-4 flex flex-col gap-3 bg-surface-2/10">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-semibold text-ink">Keywords Blacklist</span>
-                  <span className="text-[11px] text-ink-muted">Add keywords and press Enter to blacklist them.</span>
+                  <span className="text-xs font-semibold text-ink">
+                    Keywords Blacklist
+                  </span>
+                  <span className="text-[11px] text-ink-muted">
+                    Add keywords and press Enter to blacklist them.
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   <Input
@@ -678,7 +860,7 @@ export default function WorkspaceSettingsPage() {
                     disabled={isSubmitting}
                     className="h-8 text-xs bg-surface-2 border-hairline flex-1"
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === "Enter") {
                         e.preventDefault();
                         handleAddKeyword();
                       }
@@ -695,11 +877,18 @@ export default function WorkspaceSettingsPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {keywords.length === 0 ? (
-                    <span className="text-[10px] text-ink-muted italic">No keywords blacklisted yet.</span>
+                    <span className="text-[10px] text-ink-muted italic">
+                      No keywords blacklisted yet.
+                    </span>
                   ) : (
                     keywords.map((k) => (
-                      <div key={k} className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs">
-                        <span className="font-mono text-[10px] text-ink">{k}</span>
+                      <div
+                        key={k}
+                        className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs"
+                      >
+                        <span className="font-mono text-[10px] text-ink">
+                          {k}
+                        </span>
                         <button
                           type="button"
                           onClick={() => handleRemoveKeyword(k)}
@@ -718,23 +907,43 @@ export default function WorkspaceSettingsPage() {
             {/* Translation Tone */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Translation Tone</span>
-                <span className="text-[11px] text-ink-muted">Choose translation delivery tone.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Translation Tone
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Choose translation delivery tone.
+                </span>
               </div>
               <Select
                 value={
-                  watchAll.aiUsagePolicy?.translationProfile?.translationTone
-                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.translationTone
+                  watchAll.aiUsagePolicy?.translationProfile?.translationTone ||
+                  DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile
+                    .translationTone
                 }
-                onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.translationTone", val || "", { shouldDirty: true })}
+                onValueChange={(val) =>
+                  setValue(
+                    "aiUsagePolicy.translationProfile.translationTone",
+                    val || "",
+                    { shouldDirty: true },
+                  )
+                }
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select tone..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="professional" className="text-xs cursor-pointer">Professional</SelectItem>
-                  <SelectItem value="casual" className="text-xs cursor-pointer">Casual</SelectItem>
-                  <SelectItem value="formal" className="text-xs cursor-pointer">Technical</SelectItem>
+                  <SelectItem
+                    value="professional"
+                    className="text-xs cursor-pointer"
+                  >
+                    Professional
+                  </SelectItem>
+                  <SelectItem value="casual" className="text-xs cursor-pointer">
+                    Casual
+                  </SelectItem>
+                  <SelectItem value="formal" className="text-xs cursor-pointer">
+                    Technical
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -742,22 +951,45 @@ export default function WorkspaceSettingsPage() {
             {/* Vietnamese Honorific */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Vietnamese Honorific Style</span>
-                <span className="text-[11px] text-ink-muted">Control the pronouns and social markers for Vietnamese translations.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Vietnamese Honorific Style
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Control the pronouns and social markers for Vietnamese
+                  translations.
+                </span>
               </div>
               <Select
                 value={
-                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle
-                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle
+                  watchAll.aiUsagePolicy?.translationProfile
+                    ?.languageSpecificRules?.vietnameseHonorificStyle ||
+                  DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile
+                    .languageSpecificRules.vietnameseHonorificStyle
                 }
-                onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle", val || "", { shouldDirty: true })}
+                onValueChange={(val) =>
+                  setValue(
+                    "aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle",
+                    val || "",
+                    { shouldDirty: true },
+                  )
+                }
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select style..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="formal_hierarchical" className="text-xs cursor-pointer">Formal/Hierarchical</SelectItem>
-                  <SelectItem value="standard" className="text-xs cursor-pointer">Neutral</SelectItem>
+                  <SelectItem
+                    value="formal_hierarchical"
+                    className="text-xs cursor-pointer"
+                  >
+                    Formal/Hierarchical
+                  </SelectItem>
+                  <SelectItem
+                    value="standard"
+                    className="text-xs cursor-pointer"
+                  >
+                    Neutral
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -765,26 +997,48 @@ export default function WorkspaceSettingsPage() {
             {/* Japanese Honorific */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Japanese Honorific Style</span>
-                <span className="text-[11px] text-ink-muted">Set specific politeness rule sets (e.g. Keigo/Teineigo) for Japanese translations.</span>
+                <span className="text-xs font-semibold text-ink">
+                  Japanese Honorific Style
+                </span>
+                <span className="text-[11px] text-ink-muted">
+                  Set specific politeness rule sets (e.g. Keigo/Teineigo) for
+                  Japanese translations.
+                </span>
               </div>
               <Select
                 value={
-                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle
-                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle
+                  watchAll.aiUsagePolicy?.translationProfile
+                    ?.languageSpecificRules?.japaneseHonorificStyle ||
+                  DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile
+                    .languageSpecificRules.japaneseHonorificStyle
                 }
-                onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle", val || "", { shouldDirty: true })}
+                onValueChange={(val) =>
+                  setValue(
+                    "aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle",
+                    val || "",
+                    { shouldDirty: true },
+                  )
+                }
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select style..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="keigo_teineigo" className="text-xs cursor-pointer">Keigo/Teineigo</SelectItem>
-                  <SelectItem value="standard" className="text-xs cursor-pointer">Neutral/Informal</SelectItem>
+                  <SelectItem
+                    value="keigo_teineigo"
+                    className="text-xs cursor-pointer"
+                  >
+                    Keigo/Teineigo
+                  </SelectItem>
+                  <SelectItem
+                    value="standard"
+                    className="text-xs cursor-pointer"
+                  >
+                    Neutral/Informal
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
           </div>
         </div>
 
@@ -805,7 +1059,6 @@ export default function WorkspaceSettingsPage() {
             )}
           </button>
         </div>
-
       </form>
     </div>
   );

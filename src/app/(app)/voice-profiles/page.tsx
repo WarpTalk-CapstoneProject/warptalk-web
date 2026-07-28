@@ -4,11 +4,9 @@ import { useMemo, useRef, useState } from "react";
 import {
   CheckCircle,
   FileAudio,
-  Funnel,
   MagnifyingGlass,
   Microphone,
   Plus,
-  SlidersHorizontal,
   Trash,
   Waveform,
 } from "@phosphor-icons/react/dist/ssr";
@@ -43,29 +41,6 @@ const LANGUAGE_OPTIONS = [
   { value: "ko-KR", label: "Korean (ko-KR)" },
 ];
 
-const FILTERS = ["Vietnamese", "Conversational", "Narration", "Meeting-ready", "Has sample"];
-
-const FEATURED_VOICES = [
-  {
-    name: "Thanh Ngoc - Warm & Trusted Expert",
-    category: "Conversational",
-    language: "Vietnamese",
-    className: "bg-[radial-gradient(circle_at_28%_24%,#d8f3ff_0,#7cc4e8_32%,#15384a_100%)]",
-  },
-  {
-    name: "Nhu - Calm and Confident",
-    category: "Educational",
-    language: "Vietnamese",
-    className: "bg-[radial-gradient(circle_at_28%_24%,#f9dda4_0,#88a57b_38%,#26342f_100%)]",
-  },
-  {
-    name: "Tram - Friendly Southern Vietnamese",
-    category: "Translation rooms",
-    language: "Vietnamese",
-    className: "bg-[radial-gradient(circle_at_24%_22%,#ffd6dc_0,#cf7d6f_35%,#382234_100%)]",
-  },
-];
-
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
 
 export default function VoiceProfilesPage() {
@@ -76,11 +51,24 @@ export default function VoiceProfilesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [language, setLanguage] = useState("vi-VN");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [languageFilter, setLanguageFilter] = useState("all");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const profileList = useMemo(() => profiles ?? [], [profiles]);
   const readyCount = useMemo(() => profileList.filter((p) => p.hasSample).length, [profileList]);
+  const filteredProfiles = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return profileList.filter((profile) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        profile.displayName?.toLowerCase().includes(normalizedQuery) ||
+        profile.language?.toLowerCase().includes(normalizedQuery);
+      const matchesLanguage = languageFilter === "all" || profile.language === languageFilter;
+      return matchesQuery && matchesLanguage;
+    });
+  }, [languageFilter, profileList, searchQuery]);
 
   function resetForm() {
     setDisplayName("");
@@ -141,15 +129,6 @@ export default function VoiceProfilesPage() {
                 Build reusable speaker identities for translation rooms, transcripts, and AI summaries.
               </p>
             </div>
-            <div className="flex w-fit rounded-[10px] border border-border bg-canvas p-1 text-[13px]">
-              <button className="flex h-8 items-center gap-2 rounded-[8px] bg-surface-1 px-3 font-medium text-ink shadow-sm">
-                <Waveform size={15} weight="bold" />
-                My profiles
-              </button>
-              <button className="flex h-8 items-center gap-2 rounded-[8px] px-3 text-ink-muted hover:text-ink">
-                Explore presets
-              </button>
-            </div>
           </div>
           <Button
             className="h-10 w-fit rounded-full bg-neutral-950 px-5 text-white hover:bg-neutral-800"
@@ -168,29 +147,24 @@ export default function VoiceProfilesPage() {
                 className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-subtle"
                 placeholder="Search voice profiles..."
                 aria-label="Search voice profiles"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
               />
               <FileAudio size={18} className="shrink-0 text-ink-muted" />
             </label>
-            <div className="flex gap-2">
-              <Button variant="outline" className="h-12 rounded-[14px] border-border bg-white px-4 text-ink">
-                <SlidersHorizontal size={17} />
-                Filters
-              </Button>
-              <Button variant="outline" size="icon" className="h-12 w-12 rounded-[14px] border-border bg-white text-ink">
-                <Funnel size={17} />
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {FILTERS.map((filter) => (
-              <button
-                key={filter}
-                className="h-9 shrink-0 rounded-full border border-border bg-white px-4 text-[13px] font-medium text-ink-muted transition hover:border-hairline-strong hover:text-ink"
-              >
-                {filter}
-              </button>
-            ))}
+            <Select value={languageFilter} onValueChange={(value) => setLanguageFilter(value || "all")}>
+              <SelectTrigger className="h-12 min-w-52 rounded-[14px] border-border bg-white px-4 text-ink">
+                <SelectValue placeholder="All languages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All languages</SelectItem>
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </section>
 
@@ -198,18 +172,6 @@ export default function VoiceProfilesPage() {
           <Metric icon={<Microphone size={16} weight="bold" />} label="Profiles" value={String(profileList.length)} />
           <Metric icon={<CheckCircle size={16} weight="bold" />} label="With sample" value={String(readyCount)} />
           <Metric icon={<Waveform size={16} weight="bold" />} label="Default language" value="vi-VN" />
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[18px] font-semibold text-ink">Trending voice presets</h2>
-            <button className="text-[13px] font-medium text-ink-muted hover:text-ink">View all</button>
-          </div>
-          <div className="grid gap-x-10 gap-y-5 lg:grid-cols-3">
-            {FEATURED_VOICES.map((voice) => (
-              <PresetVoice key={voice.name} {...voice} />
-            ))}
-          </div>
         </section>
 
         <section className="space-y-4">
@@ -239,7 +201,7 @@ export default function VoiceProfilesPage() {
                   <div>
                     <p className="text-[15px] font-semibold text-ink">No voice profiles yet</p>
                     <p className="mt-1 max-w-2xl text-[13px] leading-5 text-ink-muted">
-                      Create your first profile now, or start with one of the presets above and tune it later with a sample.
+                      Create your first profile and attach a reference sample when you are ready.
                     </p>
                   </div>
                 </div>
@@ -253,7 +215,13 @@ export default function VoiceProfilesPage() {
               </div>
             )}
 
-            {profileList.map((profile, index) => (
+            {!isLoading && profileList.length > 0 && filteredProfiles.length === 0 && (
+              <div className="px-5 py-8 text-center text-[14px] text-ink-muted">
+                No voice profile matches the current search and language filter.
+              </div>
+            )}
+
+            {filteredProfiles.map((profile, index) => (
               <VoiceProfileRow
                 key={profile.id}
                 profile={profile}
@@ -336,33 +304,6 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
         <p className="text-[18px] font-semibold leading-6 text-ink">{value}</p>
       </div>
     </div>
-  );
-}
-
-function PresetVoice({
-  name,
-  category,
-  language,
-  className,
-}: {
-  name: string;
-  category: string;
-  language: string;
-  className: string;
-}) {
-  return (
-    <button className="group flex min-w-0 items-center gap-4 rounded-[16px] border border-transparent p-3 text-left transition hover:border-border hover:bg-white">
-      <span className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] ${className}`}>
-        <Waveform size={22} weight="bold" className="text-white drop-shadow" />
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-[14px] font-semibold text-ink group-hover:underline">{name}</span>
-        <span className="mt-1 block text-[13px] text-ink-muted">{category}</span>
-        <span className="mt-2 inline-flex items-center rounded-full bg-neutral-950/5 px-2 py-0.5 text-[12px] text-ink-muted">
-          {language}
-        </span>
-      </span>
-    </button>
   );
 }
 

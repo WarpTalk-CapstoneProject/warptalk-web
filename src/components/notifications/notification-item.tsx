@@ -1,18 +1,21 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2, Megaphone, Info, Wrench, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { notificationService } from "@/services/notification.service";
 import type { NotificationMessageDto } from "@/types/notification";
-import { Button } from "@/components/ui/button";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatDistanceToNow } from "date-fns";
+import { CheckCircle2, Info, Megaphone, Wrench } from "lucide-react";
 
 interface NotificationItemProps {
   notification: NotificationMessageDto;
   onRead?: () => void;
 }
 
-export function NotificationItem({ notification, onRead }: NotificationItemProps) {
+export function NotificationItem({
+  notification,
+  onRead,
+}: NotificationItemProps) {
   const queryClient = useQueryClient();
 
   const markReadMutation = useMutation({
@@ -52,17 +55,21 @@ export function NotificationItem({ notification, onRead }: NotificationItemProps
       }`}
     >
       <div className="mt-0.5 shrink-0">{getIcon()}</div>
-      
+
       <div className="flex-1 space-y-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={`text-sm font-medium leading-none ${!notification.isRead ? "text-ink" : "text-ink/80"}`}>
+          <p
+            className={`text-sm font-medium leading-none ${!notification.isRead ? "text-ink" : "text-ink/80"}`}
+          >
             {notification.title}
           </p>
           <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-            {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+            {formatDistanceToNow(new Date(notification.createdAt), {
+              addSuffix: true,
+            })}
           </span>
         </div>
-        
+
         <p className="text-xs text-muted-foreground line-clamp-2">
           {notification.content}
         </p>
