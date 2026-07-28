@@ -9,19 +9,38 @@ import type { AssistantPageContextDto } from "@/types/assistant";
  * message sent while this page is mounted carries pageType/entityId/snapshot automatically.
  * Pass `null` (or omit) while the page's own data hasn't loaded yet — the effect no-ops.
  */
-export function useRegisterAssistantContext(context: AssistantPageContextDto | null | undefined) {
-  const setPageContext = useAssistantContextStore((state) => state.setPageContext);
-  const clearPageContext = useAssistantContextStore((state) => state.clearPageContext);
+export function useRegisterAssistantContext(
+  context: AssistantPageContextDto | null | undefined,
+) {
+  const setPageContext = useAssistantContextStore(
+    (state) => state.setPageContext,
+  );
+  const clearPageContext = useAssistantContextStore(
+    (state) => state.clearPageContext,
+  );
 
   const entityId = context?.entityId;
   const workspaceId = context?.workspaceId;
   const pageType = context?.pageType;
-  const snapshotKey = context?.snapshot ? JSON.stringify(context.snapshot) : undefined;
+  const snapshotKey = context?.snapshot
+    ? JSON.stringify(context.snapshot)
+    : undefined;
 
   useEffect(() => {
     if (!pageType) return;
-    setPageContext({ pageType, entityId, workspaceId, snapshot: snapshotKey ? JSON.parse(snapshotKey) : undefined });
+    setPageContext({
+      pageType,
+      entityId,
+      workspaceId,
+      snapshot: snapshotKey ? JSON.parse(snapshotKey) : undefined,
+    });
     return () => clearPageContext(pageType);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageType, entityId, workspaceId, snapshotKey, setPageContext, clearPageContext]);
+  }, [
+    pageType,
+    entityId,
+    workspaceId,
+    snapshotKey,
+    setPageContext,
+    clearPageContext,
+  ]);
 }

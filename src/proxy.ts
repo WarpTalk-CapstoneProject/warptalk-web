@@ -9,7 +9,7 @@ const ADMIN_PREFIX = "/billing";
 // access to app pages while dashboard and layout work is being reviewed.
 const DISABLE_AUTH_GUARD = true;
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (DISABLE_AUTH_GUARD) {
     return NextResponse.next();
   }

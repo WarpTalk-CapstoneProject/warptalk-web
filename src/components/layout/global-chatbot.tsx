@@ -1,17 +1,45 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
-import { ArrowUp, ClockCounterClockwise, ArrowsOutSimple, CornersIn, Plus, PaperPlaneTilt, Cube, CaretDown, FileText, Chats, BookBookmark, VideoCamera, X } from "@phosphor-icons/react/dist/ssr";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  ArrowUp,
+  ClockCounterClockwise,
+  ArrowsOutSimple,
+  CornersIn,
+  Plus,
+  PaperPlaneTilt,
+  Cube,
+  CaretDown,
+  FileText,
+  Chats,
+  BookBookmark,
+  VideoCamera,
+  X,
+} from "@phosphor-icons/react/dist/ssr";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
-import { useWorkspaceMembers, useWorkspaceDocuments } from "@/hooks/use-workspace";
+import {
+  useWorkspaceMembers,
+  useWorkspaceDocuments,
+} from "@/hooks/use-workspace";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
-import { useAssistantSkills, useCreateAssistantConversation, useSendAssistantMessage } from "@/hooks/use-assistant";
+import {
+  useAssistantSkills,
+  useCreateAssistantConversation,
+  useSendAssistantMessage,
+} from "@/hooks/use-assistant";
 import { createHubConnection } from "@/lib/signalr";
 import type * as signalR from "@microsoft/signalr";
-import type { AssistantMentionDto, AssistantPageContextDto } from "@/types/assistant";
+import type {
+  AssistantMentionDto,
+  AssistantPageContextDto,
+} from "@/types/assistant";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 
@@ -30,9 +58,30 @@ interface AssistantContextOption {
 
 // Not fetchable — describes the page the widget was opened from, not workspace data.
 const STATIC_CONTEXT_OPTIONS: AssistantContextOption[] = [
-  { id: "this-page", title: "Current meeting context", type: "This page", icon: <FileText size={14} className="text-[#34c759]" />, description: "", link: "#" },
-  { id: "all-transcripts", title: "All Transcripts", type: "Resources", icon: <Chats size={14} />, description: "Search transcripts", link: "/transcripts" },
-  { id: "terminology", title: "Terminology", type: "Resources", icon: <BookBookmark size={14} />, description: "Search terminology", link: "/terminology" },
+  {
+    id: "this-page",
+    title: "Current meeting context",
+    type: "This page",
+    icon: <FileText size={14} className="text-[#34c759]" />,
+    description: "",
+    link: "#",
+  },
+  {
+    id: "all-transcripts",
+    title: "All Transcripts",
+    type: "Resources",
+    icon: <Chats size={14} />,
+    description: "Search transcripts",
+    link: "/transcripts",
+  },
+  {
+    id: "terminology",
+    title: "Terminology",
+    type: "Resources",
+    icon: <BookBookmark size={14} />,
+    description: "Search terminology",
+    link: "/terminology",
+  },
 ];
 
 type ChatRole = "user" | "assistant";
@@ -88,7 +137,8 @@ const SLASH_COMMANDS: SlashCommand[] = [
     description: "List action items and decisions from this meeting",
     pageTypes: ["room_detail", "in_meeting", "history"],
     autoSend: true,
-    buildPrompt: () => "List the action items and key decisions from this meeting's transcript.",
+    buildPrompt: () =>
+      "List the action items and key decisions from this meeting's transcript.",
   },
   {
     command: "/room-info",
@@ -112,7 +162,8 @@ const SLASH_COMMANDS: SlashCommand[] = [
     description: "Pull out key terms and terminology from this document",
     pageTypes: ["document_detail"],
     autoSend: true,
-    buildPrompt: () => "Extract the key terms and terminology used in this document.",
+    buildPrompt: () =>
+      "Extract the key terms and terminology used in this document.",
   },
   {
     command: "/recent-meetings",
@@ -163,30 +214,44 @@ function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
     pageLabel,
     title,
     status: context.snapshot?.status,
-    icon: PAGE_CONTEXT_ICONS[context.pageType] ?? <BookBookmark size={15} weight="regular" />,
+    icon: PAGE_CONTEXT_ICONS[context.pageType] ?? (
+      <BookBookmark size={15} weight="regular" />
+    ),
   };
 }
 
 function getPageContextKey(context: AssistantPageContextDto | null) {
   if (!context) return null;
-  return [context.pageType, context.workspaceId ?? "", context.entityId ?? ""].join(":");
+  return [
+    context.pageType,
+    context.workspaceId ?? "",
+    context.entityId ?? "",
+  ].join(":");
 }
 
 export function GlobalChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [selectedContexts, setSelectedContexts] = useState<AssistantContextOption[]>([]);
+  const [selectedContexts, setSelectedContexts] = useState<
+    AssistantContextOption[]
+  >([]);
   const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
-  const [disabledPageContextKey, setDisabledPageContextKey] = useState<string | null>(null);
+  const [disabledPageContextKey, setDisabledPageContextKey] = useState<
+    string | null
+  >(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const ambientPageContext = useAssistantContextStore((state) => state.pageContext);
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
+  const ambientPageContext = useAssistantContextStore(
+    (state) => state.pageContext,
+  );
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
@@ -205,11 +270,26 @@ export function GlobalChatbot() {
   // as the user types after "@". Selecting one attaches a real entityId that rides along
   // with the next sent message as a structured mention (see sendMessage below), not just
   // a display chip.
-  const { data: memberResults } = useWorkspaceMembers(activeWorkspaceId ?? undefined, 1, 5, mentionQuery);
-  const { data: roomResults } = useTranslationRooms({ search: mentionQuery, pageSize: 5 });
-  const { data: documentResults } = useWorkspaceDocuments(activeWorkspaceId ?? "", 1, 5, mentionQuery);
+  const { data: memberResults } = useWorkspaceMembers(
+    activeWorkspaceId ?? undefined,
+    1,
+    5,
+    mentionQuery,
+  );
+  const { data: roomResults } = useTranslationRooms({
+    search: mentionQuery,
+    pageSize: 5,
+  });
+  const { data: documentResults } = useWorkspaceDocuments(
+    activeWorkspaceId ?? "",
+    1,
+    5,
+    mentionQuery,
+  );
   const CONTEXT_OPTIONS: AssistantContextOption[] = useMemo(() => {
-    const memberOptions: AssistantContextOption[] = (memberResults?.items ?? []).map((m) => ({
+    const memberOptions: AssistantContextOption[] = (
+      memberResults?.items ?? []
+    ).map((m) => ({
       id: `member-${m.userId}`,
       title: m.fullName,
       type: "Members",
@@ -220,7 +300,9 @@ export function GlobalChatbot() {
       entityType: "member",
       entityId: m.userId,
     }));
-    const roomOptions: AssistantContextOption[] = (roomResults?.rooms ?? []).map((r) => ({
+    const roomOptions: AssistantContextOption[] = (
+      roomResults?.rooms ?? []
+    ).map((r) => ({
       id: `room-${r.id}`,
       title: r.title,
       type: "Meetings",
@@ -230,7 +312,9 @@ export function GlobalChatbot() {
       entityType: "room",
       entityId: r.id,
     }));
-    const documentOptions: AssistantContextOption[] = (documentResults?.items ?? []).map((d) => ({
+    const documentOptions: AssistantContextOption[] = (
+      documentResults?.items ?? []
+    ).map((d) => ({
       id: `document-${d.id}`,
       title: d.name,
       type: "Documents",
@@ -240,15 +324,25 @@ export function GlobalChatbot() {
       entityType: "document",
       entityId: d.id,
     }));
-    return [...STATIC_CONTEXT_OPTIONS, ...memberOptions, ...roomOptions, ...documentOptions];
+    return [
+      ...STATIC_CONTEXT_OPTIONS,
+      ...memberOptions,
+      ...roomOptions,
+      ...documentOptions,
+    ];
   }, [memberResults, roomResults, documentResults]);
 
   // Only offer commands relevant to the page the widget was opened from — e.g. "/summarize"
   // only makes sense with a room in ambient context (see chat_worker.py's page-context
   // injection). No ambient context registered on this page ⇒ no commands to offer.
-  const ambientPageContextKey = useMemo(() => getPageContextKey(ambientPageContext), [ambientPageContext]);
+  const ambientPageContextKey = useMemo(
+    () => getPageContextKey(ambientPageContext),
+    [ambientPageContext],
+  );
   const effectivePageContext =
-    ambientPageContextKey && disabledPageContextKey === ambientPageContextKey ? null : ambientPageContext;
+    ambientPageContextKey && disabledPageContextKey === ambientPageContextKey
+      ? null
+      : ambientPageContext;
   const isPageContextVisible = Boolean(effectivePageContext);
 
   const availableSlashCommands = useMemo(() => {
@@ -256,7 +350,10 @@ export function GlobalChatbot() {
     if (!pageType) return [];
     return SLASH_COMMANDS.filter((cmd) => cmd.pageTypes.includes(pageType));
   }, [effectivePageContext?.pageType]);
-  const ambientContextDisplay = useMemo(() => getAmbientContextDisplay(effectivePageContext), [effectivePageContext]);
+  const ambientContextDisplay = useMemo(
+    () => getAmbientContextDisplay(effectivePageContext),
+    [effectivePageContext],
+  );
   const contextComposerShellClassName = isPageContextVisible
     ? "rounded-[14px] bg-surface-2/55 p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
     : "";
@@ -265,7 +362,7 @@ export function GlobalChatbot() {
     : "relative rounded-[8px] border border-border bg-surface-1";
 
   const filteredSlashCommands = availableSlashCommands.filter((cmd) =>
-    cmd.command.slice(1).toLowerCase().startsWith(slashQuery.toLowerCase())
+    cmd.command.slice(1).toLowerCase().startsWith(slashQuery.toLowerCase()),
   );
 
   const hubConnectionRef = useRef<signalR.HubConnection | null>(null);
@@ -278,7 +375,10 @@ export function GlobalChatbot() {
     const connection = createHubConnection("/api/v1/assistant/chat-hub");
     hubConnectionRef.current = connection;
 
-    const upsertAssistantMessage = (messageId: string, updater: (prev: ChatMessage | undefined) => ChatMessage) => {
+    const upsertAssistantMessage = (
+      messageId: string,
+      updater: (prev: ChatMessage | undefined) => ChatMessage,
+    ) => {
       setMessages((prev) => {
         const index = prev.findIndex((m) => m.id === messageId);
         if (index === -1) return [...prev, updater(undefined)];
@@ -288,66 +388,98 @@ export function GlobalChatbot() {
       });
     };
 
-    connection.on("AssistantMessageStarted", (payload: { conversationId: string; messageId: string }) => {
-      if (payload.conversationId !== conversationId) return;
-      setIsAiTyping(true);
-      setActiveToolLabel(null);
-      upsertAssistantMessage(payload.messageId, (prev) => ({
-        id: payload.messageId,
-        role: "assistant",
-        content: prev?.content ?? "",
-      }));
-    });
+    connection.on(
+      "AssistantMessageStarted",
+      (payload: { conversationId: string; messageId: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        setIsAiTyping(true);
+        setActiveToolLabel(null);
+        upsertAssistantMessage(payload.messageId, (prev) => ({
+          id: payload.messageId,
+          role: "assistant",
+          content: prev?.content ?? "",
+        }));
+      },
+    );
 
-    connection.on("AssistantMessageChunk", (payload: { conversationId: string; messageId: string; delta: string }) => {
-      if (payload.conversationId !== conversationId) return;
-      setIsAiTyping(false);
-      setActiveToolLabel(null);
-      upsertAssistantMessage(payload.messageId, (prev) => ({
-        id: payload.messageId,
-        role: "assistant",
-        content: (prev?.content ?? "") + payload.delta,
-      }));
-    });
+    connection.on(
+      "AssistantMessageChunk",
+      (payload: {
+        conversationId: string;
+        messageId: string;
+        delta: string;
+      }) => {
+        if (payload.conversationId !== conversationId) return;
+        setIsAiTyping(false);
+        setActiveToolLabel(null);
+        upsertAssistantMessage(payload.messageId, (prev) => ({
+          id: payload.messageId,
+          role: "assistant",
+          content: (prev?.content ?? "") + payload.delta,
+        }));
+      },
+    );
 
-    connection.on("AssistantToolCallStarted", (payload: { conversationId: string; toolName: string }) => {
-      if (payload.conversationId !== conversationId) return;
-      setIsAiTyping(true);
-      setActiveToolLabel(TOOL_LABELS[payload.toolName] ?? "Looking that up…");
-    });
+    connection.on(
+      "AssistantToolCallStarted",
+      (payload: { conversationId: string; toolName: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        setIsAiTyping(true);
+        setActiveToolLabel(TOOL_LABELS[payload.toolName] ?? "Looking that up…");
+      },
+    );
 
-    connection.on("AssistantToolCallCompleted", (payload: { conversationId: string }) => {
-      if (payload.conversationId !== conversationId) return;
-      setActiveToolLabel(null);
-    });
+    connection.on(
+      "AssistantToolCallCompleted",
+      (payload: { conversationId: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        setActiveToolLabel(null);
+      },
+    );
 
-    connection.on("AssistantMessageCompleted", (payload: { conversationId: string; id: string; content: string }) => {
-      if (payload.conversationId !== conversationId) return;
-      setIsAiTyping(false);
-      setActiveToolLabel(null);
-      upsertAssistantMessage(payload.id, () => ({
-        id: payload.id,
-        role: "assistant",
-        content: payload.content,
-      }));
-    });
+    connection.on(
+      "AssistantMessageCompleted",
+      (payload: { conversationId: string; id: string; content: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        setIsAiTyping(false);
+        setActiveToolLabel(null);
+        upsertAssistantMessage(payload.id, () => ({
+          id: payload.id,
+          role: "assistant",
+          content: payload.content,
+        }));
+      },
+    );
 
-    connection.on("AssistantMessageFailed", (payload: { conversationId: string; messageId: string; error: string }) => {
-      if (payload.conversationId !== conversationId) return;
-      setIsAiTyping(false);
-      setActiveToolLabel(null);
-      upsertAssistantMessage(payload.messageId, () => ({
-        id: payload.messageId,
-        role: "assistant",
-        content: payload.error,
-        failed: true,
-      }));
-    });
+    connection.on(
+      "AssistantMessageFailed",
+      (payload: {
+        conversationId: string;
+        messageId: string;
+        error: string;
+      }) => {
+        if (payload.conversationId !== conversationId) return;
+        setIsAiTyping(false);
+        setActiveToolLabel(null);
+        upsertAssistantMessage(payload.messageId, () => ({
+          id: payload.messageId,
+          role: "assistant",
+          content: payload.error,
+          failed: true,
+        }));
+      },
+    );
 
-    connection.on("AssistantFollowUpMessage", (payload: { conversationId: string; id: string; content: string }) => {
-      if (payload.conversationId !== conversationId) return;
-      setMessages((prev) => [...prev, { id: payload.id, role: "assistant", content: payload.content }]);
-    });
+    connection.on(
+      "AssistantFollowUpMessage",
+      (payload: { conversationId: string; id: string; content: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        setMessages((prev) => [
+          ...prev,
+          { id: payload.id, role: "assistant", content: payload.content },
+        ]);
+      },
+    );
 
     connection
       .start()
@@ -394,13 +526,16 @@ export function GlobalChatbot() {
     if (slashMenuOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSlashSelectedIndex((prev) => Math.min(prev + 1, filteredSlashCommands.length - 1));
+        setSlashSelectedIndex((prev) =>
+          Math.min(prev + 1, filteredSlashCommands.length - 1),
+        );
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSlashSelectedIndex((prev) => Math.max(prev - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        if (filteredSlashCommands[slashSelectedIndex]) insertSlashCommand(filteredSlashCommands[slashSelectedIndex]);
+        if (filteredSlashCommands[slashSelectedIndex])
+          insertSlashCommand(filteredSlashCommands[slashSelectedIndex]);
         return;
       }
       if (e.key === "Escape") {
@@ -413,7 +548,9 @@ export function GlobalChatbot() {
     if (mentionMenuOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, filteredOptions.length - 1));
+        setSelectedIndex((prev) =>
+          Math.min(prev + 1, filteredOptions.length - 1),
+        );
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((prev) => Math.max(prev - 1, 0));
@@ -427,24 +564,28 @@ export function GlobalChatbot() {
       }
     } else {
       // Handle backspace when input is empty to delete the last context
-      if (e.key === "Backspace" && inputValue === "" && selectedContexts.length > 0) {
-        setSelectedContexts(prev => prev.slice(0, -1));
+      if (
+        e.key === "Backspace" &&
+        inputValue === "" &&
+        selectedContexts.length > 0
+      ) {
+        setSelectedContexts((prev) => prev.slice(0, -1));
       }
     }
 
     if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
+      e.preventDefault();
+      sendMessage();
     }
   };
 
-  const filteredOptions = CONTEXT_OPTIONS.filter(opt =>
-    opt.title.toLowerCase().includes(mentionQuery.toLowerCase())
+  const filteredOptions = CONTEXT_OPTIONS.filter((opt) =>
+    opt.title.toLowerCase().includes(mentionQuery.toLowerCase()),
   );
 
-  const insertMention = (opt: typeof CONTEXT_OPTIONS[0]) => {
-    setSelectedContexts(prev => {
-      if (prev.find(p => p.id === opt.id)) return prev;
+  const insertMention = (opt: (typeof CONTEXT_OPTIONS)[0]) => {
+    setSelectedContexts((prev) => {
+      if (prev.find((p) => p.id === opt.id)) return prev;
       return [...prev, opt];
     });
 
@@ -464,6 +605,13 @@ export function GlobalChatbot() {
     setTimeout(() => {
       inputRef.current?.focus();
     }, 0);
+  };
+
+  const handleMentionClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const option = CONTEXT_OPTIONS.find(
+      (item) => item.id === event.currentTarget.dataset.optionId,
+    );
+    if (option) insertMention(option);
   };
 
   const insertSlashCommand = (cmd: SlashCommand) => {
@@ -488,7 +636,7 @@ export function GlobalChatbot() {
   const togglePageContextVisibility = () => {
     if (!ambientPageContextKey) return;
     setDisabledPageContextKey((currentKey) =>
-      currentKey === ambientPageContextKey ? null : ambientPageContextKey
+      currentKey === ambientPageContextKey ? null : ambientPageContextKey,
     );
   };
 
@@ -500,10 +648,19 @@ export function GlobalChatbot() {
     // now, then clear the chips so they don't silently ride along with the *next*
     // unrelated message too.
     const mentions: AssistantMentionDto[] = selectedContexts
-      .filter((ctx): ctx is AssistantContextOption & { entityType: AssistantMentionDto["entityType"]; entityId: string } =>
-        Boolean(ctx.entityType && ctx.entityId)
+      .filter(
+        (
+          ctx,
+        ): ctx is AssistantContextOption & {
+          entityType: AssistantMentionDto["entityType"];
+          entityId: string;
+        } => Boolean(ctx.entityType && ctx.entityId),
       )
-      .map((ctx) => ({ entityType: ctx.entityType, entityId: ctx.entityId, label: ctx.title }));
+      .map((ctx) => ({
+        entityType: ctx.entityType,
+        entityId: ctx.entityId,
+        label: ctx.title,
+      }));
 
     setInputValue("");
     setMentionMenuOpen(false);
@@ -512,7 +669,8 @@ export function GlobalChatbot() {
     let convId = conversationId;
     if (!convId) {
       try {
-        const conversation = await createConversation.mutateAsync(activeWorkspaceId);
+        const conversation =
+          await createConversation.mutateAsync(activeWorkspaceId);
         convId = conversation.id;
         setConversationId(convId);
       } catch {
@@ -520,7 +678,10 @@ export function GlobalChatbot() {
       }
     }
 
-    setMessages((prev) => [...prev, { id: `local-${Date.now()}`, role: "user", content }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: `local-${Date.now()}`, role: "user", content },
+    ]);
     setIsAiTyping(true);
 
     try {
@@ -556,34 +717,48 @@ export function GlobalChatbot() {
                 }}
                 className="flex items-center h-[26px] px-3 rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors text-ink text-[12px] font-medium mr-1 truncate max-w-[200px]"
               >
-                {messages.find(m => m.role === 'user')?.content || "New chat"}
+                {messages.find((m) => m.role === "user")?.content || "New chat"}
               </motion.button>
             )}
           </AnimatePresence>
 
-          <Popover open={isOpen} onOpenChange={(open) => {
-            if (!open && messages.length > 0) {
-              setIsMinimized(true);
-            }
-            setIsOpen(open);
-          }}>
+          <Popover
+            open={isOpen}
+            onOpenChange={(open) => {
+              if (!open && messages.length > 0) {
+                setIsMinimized(true);
+              }
+              setIsOpen(open);
+            }}
+          >
             <PopoverTrigger
               aria-label="Ask WarpTalk"
               className="flex items-center h-[26px] pl-[8px] pr-[10px] rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors group text-ink"
             >
-              <span aria-hidden="true" className="mr-[6px] flex items-center justify-center">
-                <PaperPlaneTilt weight="regular" className="text-ink transition-colors" size={13} />
+              <span
+                aria-hidden="true"
+                className="mr-[6px] flex items-center justify-center"
+              >
+                <PaperPlaneTilt
+                  weight="regular"
+                  className="text-ink transition-colors"
+                  size={13}
+                />
               </span>
-              <span className="text-[12px] leading-none whitespace-nowrap">Ask WarpTalk</span>
+              <span className="text-[12px] leading-none whitespace-nowrap">
+                Ask WarpTalk
+              </span>
             </PopoverTrigger>
             <PopoverContent
               align="end"
               sideOffset={8}
-              className={`p-0 bg-surface-1 border border-border shadow-xl rounded-xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? 'w-[680px] h-[600px]' : 'w-[460px] h-[412px]'}`}
+              className={`p-0 bg-surface-1 border border-border shadow-xl rounded-xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? "w-[680px] h-[600px]" : "w-[460px] h-[412px]"}`}
             >
               {/* Chat Header */}
               <div className="flex items-center justify-between h-[48px] px-4 shrink-0">
-                <span className="font-semibold text-[13px] text-ink">New chat</span>
+                <span className="font-semibold text-[13px] text-ink">
+                  New chat
+                </span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => {
@@ -598,7 +773,11 @@ export function GlobalChatbot() {
                     onClick={() => setIsExpanded(!isExpanded)}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
-                    {isExpanded ? <CornersIn size={14} /> : <ArrowsOutSimple size={14} />}
+                    {isExpanded ? (
+                      <CornersIn size={14} />
+                    ) : (
+                      <ArrowsOutSimple size={14} />
+                    )}
                   </button>
                   <button
                     onClick={() => {
@@ -614,26 +793,36 @@ export function GlobalChatbot() {
                 </div>
               </div>
 
-               {/* Chat Messages */}
+              {/* Chat Messages */}
               <div className="flex-1 overflow-y-auto px-2 flex flex-col gap-4">
-                {messages.length > 0 && (
+                {messages.length > 0 &&
                   messages.map((msg) => (
-                    <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[85%] text-[13px] leading-relaxed ${
-                        msg.role === "user"
-                          ? "bg-surface-2 text-ink rounded-[12px] px-3.5 py-2"
-                          : msg.failed ? "text-red-500 py-2 pl-4" : "text-ink py-2 pl-4"
-                      }`}>
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[85%] text-[13px] leading-relaxed ${
+                          msg.role === "user"
+                            ? "bg-surface-2 text-ink rounded-[12px] px-3.5 py-2"
+                            : msg.failed
+                              ? "text-red-500 py-2 pl-4"
+                              : "text-ink py-2 pl-4"
+                        }`}
+                      >
                         {msg.content}
                       </div>
                     </div>
-                  ))
-                )}
+                  ))}
                 {isAiTyping && (
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 text-[13px] text-ink-subtle py-2 pl-4">
                       <div className="scale-75 origin-left flex items-center justify-center">
-                        <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+                        <Lumidot
+                          variant={lumidotVariant}
+                          pattern="frame"
+                          glow={4}
+                        />
                       </div>
                       <span>{activeToolLabel ?? "Thinking..."}</span>
                     </div>
@@ -643,47 +832,52 @@ export function GlobalChatbot() {
 
               {/* Chat Input Section */}
               <div className="relative px-2 pb-2 shrink-0">
-                  <AnimatePresence initial={false}>
-                    {ambientContextDisplay && (
-                      <motion.div
-                        key="page-context-shell"
-                        initial={{ opacity: 0, y: -6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.18, ease: "easeOut" }}
-                        className={`${contextComposerShellClassName} absolute left-[7px] right-[7px] bottom-2 z-0 h-[118px]`}
-                      >
-                        <div className="flex min-h-[30px] items-center rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium text-ink">
-                          <div
-                            aria-label="Active page context"
-                            title={`${ambientContextDisplay.pageLabel}: ${ambientContextDisplay.title}`}
-                            className="flex min-w-0 flex-1 items-center gap-1.5"
-                          >
-                            <span className="flex size-5 shrink-0 items-center justify-center rounded-[6px] bg-surface-1 text-ink-muted ring-1 ring-border/80">
-                              {ambientContextDisplay.icon}
+                <AnimatePresence initial={false}>
+                  {ambientContextDisplay && (
+                    <motion.div
+                      key="page-context-shell"
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18, ease: "easeOut" }}
+                      className={`${contextComposerShellClassName} absolute left-[7px] right-[7px] bottom-2 z-0 h-[118px]`}
+                    >
+                      <div className="flex min-h-[30px] items-center rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium text-ink">
+                        <div
+                          aria-label="Active page context"
+                          title={`${ambientContextDisplay.pageLabel}: ${ambientContextDisplay.title}`}
+                          className="flex min-w-0 flex-1 items-center gap-1.5"
+                        >
+                          <span className="flex size-5 shrink-0 items-center justify-center rounded-[6px] bg-surface-1 text-ink-muted ring-1 ring-border/80">
+                            {ambientContextDisplay.icon}
+                          </span>
+                          <span className="shrink-0 text-[12px] text-ink-muted">
+                            {ambientContextDisplay.pageLabel}
+                          </span>
+                          <span className="min-w-0 truncate">
+                            {ambientContextDisplay.title}
+                          </span>
+                          {ambientContextDisplay.status && (
+                            <span className="shrink-0 rounded-[6px] bg-surface-1 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle ring-1 ring-border">
+                              {ambientContextDisplay.status}
                             </span>
-                            <span className="shrink-0 text-[12px] text-ink-muted">{ambientContextDisplay.pageLabel}</span>
-                            <span className="min-w-0 truncate">{ambientContextDisplay.title}</span>
-                            {ambientContextDisplay.status && (
-                              <span className="shrink-0 rounded-[6px] bg-surface-1 px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle ring-1 ring-border">
-                                {ambientContextDisplay.status}
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            aria-label="Remove page context"
-                            title="Remove page context"
-                            onClick={() => setDisabledPageContextKey(ambientPageContextKey)}
-                            className="ml-2 flex size-5 shrink-0 items-center justify-center rounded-[6px] text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                          >
-                            <X size={12} weight="bold" />
-                          </button>
+                          )}
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                        <button
+                          aria-label="Remove page context"
+                          title="Remove page context"
+                          onClick={() =>
+                            setDisabledPageContextKey(ambientPageContextKey)
+                          }
+                          className="ml-2 flex size-5 shrink-0 items-center justify-center rounded-[6px] text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        >
+                          <X size={12} weight="bold" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 <div className={`${contextInputShellClassName} relative z-10`}>
-
                   {/* Slash Command Dropdown */}
                   <AnimatePresence>
                     {slashMenuOpen && (
@@ -701,13 +895,21 @@ export function GlobalChatbot() {
                               onClick={() => insertSlashCommand(cmd)}
                               onMouseEnter={() => setSlashSelectedIndex(i)}
                               className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 mx-1.5 rounded-[6px] text-[13px] transition-colors w-[calc(100%-12px)] ${
-                                i === slashSelectedIndex ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2/50"
+                                i === slashSelectedIndex
+                                  ? "bg-surface-2 text-ink"
+                                  : "text-ink-muted hover:bg-surface-2/50"
                               }`}
                             >
-                              <span className="flex items-center justify-center size-5 shrink-0 font-mono text-[13px] text-ink-subtle">/</span>
+                              <span className="flex items-center justify-center size-5 shrink-0 font-mono text-[13px] text-ink-subtle">
+                                /
+                              </span>
                               <div className="flex min-w-0 flex-col">
-                                <span className="font-medium truncate">{cmd.label}</span>
-                                <span className="text-[11px] text-ink-subtle truncate">{cmd.command} — {cmd.description}</span>
+                                <span className="font-medium truncate">
+                                  {cmd.label}
+                                </span>
+                                <span className="text-[11px] text-ink-subtle truncate">
+                                  {cmd.command} — {cmd.description}
+                                </span>
                               </div>
                             </button>
                           ))
@@ -731,40 +933,53 @@ export function GlobalChatbot() {
                         className="absolute bottom-full mb-1.5 left-0 w-full max-w-[320px] max-h-[300px] overflow-y-auto bg-surface-1 border border-border rounded-xl shadow-xl flex flex-col z-50 py-1.5"
                       >
                         {filteredOptions.length > 0 ? (
-                          Array.from(new Set(filteredOptions.map(o => o.type))).map(type => (
+                          Array.from(
+                            new Set(filteredOptions.map((o) => o.type)),
+                          ).map((type) => (
                             <div key={type} className="flex flex-col">
                               <div className="px-3 py-1.5 text-[11px] font-medium text-ink-subtle">
                                 {type}
                               </div>
-                              {filteredOptions.filter(o => o.type === type).map((opt) => {
-                                const i = filteredOptions.findIndex(o => o.id === opt.id);
-                                return (
-                                  <button
-                                    key={opt.id}
-                                    onClick={() => insertMention(opt)}
-                                    onMouseEnter={() => setSelectedIndex(i)}
-                                    className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 mx-1.5 rounded-[6px] text-[13px] transition-colors w-[calc(100%-12px)] ${
-                                      i === selectedIndex ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2/50"
-                                    }`}
-                                  >
-                                    {opt.isAvatar ? (
-                                      <div className="flex items-center justify-center size-5 rounded-full shrink-0 text-[9px] font-medium text-white bg-ink">
-                                        {opt.icon}
-                                      </div>
-                                    ) : (
-                                      <span className="flex items-center justify-center size-5 shrink-0 text-[14px]">
-                                        {opt.icon}
-                                      </span>
-                                    )}
-                                    <div className="flex items-center gap-1.5 truncate">
-                                      <span className="font-medium truncate">{opt.title}</span>
-                                      {opt.description && (
-                                        <span className="text-[12px] text-ink-subtle truncate">{opt.description}</span>
+                              {filteredOptions
+                                .filter((o) => o.type === type)
+                                .map((opt) => {
+                                  const i = filteredOptions.findIndex(
+                                    (o) => o.id === opt.id,
+                                  );
+                                  return (
+                                    <button
+                                      key={opt.id}
+                                      data-option-id={opt.id}
+                                      onClick={handleMentionClick}
+                                      onMouseEnter={() => setSelectedIndex(i)}
+                                      className={`flex items-center gap-2.5 w-full text-left px-3 py-1.5 mx-1.5 rounded-[6px] text-[13px] transition-colors w-[calc(100%-12px)] ${
+                                        i === selectedIndex
+                                          ? "bg-surface-2 text-ink"
+                                          : "text-ink-muted hover:bg-surface-2/50"
+                                      }`}
+                                    >
+                                      {opt.isAvatar ? (
+                                        <div className="flex items-center justify-center size-5 rounded-full shrink-0 text-[9px] font-medium text-white bg-ink">
+                                          {opt.icon}
+                                        </div>
+                                      ) : (
+                                        <span className="flex items-center justify-center size-5 shrink-0 text-[14px]">
+                                          {opt.icon}
+                                        </span>
                                       )}
-                                    </div>
-                                  </button>
-                                );
-                              })}
+                                      <div className="flex items-center gap-1.5 truncate">
+                                        <span className="font-medium truncate">
+                                          {opt.title}
+                                        </span>
+                                        {opt.description && (
+                                          <span className="text-[12px] text-ink-subtle truncate">
+                                            {opt.description}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
                             </div>
                           ))
                         ) : (
@@ -777,7 +992,7 @@ export function GlobalChatbot() {
                   </AnimatePresence>
 
                   <div className="flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[120px] bg-transparent px-2 py-1.5 overflow-y-auto">
-                    {selectedContexts.map(ctx => (
+                    {selectedContexts.map((ctx) => (
                       <div
                         key={ctx.id}
                         className="flex items-center gap-1 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 px-1.5 py-0.5 rounded-md text-[12px] font-medium cursor-pointer transition-colors"
@@ -803,18 +1018,31 @@ export function GlobalChatbot() {
                       value={inputValue}
                       onChange={handleInput}
                       onKeyDown={handleKeyDown}
-                      placeholder={selectedContexts.length > 0 ? "" : ambientContextDisplay ? "Ask with page context..." : "Ask WarpTalk..."}
+                      placeholder={
+                        selectedContexts.length > 0
+                          ? ""
+                          : ambientContextDisplay
+                            ? "Ask with page context..."
+                            : "Ask WarpTalk..."
+                      }
                       className="flex-1 min-w-[120px] bg-transparent resize-none outline-none text-[13px] text-ink placeholder:text-ink-subtle self-stretch"
                       rows={1}
                     />
                   </div>
 
                   <div className="flex items-center justify-between px-1.5 pb-1.5">
-                    <Popover open={skillsMenuOpen} onOpenChange={setSkillsMenuOpen}>
+                    <Popover
+                      open={skillsMenuOpen}
+                      onOpenChange={setSkillsMenuOpen}
+                    >
                       <PopoverTrigger className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium">
                         <Cube weight="regular" size={14} />
                         Skills
-                        <CaretDown weight="bold" size={10} className="text-ink-subtle ml-0.5" />
+                        <CaretDown
+                          weight="bold"
+                          size={10}
+                          className="text-ink-subtle ml-0.5"
+                        />
                       </PopoverTrigger>
                       <PopoverContent
                         align="start"
@@ -829,8 +1057,12 @@ export function GlobalChatbot() {
                                 key={skill.name}
                                 className="flex flex-col gap-0.5 px-2.5 py-1.5 rounded-md hover:bg-surface-2 transition-colors"
                               >
-                                <span className="text-[12px] font-medium text-ink">{skill.label}</span>
-                                <span className="text-[11px] text-ink-subtle">{skill.description}</span>
+                                <span className="text-[12px] font-medium text-ink">
+                                  {skill.label}
+                                </span>
+                                <span className="text-[11px] text-ink-subtle">
+                                  {skill.description}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -844,16 +1076,35 @@ export function GlobalChatbot() {
 
                     <div className="flex items-center gap-1">
                       <button
-                        aria-label={isPageContextVisible ? "Hide page context" : "Show page context"}
-                        title={isPageContextVisible ? "Hide page context" : "Show page context"}
+                        aria-label={
+                          isPageContextVisible
+                            ? "Hide page context"
+                            : "Show page context"
+                        }
+                        title={
+                          isPageContextVisible
+                            ? "Hide page context"
+                            : "Show page context"
+                        }
                         onClick={togglePageContextVisibility}
                         disabled={!ambientPageContextKey}
                         className="flex items-center justify-center size-7 rounded-full bg-surface-2 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
                       >
-                        {isPageContextVisible ? <CornersIn size={14} /> : <ArrowsOutSimple size={14} />}
+                        {isPageContextVisible ? (
+                          <CornersIn size={14} />
+                        ) : (
+                          <ArrowsOutSimple size={14} />
+                        )}
                       </button>
                       <button className="flex items-center justify-center size-7 rounded-md text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors">
-                        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M7.5 2C5.567 2 4 3.567 4 5.5v5a2.5 2.5 0 0 0 5 0v-4.5a1 1 0 0 0-2 0V10.5a.5.5 0 0 1-1 0v-5a1.5 1.5 0 0 1 3 0v5a3.5 3.5 0 0 1-7 0v-5A4.5 4.5 0 0 1 12 5.5v4.5a1 1 0 0 1-2 0V5.5A2.5 2.5 0 0 0 7.5 2Z"/></svg>
+                        <svg
+                          width="15"
+                          height="15"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                        >
+                          <path d="M7.5 2C5.567 2 4 3.567 4 5.5v5a2.5 2.5 0 0 0 5 0v-4.5a1 1 0 0 0-2 0V10.5a.5.5 0 0 1-1 0v-5a1.5 1.5 0 0 1 3 0v5a3.5 3.5 0 0 1-7 0v-5A4.5 4.5 0 0 1 12 5.5v4.5a1 1 0 0 1-2 0V5.5A2.5 2.5 0 0 0 7.5 2Z" />
+                        </svg>
                       </button>
                       <button
                         onClick={() => sendMessage()}

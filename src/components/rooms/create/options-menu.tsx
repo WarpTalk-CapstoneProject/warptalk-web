@@ -1,22 +1,18 @@
 import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandItem, CommandList } from "@/components/ui/command";
-import { DotsThree, Calendar as CalendarIcon, Repeat, CheckCircle, FileText } from "@phosphor-icons/react/dist/ssr";
+import { DotsThree, Calendar as CalendarIcon, Repeat, CheckCircle } from "@phosphor-icons/react/dist/ssr";
 
 export function OptionsMenu({
   hasScheduledAt,
   onAddScheduledAt,
   isDaily,
   onToggleDaily,
-  hasResources,
-  onAddResources
 }: {
   hasScheduledAt?: boolean;
   onAddScheduledAt?: () => void;
   isDaily?: boolean;
   onToggleDaily?: () => void;
-  hasResources?: boolean;
-  onAddResources?: () => void;
 }) {
   return (
     <Popover>
@@ -30,12 +26,6 @@ export function OptionsMenu({
               <CommandItem onSelect={onAddScheduledAt} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
                 <CalendarIcon weight="duotone" size={14} />
                 Date & Time
-              </CommandItem>
-            )}
-            {!hasResources && onAddResources && (
-              <CommandItem onSelect={onAddResources} className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2">
-                <FileText weight="duotone" size={14} />
-                Resources
               </CommandItem>
             )}
             {onToggleDaily && (

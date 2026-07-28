@@ -25,7 +25,8 @@ This document tracks the shadcn conversion for dashboard-adjacent internal pages
 - Host sidebar sign out clears local auth state and redirects to `/login`.
 - `/workspace` now renders inside a shadcn-style workspace shell with usage metrics, quota table, and department activity cards.
 - `/admin` now renders inside a shadcn-style admin shell with platform metrics, service health tabs, and audit events.
-- `/dev-test` has been simplified from backend-heavy API calls into a shadcn preview API lab with mock endpoint actions, payload setup, and result logs.
+- `/dev-test` remains a development-only diagnostics lab and is blocked with
+  HTTP 404 by `src/proxy.ts` in production.
 
 ## Files Affected
 
@@ -61,7 +62,8 @@ Not adopted:
 
 - Template landing/auth pages because the user explicitly excluded landing page, login, register, and forgot-password.
 - Template ecommerce/revenue content because it does not match WarpTalk translation operations.
-- Real API mutation behavior on `/dev-test` because backend/auth is not required at this stage.
+- Production exposure of `/dev-test`; the route is intentionally unavailable
+  outside development.
 
 ## Testing Checklist
 
