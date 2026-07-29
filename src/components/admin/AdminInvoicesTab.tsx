@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Loader2, Building2, User, Bot, Check, Copy, Shield, Search } from "lucide-react";
+import { Loader2, Building2, User, Bot, Check, Copy, Shield } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,14 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
+import { WorkspaceService } from "@/services/workspace.service";
 import Link from "next/link";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 
 interface InvoiceDto {
@@ -107,13 +104,57 @@ export function AdminInvoicesTab() {
     queryFn: () => billingService.getGlobalInvoices(1, 200), // Fetch up to 200 for rich client-side filters
   });
 
-  const invoices = (data?.items || []) as unknown as InvoiceDto[];
+  const invoices = useMemo(() => (data?.items || []) as unknown as InvoiceDto[], [data?.items]);
+  const invoiceWorkspaceIds = useMemo(
+    () => Array.from(new Set(invoices.map((invoice) => invoice.workspaceId).filter(Boolean) as string[])).sort(),
+    [invoices]
+  );
+
+  const { data: workspaces } = useQuery({
+    queryKey: ["admin-invoice-workspace-names"],
+    queryFn: () => WorkspaceService.list(1, 500, ""),
+  });
+
+  const { data: workspaceDetailsById } = useQuery({
+    queryKey: ["admin-invoice-workspace-details", invoiceWorkspaceIds.join(",")],
+    queryFn: async () => {
+      const results = await Promise.allSettled(invoiceWorkspaceIds.map((id) => WorkspaceService.getById(id)));
+      return new Map(
+        results.flatMap((result) => result.status === "fulfilled"
+          ? [[result.value.id, result.value.name] as const]
+          : [])
+      );
+    },
+    enabled: invoiceWorkspaceIds.length > 0,
+  });
+
+  const { data: salesInquiries } = useQuery({
+    queryKey: ["admin-invoice-sales-inquiry-names"],
+    queryFn: () => billingService.getSalesInquiries(1, 500),
+  });
+
+  const workspaceNamesById = useMemo(() => {
+    const names = new Map<string, string>();
+    (salesInquiries?.items ?? []).forEach((inquiry) => {
+      if (inquiry.workspaceId && inquiry.company) names.set(inquiry.workspaceId, inquiry.company);
+    });
+    (workspaces?.items ?? []).forEach((workspace) => {
+      names.set(workspace.id, workspace.name);
+    });
+    (workspaceDetailsById ?? new Map<string, string>()).forEach((name, id) => {
+      names.set(id, name);
+    });
+    return names;
+  }, [salesInquiries?.items, workspaceDetailsById, workspaces?.items]);
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter(inv => {
       const query = workspaceFilter.toLowerCase();
+      const resolvedWorkspaceName = inv.workspaceId ? workspaceNamesById.get(inv.workspaceId) : undefined;
       const matchWorkspace = workspaceFilter
-        ? (inv.workspaceId?.toLowerCase().includes(query) || inv.workspaceName?.toLowerCase().includes(query))
+        ? (inv.workspaceId?.toLowerCase().includes(query)
+          || inv.workspaceName?.toLowerCase().includes(query)
+          || resolvedWorkspaceName?.toLowerCase().includes(query))
         : true;
       const matchStatus = statusFilter !== "ALL" ? inv.status?.toLowerCase() === statusFilter.toLowerCase() : true;
       const amount = getInvoiceAmount(inv);
@@ -121,7 +162,7 @@ export function AdminInvoicesTab() {
       const matchMax = maxAmountFilter !== "" ? amount <= maxAmountFilter : true;
       return matchWorkspace && matchStatus && matchMin && matchMax;
     });
-  }, [invoices, workspaceFilter, statusFilter, minAmountFilter, maxAmountFilter]);
+  }, [invoices, workspaceFilter, statusFilter, minAmountFilter, maxAmountFilter, workspaceNamesById]);
 
   const displayTotalCount = filteredInvoices.length;
   const totalPages = Math.max(1, Math.ceil(displayTotalCount / 20));
@@ -135,6 +176,9 @@ export function AdminInvoicesTab() {
     minAmountFilter !== "",
     maxAmountFilter !== "",
   ].filter(Boolean).length;
+  const selectedInvoiceWorkspaceName = selectedInvoice?.workspaceId
+    ? workspaceNamesById.get(selectedInvoice.workspaceId) ?? selectedInvoice.workspaceName
+    : selectedInvoice?.workspaceName;
 
   const resetFilters = () => {
     setWorkspaceFilter("");
@@ -208,7 +252,7 @@ export function AdminInvoicesTab() {
             <TableRow className="border-hairline hover:bg-transparent">
               <TableHead className="w-[180px]">Date</TableHead>
               <TableHead>Workspace</TableHead>
-              <TableHead>Stripe ID</TableHead>
+              <TableHead>Invoice</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -229,6 +273,7 @@ export function AdminInvoicesTab() {
               </TableRow>
             ) : paginatedInvoices.map((inv) => {
               const workspaceId = inv.workspaceId ?? "";
+              const workspaceName = workspaceId ? workspaceNamesById.get(workspaceId) ?? inv.workspaceName : inv.workspaceName;
               const hostedInvoiceUrl = inv.hostedInvoiceUrl;
               const pdfUrl = getInvoicePdfUrl(inv);
               return (
@@ -239,10 +284,10 @@ export function AdminInvoicesTab() {
                 <TableCell>
                   {workspaceId ? (
                     <Link href={`/billing/workspace/${workspaceId}`} className="block hover:opacity-80 transition-opacity">
-                      <IdBadge id={workspaceId} type="workspace" name={inv.workspaceName} />
+                      <IdBadge id={workspaceId} type="workspace" name={workspaceName} />
                     </Link>
                   ) : (
-                    <IdBadge id="unknown" type="workspace" name={inv.workspaceName ?? "Unknown"} />
+                    <IdBadge id="unknown" type="workspace" name={workspaceName ?? "Unknown"} />
                   )}
                 </TableCell>
                 <TableCell className="text-xs font-mono text-muted-foreground">{getInvoiceNumber(inv)}</TableCell>
@@ -343,8 +388,8 @@ export function AdminInvoicesTab() {
                 </div>
 
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-ink-muted">Workspace ID</span>
-                  <span className="text-ink font-mono font-semibold">{selectedInvoice.workspaceId ?? "unknown"}</span>
+                  <span className="text-ink-muted">Workspace</span>
+                  <span className="text-ink font-semibold">{selectedInvoiceWorkspaceName ?? "Unknown"}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs">
@@ -441,7 +486,7 @@ export function AdminInvoicesTab() {
           </div>
           <div>
             <h3 className="font-bold text-gray-500 uppercase text-[9px] tracking-wider mb-2">To</h3>
-            <p className="font-bold text-gray-900 text-xs font-mono mt-1">Workspace ID: {selectedInvoice?.workspaceId ?? "unknown"}</p>
+            <p className="font-bold text-gray-900 text-xs mt-1">{selectedInvoiceWorkspaceName ?? "Unknown workspace"}</p>
             <p className="text-gray-600 mt-1">Status: <span className="text-emerald-600 font-extrabold uppercase">Paid</span></p>
             <p className="text-gray-600">Payment Gateway: Stripe</p>
           </div>
@@ -520,5 +565,3 @@ export function AdminInvoicesTab() {
     </Card>
   );
 }
-
-

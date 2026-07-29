@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -83,12 +82,6 @@ export default function AdminNotificationsPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <Badge
-              variant="outline"
-              className="bg-surface-2 text-ink border-hairline"
-            >
-              Admin Panel
-            </Badge>
             <h1 className="text-2xl font-semibold tracking-tight">
               System Notifications
             </h1>

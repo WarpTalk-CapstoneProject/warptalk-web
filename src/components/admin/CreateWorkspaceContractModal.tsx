@@ -3,47 +3,65 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Plus, Loader2, Sparkles } from "lucide-react";
+import { Building2, Plus, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WorkspaceService } from "@/services/workspace.service";
 import { billingService } from "@/services/billing.service";
 import { toast } from "sonner";
-import type { PlanDto, UpdateSubscriptionContractTermsRequest } from "@/types/billing";
+import type { PlanDto, SalesInquiryDto, SubscriptionDto, UpdateSubscriptionContractTermsRequest } from "@/types/billing";
 import type { WorkspaceDto } from "@/types/workspace";
-
-export interface DemoCompanyPreset {
-  name: string;
-}
-
-export const SAMPLE_COMPANY_PRESETS: DemoCompanyPreset[] = [
-  {
-    name: "FPT-SEP490-SU26",
-  },
-  {
-    name: "Viettel High Tech",
-  },
-  {
-    name: "VinAI Research",
-  },
-  {
-    name: "VNG Games",
-  },
-  {
-    name: "MISA Joint Stock",
-  },
-];
 
 const toInputNumber = (value: number | null | undefined) =>
   value === null || value === undefined ? "" : String(value);
 
-const normalizeCompanyName = (name: string | null | undefined) => name?.trim().toLowerCase() ?? "";
-
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const maxInvoiceTermsDays = 30;
 const priceFloorPerCredit = 2.6;
+const closedInquiryStatuses = new Set(["converted", "closed"]);
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const response = (error as { response?: { status?: unknown; data?: { message?: unknown; error?: unknown } } }).response;
+    const message = response?.data?.message ?? response?.data?.error;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
+
+function getHttpStatus(error: unknown) {
+  if (typeof error !== "object" || error === null) return null;
+  const status = (error as { response?: { status?: unknown } }).response?.status;
+  return typeof status === "number" ? status : null;
+}
+
+type WorkspaceContractCandidate = {
+  workspace: WorkspaceDto;
+  subscription?: SubscriptionDto;
+  inquiry?: SalesInquiryDto;
+  priority: number;
+  label: string;
+  requestedCredits: number | null;
+};
+
+const formatCredits = (value: number | null | undefined) =>
+  typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "N/A";
+
+const parseRequestedCredits = (inquiry?: SalesInquiryDto) => {
+  if (!inquiry) return null;
+  const estimate = inquiry.pricingEstimate as { estimatedCredits?: unknown; creditsPerCycle?: unknown } | null | undefined;
+  const estimatedCredits = Number(estimate?.estimatedCredits ?? estimate?.creditsPerCycle);
+  if (Number.isFinite(estimatedCredits) && estimatedCredits > 0) return estimatedCredits;
+
+  const match = inquiry.currentMonthlyMeetingVolume?.match(/[\d,.]+/);
+  if (!match) return null;
+  const parsed = Number(match[0].replace(/,/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
 
 export function CreateWorkspaceContractModal({
   open,
@@ -62,8 +80,9 @@ export function CreateWorkspaceContractModal({
   const [overageCapOverride, setOverageCapOverride] = useState("");
   const [overagePriceOverride, setOveragePriceOverride] = useState("");
   const [invoiceTermsDaysOverride, setInvoiceTermsDaysOverride] = useState("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSeedingBatch, setIsSeedingBatch] = useState(false);
 
   const { data: plans = [], isLoading: isLoadingPlans } = useQuery({
     queryKey: ["billing-plans-for-contract-template"],
@@ -77,21 +96,80 @@ export function CreateWorkspaceContractModal({
     enabled: open,
   });
 
+  const { data: workspaces } = useQuery({
+    queryKey: ["admin-contract-workspace-candidates"],
+    queryFn: () => WorkspaceService.list(1, 200, ""),
+    enabled: open,
+  });
+
+  const { data: salesInquiries } = useQuery({
+    queryKey: ["admin-contract-sales-inquiry-candidates"],
+    queryFn: () => billingService.getSalesInquiries(1, 200),
+    enabled: open,
+  });
+
   const enterprisePlan = useMemo<PlanDto | undefined>(() => {
     return plans.find((p) => p.slug?.toLowerCase() === "enterprise" || p.tier?.toLowerCase() === "enterprise")
       ?? plans.find((p) => p.isActive)
       ?? plans[0];
   }, [plans]);
 
-  const availablePresets = useMemo(() => {
-    const contractedWorkspaceNames = new Set(
+  const workspaceCandidates = useMemo<WorkspaceContractCandidate[]>(() => {
+    const subscriptionsByWorkspaceId = new Map(
       (globalSubscriptions?.items ?? [])
-        .map((subscription) => normalizeCompanyName(subscription.workspaceName))
-        .filter(Boolean)
+        .filter((subscription) => subscription.workspaceId)
+        .map((subscription) => [subscription.workspaceId as string, subscription])
     );
+    const openInquiriesByWorkspaceId = new Map<string, SalesInquiryDto>();
 
-    return SAMPLE_COMPANY_PRESETS.filter((preset) => !contractedWorkspaceNames.has(normalizeCompanyName(preset.name)));
-  }, [globalSubscriptions]);
+    (salesInquiries?.items ?? [])
+      .filter((inquiry) => inquiry.workspaceId && !closedInquiryStatuses.has(inquiry.status?.toLowerCase()))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .forEach((inquiry) => {
+        if (inquiry.workspaceId && !openInquiriesByWorkspaceId.has(inquiry.workspaceId)) {
+          openInquiriesByWorkspaceId.set(inquiry.workspaceId, inquiry);
+        }
+      });
+
+    return (workspaces?.items ?? [])
+      .map((workspace) => {
+        const subscription = subscriptionsByWorkspaceId.get(workspace.id);
+        const inquiry = openInquiriesByWorkspaceId.get(workspace.id);
+        const hasContract = Boolean(subscription);
+        const hasTrial = Boolean(subscription?.trialEndsAt);
+        const hasOpenRequest = Boolean(inquiry);
+        const requestedCredits = parseRequestedCredits(inquiry);
+
+        let priority = 4;
+        let label = "No contract";
+
+        if (hasTrial && hasOpenRequest) {
+          priority = 0;
+          label = "Trial + request";
+        } else if (!hasContract && hasOpenRequest) {
+          priority = 1;
+          label = "Request, no contract";
+        } else if (!hasContract) {
+          priority = 2;
+          label = "No contract";
+        } else if (hasTrial) {
+          priority = 3;
+          label = "Trial";
+        }
+
+        return { workspace, subscription, inquiry, priority, label, requestedCredits };
+      })
+      .filter((candidate) => candidate.priority <= 3)
+      .sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return new Date(b.workspace.createdAt).getTime() - new Date(a.workspace.createdAt).getTime();
+      })
+      .slice(0, 8);
+  }, [globalSubscriptions, salesInquiries, workspaces]);
+
+  const selectedCandidate = useMemo(() => {
+    return workspaceCandidates.find((candidate) => candidate.workspace.id === selectedWorkspaceId);
+  }, [selectedWorkspaceId, workspaceCandidates]);
 
   const applyBaselineTerms = useCallback((plan = enterprisePlan) => {
     if (!plan) return;
@@ -110,12 +188,21 @@ export function CreateWorkspaceContractModal({
     setOverageCapOverride("");
     setOveragePriceOverride("");
     setInvoiceTermsDaysOverride("");
+    setSelectedWorkspaceId(null);
+    setSelectedInquiryId(null);
     setIsSubmitting(false);
-    setIsSeedingBatch(false);
   };
 
-  const applyPreset = (preset: DemoCompanyPreset) => {
-    setWorkspaceName(preset.name);
+  const applyCandidate = (candidate: WorkspaceContractCandidate) => {
+    setSelectedWorkspaceId(candidate.workspace.id);
+    setSelectedInquiryId(candidate.inquiry?.id ?? null);
+    setWorkspaceName(candidate.workspace.name);
+    setContactEmail(
+      candidate.inquiry?.workEmail
+        ?? candidate.subscription?.billingContactEmail
+        ?? ""
+    );
+    applyBaselineTerms(enterprisePlan);
   };
 
   useEffect(() => {
@@ -177,6 +264,9 @@ export function CreateWorkspaceContractModal({
       min: 1,
       max: maxInvoiceTermsDays,
     });
+    if (parsedInvoiceTermsDaysOverride !== null && ![15, 30].includes(parsedInvoiceTermsDaysOverride)) {
+      throw new Error("Invoice terms must be NET 15 or NET 30.");
+    }
 
     const effectiveCredits = parsedCreditsPerCycleOverride ?? enterprisePlan.creditsPerCycle;
     const effectivePrice = parsedContractPriceVnd ?? enterprisePlan.price;
@@ -206,8 +296,8 @@ export function CreateWorkspaceContractModal({
   const getOrCreateWorkspace = async (name: string): Promise<WorkspaceDto> => {
     try {
       return await WorkspaceService.create({ name });
-    } catch (err: any) {
-      if (err?.response?.status !== 400) throw err;
+    } catch (err: unknown) {
+      if (getHttpStatus(err) !== 400) throw err;
 
       const existing = await WorkspaceService.list(1, 10, name);
       const matched = existing.items?.find((workspace) => workspace.name.toLowerCase() === name.toLowerCase());
@@ -229,50 +319,13 @@ export function CreateWorkspaceContractModal({
         planId,
         contractTerms: terms,
       });
-    } catch (err: any) {
-      if (err?.response?.status !== 400) throw err;
+    } catch (err: unknown) {
+      if (getHttpStatus(err) !== 400) throw err;
       await billingService.getActiveSubscription(workspaceId);
       toast.info("This workspace already has a subscription. Updating its contract terms instead.");
     }
 
     await applyContractTerms(workspaceId, terms);
-  };
-
-  const handleSeedBatch = async () => {
-    setIsSeedingBatch(true);
-    let createdCount = 0;
-    try {
-      const plans = await billingService.getPlans();
-      const enterprisePlan = plans.find(
-        (p) => p.slug?.toLowerCase() === "enterprise" || p.tier?.toLowerCase() === "enterprise"
-      ) ?? plans[0];
-
-      if (!enterprisePlan) {
-        throw new Error("Enterprise plan template unavailable.");
-      }
-
-      for (const preset of SAMPLE_COMPANY_PRESETS) {
-        try {
-          const newWs = await getOrCreateWorkspace(preset.name);
-          await billingService.createSubscription(newWs.id, enterprisePlan.id);
-          createdCount++;
-        } catch (err) {
-          console.warn(`Seed failed for preset ${preset.name}:`, err);
-        }
-      }
-
-      toast.success(`Successfully seeded ${createdCount} sample company workspace contracts!`);
-      queryClient.invalidateQueries({ queryKey: ["admin-billing-workspaces"] });
-      queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
-      queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
-
-      onOpenChange(false);
-      resetForm();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || "Failed batch seeding sample workspaces.");
-    } finally {
-      setIsSeedingBatch(false);
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -291,23 +344,32 @@ export function CreateWorkspaceContractModal({
 
       const contractTerms = buildContractTerms(resolveBillingEmail(name));
 
-      // 1. Create the workspace, or reuse it if the company workspace already exists.
-      const newWs = await getOrCreateWorkspace(name);
+      const newWs = selectedCandidate?.workspace ?? await getOrCreateWorkspace(name);
 
-      await createOrUpdateEnterpriseContract(newWs.id, enterprisePlan.id, contractTerms);
+      if (selectedInquiryId) {
+        await billingService.convertSalesInquiryToContract(selectedInquiryId, {
+          workspaceId: newWs.id,
+          planId: enterprisePlan.id,
+          contractTerms,
+        });
+      } else {
+        await createOrUpdateEnterpriseContract(newWs.id, enterprisePlan.id, contractTerms);
+      }
 
-      toast.success(`Workspace "${newWs.name}" created with an Enterprise contract.`);
+      toast.success(`Workspace "${newWs.name}" saved with an Enterprise contract.`);
       
       queryClient.invalidateQueries({ queryKey: ["admin-billing-workspaces"] });
       queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
       queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-contract-sales-inquiry-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-sales-inquiries"] });
 
       onOpenChange(false);
       resetForm();
 
       router.push(`/billing/workspace/${newWs.id}`);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to create workspace contract.");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to create workspace contract."));
     } finally {
       setIsSubmitting(false);
     }
@@ -324,44 +386,57 @@ export function CreateWorkspaceContractModal({
               </div>
               <DialogTitle className="text-lg font-bold">New Company Workspace Contract</DialogTitle>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 text-xs text-primary border-primary/20 hover:bg-primary/5"
-              onClick={handleSeedBatch}
-              disabled={isSeedingBatch || isSubmitting}
-            >
-              {isSeedingBatch ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              Seed 5 Demo Workspaces
-            </Button>
           </div>
           <DialogDescription className="text-sm text-muted-foreground">
-            Create or reuse a company workspace, then save the approved Enterprise contract terms.
+            Select a real workspace request or create a contract for an existing company workspace.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="rounded-lg border border-hairline bg-surface-2/60 p-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
-              Quick Presets
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {availablePresets.length > 0 ? (
-                availablePresets.map((preset) => (
-                  <Button
-                    key={preset.name}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs bg-surface-1 hover:border-primary/50"
-                    onClick={() => applyPreset(preset)}
-                  >
-                    {preset.name}
-                  </Button>
-                ))
+          <div className="space-y-2 rounded-lg border border-hairline bg-surface-2/60 p-3">
+            <div>
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Workspace candidates
+              </span>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {workspaceCandidates.length > 0 ? (
+                workspaceCandidates.map((candidate) => {
+                  const baseline = enterprisePlan?.creditsPerCycle ?? null;
+                  const requested = candidate.requestedCredits;
+                  const delta = requested !== null && baseline !== null ? requested - baseline : null;
+                  return (
+                    <button
+                      key={candidate.workspace.id}
+                      type="button"
+                      className={`rounded-md border p-3 text-left transition ${
+                        selectedWorkspaceId === candidate.workspace.id
+                          ? "border-primary bg-primary/5"
+                          : "border-hairline bg-surface-1 hover:border-primary/40"
+                      }`}
+                      onClick={() => applyCandidate(candidate)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-foreground">{candidate.workspace.name}</span>
+                        <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted-foreground">
+                          {candidate.label}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {candidate.inquiry?.workEmail ?? candidate.subscription?.billingContactEmail ?? candidate.workspace.slug}
+                      </p>
+                      <p className="mt-2 text-xs font-medium text-foreground">
+                        Request: {requested ? `${formatCredits(requested)} credits / month` : "No credit request"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Baseline: {formatCredits(baseline)} credits
+                        {delta !== null ? ` (${delta === 0 ? "matches" : `${delta > 0 ? "+" : ""}${formatCredits(delta)} vs baseline`})` : ""}
+                      </p>
+                    </button>
+                  );
+                })
               ) : (
-                <span className="text-xs text-muted-foreground">All demo company presets already have contracts.</span>
+                <span className="text-xs text-muted-foreground">No workspace candidates.</span>
               )}
             </div>
           </div>
@@ -372,9 +447,13 @@ export function CreateWorkspaceContractModal({
                 Company / Workspace Name <span className="text-rose-500">*</span>
               </Label>
               <Input
-                placeholder="e.g. FPT-SEP490-SU26 or FPT Software"
+                placeholder="Search or enter workspace name"
                 value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
+                onChange={(e) => {
+                  setWorkspaceName(e.target.value);
+                  setSelectedWorkspaceId(null);
+                  setSelectedInquiryId(null);
+                }}
                 className="h-10 bg-surface-2 border-hairline"
                 autoFocus
                 required
@@ -471,22 +550,24 @@ export function CreateWorkspaceContractModal({
               </div>
               <div className="space-y-1 lg:col-span-1">
                 <Label className="text-[11px] text-muted-foreground">Terms (Days)</Label>
-                <Input
-                  type="number"
-                  placeholder="30"
-                  value={invoiceTermsDaysOverride}
-                  onChange={(e) => setInvoiceTermsDaysOverride(e.target.value)}
-                  className="h-9 text-sm bg-surface-1"
-                />
+                <Select value={invoiceTermsDaysOverride || "15"} onValueChange={(value) => setInvoiceTermsDaysOverride(value ?? "15")}>
+                  <SelectTrigger className="h-9 bg-surface-1 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">NET 15</SelectItem>
+                    <SelectItem value="30">NET 30</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </section>
 
           <DialogFooter className="pt-2">
-            <Button variant="outline" type="button" onClick={() => onOpenChange(false)} disabled={isSubmitting || isSeedingBatch}>
+            <Button variant="outline" type="button" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || isSeedingBatch} className="gap-2">
+            <Button type="submit" disabled={isSubmitting} className="gap-2">
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" /> Creating...

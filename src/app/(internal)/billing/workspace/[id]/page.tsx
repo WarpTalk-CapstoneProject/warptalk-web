@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { UsageRateCardDto, InvoiceDto, SubscriptionDto, PlanDto, PlanRequest } from "@/types/billing";
+import type { UsageRateCardDto, InvoiceDto, SubscriptionDto, PlanDto, PlanRequest, SalesInquiryDto, CreditTransactionDto } from "@/types/billing";
 import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
 import { toast } from "sonner";
 
@@ -33,6 +33,26 @@ type ContractTermsFormState = {
   invoiceTermsDaysOverride: string;
   billingContactEmail: string;
 };
+
+type CreditTransactionGroup = CreditTransactionDto & {
+  originalTx: CreditTransactionDto[];
+};
+
+type ServiceBreakdown = {
+  count: number;
+  cost: number;
+  rawType: string;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const response = (error as { response?: { data?: { message?: unknown; error?: unknown } } }).response;
+    const message = response?.data?.message ?? response?.data?.error;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
 
 const EMPTY_CONTRACT_TERMS_FORM: ContractTermsFormState = {
   creditsPerCycleOverride: "",
@@ -144,6 +164,47 @@ function getRateCardService(chargeType: string) {
   return RATE_CARD_SERVICE_DEFINITIONS.find((service) => service.value === chargeType) ?? RATE_CARD_SERVICE_DEFINITIONS[0];
 }
 
+const SALES_FEATURE_LABELS: Record<string, string> = {
+  enterprise_contract: "Enterprise contract",
+  workspace_trial: "Workspace trial",
+  ai_meetings: "AI meetings",
+  live_translation: "Real-time translation",
+  ai_summary: "AI meeting summaries",
+  translated_audio: "Voice translation / TTS",
+  voice_clone: "Voice cloning",
+  glossary_access: "Glossary access",
+};
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: "English",
+  vi: "Vietnamese",
+  ja: "Japanese",
+};
+
+function formatSalesLabels(values: string[], labels: Record<string, string>): string {
+  if (!values.length) return "N/A";
+  return values.map((value) => labels[value] ?? value).join(", ");
+}
+
+function getSalesRequestStatusLabel(inquiry: SalesInquiryDto, hasActiveBilling: boolean): string {
+  if (hasActiveBilling && inquiry.status === "new") return "Under review";
+  if (inquiry.status === "reviewing") return "Under review";
+  if (inquiry.status === "quoted") return "Quoted";
+  if (inquiry.status === "converted") return "Converted";
+  if (inquiry.status === "closed") return "Closed";
+  return "New";
+}
+
+function getWorkspaceServiceStateLabel(subscription?: SubscriptionDto | null): string {
+  if (!subscription) return "Not active";
+  const status = subscription.status?.toLowerCase();
+  if (status === "cancelled") return "Cancelled";
+  if (status === "expired") return "Expired";
+  if (status === "pending") return "Pending";
+  if (status === "suspended") return "Suspended";
+  return subscription.serviceState ?? "Unknown";
+}
+
 function calculateDraftUnitPrice(row: PricingDraftRow, fxRate: number, creditValueVnd: number): number {
   if (!row.enabled || creditValueVnd <= 0) return 0;
   return (row.providerUnitCostUsd * fxRate * row.markupMultiplier) / creditValueVnd;
@@ -241,6 +302,13 @@ function formatContractValue(value: number | null | undefined, inheritedValue: s
   return inherited === null ? "N/A" : inherited.toLocaleString();
 }
 
+function getSalesEstimateNumber(inquiry: SalesInquiryDto | undefined, key: string): number | null {
+  const estimate = inquiry?.pricingEstimate;
+  if (!estimate || typeof estimate !== "object") return null;
+  const value = (estimate as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function getLabelForUsage(usageType: string) {
   if (usageType === "translation" || usageType === "voice_translation") return "Real-time Translation";
   if (usageType === "summary" || usageType === "meeting_summary") return "AI meeting insights";
@@ -335,11 +403,10 @@ function getInvoiceDueLabel(invoice: InvoiceDto): string {
 
 export default function AdminWorkspaceBillingPage({
   params,
-  embedded = false,
 }: {
   params: Promise<{ id: string }>;
-  embedded?: boolean;
 }) {
+  const embedded = true;
   const queryClient = useQueryClient();
   const router = useRouter();
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -355,18 +422,25 @@ export default function AdminWorkspaceBillingPage({
   // In Next.js 15+, params is a Promise and must be unwrapped
   const resolvedParams = React.use(params);
   const workspaceId = resolvedParams.id;
+  const isWorkspaceIdValid =
+    /^[0-9a-fA-F-]{36}$/.test(workspaceId) &&
+    workspaceId !== "00000000-0000-0000-0000-000000000000";
 
   const { data: balance, isLoading: isBalanceLoading } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && isWorkspaceIdValid,
     retry: 1,
   });
 
-  const { data: workspaceInfo } = useQuery({
+  const {
+    data: workspaceInfo,
+    isError: isWorkspaceInfoError,
+    isLoading: isWorkspaceInfoLoading,
+  } = useQuery({
     queryKey: ["workspace", workspaceId],
     queryFn: () => WorkspaceService.getById(workspaceId),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && isWorkspaceIdValid,
     retry: 1,
   });
 
@@ -379,14 +453,23 @@ export default function AdminWorkspaceBillingPage({
 
   const [invoicesPageNumber, setInvoicesPageNumber] = useState(1);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDto | null>(null);
-  const [selectedTxGroup, setSelectedTxGroup] = useState<any | null>(null);
+  const [selectedTxGroup, setSelectedTxGroup] = useState<CreditTransactionGroup | null>(null);
 
   const { data: subscription, isLoading: isSubscriptionLoading } = useQuery({
     queryKey: ["billing", "subscription", workspaceId],
     queryFn: () => billingService.getActiveSubscription(workspaceId),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && isWorkspaceIdValid,
     retry: 1,
   });
+
+  const { data: salesInquiryPage } = useQuery({
+    queryKey: ["sales-inquiries", "workspace", workspaceId],
+    queryFn: () => billingService.getSalesInquiries(1, 5, { workspaceId }),
+    enabled: embedded && !!workspaceId && isWorkspaceIdValid,
+    retry: 1,
+  });
+
+  const latestSalesInquiry = salesInquiryPage?.items?.[0];
 
   const { data: plans = [], isError: isPlansLoadError } = useQuery({
     queryKey: ["billing", "plans"],
@@ -450,8 +533,8 @@ export default function AdminWorkspaceBillingPage({
       queryClient.invalidateQueries({ queryKey: ["billing", "plans"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to update Enterprise baseline");
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to update Enterprise baseline"));
     },
   });
 
@@ -470,8 +553,8 @@ export default function AdminWorkspaceBillingPage({
       queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || "Failed to update contract terms");
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to update contract terms"));
     },
   });
 
@@ -489,8 +572,8 @@ export default function AdminWorkspaceBillingPage({
       queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to initialize contract");
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to initialize contract"));
     },
   });
 
@@ -507,8 +590,8 @@ export default function AdminWorkspaceBillingPage({
       queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to start trial");
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to start trial"));
     },
   });
 
@@ -525,8 +608,8 @@ export default function AdminWorkspaceBillingPage({
       queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
       queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to simulate billing cycle close");
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to simulate billing cycle close"));
     },
   });
 
@@ -539,8 +622,8 @@ export default function AdminWorkspaceBillingPage({
       queryClient.invalidateQueries({ queryKey: ["global-invoices-list"] });
       queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to record invoice payment");
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to record invoice payment"));
     },
   });
 
@@ -590,7 +673,7 @@ export default function AdminWorkspaceBillingPage({
   const { data: invoicesPage, isLoading: isInvoicesLoading } = useQuery({
     queryKey: ["billing", "invoices", workspaceId, invoicesPageNumber],
     queryFn: () => billingService.getWorkspaceInvoices(workspaceId, invoicesPageNumber, 20),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && isWorkspaceIdValid,
     retry: 1,
   });
 
@@ -641,8 +724,8 @@ export default function AdminWorkspaceBillingPage({
       await Promise.all(pricingDraftRows.filter((row) => row.enabled).map((row) => upsertUsageRateCardMutation.mutateAsync(row)));
       setPricingDraftSavedAt(format(new Date(), "MMM dd, yyyy HH:mm"));
       toast.success("Pricing changes applied");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to apply pricing changes");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to apply pricing changes"));
     }
   };
 
@@ -665,7 +748,7 @@ export default function AdminWorkspaceBillingPage({
       minAmount: filterMinAmount !== "" ? Number(filterMinAmount) : undefined,
       maxAmount: filterMaxAmount !== "" ? Number(filterMaxAmount) : undefined,
     }),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && isWorkspaceIdValid,
     retry: 1,
   });
 
@@ -673,8 +756,8 @@ export default function AdminWorkspaceBillingPage({
 
   const groupedHistoryItems = useMemo(() => {
     if (!historyPage?.items) return [];
-    const groups: any[] = [];
-    let currentGroup: any = null;
+    const groups: CreditTransactionGroup[] = [];
+    let currentGroup: CreditTransactionGroup | null = null;
 
     historyPage.items.forEach(tx => {
       if (!currentGroup) {
@@ -848,530 +931,155 @@ export default function AdminWorkspaceBillingPage({
     setIsExportOpen(false);
   };
 
+  const workspaceUnavailable =
+    !isWorkspaceIdValid || (!isWorkspaceInfoLoading && isWorkspaceInfoError);
+
+  if (isWorkspaceIdValid && isWorkspaceInfoLoading) {
+    return (
+      <div className="flex min-h-full items-center justify-center bg-surface-1 p-6">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="h-4 w-4 animate-spin" />
+          Loading workspace contract
+        </div>
+      </div>
+    );
+  }
+
+  if (workspaceUnavailable) {
+    return (
+      <div className="flex min-h-full items-center justify-center bg-surface-1 p-6">
+        <Card className="w-full max-w-md rounded-xl border-hairline bg-surface-1 shadow-linear">
+          <CardHeader>
+            <CardTitle className="text-base">Workspace not found</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This workspace ID does not exist or your account does not have access to its billing contract.
+            </p>
+            {!embedded && (
+              <Link href="/billing">
+                <Button variant="outline" className="rounded-md">
+                  Back to billing
+                </Button>
+              </Link>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (embedded) {
     const isFreeOrMissingPlan = !subscription || displayPlanName.toLowerCase().includes("free");
     const contractLabel = isFreeOrMissingPlan ? "No Enterprise contract" : displayPlanName;
     const recentTransactions = groupedHistoryItems.slice(0, 5);
     const recentInvoices = invoicesPage?.items?.slice(0, 5) ?? [];
+    const hasActiveBilling = Boolean(subscription);
 
     return (
       <div className="flex min-h-full flex-col gap-5 p-6">
         <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
-          <CardHeader className="pb-3">
+          <CardHeader>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <Badge variant="outline" className="mb-2 rounded-md bg-primary/10 text-primary">
-                  System Admin
+                  Workspace overview
                 </Badge>
-                <CardTitle className="text-lg font-semibold">Workspace contract management</CardTitle>
+                <CardTitle className="text-xl font-semibold">{workspaceInfo?.name || workspaceId}</CardTitle>
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                  Select a company workspace before creating a trial, reviewing sales intent, or saving Enterprise contract terms.
+                  View the workspace billing state, sales request, recent usage, and invoices.
                 </p>
               </div>
-              <div className="rounded-lg border border-hairline bg-surface-2 px-4 py-3 text-sm">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Editing workspace</p>
-                <p className="mt-1 font-semibold text-foreground">{workspaceInfo?.name || "Loading workspace..."}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {subscription?.planName
-                    ? `${subscription.planName}${subscription.trialEndsAt ? ` trial until ${format(new Date(subscription.trialEndsAt), "MMM d, yyyy")}` : ""}`
-                    : "No active Enterprise contract"}
-                </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" className="h-9 rounded-md" onClick={() => router.push("/billing")}>
+                  Back to billing
+                </Button>
                 {!subscription && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      className="h-8 text-xs gap-1"
-                      disabled={createSubscriptionMutation.isPending}
-                      onClick={() => createSubscriptionMutation.mutate()}
-                    >
-                      Initialize Contract
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs gap-1"
-                      disabled={createTrialMutation.isPending}
-                      onClick={() => createTrialMutation.mutate("admin@company.com")}
-                    >
-                      Start 14-Day Trial
-                    </Button>
-                  </div>
+                  <Button
+                    className="h-9 rounded-md"
+                    disabled={createTrialMutation.isPending}
+                    onClick={() => createTrialMutation.mutate(latestSalesInquiry?.workEmail || "admin@company.com")}
+                  >
+                    Start trial
+                  </Button>
                 )}
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground">Find workspace or company</Label>
-                <Input
-                  className="h-9 text-sm"
-                  value={workspaceSearch}
-                  onChange={(e) => setWorkspaceSearch(e.target.value)}
-                  placeholder="Search by workspace/company name"
-                />
-              </div>
-              <Button
-                variant="outline"
-                className="h-9 rounded-md"
-                onClick={() => router.push("/billing")}
-              >
-                Open billing overview
-              </Button>
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-              {isWorkspacePickerLoading && (
-                <div className="rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
-                  Loading workspaces...
-                </div>
-              )}
-              {!isWorkspacePickerLoading && workspacePickerPage?.items?.length === 0 && (
-                <div className="rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
-                  No matching workspace found.
-                </div>
-              )}
-              {workspacePickerPage?.items?.map((workspace) => {
-                const isCurrentWorkspace = workspace.id === workspaceId;
-                return (
-                  <button
-                    key={workspace.id}
-                    type="button"
-                    className={`rounded-lg border px-3 py-2 text-left transition ${
-                      isCurrentWorkspace
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-hairline bg-surface-2 hover:border-primary/60"
-                    }`}
-                    onClick={() => {
-                      if (!isCurrentWorkspace) router.push(`/billing/workspace/${workspace.id}`);
-                    }}
-                  >
-                    <p className="truncate text-sm font-semibold">{workspace.name}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">/{workspace.slug}</p>
-                    <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {isCurrentWorkspace ? "Current contract" : "Open contract"}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {subscription?.serviceState && subscription.serviceState !== "healthy" && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-            <p className="font-semibold">AI service state: {subscription.serviceState}</p>
-            <p className="text-xs opacity-80">
-              {subscription.suspendedReason || "Workspace AI usage may be blocked until billing is resolved."}
-            </p>
-          </div>
-        )}
-
-        <section>
-          <div className="mb-3">
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">Default contract reference</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Use these defaults as the baseline for contract discussion. The final customer terms are saved as subscription overrides.
-            </p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Price</Label>
-              <Input
-                type="number"
-                min={0}
-                className="mt-2 h-9 text-sm font-semibold"
-                value={planBaselineForm.price}
-                onChange={(e) => updatePlanBaselineField("price", e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">Monthly baseline before VAT.</p>
-            </div>
-            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credits</Label>
-              <Input
-                type="number"
-                min={0}
-                className="mt-2 h-9 text-sm font-semibold"
-                value={planBaselineForm.creditsPerCycle}
-                onChange={(e) => updatePlanBaselineField("creditsPerCycle", e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">Default committed monthly package.</p>
-            </div>
-            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trial</p>
-              <p className="mt-1 text-lg font-semibold text-foreground">14 days</p>
-              <p className="mt-1 text-xs text-muted-foreground">20,000 credits. Trial policy is separate from plan baseline.</p>
-            </div>
-            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extra usage</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                className="mt-2 h-9 text-sm font-semibold"
-                value={planBaselineForm.overagePricePerCredit}
-                onChange={(e) => updatePlanBaselineField("overagePricePerCredit", e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">VND / credit. Charged on the next invoice, up to the agreed cap.</p>
-            </div>
-            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Invoice days</Label>
-              <Input
-                type="number"
-                min={1}
-                className="mt-2 h-9 text-sm font-semibold"
-                value={planBaselineForm.invoiceTermsDays}
-                onChange={(e) => updatePlanBaselineField("invoiceTermsDays", e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">Adjustable per customer.</p>
-            </div>
-            <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rollover cap</Label>
-              <Input
-                type="number"
-                min={0}
-                className="mt-2 h-9 text-sm font-semibold"
-                value={planBaselineForm.rolloverCapCredits}
-                onChange={(e) => updatePlanBaselineField("rolloverCapCredits", e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">Default carry-over limit.</p>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-col gap-2 rounded-lg border border-hairline bg-surface-1 p-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <p>
-              {isPlansLoadError
-                ? "Enterprise plan API is unavailable. Check backend status, admin token, and migration 040 seed."
-                : !enterprisePlan
-                  ? "Enterprise plan is not available yet. Showing fallback defaults from the billing master plan; apply migration 040 or seed the Enterprise plan before saving."
-                : "Saving changes updates the Enterprise baseline. Existing workspace contracts can still override these values."}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 rounded-md bg-surface-2"
-              disabled={!enterprisePlan || updateEnterprisePlanMutation.isPending || Object.keys(planBaselineEdits).length === 0}
-              onClick={() => updateEnterprisePlanMutation.mutate()}
-            >
-              {updateEnterprisePlanMutation.isPending ? "Saving..." : "Save baseline"}
-            </Button>
-          </div>
-        </section>
-
-        <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
-          <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle className="text-base font-medium">Pricing controls</CardTitle>
-              <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
-                Review runtime rates by provider, model, charge type, and unit. Service keys are locked to backend-supported
-                billing events; admins can adjust provider cost, markup, and active state.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                Rate card settings
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-md bg-surface-2"
-                disabled={updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending}
-                onClick={handleResetPricingDraftDefaults}
-              >
-                Reset to defaults
-              </Button>
-              {pricingDraftSavedAt && (
-                <Badge variant="outline" className="rounded-md">
-                  Applied {pricingDraftSavedAt}
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <div className="grid gap-3 md:grid-cols-4">
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground">USD/VND FX</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  className="h-9 text-sm"
-                  value={pricingFxRate}
-                  onChange={(e) => { setPricingFxRate(e.target.value); setPricingDraftSavedAt(null); }}
-                />
-              </div>
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground">Credit value VND</Label>
-                <Input
-                  type="number"
-                  min={0.01}
-                  step="0.01"
-                  className="h-9 text-sm"
-                  value={pricingCreditValueVnd}
-                  onChange={(e) => { setPricingCreditValueVnd(e.target.value); setPricingDraftSavedAt(null); }}
-                />
-              </div>
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Formula</p>
-                <p className="mt-1 text-xs font-medium">provider cost x FX x markup / credit value</p>
-              </div>
-              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Resolver key</p>
-                <p className="mt-1 text-xs font-medium">provider + model + charge_type + unit</p>
-              </div>
-            </div>
-
-            <div className="rounded-md border border-hairline overflow-hidden">
-              <Table>
-                <TableHeader className="bg-surface-2">
-                  <TableRow>
-                    <TableHead className="w-[88px]">Active</TableHead>
-                    <TableHead>Service</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Provider</TableHead>
-                    <TableHead>Model</TableHead>
-                    <TableHead className="text-right">Provider cost (USD)</TableHead>
-                    <TableHead className="text-right">Markup</TableHead>
-                    <TableHead className="text-right">Unit price</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pricingDraftRows.map((row) => {
-                    const fxRate = Number(pricingFxRate) || 0;
-                    const creditValue = Number(pricingCreditValueVnd) || 0;
-                    const unitPrice = calculateDraftUnitPrice(row, fxRate, creditValue);
-                    const service = getRateCardService(row.chargeType);
-                    return (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          <Switch
-                            checked={row.enabled}
-                            onCheckedChange={(checked) => updatePricingDraftRow(row.id, "enabled", checked)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div
-                            className="min-w-[230px] rounded-md border border-hairline bg-muted/40 px-3 py-2"
-                            title={row.chargeType}
-                          >
-                            <p className="text-xs font-semibold text-foreground">{service.label}</p>
-                            <p className="mt-0.5 max-w-[210px] text-[11px] text-muted-foreground">{service.description}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex h-8 min-w-[130px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
-                            {row.unit}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex h-8 min-w-[120px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
-                            {row.provider}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex h-8 min-w-[190px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
-                            {row.model}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            className="h-8 min-w-[120px] text-right text-xs font-mono"
-                            value={formatProviderCostUsd(row.providerUnitCostUsd)}
-                            onChange={(e) => updatePricingDraftRow(row.id, "providerUnitCostUsd", Number(e.target.value) || 0)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.1"
-                            className="h-8 min-w-[86px] text-right text-xs font-mono"
-                            value={row.markupMultiplier}
-                            onChange={(e) => updatePricingDraftRow(row.id, "markupMultiplier", Number(e.target.value) || 0)}
-                          />
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-semibold font-mono">
-                          {unitPrice.toFixed(6)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 md:flex-row md:items-center md:justify-between">
-              <p>
-                {isRateCardLoadError
-                  ? "Rate-card data is unavailable. The table is showing master-plan fallback values; check service status, migration 042, and System Admin authorization before applying changes."
-                  : "Applying provider cost, markup, or active-state changes creates a new active rate-card version. Existing charged transactions keep their price snapshot."}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-md bg-surface-1"
-                disabled={updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending}
-                onClick={handleSavePricingDraft}
-              >
-                {updatePricingConfigMutation.isPending || upsertUsageRateCardMutation.isPending ? "Applying..." : "Apply pricing changes"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
-            <CardHeader>
-              <CardTitle className="text-base font-medium">Enterprise contract terms</CardTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                Baseline values are pre-filled. Save only after business terms are confirmed.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                  <span className="text-muted-foreground">Monthly credits</span>
-                  <p className="mt-1 font-semibold">{formatContractValue(subscription?.effectiveCreditsPerCycle, planBaselineForm.creditsPerCycle)}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Baseline shown unless overridden.</p>
-                </div>
-                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                  <span className="text-muted-foreground">Contract price</span>
-                  <p className="mt-1 font-semibold">{formatContractValue(subscription?.effectiveContractPriceVnd, planBaselineForm.price)} VND</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Baseline shown unless overridden.</p>
-                </div>
-                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                  <span className="text-muted-foreground">Extra usage cap</span>
-                  <p className="mt-1 font-semibold">{formatContractValue(subscription?.effectiveOverageCapCredits, planBaselineForm.overageCapCredits)} cr</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Baseline shown unless overridden.</p>
-                </div>
-                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                  <span className="text-muted-foreground">Extra usage used</span>
-                  <p className="mt-1 font-semibold">{(subscription?.overageCreditsThisCycle ?? 0).toLocaleString()} cr</p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">Monthly credits</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="h-9 text-sm"
-                    value={contractTermsDisplayForm.creditsPerCycleOverride}
-                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, creditsPerCycleOverride: e.target.value }))}
-                    placeholder={planBaselineForm.creditsPerCycle}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">Contract price VND</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="h-9 text-sm"
-                    value={contractTermsDisplayForm.contractPriceVnd}
-                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, contractPriceVnd: e.target.value }))}
-                    placeholder={planBaselineForm.price}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">Extra usage cap credits</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="h-9 text-sm"
-                    value={contractTermsDisplayForm.overageCapCreditsOverride}
-                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, overageCapCreditsOverride: e.target.value }))}
-                    placeholder={planBaselineForm.overageCapCredits}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">Extra usage price / credit</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className="h-9 text-sm"
-                    value={contractTermsDisplayForm.overagePricePerCreditOverride}
-                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, overagePricePerCreditOverride: e.target.value }))}
-                    placeholder={planBaselineForm.overagePricePerCredit}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">Invoice terms days</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    className="h-9 text-sm"
-                    value={contractTermsDisplayForm.invoiceTermsDaysOverride}
-                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, invoiceTermsDaysOverride: e.target.value }))}
-                    placeholder={planBaselineForm.invoiceTermsDays}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="text-xs text-muted-foreground">Billing contact email</Label>
-                  <Input
-                    type="email"
-                    className="h-9 text-sm"
-                    value={contractTermsForm.billingContactEmail}
-                    onChange={(e) => setContractTermsEdits((current) => ({ ...current, billingContactEmail: e.target.value }))}
-                    placeholder="billing@company.com"
-                  />
-                </div>
-              </div>
-
-              {!subscription && (
-                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-                  Create or activate a workspace subscription before saving contract overrides.
-                </p>
-              )}
-
-              <Button
-                className="rounded-md"
-                disabled={updateContractTermsMutation.isPending || !subscription}
-                onClick={() => updateContractTermsMutation.mutate()}
-              >
-                {updateContractTermsMutation.isPending ? "Saving..." : "Save contract terms"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
-            <CardHeader>
-              <CardTitle className="text-base font-medium">Workspace billing status</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div>
                 <p className="text-xs text-muted-foreground">Contract</p>
                 <p className="mt-1 font-semibold">{isSubscriptionLoading ? "Loading..." : contractLabel}</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                  <p className="text-xs text-muted-foreground">Remaining</p>
-                  <p className="mt-1 font-semibold">{isBalanceLoading ? "..." : currentCredits.toLocaleString()} cr</p>
-                </div>
-                <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                  <p className="text-xs text-muted-foreground">Used this cycle</p>
-                  <p className="mt-1 font-semibold">{isBalanceLoading ? "..." : creditsUsed.toLocaleString()} cr</p>
-                </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Trial ends</p>
+                <p className="mt-1 font-semibold">
+                  {trialEndsAt ? format(trialEndsAt, "MMM d, yyyy") : "Not on trial"}
+                </p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Cycle renewal</p>
-                <p className="mt-1 font-semibold">{renewsDate}</p>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Remaining credits</p>
+                <p className="mt-1 font-semibold">{isBalanceLoading ? "..." : currentCredits.toLocaleString()} cr</p>
               </div>
-              <div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
                 <p className="text-xs text-muted-foreground">Service state</p>
-                <Badge variant="outline" className="mt-1 rounded-md">
-                  {subscription?.serviceState ?? "Not active"}
+                <p className="mt-1 font-semibold">{getWorkspaceServiceStateLabel(subscription)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {!subscription && (
+          <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold text-foreground">No active Enterprise billing yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This workspace exists, but the owner has not started a trial or completed a contract request yet.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {latestSalesInquiry && (
+          <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <Badge variant="outline" className="mb-2 rounded-md bg-primary/10 text-primary">
+                    Sales request
+                  </Badge>
+                  <CardTitle className="text-base font-semibold">{latestSalesInquiry.company}</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {latestSalesInquiry.firstName} {latestSalesInquiry.lastName} - {latestSalesInquiry.workEmail}
+                  </p>
+                </div>
+                <Badge variant="outline" className="w-fit rounded-md capitalize">
+                  {getSalesRequestStatusLabel(latestSalesInquiry, hasActiveBilling)}
                 </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 text-sm md:grid-cols-3">
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Requested credits</p>
+                <p className="mt-1 font-semibold text-foreground">{latestSalesInquiry.currentMonthlyMeetingVolume}</p>
+              </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Features</p>
+                <p className="mt-1 truncate font-semibold text-foreground">{formatSalesLabels(latestSalesInquiry.featureInterests, SALES_FEATURE_LABELS)}</p>
+              </div>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-xs text-muted-foreground">Languages</p>
+                <p className="mt-1 truncate font-semibold text-foreground">{formatSalesLabels(latestSalesInquiry.targetLanguages, LANGUAGE_LABELS)}</p>
               </div>
             </CardContent>
           </Card>
-        </section>
+        )}
 
         <section className="grid gap-4 xl:grid-cols-2">
           <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
             <CardHeader>
-              <CardTitle className="text-base font-medium">Recent transactions</CardTitle>
+              <CardTitle className="text-base font-medium">Recent usage</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border border-hairline overflow-hidden">
@@ -1387,7 +1095,7 @@ export default function AdminWorkspaceBillingPage({
                     {isHistoryLoading ? (
                       <TableRow><TableCell colSpan={3} className="py-6 text-center text-muted-foreground">Loading...</TableCell></TableRow>
                     ) : recentTransactions.length === 0 ? (
-                      <TableRow><TableCell colSpan={3} className="py-6 text-center text-muted-foreground">No transactions yet.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={3} className="py-6 text-center text-muted-foreground">No usage yet.</TableCell></TableRow>
                     ) : (
                       recentTransactions.map((tx) => (
                         <TableRow key={tx.id}>
@@ -1404,17 +1112,8 @@ export default function AdminWorkspaceBillingPage({
           </Card>
 
           <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
-            <CardHeader className="flex-row items-center justify-between gap-3">
+            <CardHeader>
               <CardTitle className="text-base font-medium">Recent invoices</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-md text-xs"
-                disabled={!subscription || subscription.status !== "active" || simulateCycleCloseMutation.isPending}
-                onClick={() => simulateCycleCloseMutation.mutate()}
-              >
-                {simulateCycleCloseMutation.isPending ? "Closing..." : "Simulate Cycle Close"}
-              </Button>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border border-hairline overflow-hidden">
@@ -1486,7 +1185,7 @@ export default function AdminWorkspaceBillingPage({
         </div>
       </div>
 
-      {subscription?.serviceState && subscription.serviceState !== "healthy" && (
+      {subscription?.status === "active" && subscription?.serviceState && subscription.serviceState !== "healthy" && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
           <div className="flex items-start gap-2">
             <span className="mt-0.5 inline-flex h-2 w-2 rounded-full bg-amber-500" />
@@ -1712,7 +1411,7 @@ export default function AdminWorkspaceBillingPage({
                   <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface-2 p-3">
                     <span className="text-muted-foreground">Service state</span>
                     <Badge variant="outline" className="rounded-md">
-                      {subscription?.serviceState ?? "Not active"}
+                      {getWorkspaceServiceStateLabel(subscription)}
                     </Badge>
                   </div>
                 </CardContent>
@@ -2354,7 +2053,7 @@ export default function AdminWorkspaceBillingPage({
                     <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Service Breakdown</h4>
                     <div className="divide-y divide-hairline border border-hairline rounded-lg bg-surface-2/40 overflow-hidden">
                       {Object.entries(
-                        selectedTxGroup.originalTx.reduce((acc: any, item: any) => {
+                        selectedTxGroup.originalTx.reduce<Record<string, ServiceBreakdown>>((acc, item) => {
                           const type = getLabelForUsage(item.referenceType || "Other");
                           const rawType = item.referenceType || "Other";
                           if (!acc[type]) {
@@ -2364,7 +2063,7 @@ export default function AdminWorkspaceBillingPage({
                           acc[type].cost += item.amount;
                           return acc;
                         }, {})
-                      ).map(([service, data]: [string, any]) => {
+                      ).map(([service, data]) => {
                         const unitPriceVal = Math.round(Math.abs(data.cost) / data.count);
                         const suffix = getUnitSuffixForUsage(data.rawType);
                         return (
@@ -2386,7 +2085,7 @@ export default function AdminWorkspaceBillingPage({
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Activity Log Feed</h4>
                     <div className="h-[268px] overflow-y-auto border border-hairline rounded-lg divide-y divide-hairline text-xs bg-surface-1 text-ink font-sans p-3 space-y-0.5 select-text">
-                      {selectedTxGroup.originalTx.map((item: any, idx: number) => (
+                      {selectedTxGroup.originalTx.map((item, idx) => (
                         <div key={item.id || idx} className="flex justify-between items-center py-2.5 px-3 rounded-md hover:bg-surface-2/60 transition-colors">
                           <div className="flex items-center gap-2.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-primary/70"></span>

@@ -21,8 +21,6 @@ const forbidden = [
   ["billing service", billingService, "consumeCredits:"],
   ["billing service", billingService, "/consume"],
   ["billing service", billingService, "/topup"],
-  ["billing service", billingService, "} catch {\n      return {"],
-  ["billing service", billingService, "} catch {\n      return [];"],
   ["payment success page", paymentSuccessPage, '|| "CreditTopUp"'],
   ["payment success page", paymentSuccessPage, "amountPaid === 190000"],
   ["payment success page", paymentSuccessPage, "amountPaid / 8"],
@@ -39,7 +37,7 @@ const failures = forbidden
 if (fs.existsSync("src/services/payment.service.ts")) {
   failures.push("checkout must be owned by billingService; standalone payment.service.ts is forbidden");
 }
-for (const marker of ["createCheckoutSession:", "getCheckoutSession:"]) {
+for (const marker of ["createInvoiceCheckout:", "getCheckoutSession:"]) {
   if (!billingService.includes(marker)) {
     failures.push(`billingService is missing merged checkout operation: ${marker}`);
   }

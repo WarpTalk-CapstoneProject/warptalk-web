@@ -81,6 +81,60 @@ export interface SalesPackagePricingEstimateDto {
   creditsPerCycle?: number | null;
 }
 
+export interface SalesInquiryDto {
+  id: string;
+  firstName: string;
+  lastName: string;
+  workEmail: string;
+  company: string;
+  requestType: string;
+  featureInterests: string[];
+  targetLanguages: string[];
+  currentMonthlyMeetingVolume: string;
+  expectedMonthlyMeetingVolumeInSixMonths?: string | null;
+  useCaseNotes?: string | null;
+  pricingEstimate?: SalesPackagePricingEstimateDto | Record<string, unknown> | null;
+  consent: boolean;
+  source: string;
+  status: "new" | "reviewing" | "quoted" | "converted" | "closed" | string;
+  workspaceId?: string | null;
+  subscriptionId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  convertedAt?: string | null;
+  closedAt?: string | null;
+}
+
+export interface CreateSalesInquiryRequest {
+  firstName: string;
+  lastName: string;
+  workEmail: string;
+  company: string;
+  requestType: string;
+  featureInterests: string[];
+  targetLanguages: string[];
+  currentMonthlyMeetingVolume: string;
+  expectedMonthlyMeetingVolumeInSixMonths?: string | null;
+  useCaseNotes?: string | null;
+  pricingEstimate?: SalesPackagePricingEstimateDto | Record<string, unknown> | null;
+  consent: boolean;
+  source?: string | null;
+}
+
+export interface CreateWorkspaceSalesInquiryRequest extends CreateSalesInquiryRequest {
+  workspaceId: string;
+}
+
+export interface ConvertSalesInquiryToContractRequest {
+  workspaceId: string;
+  planId?: string | null;
+  contractTerms: UpdateSubscriptionContractTermsRequest;
+}
+
+export interface LinkSalesInquiryWorkspaceRequest {
+  workspaceId: string;
+}
+
 export interface PlanDto {
   id: string;
   name: string;
@@ -228,6 +282,16 @@ export interface InvoiceDto {
   subscriptionId?: string | null;
   paymentId?: string | null;
   workspaceName?: string | null;
+}
+
+export interface CheckoutSessionDto {
+  id: string;
+  amountTotal?: number | null;
+  currency: string;
+  metadata: Record<string, string>;
+  paymentStatus: string;
+  status: string;
+  paymentIntentId?: string | null;
 }
 
 export interface UsageAlertDto {

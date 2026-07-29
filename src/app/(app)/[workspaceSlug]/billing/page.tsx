@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Buildings,
@@ -17,16 +18,39 @@ import {
 } from "@phosphor-icons/react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { UsageChart } from "@/components/admin/UsageChart";
+import { getLanguageName, SUPPORTED_LANGUAGES } from "@/lib/languages";
 import { billingService } from "@/services/billing.service";
+import { WorkspaceService } from "@/services/workspace.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { InvoiceDto } from "@/types/billing";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
+const TRIAL_WORKSPACE_MEMBER_LIMIT = 5;
+const MAX_ENTERPRISE_LANGUAGES = 3;
+const CONTRACT_LANGUAGE_CODES = ["en", "vi", "ja"];
+const CONTRACT_LANGUAGE_OPTIONS = SUPPORTED_LANGUAGES.filter((language) =>
+  CONTRACT_LANGUAGE_CODES.includes(language.code),
+);
+const DEFAULT_AI_SERVICE_OPTIONS = [
+  "Real-time translation",
+  "Meeting transcripts",
+  "AI meeting summaries",
+];
+const CONTRACT_AI_SERVICE_OPTIONS = [
+  ...DEFAULT_AI_SERVICE_OPTIONS,
+  "Voice translation / TTS",
+  "Voice cloning",
+  "Glossary access",
+];
 
 function formatDate(value?: string | null) {
   return value ? format(new Date(value), "MMM d, yyyy") : "--";
@@ -61,18 +85,101 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function splitContactName(fullName?: string | null, email?: string | null) {
+  const fallback = email?.split("@")[0] || "Workspace";
+  const parts = (fullName || fallback).trim().split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || fallback;
+  const lastName = parts.slice(1).join(" ") || "Owner";
+  return { firstName, lastName };
+}
+
+function toggleStringValue(values: string[], value: string) {
+  return values.includes(value)
+    ? values.filter((selectedValue) => selectedValue !== value)
+    : [...values, value];
+}
+
 export default function WorkspaceBillingPage() {
   return <WorkspaceEnterpriseBillingContent />;
 }
 
 function WorkspaceEnterpriseBillingContent() {
-  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId) || "";
-  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName) || "Workspace";
-  const role = useWorkspaceStore((state) => state.role);
+  const params = useParams<{ workspaceSlug: string }>();
+  const routeWorkspaceSlug = params.workspaceSlug;
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
+  const activeWorkspaceDefaultLanguage = useWorkspaceStore((state) => state.defaultLanguage);
+  const activeRole = useWorkspaceStore((state) => state.role);
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
-  const canViewBilling = role === "Owner" || role === "Admin";
   const [nowMs] = useState(() => Date.now());
+  const [workspaceLookupTimedOut, setWorkspaceLookupTimedOut] = useState(false);
+  const [isContractRequestOpen, setIsContractRequestOpen] = useState(false);
+  const [contractRequest, setContractRequest] = useState({
+    companyLegalName: activeWorkspaceName ?? "",
+    billingContactName: user?.fullName ?? "",
+    billingContactEmail: user?.email ?? "",
+    requestedMonthlyCredits: "",
+    contractTerm: "Annual",
+    invoiceEmail: user?.email ?? "",
+    paymentTerms: "Net 15",
+    requestedWorkspaceMembers: String(TRIAL_WORKSPACE_MEMBER_LIMIT),
+    requestedLanguages: ["en", "vi"],
+    requestedAiServices: DEFAULT_AI_SERVICE_OPTIONS,
+  });
+
+  const shouldResolveWorkspaceFromSlug = !!routeWorkspaceSlug;
+  const { data: workspaceLookup, isLoading: isWorkspaceLookupLoading, isError: isWorkspaceLookupError } = useQuery({
+    queryKey: ["billing", "workspace-by-slug", routeWorkspaceSlug],
+    queryFn: () => WorkspaceService.list(1, 20, routeWorkspaceSlug),
+    enabled: shouldResolveWorkspaceFromSlug,
+    retry: 1,
+  });
+
+  const routeWorkspace = useMemo(() => {
+    if (!shouldResolveWorkspaceFromSlug) return null;
+    return workspaceLookup?.items?.find((workspace) => workspace.slug === routeWorkspaceSlug) ?? null;
+  }, [routeWorkspaceSlug, shouldResolveWorkspaceFromSlug, workspaceLookup?.items]);
+
+  const workspaceId = routeWorkspace?.id ?? (!shouldResolveWorkspaceFromSlug ? activeWorkspaceId : "") ?? "";
+  const workspaceName = routeWorkspace?.name ?? (!shouldResolveWorkspaceFromSlug ? activeWorkspaceName : null) ?? "Workspace";
+  const role = (routeWorkspace?.role ?? (!shouldResolveWorkspaceFromSlug ? activeRole : null) ?? "").toLowerCase();
+  const isSystemBillingAdmin = user?.roles?.some((userRole) => userRole.toLowerCase() === "admin") ?? false;
+  const canViewBilling = role === "owner" || role === "admin" || isSystemBillingAdmin;
+
+  useEffect(() => {
+    if (!routeWorkspace) return;
+    setActiveWorkspace(
+      routeWorkspace.id,
+      routeWorkspace.name,
+      routeWorkspace.slug,
+      routeWorkspace.role,
+      routeWorkspace.membershipType ?? null,
+      routeWorkspace.defaultLanguage ?? null,
+    );
+  }, [routeWorkspace, setActiveWorkspace]);
+
+  useEffect(() => {
+    if (!shouldResolveWorkspaceFromSlug || routeWorkspace || isWorkspaceLookupError) {
+      setWorkspaceLookupTimedOut(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setWorkspaceLookupTimedOut(true), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [isWorkspaceLookupError, routeWorkspace, routeWorkspaceSlug, shouldResolveWorkspaceFromSlug]);
+
+  useEffect(() => {
+    setContractRequest((current) => ({
+      ...current,
+      companyLegalName: current.companyLegalName || workspaceName,
+      billingContactName: current.billingContactName || user?.fullName || "",
+      billingContactEmail: current.billingContactEmail || user?.email || "",
+      invoiceEmail: current.invoiceEmail || user?.email || "",
+    }));
+  }, [user?.email, user?.fullName, workspaceName]);
 
   const { data: subscription, isLoading: isSubscriptionLoading } = useQuery({
     queryKey: ["billing", "subscription", workspaceId],
@@ -104,6 +211,13 @@ function WorkspaceEnterpriseBillingContent() {
     retry: 1,
   });
 
+  const { data: salesInquiryPage, isLoading: isSalesInquiryLoading } = useQuery({
+    queryKey: ["sales-inquiries", "workspace", workspaceId],
+    queryFn: () => billingService.getSalesInquiries(1, 5, { workspaceId }),
+    enabled: !!workspaceId && canViewBilling && !!subscription?.trialEndsAt,
+    retry: 1,
+  });
+
   const isLoading = isBalanceLoading || isSubscriptionLoading || isReportLoading;
   const hasTrialPeriod = !!subscription?.trialEndsAt;
   const isTrial = hasTrialPeriod && new Date(subscription.trialEndsAt!).getTime() > nowMs;
@@ -116,7 +230,14 @@ function WorkspaceEnterpriseBillingContent() {
   const invoiceTerms = subscription?.effectiveInvoiceTermsDays ?? subscription?.invoiceTermsDaysOverride ?? 15;
   const extraUsageCap = subscription?.effectiveOverageCapCredits ?? subscription?.overageCapCreditsOverride ?? 0;
   const invoices = invoicesPage?.items ?? [];
+  const latestContractInquiry = salesInquiryPage?.items?.find((inquiry) =>
+    inquiry.requestType === "enterprise_contract_request",
+  ) ?? null;
+  const hasPendingContractInquiry = latestContractInquiry
+    ? !["converted", "closed"].includes(latestContractInquiry.status.toLowerCase())
+    : false;
   const shouldShowNoBillingPlan = !!workspaceId && !isSubscriptionLoading && !hasSubscription;
+  const workspaceDefaultLanguage = routeWorkspace?.defaultLanguage ?? activeWorkspaceDefaultLanguage ?? "en";
 
   const startTrialMutation = useMutation({
     mutationFn: () => {
@@ -144,9 +265,155 @@ function WorkspaceEnterpriseBillingContent() {
   const createInvoiceCheckoutMutation = useMutation({
     mutationFn: (invoice: InvoiceDto) => billingService.createInvoiceCheckout(invoice.id),
     onSuccess: ({ url }) => {
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.location.assign(url);
     },
   });
+
+  const requestContractMutation = useMutation({
+    mutationFn: () => {
+      if (!workspaceId || !user?.email) {
+        throw new Error("Missing workspace owner account");
+      }
+
+      const { firstName, lastName } = splitContactName(user.fullName, user.email);
+      const companyLegalName = contractRequest.companyLegalName.trim();
+      const billingContactName = contractRequest.billingContactName.trim();
+      const billingContactEmail = contractRequest.billingContactEmail.trim();
+      const requestedMonthlyCredits = contractRequest.requestedMonthlyCredits.trim();
+      const contractTerm = contractRequest.contractTerm.trim();
+      const invoiceEmail = contractRequest.invoiceEmail.trim();
+      const paymentTerms = contractRequest.paymentTerms.trim();
+      const requestedWorkspaceMembers = contractRequest.requestedWorkspaceMembers.trim();
+      const requestedLanguages = contractRequest.requestedLanguages.length
+        ? contractRequest.requestedLanguages
+        : [workspaceDefaultLanguage];
+      const requestedLanguageNames = requestedLanguages.map(getLanguageName).join(", ");
+      const requestedAiServices = contractRequest.requestedAiServices;
+      const requiredFeatures = [
+        `Workspace members requested: ${requestedWorkspaceMembers}`,
+        `Languages: ${requestedLanguageNames}`,
+        `AI services: ${requestedAiServices.join(", ")}`,
+      ].join("\n");
+      const requestNotes = [
+        `Company legal name: ${companyLegalName}`,
+        `Billing contact: ${billingContactName} <${billingContactEmail}>`,
+        `Invoice email: ${invoiceEmail}`,
+        `Payment terms: ${paymentTerms}`,
+        `Requested monthly credits: ${requestedMonthlyCredits}`,
+        `Contract term: ${contractTerm}`,
+        `Required features / limits: ${requiredFeatures}`,
+      ].filter(Boolean).join("\n");
+
+      return billingService.createWorkspaceSalesInquiry({
+        workspaceId,
+        firstName,
+        lastName,
+        workEmail: billingContactEmail || user.email,
+        company: companyLegalName || workspaceName,
+        requestType: "enterprise_contract_request",
+        featureInterests: ["enterprise_contract", "workspace_trial", "ai_meetings"],
+        targetLanguages: requestedLanguages,
+        currentMonthlyMeetingVolume: `${requestedMonthlyCredits} credits / month`,
+        expectedMonthlyMeetingVolumeInSixMonths: `${requestedMonthlyCredits} credits / month`,
+        useCaseNotes: requestNotes,
+        pricingEstimate: {
+          workspaceId,
+          workspaceName,
+          workspaceSlug: routeWorkspace?.slug ?? activeWorkspaceSlug,
+          companyLegalName,
+          billingContactName,
+          billingContactEmail: billingContactEmail || user.email,
+          invoiceEmail,
+          paymentTerms,
+          requestedMonthlyCredits,
+          contractTerm,
+          requiredFeatures,
+          requestedWorkspaceMembers,
+          requestedLanguages,
+          requestedAiServices,
+          subscriptionId: subscription?.id,
+          planName: subscription?.planName,
+          trialEndsAt: subscription?.trialEndsAt,
+          creditsPerCycle: cycleCredits,
+          estimatedCredits: cycleCredits,
+          consumedCredits,
+          creditsRemaining: currentCredits,
+          usagePercent,
+          source: "workspace_billing_trial",
+        },
+        consent: true,
+        source: "workspace_billing_trial",
+      });
+    },
+    onSuccess: () => {
+      toast.success("Enterprise contract request sent to WarpTalk billing");
+      setIsContractRequestOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["sales-inquiries"] });
+      setContractRequest((current) => ({
+        ...current,
+        requestedMonthlyCredits: "",
+        requestedWorkspaceMembers: String(TRIAL_WORKSPACE_MEMBER_LIMIT),
+        requestedLanguages: ["en", "vi"],
+        requestedAiServices: DEFAULT_AI_SERVICE_OPTIONS,
+      }));
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Could not send Enterprise contract request"));
+    },
+  });
+
+  const handleRequestContract = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (contractRequest.companyLegalName.trim().length < 2) {
+      toast.error("Enter the company legal name");
+      return;
+    }
+
+    if (contractRequest.billingContactName.trim().length < 2) {
+      toast.error("Enter the billing contact name");
+      return;
+    }
+
+    if (!contractRequest.billingContactEmail.includes("@")) {
+      toast.error("Enter a valid billing contact email");
+      return;
+    }
+
+    if (!contractRequest.invoiceEmail.includes("@")) {
+      toast.error("Enter a valid invoice email");
+      return;
+    }
+
+    const requestedMonthlyCredits = Number(contractRequest.requestedMonthlyCredits);
+    if (!Number.isInteger(requestedMonthlyCredits) || requestedMonthlyCredits < 1) {
+      toast.error("Enter the monthly credits needed");
+      return;
+    }
+
+    const requestedWorkspaceMembers = Number(contractRequest.requestedWorkspaceMembers);
+    if (!Number.isInteger(requestedWorkspaceMembers) || requestedWorkspaceMembers < 1) {
+      toast.error("Enter a valid workspace member count");
+      return;
+    }
+
+    if (contractRequest.requestedLanguages.length < 1) {
+      toast.error("Select at least one supported language");
+      return;
+    }
+
+    if (contractRequest.requestedLanguages.length > MAX_ENTERPRISE_LANGUAGES) {
+      toast.error(`Select up to ${MAX_ENTERPRISE_LANGUAGES} supported languages`);
+      return;
+    }
+
+    if (contractRequest.requestedAiServices.length < 1) {
+      toast.error("Select at least one AI service");
+      return;
+    }
+
+    requestContractMutation.mutate();
+  };
 
   const statusTone = useMemo(() => {
     const state = subscription?.serviceState?.toLowerCase();
@@ -171,6 +438,35 @@ function WorkspaceEnterpriseBillingContent() {
         ? "Trial active"
         : subscription?.status || "Pending";
 
+  if (shouldResolveWorkspaceFromSlug && isWorkspaceLookupLoading && !workspaceLookupTimedOut) {
+    return (
+      <div className="flex h-full items-center justify-center bg-canvas p-6">
+        <div className="flex items-center gap-2 text-sm text-ink-muted">
+          <Spinner className="h-4 w-4 animate-spin" />
+          Loading workspace billing
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    shouldResolveWorkspaceFromSlug &&
+    (workspaceLookupTimedOut || isWorkspaceLookupError || (!isWorkspaceLookupLoading && !routeWorkspace))
+  ) {
+    return (
+      <div className="flex h-full items-center justify-center bg-canvas p-6">
+        <Card className="max-w-md rounded-md border-border">
+          <CardHeader>
+            <CardTitle className="text-base">Workspace billing unavailable</CardTitle>
+            <CardDescription>
+              This workspace was not found or your account does not have access to its billing page.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
   if (!canViewBilling) {
     return (
       <div className="flex h-full items-center justify-center bg-canvas p-6">
@@ -194,6 +490,7 @@ function WorkspaceEnterpriseBillingContent() {
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
         <header className="border-b border-border pb-5">
           <div>
+            <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               {!shouldShowNoBillingPlan && (
                 <Badge variant={statusTone as "default" | "secondary" | "destructive"}>
@@ -212,6 +509,7 @@ function WorkspaceEnterpriseBillingContent() {
             <p className="mt-1 max-w-2xl text-sm text-ink-muted">
               Review trial access, contract status, open invoices, and Enterprise usage for this workspace.
             </p>
+            </div>
           </div>
         </header>
 
@@ -228,6 +526,7 @@ function WorkspaceEnterpriseBillingContent() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <StatusRow label="Trial length" value="14 days" />
                   <StatusRow label="Trial credits" value="20,000 credits" />
+                  <StatusRow label="Workspace seats" value={`Up to ${TRIAL_WORKSPACE_MEMBER_LIMIT} members`} />
                   <StatusRow label="Extra usage" value="Disabled during trial" />
                   <StatusRow label="Contract flow" value="Admin creates approved terms" />
                 </div>
@@ -256,7 +555,7 @@ function WorkspaceEnterpriseBillingContent() {
                   Trial gives the team enough credits to test meetings, transcripts, and AI summaries without extra usage charges.
                 </div>
                 <div className="rounded-md border border-border bg-surface-1 p-3">
-                  When procurement approves, WarpTalk admin saves the negotiated credits, price before VAT, overage cap, and NET terms.
+                  After admin approval, WarpTalk saves the negotiated credits, price before VAT, overage cap, and NET terms.
                 </div>
                 <div className="rounded-md border border-border bg-surface-1 p-3">
                   Open invoices can be paid online by the workspace owner after the billing cycle closes.
@@ -318,7 +617,7 @@ function WorkspaceEnterpriseBillingContent() {
             <CardTitle className="text-base">{hasTrialPeriod ? "Trial status" : "Contract status"}</CardTitle>
             <CardDescription>
               {hasTrialPeriod
-                ? "Trial usage is free and does not create invoices or extra usage charges."
+                ? "Paid billing starts after admin approves the Enterprise contract."
                 : "Workspace billing is handled as one Enterprise contract flow."}
             </CardDescription>
           </CardHeader>
@@ -327,8 +626,8 @@ function WorkspaceEnterpriseBillingContent() {
             <StatusRow label="Billing contact" value={subscription?.billingContactEmail || "billing@warptalk.com"} />
             {hasTrialPeriod ? (
               <>
-                <StatusRow label="Extra usage" value="Disabled" />
-                <StatusRow label="Next step" value="Approve Enterprise contract terms" />
+                <StatusRow label="Workspace seats" value={`Up to ${TRIAL_WORKSPACE_MEMBER_LIMIT} members`} />
+                <StatusRow label="Contract" value="Pending approval" />
               </>
             ) : (
               <>
@@ -373,15 +672,26 @@ function WorkspaceEnterpriseBillingContent() {
           {hasTrialPeriod ? (
             <Card className="rounded-md border-border">
               <CardHeader>
-                <CardTitle className="text-base">After the trial</CardTitle>
+                <CardTitle className="text-base">Contract details</CardTitle>
                 <CardDescription>
-                  WarpTalk admin finalizes the approved Enterprise contract before paid billing begins.
+                  {hasPendingContractInquiry
+                    ? "The contract request was sent and is waiting for admin review."
+                    : "Complete the request form when the company is ready to move from trial to paid billing."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
-                <StatusRow label="Contract price" value="Set after approval" />
-                <StatusRow label="Invoices" value="Not created during trial" />
-                <StatusRow label="Extra usage" value="Unavailable during trial" />
+                {hasPendingContractInquiry ? (
+                  <StatusRow label="Request status" value={latestContractInquiry?.status || "Pending review"} />
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={hasPendingContractInquiry || isSalesInquiryLoading}
+                  onClick={() => setIsContractRequestOpen(true)}
+                >
+                  {hasPendingContractInquiry ? "Pending admin review" : "Complete contract details"}
+                </Button>
               </CardContent>
             </Card>
           ) : (
@@ -442,6 +752,214 @@ function WorkspaceEnterpriseBillingContent() {
             <FeatureBreakdownChart workspaceId={workspaceId} />
           </section>
         )}
+
+        <Dialog open={isContractRequestOpen} onOpenChange={setIsContractRequestOpen}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto border-border bg-surface-1 text-ink sm:max-w-[720px]">
+            <DialogHeader>
+              <DialogTitle>Request Enterprise contract</DialogTitle>
+              <DialogDescription>
+                Enter the company, invoice, usage, and plan details needed to prepare the subscription contract.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form className="grid gap-4" onSubmit={handleRequestContract}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1.5 text-sm font-medium text-ink sm:col-span-2">
+                  Company legal name
+                  <Input
+                    value={contractRequest.companyLegalName}
+                    onChange={(event) => setContractRequest((current) => ({
+                      ...current,
+                      companyLegalName: event.target.value,
+                    }))}
+                    placeholder="Legal entity name for the contract"
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-1.5 text-sm font-medium text-ink">
+                  Billing contact name
+                  <Input
+                    value={contractRequest.billingContactName}
+                    onChange={(event) => setContractRequest((current) => ({
+                      ...current,
+                      billingContactName: event.target.value,
+                    }))}
+                    placeholder="Contact name"
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-1.5 text-sm font-medium text-ink">
+                  Billing contact email
+                  <Input
+                    type="email"
+                    value={contractRequest.billingContactEmail}
+                    onChange={(event) => setContractRequest((current) => ({
+                      ...current,
+                      billingContactEmail: event.target.value,
+                      invoiceEmail: current.invoiceEmail || event.target.value,
+                    }))}
+                    placeholder="finance@company.com"
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-1.5 text-sm font-medium text-ink">
+                  Requested monthly credits
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={contractRequest.requestedMonthlyCredits}
+                    onChange={(event) => setContractRequest((current) => ({
+                      ...current,
+                      requestedMonthlyCredits: event.target.value,
+                    }))}
+                    placeholder="Example: 700000 credits / month"
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-1.5 text-sm font-medium text-ink">
+                  Contract term
+                  <select
+                    value={contractRequest.contractTerm}
+                    onChange={(event) => setContractRequest((current) => ({
+                      ...current,
+                      contractTerm: event.target.value,
+                    }))}
+                    className="h-9 w-full rounded-[8px] border border-border bg-surface-1 px-3 text-sm text-ink outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                  >
+                    <option>Annual</option>
+                    <option>Monthly</option>
+                  </select>
+                </label>
+
+                <label className="grid gap-1.5 text-sm font-medium text-ink">
+                  Invoice email
+                  <Input
+                    type="email"
+                    value={contractRequest.invoiceEmail}
+                    onChange={(event) => setContractRequest((current) => ({
+                      ...current,
+                      invoiceEmail: event.target.value,
+                    }))}
+                    placeholder="ap@company.com"
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-1.5 text-sm font-medium text-ink">
+                  Payment terms
+                  <select
+                    value={contractRequest.paymentTerms}
+                    onChange={(event) => setContractRequest((current) => ({
+                      ...current,
+                      paymentTerms: event.target.value,
+                    }))}
+                    className="h-9 w-full rounded-[8px] border border-border bg-surface-1 px-3 text-sm text-ink outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                  >
+                    <option>Net 15</option>
+                    <option>Net 30</option>
+                  </select>
+                </label>
+              </div>
+
+              <fieldset className="grid gap-3">
+                <legend className="text-sm font-medium text-ink">Required features / limits</legend>
+                <div className="grid gap-3 rounded-md border border-border bg-surface-1 p-3">
+                  <div className="grid gap-3">
+                    <label className="grid gap-1.5 text-sm font-medium text-ink">
+                      Workspace members
+                      <Input
+                        type="number"
+                        min={1}
+                        value={contractRequest.requestedWorkspaceMembers}
+                        onChange={(event) => setContractRequest((current) => ({
+                          ...current,
+                          requestedWorkspaceMembers: event.target.value,
+                        }))}
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <div className="text-sm font-medium text-ink">Supported languages</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {CONTRACT_LANGUAGE_OPTIONS.map((language) => (
+                        <label key={language.code} className="flex items-start gap-2 text-sm text-ink">
+                          <input
+                            type="checkbox"
+                            checked={contractRequest.requestedLanguages.includes(language.code)}
+                            onChange={() => setContractRequest((current) => {
+                              const isSelected = current.requestedLanguages.includes(language.code);
+                              if (!isSelected && current.requestedLanguages.length >= MAX_ENTERPRISE_LANGUAGES) {
+                                toast.error(`Select up to ${MAX_ENTERPRISE_LANGUAGES} supported languages`);
+                                return current;
+                              }
+
+                              return {
+                                ...current,
+                                requestedLanguages: toggleStringValue(current.requestedLanguages, language.code),
+                              };
+                            })}
+                            className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                          />
+                          <span>{language.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <div className="text-sm font-medium text-ink">AI services</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {CONTRACT_AI_SERVICE_OPTIONS.map((option) => (
+                        <label key={option} className="flex items-start gap-2 text-sm text-ink">
+                          <input
+                            type="checkbox"
+                            checked={contractRequest.requestedAiServices.includes(option)}
+                            onChange={() => setContractRequest((current) => ({
+                              ...current,
+                              requestedAiServices: toggleStringValue(current.requestedAiServices, option),
+                            }))}
+                            className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              <div className="flex justify-end gap-2 border-t border-border pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsContractRequestOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={requestContractMutation.isPending || !user?.email}
+                >
+                  {requestContractMutation.isPending ? (
+                    <>
+                      <Spinner className="h-4 w-4 animate-spin" />
+                      Sending request
+                    </>
+                  ) : (
+                    "Submit contract request"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
           </>
         )}
       </div>

@@ -23,6 +23,8 @@ export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const logout = useAuthStore((state) => state.logout);
+  const isSystemAdmin = user?.roles?.includes("admin") ?? false;
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
@@ -44,7 +46,13 @@ export default function WorkspaceOnboardingGatePage() {
   }, [isAuthenticated, router]);
 
   useEffect(() => {
-    if (isAuthenticated && !activeWorkspaceId && !workspacesLoading && !pendingInvitationsLoading) {
+    if (isAuthenticated && isSystemAdmin && !activeWorkspaceId) {
+      router.replace("/billing");
+    }
+  }, [activeWorkspaceId, isAuthenticated, isSystemAdmin, router]);
+
+  useEffect(() => {
+    if (isAuthenticated && !isSystemAdmin && !activeWorkspaceId && !workspacesLoading && !pendingInvitationsLoading) {
       if (pendingInvitations.length > 0) {
         return;
       }
@@ -67,13 +75,18 @@ export default function WorkspaceOnboardingGatePage() {
         router.replace(`/${firstWs.slug}/home`);
       }
     }
-  }, [isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, pendingInvitations, pendingInvitationsLoading, selectWorkspace, setActiveWorkspace, router]);
+  }, [isAuthenticated, isSystemAdmin, activeWorkspaceId, workspacesData, workspacesLoading, pendingInvitations, pendingInvitationsLoading, selectWorkspace, setActiveWorkspace, router]);
 
   async function handleAcceptInvitation(invitationId: string) {
     await acceptInvitation.mutateAsync(invitationId);
   }
 
-  if (!isAuthenticated || activeWorkspaceId || workspacesLoading || pendingInvitationsLoading) {
+  function handleSignOut() {
+    logout();
+    router.replace("/login");
+  }
+
+  if (!isAuthenticated || activeWorkspaceId || isSystemAdmin || workspacesLoading || pendingInvitationsLoading) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -95,8 +108,17 @@ export default function WorkspaceOnboardingGatePage() {
             priority
           />
         </div>
-        <div className="text-[12px] text-ink-muted font-medium">
-          {user?.email}
+        <div className="flex items-center gap-3">
+          <div className="text-[12px] text-ink-muted font-medium">
+            {user?.email}
+          </div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="h-8 rounded-md border border-border bg-surface-1 px-3 text-[12px] font-semibold text-ink transition hover:bg-surface-2"
+          >
+            Sign out
+          </button>
         </div>
       </header>
 

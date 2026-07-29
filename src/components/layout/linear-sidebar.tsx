@@ -608,6 +608,14 @@ export function LinearSidebar() {
             <div className="flex flex-col gap-px">
               <NavLink
                 item={{
+                  icon: CreditCard,
+                  label: "Billing",
+                  href: "/billing",
+                }}
+                pathname={pathname}
+              />
+              <NavLink
+                item={{
                   icon: Globe,
                   label: "Global Glossary",
                   href: "/admin/global-glossary",

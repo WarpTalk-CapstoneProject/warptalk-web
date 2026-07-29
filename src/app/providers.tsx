@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useState, type ReactNode } from "react";
 import { RealtimeNotificationProvider } from "@/components/providers/realtime-notification-provider";
 
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "local-dev-google-oauth-disabled";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(

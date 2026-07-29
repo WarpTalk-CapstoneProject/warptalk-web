@@ -27,12 +27,25 @@ import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { AdminInvoicesTab } from "@/components/admin/AdminInvoicesTab";
 import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
 import { AdminAlertsTab } from "@/components/admin/AdminAlertsTab";
+import { AdminSalesInquiriesTab } from "@/components/admin/AdminSalesInquiriesTab";
 import { CreateWorkspaceContractModal } from "@/components/admin/CreateWorkspaceContractModal";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { billingService } from "@/services/billing.service";
+import type { CreditTransactionDto } from "@/types/billing";
+
+type CreditTransactionGroup = CreditTransactionDto & {
+  originalTx: CreditTransactionDto[];
+  isGrouped: boolean;
+};
+
+type ServiceBreakdown = {
+  count: number;
+  cost: number;
+  rawType: string;
+};
 
 export default function AdminBillingPage() {
   const router = useRouter();
@@ -48,7 +61,7 @@ export default function AdminBillingPage() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
   const [isExporting, setIsExporting] = useState(false);
-  const [selectedTxGroup, setSelectedTxGroup] = useState<any | null>(null);
+  const [selectedTxGroup, setSelectedTxGroup] = useState<CreditTransactionGroup | null>(null);
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
 
   const activeFiltersCount = [
@@ -93,8 +106,8 @@ export default function AdminBillingPage() {
   
   const displayedLogs = useMemo(() => {
     if (!logs) return [];
-    const groups: any[] = [];
-    let currentGroup: any = null;
+    const groups: CreditTransactionGroup[] = [];
+    let currentGroup: CreditTransactionGroup | null = null;
 
     logs.forEach(tx => {
       if (!currentGroup) {
@@ -126,9 +139,43 @@ export default function AdminBillingPage() {
   const totalConsumed = logs.filter(t => t.type === "consumption").reduce((s, t) => s + t.amount, 0);
   const totalAdjusted = logs.filter(t => t.type === "adjustment").reduce((s, t) => s + t.amount, 0);
 
+  const buildHistoryFilters = () => ({
+    type: historyTypeFilter === "ALL" ? undefined : historyTypeFilter,
+    fromDate: filterFromDate ? new Date(filterFromDate + "T00:00:00").toISOString() : undefined,
+    toDate: filterToDate ? new Date(filterToDate + "T23:59:59.999").toISOString() : undefined,
+    workspaceId: filterWorkspaceId || undefined,
+    minAmount: filterMinAmount !== "" ? filterMinAmount : undefined,
+    maxAmount: filterMaxAmount !== "" ? filterMaxAmount : undefined,
+  });
+
+  const fetchAllFilteredHistory = async () => {
+    const pageSize = 200;
+    const filters = buildHistoryFilters();
+    const firstPage = await billingService.getGlobalCreditHistory(1, pageSize, filters);
+    const allItems = [...(firstPage.items ?? [])];
+    const expectedTotal = firstPage.totalCount ?? allItems.length;
+    const pageCount = Math.ceil(expectedTotal / pageSize);
+
+    for (let pageNumber = 2; pageNumber <= pageCount; pageNumber++) {
+      const nextPage = await billingService.getGlobalCreditHistory(pageNumber, pageSize, filters);
+      allItems.push(...(nextPage.items ?? []));
+    }
+
+    return {
+      totalCount: expectedTotal,
+      items: allItems,
+    };
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
+      const exportHistory = await fetchAllFilteredHistory();
+      const exportLogs = exportHistory.items ?? [];
+      const exportTotalTopUp = exportLogs.filter(t => t.type === "top_up").reduce((s, t) => s + t.amount, 0);
+      const exportTotalConsumed = exportLogs.filter(t => t.type === "consumption").reduce((s, t) => s + t.amount, 0);
+      const exportTotalAdjusted = exportLogs.filter(t => t.type === "adjustment").reduce((s, t) => s + t.amount, 0);
+
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "WarpTalk Admin";
 
@@ -169,19 +216,19 @@ export default function AdminBillingPage() {
       addSummaryRow("Audit Events (Last 30 days)", metrics?.auditEventsLast30Days ?? "N/A");
       summary.addRow([]);
 
-      addSummaryHeader("💳 This Page Transactions Summary");
+      addSummaryHeader("Filtered Billing Events Summary");
       const dateRange = (filterFromDate || filterToDate)
-        ? `${filterFromDate || "All time"} → ${filterToDate || "Now"}`
+        ? `${filterFromDate || "All time"} to ${filterToDate || "Now"}`
         : "All time";
       addSummaryRow("Date Range", dateRange);
       addSummaryRow("Billing Event Filter", historyTypeFilter);
       addSummaryRow("Workspace Filter", filterWorkspaceId || "All workspaces");
-      addSummaryRow("Matching Billing Events", totalCount);
+      addSummaryRow("Matching Billing Events", exportHistory.totalCount ?? exportLogs.length);
       summary.addRow([]);
-      addSummaryRow("Manual Credits Added", `+${totalTopUp.toLocaleString()} credits`, "FF16A34A");
-      addSummaryRow("Billable Usage Consumed", `${totalConsumed.toLocaleString()} credits`, "FFDC2626");
-      addSummaryRow("Total Adjustments", `${totalAdjusted > 0 ? "+" : ""}${totalAdjusted.toLocaleString()} credits`,
-        totalAdjusted >= 0 ? "FF2563EB" : "FFDC2626");
+      addSummaryRow("Manual Credits Added", `+${exportTotalTopUp.toLocaleString()} credits`, "FF16A34A");
+      addSummaryRow("Billable Usage Consumed", `${exportTotalConsumed.toLocaleString()} credits`, "FFDC2626");
+      addSummaryRow("Total Adjustments", `${exportTotalAdjusted > 0 ? "+" : ""}${exportTotalAdjusted.toLocaleString()} credits`,
+        exportTotalAdjusted >= 0 ? "FF2563EB" : "FFDC2626");
 
       // --- Sheet 2: Audit Trail ---
       const audit = workbook.addWorksheet("Audit Trail");
@@ -207,7 +254,7 @@ export default function AdminBillingPage() {
       };
       ["A", "B", "C", "D", "E", "F"].forEach(c => headerRow.getCell(c).border = border);
 
-      logs.forEach(tx => {
+      exportLogs.forEach(tx => {
         const row = audit.addRow({
           timestamp: new Date(tx.createdAt),
           workspace: tx.workspaceName || tx.workspaceId,
@@ -224,7 +271,7 @@ export default function AdminBillingPage() {
         ["A", "B", "C", "D", "E", "F"].forEach(c => row.getCell(c).border = border);
       });
 
-      if (!logs.length) {
+      if (!exportLogs.length) {
         const emptyRow = audit.addRow({
           timestamp: "",
           workspace: "No billing events matched the active filters.",
@@ -327,6 +374,7 @@ export default function AdminBillingPage() {
 
       <Tabs defaultValue="subscriptions" className="w-full">
         <TabsList className="bg-surface-2 p-1 rounded-lg">
+          <TabsTrigger value="sales" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Sales inquiries</TabsTrigger>
           <TabsTrigger value="subscriptions" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Contracts</TabsTrigger>
           <TabsTrigger value="alerts" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Review Queue</TabsTrigger>
           <TabsTrigger value="invoices" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Invoices</TabsTrigger>
@@ -546,6 +594,10 @@ export default function AdminBillingPage() {
           <AdminInvoicesTab />
         </TabsContent>
 
+        <TabsContent value="sales" className="mt-6 outline-none">
+          <AdminSalesInquiriesTab />
+        </TabsContent>
+
         <TabsContent value="subscriptions" className="mt-6 outline-none">
           <AdminSubscriptionsTab />
         </TabsContent>
@@ -658,7 +710,7 @@ export default function AdminBillingPage() {
                     <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Service Breakdown</h4>
                     <div className="divide-y divide-hairline border border-hairline rounded-lg bg-surface-2/40 overflow-hidden">
                       {Object.entries(
-                        selectedTxGroup.originalTx.reduce((acc: any, item: any) => {
+                        selectedTxGroup.originalTx.reduce<Record<string, ServiceBreakdown>>((acc, item) => {
                           const type = getLabelForUsage(item.referenceType || "Other");
                           const rawType = item.referenceType || "Other";
                           if (!acc[type]) {
@@ -668,7 +720,7 @@ export default function AdminBillingPage() {
                           acc[type].cost += item.amount;
                           return acc;
                         }, {})
-                      ).map(([service, data]: [string, any]) => {
+                      ).map(([service, data]) => {
                         const unitPriceVal = Math.round(Math.abs(data.cost) / data.count);
                         const suffix = getUnitSuffixForUsage(data.rawType);
                         return (
@@ -690,7 +742,7 @@ export default function AdminBillingPage() {
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Activity Log Feed</h4>
                     <div className="h-[268px] overflow-y-auto border border-hairline rounded-lg divide-y divide-hairline text-xs bg-surface-1 text-ink font-sans p-3 space-y-0.5 select-text">
-                      {selectedTxGroup.originalTx.map((item: any, idx: number) => (
+                      {selectedTxGroup.originalTx.map((item, idx) => (
                         <div key={item.id || idx} className="flex justify-between items-center py-2.5 px-3 rounded-md hover:bg-surface-2/60 transition-colors">
                           <div className="flex items-center gap-2.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-primary/70"></span>

@@ -32,6 +32,8 @@ const loginSchema = z.object({
   password: z.string().optional(),
 });
 
+const isGoogleAuthConfigured = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+
 type LoginFormData = z.infer<typeof loginSchema>;
 
 function getSafeCallbackUrl(value: string | null) {
@@ -220,29 +222,31 @@ function LoginForm() {
                 transition={{ duration: 0.2 }}
                 className="space-y-4"
               >
-                {/* Social Login */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    console.log(
-                      "[Google OAuth] Continue with Google button clicked",
-                    );
-                    handleGoogleLogin();
-                  }}
-                  className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
-                >
-                  <GoogleAuthIcon className="size-5" />
-                  Continue with Google
-                </button>
+                {isGoogleAuthConfigured && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        console.log(
+                          "[Google OAuth] Continue with Google button clicked",
+                        );
+                        handleGoogleLogin();
+                      }}
+                      className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
+                    >
+                      <GoogleAuthIcon className="size-5" />
+                      Continue with Google
+                    </button>
 
-                {/* Divider */}
-                <div className="flex items-center gap-4 py-2">
-                  <div className="h-[1px] flex-1 bg-neutral-200" />
-                  <span className="text-[11px] font-medium uppercase text-neutral-500 tracking-wider">
-                    Or
-                  </span>
-                  <div className="h-[1px] flex-1 bg-neutral-200" />
-                </div>
+                    <div className="flex items-center gap-4 py-2">
+                      <div className="h-[1px] flex-1 bg-neutral-200" />
+                      <span className="text-[11px] font-medium uppercase text-neutral-500 tracking-wider">
+                        Or
+                      </span>
+                      <div className="h-[1px] flex-1 bg-neutral-200" />
+                    </div>
+                  </>
+                )}
 
                 {/* Email Input */}
                 <div className="space-y-2">

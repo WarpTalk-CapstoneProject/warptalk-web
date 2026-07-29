@@ -1,8 +1,5 @@
 import apiClient from "@/lib/api/client";
-import type { CreditBalanceDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto, UsageAlertDto, TopWorkspaceDto, UsageChartDto, UpdateSubscriptionContractTermsRequest, PricingConfigDto, UpdatePricingConfigRequest, UsageRateCardDto, UpsertUsageRateCardRequest, PlanRequest, TrialSubscriptionRequest, CreateWorkspaceContractSubscriptionRequest } from "@/types/billing";
-
-const DIRECT_TOP_UP_DISABLED_MESSAGE =
-  "Direct credit top-up is disabled. Use Stripe Checkout for credit top-ups.";
+import type { CreditBalanceDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto, UsageAlertDto, TopWorkspaceDto, UsageChartDto, UpdateSubscriptionContractTermsRequest, PricingConfigDto, UpdatePricingConfigRequest, UsageRateCardDto, UpsertUsageRateCardRequest, PlanRequest, TrialSubscriptionRequest, CreateWorkspaceContractSubscriptionRequest, CheckoutSessionDto, CreateSalesInquiryRequest, CreateWorkspaceSalesInquiryRequest, SalesInquiryDto, ConvertSalesInquiryToContractRequest, LinkSalesInquiryWorkspaceRequest } from "@/types/billing";
 
 export const billingService = {
   /**
@@ -82,28 +79,8 @@ export const billingService = {
    * Get workspace usage chart data.
    */
   getWorkspaceUsageChart: async (workspaceId: string, year: number): Promise<UsageChartDto> => {
-    try {
-      const { data } = await apiClient.get<UsageChartDto>(`/usages/workspace/${workspaceId}/chart`, { params: { year } });
-      return data;
-    } catch {
-      return {
-        year,
-        monthlyData: [
-          { month: 1, monthName: "Jan", consumedCredits: 0, topUpCredits: 0 },
-          { month: 2, monthName: "Feb", consumedCredits: 0, topUpCredits: 0 },
-          { month: 3, monthName: "Mar", consumedCredits: 0, topUpCredits: 0 },
-          { month: 4, monthName: "Apr", consumedCredits: 0, topUpCredits: 0 },
-          { month: 5, monthName: "May", consumedCredits: 0, topUpCredits: 0 },
-          { month: 6, monthName: "Jun", consumedCredits: 0, topUpCredits: 0 },
-          { month: 7, monthName: "Jul", consumedCredits: 0, topUpCredits: 0 },
-          { month: 8, monthName: "Aug", consumedCredits: 0, topUpCredits: 0 },
-          { month: 9, monthName: "Sep", consumedCredits: 0, topUpCredits: 0 },
-          { month: 10, monthName: "Oct", consumedCredits: 0, topUpCredits: 0 },
-          { month: 11, monthName: "Nov", consumedCredits: 0, topUpCredits: 0 },
-          { month: 12, monthName: "Dec", consumedCredits: 0, topUpCredits: 0 },
-        ]
-      };
-    }
+    const { data } = await apiClient.get<UsageChartDto>(`/usages/workspace/${workspaceId}/chart`, { params: { year } });
+    return data;
   },
 
   /**
@@ -118,12 +95,8 @@ export const billingService = {
    * Get workspace usage breakdown (Donut).
    */
   getWorkspaceUsageBreakdown: async (workspaceId: string, days = 30): Promise<import("@/types/billing").UsageSummaryDto[]> => {
-    try {
-      const { data } = await apiClient.get<import("@/types/billing").UsageSummaryDto[]>(`/usages/workspace/${workspaceId}/breakdown`, { params: { days } });
-      return data;
-    } catch {
-      return [];
-    }
+    const { data } = await apiClient.get<import("@/types/billing").UsageSummaryDto[]>(`/usages/workspace/${workspaceId}/breakdown`, { params: { days } });
+    return data;
   },
 
   /**
@@ -175,6 +148,59 @@ export const billingService = {
 
   createInvoiceCheckout: async (invoiceId: string): Promise<{ url: string }> => {
     const { data } = await apiClient.post<{ url: string }>(`/invoices/${invoiceId}/checkout`);
+    return data;
+  },
+
+  getCheckoutSession: async (sessionId: string): Promise<CheckoutSessionDto> => {
+    const { data } = await apiClient.get<CheckoutSessionDto>(`/payments/checkout-session/${encodeURIComponent(sessionId)}`);
+    return data;
+  },
+
+  createSalesInquiry: async (request: CreateSalesInquiryRequest): Promise<SalesInquiryDto> => {
+    const { data } = await apiClient.post<SalesInquiryDto>(`/sales-inquiries`, request);
+    return data;
+  },
+
+  createWorkspaceSalesInquiry: async (request: CreateWorkspaceSalesInquiryRequest): Promise<SalesInquiryDto> => {
+    const { data } = await apiClient.post<SalesInquiryDto>(`/sales-inquiries/workspace`, request);
+    return data;
+  },
+
+  getSalesInquiries: async (
+    pageNumber = 1,
+    pageSize = 20,
+    filters?: { status?: string; search?: string; workspaceId?: string }
+  ): Promise<PagedResult<SalesInquiryDto>> => {
+    const { data } = await apiClient.get<PagedResult<SalesInquiryDto>>(`/sales-inquiries`, {
+      params: {
+        page: pageNumber,
+        pageSize,
+        status: filters?.status && filters.status !== "all" ? filters.status : undefined,
+        search: filters?.search || undefined,
+        workspaceId: filters?.workspaceId || undefined,
+      },
+    });
+    return data;
+  },
+
+  updateSalesInquiryStatus: async (id: string, status: string): Promise<SalesInquiryDto> => {
+    const { data } = await apiClient.patch<SalesInquiryDto>(`/sales-inquiries/${id}/status`, { status });
+    return data;
+  },
+
+  linkSalesInquiryWorkspace: async (
+    id: string,
+    request: LinkSalesInquiryWorkspaceRequest
+  ): Promise<SalesInquiryDto> => {
+    const { data } = await apiClient.patch<SalesInquiryDto>(`/sales-inquiries/${id}/workspace`, request);
+    return data;
+  },
+
+  convertSalesInquiryToContract: async (
+    id: string,
+    request: ConvertSalesInquiryToContractRequest
+  ): Promise<SalesInquiryDto> => {
+    const { data } = await apiClient.post<SalesInquiryDto>(`/sales-inquiries/${id}/convert-to-contract`, request);
     return data;
   },
 
@@ -268,25 +294,6 @@ export const billingService = {
    */
   deactivatePlan: async (id: string): Promise<void> => {
     await apiClient.delete(`/plans/${id}`);
-  },
-
-  /**
-   * Deduct credits from a workspace subscription.
-   */
-  consumeCredits: async (workspaceId: string, amount: number, referenceType: string, referenceId?: string): Promise<any> => {
-    const { data } = await apiClient.post(`/credits/workspace/${workspaceId}/consume`, { amount, referenceType, referenceId });
-    return data;
-  },
-
-  /**
-   * Legacy direct credit grant endpoint is disabled. Use paymentService.createCheckoutSession
-   * with the credit top-up payment type so credits are granted only after Stripe confirms payment.
-   */
-  topUpCredits: async (workspaceId: string, amount: number, referenceType: string): Promise<any> => {
-    void workspaceId;
-    void amount;
-    void referenceType;
-    throw new Error(DIRECT_TOP_UP_DISABLED_MESSAGE);
   },
 
   /**

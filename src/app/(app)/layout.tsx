@@ -60,26 +60,52 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
 
+  const pathSegments = pathname.split("/").filter(Boolean);
+  const isWorkspaceBillingRoute = pathSegments.length >= 2 && pathSegments[1] === "billing";
+
+  const routeWorkspaceSlug = (() => {
+    const firstSegment = pathSegments[0];
+    if (!firstSegment) return undefined;
+    const globalRoutes = new Set([
+      "billing",
+      "join",
+      "login",
+      "payment",
+      "room",
+      "voice-profiles",
+      "workspace",
+    ]);
+    return globalRoutes.has(firstSegment) ? undefined : firstSegment;
+  })();
+
   useEffect(() => {
     if (isOnboardingRoute || workspacesLoading) return;
 
-    if (!activeWorkspaceId) {
-      if (workspacesData?.items && workspacesData.items.length > 0) {
-        const firstWs = workspacesData.items[0];
+    const shouldSelectWorkspace =
+      !activeWorkspaceId ||
+      (!!routeWorkspaceSlug && activeWorkspaceSlug !== routeWorkspaceSlug);
+
+    if (shouldSelectWorkspace) {
+      const workspaceToSelect =
+        (routeWorkspaceSlug
+          ? workspacesData?.items?.find((workspace) => workspace.slug === routeWorkspaceSlug)
+          : undefined) ?? workspacesData?.items?.[0];
+
+      if (workspaceToSelect) {
         const membershipType =
-          "membershipType" in firstWs && typeof firstWs.membershipType === "string"
-            ? firstWs.membershipType
+          "membershipType" in workspaceToSelect && typeof workspaceToSelect.membershipType === "string"
+            ? workspaceToSelect.membershipType
             : "Internal";
         const defaultLanguage =
-          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
-            ? firstWs.defaultLanguage
+          "defaultLanguage" in workspaceToSelect && typeof workspaceToSelect.defaultLanguage === "string"
+            ? workspaceToSelect.defaultLanguage
             : "en";
-        selectWorkspace.mutate(firstWs.id);
+        selectWorkspace.mutate(workspaceToSelect.id);
         setActiveWorkspace(
-          firstWs.id,
-          firstWs.name,
-          firstWs.slug,
-          firstWs.role || "Member",
+          workspaceToSelect.id,
+          workspaceToSelect.name,
+          workspaceToSelect.slug,
+          workspaceToSelect.role || "Member",
           membershipType,
           defaultLanguage
         );
@@ -87,13 +113,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, selectWorkspace, setActiveWorkspace, router]);
+  }, [activeWorkspaceId, activeWorkspaceSlug, workspacesData, workspacesLoading, isOnboardingRoute, routeWorkspaceSlug, selectWorkspace, setActiveWorkspace, router]);
 
   if (isOnboardingRoute) {
     return <>{children}</>;
   }
 
-  if (!activeWorkspaceId || workspacesLoading) {
+  if (isWorkspaceBillingRoute && routeWorkspaceSlug && (!activeWorkspaceId || workspacesLoading)) {
+    return <>{children}</>;
+  }
+
+  if ((!activeWorkspaceId && !routeWorkspaceSlug) || workspacesLoading) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />

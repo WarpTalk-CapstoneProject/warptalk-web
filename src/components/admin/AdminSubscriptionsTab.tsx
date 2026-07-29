@@ -12,9 +12,20 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { billingService } from "@/services/billing.service";
+import { WorkspaceService } from "@/services/workspace.service";
 import { toast } from "sonner";
 
 const DEFAULT_PAGE_SIZE = 10;
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const response = (error as { response?: { data?: { error?: unknown; message?: unknown } } }).response;
+    const message = response?.data?.message ?? response?.data?.error;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
 
 function formatNumber(value: number | null | undefined) {
   return typeof value === "number" ? value.toLocaleString() : "N/A";
@@ -24,9 +35,25 @@ function formatMoney(value: number | null | undefined) {
   return typeof value === "number" ? `${value.toLocaleString()} VND` : "N/A";
 }
 
+function getBillingStateLabel(status?: string | null, isTrial?: boolean) {
+  const normalized = status?.toLowerCase() || "unknown";
+  if (isTrial) {
+    if (normalized === "active") return "Trial active";
+    if (normalized === "cancelled") return "Trial cancelled";
+    if (normalized === "expired") return "Trial expired";
+    if (normalized === "pending") return "Trial pending";
+    return `Trial ${normalized}`;
+  }
+  if (normalized === "active") return "Contract active";
+  if (normalized === "cancelled") return "Contract cancelled";
+  if (normalized === "expired") return "Contract expired";
+  if (normalized === "pending") return "Contract pending";
+  return normalized;
+}
+
 function WorkspaceBadge({ id, name }: { id: string; name?: string | null }) {
   const [copied, setCopied] = useState(false);
-  const displayName = name && name.trim() !== "" ? name : id.substring(0, 8);
+  const displayName = name?.trim() || id.substring(0, 8);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(id);
@@ -42,7 +69,7 @@ function WorkspaceBadge({ id, name }: { id: string; name?: string | null }) {
       <button
         type="button"
         onClick={handleCopy}
-        title="Copy workspace ID"
+        title={`Copy workspace ID: ${id}`}
         className="group min-w-0 rounded-md border border-hairline bg-surface-2 px-2 py-1 text-left transition hover:border-primary/40 hover:bg-surface-3"
       >
         <span className="flex items-center gap-1.5">
@@ -70,14 +97,40 @@ export function AdminSubscriptionsTab() {
     queryFn: () => billingService.getGlobalSubscriptions(1, 200),
   });
 
+  const subscriptions = useMemo(() => data?.items ?? [], [data?.items]);
+
+  const { data: workspaces } = useQuery({
+    queryKey: ["admin-subscription-workspace-names"],
+    queryFn: () => WorkspaceService.list(1, 500, ""),
+  });
+
+  const { data: workspaceDetailsById } = useQuery({
+    queryKey: ["admin-subscription-workspace-details", subscriptions.map((sub) => sub.workspaceId).filter(Boolean).join(",")],
+    queryFn: async () => {
+      const ids = Array.from(new Set(subscriptions.map((sub) => sub.workspaceId).filter(Boolean))) as string[];
+      const results = await Promise.allSettled(ids.map((id) => WorkspaceService.getById(id)));
+      return new Map(
+        results.flatMap((result) => result.status === "fulfilled"
+          ? [[result.value.id, result.value.name] as const]
+          : [])
+      );
+    },
+    enabled: subscriptions.some((sub) => Boolean(sub.workspaceId)),
+  });
+
+  const { data: salesInquiries } = useQuery({
+    queryKey: ["admin-subscription-sales-inquiry-names"],
+    queryFn: () => billingService.getSalesInquiries(1, 500),
+  });
+
   const cancelSubscriptionMutation = useMutation({
     mutationFn: (workspaceId: string) => billingService.cancelSubscription(workspaceId, "Cancelled by Admin"),
     onSuccess: () => {
       toast.success("Subscription cancelled successfully.");
       queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to cancel subscription.");
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to cancel subscription."));
     },
   });
 
@@ -87,27 +140,41 @@ export function AdminSubscriptionsTab() {
       toast.success("Subscription resumed successfully.");
       queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to resume subscription.");
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to resume subscription."));
     },
   });
 
-  const subscriptions = useMemo(() => data?.items ?? [], [data?.items]);
+  const workspaceNamesById = useMemo(() => {
+    const names = new Map<string, string>();
+    (salesInquiries?.items ?? []).forEach((inquiry) => {
+      if (inquiry.workspaceId && inquiry.company) names.set(inquiry.workspaceId, inquiry.company);
+    });
+    (workspaces?.items ?? []).forEach((workspace) => {
+      names.set(workspace.id, workspace.name);
+    });
+    (workspaceDetailsById ?? new Map<string, string>()).forEach((name, id) => {
+      names.set(id, name);
+    });
+    return names;
+  }, [salesInquiries?.items, workspaceDetailsById, workspaces?.items]);
 
   const filteredSubscriptions = useMemo(() => {
     const query = workspaceFilter.trim().toLowerCase();
 
     return subscriptions.filter((sub) => {
+      const resolvedWorkspaceName = sub.workspaceId ? workspaceNamesById.get(sub.workspaceId) : undefined;
       const matchesWorkspace = query
         ? sub.workspaceId?.toLowerCase().includes(query)
           || sub.workspaceName?.toLowerCase().includes(query)
+          || resolvedWorkspaceName?.toLowerCase().includes(query)
           || sub.billingContactEmail?.toLowerCase().includes(query)
         : true;
       const matchesStatus = statusFilter === "all" || sub.status?.toLowerCase() === statusFilter;
 
       return matchesWorkspace && matchesStatus;
     });
-  }, [statusFilter, subscriptions, workspaceFilter]);
+  }, [statusFilter, subscriptions, workspaceFilter, workspaceNamesById]);
 
   const totalCount = filteredSubscriptions.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -249,13 +316,10 @@ export function AdminSubscriptionsTab() {
                 return (
                   <TableRow key={sub.id} className="border-hairline hover:bg-surface-2">
                     <TableCell>
-                      <WorkspaceBadge id={sub.workspaceId!} name={sub.workspaceName} />
-                      <div className="mt-1 flex flex-col pl-10">
-                        <span className="text-xs font-medium text-muted-foreground">{sub.planName}</span>
-                        {isTrial && (
-                          <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">14-Day Trial</span>
-                        )}
-                      </div>
+                      <WorkspaceBadge
+                        id={sub.workspaceId!}
+                        name={(sub.workspaceId ? workspaceNamesById.get(sub.workspaceId) : undefined) ?? sub.workspaceName}
+                      />
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -270,7 +334,7 @@ export function AdminSubscriptionsTab() {
                                 : "bg-surface-3 text-ink"
                         }
                       >
-                        {isSuspended ? "suspended" : sub.status}
+                        {isSuspended ? "Suspended" : getBillingStateLabel(sub.status, isTrial)}
                       </Badge>
                       {!isSuspended && sub.serviceState && sub.serviceState !== "healthy" && (
                         <div className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
@@ -281,8 +345,12 @@ export function AdminSubscriptionsTab() {
                     <TableCell>
                       <div className="space-y-0.5 text-xs">
                         <div className="font-semibold text-ink">{formatNumber(sub.creditsRemaining)} remaining</div>
-                        <div className="text-muted-foreground">{formatNumber(sub.effectiveCreditsPerCycle)} committed / cycle</div>
-                        <div className="text-muted-foreground">{formatMoney(sub.effectiveContractPriceVnd)} before VAT</div>
+                        <div className="text-muted-foreground">
+                          {isTrial ? "Trial credits" : `${formatNumber(sub.effectiveCreditsPerCycle)} / cycle`}
+                        </div>
+                        {!isTrial && (
+                          <div className="text-muted-foreground">{formatMoney(sub.effectiveContractPriceVnd)} before VAT</div>
+                        )}
                         {(sub.overageCreditsThisCycle ?? 0) > 0 && (
                           <div className="font-medium text-amber-600 dark:text-amber-400">
                             {formatNumber(sub.overageCreditsThisCycle)} overage used
@@ -293,7 +361,7 @@ export function AdminSubscriptionsTab() {
                     <TableCell className="text-xs text-muted-foreground">
                       <div className="space-y-0.5">
                         <div>
-                          Renews:{" "}
+                          {isTrial ? "Trial ends" : "Renews"}:{" "}
                           <span className="font-mono text-ink">
                             {sub.trialEndsAt
                               ? format(new Date(sub.trialEndsAt), "MMM d, yyyy")
@@ -302,8 +370,12 @@ export function AdminSubscriptionsTab() {
                                 : "N/A"}
                           </span>
                         </div>
-                        <div>NET-{formatNumber(sub.effectiveInvoiceTermsDays)}</div>
-                        <div>Overage {formatNumber(sub.effectiveOveragePricePerCredit)} VND/cr</div>
+                        {!isTrial && (
+                          <>
+                            <div>NET-{formatNumber(sub.effectiveInvoiceTermsDays)}</div>
+                            <div>Overage {formatNumber(sub.effectiveOveragePricePerCredit)} VND/cr</div>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { billingService } from "@/services/billing.service";
+import { WorkspaceService } from "@/services/workspace.service";
 import type { SubscriptionDto } from "@/types/billing";
 
 const PAGE_SIZE = 20;
@@ -138,6 +139,48 @@ export function AdminAlertsTab() {
   });
 
   const reviewItems = useMemo(() => buildReviewItems(data?.items ?? []), [data?.items]);
+  const reviewWorkspaceIds = useMemo(
+    () => Array.from(new Set(reviewItems.map((item) => item.workspaceId).filter(Boolean))).sort(),
+    [reviewItems]
+  );
+
+  const { data: workspaces } = useQuery({
+    queryKey: ["admin-alert-workspace-names"],
+    queryFn: () => WorkspaceService.list(1, 500, ""),
+  });
+
+  const { data: workspaceDetailsById } = useQuery({
+    queryKey: ["admin-alert-workspace-details", reviewWorkspaceIds.join(",")],
+    queryFn: async () => {
+      const results = await Promise.allSettled(reviewWorkspaceIds.map((id) => WorkspaceService.getById(id)));
+      return new Map(
+        results.flatMap((result) => result.status === "fulfilled"
+          ? [[result.value.id, result.value.name] as const]
+          : [])
+      );
+    },
+    enabled: reviewWorkspaceIds.length > 0,
+  });
+
+  const { data: salesInquiries } = useQuery({
+    queryKey: ["admin-alert-sales-inquiry-names"],
+    queryFn: () => billingService.getSalesInquiries(1, 500),
+  });
+
+  const workspaceNamesById = useMemo(() => {
+    const names = new Map<string, string>();
+    (salesInquiries?.items ?? []).forEach((inquiry) => {
+      if (inquiry.workspaceId && inquiry.company) names.set(inquiry.workspaceId, inquiry.company);
+    });
+    (workspaces?.items ?? []).forEach((workspace) => {
+      names.set(workspace.id, workspace.name);
+    });
+    (workspaceDetailsById ?? new Map<string, string>()).forEach((name, id) => {
+      names.set(id, name);
+    });
+    return names;
+  }, [salesInquiries?.items, workspaceDetailsById, workspaces?.items]);
+
   const signalCounts = useMemo(() => ({
     trialEnding: reviewItems.filter((item) => item.status === "Trial ending").length,
     lowBalance: reviewItems.filter((item) => item.status === "Low balance").length,
@@ -213,7 +256,10 @@ export function AdminAlertsTab() {
               pageItems.map((item, index) => (
                 <TableRow key={`${item.workspaceId}-${item.status}-${index}`} className="border-hairline hover:bg-surface-2">
                   <TableCell>
-                    <WorkspaceBadge id={item.workspaceId} name={item.workspaceName} />
+                    <WorkspaceBadge
+                      id={item.workspaceId}
+                      name={workspaceNamesById.get(item.workspaceId) ?? item.workspaceName}
+                    />
                   </TableCell>
                   <TableCell>
                     <Badge

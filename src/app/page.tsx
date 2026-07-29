@@ -1257,7 +1257,7 @@ function FooterLogoMark({ large = false }: { large?: boolean }) {
 
 function LandingFooter() {
   const [salesInquiry, setSalesInquiry] = useState(salesInquiryInitialState);
-  const [salesInquiryStatus, setSalesInquiryStatus] = useState<"idle" | "submitting" | "sent">("idle");
+  const [salesInquiryStatus, setSalesInquiryStatus] = useState<"idle" | "submitting" | "sent" | "error">("idle");
   const [salesStep, setSalesStep] = useState(1);
 
   useEffect(() => {
@@ -1337,9 +1337,27 @@ function LandingFooter() {
     setSalesInquiryStatus("submitting");
     persistSalesIntent();
 
-    window.setTimeout(() => {
+    try {
+      await billingService.createSalesInquiry({
+        firstName: salesInquiry.firstName.trim(),
+        lastName: salesInquiry.lastName.trim(),
+        workEmail: salesInquiry.workEmail.trim().toLowerCase(),
+        company: salesInquiry.company.trim(),
+        requestType: salesInquiry.helpTopic,
+        featureInterests: salesInquiry.featureInterests,
+        targetLanguages: salesInquiry.targetLanguages,
+        currentMonthlyMeetingVolume: salesInquiry.currentMeetingVolume,
+        expectedMonthlyMeetingVolumeInSixMonths: salesInquiry.expectedMeetingVolume || null,
+        useCaseNotes: salesInquiry.message.trim() || null,
+        pricingEstimate: readPricingEstimateIntent(),
+        consent: salesInquiry.consent,
+        source: "landing_pricing",
+      });
       setSalesInquiryStatus("sent");
-    }, 300);
+    } catch (error) {
+      console.error("Failed to submit sales inquiry", error);
+      setSalesInquiryStatus("error");
+    }
   };
 
   const toggleSalesLanguage = (language: string) => {
@@ -1644,6 +1662,11 @@ function LandingFooter() {
                 {salesInquiryStatus === "sent" ? (
                   <p className="sales-contact-success">
                     Thank you. Thanks for reaching out. Our team will review your request and follow up within 1-2 business days.
+                  </p>
+                ) : null}
+                {salesInquiryStatus === "error" ? (
+                  <p className="sales-contact-error">
+                    We could not send your pricing request. Please try again in a moment.
                   </p>
                 ) : null}
               </form>

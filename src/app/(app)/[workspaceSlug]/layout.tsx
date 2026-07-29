@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces } from "@/hooks/use-workspace";
 import { Spinner } from "@phosphor-icons/react";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ workspaceSlug: string }>();
   const workspaceSlug = params.workspaceSlug;
+  const isBillingRoute = pathname.split("/").filter(Boolean)[1] === "billing";
 
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
@@ -20,6 +22,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   );
 
   useEffect(() => {
+    if (isBillingRoute) return;
     if (isLoading) return;
 
     if (isError || !workspacesData?.items) return;
@@ -52,6 +55,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     }
   }, [
     workspaceSlug,
+    isBillingRoute,
     activeWorkspaceSlug,
     workspacesData,
     targetWorkspace,
@@ -61,13 +65,28 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     router,
   ]);
 
-  const isSyncing =
-    !isError &&
-    (!workspacesData?.items ||
-      !targetWorkspace ||
-      activeWorkspaceSlug !== workspaceSlug);
+  const workspaceListReady = !isLoading && !isError && !!workspacesData?.items;
+  const workspaceNotAvailable = workspaceListReady && !targetWorkspace;
+  const isLoadingWorkspace = !isError && !workspacesData?.items;
 
-  if (isLoading || isSyncing) {
+  if (isBillingRoute) {
+    return <>{children}</>;
+  }
+
+  if (workspaceNotAvailable) {
+    return (
+      <div className="flex h-dvh w-screen items-center justify-center bg-canvas p-6">
+        <div className="max-w-sm text-center">
+          <h1 className="text-base font-semibold text-ink">Workspace unavailable</h1>
+          <p className="mt-2 text-sm text-ink-muted">
+            This workspace was not found or your account does not have access to it.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || isLoadingWorkspace) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />

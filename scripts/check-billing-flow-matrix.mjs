@@ -1,0 +1,128 @@
+import fs from "node:fs";
+
+const files = {
+  landing: fs.readFileSync("src/app/page.tsx", "utf8"),
+  register: fs.readFileSync("src/app/(auth)/register/page.tsx", "utf8"),
+  workspaceCreate: fs.readFileSync("src/app/(app)/workspace/create/page.tsx", "utf8"),
+  workspaceBilling: fs.readFileSync("src/app/(app)/[workspaceSlug]/billing/page.tsx", "utf8"),
+  workspaceDashboard: fs.readFileSync("src/app/(app)/[workspaceSlug]/dashboard/page.tsx", "utf8"),
+  paymentSuccess: fs.readFileSync("src/app/workspace/payment/success/page.tsx", "utf8"),
+  paymentCancelled: fs.readFileSync("src/app/payment-cancelled/page.tsx", "utf8"),
+  internalBilling: fs.readFileSync("src/app/(internal)/billing/page.tsx", "utf8"),
+  internalPlans: fs.readFileSync("src/app/(internal)/billing/plans/page.tsx", "utf8"),
+  internalWorkspace: fs.readFileSync("src/app/(internal)/billing/workspace/[id]/page.tsx", "utf8"),
+  adminSubscriptionsTab: fs.readFileSync("src/components/admin/AdminSubscriptionsTab.tsx", "utf8"),
+  salesInquiriesTab: fs.readFileSync("src/components/admin/AdminSalesInquiriesTab.tsx", "utf8"),
+  createWorkspaceContractModal: fs.readFileSync("src/components/admin/CreateWorkspaceContractModal.tsx", "utf8"),
+  linearSidebar: fs.readFileSync("src/components/layout/linear-sidebar.tsx", "utf8"),
+  billingService: fs.readFileSync("src/services/billing.service.ts", "utf8"),
+  billingTypes: fs.readFileSync("src/types/billing.ts", "utf8"),
+};
+
+const checks = [
+  ["visitor pricing calculator stores pricing intent", files.landing, "warptalk:pricing-intent"],
+  ["visitor pricing calculator submits real sales inquiry", files.landing, "billingService.createSalesInquiry"],
+  ["visitor pricing inquiry sends landing source", files.landing, 'source: "landing_pricing"'],
+  ["register flow reads pricing intent", files.register, "warptalk:pricing-intent"],
+  ["workspace create reads pricing intent", files.workspaceCreate, "pricingEstimate"],
+  ["owner/admin billing route loads active subscription", files.workspaceBilling, "billingService.getActiveSubscription"],
+  ["owner/admin billing route loads credit balance", files.workspaceBilling, "billingService.getWorkspaceCredits"],
+  ["owner/admin billing route starts 14-day trial", files.workspaceBilling, "Start 14-day trial"],
+  ["owner/admin billing route explicitly creates trial", files.workspaceBilling, "billingService.createTrialSubscription"],
+  ["owner/admin billing route opens invoice checkout", files.workspaceBilling, "billingService.createInvoiceCheckout"],
+  ["workspace member restriction message exists", files.workspaceBilling, "Enterprise billing is restricted"],
+  ["workspace billing contract term offers Annual", files.workspaceBilling, "<option>Annual</option>"],
+  ["workspace billing contract term offers Monthly", files.workspaceBilling, "<option>Monthly</option>"],
+  ["workspace dashboard can show credit summary", files.workspaceDashboard, "billingService.getWorkspaceCredits"],
+  ["payment success verifies Stripe checkout session", files.paymentSuccess, "billingService.getCheckoutSession"],
+  ["payment success shows pending verification state", files.paymentSuccess, "Payment verification pending"],
+  ["payment cancelled route links back to billing", files.paymentCancelled, "billingLink"],
+  ["system admin billing dashboard loads global metrics", files.internalBilling, "billingService.getGlobalMetrics"],
+  ["system admin billing dashboard loads global credit history", files.internalBilling, "billingService.getGlobalCreditHistory"],
+  ["system admin billing export fetches all filtered audit history", files.internalBilling, "fetchAllFilteredHistory"],
+  ["system admin billing export writes filtered audit events", files.internalBilling, "exportLogs.forEach"],
+  ["system admin billing dashboard links Enterprise baseline", files.internalBilling, "/billing/plans"],
+  ["system admin sales inquiry tab is mounted", files.internalBilling, "AdminSalesInquiriesTab"],
+  ["system admin sales inquiries list loads API data", files.salesInquiriesTab, "billingService.getSalesInquiries"],
+  ["system admin sales inquiry action creates contract", files.salesInquiriesTab, "billingService.convertSalesInquiryToContract"],
+  ["system admin sales inquiry contract starts from baseline", files.salesInquiriesTab, "Baseline template"],
+  ["system admin sales inquiry contract suggests optimized terms", files.salesInquiriesTab, "calculateSuggestedTerms"],
+  ["system admin sales inquiry modal shows suggested price", files.salesInquiriesTab, "Suggested price"],
+  ["system admin contract modal prioritizes real workspace candidates", files.createWorkspaceContractModal, "Workspace candidates"],
+  ["system admin contract modal compares requests to baseline", files.createWorkspaceContractModal, "vs baseline"],
+  ["system admin contract modal converts open workspace requests", files.createWorkspaceContractModal, "billingService.convertSalesInquiryToContract"],
+  ["system admin plans page loads pricing config from DB", files.internalPlans, "billingService.getPricingConfig"],
+  ["system admin plans page saves pricing config to DB", files.internalPlans, "billingService.updatePricingConfig"],
+  ["system admin plans page loads usage rate card", files.internalPlans, "billingService.getUsageRateCard"],
+  ["system admin plans page saves usage rate card", files.internalPlans, "billingService.upsertUsageRateCard"],
+  ["system admin workspace page saves contract terms", files.internalWorkspace, "billingService.updateSubscriptionContractTerms"],
+  ["system admin workspace page starts trial", files.internalWorkspace, "billingService.createTrialSubscription"],
+  ["system admin workspace page manual credit adjustment", files.internalWorkspace, "AdjustCreditModal"],
+  ["system admin contracts tab resumes subscription", files.adminSubscriptionsTab, "billingService.resumeSubscription"],
+  ["system admin workspace page simulates cycle close", files.internalWorkspace, "billingService.simulateCycleClose"],
+  ["system admin workspace page marks invoice paid", files.internalWorkspace, "billingService.markInvoicePaid"],
+  ["billing service exposes sales inquiry public create", files.billingService, "createSalesInquiry:"],
+  ["billing service exposes checkout session verification", files.billingService, "getCheckoutSession:"],
+  ["billing service exposes pricing config persistence", files.billingService, "updatePricingConfig:"],
+  ["billing types include structured pricing estimate", files.billingTypes, "SalesPackagePricingEstimateDto"],
+  ["workspace billing contract request locks after owner submits", files.workspaceBilling, "Pending admin review"],
+  ["workspace billing contract request reads workspace inquiry status", files.workspaceBilling, "getSalesInquiries(1, 5, { workspaceId })"],
+  ["system admin sidebar links billing", files.linearSidebar, 'href: "/billing"'],
+];
+
+const forbidden = [
+  ["billing service must not expose direct credit consumption", files.billingService, "consumeCredits:"],
+  ["billing service must not expose direct credit top-up", files.billingService, "topUpCredits:"],
+  ["billing service must not call legacy consume endpoint", files.billingService, "/consume"],
+  ["billing service must not call legacy top-up endpoint", files.billingService, "/topup"],
+  ["billing service must not mask workspace chart API failures", files.billingService, "} catch {\n      return {"],
+  ["billing service must not mask breakdown API failures", files.billingService, "} catch {\n      return [];"],
+  ["payment success must not infer legacy credit package", files.paymentSuccess, '|| "CreditTopUp"'],
+  ["workspace billing contract term must not expose custom duration", files.workspaceBilling, "Custom term"],
+  ["workspace billing contract term must not expose semiannual duration", files.workspaceBilling, "semiannual"],
+  ["workspace billing payment terms must not expose PO as payment term", files.workspaceBilling, "<option>PO required</option>"],
+  ["workspace billing payment terms must not expose custom payment term", files.workspaceBilling, "<option>Custom payment terms</option>"],
+  ["workspace billing required features must not be free-form prompt text", files.workspaceBilling, "Languages, participants, AI summary, voice clone, glossary, support level"],
+  ["workspace billing must not expose unsupported procurement section", files.workspaceBilling, "Procurement requirements"],
+  ["workspace billing procurement requirements must not be free-form prompt text", files.workspaceBilling, "Vendor onboarding, security review, PO, legal review"],
+  ["system admin sales inquiry status must not be manually edited", files.salesInquiriesTab, "billingService.updateSalesInquiryStatus"],
+  ["system admin sales inquiry action must not expose separate attach workspace button", files.salesInquiriesTab, "Attach existing workspace"],
+  ["system admin sales inquiry action must not expose link workspace API", files.salesInquiriesTab, "billingService.linkSalesInquiryWorkspace"],
+  ["workspace billing must not expose unsupported vendor onboarding", files.workspaceBilling, "Vendor onboarding"],
+  ["workspace billing must not expose unsupported purchase order flow", files.workspaceBilling, "Purchase order required"],
+  ["workspace billing contract languages must not expose Spanish", files.workspaceBilling, '"es"'],
+  ["workspace billing contract languages must not expose German", files.workspaceBilling, '"de"'],
+  ["workspace billing contract languages must not expose French", files.workspaceBilling, '"fr"'],
+  ["workspace billing contract languages must not expose Hindi", files.workspaceBilling, '"hi"'],
+  ["workspace billing contract languages must not expose Chinese", files.workspaceBilling, '"zh"'],
+  ["workspace billing contract request must not expose unenforced participant limit", files.workspaceBilling, "Max participants / meeting"],
+  ["workspace billing contract request must not send unenforced participant limit", files.workspaceBilling, "requestedMaxParticipants"],
+  ["workspace billing contract request must not use ambiguous billing address label", files.workspaceBilling, "Billing address / tax ID"],
+  ["workspace billing contract request must not use ambiguous invoice placeholder", files.workspaceBilling, "Invoice address, tax/VAT code, legal billing entity details"],
+  ["workspace billing contract request must not expose invoice tax field for thesis scope", files.workspaceBilling, "Invoice address / tax ID"],
+  ["workspace billing contract request must not send invoice tax field for thesis scope", files.workspaceBilling, "billingAddressAndTaxId"],
+  ["workspace billing contract request must not ask for meeting count", files.workspaceBilling, "Expected monthly meetings"],
+  ["workspace billing contract request must not use meeting volume state", files.workspaceBilling, "expectedMonthlyMeetingVolume:"],
+  ["workspace create must not auto-start Enterprise trial", files.workspaceCreate, "billingService.createTrialSubscription"],
+  ["workspace create success must not claim trial was created", files.workspaceCreate, "created with an Enterprise free trial"],
+  ["system admin billing export must not label export as current page only", files.internalBilling, "This Page Transactions Summary"],
+  ["system admin contract modal must not expose demo seed action", files.createWorkspaceContractModal, "Seed 5 Demo Workspaces"],
+  ["system admin contract modal must not expose quick presets", files.createWorkspaceContractModal, "Quick Presets"],
+  ["system admin contract modal must not expose preset company names", files.createWorkspaceContractModal, "FPT-SEP490-SU26"],
+];
+
+const failures = [
+  ...checks
+    .filter(([, source, marker]) => !source.includes(marker))
+    .map(([label, , marker]) => `${label}: missing marker ${marker}`),
+  ...forbidden
+    .filter(([, source, marker]) => source.includes(marker))
+    .map(([label, , marker]) => `${label}: forbidden marker ${marker}`),
+];
+
+if (failures.length > 0) {
+  console.error(failures.join("\n"));
+  process.exit(1);
+}
+
+console.log("Billing FE actor-flow matrix contract passed.");

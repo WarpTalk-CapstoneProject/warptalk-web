@@ -28,7 +28,6 @@ import {
   slugPreviewFromName,
 } from "@/features/workspace/lib/email-domain";
 import { useCreateWorkspace, useSelectWorkspace } from "@/hooks/use-workspace";
-import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { WorkspaceDto } from "@/types/workspace";
@@ -165,33 +164,15 @@ export default function CreateWorkspaceDemoPage() {
       });
 
       setCreatedWorkspace(workspace);
-      await provisionTrialSubscription(workspace.id);
       await selectWorkspace.mutateAsync(workspace.id);
       setActiveWorkspace(workspace.id, workspace.name, workspace.slug, workspace.role || "Owner", "Internal", "en");
-      toast.success(`Workspace "${workspace.name}" created with an Enterprise free trial.`);
+      window.sessionStorage.removeItem(salesIntentStorageKey);
+      toast.success(`Workspace "${workspace.name}" created.`);
       router.push(`/${workspace.slug}/home`);
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);
       toast.error(nextError.message);
-    }
-  }
-
-  async function provisionTrialSubscription(workspaceId: string) {
-    if (!user?.id || !user.email) return;
-
-    const billingContactEmail = salesIntent?.workEmail?.trim().toLowerCase() || user.email;
-
-    try {
-      await billingService.createTrialSubscription({
-        workspaceId,
-        userId: user.id,
-        ownerEmail: billingContactEmail,
-      });
-    } catch {
-      toast.info("Workspace created. Enterprise trial setup can be completed by WarpTalk billing.");
-    } finally {
-      window.sessionStorage.removeItem(salesIntentStorageKey);
     }
   }
 

@@ -50,6 +50,7 @@ type SalesPackageIntent = {
 };
 
 const salesIntentStorageKey = "warptalk:sales-package-intent";
+const pricingIntentStorageKey = "warptalk:pricing-intent";
 
 function setAccessTokenCookie(accessToken: string) {
   const maxAge = 7 * 24 * 60 * 60; // 7 days
@@ -101,7 +102,9 @@ function RegisterForm() {
     if (hasToken) return;
 
     try {
-      const rawIntent = window.sessionStorage.getItem(salesIntentStorageKey);
+      const rawIntent =
+        window.sessionStorage.getItem(salesIntentStorageKey) ??
+        window.sessionStorage.getItem(pricingIntentStorageKey);
       if (!rawIntent) return;
 
       const intent = JSON.parse(rawIntent) as SalesPackageIntent;

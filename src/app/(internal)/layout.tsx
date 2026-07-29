@@ -18,9 +18,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           {/* Top bar */}
           <header className="h-[44px] border-b border-border flex items-center justify-between px-4 shrink-0 bg-surface-1/50 backdrop-blur-md">
             <div className="flex items-center gap-1.5 text-[13px] text-ink-muted">
-              <span className="font-medium text-ink">Admin Panel</span>
-              <span className="text-ink-muted/50">/</span>
-              <span className="text-ink-muted truncate">
+              <span className="font-medium text-ink truncate">
                 {pathname.includes("billing/plans") ? "Subscription Plans" : "Management"}
               </span>
             </div>

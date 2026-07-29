@@ -7,10 +7,11 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { billingService } from "@/services/billing.service";
@@ -147,6 +148,7 @@ function validateBaselineForm(form: BaselineFormState): string | null {
 
   const invoiceTermsResult = parseBaselineNumber(form.invoiceTermsDays, "Invoice terms days", { integer: true, minExclusive: 0 });
   if (invoiceTermsResult.error) return invoiceTermsResult.error;
+  if (![15, 30].includes(invoiceTermsResult.value!)) return "Invoice terms must be NET 15 or NET 30.";
 
   const invoiceGraceResult = parseBaselineNumber(form.invoiceGraceHours, "Invoice grace hours", { integer: true, minExclusive: 0 });
   if (invoiceGraceResult.error) return invoiceGraceResult.error;
@@ -446,7 +448,6 @@ export default function AdminPlansPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <Badge variant="outline" className="border-hairline bg-surface-2 text-ink">Admin Panel</Badge>
             <h1 className="text-2xl font-semibold tracking-tight">Subscription Plans</h1>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -458,9 +459,6 @@ export default function AdminPlansPage() {
       <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
         <CardHeader>
           <CardTitle>Enterprise baseline</CardTitle>
-          <CardDescription>
-            The single system plan template. Workspace contracts inherit from Enterprise and store negotiated terms on subscriptions.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -559,9 +557,6 @@ export default function AdminPlansPage() {
             <CardTitle className="flex items-center gap-2 text-base font-medium">
               <SlidersHorizontal className="h-4 w-4 text-primary" /> Default service pricing
             </CardTitle>
-            <CardDescription>
-              Service keys are fixed to backend billing events. Admins can adjust cost, markup, and active state.
-            </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -579,7 +574,7 @@ export default function AdminPlansPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2">
             <div className="grid gap-1">
               <Label className="text-xs text-muted-foreground">USD/VND FX</Label>
               <Input
@@ -601,21 +596,13 @@ export default function AdminPlansPage() {
                 onChange={(e) => { setPricingCreditValueVndEdit(e.target.value); setPricingDraftSavedAt(null); }}
               />
             </div>
-            <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-              <p className="text-xs text-muted-foreground">Formula</p>
-              <p className="mt-1 text-xs font-medium">provider cost x FX x markup / credit value</p>
-            </div>
-            <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-              <p className="text-xs text-muted-foreground">Scope</p>
-              <p className="mt-1 text-xs font-medium">Default service baseline</p>
-            </div>
           </div>
 
           <div className="overflow-hidden rounded-md border border-hairline">
             <Table>
               <TableHeader className="bg-surface-2">
-                <TableRow>
-                  <TableHead className="w-[88px]">Active</TableHead>
+                <TableRow className="h-12">
+                  <TableHead className="w-[88px] align-middle">Active</TableHead>
                   <TableHead>Service</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Provider</TableHead>
@@ -631,55 +618,56 @@ export default function AdminPlansPage() {
                   const creditValue = Number(pricingCreditValueVnd) || 0;
                   const unitPrice = calculateDraftUnitPrice(row, fxRate, creditValue);
                   return (
-                    <TableRow key={row.id}>
-                      <TableCell>
+                    <TableRow key={row.id} className="h-[72px] align-middle">
+                      <TableCell className="py-3 align-middle">
                         <Switch
                           checked={row.enabled}
                           onCheckedChange={(checked) => updatePricingDraftRow(row.id, "enabled", checked)}
                         />
                       </TableCell>
-                      <TableCell>
-                        <div className="min-w-[210px] rounded-md border border-hairline bg-muted/40 px-3 py-2">
+                      <TableCell className="py-3 align-middle">
+                        <div className="flex h-12 min-w-[210px] items-center rounded-md border border-hairline bg-muted/40 px-3">
                           <p className="text-xs font-semibold text-foreground">{SERVICE_LABELS[row.chargeType] ?? row.chargeType}</p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">{row.chargeType}</p>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex h-8 min-w-[130px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                      <TableCell className="py-3 align-middle">
+                        <div className="flex h-12 min-w-[130px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
                           {row.unit}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex h-8 min-w-[120px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                      <TableCell className="py-3 align-middle">
+                        <div className="flex h-12 min-w-[120px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
                           {row.provider}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex h-8 min-w-[190px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+                      <TableCell className="py-3 align-middle">
+                        <div className="flex h-12 min-w-[190px] items-center rounded-md border border-hairline bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
                           {row.model}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3 align-middle">
                         <Input
                           type="text"
                           inputMode="decimal"
-                          className="h-8 min-w-[120px] text-right font-mono text-xs"
+                          className="h-12 min-w-[120px] text-right font-mono text-xs"
                           value={formatProviderCostUsd(row.providerUnitCostUsd)}
                           onChange={(e) => updatePricingDraftRow(row.id, "providerUnitCostUsd", Number(e.target.value) || 0)}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3 align-middle">
                         <Input
                           type="number"
                           min={0}
                           step="0.1"
-                          className="h-8 min-w-[86px] text-right font-mono text-xs"
+                          className="h-12 min-w-[86px] text-right font-mono text-xs"
                           value={row.markupMultiplier}
                           onChange={(e) => updatePricingDraftRow(row.id, "markupMultiplier", Number(e.target.value) || 0)}
                         />
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs font-semibold">
-                        {unitPrice.toFixed(6)}
+                      <TableCell className="py-3 align-middle">
+                        <div className="flex h-12 min-w-[100px] items-center justify-end rounded-md border border-transparent px-3 text-right font-mono text-xs font-semibold">
+                          {unitPrice.toFixed(6)}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -688,11 +676,9 @@ export default function AdminPlansPage() {
             </Table>
           </div>
 
-          <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 md:flex-row md:items-center md:justify-between">
-            <p>
-              {isPricingConfigError || isRateCardLoadError
-                ? "Default service pricing is shown from the Enterprise baseline."
-                : "Saving service changes updates the default rate-card baseline for future billing events."}
+          <div className="flex flex-col gap-3 rounded-lg border border-hairline bg-surface-2/50 p-3 md:flex-row md:items-center md:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Formula: <span className="font-mono text-foreground">Unit price = provider cost x FX x markup / credit value</span>
             </p>
             <Button
               variant="outline"
@@ -714,9 +700,6 @@ export default function AdminPlansPage() {
               <Sparkles className="h-5 w-5 text-primary" />
               Edit Enterprise baseline
             </DialogTitle>
-            <DialogDescription>
-              These values are the default Enterprise terms used before a workspace-specific contract override is saved.
-            </DialogDescription>
           </DialogHeader>
 
           {errorMsg && (
@@ -726,73 +709,81 @@ export default function AdminPlansPage() {
           )}
 
           <div className="grid gap-5 py-4">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="grid gap-2">
                 <Label>Price</Label>
-                <Input type="number" min={MIN_VND_PLAN_PRICE} step="1000" value={formState.price} onChange={(e) => updateFormField("price", e.target.value)} />
+                <Input className="h-11" type="number" min={MIN_VND_PLAN_PRICE} step="1000" value={formState.price} onChange={(e) => updateFormField("price", e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Credits/Cycle</Label>
-                <Input type="number" min={1} step="1" value={formState.creditsPerCycle} onChange={(e) => updateFormField("creditsPerCycle", e.target.value)} />
+                <Input className="h-11" type="number" min={1} step="1" value={formState.creditsPerCycle} onChange={(e) => updateFormField("creditsPerCycle", e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Warning credits</Label>
-                <Input type="number" min={0} step="1" value={formState.lowBalanceThresholdCredits} onChange={(e) => updateFormField("lowBalanceThresholdCredits", e.target.value)} />
+                <Input className="h-11" type="number" min={0} step="1" value={formState.lowBalanceThresholdCredits} onChange={(e) => updateFormField("lowBalanceThresholdCredits", e.target.value)} />
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="grid gap-2">
                 <Label>Extra usage cap</Label>
-                <Input type="number" min={0} step="1" value={formState.overageCapCredits} onChange={(e) => updateFormField("overageCapCredits", e.target.value)} />
+                <Input className="h-11" type="number" min={0} step="1" value={formState.overageCapCredits} onChange={(e) => updateFormField("overageCapCredits", e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Extra usage price/credit</Label>
-                <Input type="number" min={0} step="0.01" value={formState.overagePricePerCredit} onChange={(e) => updateFormField("overagePricePerCredit", e.target.value)} />
+                <Input className="h-11" type="number" min={0} step="0.01" value={formState.overagePricePerCredit} onChange={(e) => updateFormField("overagePricePerCredit", e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Rollover cap</Label>
-                <Input type="number" min={0} step="1" value={formState.rolloverCapCredits} onChange={(e) => updateFormField("rolloverCapCredits", e.target.value)} />
+                <Input className="h-11" type="number" min={0} step="1" value={formState.rolloverCapCredits} onChange={(e) => updateFormField("rolloverCapCredits", e.target.value)} />
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-4">
               <div className="grid gap-2">
                 <Label>Invoice terms days</Label>
-                <Input type="number" min={1} step="1" value={formState.invoiceTermsDays} onChange={(e) => updateFormField("invoiceTermsDays", e.target.value)} />
+                <Select value={formState.invoiceTermsDays || "15"} onValueChange={(value) => updateFormField("invoiceTermsDays", value ?? "15")}>
+                  <SelectTrigger className="h-11 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">NET 15</SelectItem>
+                    <SelectItem value="30">NET 30</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <Label>Invoice grace hours</Label>
-                <Input type="number" min={1} step="1" value={formState.invoiceGraceHours} onChange={(e) => updateFormField("invoiceGraceHours", e.target.value)} />
+                <Input className="h-11" type="number" min={1} step="1" value={formState.invoiceGraceHours} onChange={(e) => updateFormField("invoiceGraceHours", e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Max participants</Label>
-                <Input type="number" min={2} step="1" value={formState.maxParticipants} onChange={(e) => updateFormField("maxParticipants", e.target.value)} />
+                <Input className="h-11" type="number" min={2} step="1" value={formState.maxParticipants} onChange={(e) => updateFormField("maxParticipants", e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Max languages</Label>
-                <Input type="number" min={1} max={3} step="1" value={formState.maxLanguages} onChange={(e) => updateFormField("maxLanguages", e.target.value)} />
+                <Input className="h-11" type="number" min={1} max={3} step="1" value={formState.maxLanguages} onChange={(e) => updateFormField("maxLanguages", e.target.value)} />
               </div>
             </div>
 
-            <div className="grid gap-4 rounded-lg border border-hairline bg-surface-2/40 p-4 sm:grid-cols-2">
-              <div className="flex items-center justify-between gap-4">
+            <div className="grid gap-x-6 gap-y-4 rounded-lg border border-hairline bg-surface-2/40 p-5 md:grid-cols-2">
+              <div className="grid min-h-10 grid-cols-[1fr_auto] items-center gap-4">
                 <Label>Voice Clone</Label>
                 <Switch checked={formState.voiceCloneEnabled} onCheckedChange={(checked) => updateFormField("voiceCloneEnabled", checked)} />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="grid min-h-10 grid-cols-[1fr_auto] items-center gap-4">
                 <Label>AI Service ACL</Label>
                 <Switch checked={formState.aiAssistantEnabled} onCheckedChange={(checked) => updateFormField("aiAssistantEnabled", checked)} />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="grid min-h-10 grid-cols-[1fr_auto] items-center gap-4">
                 <Label>Glossary Access</Label>
                 <Switch checked={formState.glossaryEnabled} onCheckedChange={(checked) => updateFormField("glossaryEnabled", checked)} />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="grid min-h-10 grid-cols-[1fr_auto] items-center gap-4">
                 <Label>Dedicated GPU</Label>
                 <Switch checked={formState.dedicatedGpu} onCheckedChange={(checked) => updateFormField("dedicatedGpu", checked)} />
               </div>
-              <div className="flex items-center justify-between gap-4 sm:col-span-2">
+              <div className="grid min-h-10 grid-cols-[1fr_auto] items-center gap-4 md:col-span-2">
                 <div>
                   <Label>Active baseline</Label>
                   <p className="mt-1 text-xs text-muted-foreground">Use this template for new Enterprise contracts.</p>
