@@ -128,6 +128,7 @@ const salesFeatureOptions = [
   { label: "AI summaries", value: "summaries" },
   { label: "AI Assistant", value: "assistant" },
   { label: "Voice preview", value: "voice" },
+  { label: "Google Meet integration", value: "google_meet" },
 ];
 
 const salesVolumeOptions = [

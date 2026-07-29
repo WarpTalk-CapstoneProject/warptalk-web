@@ -50,7 +50,9 @@ const CONTRACT_AI_SERVICE_OPTIONS = [
   "Voice translation / TTS",
   "Voice cloning",
   "Glossary access",
+  "Google Meet integration",
 ];
+const GOOGLE_MEET_INTEGRATION_LABEL = "Google Meet integration";
 
 function formatDate(value?: string | null) {
   return value ? format(new Date(value), "MMM d, yyyy") : "--";
@@ -304,6 +306,13 @@ function WorkspaceEnterpriseBillingContent() {
         `Required features / limits: ${requiredFeatures}`,
       ].filter(Boolean).join("\n");
 
+      const featureInterests = [
+        "enterprise_contract",
+        "workspace_trial",
+        "ai_meetings",
+        ...(requestedAiServices.includes(GOOGLE_MEET_INTEGRATION_LABEL) ? ["google_meet"] : []),
+      ];
+
       return billingService.createWorkspaceSalesInquiry({
         workspaceId,
         firstName,
@@ -311,7 +320,7 @@ function WorkspaceEnterpriseBillingContent() {
         workEmail: billingContactEmail || user.email,
         company: companyLegalName || workspaceName,
         requestType: "enterprise_contract_request",
-        featureInterests: ["enterprise_contract", "workspace_trial", "ai_meetings"],
+        featureInterests,
         targetLanguages: requestedLanguages,
         currentMonthlyMeetingVolume: `${requestedMonthlyCredits} credits / month`,
         expectedMonthlyMeetingVolumeInSixMonths: `${requestedMonthlyCredits} credits / month`,
