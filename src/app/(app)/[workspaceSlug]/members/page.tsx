@@ -88,6 +88,9 @@ export default function WorkspaceMembersPage() {
   const isOwner = currentRole === "owner";
   const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
+  const memberGridClass = isOwnerOrAdmin
+    ? "grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px]"
+    : "grid-cols-[2.5fr_100px_100px_100px_120px]";
 
   const membersList = membersQuery.data?.items || [];
 
@@ -304,14 +307,13 @@ export default function WorkspaceMembersPage() {
         ) : (
           <div className="min-w-[750px] divide-y divide-hairline/40">
             {/* Header row */}
-            <div className="grid grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px] items-center gap-4 px-2 py-2 text-[11px] font-semibold uppercase text-ink-muted">
+            <div className={`grid ${memberGridClass} items-center gap-4 px-2 py-2 text-[11px] font-semibold uppercase text-ink-muted`}>
               <span>Name</span>
               <span>Role</span>
               <span>Membership Type</span>
               <span>Status</span>
               <span>Joined</span>
-              <span className="text-center">Host meetings</span>
-              <span className="text-right">Actions</span>
+              {isOwnerOrAdmin && <><span className="text-center">Host meetings</span><span className="text-right">Actions</span></>}
             </div>
 
             {/* Data rows */}
@@ -323,7 +325,7 @@ export default function WorkspaceMembersPage() {
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px] items-center gap-4 rounded-md px-2 py-3 transition-colors hover:bg-surface-2/40"
+                  className={`grid ${memberGridClass} items-center gap-4 rounded-md px-2 py-3 transition-colors hover:bg-surface-2/40`}
                 >
                   {/* User name, email & avatar */}
                   <div className="flex items-center gap-3 min-w-0">
@@ -352,7 +354,9 @@ export default function WorkspaceMembersPage() {
                   {/* Role Badge */}
                   <div>
                     <Badge variant="outline" className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink">
-                      {member.roleName}
+                       {member.membershipType.toLowerCase() === "external"
+                         ? "Member · External · Fixed"
+                         : member.roleName}
                     </Badge>
                   </div>
 
@@ -386,29 +390,29 @@ export default function WorkspaceMembersPage() {
                     {new Date(member.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </span>
 
-                  {/* Meeting host toggle */}
-                  <div className="flex justify-center">
-                    <Switch
-                      checked={member.canCreateMeetings}
-                      disabled={!isOwnerOrAdmin || isSelf || memberRole === "owner"}
-                      onCheckedChange={() =>
-                        handleToggleCanCreateMeetings(member.userId, member.canCreateMeetings)
-                      }
-                    />
-                  </div>
+                  {isOwnerOrAdmin && <>
+                    {/* Meeting host toggle */}
+                    <div className="flex justify-center">
+                      <Switch
+                        checked={member.canCreateMeetings}
+                        disabled={isSelf || memberRole === "owner"}
+                        onCheckedChange={() =>
+                          handleToggleCanCreateMeetings(member.userId, member.canCreateMeetings)
+                        }
+                      />
+                    </div>
 
-                  {/* Remove button */}
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => setMemberToRemove({ id: member.userId, name: member.fullName })}
-                      disabled={!isOwnerOrAdmin || isSelf || memberRole === "owner" || (isAdmin && memberRole === "admin")}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
-                      title="Remove from workspace"
-                      aria-label={`Remove ${member.fullName} from workspace`}
-                    >
-                      <UserMinus className="h-4 w-4" />
-                    </button>
-                  </div>
+                    {/* Remove button */}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setMemberToRemove({ id: member.userId, name: member.fullName })}
+                        disabled={isSelf || memberRole === "owner" || (isAdmin && memberRole === "admin")}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
+                        title="Remove from workspace"
+                        aria-label={`Remove ${member.fullName} from workspace`}
+                      ><UserMinus className="h-4 w-4" /></button>
+                    </div>
+                  </>}
                 </div>
               );
             })}
@@ -475,7 +479,7 @@ export default function WorkspaceMembersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Member" className="text-xs">Member (Standard)</SelectItem>
-                  <SelectItem value="Admin" className="text-xs">Admin (Operational Manager)</SelectItem>
+                  {isOwner && <SelectItem value="Admin" className="text-xs">Admin (Operational Manager)</SelectItem>}
                 </SelectContent>
               </Select>
               {inviteErrors.roleName && (

@@ -1,15 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
-import { Spinner, Check, PencilSimple } from "@phosphor-icons/react";
+import { Spinner, PencilSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useRemoveWorkspaceMember } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAutoSaveQueue } from "@/hooks/use-auto-save";
+import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
+import type { UpdateProfileRequest } from "@/types/auth";
+import {
+  DEFAULT_PROFILE_LANGUAGE,
+  getDefaultProfileTimezone,
+  getProfileLanguageOptions,
+  getSupportedTimezoneOptions,
+} from "@/lib/profile-localization";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -32,13 +42,25 @@ export default function SettingsPage() {
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const loadedUserRef = useRef<string | null>(null);
+  const lastQueuedValuesRef = useRef<Record<string, string>>({});
 
   // Form State
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [preferredLanguage, setPreferredLanguage] = useState("vi-VN");
-  const [timezone, setTimezone] = useState("Asia/Ho_Chi_Minh");
+  const [preferredLanguage, setPreferredLanguage] = useState(DEFAULT_PROFILE_LANGUAGE);
+  const [timezone, setTimezone] = useState(getDefaultProfileTimezone);
+  const languageOptions = useMemo(() => {
+    const options = getProfileLanguageOptions();
+    return options.some((option) => option.value === preferredLanguage)
+      ? options
+      : [{ value: preferredLanguage, label: preferredLanguage }, ...options];
+  }, [preferredLanguage]);
+  const timezoneOptions = useMemo(() => {
+    const options = getSupportedTimezoneOptions();
+    return options.includes(timezone) ? options : [timezone, ...options];
+  }, [timezone]);
 
   // Leave workspace mutation
   const removeMember = useRemoveWorkspaceMember(activeWorkspaceId || "");
@@ -56,8 +78,8 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!mounted || !isAuthenticated || !user) return;
 
-    const currentUserId = user.id;
-    const currentUserEmail = user.email;
+    if (loadedUserRef.current === user.id) return;
+    const userId = user.id;
 
     async function loadProfile() {
       try {
@@ -65,10 +87,19 @@ export default function SettingsPage() {
         if (data) {
           setFullName(data.fullName || "");
           setPhone(data.phone || "");
-          setPreferredLanguage(data.preferredLanguage || "vi-VN");
-          setTimezone(data.timezone || "Asia/Ho_Chi_Minh");
+          const nextPreferredLanguage = data.preferredLanguage || DEFAULT_PROFILE_LANGUAGE;
+          const nextTimezone = data.timezone || getDefaultProfileTimezone();
+          setPreferredLanguage(nextPreferredLanguage);
+          setTimezone(nextTimezone);
+          lastQueuedValuesRef.current = {
+            fullName: JSON.stringify(data.fullName || ""),
+            phone: JSON.stringify(data.phone || ""),
+            preferredLanguage: JSON.stringify(nextPreferredLanguage),
+            timezone: JSON.stringify(nextTimezone),
+          };
+          loadedUserRef.current = userId;
         }
-      } catch (err) {
+      } catch {
         toast.error("Failed to load user profile");
       } finally {
         setLoading(false);
@@ -78,38 +109,49 @@ export default function SettingsPage() {
     loadProfile();
   }, [mounted, isAuthenticated, user]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim()) {
-      toast.error("Full name is required");
+  const saveProfile = useCallback(async (patch: UpdateProfileRequest) => {
+    const { data } = await authService.updateProfile(patch);
+    updateUser({
+      fullName: data.fullName,
+      phone: data.phone,
+      preferredLanguage: data.preferredLanguage,
+      timezone: data.timezone,
+    });
+    return data;
+  }, [updateUser]);
+
+  const autoSave = useAutoSaveQueue<UpdateProfileRequest>({
+    save: saveProfile,
+    onError: (error) => {
+      const errorMsg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error
+        || "Failed to update profile";
+      setProfileError(errorMsg);
+      toast.error(errorMsg);
+    },
+  });
+
+  const retryProfileSave = () => {
+    setProfileError(null);
+    autoSave.retry();
+  };
+
+  const queueProfileField = (field: keyof UpdateProfileRequest, value: string) => {
+    const normalizedValue = field === "fullName" || field === "phone" ? value.trim() : value;
+    if (field === "fullName" && !normalizedValue) {
+      setProfileError("Full name is required");
       return;
     }
+    setProfileError(null);
+    const serializedValue = JSON.stringify(normalizedValue);
+    if (lastQueuedValuesRef.current[field] === serializedValue) return;
+    lastQueuedValuesRef.current[field] = serializedValue;
+    autoSave.enqueue({ [field]: normalizedValue });
+  };
 
-    setSaving(true);
-    try {
-      const { data } = await authService.updateProfile({
-        fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
-        preferredLanguage,
-        timezone,
-      });
-
-      if (data && user) {
-        // Update local auth store
-        updateUser({
-          fullName: data.fullName,
-          phone: data.phone,
-          preferredLanguage: data.preferredLanguage,
-          timezone: data.timezone,
-        });
-        toast.success("Profile updated successfully!");
-      }
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.error || "Failed to update profile";
-      toast.error(errorMsg);
-    } finally {
-      setSaving(false);
-    }
+  const commitTextField = (field: "fullName" | "phone", value: string) => {
+    if (field === "fullName") setFullName(value);
+    else setPhone(value);
+    queueProfileField(field, value);
   };
 
   const handleLeaveWorkspace = async () => {
@@ -124,7 +166,7 @@ export default function SettingsPage() {
         await removeMember.mutateAsync(user.id);
         toast.success("You have left the workspace.");
         router.push("/workspace");
-      } catch (err) {
+      } catch {
         toast.error("Failed to leave workspace.");
       }
     }
@@ -151,13 +193,16 @@ export default function SettingsPage() {
   return (
     <div className="w-full max-w-2xl mx-auto py-8 px-4 flex flex-col gap-8 text-ink">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight text-ink">
-          Profile
-        </h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-xl font-bold tracking-tight text-ink">Profile</h1>
+        <AutoSaveStatusBadge
+          status={profileError ? "error" : autoSave.status}
+          invalid={Boolean(profileError)}
+          onRetry={profileError === "Full name is required" ? undefined : retryProfileSave}
+        />
       </div>
 
-      <form onSubmit={handleSave} className="flex flex-col gap-8">
+      <div className="flex flex-col gap-8">
         
         {/* Section 1: User Profile Settings */}
         <div className="flex flex-col gap-3">
@@ -207,9 +252,19 @@ export default function SettingsPage() {
                 placeholder="Your full name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                disabled={saving}
+                onBlur={(e) => commitTextField("fullName", e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitTextField("fullName", e.currentTarget.value);
+                    e.currentTarget.blur();
+                  }
+                }}
                 className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px] focus-visible:ring-1 focus-visible:ring-primary"
               />
+              {profileError === "Full name is required" && (
+                <span className="text-[11px] text-destructive">{profileError}</span>
+              )}
             </div>
 
             {/* Phone Number */}
@@ -222,9 +277,70 @@ export default function SettingsPage() {
                 placeholder="e.g. +84 987654321"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                disabled={saving}
+                onBlur={(e) => commitTextField("phone", e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitTextField("phone", e.currentTarget.value);
+                    e.currentTarget.blur();
+                  }
+                }}
                 className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px] focus-visible:ring-1 focus-visible:ring-primary"
               />
+            </div>
+
+            {/* Preferred language */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-ink">Preferred language</span>
+              </div>
+              <Select
+                value={preferredLanguage}
+                onValueChange={(val) => {
+                  if (val) {
+                    setPreferredLanguage(val);
+                    queueProfileField("preferredLanguage", val);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px]">
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  {languageOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value} className="text-xs">
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Timezone */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-ink">Timezone</span>
+              </div>
+              <Select
+                value={timezone}
+                onValueChange={(val) => {
+                  if (val) {
+                    setTimezone(val);
+                    queueProfileField("timezone", val);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px]">
+                  <SelectValue placeholder="Select timezone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {timezoneOptions.map((option) => (
+                    <SelectItem key={option} value={option} className="text-xs">
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
           </div>
@@ -261,7 +377,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={handleLeaveWorkspace}
-                disabled={saving || isOwner}
+                disabled={autoSave.hasPendingChanges || isOwner}
                 title={isOwner ? "Transfer workspace ownership before leaving" : "Leave workspace"}
                 className="text-xs font-semibold text-destructive hover:text-red-600 transition-colors cursor-pointer"
               >
@@ -271,28 +387,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Buttons */}
-        <div className="pt-4 border-t border-hairline flex justify-end gap-3">
-          <button
-            type="submit"
-            className="flex h-8 px-5 items-center justify-center gap-2 rounded bg-primary font-medium text-white transition hover:bg-primary-hover disabled:opacity-50 text-xs cursor-pointer shadow-sm"
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Check size={14} />
-                Save Changes
-              </>
-            )}
-          </button>
-        </div>
-
-      </form>
+      </div>
     </div>
   );
 }

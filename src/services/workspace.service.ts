@@ -5,6 +5,7 @@ import type {
   WorkspaceDto,
   CreateWorkspaceRequest,
   WorkspaceSettingsDto,
+  VerifiedDomainDto,
   WorkspaceMemberDto,
   WorkspaceInvitationDto,
   WorkspaceDocumentDto,
@@ -14,7 +15,10 @@ import type {
   PagedResult,
   SelectWorkspaceResponse,
   InviteMemberResponse,
+  WorkspaceRoleChangePreview,
+  WorkspaceRoleChangeResult,
   PreviewInvitationResponse,
+  ApproveJoinRequestResponse,
   ExtractedTextDto
 } from "@/types/workspace";
 
@@ -51,6 +55,25 @@ export const WorkspaceService = {
     await apiClient.put(API.workspaces.settings(id), settings);
   },
 
+  async patchSettings(id: string, patch: Partial<WorkspaceSettingsDto>): Promise<WorkspaceSettingsDto> {
+    const { data } = await apiClient.patch<WorkspaceSettingsDto>(API.workspaces.settings(id), patch);
+    return data;
+  },
+
+  async listVerifiedDomains(workspaceId: string): Promise<VerifiedDomainDto[]> {
+    const { data } = await apiClient.get<VerifiedDomainDto[]>(API.workspaces.verifiedDomains(workspaceId));
+    return data;
+  },
+
+  async addVerifiedDomain(workspaceId: string, domain: string): Promise<VerifiedDomainDto> {
+    const { data } = await apiClient.post<VerifiedDomainDto>(API.workspaces.verifiedDomains(workspaceId), { domain });
+    return data;
+  },
+
+  async revokeVerifiedDomain(workspaceId: string, domainId: string): Promise<void> {
+    await apiClient.delete(API.workspaces.verifiedDomainDetail(workspaceId, domainId));
+  },
+
   async deleteWorkspace(id: string): Promise<void> {
     await apiClient.delete(API.workspaces.get(id));
   },
@@ -69,6 +92,21 @@ export const WorkspaceService = {
 
   async changeMemberRole(workspaceId: string, userId: string, roleName: string): Promise<void> {
     await apiClient.put(API.workspaces.memberRole(workspaceId, userId), { roleName });
+  },
+
+  async previewMemberRoleChange(workspaceId: string, userId: string, toRole: "Admin" | "Member"): Promise<WorkspaceRoleChangePreview> {
+    const { data } = await apiClient.get<WorkspaceRoleChangePreview>(API.workspaces.roleChangePreview(workspaceId, userId), { params: { toRole } });
+    return data;
+  },
+
+  async applyMemberRoleChange(workspaceId: string, userId: string, request: {
+    targetRole: "Admin" | "Member";
+    idempotencyKey: string;
+    previewToken: string;
+    correlationId?: string;
+  }): Promise<WorkspaceRoleChangeResult> {
+    const { data } = await apiClient.post<WorkspaceRoleChangeResult>(API.workspaces.roleChange(workspaceId, userId), request);
+    return data;
   },
 
   async transferOwnership(workspaceId: string, newOwnerId: string): Promise<void> {
@@ -93,9 +131,15 @@ export const WorkspaceService = {
     return data;
   },
 
-  async listInvitations(workspaceId: string, page = 1, pageSize = 10, search = ""): Promise<PagedResult<WorkspaceInvitationDto>> {
+  async listInvitations(
+    workspaceId: string,
+    page = 1,
+    pageSize = 10,
+    search = "",
+    kind: "outbound" | "join-request" = "outbound",
+  ): Promise<PagedResult<WorkspaceInvitationDto>> {
     const { data } = await apiClient.get<PagedResult<WorkspaceInvitationDto>>(API.workspaces.invitations(workspaceId), {
-      params: { page, pageSize, search },
+      params: { page, pageSize, search, kind },
     });
     return data;
   },
@@ -120,6 +164,32 @@ export const WorkspaceService = {
 
   async acceptInvitationById(inviteId: string): Promise<void> {
     await apiClient.post(API.workspaces.acceptInvitationById(inviteId));
+  },
+
+  async createJoinRequest(workspaceSlug: string): Promise<WorkspaceInvitationDto> {
+    const { data } = await apiClient.post<WorkspaceInvitationDto>(API.workspaces.joinRequests, { workspaceSlug });
+    return data;
+  },
+
+  async getMyJoinRequests(): Promise<WorkspaceInvitationDto[]> {
+    const { data } = await apiClient.get<WorkspaceInvitationDto[]>(API.workspaces.myJoinRequests);
+    return data;
+  },
+
+  async approveJoinRequest(
+    workspaceId: string,
+    invitationId: string,
+    membershipType: "Internal" | "External"
+  ): Promise<ApproveJoinRequestResponse> {
+    const { data } = await apiClient.post<ApproveJoinRequestResponse>(
+      API.workspaces.approveJoinRequest(workspaceId, invitationId),
+      { membershipType }
+    );
+    return data;
+  },
+
+  async rejectJoinRequest(workspaceId: string, invitationId: string): Promise<void> {
+    await apiClient.post(API.workspaces.rejectJoinRequest(workspaceId, invitationId));
   },
 
   // ─── Documents ───

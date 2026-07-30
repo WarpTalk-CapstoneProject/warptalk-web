@@ -22,6 +22,7 @@ import {
   Sliders,
   PaperPlaneTilt,
   Globe,
+  EnvelopeSimple,
 } from "@phosphor-icons/react/dist/ssr";
 import type { IconProps } from "@phosphor-icons/react";
 type IconType = React.ElementType<IconProps>;
@@ -206,6 +207,7 @@ export function LinearSidebar() {
   );
 
   if (isOwnerOrAdmin) {
+    workspaceNav.push({ icon: EnvelopeSimple, label: "Invitations", href: `/${slug}/invitations` });
     workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
@@ -275,6 +277,17 @@ export function LinearSidebar() {
                     </span>
                   </Link>
                 </div>
+                {role?.toLowerCase() === "owner" && (
+                  <div className={cn(
+                    "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                    pathname === `/${activeWorkspaceSlug}/settings/access-management` ? "bg-surface-2" : "hover:bg-surface-2"
+                  )}>
+                    <Link href={`/${activeWorkspaceSlug}/settings/access-management`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                      <Users size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Manage access</span>
+                    </Link>
+                  </div>
+                )}
                 {role?.toLowerCase() === "owner" && (
                   <div className={cn(
                     "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",

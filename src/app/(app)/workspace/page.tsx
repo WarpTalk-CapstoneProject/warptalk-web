@@ -7,6 +7,10 @@ import {
   SignIn,
   Spinner,
   EnvelopeSimple,
+  ArrowRight,
+  CheckCircle,
+  Clock,
+  XCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
 
@@ -17,6 +21,7 @@ import {
   usePendingWorkspaceInvitations,
   useWorkspaces,
   useSelectWorkspace,
+  useMyJoinRequests,
 } from "@/hooks/use-workspace";
 
 export default function WorkspaceOnboardingGatePage() {
@@ -24,20 +29,15 @@ export default function WorkspaceOnboardingGatePage() {
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
-  const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
+  const { data: workspacesData, isLoading: workspacesLoading, refetch: refetchWorkspaces } = useWorkspaces(1, 100);
   const { data: pendingInvitationsData, isLoading: pendingInvitationsLoading } = usePendingWorkspaceInvitations();
+  const { data: joinRequestsData, isLoading: joinRequestsLoading, refetch: refetchJoinRequests } = useMyJoinRequests();
   const pendingInvitations = useMemo(() => pendingInvitationsData ?? [], [pendingInvitationsData]);
+  const joinRequests = useMemo(() => joinRequestsData ?? [], [joinRequestsData]);
   const selectWorkspace = useSelectWorkspace();
   const acceptInvitation = useAcceptWorkspaceInvitationById();
-
-  useEffect(() => {
-    if (activeWorkspaceId) {
-      router.replace(`/${activeWorkspaceSlug || "workspace"}/home`);
-    }
-  }, [activeWorkspaceId, activeWorkspaceSlug, router]);
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
@@ -73,7 +73,23 @@ export default function WorkspaceOnboardingGatePage() {
     await acceptInvitation.mutateAsync(invitationId);
   }
 
-  if (!isAuthenticated || activeWorkspaceId || workspacesLoading || pendingInvitationsLoading) {
+  async function handleOpenWorkspace(workspaceId: string, workspaceSlug?: string | null) {
+    if (!workspaceSlug) return;
+    const workspace = workspacesData?.items.find((item) => item.id === workspaceId);
+    await selectWorkspace.mutateAsync(workspaceId);
+    setActiveWorkspace(
+      workspaceId,
+      workspace?.name || "Workspace",
+      workspaceSlug,
+      workspace?.role || "Member",
+      workspace?.membershipType || "Internal",
+      workspace?.defaultLanguage || "en"
+    );
+    await refetchWorkspaces();
+    router.push(`/${workspaceSlug}/home`);
+  }
+
+  if (!isAuthenticated || workspacesLoading || pendingInvitationsLoading || joinRequestsLoading) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -142,6 +158,79 @@ export default function WorkspaceOnboardingGatePage() {
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {workspacesData?.items && workspacesData.items.length > 0 && (
+            <div className="mt-8 rounded-lg border border-border bg-surface-1 text-left shadow-sm">
+              <div className="border-b border-border px-5 py-4">
+                <div className="text-[15px] font-semibold text-foreground">Your workspaces</div>
+                <p className="mt-1 text-[12px] text-ink-muted">Choose a workspace to continue. Pending Join Requests do not block access to these workspaces.</p>
+              </div>
+              <div className="divide-y divide-border">
+                {workspacesData.items.map((workspace) => (
+                  <button
+                    key={workspace.id}
+                    type="button"
+                    onClick={() => handleOpenWorkspace(workspace.id, workspace.slug)}
+                    className="flex w-full items-center justify-between px-5 py-3 text-left transition hover:bg-surface-2/60"
+                  >
+                    <span>
+                      <span className="block text-[13px] font-medium text-foreground">{workspace.name}</span>
+                      <span className="mt-0.5 block text-[11px] text-ink-muted">{workspace.role} · {workspace.membershipType}</span>
+                    </span>
+                    <ArrowRight size={15} className="text-ink-muted" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {joinRequests.length > 0 && (
+            <div className="mt-8 rounded-lg border border-border bg-surface-1 text-left shadow-sm">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                <div>
+                  <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+                    <Clock size={18} />
+                    Join requests
+                  </div>
+                  <p className="mt-1 text-[12px] text-ink-muted">
+                    Each request is tracked independently. Your active workspace stays available while another request is reviewed.
+                  </p>
+                </div>
+                <button type="button" onClick={() => refetchJoinRequests()} className="text-[11px] font-semibold text-primary hover:underline">
+                  Refresh
+                </button>
+              </div>
+              <div className="divide-y divide-border">
+                {joinRequests.map((request) => {
+                  const status = request.status.toUpperCase();
+                  const isApproved = status === "ACCEPTED";
+                  const isRejected = status === "REJECTED";
+                  return (
+                    <div key={request.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                      <div className="flex min-w-0 items-start gap-3">
+                        {isApproved ? <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-600" /> : isRejected ? <XCircle size={18} className="mt-0.5 shrink-0 text-destructive" /> : <Clock size={18} className="mt-0.5 shrink-0 text-amber-600" />}
+                        <div className="min-w-0">
+                          <div className="truncate text-[14px] font-medium text-foreground">{request.workspaceName || request.workspaceSlug || "Workspace"}</div>
+                          <div className="mt-1 text-[12px] text-ink-muted">
+                            {isApproved ? "Approved" : isRejected ? "Rejected" : "Waiting for Owner/Admin approval"} · {request.membershipType} provisional
+                          </div>
+                        </div>
+                      </div>
+                      {isApproved && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenWorkspace(request.workspaceId, request.workspaceSlug)}
+                          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[11px] font-semibold text-white hover:bg-primary-hover"
+                        >
+                          Open workspace <ArrowRight size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

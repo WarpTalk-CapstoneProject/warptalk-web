@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Spinner, ArrowCounterClockwise } from "@phosphor-icons/react";
+import { Spinner } from "@phosphor-icons/react";
 
 import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { UpdateUserSettingsRequest } from "@/types/auth";
+import { useAutoSaveQueue } from "@/hooks/use-auto-save";
+import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
+import { parseIntegerInRange } from "@/lib/settings-validation";
 
 const preferencesSchema = z.object({
   defaultSpeakLanguage: z.string().min(1, "Required"),
@@ -22,9 +25,9 @@ const preferencesSchema = z.object({
   defaultTranslationRoomType: z.string().min(1, "Required"),
   autoRecordTranslationRooms: z.boolean(),
   autoGenerateSummary: z.boolean(),
-  defaultMaxParticipants: z.number().min(1, "At least 1 participant").max(100, "Max 100"),
+  defaultMaxParticipants: z.number().int("Must be a whole number").min(1, "At least 1 participant").max(500, "Max 500"),
   theme: z.string().min(1, "Required"),
-  transcriptFontSize: z.number().min(10, "Min 10px").max(32, "Max 32px"),
+  transcriptFontSize: z.number().int("Must be a whole number").min(10, "Min 10px").max(32, "Max 32px"),
   showOriginalTranscript: z.boolean(),
   showTranslatedTranscript: z.boolean(),
   highContrast: z.boolean(),
@@ -41,8 +44,8 @@ const languages = [
 
 export default function PersonalPreferencesPage() {
   const queryClient = useQueryClient();
-  const { defaultLanguage } = useWorkspaceStore();
-  const lang = defaultLanguage || "en";
+  const initializedRef = useRef(false);
+  const lastQueuedValuesRef = useRef<Record<string, string>>({});
 
   // Load preferences from Auth Service API
   const { data: settingsData, isLoading, error } = useQuery({
@@ -55,40 +58,44 @@ export default function PersonalPreferencesPage() {
 
   // Save mutation
   const updateSettingsMutation = useMutation({
-    mutationFn: async (data: PreferencesFormData) => {
+    mutationFn: async (data: Partial<UpdateUserSettingsRequest>) => {
       const res = await authService.updateSettings(data);
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success("Preferences updated successfully.");
       queryClient.setQueryData(["personal-settings"], data);
-    },
-    onError: () => {
-      toast.error("Failed to update preferences");
     },
   });
 
   const {
     register,
-    handleSubmit,
     setValue,
     watch,
     reset,
-    formState: { isSubmitting, isDirty },
+    formState: { isSubmitting, errors },
   } = useForm<PreferencesFormData>({
     resolver: zodResolver(preferencesSchema),
   });
 
   const watchAll = watch();
 
+  const savePreference = useCallback(
+    (patch: Partial<UpdateUserSettingsRequest>) => updateSettingsMutation.mutateAsync(patch),
+    [updateSettingsMutation],
+  );
+  const autoSave = useAutoSaveQueue<Partial<UpdateUserSettingsRequest>>({
+    save: savePreference,
+    onError: () => toast.error("Failed to update preferences"),
+  });
+
   useEffect(() => {
-    if (settingsData) {
-      reset({
+    if (settingsData && !initializedRef.current) {
+      const initialValues: PreferencesFormData = {
         defaultSpeakLanguage: settingsData.defaultSpeakLanguage || "en",
         defaultListenLanguage: settingsData.defaultListenLanguage || "en",
         voiceCloneEnabled: settingsData.voiceCloneEnabled ?? true,
         micNoiseSuppression: settingsData.micNoiseSuppression ?? true,
-        defaultTranslationRoomType: settingsData.defaultTranslationRoomType || "webrtc",
+        defaultTranslationRoomType: settingsData.defaultTranslationRoomType || "instant",
         autoRecordTranslationRooms: settingsData.autoRecordTranslationRooms ?? false,
         autoGenerateSummary: settingsData.autoGenerateSummary ?? false,
         defaultMaxParticipants: settingsData.defaultMaxParticipants ?? 10,
@@ -98,7 +105,12 @@ export default function PersonalPreferencesPage() {
         showTranslatedTranscript: settingsData.showTranslatedTranscript ?? true,
         highContrast: settingsData.highContrast ?? false,
         screenReaderMode: settingsData.screenReaderMode ?? false,
-      });
+      };
+      reset(initialValues);
+      lastQueuedValuesRef.current = Object.fromEntries(
+        Object.entries(initialValues).map(([key, value]) => [key, JSON.stringify(value)]),
+      );
+      initializedRef.current = true;
     }
   }, [settingsData, reset]);
 
@@ -121,20 +133,40 @@ export default function PersonalPreferencesPage() {
     );
   }
 
-  const handlePreferencesSubmit = (formData: PreferencesFormData) => {
-    updateSettingsMutation.mutate(formData);
+  const queuePreference = <K extends keyof PreferencesFormData>(field: K, value: PreferencesFormData[K]) => {
+    setValue(field as never, value as never, { shouldDirty: true, shouldValidate: true });
+    const serializedValue = JSON.stringify(value);
+    if (lastQueuedValuesRef.current[String(field)] === serializedValue) return;
+    lastQueuedValuesRef.current[String(field)] = serializedValue;
+    autoSave.enqueue({ [field]: value } as Partial<UpdateUserSettingsRequest>);
+  };
+
+  const commitNumericField = (field: "defaultMaxParticipants" | "transcriptFontSize", rawValue: string) => {
+    const limits = field === "defaultMaxParticipants" ? [1, 500] : [10, 32];
+    const parsedInput = parseIntegerInRange(rawValue, limits[0], limits[1]);
+    const value = parsedInput.value;
+    setValue(field, value, { shouldDirty: true, shouldValidate: true });
+    if (!parsedInput.ok) return;
+    queuePreference(field, value);
   };
 
   return (
     <div className="w-full max-w-2xl mx-auto py-8 px-4 flex flex-col gap-8 text-ink">
       
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight text-ink">Settings</h1>
-        <p className="text-xs text-ink-muted">Configure your personal language preferences, client audio setup, and layout settings.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-bold tracking-tight text-ink">Settings</h1>
+          <p className="text-xs text-ink-muted">Configure your personal language preferences, client audio setup, and layout settings.</p>
+        </div>
+        <AutoSaveStatusBadge
+          status={autoSave.status}
+          invalid={Object.keys(errors).length > 0}
+          onRetry={Object.keys(errors).length === 0 ? autoSave.retry : undefined}
+        />
       </div>
 
-      <form onSubmit={handleSubmit(handlePreferencesSubmit)} className="flex flex-col gap-8">
+      <div className="flex flex-col gap-8">
         
         {/* Section 1: Translation & Languages */}
         <div className="flex flex-col gap-3">
@@ -151,7 +183,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Select
                 value={watchAll.defaultSpeakLanguage}
-                onValueChange={(val) => setValue("defaultSpeakLanguage", val || "", { shouldDirty: true })}
+                onValueChange={(val) => queuePreference("defaultSpeakLanguage", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select language..." />
@@ -174,7 +206,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Select
                 value={watchAll.defaultListenLanguage}
-                onValueChange={(val) => setValue("defaultListenLanguage", val || "", { shouldDirty: true })}
+                onValueChange={(val) => queuePreference("defaultListenLanguage", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select language..." />
@@ -207,7 +239,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Switch
                 checked={watchAll.voiceCloneEnabled}
-                onCheckedChange={(val) => setValue("voiceCloneEnabled", val, { shouldDirty: true })}
+                onCheckedChange={(val) => queuePreference("voiceCloneEnabled", val)}
                 disabled={isSubmitting}
               />
             </div>
@@ -220,7 +252,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Switch
                 checked={watchAll.micNoiseSuppression}
-                onCheckedChange={(val) => setValue("micNoiseSuppression", val, { shouldDirty: true })}
+                onCheckedChange={(val) => queuePreference("micNoiseSuppression", val)}
                 disabled={isSubmitting}
               />
             </div>
@@ -243,14 +275,14 @@ export default function PersonalPreferencesPage() {
               </div>
               <Select
                 value={watchAll.defaultTranslationRoomType}
-                onValueChange={(val) => setValue("defaultTranslationRoomType", val || "", { shouldDirty: true })}
+                onValueChange={(val) => queuePreference("defaultTranslationRoomType", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="webrtc" className="text-xs cursor-pointer">WebRTC (Ultra Low Latency)</SelectItem>
-                  <SelectItem value="hls" className="text-xs cursor-pointer">HLS (Low Latency Broadcaster)</SelectItem>
+                  <SelectItem value="instant" className="text-xs cursor-pointer">Instant Room</SelectItem>
+                  <SelectItem value="scheduled" className="text-xs cursor-pointer">Scheduled Room</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -263,7 +295,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Switch
                 checked={watchAll.autoRecordTranslationRooms}
-                onCheckedChange={(val) => setValue("autoRecordTranslationRooms", val, { shouldDirty: true })}
+                onCheckedChange={(val) => queuePreference("autoRecordTranslationRooms", val)}
                 disabled={isSubmitting}
               />
             </div>
@@ -276,7 +308,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Switch
                 checked={watchAll.autoGenerateSummary}
-                onCheckedChange={(val) => setValue("autoGenerateSummary", val, { shouldDirty: true })}
+                onCheckedChange={(val) => queuePreference("autoGenerateSummary", val)}
                 disabled={isSubmitting}
               />
             </div>
@@ -289,10 +321,23 @@ export default function PersonalPreferencesPage() {
               </div>
               <Input
                 type="number"
+                min={1}
+                max={500}
                 className="h-8 border-hairline focus:ring-1 focus:ring-primary text-xs bg-surface-2/40 w-[80px] text-right"
                 {...register("defaultMaxParticipants", { valueAsNumber: true })}
+                onBlur={(event) => commitNumericField("defaultMaxParticipants", event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitNumericField("defaultMaxParticipants", event.currentTarget.value);
+                    event.currentTarget.blur();
+                  }
+                }}
                 disabled={isSubmitting}
               />
+              {errors.defaultMaxParticipants?.message && (
+                <span className="text-[11px] text-destructive">{errors.defaultMaxParticipants.message}</span>
+              )}
             </div>
 
           </div>
@@ -313,7 +358,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Select
                 value={watchAll.theme}
-                onValueChange={(val) => setValue("theme", val || "", { shouldDirty: true })}
+                onValueChange={(val) => queuePreference("theme", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select theme..." />
@@ -334,10 +379,23 @@ export default function PersonalPreferencesPage() {
               </div>
               <Input
                 type="number"
+                min={10}
+                max={32}
                 className="h-8 border-hairline focus:ring-1 focus:ring-primary text-xs bg-surface-2/40 w-[80px] text-right"
                 {...register("transcriptFontSize", { valueAsNumber: true })}
+                onBlur={(event) => commitNumericField("transcriptFontSize", event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitNumericField("transcriptFontSize", event.currentTarget.value);
+                    event.currentTarget.blur();
+                  }
+                }}
                 disabled={isSubmitting}
               />
+              {errors.transcriptFontSize?.message && (
+                <span className="text-[11px] text-destructive">{errors.transcriptFontSize.message}</span>
+              )}
             </div>
 
             {/* Original Transcripts */}
@@ -348,7 +406,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Switch
                 checked={watchAll.showOriginalTranscript}
-                onCheckedChange={(val) => setValue("showOriginalTranscript", val, { shouldDirty: true })}
+                onCheckedChange={(val) => queuePreference("showOriginalTranscript", val)}
                 disabled={isSubmitting}
               />
             </div>
@@ -361,7 +419,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Switch
                 checked={watchAll.showTranslatedTranscript}
-                onCheckedChange={(val) => setValue("showTranslatedTranscript", val, { shouldDirty: true })}
+                onCheckedChange={(val) => queuePreference("showTranslatedTranscript", val)}
                 disabled={isSubmitting}
               />
             </div>
@@ -374,7 +432,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Switch
                 checked={watchAll.highContrast}
-                onCheckedChange={(val) => setValue("highContrast", val, { shouldDirty: true })}
+                onCheckedChange={(val) => queuePreference("highContrast", val)}
                 disabled={isSubmitting}
               />
             </div>
@@ -387,7 +445,7 @@ export default function PersonalPreferencesPage() {
               </div>
               <Switch
                 checked={watchAll.screenReaderMode}
-                onCheckedChange={(val) => setValue("screenReaderMode", val, { shouldDirty: true })}
+                onCheckedChange={(val) => queuePreference("screenReaderMode", val)}
                 disabled={isSubmitting}
               />
             </div>
@@ -395,36 +453,7 @@ export default function PersonalPreferencesPage() {
           </div>
         </div>
 
-        {/* Buttons */}
-        <div className="pt-4 border-t border-hairline flex justify-end gap-3">
-          {isDirty && (
-            <button
-              type="button"
-              onClick={() => reset()}
-              disabled={isSubmitting}
-              className="flex h-8 px-4 items-center justify-center gap-1.5 rounded bg-surface-2 hover:bg-surface-3 transition text-xs border border-hairline cursor-pointer text-ink"
-            >
-              <ArrowCounterClockwise size={13} />
-              Reset
-            </button>
-          )}
-          <button
-            type="submit"
-            className="flex h-8 px-5 items-center justify-center gap-2 rounded bg-primary font-medium text-white transition hover:bg-primary-hover disabled:opacity-50 text-xs cursor-pointer shadow-sm"
-            disabled={isSubmitting || updateSettingsMutation.isPending || !isDirty}
-          >
-            {updateSettingsMutation.isPending ? (
-              <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
-            ) : (
-              <>
-                <Check size={14} />
-                Save Preferences
-              </>
-            )}
-          </button>
-        </div>
-
-      </form>
+      </div>
     </div>
   );
 }

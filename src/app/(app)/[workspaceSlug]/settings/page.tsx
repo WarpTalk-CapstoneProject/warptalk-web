@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,28 +12,32 @@ import {
   Plus,
   Trash,
   Globe,
-  Warning,
-  Checks
+  Checks,
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useAuthStore } from "@/stores/auth-store";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
 import {
   useWorkspace,
   useWorkspaceSettings,
-  useUpdateWorkspaceSettings
+  usePatchWorkspaceSettings,
+  useVerifiedDomains,
+  useAddVerifiedDomain,
+  useRevokeVerifiedDomain,
 } from "@/hooks/use-workspace";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useAutoSaveQueue } from "@/hooks/use-auto-save";
+import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
+import { parseIntegerInRange } from "@/lib/settings-validation";
 
 const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),
   timezone: z.string().min(1, "Please select timezone"),
-  maxActiveRooms: z.number().min(1, "Must be at least 1 room"),
-  artifactRetentionDays: z.number().min(0, "Retention must be 0 (indefinite) or positive"),
+  maxActiveRooms: z.number().int("Must be a whole number").min(1, "Must be at least 1 room").max(50, "Max 50 rooms"),
+  artifactRetentionDays: z.number().int("Must be a whole number").min(0, "Retention must be 0 (indefinite) or positive").max(3650, "Max 3650 days"),
   enforceHostApprovalDefault: z.boolean(),
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
@@ -43,6 +47,7 @@ const settingsSchema = z.object({
   requireVerifiedDomainForInternal: z.boolean(),
   aiUsagePolicy: z.object({
     allowExternalLlm: z.boolean(),
+    useGlobalGlossary: z.boolean(),
     redactPii: z.object({
       enabled: z.boolean(),
     }),
@@ -81,12 +86,13 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   enforceHostApprovalDefault: true,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
-  allowedTargetLanguages: [],
+  allowedTargetLanguages: ["en", "vi", "ja"],
   verifiedDomains: [],
   allowExternalCollaboration: true,
-  requireVerifiedDomainForInternal: true,
+  requireVerifiedDomainForInternal: false,
   aiUsagePolicy: {
     allowExternalLlm: true,
+    useGlobalGlossary: true,
     redactPii: {
       enabled: true,
     },
@@ -114,12 +120,13 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
-    allowedTargetLanguages: settings.allowedTargetLanguages || [],
+    allowedTargetLanguages: settings.allowedTargetLanguages || ["en", "vi", "ja"],
     verifiedDomains: settings.verifiedDomains || [],
     allowExternalCollaboration: settings.allowExternalCollaboration ?? DEFAULT_SETTINGS_FORM_DATA.allowExternalCollaboration,
     requireVerifiedDomainForInternal: settings.requireVerifiedDomainForInternal ?? DEFAULT_SETTINGS_FORM_DATA.requireVerifiedDomainForInternal,
     aiUsagePolicy: {
       allowExternalLlm: true,
+      useGlobalGlossary: settings.aiUsagePolicy?.useGlobalGlossary ?? DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.useGlobalGlossary,
       redactPii: {
         enabled: settings.aiUsagePolicy?.redactPii?.enabled ?? DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.redactPii.enabled,
       },
@@ -147,25 +154,28 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
 export default function WorkspaceSettingsPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const role = useWorkspaceStore((s) => s.role);
-  const currentUser = useAuthStore((s) => s.user);
-  const { setActiveWorkspace, activeWorkspaceSlug, defaultLanguage, membershipType } = useWorkspaceStore();
-  const lang = defaultLanguage || "en";
+  const { setActiveWorkspace, activeWorkspaceSlug, membershipType } = useWorkspaceStore();
 
   // Queries & Mutations
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
   const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
-  const updateSettingsMutation = useUpdateWorkspaceSettings(activeWorkspaceId || "");
+  const patchSettingsMutation = usePatchWorkspaceSettings(activeWorkspaceId || "");
+  const verifiedDomainsQuery = useVerifiedDomains(activeWorkspaceId || "");
+  const addDomainMutation = useAddVerifiedDomain(activeWorkspaceId || "");
+  const revokeDomainMutation = useRevokeVerifiedDomain(activeWorkspaceId || "");
 
   const [newDomain, setNewDomain] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
+  const [domainError, setDomainError] = useState(false);
+  const initializedWorkspaceRef = useRef<string | null>(null);
+  const lastQueuedValuesRef = useRef<Record<string, string>>({});
 
   const {
     register,
-    handleSubmit,
     setValue,
     watch,
     reset,
-    formState: { isSubmitting },
+    formState: { isSubmitting, errors },
   } = useForm<SettingsFormData>({
     resolver: zodResolver(settingsSchema),
     defaultValues: DEFAULT_SETTINGS_FORM_DATA,
@@ -173,11 +183,37 @@ export default function WorkspaceSettingsPage() {
 
   const watchAll = watch();
 
-  useEffect(() => {
-    if (settingsQuery.data) {
-      reset(toSettingsFormData(settingsQuery.data));
+  const saveWorkspacePatch = useCallback(async (patch: Partial<WorkspaceSettingsDto>) => {
+    const saved = await patchSettingsMutation.mutateAsync(patch);
+    if (Object.prototype.hasOwnProperty.call(patch, "defaultLanguage")) {
+      setActiveWorkspace(
+        activeWorkspaceId || "",
+        workspaceQuery.data?.name || "",
+        activeWorkspaceSlug,
+        (workspaceQuery.data?.role || role || "").toLowerCase(),
+        membershipType,
+        String(patch.defaultLanguage),
+      );
     }
-  }, [settingsQuery.data, reset]);
+    return saved;
+  }, [activeWorkspaceId, activeWorkspaceSlug, membershipType, patchSettingsMutation, role, setActiveWorkspace, workspaceQuery.data]);
+
+  const autoSave = useAutoSaveQueue<Partial<WorkspaceSettingsDto>>({
+    save: saveWorkspacePatch,
+    onError: (error) => {
+      const errorMsg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error
+        || "Failed to save workspace settings.";
+      toast.error(errorMsg);
+    },
+  });
+
+  useEffect(() => {
+    if (settingsQuery.data && activeWorkspaceId && initializedWorkspaceRef.current !== activeWorkspaceId) {
+      reset(toSettingsFormData(settingsQuery.data));
+      initializedWorkspaceRef.current = activeWorkspaceId;
+      lastQueuedValuesRef.current = {};
+    }
+  }, [activeWorkspaceId, reset, settingsQuery.data]);
 
   if (!activeWorkspaceId) return null;
 
@@ -220,52 +256,47 @@ export default function WorkspaceSettingsPage() {
     );
   }
 
-  const handleSettingsSubmit = async (formData: SettingsFormData) => {
-    if (!settingsQuery.data) return;
-    const normalizedFormData: SettingsFormData = {
-      ...formData,
-      aiUsagePolicy: {
-        ...formData.aiUsagePolicy,
-        allowExternalLlm: true,
-      },
-    };
+  const queuePatch = (key: string, patch: Partial<WorkspaceSettingsDto>, value: unknown) => {
+    const serializedValue = JSON.stringify(value);
+    if (lastQueuedValuesRef.current[key] === serializedValue) return;
+    lastQueuedValuesRef.current[key] = serializedValue;
+    autoSave.enqueue(patch);
+  };
 
-    try {
-      await updateSettingsMutation.mutateAsync({
-        ...settingsQuery.data,
-        ...normalizedFormData,
-      });
-      setActiveWorkspace(
-        activeWorkspaceId,
-        workspaceQuery.data?.name || "",
-        activeWorkspaceSlug,
-        currentRole,
-        membershipType,
-        normalizedFormData.defaultLanguage
-      );
-      toast.success("Workspace settings updated successfully.");
-    } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || "Failed to update settings.";
-      toast.error(errorMsg);
-    }
+  const commitTopLevel = <K extends keyof SettingsFormData>(field: K, value: SettingsFormData[K]) => {
+    setValue(field as never, value as never, { shouldDirty: true, shouldValidate: true });
+    queuePatch(String(field), { [field]: value } as Partial<WorkspaceSettingsDto>, value);
+  };
+
+  const commitNumericField = (field: "maxActiveRooms" | "artifactRetentionDays", rawValue: string) => {
+    const limits = field === "maxActiveRooms" ? [1, 50] : [0, 3650];
+    const parsedInput = parseIntegerInRange(rawValue, limits[0], limits[1]);
+    const value = parsedInput.value;
+    setValue(field, value, { shouldDirty: true, shouldValidate: true });
+    if (!parsedInput.ok) return;
+    queuePatch(field, { [field]: value } as Partial<WorkspaceSettingsDto>, value);
+  };
+
+  const commitPolicy = (key: string, policy: SettingsFormData["aiUsagePolicy"]) => {
+    setValue("aiUsagePolicy", policy, { shouldDirty: true, shouldValidate: true });
+    queuePatch(key, { aiUsagePolicy: policy }, policy);
   };
 
   const allowedLangs = watchAll.allowedTargetLanguages || [];
   const handleLanguageToggle = (code: string) => {
+    let next: string[];
     if (allowedLangs.includes(code)) {
-      setValue(
-        "allowedTargetLanguages",
-        allowedLangs.filter((c) => c !== code),
-        { shouldDirty: true }
-      );
+      next = allowedLangs.filter((c) => c !== code);
     } else {
-      setValue("allowedTargetLanguages", [...allowedLangs, code], { shouldDirty: true });
+      next = [...allowedLangs, code];
     }
+    commitTopLevel("allowedTargetLanguages", next);
   };
 
-  const domains = watchAll.verifiedDomains || [];
-  const handleAddDomain = () => {
+  const verifiedDomainList = verifiedDomainsQuery.data || [];
+  const activeDomains = verifiedDomainList.map((vd) => vd.domain);
+
+  const handleAddDomain = async () => {
     const trimmed = newDomain.trim().toLowerCase();
     if (!trimmed) return;
     if (!trimmed.includes(".") || trimmed.startsWith(".") || trimmed.endsWith(".")) {
@@ -277,20 +308,37 @@ export default function WorkspaceSettingsPage() {
       toast.error("Cannot verify public domain names.");
       return;
     }
-    if (domains.includes(trimmed)) {
+    if (activeDomains.includes(trimmed)) {
       toast.error("Domain already added.");
       return;
     }
-    setValue("verifiedDomains", [...domains, trimmed], { shouldDirty: true });
-    setNewDomain("");
+    setDomainError(false);
+    try {
+      await addDomainMutation.mutateAsync(trimmed);
+      toast.success(`Domain "${trimmed}" verified & added successfully.`);
+      setNewDomain("");
+    } catch (err: unknown) {
+      setDomainError(true);
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        || "Failed to add verified domain.";
+      toast.error(errorMsg);
+    }
   };
 
-  const handleRemoveDomain = (domainToRemove: string) => {
-    setValue(
-      "verifiedDomains",
-      domains.filter((d) => d !== domainToRemove),
-      { shouldDirty: true }
-    );
+  const handleRemoveDomain = async (domainString: string) => {
+    const target = verifiedDomainList.find((vd) => vd.domain.toLowerCase() === domainString.toLowerCase());
+    if (!target) return;
+
+    setDomainError(false);
+    try {
+      await revokeDomainMutation.mutateAsync(target.id);
+      toast.success(`Domain "${domainString}" revoked successfully.`);
+    } catch (err: unknown) {
+      setDomainError(true);
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        || "Failed to revoke verified domain.";
+      toast.error(errorMsg);
+    }
   };
 
   const keywords = watchAll.aiUsagePolicy?.dlp?.keywordsBlacklist || [];
@@ -301,25 +349,48 @@ export default function WorkspaceSettingsPage() {
       toast.error("Keyword already in blacklist.");
       return;
     }
-    setValue("aiUsagePolicy.dlp.keywordsBlacklist", [...keywords, trimmed], { shouldDirty: true });
+    const policy = {
+      ...watchAll.aiUsagePolicy,
+      dlp: {
+        ...watchAll.aiUsagePolicy.dlp,
+        keywordsBlacklist: [...keywords, trimmed],
+      },
+    };
+    commitPolicy("aiUsagePolicy.dlp.keywordsBlacklist", policy);
     setNewKeyword("");
   };
 
   const handleRemoveKeyword = (keywordToRemove: string) => {
-    setValue(
-      "aiUsagePolicy.dlp.keywordsBlacklist",
-      keywords.filter((k) => k !== keywordToRemove),
-      { shouldDirty: true }
-    );
+    const policy = {
+      ...watchAll.aiUsagePolicy,
+      dlp: {
+        ...watchAll.aiUsagePolicy.dlp,
+        keywordsBlacklist: keywords.filter((k) => k !== keywordToRemove),
+      },
+    };
+    commitPolicy("aiUsagePolicy.dlp.keywordsBlacklist", policy);
   };
+
+  const effectiveSaveStatus = domainError
+    ? "error"
+    : addDomainMutation.isPending || revokeDomainMutation.isPending
+      ? "saving"
+      : autoSave.status;
 
   return (
     <div className="w-full max-w-2xl mx-auto py-8 px-4 flex flex-col gap-8 text-ink">
 
       {/* Page Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight text-ink">Settings</h1>
-        <p className="text-xs text-ink-muted">Configure your workspace defaults, collaboration boundaries, and AI scanning policies.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-bold tracking-tight text-ink">Settings</h1>
+          <p className="text-xs text-ink-muted">Configure your workspace defaults, collaboration boundaries, and AI scanning policies.</p>
+        </div>
+        <AutoSaveStatusBadge
+          status={effectiveSaveStatus}
+          invalid={Object.keys(errors).length > 0}
+          onRetry={Object.keys(errors).length === 0 && !domainError ? autoSave.retry : undefined}
+        />
       </div>
 
       {/* Workspace Link & Slug Card */}
@@ -387,35 +458,30 @@ export default function WorkspaceSettingsPage() {
         </div>
       </div>
 
-      <form
-        onSubmit={handleSubmit(
-          handleSettingsSubmit,
-          () => toast.error("Please complete required workspace settings before saving.")
-        )}
-        className="flex flex-col gap-8"
-      >
+      <div className="flex flex-col gap-8">
 
-        {/* Section 1: General */}
+        {/* Section 1: General Workspace Defaults */}
         <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">Localization & General</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">General Workspace Defaults</div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
 
             {/* Default Language */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Default Language</span>
-                <span className="text-[11px] text-ink-muted">The default language used for translation and transcription features in this workspace if a user or room does not specify one.</span>
+                <span className="text-[11px] text-ink-muted">Default spoken language for new translation rooms.</span>
               </div>
               <Select
                 value={watchAll.defaultLanguage}
-                onValueChange={(val) => setValue("defaultLanguage", val || "", { shouldDirty: true })}
+                onValueChange={(val) => val && commitTopLevel("defaultLanguage", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               >
-                <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select language..." />
+                <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
+                  <SelectValue placeholder="Select language" />
                 </SelectTrigger>
                 <SelectContent>
                   {languages.map((l) => (
-                    <SelectItem key={l.code} value={l.code} className="text-xs cursor-pointer">
+                    <SelectItem key={l.code} value={l.code} className="text-xs">
                       {l.label}
                     </SelectItem>
                   ))}
@@ -427,19 +493,21 @@ export default function WorkspaceSettingsPage() {
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Timezone</span>
-                <span className="text-[11px] text-ink-muted">Select the default timezone context for calculations.</span>
+                <span className="text-[11px] text-ink-muted">Timezone used for meeting schedules and audit timestamps.</span>
               </div>
               <Select
                 value={watchAll.timezone}
-                onValueChange={(val) => setValue("timezone", val || "", { shouldDirty: true })}
+                onValueChange={(val) => val && commitTopLevel("timezone", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               >
-                <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select timezone..." />
+                <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
+                  <SelectValue placeholder="Select timezone" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="UTC" className="text-xs cursor-pointer">UTC (Greenwich Mean Time)</SelectItem>
-                  <SelectItem value="GMT+7" className="text-xs cursor-pointer">GMT+7 (Indochina Time)</SelectItem>
-                  <SelectItem value="GMT+9" className="text-xs cursor-pointer">GMT+9 (Japan Standard Time)</SelectItem>
+                  <SelectItem value="UTC" className="text-xs">UTC</SelectItem>
+                  <SelectItem value="Asia/Ho_Chi_Minh" className="text-xs">Asia/Ho_Chi_Minh (+7)</SelectItem>
+                  <SelectItem value="Asia/Tokyo" className="text-xs">Asia/Tokyo (+9)</SelectItem>
+                  <SelectItem value="America/New_York" className="text-xs">America/New_York (-5)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -448,91 +516,121 @@ export default function WorkspaceSettingsPage() {
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Max Active Rooms</span>
-                <span className="text-[11px] text-ink-muted">Limit the number of concurrent active translation rooms.</span>
+                <span className="text-[11px] text-ink-muted">Maximum concurrent translation rooms allowed for this workspace.</span>
               </div>
               <Input
                 type="number"
-                className="h-8 border-hairline focus:ring-1 focus:ring-primary text-xs bg-surface-2/40 w-[80px] text-right"
+                min={1}
+                max={50}
                 {...register("maxActiveRooms", { valueAsNumber: true })}
-                disabled={isSubmitting}
+                onBlur={(event) => commitNumericField("maxActiveRooms", event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitNumericField("maxActiveRooms", event.currentTarget.value);
+                    event.currentTarget.blur();
+                  }
+                }}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+                className="w-[140px] h-8 text-xs bg-surface-2 border-hairline"
               />
+              {errors.maxActiveRooms?.message && (
+                <span className="text-[11px] text-destructive">{errors.maxActiveRooms.message}</span>
+              )}
             </div>
 
-            {/* Artifact Retention */}
+            {/* Artifact Retention Days */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Artifact Retention (Days)</span>
-                <span className="text-[11px] text-ink-muted">Specify how long translation transcripts and audios are kept. Set to 0 for indefinite retention.</span>
+                <span className="text-xs font-semibold text-ink">Artifact Retention Days</span>
+                <span className="text-[11px] text-ink-muted">Days to retain meeting transcripts and recordings (0 = indefinite).</span>
               </div>
               <Input
                 type="number"
-                className="h-8 border-hairline focus:ring-1 focus:ring-primary text-xs bg-surface-2/40 w-[80px] text-right"
+                min={0}
+                max={3650}
                 {...register("artifactRetentionDays", { valueAsNumber: true })}
-                disabled={isSubmitting}
+                onBlur={(event) => commitNumericField("artifactRetentionDays", event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitNumericField("artifactRetentionDays", event.currentTarget.value);
+                    event.currentTarget.blur();
+                  }
+                }}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+                className="w-[140px] h-8 text-xs bg-surface-2 border-hairline"
               />
+              {errors.artifactRetentionDays?.message && (
+                <span className="text-[11px] text-destructive">{errors.artifactRetentionDays.message}</span>
+              )}
             </div>
 
-            {/* Allowed Languages */}
-            <div className="py-3.5 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Allowed Target Languages */}
+            <div className="py-3.5 px-4 flex flex-col gap-2">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Allowed Target Languages</span>
-                <span className="text-[11px] text-ink-muted">Limit which translation languages are active.</span>
+                <span className="text-xs font-semibold text-ink">Allowed Target Translation Languages</span>
+                <span className="text-[11px] text-ink-muted">Languages available for live translation in meeting rooms.</span>
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end mt-1 sm:mt-0">
+              <div className="flex flex-wrap gap-2 mt-1">
                 {languages.map((l) => {
-                  const isChecked = allowedLangs.includes(l.code);
+                  const selected = allowedLangs.includes(l.code);
                   return (
-                    <label key={l.code} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => handleLanguageToggle(l.code)}
-                        disabled={isSubmitting}
-                        className="rounded border-hairline text-primary focus:ring-primary h-3.5 w-3.5 bg-surface-2 cursor-pointer"
-                      />
-                      <span className="font-medium text-ink-muted">{l.label}</span>
-                    </label>
+                    <button
+                      key={l.code}
+                      type="button"
+                      onClick={() => handleLanguageToggle(l.code)}
+                      disabled={isSubmitting || !isOwnerOrAdmin}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs cursor-pointer transition ${
+                        selected
+                          ? "bg-primary/10 border-primary text-primary font-semibold"
+                          : "bg-surface-2 border-hairline text-ink-muted hover:text-ink"
+                      }`}
+                    >
+                      {selected && <Checks size={12} className="text-primary" />}
+                      {l.label} ({l.code.toUpperCase()})
+                    </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Enforce Host Admission */}
+            {/* Enforce Host Approval */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enforce Host Admission</span>
-                <span className="text-[11px] text-ink-muted">Require host permission for participants to join rooms by default.</span>
+                <span className="text-xs font-semibold text-ink">Enforce Host Approval</span>
+                <span className="text-[11px] text-ink-muted">Require host admission for participants joining translation rooms.</span>
               </div>
               <Switch
                 checked={watchAll.enforceHostApprovalDefault}
-                onCheckedChange={(val) => setValue("enforceHostApprovalDefault", val, { shouldDirty: true })}
-                disabled={isSubmitting}
+                onCheckedChange={(val) => commitTopLevel("enforceHostApprovalDefault", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               />
             </div>
 
             {/* Voice Cloning */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Voice Cloning</span>
-                <span className="text-[11px] text-ink-muted">Enable voice clone features inside meetings.</span>
+                <span className="text-xs font-semibold text-ink">Voice Cloning Synthesis</span>
+                <span className="text-[11px] text-ink-muted">Synthesize translated speech using neural voice cloning of original speakers.</span>
               </div>
               <Switch
                 checked={watchAll.voiceCloningEnabled}
-                onCheckedChange={(val) => setValue("voiceCloningEnabled", val, { shouldDirty: true })}
-                disabled={isSubmitting}
+                onCheckedChange={(val) => commitTopLevel("voiceCloningEnabled", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               />
             </div>
 
             {/* Profanity Filter */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enable Profanity Filter</span>
-                <span className="text-[11px] text-ink-muted">Automatically censor bad words and slang in transcripts.</span>
+                <span className="text-xs font-semibold text-ink">Profanity Filter</span>
+                <span className="text-[11px] text-ink-muted">Censor inappropriate or profane language in transcripts.</span>
               </div>
               <Switch
                 checked={watchAll.isProfanityFilterEnabled}
-                onCheckedChange={(val) => setValue("isProfanityFilterEnabled", val, { shouldDirty: true })}
-                disabled={isSubmitting}
+                onCheckedChange={(val) => commitTopLevel("isProfanityFilterEnabled", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               />
             </div>
 
@@ -549,17 +647,11 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-0.5 max-w-[70%]">
                 <span className="text-xs font-semibold text-ink">Allow External Collaboration</span>
                 <span className="text-[11px] text-ink-muted">Allow external participants to join rooms.</span>
-                {isAdmin && (
-                  <span className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
-                    <Warning size={12} />
-                    Only the Workspace Owner can modify this.
-                  </span>
-                )}
               </div>
               <Switch
                 checked={watchAll.allowExternalCollaboration}
-                onCheckedChange={(val) => setValue("allowExternalCollaboration", val, { shouldDirty: true })}
-                disabled={isSubmitting || isAdmin}
+                onCheckedChange={(val) => commitTopLevel("allowExternalCollaboration", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               />
             </div>
 
@@ -571,8 +663,8 @@ export default function WorkspaceSettingsPage() {
               </div>
               <Switch
                 checked={watchAll.requireVerifiedDomainForInternal}
-                onCheckedChange={(val) => setValue("requireVerifiedDomainForInternal", val, { shouldDirty: true })}
-                disabled={isSubmitting}
+                onCheckedChange={(val) => commitTopLevel("requireVerifiedDomainForInternal", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               />
             </div>
 
@@ -588,7 +680,7 @@ export default function WorkspaceSettingsPage() {
                   placeholder="Enter a domain (e.g., company.com)"
                   value={newDomain}
                   onChange={(e) => setNewDomain(e.target.value)}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !isOwnerOrAdmin || addDomainMutation.isPending}
                   className="h-8 text-xs bg-surface-2 border-hairline flex-1"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -600,25 +692,28 @@ export default function WorkspaceSettingsPage() {
                 <button
                   type="button"
                   onClick={handleAddDomain}
-                  disabled={isSubmitting || !newDomain.trim()}
-                  className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink"
+                  disabled={isSubmitting || !isOwnerOrAdmin || addDomainMutation.isPending || !newDomain.trim()}
+                  className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink disabled:opacity-50"
                 >
-                  <Plus size={12} /> Add Domain
+                  {addDomainMutation.isPending ? <Spinner className="h-3 w-3 animate-spin" /> : <Plus size={12} />} Add Domain
                 </button>
               </div>
               <div className="flex flex-wrap gap-2 mt-1">
-                {domains.length === 0 ? (
+                {verifiedDomainsQuery.isPending ? (
+                  <span className="text-[10px] text-ink-muted flex items-center gap-1"><Spinner className="h-3 w-3 animate-spin" /> Loading domains...</span>
+                ) : activeDomains.length === 0 ? (
                   <span className="text-[10px] text-ink-muted italic">No verified domains. Add one above.</span>
                 ) : (
-                  domains.map((d) => (
+                  activeDomains.map((d) => (
                     <div key={d} className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs">
                       <Globe size={11} className="text-primary" />
                       <span className="font-mono text-[10px] text-ink">{d}</span>
                       <button
                         type="button"
                         onClick={() => handleRemoveDomain(d)}
-                        disabled={isSubmitting}
-                        className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer"
+                        disabled={isSubmitting || !isOwnerOrAdmin || revokeDomainMutation.isPending}
+                        className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer disabled:opacity-50"
+                        title={`Revoke domain ${d}`}
                       >
                         <Trash size={11} />
                       </button>
@@ -636,6 +731,22 @@ export default function WorkspaceSettingsPage() {
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">AI Ingestion & Security Guardrails</div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
 
+            {/* Global Glossary */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-ink">Use global glossary</span>
+                <span className="text-[11px] text-ink-muted">Merge the global glossary into new transcript and translation prompts.</span>
+              </div>
+              <Switch
+                checked={watchAll.aiUsagePolicy?.useGlobalGlossary ?? true}
+                onCheckedChange={(val) => commitPolicy(
+                  "aiUsagePolicy.useGlobalGlossary",
+                  { ...watchAll.aiUsagePolicy, useGlobalGlossary: val },
+                )}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+              />
+            </div>
+
             {/* Redact PII */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
@@ -644,8 +755,11 @@ export default function WorkspaceSettingsPage() {
               </div>
               <Switch
                 checked={watchAll.aiUsagePolicy?.redactPii?.enabled ?? false}
-                onCheckedChange={(val) => setValue("aiUsagePolicy.redactPii.enabled", val, { shouldDirty: true })}
-                disabled={isSubmitting}
+                onCheckedChange={(val) => commitPolicy(
+                  "aiUsagePolicy.redactPii.enabled",
+                  { ...watchAll.aiUsagePolicy, redactPii: { ...watchAll.aiUsagePolicy.redactPii, enabled: val } },
+                )}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               />
             </div>
 
@@ -657,26 +771,29 @@ export default function WorkspaceSettingsPage() {
               </div>
               <Switch
                 checked={watchAll.aiUsagePolicy?.dlp?.enabled ?? false}
-                onCheckedChange={(val) => setValue("aiUsagePolicy.dlp.enabled", val, { shouldDirty: true })}
-                disabled={isSubmitting}
+                onCheckedChange={(val) => commitPolicy(
+                  "aiUsagePolicy.dlp.enabled",
+                  { ...watchAll.aiUsagePolicy, dlp: { ...watchAll.aiUsagePolicy.dlp, enabled: val } },
+                )}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               />
             </div>
 
-            {/* Blacklisted Keywords (Conditional) */}
+            {/* DLP Blacklist Keywords */}
             {watchAll.aiUsagePolicy?.dlp?.enabled && (
-              <div className="py-4 px-4 flex flex-col gap-3 bg-surface-2/10">
+              <div className="py-4 px-4 flex flex-col gap-3 bg-surface-2/50">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-semibold text-ink">Keywords Blacklist</span>
-                  <span className="text-[11px] text-ink-muted">Add keywords and press Enter to blacklist them.</span>
+                  <span className="text-xs font-semibold text-ink">DLP Restricted Keywords</span>
+                  <span className="text-[11px] text-ink-muted">Words that will trigger DLP alerts or redaction during streaming translation.</span>
                 </div>
                 <div className="flex gap-2">
                   <Input
                     type="text"
-                    placeholder="Add Keyword"
+                    placeholder="Enter keyword (e.g., Confidential, Internal-Only)"
                     value={newKeyword}
                     onChange={(e) => setNewKeyword(e.target.value)}
-                    disabled={isSubmitting}
-                    className="h-8 text-xs bg-surface-2 border-hairline flex-1"
+                    disabled={isSubmitting || !isOwnerOrAdmin}
+                    className="h-8 text-xs bg-surface-1 border-hairline flex-1"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -687,7 +804,7 @@ export default function WorkspaceSettingsPage() {
                   <button
                     type="button"
                     onClick={handleAddKeyword}
-                    disabled={isSubmitting || !newKeyword.trim()}
+                    disabled={isSubmitting || !isOwnerOrAdmin || !newKeyword.trim()}
                     className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink"
                   >
                     <Plus size={12} /> Add Keyword
@@ -695,15 +812,15 @@ export default function WorkspaceSettingsPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {keywords.length === 0 ? (
-                    <span className="text-[10px] text-ink-muted italic">No keywords blacklisted yet.</span>
+                    <span className="text-[10px] text-ink-muted italic">No blacklist keywords configured.</span>
                   ) : (
-                    keywords.map((k) => (
-                      <div key={k} className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs">
-                        <span className="font-mono text-[10px] text-ink">{k}</span>
+                    keywords.map((kw) => (
+                      <div key={kw} className="flex items-center gap-1.5 bg-surface-1 border border-hairline px-2 py-0.5 rounded text-xs">
+                        <span className="font-mono text-[10px] text-ink">{kw}</span>
                         <button
                           type="button"
-                          onClick={() => handleRemoveKeyword(k)}
-                          disabled={isSubmitting}
+                          onClick={() => handleRemoveKeyword(kw)}
+                          disabled={isSubmitting || !isOwnerOrAdmin}
                           className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer"
                         >
                           <Trash size={11} />
@@ -719,68 +836,106 @@ export default function WorkspaceSettingsPage() {
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Translation Tone</span>
-                <span className="text-[11px] text-ink-muted">Choose translation delivery tone.</span>
+                <span className="text-[11px] text-ink-muted">Tone profile applied to real-time LLM translation prompts.</span>
               </div>
               <Select
-                value={
-                  watchAll.aiUsagePolicy?.translationProfile?.translationTone
-                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.translationTone
+                value={watchAll.aiUsagePolicy?.translationProfile?.translationTone || "professional"}
+                onValueChange={(val) =>
+                  val && commitPolicy(
+                    "aiUsagePolicy.translationProfile.translationTone",
+                    {
+                      ...watchAll.aiUsagePolicy,
+                      translationProfile: { ...watchAll.aiUsagePolicy.translationProfile, translationTone: val },
+                    },
+                  )
                 }
-                onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.translationTone", val || "", { shouldDirty: true })}
+                disabled={isSubmitting || !isOwnerOrAdmin}
               >
-                <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select tone..." />
+                <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
+                  <SelectValue placeholder="Select tone" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="professional" className="text-xs cursor-pointer">Professional</SelectItem>
-                  <SelectItem value="casual" className="text-xs cursor-pointer">Casual</SelectItem>
-                  <SelectItem value="formal" className="text-xs cursor-pointer">Technical</SelectItem>
+                  <SelectItem value="professional" className="text-xs">Professional</SelectItem>
+                  <SelectItem value="formal" className="text-xs">Formal</SelectItem>
+                  <SelectItem value="casual" className="text-xs">Casual</SelectItem>
+                  <SelectItem value="technical" className="text-xs">Technical</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Vietnamese Honorific */}
+            {/* Vietnamese Honorific Style */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Vietnamese Honorific Style</span>
-                <span className="text-[11px] text-ink-muted">Control the pronouns and social markers for Vietnamese translations.</span>
+                <span className="text-[11px] text-ink-muted">Honorific style for Vietnamese translation generation.</span>
               </div>
               <Select
                 value={
-                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle
-                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle
+                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle ||
+                  "formal_hierarchical"
                 }
-                onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle", val || "", { shouldDirty: true })}
+                onValueChange={(val) =>
+                  val && commitPolicy(
+                    "aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle",
+                    {
+                      ...watchAll.aiUsagePolicy,
+                      translationProfile: {
+                        ...watchAll.aiUsagePolicy.translationProfile,
+                        languageSpecificRules: {
+                          ...watchAll.aiUsagePolicy.translationProfile.languageSpecificRules,
+                          vietnameseHonorificStyle: val,
+                        },
+                      },
+                    },
+                  )
+                }
+                disabled={isSubmitting || !isOwnerOrAdmin}
               >
-                <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select style..." />
+                <SelectTrigger className="w-[160px] h-8 text-xs bg-surface-2 border-hairline">
+                  <SelectValue placeholder="Select style" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="formal_hierarchical" className="text-xs cursor-pointer">Formal/Hierarchical</SelectItem>
-                  <SelectItem value="standard" className="text-xs cursor-pointer">Neutral</SelectItem>
+                  <SelectItem value="formal_hierarchical" className="text-xs">Formal Hierarchical</SelectItem>
+                  <SelectItem value="neutral" className="text-xs">Neutral</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Japanese Honorific */}
+            {/* Japanese Honorific Style */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Japanese Honorific Style</span>
-                <span className="text-[11px] text-ink-muted">Set specific politeness rule sets (e.g. Keigo/Teineigo) for Japanese translations.</span>
+                <span className="text-xs font-semibold text-ink">Japanese Keigo / Honorific Style</span>
+                <span className="text-[11px] text-ink-muted">Politeness level for Japanese LLM translation outputs.</span>
               </div>
               <Select
                 value={
-                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle
-                  || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle
+                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle ||
+                  "keigo_teineigo"
                 }
-                onValueChange={(val) => setValue("aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle", val || "", { shouldDirty: true })}
+                onValueChange={(val) =>
+                  val && commitPolicy(
+                    "aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle",
+                    {
+                      ...watchAll.aiUsagePolicy,
+                      translationProfile: {
+                        ...watchAll.aiUsagePolicy.translationProfile,
+                        languageSpecificRules: {
+                          ...watchAll.aiUsagePolicy.translationProfile.languageSpecificRules,
+                          japaneseHonorificStyle: val,
+                        },
+                      },
+                    },
+                  )
+                }
+                disabled={isSubmitting || !isOwnerOrAdmin}
               >
-                <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select style..." />
+                <SelectTrigger className="w-[160px] h-8 text-xs bg-surface-2 border-hairline">
+                  <SelectValue placeholder="Select style" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="keigo_teineigo" className="text-xs cursor-pointer">Keigo/Teineigo</SelectItem>
-                  <SelectItem value="standard" className="text-xs cursor-pointer">Neutral/Informal</SelectItem>
+                  <SelectItem value="keigo_teineigo" className="text-xs">Teineigo (Polite)</SelectItem>
+                  <SelectItem value="sonkeigo_kenjougo" className="text-xs">Sonkeigo/Kenjougo (Honorific/Humble)</SelectItem>
+                  <SelectItem value="plain" className="text-xs">Plain (Informal)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -788,25 +943,7 @@ export default function WorkspaceSettingsPage() {
           </div>
         </div>
 
-        {/* Save button */}
-        <div className="pt-4 border-t border-hairline flex justify-end">
-          <button
-            type="submit"
-            className="flex h-8 px-5 items-center justify-center gap-2 rounded bg-primary font-medium text-white transition hover:bg-primary-hover disabled:opacity-50 text-xs cursor-pointer shadow-sm"
-            disabled={isSubmitting || updateSettingsMutation.isPending}
-          >
-            {updateSettingsMutation.isPending ? (
-              <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
-            ) : (
-              <>
-                <Checks size={14} />
-                Save Changes
-              </>
-            )}
-          </button>
-        </div>
-
-      </form>
+      </div>
     </div>
   );
 }

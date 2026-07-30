@@ -52,6 +52,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useWorkspaceDocuments,
   useWorkspace,
+  useWorkspaceMembers,
   useUploadWorkspaceDocument,
   useApproveWorkspaceDocument,
   useDeleteWorkspaceDocument,
@@ -63,6 +64,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const uploadSchema = z.object({
   name: z.string().min(2, "Document name must be at least 2 characters"),
@@ -96,6 +98,8 @@ export default function WorkspaceDocumentsPage() {
   // TanStack Query list
   const documentsQuery = useWorkspaceDocuments(activeWorkspaceId || "", page, 20, query);
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
+  const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
+  const workspaceMembers = membersQuery.data?.items ?? [];
   const roomsQuery = useTranslationRooms({ pageSize: 100 });
 
   // Mutations
@@ -488,6 +492,8 @@ export default function WorkspaceDocumentsPage() {
             <thead>
               <tr className="border-b border-hairline/20 bg-surface-2/50 text-ink-muted font-semibold">
                 <th className="py-3 px-4 font-semibold">Name</th>
+                <th className="py-3 px-4 font-semibold">Uploaded By</th>
+                <th className="py-3 px-4 font-semibold">Approved By</th>
                 <th className="py-3 px-4 font-semibold">Classification / AI</th>
                 <th className="py-3 px-4 font-semibold">Last Modified</th>
                 <th className="py-3 px-4 font-semibold">Size</th>
@@ -498,6 +504,8 @@ export default function WorkspaceDocumentsPage() {
               {filteredDocs.map((doc) => {
                 const isDocOwner = doc.uploadedBy === currentUser?.id || doc.ownerId === currentUser?.id;
                 const canManageDoc = canApproveDocuments || isDocOwner;
+                const uploader = workspaceMembers.find((m) => m.userId === doc.uploadedBy || m.id === doc.uploadedBy);
+                const approver = workspaceMembers.find((m) => m.userId === doc.approvedBy || m.id === doc.approvedBy);
 
                 return (
                   <tr
@@ -518,6 +526,44 @@ export default function WorkspaceDocumentsPage() {
                           </span>
                         </div>
                       </div>
+                    </td>
+
+                    {/* Uploaded By */}
+                    <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                      {uploader ? (
+                        <div className="flex items-center gap-2" title={`Uploaded by ${uploader.fullName}`}>
+                          <Avatar className="h-6 w-6 rounded-full border border-border/50">
+                            <AvatarImage src={uploader.avatarUrl ?? undefined} alt={uploader.fullName} />
+                            <AvatarFallback className="rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
+                              {uploader.fullName ? uploader.fullName.charAt(0).toUpperCase() : "U"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-[11px] font-medium text-ink truncate max-w-[110px]">
+                            {uploader.fullName}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-ink-muted text-[11px]">—</span>
+                      )}
+                    </td>
+
+                    {/* Approved By */}
+                    <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                      {approver ? (
+                        <div className="flex items-center gap-2" title={`Approved by ${approver.fullName}`}>
+                          <Avatar className="h-6 w-6 rounded-full border border-emerald-500/30">
+                            <AvatarImage src={approver.avatarUrl ?? undefined} alt={approver.fullName} />
+                            <AvatarFallback className="rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-semibold">
+                              {approver.fullName ? approver.fullName.charAt(0).toUpperCase() : "A"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-[11px] font-medium text-emerald-600 truncate max-w-[110px]">
+                            {approver.fullName}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-ink-muted text-[11px]">—</span>
+                      )}
                     </td>
 
                     {/* Classification / Status Badge */}
@@ -858,7 +904,7 @@ export default function WorkspaceDocumentsPage() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!docToDelete} onOpenChange={(open) => !open && setDocToDelete(null)}>
+      <Dialog open={!!docToDelete} onOpenChange={(open: boolean) => !open && setDocToDelete(null)}>
         <DialogContent className="border-hairline bg-surface-1 max-w-sm rounded-2xl">
           <DialogHeader className="flex flex-col gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive mx-auto">
