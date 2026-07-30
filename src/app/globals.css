@@ -152,37 +152,6 @@
 }
 
 @layer base {
-  ::view-transition-group(root) {
-    animation-duration: 1.5s;
-    animation-timing-function: var(--expo-out);
-  }
-
-  ::view-transition-new(root) {
-    animation: theme-polygon-gradient-reveal 1.5s var(--expo-out) both;
-    mask: url('data:image/svg+xml,<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 0H40L0 40V0Z" fill="url(%23paint0_linear_16_14)"/><defs><linearGradient id="paint0_linear_16_14" x1="0" y1="0" x2="20.5" y2="20.5" gradientUnits="userSpaceOnUse"><stop stop-color="white"/><stop offset="0.84506" stop-color="white" stop-opacity="0.99"/><stop offset="0.9506" stop-color="white" stop-opacity="0"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient></defs></svg>')
-      top left / 0 no-repeat;
-    mask-origin: content-box;
-    -webkit-mask: url('data:image/svg+xml,<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 0H40L0 40V0Z" fill="url(%23paint0_linear_16_14)"/><defs><linearGradient id="paint0_linear_16_14" x1="0" y1="0" x2="20.5" y2="20.5" gradientUnits="userSpaceOnUse"><stop stop-color="white"/><stop offset="0.84506" stop-color="white" stop-opacity="0.99"/><stop offset="0.9506" stop-color="white" stop-opacity="0"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient></defs></svg>')
-      top left / 0 no-repeat;
-    -webkit-mask-origin: content-box;
-    mix-blend-mode: normal;
-  }
-
-  ::view-transition-old(root),
-  .dark::view-transition-old(root) {
-    animation: theme-polygon-gradient-reveal 1.5s var(--expo-out) both;
-    mix-blend-mode: normal;
-    transform-origin: top left;
-    z-index: -1;
-  }
-
-  @keyframes theme-polygon-gradient-reveal {
-    to {
-      mask-size: 200vmax;
-      -webkit-mask-size: 200vmax;
-    }
-  }
-
   * {
     @apply border-border outline-ring/50;
   }

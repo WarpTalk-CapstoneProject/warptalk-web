@@ -233,7 +233,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <NotificationPopover />
             <ThemeToggleButton />
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
-            <ThemeToggleButton />
             <div className="w-[1px] h-3.5 bg-border mx-1" />
             <button
               onClick={toggleRightSidebar}

@@ -1,136 +1,17 @@
 "use client";
 
-import { flushSync } from "react-dom";
-import { useEffect, useMemo } from "react";
 import { MoonStars, SunDim } from "@phosphor-icons/react/dist/ssr";
 import { useTheme } from "next-themes";
 
 import { cn } from "@/lib/utils";
 
-const STYLE_ID = "warptalk-theme-toggle-style";
-const BASE_STYLE_ID = "warptalk-theme-toggle-base-style";
-const DEFAULT_DURATION = 1500;
-const DEFAULT_EASING =
-  "linear(0 0%, 0.2342 12.49%, 0.4374 24.99%, 0.6093 37.49%, 0.6835 43.74%, 0.7499 49.99%, 0.8086 56.25%, 0.8593 62.5%, 0.9023 68.75%, 0.9375 75%, 0.9648 81.25%, 0.9844 87.5%, 0.9961 93.75%, 1 100%)";
-
-function createPolygonGradientMask() {
-  const gradient = [
-    '<linearGradient id="g" x1="0" y1="0" x2="20.5" y2="20.5" gradientUnits="userSpaceOnUse">',
-    '<stop stop-color="white"/>',
-    '<stop offset="0.84506" stop-color="white" stop-opacity="0.99"/>',
-    '<stop offset="0.9506" stop-color="white" stop-opacity="0"/>',
-    '<stop offset="1" stop-color="white" stop-opacity="0"/>',
-    "</linearGradient>",
-  ].join("");
-
-  const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">',
-    `<defs>${gradient}</defs>`,
-    '<path d="M0 0H40L0 40V0Z" fill="url(#g)"/>',
-    "</svg>",
-  ].join("");
-
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-}
-
-function ensureBaseStyles() {
-  if (typeof document === "undefined" || document.getElementById(BASE_STYLE_ID)) {
-    return;
-  }
-
-  const style = document.createElement("style");
-  style.id = BASE_STYLE_ID;
-  style.textContent = `
-    ::view-transition-old(root),
-    ::view-transition-new(root) {
-      animation: none;
-      mix-blend-mode: normal;
-    }
-
-    ::view-transition-group(root) {
-      isolation: isolate;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function injectPolygonGradientStyles(duration: number) {
-  if (typeof document === "undefined") return;
-
-  const existing = document.getElementById(STYLE_ID);
-  if (existing) existing.remove();
-
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
-  style.textContent = `
-    ::view-transition-group(root) {
-      animation-duration: ${duration}ms;
-      animation-timing-function: ease;
-      animation-timing-function: ${DEFAULT_EASING};
-    }
-
-    ::view-transition-new(root) {
-      mask: ${createPolygonGradientMask()} top left / 0 no-repeat;
-      animation: warptalkPolygonGradientScale ${duration}ms ease;
-      animation: warptalkPolygonGradientScale ${duration}ms ${DEFAULT_EASING};
-      animation-fill-mode: both;
-      will-change: mask-size;
-    }
-
-    ::view-transition-old(root),
-    .dark::view-transition-old(root) {
-      animation: warptalkPolygonGradientScale ${duration}ms ease;
-      animation: warptalkPolygonGradientScale ${duration}ms ${DEFAULT_EASING};
-      animation-fill-mode: both;
-      z-index: -1;
-      transform-origin: top left;
-    }
-
-    @keyframes warptalkPolygonGradientScale {
-      to {
-        mask-size: 200vmax;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-  window.setTimeout(() => style.remove(), duration);
-}
-
 export function ThemeToggleButton({ className }: { className?: string }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
-
-  useEffect(() => {
-    ensureBaseStyles();
-  }, []);
-
-  const currentTheme = useMemo(() => {
-    return (resolvedTheme ?? theme ?? "light") === "dark" ? "dark" : "light";
-  }, [resolvedTheme, theme]);
+  const currentTheme = (resolvedTheme ?? theme ?? "light") === "dark" ? "dark" : "light";
 
   const toggleTheme = () => {
     const nextTheme = currentTheme === "dark" ? "light" : "dark";
-    const startViewTransition = (document as Document & {
-      startViewTransition?: (cb: () => void) => { ready: Promise<void> };
-    }).startViewTransition?.bind(document);
-
-    if (
-      typeof document === "undefined" ||
-      !startViewTransition ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      setTheme(nextTheme);
-      return;
-    }
-
-    injectPolygonGradientStyles(DEFAULT_DURATION);
-
-    startViewTransition(() => {
-      flushSync(() => setTheme(nextTheme));
-    })
-      .ready.catch(() => {
-        setTheme(nextTheme);
-      });
+    setTheme(nextTheme);
   };
 
   return (
