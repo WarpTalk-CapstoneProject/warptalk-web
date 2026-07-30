@@ -32,7 +32,8 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Admin, workspace, and participant sidebars keep their existing collapsible behavior while sharing the updated logo treatment.
 - Command search now includes the full review route set: dashboard, rooms, create room, history, AI summaries, AI chat, terminology, feedback, workspace, admin, and dev test.
 - `/rooms` and `/history` were compacted to match `/dashboard` density at 100% zoom: smaller section gaps, smaller headings, 82px metric cards, compact table rows, and tighter detail panels.
-- The global `Ask WarpTalk` popover shows ambient page context as a Linear-style gray shell that is tall enough to wrap both the context row and the chat input when context is visible. The compact chat width is wider than before, and the input remains a white inset surface with a subtle shadow on a separate `z-10` layer. The gray shell/context row animates up/down when hidden or shown while the input stays in place. The context card includes the current page/entity label, status when available, a type-specific context icon, and an `x` control that disables sending page context for the active page/entity. The four-corner toolbar icon inside the composer toggles the gray page-context card; when the card is hidden, the outgoing assistant message sends `pageContext: null`. The header resize icon continues to resize the whole chat popover.
+- The global `Ask WarpBot` popover shows ambient page context as a Linear-style gray shell that is tall enough to wrap both the context row and the chat input when context is visible. The compact chat width is wider than before, and the input remains a white inset surface with a subtle shadow on a separate `z-10` layer. The gray shell/context row animates up/down when hidden or shown while the input stays in place. The context card includes the current page/entity label, status when available, a type-specific context icon, and an `x` control that disables sending page context for the active page/entity. The four-corner toolbar icon inside the composer toggles the gray page-context card; when the card is hidden, the outgoing assistant message sends `pageContext: null`. The header resize icon continues to resize the whole chat popover.
+- Clicking the main `Ask WarpBot` trigger always clears the previous conversation ID and messages. The minimized-conversation chip is the explicit way to resume a minimized conversation.
 
 ## Files Affected
 
@@ -59,7 +60,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Command search is frontend-only and navigates between available local app pages.
 - The `.glass-dashboard-scope` class in `globals.css` scopes glass styling to authenticated host pages so landing and auth pages stay unchanged.
 - The Host profile control is currently presentational in this layout pass. Account-menu behavior should be wired back in if the product requires profile or logout actions from the topbar.
-- Removing the Ask WarpTalk page-context strip only suppresses the ambient `pageContext` payload for the current page/entity. Explicit `@` mention chips still send their selected entity references.
+- Removing the Ask WarpBot page-context strip only suppresses the ambient `pageContext` payload for the current page/entity. Explicit `@` mention chips still send their selected entity references.
 
 ## Known Limitations
 
@@ -73,4 +74,5 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Open representative host, admin, participant, and workspace routes to confirm the logo and navigation alignment.
 - Verify active navigation states on nested routes.
 - Check narrow desktop widths to ensure the fixed host sidebar and topbar actions do not overlap page content.
-- Open Ask WarpTalk on a page with registered assistant context, confirm the softer gray shell wraps both the context row and the input, confirm toggling it animates only the gray shell/context row while the input stays fixed, confirm the strip uses a page-type icon instead of a generic green dot, confirm hidden context sends `pageContext: null`, and confirm the header resize icon still resizes the whole chat popover.
+- Open Ask WarpBot twice and confirm each main-trigger click starts a blank conversation; use the minimized chip to confirm explicit resume still works.
+- Run `npm run test:2807-hotfix`.

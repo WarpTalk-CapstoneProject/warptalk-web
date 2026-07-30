@@ -87,16 +87,41 @@ export function useStartTranslationRoom() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      try {
-        await translationRoomService.generateAudioRoutes(id);
-      } catch (err) {
-        console.warn("Failed to generate audio routes. Room might fail to start if no routes exist.", err);
-      }
       const { data: translationRoom } = await translationRoomService.start(id);
       return translationRoom;
     },
     onSuccess: (translationRoom, id) => {
       queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    },
+  });
+}
+
+export function usePauseTranslationRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await translationRoomService.pause(id);
+    },
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], (current) =>
+        current ? { ...current, status: "paused" } : current,
+      );
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    },
+  });
+}
+
+export function useResumeTranslationRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await translationRoomService.resume(id);
+    },
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], (current) =>
+        current ? { ...current, status: "in_progress" } : current,
+      );
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
   });

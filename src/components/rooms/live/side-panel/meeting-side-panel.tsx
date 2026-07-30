@@ -1,23 +1,15 @@
 "use client";
 
 import { ChatPanel } from "@/components/rooms/live/chat-panel";
-import { usePolls } from "@/hooks/use-polls";
-import { useQuestions } from "@/hooks/use-qa";
 import type { TranscriptSegmentDto } from "@/types/realtime";
-import type { HubConnection } from "@microsoft/signalr";
 import type {
   TranslationRoomDto,
   TranslationRoomParticipantDto,
 } from "@/types/translationRoom";
 import { PeoplePanel } from "./people-panel";
-import { PollsPanel } from "./polls-panel";
-import { QaPanel } from "./qa-panel";
 import { TranscriptPanel } from "./transcript-panel";
 
-import { CollaborativeNotesPanel } from "./collaborative-notes-panel";
-
-export type SidePanelMode =
-  "transcript" | "chat" | "participants" | "polls" | "qa" | "notes";
+export type SidePanelMode = "transcript" | "chat" | "participants";
 
 export function MeetingSidePanel({
   roomId,
@@ -36,7 +28,6 @@ export function MeetingSidePanel({
   raisedHandUserIds,
   spotlightedUserId,
   onToggleSpotlight,
-  connection,
 }: {
   roomId: string;
   room: TranslationRoomDto;
@@ -58,16 +49,7 @@ export function MeetingSidePanel({
   spotlightedUserId?: string | null;
   /** Host-only: toggles spotlight for this participant. Omit to hide the control. */
   onToggleSpotlight?: (userId: string) => void;
-  /** SignalR connection to translationRoom hub */
-  connection?: HubConnection | null;
 }) {
-  // Shared cache with polls-panel.tsx/qa-panel.tsx (same query key) — reused here only to
-  // size the tab badges, not an extra network round-trip once a panel has fetched it.
-  const openPollCount =
-    usePolls(roomId).data?.filter((p) => p.status === "open").length ?? 0;
-  const openQuestionCount =
-    useQuestions(roomId).data?.filter((q) => q.status === "open").length ?? 0;
-
   return (
     <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden xl:flex hidden">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-1 rounded-2xl border border-border shadow-sm">
@@ -83,27 +65,10 @@ export function MeetingSidePanel({
             onClick={() => onModeChange("chat")}
           />
           <TabButton
-            active={mode === "notes"}
-            label="Notes"
-            onClick={() => onModeChange("notes")}
-          />
-          <TabButton
             active={mode === "participants"}
             label="People"
             badge={activeCount}
             onClick={() => onModeChange("participants")}
-          />
-          <TabButton
-            active={mode === "polls"}
-            label="Polls"
-            badge={openPollCount || undefined}
-            onClick={() => onModeChange("polls")}
-          />
-          <TabButton
-            active={mode === "qa"}
-            label="Q&A"
-            badge={openQuestionCount || undefined}
-            onClick={() => onModeChange("qa")}
           />
         </div>
 
@@ -113,12 +78,6 @@ export function MeetingSidePanel({
           ) : null}
           {mode === "chat" ? (
             <ChatPanel roomId={roomId} targetLanguage={chatTargetLanguage} />
-          ) : null}
-          {mode === "notes" ? (
-            <CollaborativeNotesPanel
-              connection={connection ?? null}
-              roomId={roomId}
-            />
           ) : null}
           {mode === "participants" ? (
             <PeoplePanel
@@ -135,10 +94,6 @@ export function MeetingSidePanel({
               onToggleSpotlight={onToggleSpotlight}
             />
           ) : null}
-          {mode === "polls" ? (
-            <PollsPanel roomId={roomId} isHost={isHost} />
-          ) : null}
-          {mode === "qa" ? <QaPanel roomId={roomId} isHost={isHost} /> : null}
         </div>
       </div>
     </aside>

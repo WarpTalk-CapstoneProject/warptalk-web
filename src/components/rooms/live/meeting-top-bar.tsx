@@ -75,7 +75,7 @@ export function MeetingTopBar({
               {getLanguageName(targetLanguage)}
             </span>
             <span className="text-ink-tertiary">/</span>
-            <MeetingTimer startedAt={room.startedAt} />
+            <MeetingTimer createdAt={room.createdAt} endedAt={room.endedAt} />
           </div>
           <div
             className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${warptalkStarted ? "bg-red-50 text-red-600" : "bg-surface-2 text-ink-subtle"}`}

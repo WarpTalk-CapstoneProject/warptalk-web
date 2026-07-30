@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
@@ -59,6 +60,7 @@ import {
   useUploadWorkspaceDocument,
   useWorkspace,
   useWorkspaceDocuments,
+  useWorkspaceMembers,
 } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -105,6 +107,11 @@ export default function WorkspaceDocumentsPage() {
     query,
   );
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
+  const workspaceMembersQuery = useWorkspaceMembers(
+    activeWorkspaceId || "",
+    1,
+    100,
+  );
 
   // Mutations
   const uploadMutation = useUploadWorkspaceDocument(activeWorkspaceId || "");
@@ -523,6 +530,7 @@ export default function WorkspaceDocumentsPage() {
               <tr className="border-b border-hairline/20 bg-surface-2/50 text-ink-muted font-semibold">
                 <th className="py-3 px-4 font-semibold">Name</th>
                 <th className="py-3 px-4 font-semibold">Classification / AI</th>
+                <th className="py-3 px-4 font-semibold">People</th>
                 <th className="py-3 px-4 font-semibold">Last Modified</th>
                 <th className="py-3 px-4 font-semibold">Size</th>
                 <th className="py-3 px-4 font-semibold text-right">Actions</th>
@@ -600,6 +608,23 @@ export default function WorkspaceDocumentsPage() {
                           <span>AI Context</span>
                         </span>
                       )}
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <DocumentActor
+                          label="Uploader"
+                          member={workspaceMembersQuery.data?.items.find(
+                            (member) => member.userId === doc.uploadedBy,
+                          )}
+                        />
+                        <DocumentActor
+                          label="Approver"
+                          member={workspaceMembersQuery.data?.items.find(
+                            (member) => member.userId === doc.approvedBy,
+                          )}
+                        />
+                      </div>
                     </td>
 
                     {/* Last Modified Date */}
@@ -737,6 +762,20 @@ export default function WorkspaceDocumentsPage() {
                 <div className="flex items-center justify-between text-[10px] text-ink-muted pt-2 border-t border-hairline/20 mt-1">
                   <span>{formatDate(doc.updatedAt || doc.createdAt)}</span>
                   <span>{formatBytes(doc.sizeBytes)}</span>
+                </div>
+                <div className="flex items-center gap-3 pt-1">
+                  <DocumentActor
+                    label="Uploader"
+                    member={workspaceMembersQuery.data?.items.find(
+                      (member) => member.userId === doc.uploadedBy,
+                    )}
+                  />
+                  <DocumentActor
+                    label="Approver"
+                    member={workspaceMembersQuery.data?.items.find(
+                      (member) => member.userId === doc.approvedBy,
+                    )}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -999,6 +1038,40 @@ export default function WorkspaceDocumentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function DocumentActor({
+  label,
+  member,
+}: {
+  label: "Uploader" | "Approver";
+  member?: {
+    fullName: string;
+    email: string;
+    avatarUrl?: string | null;
+  };
+}) {
+  if (!member) {
+    return (
+      <span className="text-[10px] text-ink-muted" title={`${label} unavailable`}>
+        {label}: —
+      </span>
+    );
+  }
+
+  const name = member.fullName || member.email;
+  return (
+    <div className="flex min-w-0 items-center gap-1.5" title={`${label}: ${name}`}>
+      <Avatar size="sm">
+        {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt={name} /> : null}
+        <AvatarFallback>{name.slice(0, 1).toUpperCase()}</AvatarFallback>
+      </Avatar>
+      <div className="hidden min-w-0 flex-col xl:flex">
+        <span className="text-[9px] uppercase tracking-wide text-ink-muted">{label}</span>
+        <span className="max-w-24 truncate text-[10px] font-medium text-ink">{name}</span>
+      </div>
     </div>
   );
 }

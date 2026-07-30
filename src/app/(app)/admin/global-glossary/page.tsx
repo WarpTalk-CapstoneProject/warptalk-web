@@ -6,12 +6,13 @@ import {
   CheckCircle,
   ClockCounterClockwise,
   Globe,
+  PencilSimple,
   Plus,
   ShieldWarning,
   Spinner,
   Trash,
   Upload,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -36,8 +37,10 @@ import {
   useGlobalGlossaryAudits,
   useGlobalGlossaryTerms,
   usePublishGlobalGlossaryTerm,
+  useUpdateGlobalGlossaryTerm,
 } from "@/hooks/use-global-glossary";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 
 const termSchema = z.object({
   term: z
@@ -70,6 +73,7 @@ export default function AdminGlobalGlossaryPage() {
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [termToEdit, setTermToEdit] = useState<GlobalGlossaryTermDto | null>(null);
   const [auditsTermId, setAuditsTermId] = useState<string | null>(null);
   const [termToDelete, setTermToDelete] = useState<{
     id: string;
@@ -87,6 +91,7 @@ export default function AdminGlobalGlossaryPage() {
   const termsQuery = useGlobalGlossaryTerms(query);
   const auditsQuery = useGlobalGlossaryAudits(auditsTermId || "");
   const createMutation = useCreateGlobalGlossaryTerm();
+  const updateMutation = useUpdateGlobalGlossaryTerm(termToEdit?.id ?? "");
   const deleteMutation = useDeleteGlobalGlossaryTerm();
   const publishMutation = usePublishGlobalGlossaryTerm();
   const archiveMutation = useArchiveGlobalGlossaryTerm();
@@ -98,6 +103,10 @@ export default function AdminGlobalGlossaryPage() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<TermFormData>({
+    resolver: zodResolver(termSchema),
+    defaultValues: { term: "", preferredTranslation: "", priority: 5 },
+  });
+  const editForm = useForm<TermFormData>({
     resolver: zodResolver(termSchema),
     defaultValues: { term: "", preferredTranslation: "", priority: 5 },
   });
@@ -136,6 +145,40 @@ export default function AdminGlobalGlossaryPage() {
       setIsCreateOpen(false);
     } catch {
       toast.error("Failed to create term.");
+    }
+  };
+
+  const openEditDialog = (term: GlobalGlossaryTermDto) => {
+    setTermToEdit(term);
+    editForm.reset({
+      term: term.term,
+      preferredTranslation: term.preferredTranslation,
+      sourceLanguage: term.sourceLanguage ?? "",
+      targetLanguage: term.targetLanguage ?? "",
+      businessDomain: term.businessDomain ?? "",
+      definition: term.definition ?? "",
+      usageNote: term.usageNote ?? "",
+      priority: term.priority,
+    });
+  };
+
+  const handleUpdate = async (data: TermFormData) => {
+    if (!termToEdit) return;
+    try {
+      await updateMutation.mutateAsync({
+        term: data.term,
+        preferredTranslation: data.preferredTranslation,
+        sourceLanguage: data.sourceLanguage || null,
+        targetLanguage: data.targetLanguage || null,
+        businessDomain: data.businessDomain || null,
+        definition: data.definition || null,
+        usageNote: data.usageNote || null,
+        priority: data.priority,
+      });
+      toast.success(`Term "${data.term}" updated.`);
+      setTermToEdit(null);
+    } catch {
+      toast.error("Failed to update term.");
     }
   };
 
@@ -349,6 +392,13 @@ export default function AdminGlobalGlossaryPage() {
                     {term.status}
                   </Badge>
                   <div className="flex justify-end items-center gap-1">
+                    <button
+                      onClick={() => openEditDialog(term)}
+                      className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors"
+                      title="Edit"
+                    >
+                      <PencilSimple className="h-3.5 w-3.5" />
+                    </button>
                     {term.status !== "published" && (
                       <button
                         onClick={() => handlePublish(term.id, term.term)}
@@ -535,6 +585,102 @@ export default function AdminGlobalGlossaryPage() {
                   <Spinner className="h-4 w-4 animate-spin" />
                 ) : (
                   "Create Draft"
+                )}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Term Dialog */}
+      <Dialog
+        open={!!termToEdit}
+        onOpenChange={(open) => !open && setTermToEdit(null)}
+      >
+        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-bold text-base">
+              Edit Global Glossary Term
+            </DialogTitle>
+            <DialogDescription className="text-xs text-ink-muted">
+              Updates are audited and apply immediately when the term is published.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            onSubmit={editForm.handleSubmit(handleUpdate)}
+            className="flex flex-col gap-3 my-2 max-h-[60vh] overflow-y-auto pr-1"
+          >
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Term</label>
+              <Input className="h-8 border-hairline text-xs" {...editForm.register("term")} />
+              {editForm.formState.errors.term && (
+                <p className="text-[10px] text-destructive">
+                  {editForm.formState.errors.term.message}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Preferred Translation</label>
+              <Input
+                className="h-8 border-hairline text-xs"
+                {...editForm.register("preferredTranslation")}
+              />
+              {editForm.formState.errors.preferredTranslation && (
+                <p className="text-[10px] text-destructive">
+                  {editForm.formState.errors.preferredTranslation.message}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold">Source Lang</label>
+                <Input className="h-8 border-hairline text-xs" {...editForm.register("sourceLanguage")} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold">Target Lang</label>
+                <Input className="h-8 border-hairline text-xs" {...editForm.register("targetLanguage")} />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Business Domain</label>
+              <Input className="h-8 border-hairline text-xs" {...editForm.register("businessDomain")} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Definition</label>
+              <Input className="h-8 border-hairline text-xs" {...editForm.register("definition")} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Usage Note</label>
+              <Input className="h-8 border-hairline text-xs" {...editForm.register("usageNote")} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Priority (0-10)</label>
+              <Input
+                type="number"
+                min={0}
+                max={10}
+                className="h-8 border-hairline text-xs"
+                {...editForm.register("priority", { valueAsNumber: true })}
+              />
+            </div>
+            <DialogFooter className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTermToEdit(null)}
+                className="h-8 px-3 rounded border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="h-8 px-4 rounded bg-primary text-xs font-semibold text-white hover:bg-primary-hover transition disabled:opacity-50"
+              >
+                {updateMutation.isPending ? (
+                  <Spinner className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Save Changes"
                 )}
               </button>
             </DialogFooter>
