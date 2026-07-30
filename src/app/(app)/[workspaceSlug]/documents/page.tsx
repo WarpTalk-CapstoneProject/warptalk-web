@@ -24,8 +24,8 @@ import {
   Info,
   List,
   Lock,
-  MagnifyingGlass,
   ShieldWarning,
+  SlidersHorizontal,
   Sparkle,
   Spinner,
   SquaresFour,
@@ -49,6 +49,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -342,53 +343,18 @@ export default function WorkspaceDocumentsPage() {
   });
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-6 py-6 pb-12 text-ink max-w-7xl mx-auto w-full">
+    <div className="flex h-full flex-col bg-surface-1 px-4 pb-12 text-ink">
       {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-ink">
-            Library
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Rounded Search Input Bar */}
-          <div className="relative w-72 sm:w-80">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">
-              <MagnifyingGlass className="h-4 w-4" />
-            </span>
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search..."
-              className="h-10 pl-9 pr-4 text-xs bg-surface-1 border-hairline rounded-full focus:ring-1 focus:ring-primary shadow-sm"
-            />
-          </div>
-
-          {/* New Document Button */}
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full bg-surface-3 hover:bg-surface-3/80 text-ink font-semibold text-xs shadow-sm transition-all border border-hairline/40 cursor-pointer"
-          >
-            <span>New</span>
-            <CaretDown className="h-3.5 w-3.5 text-ink-muted" />
-          </button>
-        </div>
-      </div>
-
       {/* ─── Pill Category Filters & View Toggle Bar ─── */}
-      <div className="flex items-center justify-between border-b border-hairline/30 pb-3">
+      <div className="flex shrink-0 items-center justify-between gap-4 py-3">
         {/* Left Side: Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveCategory("all")}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`rounded-full border px-4 py-1.5 text-[13px] transition-all ${
               activeCategory === "all"
-                ? "bg-surface-3 text-ink shadow-sm border border-hairline/30"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             All
@@ -396,10 +362,10 @@ export default function WorkspaceDocumentsPage() {
           {canApproveDocuments && (
             <button
               onClick={() => setActiveCategory("pending")}
-              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
                 activeCategory === "pending"
-                  ? "bg-amber-500/10 text-amber-600 border border-amber-500/20 shadow-sm"
-                  : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Info className="h-3.5 w-3.5 text-amber-500" />
@@ -413,10 +379,10 @@ export default function WorkspaceDocumentsPage() {
           )}
           <button
             onClick={() => setActiveCategory("ai")}
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
               activeCategory === "ai"
-                ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-sm"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             <Sparkle className="h-3.5 w-3.5 text-emerald-500" />
@@ -424,10 +390,10 @@ export default function WorkspaceDocumentsPage() {
           </button>
           <button
             onClick={() => setActiveCategory("admin")}
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
               activeCategory === "admin"
-                ? "bg-surface-3 text-ink border border-hairline/30 shadow-sm"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             <FileText className="h-3.5 w-3.5 text-ink-muted" />
@@ -435,10 +401,10 @@ export default function WorkspaceDocumentsPage() {
           </button>
           <button
             onClick={() => setActiveCategory("sensitive")}
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
               activeCategory === "sensitive"
-                ? "bg-destructive/10 text-destructive border border-destructive/20 shadow-sm"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             <Lock className="h-3.5 w-3.5 text-destructive" />
@@ -447,10 +413,10 @@ export default function WorkspaceDocumentsPage() {
           {archivedCount > 0 && (
             <button
               onClick={() => setActiveCategory("archived")}
-              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
                 activeCategory === "archived"
-                  ? "bg-amber-500/10 text-amber-600 border border-amber-500/20 shadow-sm"
-                  : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Archive className="h-3.5 w-3.5 text-amber-500" />
@@ -464,46 +430,75 @@ export default function WorkspaceDocumentsPage() {
 
         {/* Right Side: Action Icons (Filter & Grid/List Toggle) */}
         <div className="flex items-center gap-2 shrink-0">
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            placeholder="Search documents..."
+            ariaLabel="Search documents"
+            collapsedWidth={28}
+            expandedWidth={220}
+            className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+            iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+            clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+            inputClassName="h-[26px] text-[12px]"
+          />
           <button
-            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-ink-muted hover:text-ink transition-colors"
+            className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
             title="Filter options"
           >
-            <Funnel className="h-4 w-4" />
+            <Funnel className="h-3.5 w-3.5" />
             {activeCategory !== "all" && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
-                1
-              </span>
+              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
             )}
+          </button>
+
+          <button
+            className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Display options"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
           </button>
 
           <div className="h-4 w-px bg-hairline/50 mx-1" />
 
           <button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
+          >
+            <span>New</span>
+            <CaretDown className="h-3.5 w-3.5" />
+          </button>
+
+          <button
             onClick={() => setViewMode("grid")}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+            className={`inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 transition-colors ${
               viewMode === "grid"
                 ? "bg-surface-3 text-ink shadow-sm"
-                : "text-ink-muted hover:text-ink"
+                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             }`}
             title="Grid View"
           >
-            <SquaresFour className="h-4 w-4" />
+            <SquaresFour className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+            className={`inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 transition-colors ${
               viewMode === "list"
                 ? "bg-surface-3 text-ink shadow-sm"
-                : "text-ink-muted hover:text-ink"
+                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             }`}
             title="List View"
           >
-            <List className="h-4 w-4" />
+            <List className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
       {/* ─── Document Content: List View vs Grid View ─── */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {documentsQuery.isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <Spinner className="h-7 w-7 animate-spin text-primary" />
@@ -748,6 +743,7 @@ export default function WorkspaceDocumentsPage() {
           ))}
         </div>
       )}
+      </div>
 
       {/* ─── Pagination ─── */}
       {documentsQuery.data && documentsQuery.data.total > 20 && (

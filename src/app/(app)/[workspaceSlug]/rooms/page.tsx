@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import {
   Dialog,
   DialogContent,
@@ -424,6 +425,7 @@ export default function MeetingsPageLinear() {
   const router = useRouter();
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -450,21 +452,43 @@ export default function MeetingsPageLinear() {
   }, [roomList.data?.rooms]);
 
   const filteredRooms = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const matchesSearch = (room: TranslationRoomDto) => {
+      if (!normalizedQuery) return true;
+
+      return [
+        room.title,
+        room.description,
+        room.translationRoomCode,
+        room.status,
+        room.sourceLanguage,
+        ...(room.targetLanguages ?? []),
+      ]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(normalizedQuery));
+    };
+
     if (activeTab === "active") {
       const now = new Date();
       const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60000);
       return rooms.filter(
         (r) =>
-          r.status === "in_progress" ||
-          r.status === "waiting" ||
-          (r.status === "scheduled" &&
-            (!r.scheduledAt || new Date(r.scheduledAt) <= fifteenMinsFromNow)),
+          matchesSearch(r) &&
+          (r.status === "in_progress" ||
+            r.status === "waiting" ||
+            (r.status === "scheduled" &&
+              (!r.scheduledAt ||
+                new Date(r.scheduledAt) <= fifteenMinsFromNow))),
       );
     }
     if (activeTab === "scheduled") {
-      if (!selectedDate) return rooms.filter((r) => r.status === "scheduled");
+      if (!selectedDate)
+        return rooms.filter(
+          (r) => r.status === "scheduled" && matchesSearch(r),
+        );
       return rooms.filter(
         (r) =>
+          matchesSearch(r) &&
           r.status === "scheduled" &&
           r.scheduledAt &&
           new Date(r.scheduledAt).toDateString() ===
@@ -474,12 +498,13 @@ export default function MeetingsPageLinear() {
     if (activeTab === "history")
       return rooms.filter(
         (r) =>
-          r.status === "ended" ||
-          r.status === "cancelled" ||
-          r.status === "timeout",
+          matchesSearch(r) &&
+          (r.status === "ended" ||
+            r.status === "cancelled" ||
+            r.status === "timeout"),
       );
-    return rooms;
-  }, [rooms, activeTab, selectedDate]);
+    return rooms.filter(matchesSearch);
+  }, [rooms, activeTab, selectedDate, searchQuery]);
 
   return (
     <div className="flex flex-col h-full bg-surface-1">
@@ -498,6 +523,18 @@ export default function MeetingsPageLinear() {
         </div>
 
         <div className="flex items-center gap-2 pl-4 shrink-0">
+          <ExpandingSearchDock
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            placeholder="Search meetings..."
+            ariaLabel="Search meetings"
+            collapsedWidth={28}
+            expandedWidth={220}
+            className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+            iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+            clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+            inputClassName="h-[26px] text-[12px]"
+          />
           <button
             className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm"
             title="Filter"

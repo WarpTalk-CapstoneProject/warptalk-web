@@ -14,6 +14,10 @@ type ExpandingSearchDockProps = {
   ariaLabel?: string;
   className?: string;
   inputClassName?: string;
+  iconButtonClassName?: string;
+  clearButtonClassName?: string;
+  collapsedWidth?: number;
+  expandedWidth?: number;
 };
 
 export function ExpandingSearchDock({
@@ -23,13 +27,13 @@ export function ExpandingSearchDock({
   ariaLabel = "Search",
   className,
   inputClassName,
+  iconButtonClassName,
+  clearButtonClassName,
+  collapsedWidth = 36,
+  expandedWidth = 292,
 }: ExpandingSearchDockProps) {
   const [open, setOpen] = React.useState(Boolean(value));
   const inputRef = React.useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
-    if (value) setOpen(true);
-  }, [value]);
 
   React.useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -41,7 +45,7 @@ export function ExpandingSearchDock({
 
   return (
     <motion.div
-      animate={{ width: open ? 292 : 36 }}
+      animate={{ width: open ? expandedWidth : collapsedWidth }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       className={cn(
         "relative flex h-9 shrink-0 items-center overflow-hidden rounded-full border border-border bg-canvas/80 text-ink shadow-[0_8px_20px_rgba(15,15,15,0.04)] backdrop-blur-md",
@@ -55,7 +59,10 @@ export function ExpandingSearchDock({
         size="icon-sm"
         aria-label={open ? "Focus search" : ariaLabel}
         onClick={() => setOpen(true)}
-        className="ml-1 size-7 rounded-full text-ink-muted hover:bg-neutral-100 hover:text-ink"
+        className={cn(
+          "ml-1 size-7 rounded-full text-ink-muted hover:bg-neutral-100 hover:text-ink",
+          iconButtonClassName
+        )}
       >
         <MagnifyingGlass size={15} />
       </Button>
@@ -99,7 +106,10 @@ export function ExpandingSearchDock({
                   onValueChange("");
                   inputRef.current?.focus();
                 }}
-                className="mr-1 size-6 rounded-full text-ink-muted hover:bg-neutral-100 hover:text-ink"
+                className={cn(
+                  "mr-1 size-6 rounded-full text-ink-muted hover:bg-neutral-100 hover:text-ink",
+                  clearButtonClassName
+                )}
               >
                 <X size={12} />
               </Button>

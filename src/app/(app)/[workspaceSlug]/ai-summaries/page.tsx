@@ -11,8 +11,9 @@ import {
   Clock,
   Copy,
   DownloadSimple,
-  MagnifyingGlass,
+  Funnel,
   Scroll,
+  SlidersHorizontal,
   SpinnerGap,
   Translate,
   Users,
@@ -21,7 +22,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
@@ -154,61 +155,66 @@ export default function TranscriptsPage() {
   }
 
   return (
-    <main className="min-h-full bg-canvas text-ink">
-      <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">
-        <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
-              <Scroll size={14} /> Meeting records
-            </div>
-            <h1 className="text-[30px] font-semibold leading-none">
-              Transcripts
-            </h1>
-            <p className="mt-2 text-[13px] text-ink-muted">
-              Read the full transcript, AI summary, and retained artifacts for
-              every finished meeting.
-            </p>
-          </div>
-          <div className="relative w-full lg:w-[360px]">
-            <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search meeting, code, or host"
-              className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none"
-            />
-          </div>
-        </header>
-
+    <main className="flex h-full flex-col bg-surface-1 text-ink">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div
-          className="flex items-center gap-1 border-b border-border py-3"
+          className="flex shrink-0 items-center justify-between gap-4 px-4 py-3"
           role="tablist"
           aria-label="Transcript filters"
         >
-          {transcriptFilters.map((item) => (
+          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+            {transcriptFilters.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={filter === item.value}
+                onClick={() => setFilter(item.value)}
+                className={cn(
+                  "flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] capitalize transition-all select-none",
+                  filter === item.value
+                    ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                    : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 pl-4">
+            <ExpandingSearchDock
+              value={query}
+              onValueChange={setQuery}
+              placeholder="Search transcripts..."
+              ariaLabel="Search transcripts"
+              collapsedWidth={28}
+              expandedWidth={220}
+              className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+              iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+              clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+              inputClassName="h-[26px] text-[12px]"
+            />
             <button
-              key={item.value}
-              type="button"
-              role="tab"
-              aria-selected={filter === item.value}
-              onClick={() => setFilter(item.value)}
-              className={cn(
-                "h-7 rounded-md px-3 text-[11px] font-medium transition-colors",
-                filter === item.value
-                  ? "bg-ink text-surface-1"
-                  : "text-ink-muted hover:bg-surface-2 hover:text-ink",
-              )}
+              className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              title="Active transcript filter"
             >
-              {item.label}
+              <Funnel weight="bold" size={13} />
+              {filter !== "all" && (
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+              )}
             </button>
-          ))}
-          <span className="ml-auto text-[10px] tabular-nums text-ink-subtle">
-            {items.length} results
-          </span>
+            <button
+              className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              title={`${items.length} results`}
+            >
+              <SlidersHorizontal weight="bold" size={13} />
+            </button>
+          </div>
         </div>
 
         <section
-          className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1"
+          className="min-h-0 flex-1 overflow-hidden border-t border-border bg-surface-1"
           aria-label="Transcript review queue"
         >
           {history.isLoading ? (
@@ -218,8 +224,8 @@ export default function TranscriptsPage() {
           ) : items.length === 0 ? (
             <EmptyState hasQuery={Boolean(query)} />
           ) : (
-            <div className="grid min-h-[600px] lg:grid-cols-[360px_minmax(0,1fr)]">
-              <div className="border-b border-border lg:border-b-0 lg:border-r">
+            <div className="grid h-full min-h-0 lg:grid-cols-[360px_minmax(0,1fr)]">
+              <div className="min-h-0 overflow-y-auto border-b border-border lg:border-b-0 lg:border-r">
                 <div className="flex h-10 items-center justify-between border-b border-border bg-surface-2/45 px-4">
                   <span className="text-[10px] font-medium text-ink-subtle">
                     TRANSCRIPT QUEUE

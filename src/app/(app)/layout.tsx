@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import gsap from "gsap";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
+  Plus,
   Question,
   SidebarSimple,
   Spinner,
@@ -17,11 +19,75 @@ import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
+import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
+import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
+
+function AnimatedWidthPanel({
+  open,
+  width,
+  side,
+  className,
+  children,
+}: {
+  open: boolean;
+  width: number;
+  side: "left" | "right";
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [initialWidth] = useState(() => (open ? width : 0));
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const hasMounted = useRef(false);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    const content = contentRef.current;
+    if (!panel || !content) return;
+
+    if (!hasMounted.current) {
+      gsap.set(panel, { width: open ? width : 0 });
+      gsap.set(content, {
+        autoAlpha: open ? 1 : 0,
+        x: open ? 0 : side === "left" ? -14 : 14,
+      });
+      hasMounted.current = true;
+      return;
+    }
+
+    gsap.killTweensOf([panel, content]);
+    gsap.to(panel, {
+      width: open ? width : 0,
+      duration: 0.42,
+      ease: "power3.inOut",
+    });
+    gsap.to(content, {
+      autoAlpha: open ? 1 : 0,
+      x: open ? 0 : side === "left" ? -14 : 14,
+      duration: 0.28,
+      ease: open ? "power3.out" : "power2.in",
+    });
+  }, [open, side, width]);
+
+  return (
+    <div
+      ref={panelRef}
+      aria-hidden={!open}
+      className={cn("h-full shrink-0 overflow-hidden", !open && "pointer-events-none", className)}
+      style={{ width: initialWidth }}
+    >
+      <div ref={contentRef} className="h-full" style={{ width }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -35,6 +101,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const addWorkspaceTab = useWorkspaceTabsStore((state) => state.addTab);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [mounted, setMounted] = useState(false);
   
@@ -56,6 +123,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const roomQuery = useTranslationRoom(roomId ?? "");
   const roomTitle = roomId && roomQuery?.data ? roomQuery.data.title : undefined;
+  const workspaceTabScope = activeWorkspaceSlug || "global";
+  const workspaceTabOptions = useMemo(
+    () => buildTabOptions(activeWorkspaceSlug || "workspace"),
+    [activeWorkspaceSlug]
+  );
+  const currentWorkspaceTab = useMemo(
+    () => resolveCurrentTab(pathname, workspaceTabOptions),
+    [pathname, workspaceTabOptions]
+  );
 
   const isOnboardingRoute =
     pathname === "/workspace" ||
@@ -122,9 +198,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
+  function handleAddCurrentWorkspaceTab() {
+    if (!currentWorkspaceTab) return;
+    addWorkspaceTab(workspaceTabScope, currentWorkspaceTab);
+  }
+
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
-      {leftSidebarOpen && <LinearSidebar />}
+      <AnimatedWidthPanel open={leftSidebarOpen} width={224} side="left">
+        <LinearSidebar />
+      </AnimatedWidthPanel>
       {/* Main Column */}
       <div className="relative flex flex-col flex-1 overflow-hidden min-w-0">
         {/* Main content box */}
@@ -227,6 +310,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 );
               });
             })()}
+            {currentWorkspaceTab ? (
+              <button
+                type="button"
+                onClick={handleAddCurrentWorkspaceTab}
+                className="ml-0.5 grid size-5 shrink-0 place-items-center rounded-[6px] border border-transparent text-ink-muted transition-colors hover:border-border hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                title={`Add ${currentWorkspaceTab.title} tab`}
+                aria-label={`Add ${currentWorkspaceTab.title} tab`}
+              >
+                <Plus size={11} weight="bold" />
+              </button>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
@@ -243,14 +337,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        <WorkspaceTabs />
+
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <main className="min-h-0 flex-1 overflow-y-auto">
             {children}
           </main>
 
           {/* Right Sidebar (Context/Properties) */}
-          {rightSidebarOpen && !pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
-            <aside className="w-[260px] shrink-0 border-l border-border bg-surface-1 flex flex-col overflow-hidden">
+          {!pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
+            <AnimatedWidthPanel
+              open={rightSidebarOpen}
+              width={260}
+              side="right"
+              className="bg-surface-1"
+            >
+              <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
               <div className="flex items-center px-4 h-[38px] border-b border-border">
                 <span className="text-[12px] font-medium text-ink">Properties</span>
               </div>
@@ -260,6 +362,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             </aside>
+            </AnimatedWidthPanel>
           )}
         </div>
         </div>
