@@ -26,6 +26,7 @@ import {
   useTranslationRoomInvitations,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
+import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -49,6 +50,7 @@ export function CreateRoomDialog() {
   const setEditRoomId = useUIStore((state) => state.setEditRoomId);
   const workspaceName =
     useWorkspaceStore((state) => state.activeWorkspaceName) || "Workspace";
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -193,6 +195,7 @@ export function CreateRoomDialog() {
         handleOpenChange(false);
       } else {
         const room = await createRoomMutation.mutateAsync({
+          workspaceId: activeWorkspaceId ?? undefined,
           title: title.trim(),
           description: description.trim() || undefined,
           translationRoomType: scheduledAt ? "scheduled" : "instant",
@@ -208,9 +211,10 @@ export function CreateRoomDialog() {
       }
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : `Failed to ${editRoomId ? "update" : "create"} room.`,
+        getErrorMessage(
+          error,
+          `Failed to ${editRoomId ? "update" : "create"} room.`,
+        ),
       );
     }
   }

@@ -34,6 +34,7 @@ import type { InvoiceDto } from "@/types/billing";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
+const BILLING_REALTIME_REFETCH_MS = 10_000;
 const TRIAL_WORKSPACE_MEMBER_LIMIT = 5;
 const MAX_ENTERPRISE_LANGUAGES = 3;
 const CONTRACT_LANGUAGE_CODES = ["en", "vi", "ja"];
@@ -187,6 +188,7 @@ function WorkspaceEnterpriseBillingContent() {
     queryKey: ["billing", "subscription", workspaceId],
     queryFn: () => billingService.getActiveSubscription(workspaceId),
     enabled: !!workspaceId && canViewBilling,
+    refetchInterval: BILLING_REALTIME_REFETCH_MS,
     retry: 1,
   });
 
@@ -196,6 +198,7 @@ function WorkspaceEnterpriseBillingContent() {
     queryKey: ["billing", "balance", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId),
     enabled: !!workspaceId && canViewBilling && hasSubscription,
+    refetchInterval: BILLING_REALTIME_REFETCH_MS,
     retry: 1,
   });
 
@@ -203,6 +206,7 @@ function WorkspaceEnterpriseBillingContent() {
     queryKey: ["billing", "report", workspaceId, CURRENT_YEAR, CURRENT_MONTH],
     queryFn: () => billingService.getBillingReport(workspaceId, CURRENT_MONTH, CURRENT_YEAR),
     enabled: !!workspaceId && canViewBilling && hasSubscription,
+    refetchInterval: BILLING_REALTIME_REFETCH_MS,
     retry: 1,
   });
 
@@ -210,6 +214,7 @@ function WorkspaceEnterpriseBillingContent() {
     queryKey: ["billing", "invoices", workspaceId],
     queryFn: () => billingService.getWorkspaceInvoices(workspaceId, 1, 5),
     enabled: !!workspaceId && canViewBilling && hasSubscription,
+    refetchInterval: BILLING_REALTIME_REFETCH_MS,
     retry: 1,
   });
 
@@ -757,8 +762,8 @@ function WorkspaceEnterpriseBillingContent() {
 
         {!hasTrialPeriod && (
           <section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
-            <UsageChart workspaceId={workspaceId} />
-            <FeatureBreakdownChart workspaceId={workspaceId} />
+            <UsageChart workspaceId={workspaceId} refetchIntervalMs={BILLING_REALTIME_REFETCH_MS} />
+            <FeatureBreakdownChart workspaceId={workspaceId} refetchIntervalMs={BILLING_REALTIME_REFETCH_MS} />
           </section>
         )}
 

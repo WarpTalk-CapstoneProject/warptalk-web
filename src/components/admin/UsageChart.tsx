@@ -34,11 +34,12 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 interface UsageChartProps {
   workspaceId?: string;
   className?: string;
+  refetchIntervalMs?: number;
 }
 
 type Grouping = "month" | "quarter" | "year";
 
-export function UsageChart({ workspaceId, className }: UsageChartProps) {
+export function UsageChart({ workspaceId, className, refetchIntervalMs }: UsageChartProps) {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [grouping, setGrouping] = useState<Grouping>("month");
@@ -71,6 +72,7 @@ export function UsageChart({ workspaceId, className }: UsageChartProps) {
         return [result];
       }
     },
+    refetchInterval: refetchIntervalMs,
   });
 
   const chartData = useMemo(() => {

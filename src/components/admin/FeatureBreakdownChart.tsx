@@ -24,6 +24,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 interface FeatureBreakdownChartProps {
   workspaceId?: string;
   className?: string;
+  refetchIntervalMs?: number;
 }
 
 const COLORS = [
@@ -39,6 +40,7 @@ const COLORS = [
 export function FeatureBreakdownChart({
   workspaceId,
   className,
+  refetchIntervalMs,
 }: FeatureBreakdownChartProps) {
   const [days, setDays] = useState<number>(30);
 
@@ -50,6 +52,7 @@ export function FeatureBreakdownChart({
       workspaceId
         ? billingService.getWorkspaceUsageBreakdown(workspaceId, days)
         : billingService.getGlobalUsageBreakdown(days),
+    refetchInterval: refetchIntervalMs,
   });
 
   const chartData = useMemo(() => {
