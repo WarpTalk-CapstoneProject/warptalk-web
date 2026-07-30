@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
@@ -19,6 +19,7 @@ import { NotificationPopover } from "@/components/notifications/notification-pop
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 
@@ -34,6 +35,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const [mounted, setMounted] = useState(false);
   
   const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
   const selectWorkspace = useSelectWorkspace();
@@ -60,7 +63,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace/join";
 
   useEffect(() => {
-    if (isOnboardingRoute || workspacesLoading) return;
+    const handle = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [mounted, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!mounted || !isAuthenticated || isOnboardingRoute || workspacesLoading) return;
 
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
@@ -86,7 +100,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, selectWorkspace, setActiveWorkspace, router]);
+  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+
+  if (!mounted || !isAuthenticated) {
+    return (
+      <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
+        <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+      </div>
+    );
+  }
 
   if (isOnboardingRoute) {
     return <>{children}</>;
@@ -209,6 +231,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
             <NotificationPopover />
+            <ThemeToggleButton />
             <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
             <ThemeToggleButton />
             <div className="w-[1px] h-3.5 bg-border mx-1" />

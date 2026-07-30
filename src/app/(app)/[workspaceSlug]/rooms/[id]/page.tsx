@@ -244,9 +244,9 @@ export default function RoomInformationPage() {
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white text-ink">
+    <div className="flex h-full flex-col overflow-hidden bg-canvas text-ink">
       {copiedText ? (
-        <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md bg-black px-4 py-2 text-[13px] font-medium text-white shadow-lg">
+        <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md border border-border bg-surface-1 px-4 py-2 text-[13px] font-medium text-ink shadow-lg">
           {copiedText}
         </div>
       ) : null}
@@ -436,7 +436,7 @@ export default function RoomInformationPage() {
 
             <PropertyPanel title="Meeting access">
               <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
-                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-white text-ink">
+                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-1 text-ink">
                   <Video className="size-4" />
                 </div>
                 <div className="min-w-0">
@@ -577,7 +577,7 @@ function MeetingTranscriptArtifact({
       </div>
 
       {ordered.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+        <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
           {isEnded
             ? "No transcript was captured for this meeting."
             : "The transcript is saved here as the meeting is transcribed."}
@@ -992,7 +992,7 @@ function LinkToolbarButton({
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             placeholder="Paste a link..."
-            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-white px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
           <Button
             type="submit"

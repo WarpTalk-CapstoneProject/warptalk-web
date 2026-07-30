@@ -29,7 +29,6 @@ import {
   GearSix,
   MagnifyingGlass,
   Microphone,
-  Moon,
   Plus,
   Question,
   Scroll,
@@ -122,6 +121,7 @@ import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 import Link from "next/link";
+import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 
 function Breadcrumbs() {
   const activeWorkspaceSlug = useWorkspaceStore(
@@ -292,9 +292,7 @@ export function Topbar() {
             <Question weight="light" className="h-4 w-4" />
           </IconButton>
           <NotificationPopover />
-          <IconButton label="Theme">
-            <Moon weight="light" className="h-4 w-4" />
-          </IconButton>
+          <ThemeToggleButton />
           <DropdownMenu>
             <DropdownMenuTrigger
               className="ml-2 flex h-8 items-center gap-2 rounded-md bg-muted/50 px-2 text-foreground outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"

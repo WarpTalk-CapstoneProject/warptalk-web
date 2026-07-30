@@ -8,6 +8,8 @@ import { BackgroundProcessor, type BackgroundProcessorWrapper } from "@livekit/t
 
 const DEVICE_PREVIEW_KEY = "warptalk.devices.preview";
 const BLUR_RADIUS = 10;
+const ENABLE_KRISP_NOISE_FILTER =
+  process.env.NEXT_PUBLIC_ENABLE_KRISP_NOISE_FILTER === "true";
 
 export interface TrackEffectsPreferences {
   noiseSuppressionEnabled: boolean;
@@ -57,7 +59,11 @@ export function useTrackProcessors({
     let cancelled = false;
     async function applyNoiseProcessor() {
       try {
-        if (noiseSuppressionEnabled && isKrispNoiseFilterSupported()) {
+        if (
+          ENABLE_KRISP_NOISE_FILTER &&
+          noiseSuppressionEnabled &&
+          isKrispNoiseFilterSupported()
+        ) {
           if (!krispRef.current) krispRef.current = KrispNoiseFilter();
           await localAudioTrack.setProcessor(krispRef.current);
         } else if (localAudioTrack.getProcessor()) {

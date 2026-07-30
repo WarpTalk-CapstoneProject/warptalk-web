@@ -72,7 +72,9 @@ export function SetupRoomModal() {
 
   // Krisp noise filter / background blur — applied as LiveKit track processors once in
   // the room (see src/hooks/use-track-processors.ts), not to this raw preview stream.
-  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(
+    process.env.NEXT_PUBLIC_ENABLE_KRISP_NOISE_FILTER === "true",
+  );
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);

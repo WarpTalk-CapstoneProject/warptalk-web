@@ -33,6 +33,7 @@ const loginSchema = z.object({
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
 function getSafeCallbackUrl(value: string | null) {
   if (
@@ -60,26 +61,9 @@ function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
   document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
 }
 
-function LoginForm() {
+function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = getSafeCallbackUrl(
-    searchParams.get("callbackUrl") || searchParams.get("redirect"),
-  );
   const login = useAuthStore((s) => s.login);
-  const [showPassword, setShowPassword] = useState(false);
-  const [step, setStep] = useState<"email" | "password">("email");
-
-  const {
-    register,
-    handleSubmit,
-    trigger,
-    getValues,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  });
 
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -121,6 +105,56 @@ function LoginForm() {
       console.error("[Google OAuth] Popup / Client Error:", errorResponse);
       toast.error("Google authentication failed or popup was closed.");
     },
+  });
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        console.log("[Google OAuth] Continue with Google button clicked");
+        handleGoogleLogin();
+      }}
+      className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
+    >
+      <GoogleAuthIcon className="size-5" />
+      Continue with Google
+    </button>
+  );
+}
+
+function GoogleLoginUnavailableButton() {
+  return (
+    <button
+      type="button"
+      disabled
+      title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable Google login."
+      className="flex h-14 w-full cursor-not-allowed items-center justify-center gap-3 rounded-full border border-neutral-200 bg-neutral-50 text-[15px] font-medium text-neutral-400"
+    >
+      <GoogleAuthIcon className="size-5" />
+      Continue with Google
+    </button>
+  );
+}
+
+function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = getSafeCallbackUrl(
+    searchParams.get("callbackUrl") || searchParams.get("redirect"),
+  );
+  const login = useAuthStore((s) => s.login);
+  const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState<"email" | "password">("email");
+
+  const {
+    register,
+    handleSubmit,
+    trigger,
+    getValues,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
   });
 
   useEffect(() => {
@@ -221,19 +255,11 @@ function LoginForm() {
                 className="space-y-4"
               >
                 {/* Social Login */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    console.log(
-                      "[Google OAuth] Continue with Google button clicked",
-                    );
-                    handleGoogleLogin();
-                  }}
-                  className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
-                >
-                  <GoogleAuthIcon className="size-5" />
-                  Continue with Google
-                </button>
+                {GOOGLE_CLIENT_ID ? (
+                  <GoogleLoginButton callbackUrl={callbackUrl} />
+                ) : (
+                  <GoogleLoginUnavailableButton />
+                )}
 
                 {/* Divider */}
                 <div className="flex items-center gap-4 py-2">

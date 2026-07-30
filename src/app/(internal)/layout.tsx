@@ -1,12 +1,35 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Spinner } from "@phosphor-icons/react/dist/ssr";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function InternalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const handle = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [mounted, isAuthenticated, router]);
+
+  if (!mounted || !isAuthenticated) {
+    return (
+      <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
+        <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">

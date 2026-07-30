@@ -67,6 +67,10 @@ export function PeoplePanel({
   const lkParticipantIds = new Set(lkParticipants.map((p) => p.identity));
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
+  const visibleParticipants = participants.filter(
+    (participant) =>
+      !["left", "removed", "kicked", "rejected"].includes(participant.status),
+  );
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -99,19 +103,25 @@ export function PeoplePanel({
             Could not load participant controls.
           </p>
         ) : null}
-        {participants.map((participant) => (
-          <ParticipantRow
-            key={participant.id}
-            participant={participant}
-            isHost={isHost}
-            roomId={roomId}
-            isRoomHost={participant.userId === room.hostId}
-            isInRoom={lkParticipantIds.has(participant.userId)}
-            handRaised={raisedHandUserIds?.has(participant.userId) ?? false}
-            isSpotlighted={spotlightedUserId === participant.userId}
-            onToggleSpotlight={isHost ? onToggleSpotlight : undefined}
-          />
-        ))}
+        {visibleParticipants.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border px-3 py-4 text-[13px] text-ink-subtle">
+            No active participants in this room.
+          </p>
+        ) : (
+          visibleParticipants.map((participant) => (
+            <ParticipantRow
+              key={participant.id}
+              participant={participant}
+              isHost={isHost}
+              roomId={roomId}
+              isRoomHost={participant.userId === room.hostId}
+              isInRoom={lkParticipantIds.has(participant.userId)}
+              handRaised={raisedHandUserIds?.has(participant.userId) ?? false}
+              isSpotlighted={spotlightedUserId === participant.userId}
+              onToggleSpotlight={isHost ? onToggleSpotlight : undefined}
+            />
+          ))
+        )}
       </div>
     </div>
   );
@@ -258,7 +268,13 @@ function ParticipantRow({
             </button>
           )}
           {canManage && (
-            <div className="hidden group-hover:flex items-center">
+            <div
+              className={
+                participant.status === "waiting"
+                  ? "flex items-center"
+                  : "hidden group-hover:flex items-center"
+              }
+            >
               {participant.status === "waiting" ? (
                 <>
                   <button

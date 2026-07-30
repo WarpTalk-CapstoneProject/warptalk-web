@@ -42,29 +42,16 @@ type RegisterFormData = {
   email?: string;
   password: string;
 };
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
 function setAccessTokenCookie(accessToken: string) {
   const maxAge = 7 * 24 * 60 * 60; // 7 days
   document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
-function RegisterForm() {
+function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token");
-  const hasToken = Boolean(token);
-  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
-
   const login = useAuthStore((s) => s.login);
-  const [showPassword, setShowPassword] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<RegisterFormData>({
-    resolver: zodResolver(getRegisterSchema(hasToken)) as Resolver<RegisterFormData>,
-  });
 
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -86,6 +73,47 @@ function RegisterForm() {
     onError: () => {
       toast.error("Google authentication failed.");
     },
+  });
+
+  return (
+    <SocialButton
+      icon={<GoogleAuthIcon />}
+      label="Google"
+      onClick={() => handleGoogleLogin()}
+    />
+  );
+}
+
+function RegisterGoogleUnavailableButton() {
+  return (
+    <button
+      type="button"
+      disabled
+      title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable Google sign-in."
+      className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-white/10 bg-black text-sm font-medium text-white/35"
+    >
+      <GoogleAuthIcon />
+      Google
+    </button>
+  );
+}
+
+function RegisterForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+  const hasToken = Boolean(token);
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
+
+  const login = useAuthStore((s) => s.login);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(getRegisterSchema(hasToken)) as Resolver<RegisterFormData>,
   });
 
   const onSubmit = async (data: RegisterFormData) => {
@@ -232,17 +260,11 @@ function RegisterForm() {
         </span>
       </div>
 
-      <SocialButton
-        icon={<GoogleAuthIcon />}
-        label="Google"
-        onClick={() => {
-          if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
-            toast.error("Google Login is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env.local");
-            return;
-          }
-          handleGoogleLogin();
-        }}
-      />
+      {GOOGLE_CLIENT_ID ? (
+        <RegisterGoogleButton callbackUrl={callbackUrl} />
+      ) : (
+        <RegisterGoogleUnavailableButton />
+      )}
     </CinematicAuthShell>
   );
 }
