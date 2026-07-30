@@ -294,7 +294,7 @@ export default function WorkspaceInvitationsPage() {
                               ? "bg-emerald-500/5 text-emerald-500 border-emerald-500/20"
                               : normalizedStatus === "REJECTED"
                                 ? "bg-destructive/5 text-destructive border-destructive/20"
-                              : "bg-surface-3 border-hairline text-ink-muted"
+                                : "bg-surface-3 border-hairline text-ink-muted"
                         }`}
                       >
                         {invite.status}
