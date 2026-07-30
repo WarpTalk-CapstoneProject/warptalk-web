@@ -8,6 +8,7 @@ import {
 import { Users, X, Plus } from "@phosphor-icons/react/dist/ssr";
 import { PillButton } from "./pill-button";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export function isValidInviteEmail(value: string) {
@@ -28,6 +29,9 @@ export function InvitePeoplePicker({
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
+  const currentUser = useAuthStore((state) => state.user);
+  const currentUserEmail = currentUser?.email?.trim().toLowerCase() ?? "";
+  const currentUserId = currentUser?.id;
   const { data: membersData } = useWorkspaceMembers(
     activeWorkspaceId || "",
     1,
@@ -41,6 +45,8 @@ export function InvitePeoplePicker({
       m.fullName !== "Unknown" &&
       Boolean(m.email) &&
       isValidInviteEmail(m.email ?? "") &&
+      m.userId !== currentUserId &&
+      (m.email ?? "").trim().toLowerCase() !== currentUserEmail &&
       !emails.includes((m.email ?? "").toLowerCase()),
   );
 
@@ -54,6 +60,10 @@ export function InvitePeoplePicker({
       }
       if (emails.includes(email)) {
         setInputError("This email is already invited.");
+        return;
+      }
+      if (email === currentUserEmail) {
+        setInputError("You are already the host of this meeting.");
         return;
       }
       onChange([...emails, email]);
@@ -70,6 +80,10 @@ export function InvitePeoplePicker({
     const normalizedEmail = email.trim().toLowerCase();
     if (!isValidInviteEmail(normalizedEmail)) {
       setInputError("This workspace member does not have a valid email.");
+      return;
+    }
+    if (normalizedEmail === currentUserEmail) {
+      setInputError("You are already the host of this meeting.");
       return;
     }
     if (!emails.includes(normalizedEmail)) {

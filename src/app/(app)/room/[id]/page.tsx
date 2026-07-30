@@ -174,7 +174,7 @@ export default function RoomDetailPage() {
     useState<boolean>(
       savedDevices.noiseSuppressionEnabled ??
         savedJoinConfig.noiseSuppressionEnabled ??
-        true,
+        process.env.NEXT_PUBLIC_ENABLE_KRISP_NOISE_FILTER === "true",
     );
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState<boolean>(
     savedDevices.backgroundBlurEnabled ??
@@ -254,6 +254,9 @@ export default function RoomDetailPage() {
   // never refetched just for this, so without this override a promoted participant's
   // host-only UI would stay hidden until their next full room refetch.
   const [liveHostUserId, setLiveHostUserId] = useState<string | null>(null);
+  useEffect(() => {
+    setLiveHostUserId(meetingSession?.activeHostId ?? null);
+  }, [meetingSession?.activeHostId]);
   const isHost = Boolean(
     (liveHostUserId
       ? user?.id === liveHostUserId
@@ -352,6 +355,16 @@ export default function RoomDetailPage() {
     room?.status !== "cancelled" &&
     room?.status !== "expired" &&
     room?.status !== "failed";
+
+  useEffect(() => {
+    if (!room) return;
+    if (!["ended", "cancelled", "expired", "failed"].includes(room.status))
+      return;
+
+    setMeetingSession(null);
+    setWarptalkStarted(false);
+    router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+  }, [activeWorkspaceSlug, room, router]);
 
   const displayName =
     savedJoinConfig.displayName ||
@@ -733,7 +746,6 @@ export default function RoomDetailPage() {
   const retryMeetingConnection = useCallback(() => {
     if (!room?.id || !canConnectMeeting) return;
     meetingJoinedRef.current = true;
-    setMeetingSession(null);
 
     void joinMeetingAsync({ translationRoomId: room.id, displayName })
       .then((session) => {
@@ -775,6 +787,16 @@ export default function RoomDetailPage() {
   useEffect(() => {
     retryMeetingConnectionRef.current = retryMeetingConnection;
   }, [retryMeetingConnection]);
+
+  useEffect(() => {
+    if (!meetingSession?.isWaitingRoom || isMeetingJoining) return;
+
+    const intervalId = window.setInterval(() => {
+      retryMeetingConnectionRef.current();
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isMeetingJoining, meetingSession?.isWaitingRoom]);
 
   useEffect(() => {
     if (!room?.id || !canConnectMeeting || meetingJoinedRef.current) return;
@@ -862,7 +884,13 @@ export default function RoomDetailPage() {
         addOrMergeTranslationText(translation);
       },
     );
-    connection.on("TranslationRoomEnded", () => refetchRoom());
+    connection.on("TranslationRoomEnded", () => {
+      setMeetingSession(null);
+      setWarptalkStarted(false);
+      toast.info("This meeting has ended.");
+      void refetchRoom();
+      router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+    });
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
       setHandRaisedInStore(userId, isRaised);
@@ -1590,7 +1618,7 @@ export default function RoomDetailPage() {
               />
 
               {/* Floating Control Bar */}
-              <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity hover:opacity-100">
+              <div className="absolute bottom-6 left-1/2 z-30 w-[calc(100%-2rem)] max-w-fit -translate-x-1/2 overflow-x-auto px-1 pb-1 transition-opacity hover:opacity-100">
                 <MeetingControlBar
                   meetingEnabled={Boolean(meetingSession?.token)}
                   cameraEnabled={cameraEnabled}
