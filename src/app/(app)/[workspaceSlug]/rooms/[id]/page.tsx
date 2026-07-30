@@ -23,14 +23,12 @@ import {
   Copy,
   Download,
   FileText,
-  Hash,
   Italic,
   Link as LinkIcon,
   List,
   ListOrdered,
   Loader2,
   MapPin,
-  MessageSquareText,
   MoreHorizontal,
   Quote,
   Star,
@@ -96,8 +94,6 @@ import type {
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 
-type ThreadKind = "log" | "note" | "transcript" | "system";
-
 type UserIdentity = {
   id: string;
   name: string;
@@ -108,23 +104,6 @@ type UserIdentity = {
   speakLanguage?: string;
   listenLanguage?: string;
 };
-
-type ThreadEvent = {
-  id: string;
-  kind: ThreadKind;
-  title: string;
-  at?: string;
-  actor: UserIdentity;
-  content: string;
-  metadata?: string[];
-  accent?: "primary" | "muted" | "success";
-};
-
-type MarkdownBlock =
-  | { type: "h1" | "h2" | "h3" | "quote" | "code" | "p"; text: string }
-  | { type: "ul" | "ol"; items: string[] }
-  | { type: "table"; headers: string[]; rows: string[][] }
-  | { type: "hr" };
 
 const statusLabels: Record<TranslationRoomStatus, string> = {
   scheduled: "Scheduled",
@@ -221,9 +200,6 @@ export default function RoomInformationPage() {
     );
   }
 
-  const languageNames = [room.sourceLanguage, ...room.targetLanguages]
-    .filter((language): language is string => Boolean(language))
-    .map(getLanguageName);
   const isEnded = room.status === "ended";
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
   const participants = buildUserList(
@@ -234,15 +210,6 @@ export default function RoomInformationPage() {
     user,
   );
   const hostUser = getHostUser(room, participants, membersArray, user);
-  const threadEvents = buildThreadEvents(
-    room,
-    hostUser,
-    participants,
-    apiParticipants,
-    apiInvitations,
-    languageNames,
-  );
-
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white text-ink">
       {copiedText ? (
@@ -352,7 +319,6 @@ export default function RoomInformationPage() {
               />
             ) : null}
 
-            <RoomThread events={threadEvents} />
           </main>
 
           <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
@@ -460,63 +426,6 @@ export default function RoomInformationPage() {
           </aside>
         </div>
       </div>
-    </div>
-  );
-}
-
-function RoomThread({ events }: { events: ThreadEvent[] }) {
-  return (
-    <section className="relative mt-8">
-      <div className="mb-2 flex items-center justify-between">
-        <div>
-          <h2 className="text-[17px] font-semibold">Activity</h2>
-          <p className="mt-0.5 text-[12px] text-muted-foreground">
-            Room events and participant changes.
-          </p>
-        </div>
-        <InlineChip icon={<MessageSquareText className="size-3.5" />}>
-          {events.length} updates
-        </InlineChip>
-      </div>
-
-      <div className="relative mt-4 border-l border-border pl-5">
-        <div className="space-y-1">
-          {events.length === 0 ? (
-            <ThreadEmptyState />
-          ) : (
-            events.map((event) => (
-              <article
-                key={event.id}
-                className="relative rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-1"
-              >
-                <span className="absolute -left-5 top-4 h-px w-3 bg-border" />
-                <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                  <KindChip kind={event.kind} />
-                  <UserChip user={event.actor} compact />
-                  <span className="font-medium text-ink">{event.title}</span>
-                  {event.at ? (
-                    <span className="text-muted-foreground">{event.at}</span>
-                  ) : null}
-                  {event.metadata?.map((item) => (
-                    <InlineChip key={item}>{item}</InlineChip>
-                  ))}
-                </div>
-                {event.content ? (
-                  <MarkdownContent content={event.content} />
-                ) : null}
-              </article>
-            ))
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ThreadEmptyState() {
-  return (
-    <div className="-ml-5 py-6 text-center text-[12px] text-muted-foreground">
-      No activity yet.
     </div>
   );
 }
@@ -1072,331 +981,6 @@ function UserChip({
   );
 }
 
-function MarkdownContent({ content }: { content: string }) {
-  const blocks = parseMarkdownBlocks(content);
-  return (
-    <div className="mt-3 space-y-3 text-[13px] leading-6 text-ink-subtle">
-      {blocks.map((block, index) => {
-        switch (block.type) {
-          case "h1":
-            return (
-              <h1
-                key={index}
-                className="text-[20px] font-semibold leading-7 text-ink"
-              >
-                {renderInlineMarkdown(block.text)}
-              </h1>
-            );
-          case "h2":
-            return (
-              <h2
-                key={index}
-                className="text-[17px] font-semibold leading-6 text-ink"
-              >
-                {renderInlineMarkdown(block.text)}
-              </h2>
-            );
-          case "h3":
-            return (
-              <h3
-                key={index}
-                className="text-[15px] font-semibold leading-6 text-ink"
-              >
-                {renderInlineMarkdown(block.text)}
-              </h3>
-            );
-          case "ul":
-            return (
-              <ul key={index} className="list-disc space-y-1 pl-5">
-                {block.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>{renderInlineMarkdown(item)}</li>
-                ))}
-              </ul>
-            );
-          case "ol":
-            return (
-              <ol key={index} className="list-decimal space-y-1 pl-5">
-                {block.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>{renderInlineMarkdown(item)}</li>
-                ))}
-              </ol>
-            );
-          case "quote":
-            return (
-              <blockquote
-                key={index}
-                className="border-l-2 border-primary/50 pl-3 text-muted-foreground"
-              >
-                {renderInlineMarkdown(block.text)}
-              </blockquote>
-            );
-          case "code":
-            return (
-              <pre
-                key={index}
-                className="overflow-x-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-[12px] leading-5 text-ink"
-              >
-                <code>{block.text}</code>
-              </pre>
-            );
-          case "table":
-            return (
-              <div
-                key={index}
-                className="overflow-x-auto rounded-lg border border-border"
-              >
-                <table className="min-w-full border-collapse text-left text-[12px]">
-                  <thead className="bg-surface-2 text-ink">
-                    <tr>
-                      {block.headers.map((header) => (
-                        <th
-                          key={header}
-                          className="border-b border-border px-3 py-2 font-medium"
-                        >
-                          {renderInlineMarkdown(header)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {block.rows.map((row, rowIndex) => (
-                      <tr
-                        key={rowIndex}
-                        className="border-b border-border last:border-b-0"
-                      >
-                        {row.map((cell, cellIndex) => (
-                          <td key={cellIndex} className="px-3 py-2 align-top">
-                            {renderInlineMarkdown(cell)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          case "hr":
-            return <hr key={index} className="border-border" />;
-          case "p":
-          default:
-            return <p key={index}>{renderInlineMarkdown(block.text)}</p>;
-        }
-      })}
-    </div>
-  );
-}
-
-function parseMarkdownBlocks(content: string): MarkdownBlock[] {
-  const lines = content.trim().split(/\r?\n/);
-  const blocks: MarkdownBlock[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index];
-    if (!line.trim()) {
-      index += 1;
-      continue;
-    }
-    if (line.startsWith("```")) {
-      const codeLines: string[] = [];
-      index += 1;
-      while (index < lines.length && !lines[index].startsWith("```")) {
-        codeLines.push(lines[index]);
-        index += 1;
-      }
-      blocks.push({ type: "code", text: codeLines.join("\n") });
-      index += 1;
-      continue;
-    }
-    if (/^#{1,3}\s/.test(line)) {
-      const level = line.match(/^#+/)?.[0].length ?? 1;
-      const type = `h${level}` as "h1" | "h2" | "h3";
-      blocks.push({ type, text: line.replace(/^#{1,3}\s/, "") });
-      index += 1;
-      continue;
-    }
-    if (
-      /^\|.+\|$/.test(line) &&
-      /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(lines[index + 1] ?? "")
-    ) {
-      const headers = splitTableRow(line);
-      const rows: string[][] = [];
-      index += 2;
-      while (index < lines.length && /^\|.+\|$/.test(lines[index])) {
-        rows.push(splitTableRow(lines[index]));
-        index += 1;
-      }
-      blocks.push({ type: "table", headers, rows });
-      continue;
-    }
-    if (/^[-*]\s+/.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length && /^[-*]\s+/.test(lines[index])) {
-        items.push(lines[index].replace(/^[-*]\s+/, ""));
-        index += 1;
-      }
-      blocks.push({ type: "ul", items });
-      continue;
-    }
-    if (/^\d+\.\s+/.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length && /^\d+\.\s+/.test(lines[index])) {
-        items.push(lines[index].replace(/^\d+\.\s+/, ""));
-        index += 1;
-      }
-      blocks.push({ type: "ol", items });
-      continue;
-    }
-    if (line.startsWith("> ")) {
-      blocks.push({ type: "quote", text: line.replace(/^>\s+/, "") });
-      index += 1;
-      continue;
-    }
-    if (line.trim() === "---") {
-      blocks.push({ type: "hr" });
-      index += 1;
-      continue;
-    }
-
-    const paragraph = [line];
-    index += 1;
-    while (
-      index < lines.length &&
-      lines[index].trim() &&
-      !/^#{1,3}\s|^[-*]\s+|^\d+\.\s+|^>\s+|^```|^\|.+\|$/.test(lines[index])
-    ) {
-      paragraph.push(lines[index]);
-      index += 1;
-    }
-    blocks.push({ type: "p", text: paragraph.join(" ") });
-  }
-
-  return blocks;
-}
-
-function renderInlineMarkdown(text: string): ReactNode[] {
-  const tokens = text
-    .split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g)
-    .filter(Boolean);
-  return tokens.map((token, index) => {
-    if (token.startsWith("**") && token.endsWith("**")) {
-      return (
-        <strong key={index} className="font-semibold text-ink">
-          {token.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (token.startsWith("*") && token.endsWith("*")) {
-      return <em key={index}>{token.slice(1, -1)}</em>;
-    }
-    if (token.startsWith("`") && token.endsWith("`")) {
-      return (
-        <code
-          key={index}
-          className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[12px] text-ink"
-        >
-          {token.slice(1, -1)}
-        </code>
-      );
-    }
-    const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-    if (link) {
-      return (
-        <a
-          key={index}
-          href={link[2]}
-          className="font-medium text-primary underline underline-offset-3"
-        >
-          {link[1]}
-        </a>
-      );
-    }
-    return <span key={index}>{token}</span>;
-  });
-}
-
-function splitTableRow(line: string) {
-  return line
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => cell.trim());
-}
-
-function buildThreadEvents(
-  room: TranslationRoomDto,
-  hostUser: UserIdentity,
-  participants: UserIdentity[],
-  roomParticipants: TranslationRoomParticipantDto[],
-  invitations: TranslationRoomInvitationDto[],
-  languageNames: string[],
-): ThreadEvent[] {
-  const events: ThreadEvent[] = [
-    {
-      id: "scheduled",
-      kind: "log",
-      title: "Meeting scheduled",
-      at: formatDateTime(room.createdAt),
-      actor: hostUser,
-      accent: "primary",
-      content: `Language scope: **${languageNames.join(", ") || "Not set"}**.`,
-      metadata: [room.translationRoomCode],
-    },
-  ];
-
-  const participantEvents = roomParticipants
-    .filter((participant) => participant.joinedAt)
-    .map((participant) => ({
-      id: `participant-${participant.id}`,
-      kind: "log" as const,
-      title: "Participant joined",
-      at: formatDateTime(participant.joinedAt),
-      actor:
-        participants.find((item) => item.id === participant.userId) ??
-        toUserIdentity(participant),
-      accent: "muted" as const,
-      content: `Joined with **${getLanguageName(participant.speakLanguage)}** speaking and **${getLanguageName(participant.listenLanguage)}** listening.`,
-      metadata: [normalizeLabel(participant.status) ?? "Joined"],
-    }));
-
-  const invitationEvents = invitations.map((invitation) => ({
-    id: `invitation-${invitation.id}`,
-    kind: "log" as const,
-    title: "Invitation updated",
-    at: formatDateTime(invitation.updatedAt || invitation.createdAt),
-    actor: hostUser,
-    accent: "muted" as const,
-    content: `Invitation for **${invitation.email}** is **${normalizeLabel(invitation.status) ?? "Pending"}**.`,
-  }));
-
-  events.push(...participantEvents, ...invitationEvents);
-
-  if (room.startedAt) {
-    events.push({
-      id: "started",
-      kind: "log",
-      title: "Meeting started",
-      at: formatDateTime(room.startedAt),
-      actor: hostUser,
-      accent: "success",
-      content: "Realtime translation and transcript capture started.",
-    });
-  }
-
-  if (room.endedAt) {
-    events.push({
-      id: "ended",
-      kind: "log",
-      title: "Meeting ended",
-      at: formatDateTime(room.endedAt),
-      actor: hostUser,
-      content: `Final duration: **${formatDuration(room)}**.`,
-    });
-  }
-
-  return events.sort((left, right) => compareEventTime(left.at, right.at));
-}
-
 function buildUserList(
   room: TranslationRoomDto,
   participants: TranslationRoomParticipantDto[],
@@ -1671,19 +1255,6 @@ function InlineChip({
   );
 }
 
-function KindChip({ kind }: { kind: ThreadKind }) {
-  const config: Record<ThreadKind, { icon: ReactNode; label: string }> = {
-    log: { icon: <Hash className="size-3.5" />, label: "Event" },
-    note: { icon: <Hash className="size-3.5" />, label: "Note" },
-    transcript: {
-      icon: <MessageSquareText className="size-3.5" />,
-      label: "Transcript",
-    },
-    system: { icon: <Hash className="size-3.5" />, label: "System" },
-  };
-  return <InlineChip icon={config[kind].icon}>{config[kind].label}</InlineChip>;
-}
-
 function AvatarInitial({
   user,
   className,
@@ -1744,30 +1315,4 @@ function formatDateTime(value?: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatDuration(room: TranslationRoomDto) {
-  const seconds =
-    room.durationSeconds ??
-    (room.startedAt && room.endedAt
-      ? Math.max(
-          0,
-          Math.round(
-            (new Date(room.endedAt).getTime() -
-              new Date(room.startedAt).getTime()) /
-              1000,
-          ),
-        )
-      : 0);
-  if (!seconds) return "0m";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours ? `${hours}h ` : ""}${minutes}m`;
-}
-
-function compareEventTime(left?: string, right?: string) {
-  const leftTime = left ? new Date(left).getTime() : Number.NaN;
-  const rightTime = right ? new Date(right).getTime() : Number.NaN;
-  if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) return 0;
-  return leftTime - rightTime;
 }

@@ -266,6 +266,16 @@ export function GlobalChatbot() {
   const { data: skills } = useAssistantSkills();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
 
+  const startNewConversation = () => {
+    setConversationId(null);
+    setMessages([]);
+    setInputValue("");
+    setSelectedContexts([]);
+    setIsAiTyping(false);
+    setActiveToolLabel(null);
+    setIsMinimized(false);
+  };
+
   // Real workspace members/meetings/documents for the @mention picker — each refetches
   // as the user types after "@". Selecting one attaches a real entityId that rides along
   // with the next sent message as a structured mention (see sendMessage below), not just
@@ -732,7 +742,11 @@ export function GlobalChatbot() {
             }}
           >
             <PopoverTrigger
-              aria-label="Ask WarpTalk"
+              aria-label="Ask WarpBot"
+              onClick={() => {
+                startNewConversation();
+                setIsOpen(true);
+              }}
               className="flex items-center h-[26px] pl-[8px] pr-[10px] rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors group text-ink"
             >
               <span
@@ -746,7 +760,7 @@ export function GlobalChatbot() {
                 />
               </span>
               <span className="text-[12px] leading-none whitespace-nowrap">
-                Ask WarpTalk
+                Ask WarpBot
               </span>
             </PopoverTrigger>
             <PopoverContent
@@ -783,8 +797,7 @@ export function GlobalChatbot() {
                     onClick={() => {
                       setIsOpen(false);
                       setIsMinimized(false);
-                      setMessages([]);
-                      setConversationId(null);
+                      startNewConversation();
                     }}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
@@ -1023,7 +1036,7 @@ export function GlobalChatbot() {
                           ? ""
                           : ambientContextDisplay
                             ? "Ask with page context..."
-                            : "Ask WarpTalk..."
+                            : "Ask WarpBot..."
                       }
                       className="flex-1 min-w-[120px] bg-transparent resize-none outline-none text-[13px] text-ink placeholder:text-ink-subtle self-stretch"
                       rows={1}

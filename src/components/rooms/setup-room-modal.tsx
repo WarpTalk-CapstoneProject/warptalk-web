@@ -19,6 +19,7 @@ import {
   useJoinTranslationRoomByCode,
   useTranslationRoom,
 } from "@/hooks/use-translationRooms";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
@@ -72,7 +73,7 @@ export function SetupRoomModal() {
 
   // Krisp noise filter / background blur — applied as LiveKit track processors once in
   // the room (see src/hooks/use-track-processors.ts), not to this raw preview stream.
-  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(false);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
@@ -319,6 +320,8 @@ export function SetupRoomModal() {
           cameraEnabled,
           microphoneEnabled,
           noiseSuppressionEnabled,
+          noiseSuppressionPreferenceVersion:
+            NOISE_SUPPRESSION_PREFERENCE_VERSION,
           backgroundBlurEnabled,
         }),
       );

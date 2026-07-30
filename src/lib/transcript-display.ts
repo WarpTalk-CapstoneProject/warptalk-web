@@ -14,6 +14,18 @@ export type AnimatedWordToken = {
 const MAX_UTTERANCE_GAP_MS = 2_500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export function dedupeTranscriptSegments(
+  segments: TranscriptSegmentDto[],
+): TranscriptSegmentDto[] {
+  const byId = new Map<string, TranscriptSegmentDto>();
+  for (const segment of segments) {
+    byId.set(segment.segmentId, segment);
+  }
+  // Map preserves the first insertion position when an existing value is replaced.
+  // Arrival order stays valid when a reconnected ingress track resets startTimeMs.
+  return Array.from(byId.values());
+}
+
 export function groupTranscriptSegments(segments: TranscriptSegmentDto[]): TranscriptSegmentDto[] {
   const utterances: TranscriptSegmentDto[] = [];
 

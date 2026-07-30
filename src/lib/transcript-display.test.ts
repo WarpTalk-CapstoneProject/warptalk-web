@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  dedupeTranscriptSegments,
   formatTranscriptTimestamp,
   getAnimatedWordTokens,
   getLiveCaptionText,
@@ -43,6 +44,24 @@ test("groups adjacent chunks from the same speaker into one stable utterance", (
   assert.equal(groups[0].originalText, "Hello how are you?");
   assert.equal(groups[0].translatedText, "Xin chào bạn khỏe không?");
   assert.equal(groups[0].endTimeMs, 3_100);
+});
+
+test("keeps arrival order when a reconnected audio track resets its relative timestamp", () => {
+  const ordered = dedupeTranscriptSegments([
+    segment({ segmentId: "before-reconnect", startTimeMs: 48_000, originalText: "Before" }),
+    segment({ segmentId: "after-reconnect", startTimeMs: 0, originalText: "After" }),
+    segment({
+      segmentId: "before-reconnect",
+      startTimeMs: 48_000,
+      originalText: "Before updated",
+    }),
+  ]);
+
+  assert.deepEqual(
+    ordered.map((item) => item.segmentId),
+    ["before-reconnect", "after-reconnect"],
+  );
+  assert.equal(ordered[0].originalText, "Before updated");
 });
 
 test("keeps a new STT chunk in the current utterance while its translation is pending", () => {

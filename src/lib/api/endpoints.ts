@@ -35,6 +35,8 @@ export const API = {
       `/translation-rooms/${id}/participants/${participantId}/kick`,
     leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
     start: (id: string) => `/translation-rooms/${id}/start`,
+    pause: (id: string) => `/translation-rooms/${id}/pause`,
+    resume: (id: string) => `/translation-rooms/${id}/resume`,
     end: (id: string) => `/translation-rooms/${id}/end`,
     cancel: (id: string) => `/translation-rooms/${id}/cancel`,
     artifacts: (id: string) => `/translation-rooms/${id}/artifacts`,
