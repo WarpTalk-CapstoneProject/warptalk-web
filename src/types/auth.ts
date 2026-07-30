@@ -60,3 +60,39 @@ export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
 }
+
+export interface UserSettingsDto {
+  userId: string;
+  defaultSpeakLanguage: string;
+  defaultListenLanguage: string;
+  voiceCloneEnabled: boolean;
+  micNoiseSuppression: boolean;
+  defaultTranslationRoomType: string;
+  autoRecordTranslationRooms: boolean;
+  autoGenerateSummary: boolean;
+  defaultMaxParticipants: number;
+  theme: string;
+  transcriptFontSize: number;
+  showOriginalTranscript: boolean;
+  showTranslatedTranscript: boolean;
+  highContrast: boolean;
+  screenReaderMode: boolean;
+  updatedAt: string;
+}
+
+export interface UpdateUserSettingsRequest {
+  defaultSpeakLanguage?: string;
+  defaultListenLanguage?: string;
+  voiceCloneEnabled?: boolean;
+  micNoiseSuppression?: boolean;
+  defaultTranslationRoomType?: string;
+  autoRecordTranslationRooms?: boolean;
+  autoGenerateSummary?: boolean;
+  defaultMaxParticipants?: number;
+  theme?: string;
+  transcriptFontSize?: number;
+  showOriginalTranscript?: boolean;
+  showTranslatedTranscript?: boolean;
+  highContrast?: boolean;
+  screenReaderMode?: boolean;
+}

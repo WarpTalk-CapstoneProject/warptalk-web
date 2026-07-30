@@ -19,7 +19,7 @@ export async function serverFetch<T>(
   const cookieStore = await cookies();
   const token = cookieStore.get("access_token")?.value;
 
-  const baseUrl = process.env.API_GATEWAY_URL || "http://localhost:5000";
+  const baseUrl = process.env.API_GATEWAY_URL || "http://localhost:5200";
   const url = `${baseUrl}/api/v1${endpoint}`;
 
   const res = await fetch(url, {

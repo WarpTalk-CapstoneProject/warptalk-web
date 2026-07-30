@@ -1,51 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeClosed, Spinner } from "@phosphor-icons/react/dist/ssr";
+import { Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
+import { useGoogleLogin } from "@react-oauth/google";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useAuthStore } from "@/stores/auth-store";
+  CinematicAuthShell,
+  GoogleAuthIcon,
+  InputGroup,
+  SocialButton,
+} from "@/components/auth/cinematic-auth-shell";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
-const registerSchema = z
-  .object({
-    fullName: z.string().min(1, "Vui lòng nhập họ tên"),
-    email: z.string().email("Email không hợp lệ"),
-    password: z
-      .string()
-      .min(8, "Mật khẩu tối thiểu 8 ký tự")
-      .regex(/[A-Z]/, "Cần ít nhất 1 chữ hoa")
-      .regex(/[0-9]/, "Cần ít nhất 1 số")
-      .regex(/[^A-Za-z0-9]/, "Cần ít nhất 1 ký tự đặc biệt"),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Mật khẩu xác nhận không khớp",
-    path: ["confirmPassword"],
+function getSafeCallbackUrl(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value === "/rooms") return "/workspace";
+  return value;
+}
+
+const getRegisterSchema = (hasToken: boolean) =>
+  z.object({
+    firstName: z.string().min(1, "Please enter your first name"),
+    lastName: z.string().min(1, "Please enter your last name"),
+    email: hasToken
+      ? z.string().optional().or(z.literal(""))
+      : z.string().min(1, "Email is required").email("Invalid email address"),
+    password: z.string().min(8, "Password must be at least 8 symbols"),
   });
 
-type RegisterFormData = z.infer<typeof registerSchema>;
+type RegisterFormData = {
+  firstName: string;
+  lastName: string;
+  email?: string;
+  password: string;
+};
 
-export default function RegisterPage() {
+function setAccessTokenCookie(accessToken: string) {
+  const maxAge = 7 * 24 * 60 * 60; // 7 days
+  document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+  const hasToken = Boolean(token);
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
+
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -54,136 +63,184 @@ export default function RegisterPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
+    resolver: zodResolver(getRegisterSchema(hasToken)) as Resolver<RegisterFormData>,
+  });
+
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        const idToken = tokenResponse.access_token;
+        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, { idToken });
+        const { user, accessToken, refreshToken } = res.data;
+
+        login(user, accessToken, refreshToken);
+        setAccessTokenCookie(accessToken);
+
+        toast.success("Google sign-in successful!");
+        router.replace(callbackUrl);
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
+      }
+    },
+    onError: () => {
+      toast.error("Google authentication failed.");
+    },
   });
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
-      // Backend RegisterRequest: { email, password, fullName }
-      const res = await apiClient.post<AuthResponse>(API.auth.register, {
-        email: data.email,
-        password: data.password,
-        fullName: data.fullName,
-      });
-      const { user, accessToken, refreshToken, expiresAt } = res.data;
+      let res;
+      if (hasToken) {
+        res = await apiClient.post<AuthResponse>(API.auth.registerInvited, {
+          token,
+          password: data.password,
+          fullName: `${data.firstName} ${data.lastName}`.trim(),
+        });
+      } else {
+        res = await apiClient.post<AuthResponse>(API.auth.register, {
+          email: data.email,
+          password: data.password,
+          fullName: `${data.firstName} ${data.lastName}`.trim(),
+        });
+      }
+
+      const { user, accessToken, refreshToken } = res.data;
 
       login(user, accessToken, refreshToken);
-      const maxAge = Math.floor(
-        (new Date(expiresAt).getTime() - Date.now()) / 1000
-      );
-      document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      setAccessTokenCookie(accessToken);
 
-      toast.success("Đăng ký thành công!");
-      router.push("/dashboard");
+      toast.success("Registration successful!");
+      router.replace(callbackUrl);
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { error?: string } };
       };
       toast.error(
-        error?.response?.data?.error || "Đăng ký thất bại. Vui lòng thử lại."
+        error?.response?.data?.error ||
+          "Registration failed. Please try again."
       );
     }
   };
 
   return (
-    <Card>
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold">Tạo tài khoản</CardTitle>
-        <CardDescription>
-          Nhập thông tin để đăng ký tài khoản WarpTalk
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="fullName">Họ tên</Label>
-            <Input
-              id="fullName"
-              placeholder="Nguyễn Văn A"
-              autoComplete="name"
-              {...register("fullName")}
+    <CinematicAuthShell>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-medium tracking-tight">Create New Profile</h1>
+        <p className="text-sm text-white/40">
+          {hasToken 
+            ? "You've been invited! Enter your details to join the workspace."
+            : "Input your basic details to begin the journey."}
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <InputGroup
+              label="First Name"
+              placeholder="Warp"
+              type="text"
+              autoComplete="given-name"
+              aria-invalid={Boolean(errors.firstName)}
+              {...register("firstName")}
             />
-            {errors.fullName && (
-              <p className="text-sm text-destructive">
-                {errors.fullName.message}
-              </p>
+            {errors.firstName && (
+              <p className="mt-2 text-xs text-white/50">{errors.firstName.message}</p>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
+          <div>
+            <InputGroup
+              label="Last Name"
+              placeholder="Studio"
+              type="text"
+              autoComplete="family-name"
+              aria-invalid={Boolean(errors.lastName)}
+              {...register("lastName")}
+            />
+            {errors.lastName && (
+              <p className="mt-2 text-xs text-white/50">{errors.lastName.message}</p>
+            )}
+          </div>
+        </div>
+
+        {!hasToken && (
+          <div>
+            <InputGroup
+              label="Email"
+              placeholder="name@domain.com"
               type="email"
-              placeholder="name@example.com"
               autoComplete="email"
+              aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
             {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
+              <p className="mt-2 text-xs text-white/50">{errors.email.message}</p>
             )}
           </div>
+        )}
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Mật khẩu</Label>
-            <div className="relative">
-              <Input
-                id="password"
+        <div className="space-y-2">
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-white">Password</span>
+            <span className="relative block">
+              <input
                 type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
+                placeholder="Create password"
                 autoComplete="new-password"
+                className="h-11 w-full rounded-xl border-none bg-brand-gray px-4 pr-12 text-white outline-none placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+                aria-invalid={Boolean(errors.password)}
                 {...register("password")}
               />
               <button
                 type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 transition-colors hover:text-white"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
+                {showPassword ? <EyeClosed weight="light" /> : <Eye weight="light" />}
               </button>
-            </div>
-            {errors.password && (
-              <p className="text-sm text-destructive">
-                {errors.password.message}
-              </p>
-            )}
-          </div>
+            </span>
+          </label>
+          <p className="text-xs text-white/40">Requires at least 8 symbols.</p>
+          {errors.password && (
+            <p className="text-xs text-white/50">{errors.password.message}</p>
+          )}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Xác nhận mật khẩu</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="••••••••"
-              autoComplete="new-password"
-              {...register("confirmPassword")}
-            />
-            {errors.confirmPassword && (
-              <p className="text-sm text-destructive">
-                {errors.confirmPassword.message}
-              </p>
-            )}
-          </div>
-        </CardContent>
-
-        <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Đăng ký
-          </Button>
-          <p className="text-sm text-muted-foreground">
-            Đã có tài khoản?{" "}
-            <Link href="/login" className="text-primary hover:underline">
-              Đăng nhập
-            </Link>
-          </p>
-        </CardFooter>
+        <button
+          type="submit"
+          className="mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-white font-semibold text-black transition hover:bg-white/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? <Spinner weight="light" className="animate-spin" /> : "Create Account"}
+        </button>
       </form>
-    </Card>
+
+      <p className="text-center text-sm text-white/40">
+        Member of the team?{" "}
+        <Link href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="font-medium text-white hover:underline">
+          Log in
+        </Link>
+      </p>
+
+      <div className="relative">
+        <div className="border-t border-white/10" />
+        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-black px-4 text-xs font-medium uppercase tracking-widest text-white/40">
+          Or
+        </span>
+      </div>
+
+      <SocialButton icon={<GoogleAuthIcon />} label="Google" onClick={() => handleGoogleLogin()} />
+    </CinematicAuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center"><Spinner weight="light" className="animate-spin text-white" size={32} /></div>}>
+      <RegisterForm />
+    </Suspense>
   );
 }

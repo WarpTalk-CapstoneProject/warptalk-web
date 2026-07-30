@@ -1,29 +1,23 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Spinner } from "@phosphor-icons/react/dist/ssr";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  CinematicAuthShell,
+  GoogleAuthIcon,
+  InputGroup,
+  SocialButton,
+} from "@/components/auth/cinematic-auth-shell";
 import apiClient from "@/lib/api/client";
-import { API } from "@/lib/api/endpoints";
 
 const forgotSchema = z.object({
-  email: z.string().email("Email không hợp lệ"),
+  email: z.string().email("Invalid email address"),
 });
 
 type ForgotFormData = z.infer<typeof forgotSchema>;
@@ -41,55 +35,64 @@ export default function ForgotPasswordPage() {
 
   const onSubmit = async (data: ForgotFormData) => {
     try {
-      // TODO: Backend forgot-password endpoint not yet implemented
       await apiClient.post("/auth/forgot-password", data);
-      toast.success("Đã gửi email hướng dẫn đặt lại mật khẩu!");
+      toast.success("Password reset instructions have been sent.");
       router.push("/login");
     } catch {
-      // Always show success to prevent email enumeration
-      toast.success("Nếu email tồn tại, bạn sẽ nhận được hướng dẫn.");
+      // Always show success to prevent email enumeration.
+      toast.success("If that email exists, reset instructions will be sent.");
       router.push("/login");
     }
   };
 
   return (
-    <Card>
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold">Quên mật khẩu</CardTitle>
-        <CardDescription>
-          Nhập email để nhận hướng dẫn đặt lại mật khẩu
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@example.com"
-              autoComplete="email"
-              {...register("email")}
-            />
-            {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
-            )}
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Gửi email
-          </Button>
-          <Link
-            href="/login"
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Quay lại đăng nhập
-          </Link>
-        </CardFooter>
+    <CinematicAuthShell>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-medium tracking-tight">Recover Account</h1>
+        <p className="text-sm text-white/40">
+          Enter your email and we will send reset instructions.
+        </p>
+      </div>
+
+      <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div>
+          <InputGroup
+            label="Email"
+            placeholder="name@domain.com"
+            type="email"
+            autoComplete="email"
+            aria-invalid={Boolean(errors.email)}
+            {...register("email")}
+          />
+          {errors.email && (
+            <p className="mt-2 text-xs text-white/50">{errors.email.message}</p>
+          )}
+        </div>
+
+        <button
+          type="submit"
+          className="mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-white font-semibold text-black transition hover:bg-white/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? <Spinner weight="light" className="animate-spin" /> : "Send Reset Email"}
+        </button>
       </form>
-    </Card>
+
+      <p className="text-center text-sm text-white/40">
+        Remember your password?{" "}
+        <Link href="/login" className="font-medium text-white hover:underline">
+          Log in
+        </Link>
+      </p>
+
+      <div className="relative">
+        <div className="border-t border-white/10" />
+        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-black px-4 text-xs font-medium uppercase tracking-widest text-white/40">
+          Or
+        </span>
+      </div>
+
+      <SocialButton icon={<GoogleAuthIcon />} label="Google" />
+    </CinematicAuthShell>
   );
 }

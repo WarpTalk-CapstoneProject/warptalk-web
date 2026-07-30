@@ -1,39 +1,36 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Video,
-  FileText,
-  Building2,
-  CreditCard,
-  Bell,
-  Settings,
-  Shield,
-  Languages,
-  ChevronLeft,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+import {
+  Bell,
+  CaretLeft,
+  CreditCard,
+  FileText,
+  GearSix,
+  Shield,
+  VideoCamera,
+} from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Cuộc họp", href: "/translationRooms", icon: Video },
-  { name: "Bản ghi", href: "/transcripts", icon: FileText },
-  { name: "Workspace", href: "/workspace", icon: Building2 },
+  { name: "Cuộc họp", href: "/rooms", icon: VideoCamera },
+  { name: "Bản ghi", href: "/history", icon: FileText },
   { name: "Gói dịch vụ", href: "/subscription", icon: CreditCard },
 ];
 
 const secondaryNav = [
   { name: "Thông báo", href: "/notifications", icon: Bell },
-  { name: "Cài đặt", href: "/settings", icon: Settings },
+  { name: "Cài đặt", href: "/settings", icon: GearSix },
 ];
 
 const adminNav = [
-  { name: "Quản trị", href: "/admin", icon: Shield },
+  { name: "Admin", href: "/rooms", icon: Shield },
+  { name: "Notifications", href: "/notifications", icon: Bell },
 ];
 
 export function Sidebar() {
@@ -44,15 +41,17 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-16" : "w-64",
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2.5 border-b px-4">
-        <Languages className="h-7 w-7 shrink-0 text-primary" />
-        {!collapsed && (
-          <span className="text-lg font-bold tracking-tight">WarpTalk</span>
+      <div
+        className={cn(
+          "flex h-16 items-center border-b",
+          collapsed ? "justify-center px-2" : "px-4",
         )}
+      >
+        <WarpTalkBrand compact={collapsed} />
       </div>
 
       {/* Nav */}
@@ -68,7 +67,7 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
               title={collapsed ? item.name : undefined}
             >
@@ -91,7 +90,7 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
               title={collapsed ? item.name : undefined}
             >
@@ -114,7 +113,7 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
               title={collapsed ? item.name : undefined}
             >
@@ -133,10 +132,11 @@ export function Sidebar() {
           className="w-full"
           onClick={() => setCollapsed(!collapsed)}
         >
-          <ChevronLeft
+          <CaretLeft
+            weight="light"
             className={cn(
               "h-4 w-4 transition-transform",
-              collapsed && "rotate-180"
+              collapsed && "rotate-180",
             )}
           />
         </Button>
