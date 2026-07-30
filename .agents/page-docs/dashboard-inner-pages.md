@@ -67,6 +67,9 @@ Not adopted:
 
 ## Testing Checklist
 
+- [ ] Documents list/grid shows Uploader and Approver avatars/names when those actors are workspace members.
+- [ ] An External uploader can still see an approved upload after refresh.
+- [ ] `npm run test:2807-hotfix` and WorkspaceService document tests pass.
 - [ ] `/rooms`, `/history`, `/ai-summaries`, `/ai-chat`, `/terminology`, and `/feedback` render inside the dark glass host shell.
 - [ ] `/ai-summaries` renders with summary cards and metrics.
 - [ ] `/ai-chat` accepts local input and appends preview messages.

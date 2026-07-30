@@ -207,6 +207,14 @@ export const translationRoomService = {
     return { ...response, data: normalizeRoom(response.data) };
   },
 
+  pause(id: string) {
+    return apiClient.post<void>(API.translationRooms.pause(id));
+  },
+
+  resume(id: string) {
+    return apiClient.post<void>(API.translationRooms.resume(id));
+  },
+
   end(id: string) {
     return apiClient.post<void>(API.translationRooms.end(id));
   },

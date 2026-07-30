@@ -9,6 +9,7 @@ import { Users, X, Plus } from "@phosphor-icons/react/dist/ssr";
 import { PillButton } from "./pill-button";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useAuthStore } from "@/stores/auth-store";
 
 export function isValidInviteEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
@@ -23,6 +24,7 @@ export function InvitePeoplePicker({
 }) {
   const [input, setInput] = useState("");
   const [inputError, setInputError] = useState("");
+  const user = useAuthStore((state) => state.user);
   const active = emails.length > 0;
 
   const activeWorkspaceId = useWorkspaceStore(
@@ -41,6 +43,8 @@ export function InvitePeoplePicker({
       m.fullName !== "Unknown" &&
       Boolean(m.email) &&
       isValidInviteEmail(m.email ?? "") &&
+      m.userId !== user?.id &&
+      m.email?.toLowerCase() !== user?.email.toLowerCase() &&
       !emails.includes((m.email ?? "").toLowerCase()),
   );
 
