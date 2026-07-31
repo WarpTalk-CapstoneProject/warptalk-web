@@ -22,7 +22,9 @@ const checks = [
   ["live side panel removes notes polls and q-and-a tabs", !sidePanel.includes('label="Notes"') && !sidePanel.includes('label="Polls"') && !sidePanel.includes('label="Q&A"')],
   ["live side panel does not fetch removed feature badges", !sidePanel.includes("usePolls(") && !sidePanel.includes("useQuestions(")],
   ["live room no longer subscribes to removed polls and q-and-a events", !livePage.includes('connection.on("PollCreated"') && !livePage.includes('connection.on("QuestionAsked"')],
-  ["live room never auto-starts translation before the host clicks start", !livePage.includes("autoStartedRef") && !livePage.includes("startRoom.mutate(room.id")],
+  // WT-183: superseded 2026-07-30's "never auto-starts" contract — the host joining the
+  // live call now auto-starts translation instead of requiring a separate manual click.
+  ["live room auto-starts translation once the host joins the call", livePage.includes("autoStartTriggeredRef") && livePage.includes("startRoom.mutate(room.id")],
   ["translation controls follow persisted room lifecycle", livePage.includes('room?.status === "in_progress"') && livePage.includes('room.status === "paused"')],
   ["stop translation pauses the backend pipeline", livePage.includes("usePauseTranslationRoom") && livePage.includes("pauseRoom.mutate")],
   ["resume translation resumes the backend pipeline", livePage.includes("useResumeTranslationRoom") && livePage.includes('room.status === "paused" ? resumeRoom : startRoom')],
