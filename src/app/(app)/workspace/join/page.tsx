@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState, Suspense, useMemo } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { isAxiosError } from "axios";
 import { 
   ArrowLeft, 
   EnvelopeSimple, 
@@ -27,6 +28,25 @@ function setAccessTokenCookie(accessToken: string) {
   document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
+type ApiErrorPayload = {
+  error?: string;
+};
+
+const subscribeMounted = () => () => {};
+const getMountedSnapshot = () => true;
+const getServerMountedSnapshot = () => false;
+
+function getApiError(err: unknown) {
+  if (!isAxiosError<ApiErrorPayload>(err)) {
+    return { status: undefined, error: "" };
+  }
+
+  return {
+    status: err.response?.status,
+    error: err.response?.data?.error ?? "",
+  };
+}
+
 export default function JoinWorkspacePage() {
   return (
     <Suspense
@@ -50,7 +70,7 @@ function JoinWorkspaceContent() {
 
   // States
   const [slugOrUrl, setSlugOrUrl] = useState("");
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(subscribeMounted, getMountedSnapshot, getServerMountedSnapshot);
   
   // Auth Form states (minimalist login/register tab)
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -73,10 +93,6 @@ function JoinWorkspaceContent() {
   } = useRoomPreflight(code, !!code);
 
   const createJoinRequestMutation = useCreateJoinRequest();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (mounted && !isAuthenticated && !code) {
@@ -132,9 +148,9 @@ function JoinWorkspaceContent() {
           refetchPreflight();
         }
       }
-    } catch (err: any) {
-      const errMsg = err?.response?.data?.error || "Authentication failed.";
-      toast.error(errMsg);
+    } catch (err: unknown) {
+      const { error } = getApiError(err);
+      toast.error(error || "Authentication failed.");
     } finally {
       setAuthLoading(false);
     }
@@ -145,9 +161,8 @@ function JoinWorkspaceContent() {
     try {
       await createJoinRequestMutation.mutateAsync(payload);
       toast.success("Join request sent successfully! Waiting for admin approval.");
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const errorMsg = err?.response?.data?.error || "";
+    } catch (err: unknown) {
+      const { status, error: errorMsg } = getApiError(err);
 
       if (status === 404) {
         toast.error("Workspace không hoạt động hoặc không tồn tại.");
@@ -164,7 +179,7 @@ function JoinWorkspaceContent() {
   // Manual Slug Submit
   const handleManualSlugSubmit = (e: FormEvent) => {
     e.preventDefault();
-    let inputVal = slugOrUrl.trim();
+    const inputVal = slugOrUrl.trim();
     if (!inputVal) return;
 
     // Resolve slug from URL if pasted as full link

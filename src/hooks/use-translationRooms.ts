@@ -11,7 +11,6 @@ import type {
   TranslationRoomDto,
   TranslationRoomParticipantDto,
   UpdateRoomSettingsRequest,
-  RoomPreflightResponse,
 } from "@/types/translationRoom";
 
 const MEETING_KEY = ["translationRooms"] as const;
