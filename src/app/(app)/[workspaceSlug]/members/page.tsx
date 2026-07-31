@@ -8,13 +8,14 @@ import { toast } from "sonner";
 import {
   Users,
   UserMinus,
-  MagnifyingGlass,
+  Funnel,
   Spinner,
   Warning,
   Plus,
   Check,
   Copy,
   Download,
+  SlidersHorizontal,
 } from "@phosphor-icons/react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -30,6 +31,7 @@ import {
 } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -123,6 +125,17 @@ export default function WorkspaceMembersPage() {
   const isOwnerOrAdmin = isOwner || isAdmin;
 
   const membersList = membersQuery.data?.items || [];
+  const memberFilterPills = [
+    { key: "all", label: "All", role: "all", status: "all" },
+    { key: "owner", label: "Owner", role: "owner", status: "all" },
+    { key: "admin", label: "Admin", role: "admin", status: "all" },
+    { key: "member", label: "Member", role: "member", status: "all" },
+    { key: "active", label: "Active", role: "all", status: "active" },
+  ] as const;
+  const activeMemberFilter =
+    memberFilterPills.find(
+      (item) => item.role === roleFilter && item.status === statusFilter,
+    )?.key ?? "custom";
 
   // Client-side filtering for Role and Status
   const filteredMembers = membersList.filter((member) => {
@@ -274,77 +287,68 @@ export default function WorkspaceMembersPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink">
+    <div className="flex h-full flex-col bg-surface-1 text-ink">
       {/* Filter, Search, and Action triggers - Unified horizontal design */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-hairline gap-4 pt-2">
-        <div className="flex items-center flex-1 gap-2 max-w-xl">
-          <div className="relative flex-1">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted">
-              <MagnifyingGlass className="h-4 w-4" />
-            </span>
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
+      <div className="flex shrink-0 flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+          {memberFilterPills.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => {
+                setRoleFilter(item.role);
+                setStatusFilter(item.status);
               }}
-              placeholder="Search by name or email"
-              className="h-8 pl-8 pr-3 text-xs bg-surface-2/60 border-hairline focus:ring-1 focus:ring-primary focus-visible:ring-1 focus-visible:ring-primary w-full"
-            />
-          </div>
-
-          {/* Role Filter */}
-          <Select
-            value={roleFilter}
-            onValueChange={(val: string | null) => setRoleFilter(val || "all")}
-          >
-            <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
-              <SelectValue placeholder="All Roles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                All Roles
-              </SelectItem>
-              <SelectItem value="owner" className="text-xs">
-                Owner
-              </SelectItem>
-              <SelectItem value="admin" className="text-xs">
-                Admin
-              </SelectItem>
-              <SelectItem value="member" className="text-xs">
-                Member
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Status Filter */}
-          <Select
-            value={statusFilter}
-            onValueChange={(val: string | null) =>
-              setStatusFilter(val || "all")
-            }
-          >
-            <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                All Statuses
-              </SelectItem>
-              <SelectItem value="active" className="text-xs">
-                Active
-              </SelectItem>
-            </SelectContent>
-          </Select>
+              className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+                activeMemberFilter === item.key
+                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        {/* Export & Invite buttons for Owner/Admin only */}
-        {isOwnerOrAdmin && (
-          <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 pl-4">
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            placeholder="Search members..."
+            ariaLabel="Search members"
+            collapsedWidth={28}
+            expandedWidth={220}
+            className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+            iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+            clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+            inputClassName="h-[26px] text-[12px]"
+          />
+          <button
+            className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Member filters"
+          >
+            <Funnel weight="bold" size={13} />
+            {(roleFilter !== "all" || statusFilter !== "all") && (
+              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+            )}
+          </button>
+          <button
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title={`${filteredMembers.length} members`}
+          >
+            <SlidersHorizontal weight="bold" size={13} />
+          </button>
+
+          {isOwnerOrAdmin && (
+            <>
+              <div className="mx-1 h-4 w-[1px] bg-border" />
             <button
               onClick={handleExportXlsx}
               disabled={isExporting}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 px-3 text-xs font-semibold text-ink transition duration-150 cursor-pointer shrink-0 disabled:opacity-50"
+              className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50"
             >
               {isExporting ? (
                 <Spinner className="h-3.5 w-3.5 animate-spin text-primary" />
@@ -359,17 +363,18 @@ export default function WorkspaceMembersPage() {
                 resetInvite();
                 setIsInviteOpen(true);
               }}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-3 text-xs font-semibold text-white transition duration-150 cursor-pointer shrink-0"
+              className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Invite</span>
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Members Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-4 pb-6">
         {membersQuery.isLoading ? (
           <div className="flex h-48 items-center justify-center">
             <Spinner className="h-6 w-6 animate-spin text-primary" />

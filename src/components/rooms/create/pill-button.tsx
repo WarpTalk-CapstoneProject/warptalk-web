@@ -11,7 +11,7 @@ export const PillButton = React.forwardRef<HTMLButtonElement, { icon: React.Elem
         "flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors border shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
         active 
           ? "border-border bg-surface-1 text-ink hover:bg-surface-2" 
-          : "border-border/60 bg-white dark:bg-transparent text-ink-muted hover:text-ink hover:border-border hover:bg-surface-1"
+          : "border-border/60 bg-surface-1 text-ink-muted hover:text-ink hover:border-border hover:bg-surface-2"
       )}
       {...props}
     >
