@@ -14,8 +14,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
+import { useWorkspaceMembers } from "@/hooks/use-workspace";
+import { resolveRoomHost } from "@/lib/room-host";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
+import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
   CaretDown,
@@ -94,13 +98,22 @@ function LanguageWithFlag({
   );
 }
 
-function LinearRow({ room }: { room: TranslationRoomDto }) {
+function LinearRow({
+  room,
+  members,
+}: {
+  room: TranslationRoomDto;
+  members: WorkspaceMemberDto[];
+}) {
   const params = useParams();
   const workspaceSlug = params?.workspaceSlug as string;
   const user = useAuthStore((state) => state.user);
   const isCurrentUserHost = room.hostId === user?.id || Boolean(room.isHost);
-  const hostName = isCurrentUserHost && user?.fullName ? user.fullName : "Host";
-  const hostAvatar = isCurrentUserHost ? user?.avatarUrl : undefined;
+  const { name: hostName, avatarUrl: hostAvatar } = resolveRoomHost(
+    room,
+    members,
+    user,
+  );
 
   return (
     <Link
@@ -423,6 +436,15 @@ import { useUIStore } from "@/stores/ui-store";
 
 export default function MeetingsPageLinear() {
   const router = useRouter();
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
+  const membersQuery = useWorkspaceMembers(
+    activeWorkspaceId ?? undefined,
+    1,
+    100,
+  );
+  const members = membersQuery.data?.items ?? [];
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -623,7 +645,7 @@ export default function MeetingsPageLinear() {
               <div className="flex flex-col pb-8">
                 {filteredRooms.length > 0 ? (
                   filteredRooms.map((room) => (
-                    <LinearRow key={room.id} room={room} />
+                    <LinearRow key={room.id} room={room} members={members} />
                   ))
                 ) : (
                   <div className="px-6 py-12 text-[13px] text-muted-foreground flex flex-col items-center justify-center">

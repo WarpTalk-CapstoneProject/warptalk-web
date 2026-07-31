@@ -833,8 +833,8 @@ export default function WorkspaceDocumentsPage() {
                 <label className="text-xs font-bold text-ink flex items-center justify-between">
                   <span>1. Select Reference File</span>
                   <span className="text-[11px] font-normal text-ink-muted">
-                    Supported: PDF, DOCX, DOC, TXT, CSV, MD, JSON, PNG, JPG,
-                    JPEG, WEBP (Max 10MB)
+                    Supported: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP,
+                    GIF (Max 10MB)
                   </span>
                 </label>
 

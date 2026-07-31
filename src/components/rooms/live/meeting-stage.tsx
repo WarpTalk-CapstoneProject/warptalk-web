@@ -11,6 +11,7 @@ import {
   PushPinSimple,
   SpinnerGap,
   Star,
+  VideoCameraSlash,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   ConnectionState,
@@ -150,7 +151,7 @@ export function LiveKitMeetingStage({
     const isActiveSpeaker = activeSpeakerIdentities.has(identity);
     const isFeatured = featuredIdentity === identity;
     const handRaised = raisedHandUserIds?.has(identity) ?? false;
-    const displayName = trackRef.participant.name || identity || "Participant";
+    const displayName = trackRef.participant.name || identity || fallbackName;
     const showCameraOffState =
       trackRef.source === Track.Source.Camera &&
       (trackRef.publication?.isMuted ?? true);
@@ -162,7 +163,7 @@ export function LiveKitMeetingStage({
           trackRef.participant.sid +
           (trackRef.publication?.trackSid ?? "placeholder")
         }
-        className={`group relative h-full min-h-0 w-full overflow-hidden rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
+        className={`group relative h-full min-h-[180px] w-full overflow-hidden rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
         onClick={() => onPinParticipant?.(identity)}
       >
         <ParticipantTile
@@ -371,6 +372,13 @@ function gridClassName(count: number) {
   if (count <= 9) return "grid-cols-3";
   if (count <= 16) return "grid-cols-4";
   return "grid-cols-5";
+}
+
+function isCameraUnavailable(trackRef: TrackReferenceOrPlaceholder) {
+  return (
+    trackRef.source === Track.Source.Camera &&
+    (!trackRef.publication || trackRef.publication.isMuted)
+  );
 }
 
 function isAutomatedParticipant(identity?: string, name?: string) {

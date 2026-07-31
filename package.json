@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:contracts": "npm run test:2807-hotfix && npm run test:meeting-chat && npm run test:meeting-ai-trigger && npm run test:meeting-duration && npm run test:recording-control && npm run test:track-processors && npm run test:room-detail-thread && npm run test:transcript-display && npm run test:production-billing && npm run test:production-surface && npm run test:code-review-ux",
+    "test:contracts": "npm run test:2807-hotfix && npm run test:meeting-chat && npm run test:meeting-ai-trigger && npm run test:meeting-duration && npm run test:recording-control && npm run test:track-processors && npm run test:room-detail-thread && npm run test:transcript-display && npm run test:room-host && npm run test:meeting-camera-off-ui && npm run test:create-room-language && npm run test:terminal-room-join && npm run test:waiting-room-admission && npm run test:participant-approval-ui && npm run test:production-billing && npm run test:production-surface && npm run test:code-review-ux && npm run test:join-room-code && npm run test:copy-room-code",
     "test:2807-hotfix": "node scripts/check-2807-hotfix-contract.mjs",
     "test:routes": "node scripts/check-dashboard-routes.mjs",
     "test:meeting-chat": "node scripts/check-meeting-chat-contract.mjs",
@@ -22,7 +22,15 @@
     "test:code-review-ux": "node scripts/check-code-review-ux-contract.mjs",
     "email:dev": "email dev --dir src/emails --port 3001",
     "email:render": "npx tsx scripts/render-email-templates.ts",
-    "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript-display.test.ts"
+    "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript-display.test.ts",
+    "test:create-room-language": "node scripts/check-create-room-language-contract.mjs",
+    "test:terminal-room-join": "node scripts/check-terminal-room-join-contract.mjs",
+    "test:waiting-room-admission": "node scripts/check-waiting-room-admission-contract.mjs",
+    "test:participant-approval-ui": "node scripts/check-participant-approval-ui-contract.mjs",
+    "test:room-host": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/room-host.test.ts",
+    "test:meeting-camera-off-ui": "node scripts/check-meeting-camera-off-ui-contract.mjs",
+    "test:join-room-code": "node scripts/check-join-room-code-contract.mjs",
+    "test:copy-room-code": "node scripts/check-copy-room-code-contract.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

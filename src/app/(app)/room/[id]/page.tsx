@@ -97,8 +97,13 @@ export default function RoomDetailPage() {
   );
   const roomId = params.id;
   const user = useAuthStore((state) => state.user);
+  const [meetingSession, setMeetingSession] =
+    useState<JoinMeetingResponseDto | null>(null);
   const roomQuery = useTranslationRoom(roomId);
-  const participantsQuery = useTranslationRoomParticipants(roomId);
+  const participantsQuery = useTranslationRoomParticipants(
+    roomId,
+    meetingSession !== null && !meetingSession.isWaitingRoom,
+  );
   const refetchParticipants = participantsQuery.refetch;
   const startRoom = useStartTranslationRoom();
   const pauseRoom = usePauseTranslationRoom();
@@ -113,8 +118,6 @@ export default function RoomDetailPage() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
-  const [meetingSession, setMeetingSession] =
-    useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");
@@ -218,7 +221,8 @@ export default function RoomDetailPage() {
   const updateParticipantSpeakLanguage = useTranslationRoomStore(
     (state) => state.updateParticipantSpeakLanguage,
   );
-  const { rightSidebarOpen, setLeftSidebarOpen } = useUIStore();
+  const { rightSidebarOpen, setLeftSidebarOpen, setRightSidebarOpen } =
+    useUIStore();
 
   useEffect(() => {
     setLeftSidebarOpen(false);
@@ -843,7 +847,11 @@ export default function RoomDetailPage() {
         addOrMergeTranslationText(translation);
       },
     );
-    connection.on("TranslationRoomEnded", () => refetchRoom());
+    connection.on("TranslationRoomEnded", () => {
+      void refetchRoom();
+      toast.info("This meeting has ended.");
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+    });
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
       setHandRaisedInStore(userId, isRaised);
@@ -1254,6 +1262,8 @@ export default function RoomDetailPage() {
     const mutation = room.status === "paused" ? resumeRoom : startRoom;
     mutation.mutate(room.id, {
       onSuccess: () => {
+        setSidePanelMode("transcript");
+        setRightSidebarOpen(true);
         toast.success("WarpTalk realtime translation started.");
       },
       onError: (error) => {

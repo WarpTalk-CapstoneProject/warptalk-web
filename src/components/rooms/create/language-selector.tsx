@@ -4,12 +4,12 @@ import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
 
 const languageOptions = [
-  { code: "vi", label: "Vietnamese" },
-  { code: "en", label: "English" },
-  { code: "ja", label: "Japanese" },
-  { code: "ko", label: "Korean" },
-  { code: "fr", label: "French" },
-  { code: "es", label: "Spanish" },
+  { code: "vi-VN", label: "Vietnamese" },
+  { code: "en-US", label: "English" },
+  { code: "ja-JP", label: "Japanese" },
+  { code: "ko-KR", label: "Korean" },
+  { code: "fr-FR", label: "French" },
+  { code: "es-ES", label: "Spanish" },
 ];
 
 function getFlagEmoji(locale: string) {

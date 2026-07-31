@@ -62,7 +62,7 @@ export interface TranslationRoomParticipantDto {
 // ── Request DTOs ──────────────────────────────
 
 export interface CreateTranslationRoomRequest {
-  workspaceId?: string;
+  workspaceId: string;
   title: string;
   description?: string;
   translationRoomType:
