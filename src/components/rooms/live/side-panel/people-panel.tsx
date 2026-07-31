@@ -6,7 +6,6 @@ import {
   Microphone,
   MicrophoneSlash,
   Star,
-  UserCheck,
   UserMinus,
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
@@ -258,18 +257,26 @@ function ParticipantRow({
             </button>
           )}
           {canManage && (
-            <div className="hidden group-hover:flex items-center">
+            <div
+              className={
+                participant.status === "waiting"
+                  ? "flex items-center gap-1"
+                  : "hidden group-hover:flex items-center"
+              }
+            >
               {participant.status === "waiting" ? (
                 <>
-                  <button
+                  <Button
+                    size="sm"
+                    disabled={admit.isPending}
                     onClick={() => runAction("admit")}
-                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted"
-                    title="Admit"
+                    className="h-7 px-2 text-[11px]"
                   >
-                    <UserCheck className="h-3.5 w-3.5" />
-                  </button>
+                    {admit.isPending ? "Approving..." : "Approve"}
+                  </Button>
                   <button
                     onClick={() => runAction("reject")}
+                    disabled={reject.isPending}
                     className="grid h-6 w-6 place-items-center rounded-sm hover:bg-red-50 text-red-600"
                     title="Reject"
                   >
