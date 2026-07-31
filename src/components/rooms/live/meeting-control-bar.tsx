@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Copy, Fingerprint, HandPalm, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
+import { Copy, Fingerprint, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getLanguageName } from "@/lib/languages";
@@ -364,6 +364,12 @@ export function MeetingControlBar({
         label="Copy join link"
         icon={<Copy className="h-[18px] w-[18px]" />}
         onClick={() => onCopyText(joinLink || roomCode, joinLink ? "Join link" : "Room code")}
+      />
+
+      <MeetControl
+        label="Copy room code"
+        icon={<Hash className="h-[18px] w-[18px]" />}
+        onClick={() => onCopyText(roomCode, "Room code")}
       />
 
       <div className="relative">
