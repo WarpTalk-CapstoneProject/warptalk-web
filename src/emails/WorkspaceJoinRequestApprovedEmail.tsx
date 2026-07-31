@@ -22,8 +22,9 @@ export const WorkspaceJoinRequestApprovedEmail = ({
   workspaceName = "{{WorkspaceName}}",
   membershipType = "{{MembershipType}}",
   joinUrl = "{{JoinUrl}}",
+  recipientEmail,
 }: WorkspaceJoinRequestApprovedEmailProps) => {
-  const previewText = `Your request to join ${workspaceName} on WarpTalk has been approved`;
+  const previewText = `Your request to join ${workspaceName} on WarpTalk has been approved!`;
 
   return (
     <Html lang="en">
@@ -37,12 +38,10 @@ export const WorkspaceJoinRequestApprovedEmail = ({
           <Section style={contentSection}>
             <Text style={paragraph}>Hello,</Text>
             <Text style={paragraph}>
-              Great news! Your request to join the{" "}
-              <strong style={highlight}>{workspaceName}</strong> workspace has been approved as a{" "}
-              <span style={typeBadge}>{membershipType}</span> member.
+              Great news! Your request to join <strong style={highlight}>{workspaceName}</strong> has been approved as a <span style={roleBadge}>Member</span> with membership type <strong style={highlight}>{membershipType}</strong>.
             </Text>
             <Text style={paragraph}>
-              You can now access workspace documents, translation rooms, and collaboration channels.
+              You can now access all shared translation rooms, workspace channels, documents, and AI-powered collaborative artifacts.
             </Text>
 
             <Section style={btnContainer}>
@@ -64,6 +63,9 @@ export const WorkspaceJoinRequestApprovedEmail = ({
 
           <Text style={footer}>
             &copy; {new Date().getFullYear()} WarpTalk Capstone Project. All rights reserved.
+            <br />
+            {recipientEmail && `This email was sent to ${recipientEmail}. `}
+            If you did not submit this join request, please contact workspace administrators.
           </Text>
         </Container>
       </Body>
@@ -73,6 +75,7 @@ export const WorkspaceJoinRequestApprovedEmail = ({
 
 export default WorkspaceJoinRequestApprovedEmail;
 
+// Inline styles for universal mail client compatibility (Gmail, Outlook, Apple Mail)
 const main: React.CSSProperties = {
   backgroundColor: "#0f172a",
   fontFamily:
@@ -96,24 +99,24 @@ const logo: React.CSSProperties = {
   fontWeight: "800",
   color: "#38bdf8",
   letterSpacing: "-0.5px",
-  margin: "0 0 24px 0",
+  margin: "0 0 20px 0",
 };
 
 const header: React.CSSProperties = {
-  fontSize: "20px",
+  fontSize: "22px",
   fontWeight: "700",
-  color: "#f8fafc",
-  margin: "0 0 20px 0",
+  color: "#ffffff",
+  margin: "0 0 24px 0",
   lineHeight: "1.3",
 };
 
 const contentSection: React.CSSProperties = {
-  margin: "0 0 28px 0",
+  margin: "0 0 24px 0",
 };
 
 const paragraph: React.CSSProperties = {
-  fontSize: "15px",
-  lineHeight: "1.6",
+  fontSize: "14px",
+  lineHeight: "24px",
   color: "#cbd5e1",
   margin: "0 0 16px 0",
 };
@@ -123,56 +126,56 @@ const highlight: React.CSSProperties = {
   fontWeight: "600",
 };
 
-const typeBadge: React.CSSProperties = {
-  backgroundColor: "#059669",
+const roleBadge: React.CSSProperties = {
+  backgroundColor: "#0284c7",
   color: "#ffffff",
+  padding: "2px 8px",
+  borderRadius: "4px",
   fontSize: "12px",
   fontWeight: "600",
-  padding: "3px 8px",
-  borderRadius: "4px",
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
 };
 
 const btnContainer: React.CSSProperties = {
+  textAlign: "center" as const,
   margin: "28px 0",
-  textAlign: "left",
 };
 
 const button: React.CSSProperties = {
-  backgroundColor: "#2563eb",
+  backgroundColor: "#0284c7",
   backgroundImage: "linear-gradient(135deg, #0284c7 0%, #2563eb 100%)",
+  borderRadius: "8px",
   color: "#ffffff",
+  fontSize: "14px",
   fontWeight: "600",
   textDecoration: "none",
-  padding: "14px 28px",
-  borderRadius: "8px",
-  fontSize: "15px",
+  textAlign: "center" as const,
   display: "inline-block",
-  boxShadow: "0 4px 12px rgba(37, 99, 235, 0.3)",
+  padding: "12px 28px",
+  boxShadow: "0 4px 12px rgba(2, 132, 199, 0.3)",
 };
 
 const subtext: React.CSSProperties = {
-  fontSize: "13px",
-  lineHeight: "1.5",
+  fontSize: "12px",
+  lineHeight: "18px",
   color: "#94a3b8",
-  margin: "20px 0 0 0",
+  margin: "16px 0 0 0",
 };
 
 const linkUrl: React.CSSProperties = {
   color: "#38bdf8",
-  wordBreak: "break-all",
+  wordBreak: "break-all" as const,
   textDecoration: "underline",
 };
 
 const hr: React.CSSProperties = {
   borderColor: "#334155",
-  margin: "28px 0",
+  margin: "24px 0",
 };
 
 const footer: React.CSSProperties = {
   fontSize: "12px",
-  lineHeight: "1.5",
+  lineHeight: "18px",
   color: "#64748b",
   margin: "0",
+  textAlign: "center" as const,
 };

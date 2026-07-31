@@ -220,7 +220,7 @@ export default function RoomInformationPage() {
   );
   const hostUser = getHostUser(room, participants, membersArray, user);
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-canvas text-ink">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
       {copiedText ? (
         <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md border border-border bg-surface-1 px-4 py-2 text-[13px] font-medium text-ink shadow-lg">
           {copiedText}
@@ -535,7 +535,7 @@ function MeetingTranscriptArtifact({
                       <div
                         className={`rounded-2xl px-3 py-2 ${
                           isSelf
-                            ? "rounded-tr-sm bg-brand-primary"
+                            ? "rounded-tr-sm bg-primary"
                             : "rounded-tl-sm border border-border bg-white"
                         }`}
                       >
@@ -648,7 +648,7 @@ function RoomNotesEditor({
         openOnClick: "whenNotEditable",
         autolink: true,
         HTMLAttributes: {
-          class: "text-brand-primary underline underline-offset-2",
+          class: "text-primary underline underline-offset-2",
         },
       }),
       Placeholder.configure({
@@ -1076,13 +1076,21 @@ function buildUserList(
         item.email === invitation.email,
     );
     const name = member?.fullName || invitation.email;
-    if (
-      !mapped.some(
-        (participant) =>
-          participant.email === invitation.email ||
-          participant.id === invitation.email,
-      )
-    ) {
+    // WT-191: match on email only. The previous check also compared against
+    // participant.id, which is a user UUID and can never equal an email — and
+    // toUserIdentity did not populate `email` at all, so nothing ever matched and
+    // every invitee was appended a second time. That is what produced one row for
+    // the participant ("Waiting"/"Left") and a duplicate for the invitation
+    // ("pending"/"accepted") for the same person.
+    const invitationEmail = invitation.email?.trim().toLowerCase();
+    const alreadyListed = invitationEmail
+      ? mapped.some(
+          (participant) =>
+            participant.email?.trim().toLowerCase() === invitationEmail,
+        )
+      : false;
+
+    if (!alreadyListed) {
       mapped.push({
         id: invitation.id ?? invitation.email,
         name,
@@ -1113,6 +1121,9 @@ function toUserIdentity(
       currentUser,
       participant.displayName,
     ),
+    // WT-191: required for buildUserList to recognise that an invitee has already
+    // joined. Without it every invitation was rendered as a second attendee row.
+    email: resolveUserEmail(participant.userId, membersArray, currentUser),
     role,
     status: normalizeLabel(participant.status),
     avatarUrl: participant.avatarUrl,
@@ -1347,6 +1358,28 @@ function normalizeLabel(value?: string) {
     .toLowerCase()
     .replace(/_/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+/**
+ * Best-effort email for a room participant. Participants only carry a user id, so an
+ * invitation (which is keyed by email) can only be matched back to someone who already
+ * joined by resolving that id through the workspace member list. Returns undefined for
+ * guests and for members the caller cannot see — callers must treat that as "unknown",
+ * never as "not the same person".
+ */
+function resolveUserEmail(
+  userId: string | undefined,
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null,
+): string | undefined {
+  if (!userId) return undefined;
+  if (userId === currentUser?.id) return currentUser?.email ?? undefined;
+
+  const member = membersArray.find(
+    (item) =>
+      item.userId === userId || item.id === userId || item.email === userId,
+  );
+  return member?.email ?? undefined;
 }
 
 function resolveUserName(

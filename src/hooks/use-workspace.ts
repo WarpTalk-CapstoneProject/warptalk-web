@@ -10,13 +10,11 @@ export const WORKSPACE_KEYS = {
   list: (page: number, pageSize: number, search: string) => ["workspaces", "list", { page, pageSize, search }] as const,
   detail: (id: string) => ["workspaces", "detail", id] as const,
   settings: (id: string) => ["workspaces", "settings", id] as const,
-  verifiedDomains: (workspaceId: string) => ["workspaces", "verified-domains", workspaceId] as const,
   members: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "members", workspaceId, { page, pageSize, search }] as const,
-  invitations: (workspaceId: string, page: number, pageSize: number, search: string, kind: "outbound" | "join-request") =>
-    ["workspaces", "invitations", workspaceId, { page, pageSize, search, kind }] as const,
+  invitations: (workspaceId: string, page: number, pageSize: number, search: string) =>
+    ["workspaces", "invitations", workspaceId, { page, pageSize, search }] as const,
   pendingInvitations: () => ["workspaces", "invitations", "pending"] as const,
-  myJoinRequests: () => ["workspaces", "join-requests", "mine"] as const,
   invitationPreview: (token: string) => ["workspaces", "invitation-preview", token] as const,
   documentLists: (workspaceId: string) => ["workspaces", "documents", workspaceId] as const,
   documents: (workspaceId: string, page: number, pageSize: number, search: string) =>
@@ -85,47 +83,6 @@ export function useUpdateWorkspaceSettings(workspaceId: string) {
   });
 }
 
-export function usePatchWorkspaceSettings(workspaceId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (patch: Partial<WorkspaceSettingsDto>) => WorkspaceService.patchSettings(workspaceId, patch),
-    onSuccess: (settings) => {
-      queryClient.setQueryData(WORKSPACE_KEYS.settings(workspaceId), settings);
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
-    },
-  });
-}
-
-export function useVerifiedDomains(workspaceId: string) {
-  return useQuery({
-    queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId),
-    queryFn: () => WorkspaceService.listVerifiedDomains(workspaceId),
-    enabled: !!workspaceId,
-  });
-}
-
-export function useAddVerifiedDomain(workspaceId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (domain: string) => WorkspaceService.addVerifiedDomain(workspaceId, domain),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId) });
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
-    },
-  });
-}
-
-export function useRevokeVerifiedDomain(workspaceId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (domainId: string) => WorkspaceService.revokeVerifiedDomain(workspaceId, domainId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId) });
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
-    },
-  });
-}
-
 // ─── Members ───
 
 export function useWorkspaceMembers(workspaceId: string | undefined, page = 1, pageSize = 10, search = "") {
@@ -155,25 +112,6 @@ export function useChangeWorkspaceMemberRole(workspaceId: string) {
       WorkspaceService.changeMemberRole(workspaceId, userId, roleName),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
-    },
-  });
-}
-
-export function usePreviewWorkspaceMemberRoleChange(workspaceId: string) {
-  return useMutation({
-    mutationFn: ({ userId, toRole }: { userId: string; toRole: "Admin" | "Member" }) =>
-      WorkspaceService.previewMemberRoleChange(workspaceId, userId, toRole),
-  });
-}
-
-export function useApplyWorkspaceMemberRoleChange(workspaceId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ userId, request }: { userId: string; request: Parameters<typeof WorkspaceService.applyMemberRoleChange>[2] }) =>
-      WorkspaceService.applyMemberRoleChange(workspaceId, userId, request),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.detail(workspaceId) });
     },
   });
 }
@@ -213,16 +151,10 @@ export function useInviteWorkspaceMember(workspaceId: string) {
   });
 }
 
-export function useWorkspaceInvitations(
-  workspaceId: string,
-  page = 1,
-  pageSize = 10,
-  search = "",
-  kind: "outbound" | "join-request" = "outbound",
-) {
+export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string) {
   return useQuery({
-    queryKey: WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search, kind),
-    queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search, kind),
+    queryKey: [...WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search), category],
+    queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search, category),
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
@@ -280,48 +212,40 @@ export function useAcceptWorkspaceInvitationById() {
 export function useCreateJoinRequest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: WorkspaceService.createJoinRequest,
+    mutationFn: (request: { roomCode?: string; workspaceSlug?: string } | string) => {
+      const payload = typeof request === "string" ? { workspaceSlug: request } : request;
+      return WorkspaceService.createJoinRequest(payload);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.myJoinRequests() });
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.list(1, 100, "") });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
     },
   });
 }
 
-export function useMyJoinRequests() {
-  return useQuery({
-    queryKey: WORKSPACE_KEYS.myJoinRequests(),
-    queryFn: WorkspaceService.getMyJoinRequests,
-    staleTime: 30000,
-    refetchOnWindowFocus: true,
-  });
-}
-
-export function useApproveJoinRequest(workspaceId: string) {
+export function useApproveWorkspaceJoinRequest(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ invitationId, membershipType }: { invitationId: string; membershipType: "Internal" | "External" }) =>
-      WorkspaceService.approveJoinRequest(workspaceId, invitationId, membershipType),
+    mutationFn: (payload: string | { invitationId: string; membershipType?: string }) =>
+      WorkspaceService.approveJoinRequest(workspaceId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.invitations(workspaceId, 1, 10, "", "outbound") });
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.myJoinRequests() });
-      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members"] });
     },
   });
 }
 
-export function useRejectJoinRequest(workspaceId: string) {
+export function useRejectWorkspaceJoinRequest(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (invitationId: string) => WorkspaceService.rejectJoinRequest(workspaceId, invitationId),
+    mutationFn: (inviteId: string) => WorkspaceService.rejectJoinRequest(workspaceId, inviteId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.myJoinRequests() });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
     },
   });
 }
+
+export const useApproveJoinRequest = useApproveWorkspaceJoinRequest;
+export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
 
 // ─── Documents ───
 

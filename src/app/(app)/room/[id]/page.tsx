@@ -33,6 +33,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { mergeParticipants } from "@/lib/merge-participants";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   ParticipantInfoDto,
@@ -41,9 +42,6 @@ import type {
   TranslationTextDto,
   VoiceOptionDto,
 } from "@/types/realtime";
-import type {
-  TranslationRoomParticipantDto,
-} from "@/types/translationRoom";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
@@ -1690,40 +1688,6 @@ function LiveKitReconnectWatcher({
   }, [room, onReconnecting, onReconnected]);
 
   return null;
-}
-
-function mergeParticipants(
-  apiParticipants: TranslationRoomParticipantDto[],
-  liveParticipants: ParticipantInfoDto[],
-): TranslationRoomParticipantDto[] {
-  const mappedLive = liveParticipants.map((participant) => ({
-    id: participant.userId,
-    translationRoomId: "",
-    userId: participant.userId,
-    displayName: participant.displayName,
-    role: participant.role ?? "participant",
-    listenLanguage: participant.listenLanguage,
-    speakLanguage: participant.speakLanguage,
-    status:
-      participant.status === "connected"
-        ? "connected"
-        : (participant.status ?? "connected"),
-    isTranslationAudioEnabled: !participant.isMuted,
-    isUsingVoiceClone: participant.isUsingVoiceClone,
-    avatarUrl: participant.avatarUrl,
-    joinedAt: participant.joinedAt,
-  })) satisfies TranslationRoomParticipantDto[];
-
-  const byUserId = new Map(
-    apiParticipants.map((participant) => [participant.userId, participant]),
-  );
-  for (const participant of mappedLive) {
-    byUserId.set(participant.userId, {
-      ...byUserId.get(participant.userId),
-      ...participant,
-    });
-  }
-  return Array.from(byUserId.values());
 }
 
 function normalizeLanguageCode(language: string) {
