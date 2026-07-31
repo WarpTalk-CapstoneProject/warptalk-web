@@ -1093,6 +1093,32 @@ export default function RoomDetailPage() {
     user?.id,
   ]);
 
+  // WT-183: joining a room and starting its translation pipeline used to be two separate
+  // manual steps — the room kept showing "Waiting" in the Meetings list even after the
+  // host was already in the call, since nothing had called /start yet. Once the HOST
+  // actually enters the live call (not just the pre-call waiting screen), auto-start
+  // translation for them instead of requiring a second explicit click. Guarded to fire at
+  // most once per mount and only from a genuinely-not-started state, so it can never
+  // re-trigger a room the host explicitly paused via "Stop Translation".
+  const autoStartTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoStartTriggeredRef.current) return;
+    if (!meetingSession || meetingSession.isWaitingRoom) return;
+    if (!isRoomHost || !room?.id) return;
+    if (room.status !== "waiting" && room.status !== "scheduled") return;
+
+    autoStartTriggeredRef.current = true;
+    startRoom.mutate(room.id, {
+      onSuccess: () => {
+        toast.success("WarpTalk realtime translation started.");
+      },
+      onError: () => {
+        // Let a later join attempt (or the manual Start button) retry.
+        autoStartTriggeredRef.current = false;
+      },
+    });
+  }, [meetingSession, isRoomHost, room?.id, room?.status, startRoom]);
+
   useEffect(() => {
     if (!roomId) return;
     const chatConnection = createHubConnection("/api/v1/meetings/chat-hub");
