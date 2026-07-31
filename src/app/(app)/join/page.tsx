@@ -22,7 +22,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
+import { useJoinTranslationRoomByCode, useRoomPreflight } from "@/hooks/use-translationRooms";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
