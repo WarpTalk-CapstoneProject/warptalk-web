@@ -15,6 +15,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -77,7 +78,7 @@ function JoinMeetingContent() {
   const animationRef = useRef<number | null>(null);
 
   const displayName = user?.fullName || user?.email || "Guest";
-  const [roomCode] = useState(searchParams.get("code") ?? "");
+  const [roomCode, setRoomCode] = useState(searchParams.get("code") ?? "");
   const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
   const [listenLanguage, setListenLanguage] = useState("en-US");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -456,6 +457,20 @@ function JoinMeetingContent() {
         {/* Right Side: Settings Panel (Surface 1) */}
         <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden flex flex-col h-full min-h-[460px]">
           <div className="flex-1 p-6 space-y-8 overflow-y-auto custom-scrollbar">
+            {/* Room Code Section */}
+            <div className="space-y-4">
+              <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">
+                Meeting Code
+              </h4>
+              <Input
+                value={roomCode}
+                onChange={(event) => setRoomCode(event.target.value)}
+                placeholder="e.g. abc-defg-hij"
+                autoFocus={!roomCode}
+                className="h-[36px] text-[13px] font-mono"
+              />
+            </div>
+
             {/* Join Details Section */}
             <div className="space-y-4">
               <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">

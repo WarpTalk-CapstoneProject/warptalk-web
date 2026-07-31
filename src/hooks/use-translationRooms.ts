@@ -15,6 +15,7 @@ import type {
 
 const MEETING_KEY = ["translationRooms"] as const;
 const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
+const sessionsKey = (roomId: string) => [...MEETING_KEY, roomId, "sessions"] as const;
 
 export function useTranslationRooms(params?: {
   status?: string;
@@ -93,6 +94,7 @@ export function useStartTranslationRoom() {
     onSuccess: (translationRoom, id) => {
       queryClient.setQueryData<TranslationRoomDto>([...MEETING_KEY, id], translationRoom);
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+      queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
     },
   });
 }
@@ -108,6 +110,7 @@ export function usePauseTranslationRoom() {
         current ? { ...current, status: "paused" } : current,
       );
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+      queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
     },
   });
 }
@@ -123,7 +126,23 @@ export function useResumeTranslationRoom() {
         current ? { ...current, status: "in_progress" } : current,
       );
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+      queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
     },
+  });
+}
+
+/** All translation sessions for a room — used to bucket transcript segments into
+ * "Translation 1", "Translation 2"... blocks. Polls while the room is live so every
+ * participant's transcript picks up a Start/Pause/Resume without a manual refresh. */
+export function useTranslationRoomSessions(roomId: string, enabled = true) {
+  return useQuery({
+    queryKey: sessionsKey(roomId),
+    queryFn: async () => {
+      const { data } = await translationRoomService.sessions(roomId);
+      return data;
+    },
+    enabled: Boolean(roomId) && enabled,
+    refetchInterval: enabled ? 5000 : false,
   });
 }
 
@@ -155,6 +174,8 @@ export function useEndTranslationRoom() {
           : current
       );
       queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, id] });
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+      queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
     },
   });
 }
