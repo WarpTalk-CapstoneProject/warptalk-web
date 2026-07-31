@@ -225,10 +225,8 @@ export function useCreateJoinRequest() {
 export function useApproveWorkspaceJoinRequest(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: string | { inviteId?: string; invitationId?: string; membershipType?: string }) => {
-      const inviteId = typeof payload === "string" ? payload : (payload.inviteId || payload.invitationId || "");
-      return WorkspaceService.approveJoinRequest(workspaceId, { inviteId, membershipType: typeof payload === "string" ? undefined : payload.membershipType });
-    },
+    mutationFn: (payload: { inviteId: string; membershipType?: string }) =>
+      WorkspaceService.approveJoinRequest(workspaceId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
       queryClient.invalidateQueries({ queryKey: ["workspaces", "members"] });
