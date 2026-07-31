@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -69,7 +69,7 @@ export default function WorkspaceInvitationsPage() {
     register,
     handleSubmit,
     setValue,
-    control,
+    watch,
     reset,
     formState: { errors },
   } = useForm<InviteFormData>({
@@ -80,7 +80,7 @@ export default function WorkspaceInvitationsPage() {
     },
   });
 
-  const selectedRole = useWatch({ control, name: "roleName" });
+  const selectedRole = watch("roleName");
 
   if (!activeWorkspaceId) return null;
 
@@ -294,7 +294,7 @@ export default function WorkspaceInvitationsPage() {
                               ? "bg-emerald-500/5 text-emerald-500 border-emerald-500/20"
                               : normalizedStatus === "REJECTED"
                                 ? "bg-destructive/5 text-destructive border-destructive/20"
-                              : "bg-surface-3 border-hairline text-ink-muted"
+                                : "bg-surface-3 border-hairline text-ink-muted"
                         }`}
                       >
                         {invite.status}
@@ -472,11 +472,11 @@ export default function WorkspaceInvitationsPage() {
             </div>
             <DialogTitle className="text-center font-bold text-base">Invitation Created</DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              The invite is bound to <span className="font-semibold text-ink">{inviteNotice?.email}</span>. A secure invitation email has been sent to that address.
+              The invite is bound to <span className="font-semibold text-ink">{inviteNotice?.email}</span>. Open this dev email URL to simulate the mailbox message.
             </DialogDescription>
           </DialogHeader>
 
-          {process.env.NODE_ENV !== "production" && inviteNotice?.previewUrl && (
+          {inviteNotice?.previewUrl && (
             <div className="my-4 flex gap-2">
               <Input
                 readOnly

@@ -93,9 +93,9 @@ export const WorkspaceService = {
     return data;
   },
 
-  async listInvitations(workspaceId: string, page = 1, pageSize = 10, search = ""): Promise<PagedResult<WorkspaceInvitationDto>> {
+  async listInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string): Promise<PagedResult<WorkspaceInvitationDto>> {
     const { data } = await apiClient.get<PagedResult<WorkspaceInvitationDto>>(API.workspaces.invitations(workspaceId), {
-      params: { page, pageSize, search },
+      params: { page, pageSize, search, category },
     });
     return data;
   },
@@ -107,6 +107,22 @@ export const WorkspaceService = {
 
   async revokeInvitation(workspaceId: string, inviteId: string): Promise<void> {
     await apiClient.delete(API.workspaces.revokeInvitation(workspaceId, inviteId));
+  },
+
+  async createJoinRequest(request: { roomCode?: string; workspaceSlug?: string }): Promise<WorkspaceInvitationDto> {
+    const { data } = await apiClient.post<WorkspaceInvitationDto>(API.workspaces.joinRequests, request);
+    return data;
+  },
+
+  async approveJoinRequest(workspaceId: string, inviteId: string | { invitationId: string; membershipType?: string }, membershipType?: string): Promise<{ approvalEmailStatus?: string }> {
+    const id = typeof inviteId === "string" ? inviteId : inviteId.invitationId;
+    const type = typeof inviteId === "string" ? membershipType : inviteId.membershipType;
+    const { data } = await apiClient.post<{ approvalEmailStatus?: string }>(API.workspaces.approveJoinRequest(workspaceId, id), { membershipType: type });
+    return data || {};
+  },
+
+  async rejectJoinRequest(workspaceId: string, inviteId: string): Promise<void> {
+    await apiClient.post(API.workspaces.rejectJoinRequest(workspaceId, inviteId));
   },
 
   async previewInvitation(token: string): Promise<PreviewInvitationResponse> {

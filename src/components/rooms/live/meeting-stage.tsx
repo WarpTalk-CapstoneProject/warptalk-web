@@ -11,7 +11,6 @@ import {
   PushPinSimple,
   SpinnerGap,
   Star,
-  VideoCameraSlash,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   ConnectionState,
