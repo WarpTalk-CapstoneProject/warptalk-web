@@ -97,8 +97,13 @@ export default function RoomDetailPage() {
   );
   const roomId = params.id;
   const user = useAuthStore((state) => state.user);
+  const [meetingSession, setMeetingSession] =
+    useState<JoinMeetingResponseDto | null>(null);
   const roomQuery = useTranslationRoom(roomId);
-  const participantsQuery = useTranslationRoomParticipants(roomId);
+  const participantsQuery = useTranslationRoomParticipants(
+    roomId,
+    meetingSession !== null && !meetingSession.isWaitingRoom,
+  );
   const refetchParticipants = participantsQuery.refetch;
   const startRoom = useStartTranslationRoom();
   const pauseRoom = usePauseTranslationRoom();
@@ -113,8 +118,6 @@ export default function RoomDetailPage() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
-  const [meetingSession, setMeetingSession] =
-    useState<JoinMeetingResponseDto | null>(null);
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");

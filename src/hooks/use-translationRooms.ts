@@ -173,14 +173,14 @@ export function useCancelTranslationRoom() {
   });
 }
 
-export function useTranslationRoomParticipants(roomId: string) {
+export function useTranslationRoomParticipants(roomId: string, enabled = true) {
   return useQuery({
     queryKey: [...MEETING_KEY, roomId, "participants"],
     queryFn: async () => {
       const { data } = await translationRoomService.participants(roomId);
       return data;
     },
-    enabled: Boolean(roomId),
+    enabled: Boolean(roomId) && enabled,
     refetchInterval: 3000,
   });
 }

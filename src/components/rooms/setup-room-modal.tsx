@@ -19,6 +19,7 @@ import {
   useJoinTranslationRoomByCode,
   useTranslationRoom,
 } from "@/hooks/use-translationRooms";
+import { canJoinTranslationRoom } from "@/lib/translation-room-access";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -278,6 +279,11 @@ export function SetupRoomModal() {
 
   async function handleConfirm() {
     if (!room || isJoining) return;
+    if (!canJoinTranslationRoom(room.status)) {
+      toast.error("This meeting is no longer available to join.");
+      setIsOpen(false);
+      return;
+    }
     const displayName = (user?.fullName || user?.email || "Participant").trim();
 
     setIsJoining(true);
@@ -508,10 +514,17 @@ export function SetupRoomModal() {
             <div className="p-4 border-t border-border bg-surface-1 shrink-0">
               <button
                 onClick={handleConfirm}
-                disabled={isJoining || isLoadingRoom || !room}
+                disabled={
+                  isJoining ||
+                  isLoadingRoom ||
+                  !room ||
+                  !canJoinTranslationRoom(room.status)
+                }
                 className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {isJoining
+                {room && !canJoinTranslationRoom(room.status)
+                  ? "Meeting unavailable"
+                  : isJoining
                   ? isHost
                     ? "Starting..."
                     : "Joining..."
