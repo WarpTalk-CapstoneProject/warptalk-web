@@ -400,10 +400,3 @@ function initials(value: string) {
     .map((part) => part[0]?.toUpperCase())
     .join("");
 }
-
-function isCameraUnavailable(trackRef: TrackReferenceOrPlaceholder) {
-  return (
-    trackRef.source === Track.Source.Camera &&
-    (!trackRef.publication || trackRef.publication.isMuted)
-  );
-}
