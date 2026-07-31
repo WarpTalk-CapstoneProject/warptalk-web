@@ -114,10 +114,17 @@ export const WorkspaceService = {
     return data;
   },
 
-  async approveJoinRequest(workspaceId: string, inviteId: string | { invitationId: string; membershipType?: string }, membershipType?: string): Promise<{ approvalEmailStatus?: string }> {
-    const id = typeof inviteId === "string" ? inviteId : inviteId.invitationId;
+  async approveJoinRequest(
+    workspaceId: string,
+    inviteId: string | { inviteId: string; membershipType?: string },
+    membershipType?: string
+  ): Promise<{ approvalEmailStatus?: string }> {
+    const id = typeof inviteId === "string" ? inviteId : inviteId.inviteId;
     const type = typeof inviteId === "string" ? membershipType : inviteId.membershipType;
-    const { data } = await apiClient.post<{ approvalEmailStatus?: string }>(API.workspaces.approveJoinRequest(workspaceId, id), { membershipType: type });
+    const { data } = await apiClient.post<{ approvalEmailStatus?: string }>(
+      API.workspaces.approveJoinRequest(workspaceId, id),
+      { membershipType: type }
+    );
     return data || {};
   },
 
