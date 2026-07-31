@@ -175,7 +175,7 @@ export function CreateRoomDialog() {
       // declared language (an internal fallback for the audio-route mesh), and the full
       // declared set is sent as targetLanguages.
       const languages = Array.from(new Set(meetingLanguages));
-      const sourceLanguage = languages[0];
+      const sourceLanguage = languages[0] || "en";
       const targetLanguages = languages;
 
       if (editRoomId) {

@@ -31,13 +31,19 @@ async function refreshAccessToken() {
     body: JSON.stringify({ refreshToken }),
   })
     .then(async (response) => {
-      if (!response.ok) return accessToken;
+      if (!response.ok) {
+        useAuthStore.getState().logout();
+        return "";
+      }
       const data = (await response.json()) as { accessToken: string; refreshToken: string };
       useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
       document.cookie = `access_token=${data.accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
       return data.accessToken;
     })
-    .catch(() => accessToken)
+    .catch(() => {
+      useAuthStore.getState().logout();
+      return "";
+    })
     .finally(() => {
       refreshPromise = null;
     });

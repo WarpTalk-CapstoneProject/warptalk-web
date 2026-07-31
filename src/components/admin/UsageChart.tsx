@@ -147,7 +147,7 @@ export function UsageChart({ workspaceId, className, refetchIntervalMs }: UsageC
               : "Global Usage Over Time"}
           </CardTitle>
           <CardDescription>
-            Comparing Consumed Credits vs Top-up Credits
+            Total Consumed Credits
           </CardDescription>
         </div>
         <div className="flex items-center gap-3">
@@ -266,14 +266,6 @@ export function UsageChart({ workspaceId, className, refetchIntervalMs }: UsageC
                   radius={[4, 4, 0, 0]}
                   barSize={20}
                   activeBar={<Rectangle fill="#2563eb" />}
-                />
-                <Bar
-                  dataKey="topUpCredits"
-                  name="Top-up"
-                  fill="#10b981"
-                  radius={[4, 4, 0, 0]}
-                  barSize={20}
-                  activeBar={<Rectangle fill="#059669" />}
                 />
               </BarChart>
             </ResponsiveContainer>

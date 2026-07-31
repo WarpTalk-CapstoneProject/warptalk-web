@@ -348,6 +348,10 @@ export function RealtimeNotificationProvider({ children }: { children: React.Rea
       })
       .catch((err) => {
         console.warn("RealtimeNotificationProvider connection failed:", err);
+        if (err?.message?.includes("401") || err?.message?.includes("Unauthorized") || err?.message?.includes("Status code '401'")) {
+          useAuthStore.getState().logout();
+          window.location.href = "/login";
+        }
       });
 
     setConnection(hubConn);

@@ -264,6 +264,8 @@ apiClient.interceptors.response.use(
         if (typeof window !== "undefined") {
           window.location.href = "/login";
         }
+        // Return an unresolved promise to prevent React Query from retrying and causing infinite loop
+        return new Promise(() => {});
       }
       return Promise.reject(refreshError);
     }
