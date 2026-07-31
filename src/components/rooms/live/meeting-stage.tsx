@@ -11,6 +11,7 @@ import {
   PushPinSimple,
   SpinnerGap,
   Star,
+  VideoCameraSlash,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   ConnectionState,
@@ -24,7 +25,7 @@ import type { MeetingLayoutMode } from "./meeting-control-bar";
 import { NetworkQualityIcon } from "./network-quality-icon";
 
 const TILE_CLASSNAME =
-  "overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur";
+  "h-full w-full overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur";
 
 export function LiveKitMeetingStage({
   fallbackName,
@@ -129,6 +130,8 @@ export function LiveKitMeetingStage({
     const isActiveSpeaker = activeSpeakerIdentities.has(identity);
     const isFeatured = featuredIdentity === identity;
     const handRaised = raisedHandUserIds?.has(identity) ?? false;
+    const displayName = trackRef.participant.name || identity || fallbackName;
+    const cameraUnavailable = isCameraUnavailable(trackRef);
 
     return (
       <div
@@ -136,13 +139,31 @@ export function LiveKitMeetingStage({
           trackRef.participant.sid +
           (trackRef.publication?.trackSid ?? "placeholder")
         }
-        className={`relative rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-1" : ""}`}
+        className={`relative h-full min-h-[180px] overflow-hidden rounded-xl bg-surface-3 transition-shadow ${isActiveSpeaker ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-1" : ""}`}
         onClick={() => onPinParticipant?.(identity)}
       >
-        <ParticipantTile
-          trackRef={trackRef}
-          className={`${TILE_CLASSNAME} ${options?.minHeight ?? ""} ${onPinParticipant ? "cursor-pointer" : ""}`}
-        />
+        {cameraUnavailable ? (
+          <div
+            data-camera-state="off"
+            className={`flex h-full w-full flex-col items-center justify-center bg-surface-3 px-6 text-center ${options?.minHeight ?? ""}`}
+          >
+            <div className="grid h-20 w-20 place-items-center rounded-full bg-surface-1 text-2xl font-semibold text-ink-muted shadow-sm">
+              {initials(displayName)}
+            </div>
+            <p className="mt-3 max-w-full truncate text-[15px] font-medium text-ink">
+              {displayName}
+            </p>
+            <p className="mt-1 flex items-center gap-1.5 text-[12px] text-ink-subtle">
+              <VideoCameraSlash className="h-4 w-4" />
+              Camera is off
+            </p>
+          </div>
+        ) : (
+          <ParticipantTile
+            trackRef={trackRef}
+            className={`${TILE_CLASSNAME} ${options?.minHeight ?? ""} ${onPinParticipant ? "cursor-pointer" : ""}`}
+          />
+        )}
         <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5">
           {handRaised ? <HandRaiseBadge /> : null}
           {isFeatured ? (
@@ -288,6 +309,13 @@ function gridClassName(count: number) {
   if (count <= 9) return "grid-cols-3";
   if (count <= 16) return "grid-cols-4";
   return "grid-cols-5";
+}
+
+function isCameraUnavailable(trackRef: TrackReferenceOrPlaceholder) {
+  return (
+    trackRef.source === Track.Source.Camera &&
+    (!trackRef.publication || trackRef.publication.isMuted)
+  );
 }
 
 function isAutomatedParticipant(identity?: string, name?: string) {

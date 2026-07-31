@@ -74,7 +74,7 @@ export function MeetingSidePanel({
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
           {mode === "transcript" ? (
-            <TranscriptPanel segments={segments} />
+            <TranscriptPanel segments={segments} roomId={roomId} baseTime={room.startedAt} />
           ) : null}
           {mode === "chat" ? (
             <ChatPanel roomId={roomId} targetLanguage={chatTargetLanguage} />

@@ -26,7 +26,6 @@ import {
   useTranslationRoomInvitations,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
-import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -48,9 +47,14 @@ export function CreateRoomDialog() {
   const setIsOpen = useUIStore((state) => state.setCreateRoomModalOpen);
   const editRoomId = useUIStore((state) => state.editRoomId);
   const setEditRoomId = useUIStore((state) => state.setEditRoomId);
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
   const workspaceName =
     useWorkspaceStore((state) => state.activeWorkspaceName) || "Workspace";
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -59,8 +63,8 @@ export function CreateRoomDialog() {
   // direction: each participant's own speak/listen language comes from their profile at
   // join. Defaults to a common bilingual pair.
   const [meetingLanguages, setMeetingLanguages] = useState<string[]>([
-    "en",
-    "vi",
+    "en-US",
+    "vi-VN",
   ]);
   const [isDaily, setIsDaily] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
@@ -92,7 +96,7 @@ export function CreateRoomDialog() {
     setMeetingLanguages(
       editRoomData.targetLanguages?.length
         ? editRoomData.targetLanguages
-        : [editRoomData.sourceLanguage || "en"],
+        : [editRoomData.sourceLanguage || "en-US"],
     );
     setScheduledAt(
       editRoomData.scheduledAt ? new Date(editRoomData.scheduledAt) : null,
@@ -133,7 +137,7 @@ export function CreateRoomDialog() {
         setTitle("");
         setDescription("");
         setInvitedEmails([]);
-        setMeetingLanguages(["en", "vi"]);
+        setMeetingLanguages(["en-US", "vi-VN"]);
         setScheduledAt(null);
         setIsExpanded(false);
         setCreatedRoomId(null);
@@ -168,14 +172,13 @@ export function CreateRoomDialog() {
       toast.error("Please complete all required fields.");
       return;
     }
-
     try {
       // The meeting is defined by its set of languages. The backend still models a
       // (sourceLanguage, targetLanguages) pair, so derive them: source is just the first
       // declared language (an internal fallback for the audio-route mesh), and the full
       // declared set is sent as targetLanguages.
       const languages = Array.from(new Set(meetingLanguages));
-      const sourceLanguage = languages[0] || "en";
+      const sourceLanguage = languages[0];
       const targetLanguages = languages;
 
       if (editRoomId) {
@@ -194,8 +197,12 @@ export function CreateRoomDialog() {
         toast.success("Room updated successfully.");
         handleOpenChange(false);
       } else {
+        if (!activeWorkspaceId) {
+          toast.error("Please select a workspace before creating a room.");
+          return;
+        }
         const room = await createRoomMutation.mutateAsync({
-          workspaceId: activeWorkspaceId ?? undefined,
+          workspaceId: activeWorkspaceId,
           title: title.trim(),
           description: description.trim() || undefined,
           translationRoomType: scheduledAt ? "scheduled" : "instant",
@@ -211,10 +218,9 @@ export function CreateRoomDialog() {
       }
     } catch (error) {
       toast.error(
-        getErrorMessage(
-          error,
-          `Failed to ${editRoomId ? "update" : "create"} room.`,
-        ),
+        error instanceof Error
+          ? error.message
+          : `Failed to ${editRoomId ? "update" : "create"} room.`,
       );
     }
   }
@@ -404,7 +410,11 @@ export function CreateRoomDialog() {
                     Configure
                   </Button>
                   <Link
-                    href={`/room/${createdRoomId}`}
+                    href={
+                      activeWorkspaceSlug
+                        ? `/${activeWorkspaceSlug}/rooms/${createdRoomId}`
+                        : `/room/${createdRoomId}`
+                    }
                     onClick={() => handleOpenChange(false)}
                     className={cn(
                       buttonVariants({ variant: "default" }),

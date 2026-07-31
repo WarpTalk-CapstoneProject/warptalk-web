@@ -15,8 +15,10 @@ const checks = [
   ["Ask WarpBot trigger resets to a new conversation", chatbot.includes("startNewConversation") && chatbot.includes("setConversationId(null)") && chatbot.includes("setMessages([])")],
   ["active meeting assistant context reports live", room.includes('status: "live"')],
   ["meeting top bar only exposes host end controls to the actual room host", room.includes("isHost={isRoomHost}")],
+  ["ended-room realtime event notifies and redirects participants", room.includes('connection.on("TranslationRoomEnded"') && room.includes('toast.info("This meeting has ended.")') && room.includes('router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`)')],
   ["document list renders uploader identity", documents.includes("Uploader") && documents.includes("doc.uploadedBy")],
   ["document list renders approver identity", documents.includes("Approver") && documents.includes("doc.approvedBy")],
+  ["document upload help only advertises backend-supported formats", documents.replace(/\s+/g, " ").includes("Supported: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP, GIF")],
   ["global glossary CRUD screen remains available", glossary.includes("useCreateGlobalGlossaryTerm") && glossary.includes("useUpdateGlobalGlossaryTerm") && glossary.includes("useDeleteGlobalGlossaryTerm") && glossary.includes("useBulkImportGlobalGlossaryTerms")],
 ];
 
