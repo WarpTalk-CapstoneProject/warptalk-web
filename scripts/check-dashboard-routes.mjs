@@ -1,92 +1,98 @@
 const baseUrl = process.env.WARPTALK_BASE_URL ?? "http://localhost:3000";
 
-const expectedOkRoutes = [
-  "/host/dashboard",
-  "/participant/dashboard",
-  "/participant/meetings",
-  "/participant/summaries",
-  "/participant/ai-chat",
-  "/participant/settings",
-  "/workspace/dashboard",
-  "/workspace/members",
-  "/workspace/rooms",
-  "/workspace/artifacts",
-  "/workspace/terminology",
-  "/workspace/billing",
-  "/workspace/settings",
-  "/internal/dashboard",
-  "/internal/workspaces",
-  "/internal/users",
-  "/internal/plans",
-  "/internal/ai-ops",
-  "/internal/support",
-  "/internal/settings",
+const publicRoutes = [
+  "/",
+  "/login",
+  "/register",
+  "/forgot-password",
   "/join?code=WARP-241",
-  "/rooms",
-  "/rooms/create",
-  "/rooms/preview-investor-qa",
-  "/rooms/preview-investor-qa/setup",
-  "/rooms/preview-investor-qa/waiting",
-  "/room/preview-investor-qa",
-  "/rooms/preview-investor-qa/ended",
-  "/rooms/preview-investor-qa/artifacts",
-  "/history",
-  "/ai-summaries",
-  "/ai-chat",
-  "/terminology",
-  "/voice-profiles",
-  "/feedback",
-  "/settings",
+  "/workspace/payment/plans",
 ];
 
-const expectedRedirectRoutes = [
-  "/dashboard",
+const privateRoutes = [
   "/workspace",
-  "/admin",
+  "/acme/dashboard",
+  "/acme/members",
+  "/acme/rooms",
+  "/acme/billing",
+  "/billing",
+  "/ai-chat",
+  "/room/00000000-0000-0000-0000-000000000000",
 ];
 
-const expectedNotFoundRoutes = [
+const authenticatedRoutes = [
+  "/workspace",
+  "/workspace/create",
+  "/acme/dashboard",
+  "/acme/members",
+  "/acme/rooms",
+  "/acme/billing",
+  "/billing",
+  "/billing/plans",
+  "/ai-chat",
+  "/room/00000000-0000-0000-0000-000000000000",
+  "/voice-profiles",
+];
+
+const authenticatedNotFoundRoutes = [
   "/this-route-does-not-exist",
-  "/dashboard/unknown-page",
-  "/rooms/not-real/unknown-page",
+  "/acme/unknown-page",
 ];
 
-async function checkRoute(route, expectedStatus) {
-  const response = await fetch(`${baseUrl}${route}`, { redirect: "manual" });
-  const passed = response.status === expectedStatus;
-  const mark = passed ? "PASS" : "FAIL";
-  console.log(`${mark} ${route} expected ${expectedStatus}, got ${response.status}`);
+async function request(route, authenticated = false) {
+  return fetch(`${baseUrl}${route}`, {
+    redirect: "manual",
+    headers: authenticated
+      ? { cookie: "access_token=route-contract-placeholder" }
+      : undefined,
+  });
+}
 
-  if (!passed) {
-    throw new Error(`${route} expected ${expectedStatus}, got ${response.status}`);
-  }
+function assert(condition, message) {
+  console.log(`${condition ? "PASS" : "FAIL"} ${message}`);
+  if (!condition) throw new Error(message);
 }
 
 async function main() {
-  console.log(`Checking dashboard routes at ${baseUrl}`);
+  console.log(`Checking route and authentication contracts at ${baseUrl}`);
 
-  for (const route of expectedOkRoutes) {
-    await checkRoute(route, 200);
+  for (const route of publicRoutes) {
+    const response = await request(route);
+    assert(response.status === 200, `${route} is public (got ${response.status})`);
   }
 
-  for (const route of expectedRedirectRoutes) {
-    const response = await fetch(`${baseUrl}${route}`, { redirect: "manual" });
-    const passed = response.status === 307 || response.status === 308;
-    const mark = passed ? "PASS" : "FAIL";
-    console.log(`${mark} ${route} expected redirect, got ${response.status}`);
-
-    if (!passed) {
-      throw new Error(`${route} expected redirect, got ${response.status}`);
-    }
+  for (const route of privateRoutes) {
+    const response = await request(route);
+    const location = response.headers.get("location") ?? "";
+    assert(
+      [307, 308].includes(response.status) &&
+        location.includes("/login") &&
+        location.includes("redirect="),
+      `${route} redirects unauthenticated users to login (got ${response.status} ${location})`,
+    );
   }
 
-  for (const route of expectedNotFoundRoutes) {
-    await checkRoute(route, 404);
+  for (const route of authenticatedRoutes) {
+    const response = await request(route, true);
+    assert(
+      response.status === 200,
+      `${route} exists for authenticated users (got ${response.status})`,
+    );
+  }
+
+  for (const route of authenticatedNotFoundRoutes) {
+    const response = await request(route, true);
+    assert(
+      response.status === 404,
+      `${route} remains not found after authentication (got ${response.status})`,
+    );
   }
 }
 
 main().catch((error) => {
   console.error(error.message);
-  console.error("Make sure the dev server is running before this check, for example: npm run dev");
+  console.error(
+    "Make sure the production or development server is running, for example: npm run dev",
+  );
   process.exit(1);
 });

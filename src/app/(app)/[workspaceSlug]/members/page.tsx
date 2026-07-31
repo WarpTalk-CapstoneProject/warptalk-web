@@ -1,20 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
   Users,
   UserMinus,
-  MagnifyingGlass,
+  Funnel,
   Spinner,
   Warning,
   Plus,
   Check,
   Copy,
   Download,
+  SlidersHorizontal,
 } from "@phosphor-icons/react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -30,10 +31,24 @@ import {
 } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const inviteSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -56,13 +71,30 @@ export default function WorkspaceMembersPage() {
 
   // Modal and invitation states
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [inviteNotice, setInviteNotice] = useState<{ email: string; previewUrl: string; warning?: string | null } | null>(null);
-  const [memberToRemove, setMemberToRemove] = useState<{ id: string; name: string } | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<{
+    email: string;
+    previewUrl: string;
+    warning?: string | null;
+  } | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // TanStack Query Hooks
-  const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", page, 10, query);
-  const removeMemberMutation = useRemoveWorkspaceMember(activeWorkspaceId || "");
-  const updateMemberMutation = useUpdateWorkspaceMember(activeWorkspaceId || "");
+  const membersQuery = useWorkspaceMembers(
+    activeWorkspaceId || "",
+    page,
+    10,
+    query,
+  );
+  const removeMemberMutation = useRemoveWorkspaceMember(
+    activeWorkspaceId || "",
+  );
+  const updateMemberMutation = useUpdateWorkspaceMember(
+    activeWorkspaceId || "",
+  );
   const inviteMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
 
   // Invite form setup
@@ -70,7 +102,7 @@ export default function WorkspaceMembersPage() {
     register: registerInvite,
     handleSubmit: handleSubmitInvite,
     setValue: setValueInvite,
-    watch: watchInvite,
+    control: inviteControl,
     reset: resetInvite,
     formState: { errors: inviteErrors },
   } = useForm<InviteFormData>({
@@ -81,7 +113,10 @@ export default function WorkspaceMembersPage() {
     },
   });
 
-  const selectedInviteRole = watchInvite("roleName");
+  const selectedInviteRole = useWatch({
+    control: inviteControl,
+    name: "roleName",
+  });
 
   if (!activeWorkspaceId) return null;
 
@@ -90,13 +125,26 @@ export default function WorkspaceMembersPage() {
   const isOwnerOrAdmin = isOwner || isAdmin;
 
   const membersList = membersQuery.data?.items || [];
-
-  const [isExporting, setIsExporting] = useState(false);
+  const memberFilterPills = [
+    { key: "all", label: "All", role: "all", status: "all" },
+    { key: "owner", label: "Owner", role: "owner", status: "all" },
+    { key: "admin", label: "Admin", role: "admin", status: "all" },
+    { key: "member", label: "Member", role: "member", status: "all" },
+    { key: "active", label: "Active", role: "all", status: "active" },
+  ] as const;
+  const activeMemberFilter =
+    memberFilterPills.find(
+      (item) => item.role === roleFilter && item.status === statusFilter,
+    )?.key ?? "custom";
 
   // Client-side filtering for Role and Status
   const filteredMembers = membersList.filter((member) => {
-    const matchesRole = roleFilter === "all" || member.roleName.toLowerCase() === roleFilter.toLowerCase();
-    const matchesStatus = statusFilter === "all" || member.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesRole =
+      roleFilter === "all" ||
+      member.roleName.toLowerCase() === roleFilter.toLowerCase();
+    const matchesStatus =
+      statusFilter === "all" ||
+      member.status.toLowerCase() === statusFilter.toLowerCase();
     return matchesRole && matchesStatus;
   });
 
@@ -113,7 +161,11 @@ export default function WorkspaceMembersPage() {
         { header: "Membership Type", key: "membershipType", width: 18 },
         { header: "Status", key: "status", width: 12 },
         { header: "Joined Date", key: "joinedAt", width: 20 },
-        { header: "Host Meetings Permission", key: "canCreateMeetings", width: 22 },
+        {
+          header: "Host Meetings Permission",
+          key: "canCreateMeetings",
+          width: 22,
+        },
       ];
 
       // Style header row
@@ -132,7 +184,9 @@ export default function WorkspaceMembersPage() {
           roleName: m.roleName || "Member",
           membershipType: m.membershipType || "Internal",
           status: m.status || "Active",
-          joinedAt: m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "N/A",
+          joinedAt: m.joinedAt
+            ? new Date(m.joinedAt).toLocaleDateString()
+            : "N/A",
           canCreateMeetings: m.canCreateMeetings ? "Yes" : "No",
         });
       });
@@ -152,13 +206,21 @@ export default function WorkspaceMembersPage() {
     }
   };
 
-  const handleToggleCanCreateMeetings = async (userId: string, currentVal: boolean) => {
+  const handleToggleCanCreateMeetings = async (
+    userId: string,
+    currentVal: boolean,
+  ) => {
     try {
-      await updateMemberMutation.mutateAsync({ userId, canCreateMeetings: !currentVal });
+      await updateMemberMutation.mutateAsync({
+        userId,
+        canCreateMeetings: !currentVal,
+      });
       toast.success("Meeting host permission updated.");
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Failed to update meeting permission");
+      toast.error(
+        error?.response?.data?.error || "Failed to update meeting permission",
+      );
     }
   };
 
@@ -197,10 +259,16 @@ export default function WorkspaceMembersPage() {
       });
       setIsInviteOpen(false);
       resetInvite();
-      toast.success(result.warning ? "Invitation created, but email delivery failed." : "Invitation sent.");
+      toast.success(
+        result.warning
+          ? "Invitation created, but email delivery failed."
+          : "Invitation sent.",
+      );
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Failed to create invitation");
+      toast.error(
+        error?.response?.data?.error || "Failed to create invitation",
+      );
     }
   };
 
@@ -219,59 +287,74 @@ export default function WorkspaceMembersPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink">
+    <div className="flex h-full flex-col bg-surface-1 text-ink">
       {/* Filter, Search, and Action triggers - Unified horizontal design */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-hairline gap-4 pt-2">
-        <div className="flex items-center flex-1 gap-2 max-w-xl">
-          <div className="relative flex-1">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted">
-              <MagnifyingGlass className="h-4 w-4" />
-            </span>
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
+      <div className="flex shrink-0 flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+          {memberFilterPills.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => {
+                setRoleFilter(item.role);
+                setStatusFilter(item.status);
               }}
-              placeholder="Search by name or email"
-              className="h-8 pl-8 pr-3 text-xs bg-surface-2/60 border-hairline focus:ring-1 focus:ring-primary focus-visible:ring-1 focus-visible:ring-primary w-full"
-            />
-          </div>
-
-          {/* Role Filter */}
-          <Select value={roleFilter} onValueChange={(val: string | null) => setRoleFilter(val || "all")}>
-            <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
-              <SelectValue placeholder="All Roles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Roles</SelectItem>
-              <SelectItem value="owner" className="text-xs">Owner</SelectItem>
-              <SelectItem value="admin" className="text-xs">Admin</SelectItem>
-              <SelectItem value="member" className="text-xs">Member</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={(val: string | null) => setStatusFilter(val || "all")}>
-            <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Statuses</SelectItem>
-              <SelectItem value="active" className="text-xs">Active</SelectItem>
-            </SelectContent>
-          </Select>
+              className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+                activeMemberFilter === item.key
+                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        {/* Export & Invite buttons for Owner/Admin only */}
-        {isOwnerOrAdmin && (
-          <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 pl-4">
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            placeholder="Search members..."
+            ariaLabel="Search members"
+            collapsedWidth={28}
+            expandedWidth={220}
+            className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+            iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+            clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+            inputClassName="h-[26px] text-[12px]"
+          />
+          <button
+            className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Member filters"
+          >
+            <Funnel weight="bold" size={13} />
+            {(roleFilter !== "all" || statusFilter !== "all") && (
+              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+            )}
+          </button>
+          <button
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title={`${filteredMembers.length} members`}
+          >
+            <SlidersHorizontal weight="bold" size={13} />
+          </button>
+
+          {isOwnerOrAdmin && (
+            <>
+              <div className="mx-1 h-4 w-[1px] bg-border" />
             <button
               onClick={handleExportXlsx}
               disabled={isExporting}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 px-3 text-xs font-semibold text-ink transition duration-150 cursor-pointer shrink-0 disabled:opacity-50"
+              className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50"
             >
-              {isExporting ? <Spinner className="h-3.5 w-3.5 animate-spin text-primary" /> : <Download className="h-3.5 w-3.5 text-primary" />}
+              {isExporting ? (
+                <Spinner className="h-3.5 w-3.5 animate-spin text-primary" />
+              ) : (
+                <Download className="h-3.5 w-3.5 text-primary" />
+              )}
               <span>{isExporting ? "Exporting..." : "Export (.xlsx)"}</span>
             </button>
 
@@ -280,17 +363,18 @@ export default function WorkspaceMembersPage() {
                 resetInvite();
                 setIsInviteOpen(true);
               }}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-3 text-xs font-semibold text-white transition duration-150 cursor-pointer shrink-0"
+              className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Invite</span>
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Members Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-4 pb-6">
         {membersQuery.isLoading ? (
           <div className="flex h-48 items-center justify-center">
             <Spinner className="h-6 w-6 animate-spin text-primary" />
@@ -299,7 +383,9 @@ export default function WorkspaceMembersPage() {
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-center border border-dashed border-hairline rounded-lg bg-surface-1/10">
             <Users className="h-8 w-8 text-ink-muted" />
             <p className="text-sm font-medium">No members found</p>
-            <p className="text-xs text-ink-muted">Try adjusting your search terms or filters.</p>
+            <p className="text-xs text-ink-muted">
+              Try adjusting your search terms or filters.
+            </p>
           </div>
         ) : (
           <div className="min-w-[750px] divide-y divide-hairline/40">
@@ -351,7 +437,10 @@ export default function WorkspaceMembersPage() {
 
                   {/* Role Badge */}
                   <div>
-                    <Badge variant="outline" className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink">
+                    <Badge
+                      variant="outline"
+                      className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
+                    >
                       {member.roleName}
                     </Badge>
                   </div>
@@ -360,9 +449,11 @@ export default function WorkspaceMembersPage() {
                   <div>
                     <Badge
                       variant="outline"
-                      className={member.membershipType.toLowerCase() === "external"
-                        ? "rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                        : "rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"}
+                      className={
+                        member.membershipType.toLowerCase() === "external"
+                          ? "rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                          : "rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
+                      }
                     >
                       {member.membershipType}
                     </Badge>
@@ -372,10 +463,11 @@ export default function WorkspaceMembersPage() {
                   <div>
                     <Badge
                       variant="outline"
-                      className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${memberStatus === "active"
+                      className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${
+                        memberStatus === "active"
                           ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20"
                           : "bg-surface-3/50 border-hairline text-ink-muted"
-                        }`}
+                      }`}
                     >
                       {member.status.toLowerCase()}
                     </Badge>
@@ -383,16 +475,25 @@ export default function WorkspaceMembersPage() {
 
                   {/* Joined Date */}
                   <span className="text-xs text-ink-muted font-medium">
-                    {new Date(member.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    {new Date(member.joinedAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
                   </span>
 
                   {/* Meeting host toggle */}
                   <div className="flex justify-center">
                     <Switch
                       checked={member.canCreateMeetings}
-                      disabled={!isOwnerOrAdmin || isSelf || memberRole === "owner"}
+                      disabled={
+                        !isOwnerOrAdmin || isSelf || memberRole === "owner"
+                      }
                       onCheckedChange={() =>
-                        handleToggleCanCreateMeetings(member.userId, member.canCreateMeetings)
+                        handleToggleCanCreateMeetings(
+                          member.userId,
+                          member.canCreateMeetings,
+                        )
                       }
                     />
                   </div>
@@ -400,8 +501,18 @@ export default function WorkspaceMembersPage() {
                   {/* Remove button */}
                   <div className="flex justify-end">
                     <button
-                      onClick={() => setMemberToRemove({ id: member.userId, name: member.fullName })}
-                      disabled={!isOwnerOrAdmin || isSelf || memberRole === "owner" || (isAdmin && memberRole === "admin")}
+                      onClick={() =>
+                        setMemberToRemove({
+                          id: member.userId,
+                          name: member.fullName,
+                        })
+                      }
+                      disabled={
+                        !isOwnerOrAdmin ||
+                        isSelf ||
+                        memberRole === "owner" ||
+                        (isAdmin && memberRole === "admin")
+                      }
                       className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
                       title="Remove from workspace"
                       aria-label={`Remove ${member.fullName} from workspace`}
@@ -425,7 +536,9 @@ export default function WorkspaceMembersPage() {
             >
               Previous
             </button>
-            <span className="text-xs text-ink-muted font-medium">Page {page}</span>
+            <span className="text-xs text-ink-muted font-medium">
+              Page {page}
+            </span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={membersList.length < 10}
@@ -441,13 +554,18 @@ export default function WorkspaceMembersPage() {
       <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
         <DialogContent className="border-hairline bg-surface-1 max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-bold text-base text-foreground">Invite Member</DialogTitle>
+            <DialogTitle className="font-bold text-base text-foreground">
+              Invite Member
+            </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
               Generate a secure join link for a new member.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmitInvite(handleInvite)} className="flex flex-col gap-4 my-2">
+          <form
+            onSubmit={handleSubmitInvite(handleInvite)}
+            className="flex flex-col gap-4 my-2"
+          >
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold">Email Address</label>
               <Input
@@ -458,7 +576,9 @@ export default function WorkspaceMembersPage() {
                 disabled={inviteMutation.isPending}
               />
               {inviteErrors.email && (
-                <p className="text-[11px] text-destructive mt-0.5">{inviteErrors.email.message}</p>
+                <p className="text-[11px] text-destructive mt-0.5">
+                  {inviteErrors.email.message}
+                </p>
               )}
             </div>
 
@@ -467,24 +587,32 @@ export default function WorkspaceMembersPage() {
               <Select
                 value={selectedInviteRole}
                 onValueChange={(val: string | null) => {
-                  if (val) setValueInvite("roleName", val as "Admin" | "Member");
+                  if (val)
+                    setValueInvite("roleName", val as "Admin" | "Member");
                 }}
               >
                 <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Member" className="text-xs">Member (Standard)</SelectItem>
-                  <SelectItem value="Admin" className="text-xs">Admin (Operational Manager)</SelectItem>
+                  <SelectItem value="Member" className="text-xs">
+                    Member (Standard)
+                  </SelectItem>
+                  <SelectItem value="Admin" className="text-xs">
+                    Admin (Operational Manager)
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {inviteErrors.roleName && (
-                <p className="text-[11px] text-destructive mt-0.5">{inviteErrors.roleName.message}</p>
+                <p className="text-[11px] text-destructive mt-0.5">
+                  {inviteErrors.roleName.message}
+                </p>
               )}
             </div>
 
             <p className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-5 text-ink-muted">
-              Internal or External access is assigned automatically from the workspace&apos;s verified domains.
+              Internal or External access is assigned automatically from the
+              workspace&apos;s verified domains.
             </p>
 
             <DialogFooter className="mt-4 flex gap-2">
@@ -512,19 +640,28 @@ export default function WorkspaceMembersPage() {
       </Dialog>
 
       {/* Generated Link Share Dialog */}
-      <Dialog open={!!inviteNotice} onOpenChange={(open: boolean) => !open && setInviteNotice(null)}>
+      <Dialog
+        open={!!inviteNotice}
+        onOpenChange={(open: boolean) => !open && setInviteNotice(null)}
+      >
         <DialogContent className="border-hairline bg-surface-1 max-w-md">
           <DialogHeader className="flex flex-col gap-1.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto">
               <Check className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-center font-bold text-base text-foreground">Invitation Created</DialogTitle>
+            <DialogTitle className="text-center font-bold text-base text-foreground">
+              Invitation Created
+            </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              The invite is bound to <span className="font-semibold text-ink">{inviteNotice?.email}</span>. Open this dev email URL to simulate the mailbox message.
+              The invite is bound to{" "}
+              <span className="font-semibold text-ink">
+                {inviteNotice?.email}
+              </span>
+              . A secure invitation email has been sent to that address.
             </DialogDescription>
           </DialogHeader>
 
-          {inviteNotice?.previewUrl && (
+          {process.env.NODE_ENV !== "production" && inviteNotice?.previewUrl && (
             <div className="my-4 flex gap-2">
               <Input
                 readOnly
@@ -532,7 +669,10 @@ export default function WorkspaceMembersPage() {
                 className="h-9 flex-1 select-all border-hairline bg-surface-2 font-mono text-xs"
               />
               <button
-                onClick={() => inviteNotice.previewUrl && copyToClipboard(inviteNotice.previewUrl)}
+                onClick={() =>
+                  inviteNotice.previewUrl &&
+                  copyToClipboard(inviteNotice.previewUrl)
+                }
                 className="flex h-9 items-center justify-center gap-1 rounded-md border border-hairline bg-surface-1 px-3 text-xs font-semibold transition hover:bg-surface-2"
               >
                 <Copy className="h-4 w-4" />
@@ -559,16 +699,25 @@ export default function WorkspaceMembersPage() {
       </Dialog>
 
       {/* Remove Confirmation Dialog */}
-      <Dialog open={!!memberToRemove} onOpenChange={(open: boolean) => !open && setMemberToRemove(null)}>
+      <Dialog
+        open={!!memberToRemove}
+        onOpenChange={(open: boolean) => !open && setMemberToRemove(null)}
+      >
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader className="flex flex-col gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive mx-auto">
               <Warning className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-center font-bold text-base text-foreground">Remove Member?</DialogTitle>
+            <DialogTitle className="text-center font-bold text-base text-foreground">
+              Remove Member?
+            </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Are you sure you want to remove <span className="font-semibold text-ink">{memberToRemove?.name}</span>?
-              They will instantly lose access to all meetings, documents, and transcripts in this workspace.
+              Are you sure you want to remove{" "}
+              <span className="font-semibold text-ink">
+                {memberToRemove?.name}
+              </span>
+              ? They will instantly lose access to all meetings, documents, and
+              transcripts in this workspace.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">

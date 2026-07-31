@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -69,7 +69,7 @@ export default function WorkspaceInvitationsPage() {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     reset,
     formState: { errors },
   } = useForm<InviteFormData>({
@@ -80,7 +80,7 @@ export default function WorkspaceInvitationsPage() {
     },
   });
 
-  const selectedRole = watch("roleName");
+  const selectedRole = useWatch({ control, name: "roleName" });
 
   if (!activeWorkspaceId) return null;
 
@@ -472,11 +472,11 @@ export default function WorkspaceInvitationsPage() {
             </div>
             <DialogTitle className="text-center font-bold text-base">Invitation Created</DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              The invite is bound to <span className="font-semibold text-ink">{inviteNotice?.email}</span>. Open this dev email URL to simulate the mailbox message.
+              The invite is bound to <span className="font-semibold text-ink">{inviteNotice?.email}</span>. A secure invitation email has been sent to that address.
             </DialogDescription>
           </DialogHeader>
 
-          {inviteNotice?.previewUrl && (
+          {process.env.NODE_ENV !== "production" && inviteNotice?.previewUrl && (
             <div className="my-4 flex gap-2">
               <Input
                 readOnly

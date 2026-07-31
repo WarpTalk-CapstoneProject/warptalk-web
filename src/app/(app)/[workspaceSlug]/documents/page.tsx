@@ -1,68 +1,69 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { toast } from "sonner";
 import {
-  FileText,
-  Upload,
-  Check,
-  X,
-  Trash,
-  Eye,
-  MagnifyingGlass,
-  Spinner,
-  ShieldWarning,
-  Warning,
-  VideoCamera,
+  WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL,
+  WORKSPACE_DOCUMENT_INGESTION_STATUS,
+  WORKSPACE_DOCUMENT_SOURCE_TYPE,
+  WORKSPACE_DOCUMENT_STATUS,
+} from "@/constants/workspace-document";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
   Archive,
   ArrowCounterClockwise,
-  Sparkle,
-  Lock,
   Brain,
-  Plus,
-  SquaresFour,
-  List,
-  Funnel,
-  DownloadSimple,
   CaretDown,
-  FilePdf,
+  Eye,
   FileCode,
   FileCsv,
   FileDoc,
   FileImage,
-  Users,
-  Info
+  FilePdf,
+  FileText,
+  Funnel,
+  Info,
+  List,
+  Lock,
+  ShieldWarning,
+  SlidersHorizontal,
+  Sparkle,
+  Spinner,
+  SquaresFour,
+  Trash,
+  Upload,
+  Warning,
 } from "@phosphor-icons/react";
-import { useTranslationRooms } from "@/hooks/use-translationRooms";
-import {
-  WORKSPACE_DOCUMENT_STATUS,
-  WORKSPACE_DOCUMENT_INGESTION_STATUS,
-  WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL,
-  WORKSPACE_DOCUMENT_SOURCE_TYPE,
-} from "@/constants/workspace-document";
-import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 
-import apiClient from "@/lib/api/client";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  useArchiveWorkspaceDocument,
+  useDeleteWorkspaceDocument,
+  useRestoreWorkspaceDocument,
+  useUploadWorkspaceDocument,
+  useWorkspace,
+  useWorkspaceDocuments,
+  useWorkspaceMembers,
+} from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import {
-  useWorkspaceDocuments,
-  useWorkspace,
-  useUploadWorkspaceDocument,
-  useApproveWorkspaceDocument,
-  useDeleteWorkspaceDocument,
-  useArchiveWorkspaceDocument,
-  useRestoreWorkspaceDocument
-} from "@/hooks/use-workspace";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const uploadSchema = z.object({
   name: z.string().min(2, "Document name must be at least 2 characters"),
@@ -70,10 +71,12 @@ const uploadSchema = z.object({
 });
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"];
-const ACCEPTED_UPLOAD_EXTENSIONS = ".pdf,.docx,.xlsx,.md,.png,.jpg,.jpeg,.webp,.bmp,.gif";
+const ACCEPTED_UPLOAD_EXTENSIONS =
+  ".pdf,.docx,.xlsx,.md,.png,.jpg,.jpeg,.webp,.bmp,.gif";
 
 type UploadFormData = z.infer<typeof uploadSchema>;
-type FilterCategory = "all" | "pending" | "ai" | "admin" | "sensitive" | "archived";
+type FilterCategory =
+  "all" | "pending" | "ai" | "admin" | "sensitive" | "archived";
 type ViewMode = "list" | "grid";
 
 export default function WorkspaceDocumentsPage() {
@@ -91,16 +94,27 @@ export default function WorkspaceDocumentsPage() {
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFileIsImage, setSelectedFileIsImage] = useState(false);
-  const [docToDelete, setDocToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [docToDelete, setDocToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // TanStack Query list
-  const documentsQuery = useWorkspaceDocuments(activeWorkspaceId || "", page, 20, query);
+  const documentsQuery = useWorkspaceDocuments(
+    activeWorkspaceId || "",
+    page,
+    20,
+    query,
+  );
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
-  const roomsQuery = useTranslationRooms({ pageSize: 100 });
+  const workspaceMembersQuery = useWorkspaceMembers(
+    activeWorkspaceId || "",
+    1,
+    100,
+  );
 
   // Mutations
   const uploadMutation = useUploadWorkspaceDocument(activeWorkspaceId || "");
-  const approveMutation = useApproveWorkspaceDocument(activeWorkspaceId || "");
   const deleteMutation = useDeleteWorkspaceDocument(activeWorkspaceId || "");
   const archiveMutation = useArchiveWorkspaceDocument(activeWorkspaceId || "");
   const restoreMutation = useRestoreWorkspaceDocument(activeWorkspaceId || "");
@@ -109,7 +123,7 @@ export default function WorkspaceDocumentsPage() {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<UploadFormData>({
@@ -119,6 +133,7 @@ export default function WorkspaceDocumentsPage() {
       isAiAllowed: true,
     },
   });
+  const isAiAllowed = useWatch({ control, name: "isAiAllowed" });
 
   useRegisterAssistantContext(
     activeWorkspaceId
@@ -130,7 +145,7 @@ export default function WorkspaceDocumentsPage() {
             count: String(documentsQuery.data?.items?.length ?? 0),
           },
         }
-      : null
+      : null,
   );
 
   if (!activeWorkspaceId) return null;
@@ -151,8 +166,9 @@ export default function WorkspaceDocumentsPage() {
       const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
       const isImg = IMAGE_EXTENSIONS.includes(ext);
       setSelectedFileIsImage(isImg);
-      
-      const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+
+      const nameWithoutExt =
+        file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
       setValue("name", nameWithoutExt);
       setValue("isAiAllowed", !isImg);
 
@@ -183,25 +199,31 @@ export default function WorkspaceDocumentsPage() {
       });
 
       toast.success(
-        uploadedDocument.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL
+        uploadedDocument.status?.toLowerCase() ===
+          WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL
           ? "Document uploaded! Submitted for approval."
           : canApproveDocuments
-          ? "Document uploaded & published successfully!"
-          : "Document uploaded successfully."
+            ? "Document uploaded & published successfully!"
+            : "Document uploaded successfully.",
       );
       setSelectedFile(null);
       setSelectedFileIsImage(false);
       reset({ name: "", isAiAllowed: true });
       setIsUploadModalOpen(false);
-      const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
+      const fileInput = document.getElementById(
+        "file-upload-input",
+      ) as HTMLInputElement;
       if (fileInput) fileInput.value = "";
     } catch (err: unknown) {
-      const response = (err as { response?: { status?: number; data?: { error?: string } } })?.response;
-      const errorMsg = response?.status === 401
-        ? "Your session expired. Please sign in again."
-        : response?.status === 403
-          ? "You do not have permission to upload documents to this workspace."
-          : response?.data?.error || "Failed to upload document.";
+      const response = (
+        err as { response?: { status?: number; data?: { error?: string } } }
+      )?.response;
+      const errorMsg =
+        response?.status === 401
+          ? "Your session expired. Please sign in again."
+          : response?.status === 403
+            ? "You do not have permission to upload documents to this workspace."
+            : response?.data?.error || "Failed to upload document.";
       toast.error(errorMsg);
     }
   };
@@ -211,8 +233,9 @@ export default function WorkspaceDocumentsPage() {
       await archiveMutation.mutateAsync(docId);
       toast.success("Document archived.");
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
-        || "Failed to archive document.";
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to archive document.";
       toast.error(errorMsg);
     }
   };
@@ -222,19 +245,9 @@ export default function WorkspaceDocumentsPage() {
       await restoreMutation.mutateAsync(docId);
       toast.success("Document restored.");
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
-        || "Failed to restore document.";
-      toast.error(errorMsg);
-    }
-  };
-
-  const handleApproveQuick = async (docId: string, approve: boolean) => {
-    try {
-      await approveMutation.mutateAsync({ docId, approve });
-      toast.success(approve ? "Document approved successfully!" : "Document rejected.");
-    } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
-        || "Failed to process approval.";
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to restore document.";
       toast.error(errorMsg);
     }
   };
@@ -246,8 +259,9 @@ export default function WorkspaceDocumentsPage() {
       toast.success("Document deleted.");
       setDocToDelete(null);
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
-        || "Failed to delete document.";
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to delete document.";
       toast.error(errorMsg);
     }
   };
@@ -263,26 +277,46 @@ export default function WorkspaceDocumentsPage() {
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
     const d = new Date(dateString);
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} ${d.getDate()} ${months[d.getMonth()]}`;
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")} ${d.getDate()} ${months[d.getMonth()]}`;
   };
 
   const getFileIcon = (ext?: string) => {
     const cleanExt = ext?.toLowerCase().replace(".", "");
-    if (cleanExt === "pdf") return <FilePdf className="h-6 w-6 text-red-500 shrink-0" />;
-    if (cleanExt === "csv") return <FileCsv className="h-6 w-6 text-emerald-500 shrink-0" />;
-    if (cleanExt === "txt" || cleanExt === "json" || cleanExt === "md") return <FileCode className="h-6 w-6 text-blue-500 shrink-0" />;
-    if (["png", "jpg", "jpeg", "webp", "bmp"].includes(cleanExt || "")) return <FileImage className="h-6 w-6 text-purple-500 shrink-0" />;
+    if (cleanExt === "pdf")
+      return <FilePdf className="h-6 w-6 text-red-500 shrink-0" />;
+    if (cleanExt === "csv")
+      return <FileCsv className="h-6 w-6 text-emerald-500 shrink-0" />;
+    if (cleanExt === "txt" || cleanExt === "json" || cleanExt === "md")
+      return <FileCode className="h-6 w-6 text-blue-500 shrink-0" />;
+    if (["png", "jpg", "jpeg", "webp", "bmp"].includes(cleanExt || ""))
+      return <FileImage className="h-6 w-6 text-purple-500 shrink-0" />;
     return <FileDoc className="h-6 w-6 text-primary shrink-0" />;
   };
 
   // Filter raw documents list based on Category Pills
   const rawDocsList = documentsQuery.data?.items || [];
   const pendingCount = rawDocsList.filter(
-    (doc) => doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending")
+    (doc) =>
+      doc.status?.toLowerCase() ===
+        WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
+      doc.status?.toLowerCase().includes("pending"),
   ).length;
   const archivedCount = rawDocsList.filter(
-    (doc) => doc.status?.toLowerCase() === "archived"
+    (doc) => doc.status?.toLowerCase() === "archived",
   ).length;
 
   const filteredDocs = rawDocsList.filter((doc) => {
@@ -294,7 +328,11 @@ export default function WorkspaceDocumentsPage() {
     if (isArchived) return false;
 
     if (activeCategory === "pending") {
-      return doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending");
+      return (
+        doc.status?.toLowerCase() ===
+          WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
+        doc.status?.toLowerCase().includes("pending")
+      );
     }
     if (activeCategory === "ai") {
       return doc.isAiAllowed;
@@ -303,57 +341,27 @@ export default function WorkspaceDocumentsPage() {
       return !doc.isAiAllowed;
     }
     if (activeCategory === "sensitive") {
-      return doc.confidentialityLevel === WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED;
+      return (
+        doc.confidentialityLevel ===
+        WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED
+      );
     }
     return true; // "all"
   });
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-6 py-6 pb-12 text-ink max-w-7xl mx-auto w-full">
+    <div className="flex h-full flex-col bg-surface-1 px-4 pb-12 text-ink">
       {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-ink">Library</h1>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Rounded Search Input Bar */}
-          <div className="relative w-72 sm:w-80">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">
-              <MagnifyingGlass className="h-4 w-4" />
-            </span>
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search..."
-              className="h-10 pl-9 pr-4 text-xs bg-surface-1 border-hairline rounded-full focus:ring-1 focus:ring-primary shadow-sm"
-            />
-          </div>
-
-          {/* New Document Button */}
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full bg-surface-3 hover:bg-surface-3/80 text-ink font-semibold text-xs shadow-sm transition-all border border-hairline/40 cursor-pointer"
-          >
-            <span>New</span>
-            <CaretDown className="h-3.5 w-3.5 text-ink-muted" />
-          </button>
-        </div>
-      </div>
-
       {/* ─── Pill Category Filters & View Toggle Bar ─── */}
-      <div className="flex items-center justify-between border-b border-hairline/30 pb-3">
+      <div className="flex shrink-0 items-center justify-between gap-4 py-3">
         {/* Left Side: Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveCategory("all")}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`rounded-full border px-4 py-1.5 text-[13px] transition-all ${
               activeCategory === "all"
-                ? "bg-surface-3 text-ink shadow-sm border border-hairline/30"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             All
@@ -361,10 +369,10 @@ export default function WorkspaceDocumentsPage() {
           {canApproveDocuments && (
             <button
               onClick={() => setActiveCategory("pending")}
-              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
                 activeCategory === "pending"
-                  ? "bg-amber-500/10 text-amber-600 border border-amber-500/20 shadow-sm"
-                  : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Info className="h-3.5 w-3.5 text-amber-500" />
@@ -378,10 +386,10 @@ export default function WorkspaceDocumentsPage() {
           )}
           <button
             onClick={() => setActiveCategory("ai")}
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
               activeCategory === "ai"
-                ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-sm"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             <Sparkle className="h-3.5 w-3.5 text-emerald-500" />
@@ -389,10 +397,10 @@ export default function WorkspaceDocumentsPage() {
           </button>
           <button
             onClick={() => setActiveCategory("admin")}
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
               activeCategory === "admin"
-                ? "bg-surface-3 text-ink border border-hairline/30 shadow-sm"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             <FileText className="h-3.5 w-3.5 text-ink-muted" />
@@ -400,10 +408,10 @@ export default function WorkspaceDocumentsPage() {
           </button>
           <button
             onClick={() => setActiveCategory("sensitive")}
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
               activeCategory === "sensitive"
-                ? "bg-destructive/10 text-destructive border border-destructive/20 shadow-sm"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             <Lock className="h-3.5 w-3.5 text-destructive" />
@@ -412,10 +420,10 @@ export default function WorkspaceDocumentsPage() {
           {archivedCount > 0 && (
             <button
               onClick={() => setActiveCategory("archived")}
-              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
                 activeCategory === "archived"
-                  ? "bg-amber-500/10 text-amber-600 border border-amber-500/20 shadow-sm"
-                  : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Archive className="h-3.5 w-3.5 text-amber-500" />
@@ -429,42 +437,75 @@ export default function WorkspaceDocumentsPage() {
 
         {/* Right Side: Action Icons (Filter & Grid/List Toggle) */}
         <div className="flex items-center gap-2 shrink-0">
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            placeholder="Search documents..."
+            ariaLabel="Search documents"
+            collapsedWidth={28}
+            expandedWidth={220}
+            className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+            iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+            clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+            inputClassName="h-[26px] text-[12px]"
+          />
           <button
-            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-ink-muted hover:text-ink transition-colors"
+            className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
             title="Filter options"
           >
-            <Funnel className="h-4 w-4" />
+            <Funnel className="h-3.5 w-3.5" />
             {activeCategory !== "all" && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
-                1
-              </span>
+              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
             )}
+          </button>
+
+          <button
+            className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Display options"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
           </button>
 
           <div className="h-4 w-px bg-hairline/50 mx-1" />
 
           <button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
+          >
+            <span>New</span>
+            <CaretDown className="h-3.5 w-3.5" />
+          </button>
+
+          <button
             onClick={() => setViewMode("grid")}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-              viewMode === "grid" ? "bg-surface-3 text-ink shadow-sm" : "text-ink-muted hover:text-ink"
+            className={`inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 transition-colors ${
+              viewMode === "grid"
+                ? "bg-surface-3 text-ink shadow-sm"
+                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             }`}
             title="Grid View"
           >
-            <SquaresFour className="h-4 w-4" />
+            <SquaresFour className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-              viewMode === "list" ? "bg-surface-3 text-ink shadow-sm" : "text-ink-muted hover:text-ink"
+            className={`inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 transition-colors ${
+              viewMode === "list"
+                ? "bg-surface-3 text-ink shadow-sm"
+                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             }`}
             title="List View"
           >
-            <List className="h-4 w-4" />
+            <List className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
       {/* ─── Document Content: List View vs Grid View ─── */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {documentsQuery.isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <Spinner className="h-7 w-7 animate-spin text-primary" />
@@ -489,6 +530,7 @@ export default function WorkspaceDocumentsPage() {
               <tr className="border-b border-hairline/20 bg-surface-2/50 text-ink-muted font-semibold">
                 <th className="py-3 px-4 font-semibold">Name</th>
                 <th className="py-3 px-4 font-semibold">Classification / AI</th>
+                <th className="py-3 px-4 font-semibold">People</th>
                 <th className="py-3 px-4 font-semibold">Last Modified</th>
                 <th className="py-3 px-4 font-semibold">Size</th>
                 <th className="py-3 px-4 font-semibold text-right">Actions</th>
@@ -496,14 +538,18 @@ export default function WorkspaceDocumentsPage() {
             </thead>
             <tbody className="divide-y divide-hairline/20">
               {filteredDocs.map((doc) => {
-                const isDocOwner = doc.uploadedBy === currentUser?.id || doc.ownerId === currentUser?.id;
+                const isDocOwner =
+                  doc.uploadedBy === currentUser?.id ||
+                  doc.ownerId === currentUser?.id;
                 const canManageDoc = canApproveDocuments || isDocOwner;
 
                 return (
                   <tr
                     key={doc.id}
                     className="hover:bg-surface-2/40 transition-colors group cursor-pointer"
-                    onClick={() => router.push(`/${workspaceSlug}/documents/${doc.id}`)}
+                    onClick={() =>
+                      router.push(`/${workspaceSlug}/documents/${doc.id}`)
+                    }
                   >
                     {/* Name column with thumbnail icon */}
                     <td className="py-3.5 px-4">
@@ -521,8 +567,13 @@ export default function WorkspaceDocumentsPage() {
                     </td>
 
                     {/* Classification / Status Badge */}
-                    <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
-                      {doc.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL || doc.status?.toLowerCase().includes("pending") ? (
+                    <td
+                      className="py-3.5 px-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {doc.status?.toLowerCase() ===
+                        WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
+                      doc.status?.toLowerCase().includes("pending") ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
                           <Info className="h-3 w-3 text-amber-500" />
                           <span>Pending Approval</span>
@@ -532,17 +583,22 @@ export default function WorkspaceDocumentsPage() {
                           <FileText className="h-3 w-3" />
                           <span>Administrative</span>
                         </span>
-                      ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
+                      ) : doc.ingestionStatus?.toLowerCase() ===
+                        WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                           <Sparkle className="h-3 w-3 text-emerald-500" />
                           <span>AI Ready</span>
                         </span>
-                      ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
+                      ) : doc.ingestionStatus?.toLowerCase() ===
+                        WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full">
                           <ShieldWarning className="h-3 w-3" />
                           <span>AI Failed</span>
                         </span>
-                      ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING || doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
+                      ) : doc.ingestionStatus?.toLowerCase() ===
+                          WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING ||
+                        doc.ingestionStatus?.toLowerCase() ===
+                          WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full animate-pulse">
                           <span>Processing AI...</span>
                         </span>
@@ -552,6 +608,23 @@ export default function WorkspaceDocumentsPage() {
                           <span>AI Context</span>
                         </span>
                       )}
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <DocumentActor
+                          label="Uploader"
+                          member={workspaceMembersQuery.data?.items.find(
+                            (member) => member.userId === doc.uploadedBy,
+                          )}
+                        />
+                        <DocumentActor
+                          label="Approver"
+                          member={workspaceMembersQuery.data?.items.find(
+                            (member) => member.userId === doc.approvedBy,
+                          )}
+                        />
+                      </div>
                     </td>
 
                     {/* Last Modified Date */}
@@ -565,18 +638,23 @@ export default function WorkspaceDocumentsPage() {
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className="py-3.5 px-4 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => router.push(`/${workspaceSlug}/documents/${doc.id}`)}
+                          onClick={() =>
+                            router.push(`/${workspaceSlug}/documents/${doc.id}`)
+                          }
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-3 hover:text-ink transition-colors cursor-pointer"
                           title="View Details"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
 
-                        {canManageDoc && (
-                          doc.status?.toLowerCase() === "archived" ? (
+                        {canManageDoc &&
+                          (doc.status?.toLowerCase() === "archived" ? (
                             <button
                               onClick={() => handleRestore(doc.id)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
@@ -592,12 +670,13 @@ export default function WorkspaceDocumentsPage() {
                             >
                               <Archive className="h-4 w-4" />
                             </button>
-                          )
-                        )}
+                          ))}
 
                         {canManageDoc && (
                           <button
-                            onClick={() => setDocToDelete({ id: doc.id, name: doc.name })}
+                            onClick={() =>
+                              setDocToDelete({ id: doc.id, name: doc.name })
+                            }
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
                             title="Delete Permanently"
                           >
@@ -618,7 +697,9 @@ export default function WorkspaceDocumentsPage() {
           {filteredDocs.map((doc) => (
             <Card
               key={doc.id}
-              onClick={() => router.push(`/${workspaceSlug}/documents/${doc.id}`)}
+              onClick={() =>
+                router.push(`/${workspaceSlug}/documents/${doc.id}`)
+              }
               className="border-hairline/30 bg-surface-1/50 hover:bg-surface-2/40 transition-all cursor-pointer rounded-xl group shadow-sm flex flex-col justify-between"
             >
               <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between space-y-0">
@@ -626,23 +707,43 @@ export default function WorkspaceDocumentsPage() {
                   {getFileIcon(doc.fileExtension)}
                 </div>
                 {!doc.isAiAllowed ? (
-                  <span className="p-1 text-ink-muted bg-surface-3 rounded-full" title="Administrative">
+                  <span
+                    className="p-1 text-ink-muted bg-surface-3 rounded-full"
+                    title="Administrative"
+                  >
                     <FileText className="h-3.5 w-3.5" />
                   </span>
-                ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
-                  <span className="p-1 text-emerald-500 bg-emerald-500/10 rounded-full" title="AI Ready">
+                ) : doc.ingestionStatus?.toLowerCase() ===
+                  WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
+                  <span
+                    className="p-1 text-emerald-500 bg-emerald-500/10 rounded-full"
+                    title="AI Ready"
+                  >
                     <Sparkle className="h-3.5 w-3.5 text-emerald-500" />
                   </span>
-                ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
-                  <span className="p-1 text-destructive bg-destructive/10 rounded-full" title="AI Ingestion Failed">
+                ) : doc.ingestionStatus?.toLowerCase() ===
+                  WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
+                  <span
+                    className="p-1 text-destructive bg-destructive/10 rounded-full"
+                    title="AI Ingestion Failed"
+                  >
                     <ShieldWarning className="h-3.5 w-3.5" />
                   </span>
-                ) : doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING || doc.ingestionStatus?.toLowerCase() === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
-                  <span className="p-1 text-amber-500 bg-amber-500/10 rounded-full" title="Processing AI...">
+                ) : doc.ingestionStatus?.toLowerCase() ===
+                    WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING ||
+                  doc.ingestionStatus?.toLowerCase() ===
+                    WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
+                  <span
+                    className="p-1 text-amber-500 bg-amber-500/10 rounded-full"
+                    title="Processing AI..."
+                  >
                     <Spinner className="h-3.5 w-3.5 animate-spin" />
                   </span>
                 ) : (
-                  <span className="p-1 text-primary bg-primary/10 rounded-full" title="AI Context">
+                  <span
+                    className="p-1 text-primary bg-primary/10 rounded-full"
+                    title="AI Context"
+                  >
                     <Brain className="h-3.5 w-3.5" />
                   </span>
                 )}
@@ -662,11 +763,26 @@ export default function WorkspaceDocumentsPage() {
                   <span>{formatDate(doc.updatedAt || doc.createdAt)}</span>
                   <span>{formatBytes(doc.sizeBytes)}</span>
                 </div>
+                <div className="flex items-center gap-3 pt-1">
+                  <DocumentActor
+                    label="Uploader"
+                    member={workspaceMembersQuery.data?.items.find(
+                      (member) => member.userId === doc.uploadedBy,
+                    )}
+                  />
+                  <DocumentActor
+                    label="Approver"
+                    member={workspaceMembersQuery.data?.items.find(
+                      (member) => member.userId === doc.approvedBy,
+                    )}
+                  />
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+      </div>
 
       {/* ─── Pagination ─── */}
       {documentsQuery.data && documentsQuery.data.total > 20 && (
@@ -678,7 +794,9 @@ export default function WorkspaceDocumentsPage() {
           >
             Previous
           </button>
-          <span className="text-xs text-ink-muted font-medium">Page {page}</span>
+          <span className="text-xs text-ink-muted font-medium">
+            Page {page}
+          </span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={filteredDocs.length < 20}
@@ -700,17 +818,24 @@ export default function WorkspaceDocumentsPage() {
               <span>Upload New Document</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted mt-1">
-              Add reference documents to your workspace library. Configure AI search context and member access permissions.
+              Add reference documents to your workspace library. Configure AI
+              search context and member access permissions.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(handleUploadSubmit)} className="flex flex-col gap-6 overflow-y-auto pr-1.5 pt-5 flex-1">
+          <form
+            onSubmit={handleSubmit(handleUploadSubmit)}
+            className="flex flex-col gap-6 overflow-y-auto pr-1.5 pt-5 flex-1"
+          >
             {/* Step 1: File Selection & Document Name */}
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-ink flex items-center justify-between">
                   <span>1. Select Reference File</span>
-                  <span className="text-[11px] font-normal text-ink-muted">Supported: PDF, DOCX, DOC, TXT, CSV, MD, JSON, PNG, JPG, JPEG, WEBP (Max 10MB)</span>
+                  <span className="text-[11px] font-normal text-ink-muted">
+                    Supported: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP,
+                    GIF (Max 10MB)
+                  </span>
                 </label>
 
                 {!selectedFile ? (
@@ -739,18 +864,27 @@ export default function WorkspaceDocumentsPage() {
                   <div className="flex items-center justify-between p-3.5 rounded-2xl border border-emerald-500/40 bg-emerald-500/5 transition-all">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
-                        {getFileIcon(selectedFile.name.substring(selectedFile.name.lastIndexOf(".")))}
+                        {getFileIcon(
+                          selectedFile.name.substring(
+                            selectedFile.name.lastIndexOf("."),
+                          ),
+                        )}
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-bold text-ink truncate">{selectedFile.name}</span>
-                        <span className="text-[11px] text-ink-muted font-mono">{formatBytes(selectedFile.size)}</span>
+                        <span className="text-xs font-bold text-ink truncate">
+                          {selectedFile.name}
+                        </span>
+                        <span className="text-[11px] text-ink-muted font-mono">
+                          {formatBytes(selectedFile.size)}
+                        </span>
                         {selectedFileIsImage && (
                           <Badge
                             variant="outline"
                             className="mt-2 w-fit border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
                           >
                             <Info className="mr-1 h-3 w-3" />
-                            Image files will be stored as administrative attachments
+                            Image files will be stored as administrative
+                            attachments
                           </Badge>
                         )}
                       </div>
@@ -772,7 +906,9 @@ export default function WorkspaceDocumentsPage() {
 
               {/* Document Display Name */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-ink">Document Display Name</label>
+                <label className="text-xs font-bold text-ink">
+                  Document Display Name
+                </label>
                 <Input
                   type="text"
                   placeholder="e.g. Legal Glossaries 2026"
@@ -781,7 +917,9 @@ export default function WorkspaceDocumentsPage() {
                   disabled={isSubmitting}
                 />
                 {errors.name && (
-                  <p className="text-[11px] text-destructive mt-0.5">{errors.name.message}</p>
+                  <p className="text-[11px] text-destructive mt-0.5">
+                    {errors.name.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -793,7 +931,9 @@ export default function WorkspaceDocumentsPage() {
                   <div className="flex items-center gap-2">
                     <Brain className="h-4 w-4 text-emerald-500" />
                     <span className="text-xs font-bold text-ink">
-                      {canApproveDocuments ? "Allow AI Assistant indexing" : "Request AI Assistant indexing"}
+                      {canApproveDocuments
+                        ? "Allow AI Assistant indexing"
+                        : "Request AI Assistant indexing"}
                     </span>
                   </div>
                   <span className="text-[11px] text-ink-muted leading-relaxed">
@@ -803,9 +943,11 @@ export default function WorkspaceDocumentsPage() {
                   </span>
                 </div>
                 <Switch
-                  checked={watch("isAiAllowed")}
+                  checked={isAiAllowed}
                   disabled={selectedFileIsImage}
-                  onCheckedChange={(checked: boolean) => setValue("isAiAllowed", checked, { shouldValidate: true })}
+                  onCheckedChange={(checked: boolean) =>
+                    setValue("isAiAllowed", checked, { shouldValidate: true })
+                  }
                 />
               </div>
 
@@ -815,7 +957,8 @@ export default function WorkspaceDocumentsPage() {
                   className="w-fit border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold text-sky-700"
                 >
                   <Info className="mr-1 h-3.5 w-3.5" />
-                  Image files are stored as administrative attachments. AI ingestion will be automatically skipped.
+                  Image files are stored as administrative attachments. AI
+                  ingestion will be automatically skipped.
                 </Badge>
               )}
 
@@ -858,15 +1001,25 @@ export default function WorkspaceDocumentsPage() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!docToDelete} onOpenChange={(open) => !open && setDocToDelete(null)}>
+      <Dialog
+        open={!!docToDelete}
+        onOpenChange={(open) => !open && setDocToDelete(null)}
+      >
         <DialogContent className="border-hairline bg-surface-1 max-w-sm rounded-2xl">
           <DialogHeader className="flex flex-col gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive mx-auto">
               <Warning className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-center font-bold text-base">Delete Document?</DialogTitle>
+            <DialogTitle className="text-center font-bold text-base">
+              Delete Document?
+            </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Are you sure you want to delete <span className="font-semibold text-ink">{docToDelete?.name}</span>? This will remove file content, AI context, and access policies from workspace.
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-ink">
+                {docToDelete?.name}
+              </span>
+              ? This will remove file content, AI context, and access policies
+              from workspace.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
@@ -885,6 +1038,40 @@ export default function WorkspaceDocumentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function DocumentActor({
+  label,
+  member,
+}: {
+  label: "Uploader" | "Approver";
+  member?: {
+    fullName: string;
+    email: string;
+    avatarUrl?: string | null;
+  };
+}) {
+  if (!member) {
+    return (
+      <span className="text-[10px] text-ink-muted" title={`${label} unavailable`}>
+        {label}: —
+      </span>
+    );
+  }
+
+  const name = member.fullName || member.email;
+  return (
+    <div className="flex min-w-0 items-center gap-1.5" title={`${label}: ${name}`}>
+      <Avatar size="sm">
+        {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt={name} /> : null}
+        <AvatarFallback>{name.slice(0, 1).toUpperCase()}</AvatarFallback>
+      </Avatar>
+      <div className="hidden min-w-0 flex-col xl:flex">
+        <span className="text-[9px] uppercase tracking-wide text-ink-muted">{label}</span>
+        <span className="max-w-24 truncate text-[10px] font-medium text-ink">{name}</span>
+      </div>
     </div>
   );
 }

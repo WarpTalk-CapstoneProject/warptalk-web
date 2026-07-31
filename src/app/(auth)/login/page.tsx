@@ -1,15 +1,20 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CaretLeft, Eye, EyeClosed, Spinner, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import {
+  Eye,
+  EyeClosed,
+  Spinner,
+  WarningCircle,
+} from "@phosphor-icons/react/dist/ssr";
+import { AnimatePresence, motion } from "motion/react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { motion, AnimatePresence } from "motion/react";
 
 import { useGoogleLogin } from "@react-oauth/google";
 
@@ -18,9 +23,9 @@ import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
 import { Checkbox } from "@/components/ui/checkbox";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
-import { cn } from "@/lib/utils";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email address"),
@@ -28,9 +33,16 @@ const loginSchema = z.object({
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
 function getSafeCallbackUrl(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value === "/rooms") return "/workspace";
+  if (
+    !value ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value === "/rooms"
+  )
+    return "/workspace";
   return value;
 }
 
@@ -49,10 +61,87 @@ function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
   document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
 }
 
+function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
+  const router = useRouter();
+  const login = useAuthStore((s) => s.login);
+
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      console.log("[Google OAuth] Token Response:", tokenResponse);
+      try {
+        const idToken = tokenResponse.access_token;
+        console.log(
+          "[Google OAuth] Sending token to backend /auth/google-login...",
+        );
+        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, {
+          idToken,
+        });
+        console.log("[Google OAuth] Backend Response:", res.data);
+        const { user, accessToken, refreshToken } = res.data;
+
+        login(user, accessToken, refreshToken);
+        setAccessTokenCookie(accessToken);
+
+        toast.success("Google login successful!");
+
+        const isAdmin = user.roles?.some(
+          (r: string) => r.toLowerCase() === "admin",
+        );
+        if (isAdmin && callbackUrl === "/workspace/dashboard") {
+          router.replace("/dashboard");
+        } else {
+          router.replace(callbackUrl);
+        }
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        console.error("[Google OAuth] Backend verification error:", error);
+        toast.error(
+          error?.response?.data?.error ||
+            "Google login failed. Please try again.",
+        );
+      }
+    },
+    onError: (errorResponse) => {
+      console.error("[Google OAuth] Popup / Client Error:", errorResponse);
+      toast.error("Google authentication failed or popup was closed.");
+    },
+  });
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        console.log("[Google OAuth] Continue with Google button clicked");
+        handleGoogleLogin();
+      }}
+      className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
+    >
+      <GoogleAuthIcon className="size-5" />
+      Continue with Google
+    </button>
+  );
+}
+
+function GoogleLoginUnavailableButton() {
+  return (
+    <button
+      type="button"
+      disabled
+      title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable Google login."
+      className="flex h-14 w-full cursor-not-allowed items-center justify-center gap-3 rounded-full border border-neutral-200 bg-neutral-50 text-[15px] font-medium text-neutral-400"
+    >
+      <GoogleAuthIcon className="size-5" />
+      Continue with Google
+    </button>
+  );
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
+  const callbackUrl = getSafeCallbackUrl(
+    searchParams.get("callbackUrl") || searchParams.get("redirect"),
+  );
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "password">("email");
@@ -68,55 +157,19 @@ function LoginForm() {
     resolver: zodResolver(loginSchema),
   });
 
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      console.log("[Google OAuth] Token Response:", tokenResponse);
-      try {
-        const idToken = tokenResponse.access_token;
-        console.log("[Google OAuth] Sending token to backend /auth/google-login...");
-        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, { idToken });
-        console.log("[Google OAuth] Backend Response:", res.data);
-        const { user, accessToken, refreshToken } = res.data;
-
-        login(user, accessToken, refreshToken);
-        setAccessTokenCookie(accessToken);
-
-        toast.success("Google login successful!");
-
-        const isAdmin = user.roles?.some((r: string) => r.toLowerCase() === "admin");
-        if (isAdmin && callbackUrl === "/workspace/dashboard") {
-          router.replace("/dashboard");
-        } else {
-          router.replace(callbackUrl);
-        }
-      } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        console.error("[Google OAuth] Backend verification error:", error);
-        toast.error(error?.response?.data?.error || "Google login failed. Please try again.");
-      }
-    },
-    onError: (errorResponse) => {
-      console.error("[Google OAuth] Popup / Client Error:", errorResponse);
-      toast.error("Google authentication failed or popup was closed.");
-    },
-  });
-
   useEffect(() => {
     const url = new URL(window.location.href);
-    const hasSensitiveParams = url.searchParams.has("email") || url.searchParams.has("password");
+    const hasSensitiveParams =
+      url.searchParams.has("email") || url.searchParams.has("password");
     if (!hasSensitiveParams) return;
     url.searchParams.delete("email");
     url.searchParams.delete("password");
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
   }, []);
-
-  const onContinue = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    const isEmailValid = await trigger("email");
-    if (isEmailValid) {
-      setStep("password");
-    }
-  };
 
   const onSubmit = async (data: LoginFormData) => {
     if (step === "email") {
@@ -128,7 +181,9 @@ function LoginForm() {
     }
 
     if (!data.password || data.password.length < 6) {
-      setError("password", { message: "Password must be at least 6 characters" });
+      setError("password", {
+        message: "Password must be at least 6 characters",
+      });
       return;
     }
 
@@ -143,8 +198,10 @@ function LoginForm() {
       setAccessTokenCookie(accessToken);
 
       toast.success("Login successful!");
-      
-      const isAdmin = user.roles?.some((r: string) => r.toLowerCase() === "admin");
+
+      const isAdmin = user.roles?.some(
+        (r: string) => r.toLowerCase() === "admin",
+      );
       if (isAdmin && callbackUrl === "/workspace/dashboard") {
         router.replace("/dashboard");
       } else {
@@ -152,7 +209,9 @@ function LoginForm() {
       }
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Login failed. Please try again.");
+      toast.error(
+        error?.response?.data?.error || "Login failed. Please try again.",
+      );
     }
   };
 
@@ -162,7 +221,10 @@ function LoginForm() {
 
       {/* Header Logo area like ChatGPT */}
       <div className="absolute top-6 left-6 z-30">
-        <Link href="/" className="inline-block transition-opacity hover:opacity-80">
+        <Link
+          href="/"
+          className="inline-block transition-opacity hover:opacity-80"
+        >
           <Image
             src="/assets/logos/warptalk-sidebar-logo.png"
             alt="WarpTalk"
@@ -176,7 +238,9 @@ function LoginForm() {
 
       <div className="relative z-20 w-full max-w-[360px] px-4">
         <div className="flex flex-col items-center mb-10">
-          <h1 className="text-3xl font-semibold tracking-tight text-black mb-2 text-center">Log in or sign up</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-black mb-2 text-center">
+            Log in or sign up
+          </h1>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="w-full" noValidate>
@@ -191,17 +255,11 @@ function LoginForm() {
                 className="space-y-4"
               >
                 {/* Social Login */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    console.log("[Google OAuth] Continue with Google button clicked");
-                    handleGoogleLogin();
-                  }}
-                  className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
-                >
-                  <GoogleAuthIcon className="size-5" />
-                  Continue with Google
-                </button>
+                {GOOGLE_CLIENT_ID ? (
+                  <GoogleLoginButton callbackUrl={callbackUrl} />
+                ) : (
+                  <GoogleLoginUnavailableButton />
+                )}
 
                 {/* Divider */}
                 <div className="flex items-center gap-4 py-2">
@@ -221,14 +279,17 @@ function LoginForm() {
                     placeholder="Email address"
                     className={cn(
                       "h-14 w-full rounded-full border border-neutral-300 bg-white px-5 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
-                      errors.email && "border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]"
+                      errors.email &&
+                        "border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]",
                     )}
                     {...register("email")}
                   />
                   {errors.email && (
                     <div className="flex items-center gap-1.5 mt-1.5 text-[#d92d20]">
                       <WarningCircle size={16} />
-                      <p className="text-[13px] font-medium">{errors.email.message}</p>
+                      <p className="text-[13px] font-medium">
+                        {errors.email.message}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -240,7 +301,6 @@ function LoginForm() {
                 >
                   Continue
                 </button>
-
               </motion.div>
             ) : (
               <motion.div
@@ -276,7 +336,8 @@ function LoginForm() {
                       placeholder="Password"
                       className={cn(
                         "h-14 w-full rounded-full border border-neutral-300 bg-white px-5 pr-12 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
-                        errors.password && "border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]"
+                        errors.password &&
+                          "border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]",
                       )}
                       {...register("password")}
                     />
@@ -285,13 +346,19 @@ function LoginForm() {
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 transition-colors hover:text-black"
                       onClick={() => setShowPassword((v) => !v)}
                     >
-                      {showPassword ? <EyeClosed weight="regular" size={20} /> : <Eye weight="regular" size={20} />}
+                      {showPassword ? (
+                        <EyeClosed weight="regular" size={20} />
+                      ) : (
+                        <Eye weight="regular" size={20} />
+                      )}
                     </button>
                   </div>
                   {errors.password && (
                     <div className="flex items-center gap-1.5 mt-1.5 text-[#d92d20]">
                       <WarningCircle size={16} />
-                      <p className="text-[13px] font-medium">{errors.password.message}</p>
+                      <p className="text-[13px] font-medium">
+                        {errors.password.message}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -301,7 +368,10 @@ function LoginForm() {
                     <Checkbox className="size-[14px] rounded-sm border-neutral-300 data-[state=checked]:bg-black data-[state=checked]:text-white" />
                     Keep me logged in
                   </label>
-                  <Link href="/forgot-password" className="text-[13px] font-medium text-neutral-800 hover:text-black hover:underline bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg">
+                  <Link
+                    href="/forgot-password"
+                    className="text-[13px] font-medium text-neutral-800 hover:text-black hover:underline bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg"
+                  >
                     Forgot password?
                   </Link>
                 </div>
@@ -311,7 +381,11 @@ function LoginForm() {
                   disabled={isSubmitting}
                   className="flex h-14 w-full items-center justify-center rounded-full bg-black font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99] disabled:opacity-70 disabled:pointer-events-none mt-2 text-[15px]"
                 >
-                  {isSubmitting ? <Spinner weight="bold" className="animate-spin" /> : "Log In"}
+                  {isSubmitting ? (
+                    <Spinner weight="bold" className="animate-spin" />
+                  ) : (
+                    "Log In"
+                  )}
                 </button>
               </motion.div>
             )}
@@ -321,9 +395,19 @@ function LoginForm() {
         {/* Footer */}
         <div className="mt-auto pb-6 pt-12 flex justify-center relative z-20">
           <div className="flex items-center gap-4 bg-white/70 backdrop-blur-md px-4 py-1.5 rounded-full text-[13px] font-medium text-neutral-700 shadow-sm border border-white/50">
-            <Link href="/terms" className="hover:text-black hover:underline transition-colors">Terms of use</Link>
+            <Link
+              href="/terms"
+              className="hover:text-black hover:underline transition-colors"
+            >
+              Terms of use
+            </Link>
             <span className="text-neutral-400">|</span>
-            <Link href="/privacy" className="hover:text-black hover:underline transition-colors">Privacy policy</Link>
+            <Link
+              href="/privacy"
+              className="hover:text-black hover:underline transition-colors"
+            >
+              Privacy policy
+            </Link>
           </div>
         </div>
       </div>
@@ -336,7 +420,11 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="fixed inset-0 z-20 grid place-items-center bg-white">
-          <Spinner weight="bold" className="animate-spin text-black" size={32} />
+          <Spinner
+            weight="bold"
+            className="animate-spin text-black"
+            size={32}
+          />
         </div>
       }
     >

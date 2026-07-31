@@ -1,4 +1,5 @@
 import { translationRoomService } from "@/services/translationRoom.service";
+import { calculateMeetingDurationSeconds } from "@/lib/meeting-duration";
 import type { EndedRoomHistoryItem, RoomArtifactStatus, RoomHistoryResponse, TranslationRoomSummaryArtifact } from "@/types/roomHistory";
 import type { TranslationRoomArtifactDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
 import { parseMeetingSummaryContent } from "@/types/meetingSummary";
@@ -92,7 +93,10 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
     status: room.status === "cancelled" ? "cancelled" : "ended",
     startedAt: room.startedAt ?? room.createdAt,
     endedAt: room.endedAt ?? room.startedAt ?? room.createdAt,
-    durationSeconds: room.durationSeconds ?? 0,
+    durationSeconds: calculateMeetingDurationSeconds(
+      room.createdAt,
+      room.endedAt ?? room.createdAt,
+    ),
     sourceLanguage: room.sourceLanguage ?? "en",
     targetLanguages: room.targetLanguages,
     participants: item.participants.map((participant) => ({

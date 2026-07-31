@@ -35,6 +35,8 @@ export const API = {
       `/translation-rooms/${id}/participants/${participantId}/kick`,
     leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
     start: (id: string) => `/translation-rooms/${id}/start`,
+    pause: (id: string) => `/translation-rooms/${id}/pause`,
+    resume: (id: string) => `/translation-rooms/${id}/resume`,
     end: (id: string) => `/translation-rooms/${id}/end`,
     cancel: (id: string) => `/translation-rooms/${id}/cancel`,
     artifacts: (id: string) => `/translation-rooms/${id}/artifacts`,
@@ -44,6 +46,7 @@ export const API = {
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
     voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
+    sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,

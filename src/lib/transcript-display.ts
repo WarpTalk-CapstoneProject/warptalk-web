@@ -1,4 +1,6 @@
 import type { TranscriptSegmentDto } from "@/types/realtime";
+import type { TranscriptSegmentDto as SavedTranscriptSegmentDto } from "@/types/transcript";
+import type { TranslationRoomSessionDto } from "@/types/translationRoom";
 
 type SpeakerParticipant = {
   userId: string;
@@ -13,6 +15,18 @@ export type AnimatedWordToken = {
 
 const MAX_UTTERANCE_GAP_MS = 2_500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function dedupeTranscriptSegments(
+  segments: TranscriptSegmentDto[],
+): TranscriptSegmentDto[] {
+  const byId = new Map<string, TranscriptSegmentDto>();
+  for (const segment of segments) {
+    byId.set(segment.segmentId, segment);
+  }
+  // Map preserves the first insertion position when an existing value is replaced.
+  // Arrival order stays valid when a reconnected ingress track resets startTimeMs.
+  return Array.from(byId.values());
+}
 
 export function groupTranscriptSegments(segments: TranscriptSegmentDto[]): TranscriptSegmentDto[] {
   const utterances: TranscriptSegmentDto[] = [];
@@ -34,6 +48,98 @@ export function groupTranscriptSegments(segments: TranscriptSegmentDto[]): Trans
   }
 
   return utterances;
+}
+
+/**
+ * Groups a saved/paginated transcript (from the REST API, not the live SignalR
+ * stream) so consecutive segments from the same speaker render as one continuous
+ * block instead of a new line per finalized STT chunk.
+ */
+export function groupSavedTranscriptSegments(
+  segments: SavedTranscriptSegmentDto[],
+): SavedTranscriptSegmentDto[] {
+  const utterances: SavedTranscriptSegmentDto[] = [];
+
+  for (const segment of segments) {
+    const previous = utterances[utterances.length - 1];
+    if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
+      utterances.push({ ...segment });
+      continue;
+    }
+
+    utterances[utterances.length - 1] = {
+      ...previous,
+      originalText: appendText(previous.originalText, segment.originalText),
+      endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
+    };
+  }
+
+  return utterances;
+}
+
+export type TranslationSessionBlock<T> = {
+  /** 1-based, oldest session first — this is the "N" in "Translation N". */
+  sessionNumber: number;
+  /** null when there's no session data to attribute this block to (old data, or the
+   * segments fall before the first known session). */
+  session: TranslationRoomSessionDto | null;
+  segments: T[];
+};
+
+/**
+ * Splits a transcript into one block per Start/Resume→Pause/End translation session, so
+ * the UI can label each with "Translation N" — see TranslationRoomService's
+ * Start/Pause/Resume/EndTranslationRoomAsync, which open/close a TranslationRoomSession
+ * per toggle. `segments` must already be in chronological order.
+ *
+ * With fewer than 2 known sessions (the overwhelmingly common case — translation was
+ * started once and never paused) this is a no-op: everything comes back as a single
+ * unlabeled block so the caller can skip rendering session dividers entirely.
+ */
+export function groupSegmentsByTranslationSession<T extends { startTimeMs: number }>(
+  segments: T[],
+  sessions: readonly TranslationRoomSessionDto[],
+  baseTime?: string,
+): TranslationSessionBlock<T>[] {
+  if (!segments.length) return [];
+
+  const timedSessions = sessions.filter((session) => session.startedAt);
+  const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
+
+  if (timedSessions.length < 2 || Number.isNaN(baseMs)) {
+    return [{ sessionNumber: 1, session: timedSessions[0] ?? null, segments }];
+  }
+
+  const ordered = [...timedSessions].sort(
+    (left, right) => new Date(left.startedAt!).getTime() - new Date(right.startedAt!).getTime(),
+  );
+
+  function resolveSessionIndex(segment: T): number {
+    const absoluteMs = baseMs + segment.startTimeMs;
+    let fallback = 0;
+    for (let index = 0; index < ordered.length; index += 1) {
+      const startedMs = new Date(ordered[index].startedAt!).getTime();
+      const endedMs = ordered[index].endedAt ? new Date(ordered[index].endedAt!).getTime() : Infinity;
+      if (absoluteMs >= startedMs) fallback = index;
+      if (absoluteMs >= startedMs && absoluteMs < endedMs) return index;
+    }
+    // Falls in a gap between sessions (or after the last EndedAt, e.g. clock skew) —
+    // attribute to the most recent session that had already started rather than
+    // silently dropping it from every block.
+    return fallback;
+  }
+
+  const blocks: TranslationSessionBlock<T>[] = [];
+  for (const segment of segments) {
+    const index = resolveSessionIndex(segment);
+    const last = blocks[blocks.length - 1];
+    if (last && last.sessionNumber === index + 1) {
+      last.segments.push(segment);
+    } else {
+      blocks.push({ sessionNumber: index + 1, session: ordered[index], segments: [segment] });
+    }
+  }
+  return blocks;
 }
 
 export function resolveTranscriptSpeakerName(
@@ -101,6 +207,19 @@ function belongsToSameUtterance(previous: TranscriptSegmentDto, next: Transcript
 
   const hasTimeline = previous.endTimeMs > 0 && next.startTimeMs > 0;
   if (!hasTimeline) return true;
+
+  const gapMs = next.startTimeMs - previous.endTimeMs;
+  return gapMs >= 0 && gapMs <= MAX_UTTERANCE_GAP_MS;
+}
+
+function belongsToSameSavedUtterance(
+  previous: SavedTranscriptSegmentDto,
+  next: SavedTranscriptSegmentDto,
+): boolean {
+  const previousSpeaker = previous.speakerParticipantId ?? previous.speakerName;
+  const nextSpeaker = next.speakerParticipantId ?? next.speakerName;
+  if (previousSpeaker !== nextSpeaker) return false;
+  if (previous.originalLanguage !== next.originalLanguage) return false;
 
   const gapMs = next.startTimeMs - previous.endTimeMs;
   return gapMs >= 0 && gapMs <= MAX_UTTERANCE_GAP_MS;

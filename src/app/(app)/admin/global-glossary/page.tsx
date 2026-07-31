@@ -1,40 +1,57 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Archive,
+  CheckCircle,
+  ClockCounterClockwise,
+  Globe,
+  PencilSimple,
+  Plus,
+  ShieldWarning,
+  Spinner,
+  Trash,
+  Upload,
+} from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { toast } from "sonner";
-import {
-  Globe,
-  Plus,
-  Trash,
-  Spinner,
-  CheckCircle,
-  Archive,
-  Upload,
-  ClockCounterClockwise,
-  ShieldWarning,
-} from "@phosphor-icons/react";
+import { z } from "zod";
 
-import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-  useGlobalGlossaryTerms,
-  useGlobalGlossaryAudits,
-  useCreateGlobalGlossaryTerm,
-  useDeleteGlobalGlossaryTerm,
-  usePublishGlobalGlossaryTerm,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
   useArchiveGlobalGlossaryTerm,
   useBulkImportGlobalGlossaryTerms,
+  useCreateGlobalGlossaryTerm,
+  useDeleteGlobalGlossaryTerm,
+  useGlobalGlossaryAudits,
+  useGlobalGlossaryTerms,
+  usePublishGlobalGlossaryTerm,
+  useUpdateGlobalGlossaryTerm,
 } from "@/hooks/use-global-glossary";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 
 const termSchema = z.object({
-  term: z.string().min(3, "Term must be at least 3 characters — short/common words risk hijacking every meeting's STT."),
-  preferredTranslation: z.string().min(1, "Preferred translation cannot be empty"),
+  term: z
+    .string()
+    .min(
+      3,
+      "Term must be at least 3 characters — short/common words risk hijacking every meeting's STT.",
+    ),
+  preferredTranslation: z
+    .string()
+    .min(1, "Preferred translation cannot be empty"),
   sourceLanguage: z.string().optional(),
   targetLanguage: z.string().optional(),
   businessDomain: z.string().optional(),
@@ -56,8 +73,12 @@ export default function AdminGlobalGlossaryPage() {
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [termToEdit, setTermToEdit] = useState<GlobalGlossaryTermDto | null>(null);
   const [auditsTermId, setAuditsTermId] = useState<string | null>(null);
-  const [termToDelete, setTermToDelete] = useState<{ id: string; term: string } | null>(null);
+  const [termToDelete, setTermToDelete] = useState<{
+    id: string;
+    term: string;
+  } | null>(null);
   const [csvText, setCsvText] = useState("");
 
   const query = {
@@ -70,6 +91,7 @@ export default function AdminGlobalGlossaryPage() {
   const termsQuery = useGlobalGlossaryTerms(query);
   const auditsQuery = useGlobalGlossaryAudits(auditsTermId || "");
   const createMutation = useCreateGlobalGlossaryTerm();
+  const updateMutation = useUpdateGlobalGlossaryTerm(termToEdit?.id ?? "");
   const deleteMutation = useDeleteGlobalGlossaryTerm();
   const publishMutation = usePublishGlobalGlossaryTerm();
   const archiveMutation = useArchiveGlobalGlossaryTerm();
@@ -84,6 +106,10 @@ export default function AdminGlobalGlossaryPage() {
     resolver: zodResolver(termSchema),
     defaultValues: { term: "", preferredTranslation: "", priority: 5 },
   });
+  const editForm = useForm<TermFormData>({
+    resolver: zodResolver(termSchema),
+    defaultValues: { term: "", preferredTranslation: "", priority: 5 },
+  });
 
   if (!isSystemAdmin) {
     return (
@@ -91,8 +117,8 @@ export default function AdminGlobalGlossaryPage() {
         <ShieldWarning className="h-10 w-10 text-ink-muted" />
         <p className="text-sm font-semibold text-ink">Admin access required</p>
         <p className="text-xs text-ink-muted max-w-sm">
-          The global glossary is a system-wide baseline applied to every workspace. Only platform
-          administrators can view or edit it.
+          The global glossary is a system-wide baseline applied to every
+          workspace. Only platform administrators can view or edit it.
         </p>
       </div>
     );
@@ -122,12 +148,51 @@ export default function AdminGlobalGlossaryPage() {
     }
   };
 
+  const openEditDialog = (term: GlobalGlossaryTermDto) => {
+    setTermToEdit(term);
+    editForm.reset({
+      term: term.term,
+      preferredTranslation: term.preferredTranslation,
+      sourceLanguage: term.sourceLanguage ?? "",
+      targetLanguage: term.targetLanguage ?? "",
+      businessDomain: term.businessDomain ?? "",
+      definition: term.definition ?? "",
+      usageNote: term.usageNote ?? "",
+      priority: term.priority,
+    });
+  };
+
+  const handleUpdate = async (data: TermFormData) => {
+    if (!termToEdit) return;
+    try {
+      await updateMutation.mutateAsync({
+        term: data.term,
+        preferredTranslation: data.preferredTranslation,
+        sourceLanguage: data.sourceLanguage || null,
+        targetLanguage: data.targetLanguage || null,
+        businessDomain: data.businessDomain || null,
+        definition: data.definition || null,
+        usageNote: data.usageNote || null,
+        priority: data.priority,
+      });
+      toast.success(`Term "${data.term}" updated.`);
+      setTermToEdit(null);
+    } catch {
+      toast.error("Failed to update term.");
+    }
+  };
+
   const handlePublish = async (id: string, term: string) => {
     try {
       await publishMutation.mutateAsync(id);
-      toast.success(`"${term}" published — now live for every opted-in workspace.`);
+      toast.success(
+        `"${term}" published — now live for every opted-in workspace.`,
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to publish term (a definition is required).";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to publish term (a definition is required).";
       toast.error(message);
     }
   };
@@ -164,16 +229,30 @@ export default function AdminGlobalGlossaryPage() {
       return;
     }
 
-    const rows = lines.slice(1).filter((r) => r.length >= 2 && r[termIdx]?.trim()).map((r) => ({
-      term: r[termIdx].trim(),
-      preferredTranslation: r[transIdx]?.trim() || r[termIdx].trim(),
-      sourceLanguage: idx("SourceLanguage") >= 0 ? r[idx("SourceLanguage")]?.trim() || null : null,
-      targetLanguage: idx("TargetLanguage") >= 0 ? r[idx("TargetLanguage")]?.trim() || null : null,
-      businessDomain: idx("BusinessDomain") >= 0 ? r[idx("BusinessDomain")]?.trim() || null : null,
-      definition: idx("Definition") >= 0 ? r[idx("Definition")]?.trim() || null : null,
-      usageNote: idx("UsageNote") >= 0 ? r[idx("UsageNote")]?.trim() || null : null,
-      priority: idx("Priority") >= 0 ? Number(r[idx("Priority")]) || 5 : 5,
-    }));
+    const rows = lines
+      .slice(1)
+      .filter((r) => r.length >= 2 && r[termIdx]?.trim())
+      .map((r) => ({
+        term: r[termIdx].trim(),
+        preferredTranslation: r[transIdx]?.trim() || r[termIdx].trim(),
+        sourceLanguage:
+          idx("SourceLanguage") >= 0
+            ? r[idx("SourceLanguage")]?.trim() || null
+            : null,
+        targetLanguage:
+          idx("TargetLanguage") >= 0
+            ? r[idx("TargetLanguage")]?.trim() || null
+            : null,
+        businessDomain:
+          idx("BusinessDomain") >= 0
+            ? r[idx("BusinessDomain")]?.trim() || null
+            : null,
+        definition:
+          idx("Definition") >= 0 ? r[idx("Definition")]?.trim() || null : null,
+        usageNote:
+          idx("UsageNote") >= 0 ? r[idx("UsageNote")]?.trim() || null : null,
+        priority: idx("Priority") >= 0 ? Number(r[idx("Priority")]) || 5 : 5,
+      }));
 
     if (rows.length === 0) {
       toast.error("No valid rows found.");
@@ -184,7 +263,9 @@ export default function AdminGlobalGlossaryPage() {
       const result = await bulkImportMutation.mutateAsync({ rows });
       toast.success(`Imported ${result.imported}, skipped ${result.skipped}.`);
       if (result.errors.length > 0) {
-        toast.info(`${result.errors.length} row(s) had issues — check console.`);
+        toast.info(
+          `${result.errors.length} row(s) had issues — check console.`,
+        );
         console.warn("Bulk import issues:", result.errors);
       }
       setCsvText("");
@@ -203,8 +284,9 @@ export default function AdminGlobalGlossaryPage() {
             Global Glossary
           </h1>
           <p className="text-sm text-ink-muted mt-1">
-            System-wide terminology baseline applied to every workspace (unless it opts out). A
-            workspace's own glossary term always overrides a matching global term.
+            System-wide terminology baseline applied to every workspace (unless
+            it opts out). A workspace’s own glossary term always overrides a
+            matching global term.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -236,7 +318,9 @@ export default function AdminGlobalGlossaryPage() {
                   setPage(1);
                 }}
                 className={`h-7 px-2.5 rounded-md text-xs font-semibold capitalize transition ${
-                  status === s ? "bg-primary text-white" : "bg-surface-2 text-ink-muted hover:bg-surface-2/70"
+                  status === s
+                    ? "bg-primary text-white"
+                    : "bg-surface-2 text-ink-muted hover:bg-surface-2/70"
                 }`}
               >
                 {s}
@@ -281,18 +365,40 @@ export default function AdminGlobalGlossaryPage() {
                   className="grid grid-cols-[1fr_1fr_100px_80px_90px_140px] items-center gap-3 px-4 py-2.5 hover:bg-surface-2/30 transition-colors"
                 >
                   <div className="min-w-0">
-                    <span className="text-xs font-semibold text-ink truncate block">{term.term}</span>
+                    <span className="text-xs font-semibold text-ink truncate block">
+                      {term.term}
+                    </span>
                     {term.definition && (
-                      <span className="text-[10px] text-ink-muted truncate block">{term.definition}</span>
+                      <span className="text-[10px] text-ink-muted truncate block">
+                        {term.definition}
+                      </span>
                     )}
                   </div>
-                  <span className="text-xs text-primary font-semibold truncate">{term.preferredTranslation}</span>
-                  <span className="text-xs text-ink-muted truncate">{term.businessDomain || "—"}</span>
-                  <span className="text-xs text-ink-muted">{term.priority}</span>
-                  <Badge variant={term.status === "published" ? "default" : "secondary"} className="w-fit capitalize">
+                  <span className="text-xs text-primary font-semibold truncate">
+                    {term.preferredTranslation}
+                  </span>
+                  <span className="text-xs text-ink-muted truncate">
+                    {term.businessDomain || "—"}
+                  </span>
+                  <span className="text-xs text-ink-muted">
+                    {term.priority}
+                  </span>
+                  <Badge
+                    variant={
+                      term.status === "published" ? "default" : "secondary"
+                    }
+                    className="w-fit capitalize"
+                  >
                     {term.status}
                   </Badge>
                   <div className="flex justify-end items-center gap-1">
+                    <button
+                      onClick={() => openEditDialog(term)}
+                      className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors"
+                      title="Edit"
+                    >
+                      <PencilSimple className="h-3.5 w-3.5" />
+                    </button>
                     {term.status !== "published" && (
                       <button
                         onClick={() => handlePublish(term.id, term.term)}
@@ -321,7 +427,9 @@ export default function AdminGlobalGlossaryPage() {
                       <ClockCounterClockwise className="h-3.5 w-3.5" />
                     </button>
                     <button
-                      onClick={() => setTermToDelete({ id: term.id, term: term.term })}
+                      onClick={() =>
+                        setTermToDelete({ id: term.id, term: term.term })
+                      }
                       className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors"
                       title="Delete"
                     >
@@ -361,46 +469,93 @@ export default function AdminGlobalGlossaryPage() {
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-bold text-base">New Global Glossary Term</DialogTitle>
+            <DialogTitle className="font-bold text-base">
+              New Global Glossary Term
+            </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
-              Created as a draft — publish explicitly to make it live for every workspace.
+              Created as a draft — publish explicitly to make it live for every
+              workspace.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(handleCreate)} className="flex flex-col gap-3 my-2 max-h-[60vh] overflow-y-auto pr-1">
+          <form
+            onSubmit={handleSubmit(handleCreate)}
+            className="flex flex-col gap-3 my-2 max-h-[60vh] overflow-y-auto pr-1"
+          >
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold">Term</label>
-              <Input className="h-8 border-hairline text-xs" placeholder="e.g. architect" {...register("term")} />
-              {errors.term && <p className="text-[10px] text-destructive">{errors.term.message}</p>}
+              <Input
+                className="h-8 border-hairline text-xs"
+                placeholder="e.g. architect"
+                {...register("term")}
+              />
+              {errors.term && (
+                <p className="text-[10px] text-destructive">
+                  {errors.term.message}
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Preferred Translation</label>
-              <Input className="h-8 border-hairline text-xs" placeholder="e.g. architect (keep verbatim)" {...register("preferredTranslation")} />
+              <label className="text-xs font-semibold">
+                Preferred Translation
+              </label>
+              <Input
+                className="h-8 border-hairline text-xs"
+                placeholder="e.g. architect (keep verbatim)"
+                {...register("preferredTranslation")}
+              />
               {errors.preferredTranslation && (
-                <p className="text-[10px] text-destructive">{errors.preferredTranslation.message}</p>
+                <p className="text-[10px] text-destructive">
+                  {errors.preferredTranslation.message}
+                </p>
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold">Source Lang (opt.)</label>
-                <Input className="h-8 border-hairline text-xs" placeholder="agnostic" {...register("sourceLanguage")} />
+                <label className="text-xs font-semibold">
+                  Source Lang (opt.)
+                </label>
+                <Input
+                  className="h-8 border-hairline text-xs"
+                  placeholder="agnostic"
+                  {...register("sourceLanguage")}
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold">Target Lang (opt.)</label>
-                <Input className="h-8 border-hairline text-xs" placeholder="agnostic" {...register("targetLanguage")} />
+                <label className="text-xs font-semibold">
+                  Target Lang (opt.)
+                </label>
+                <Input
+                  className="h-8 border-hairline text-xs"
+                  placeholder="agnostic"
+                  {...register("targetLanguage")}
+                />
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Business Domain (opt.)</label>
-              <Input className="h-8 border-hairline text-xs" placeholder="e.g. IT, Finance" {...register("businessDomain")} />
+              <label className="text-xs font-semibold">
+                Business Domain (opt.)
+              </label>
+              <Input
+                className="h-8 border-hairline text-xs"
+                placeholder="e.g. IT, Finance"
+                {...register("businessDomain")}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold">Definition</label>
-              <Input className="h-8 border-hairline text-xs" placeholder="required before publishing" {...register("definition")} />
+              <Input
+                className="h-8 border-hairline text-xs"
+                placeholder="required before publishing"
+                {...register("definition")}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold">Usage Note (opt.)</label>
-              <Input className="h-8 border-hairline text-xs" {...register("usageNote")} />
+              <Input
+                className="h-8 border-hairline text-xs"
+                {...register("usageNote")}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold">Priority (0-10)</label>
@@ -426,7 +581,107 @@ export default function AdminGlobalGlossaryPage() {
                 disabled={isSubmitting}
                 className="h-8 px-4 rounded bg-primary text-xs font-semibold text-white hover:bg-primary-hover transition"
               >
-                {isSubmitting ? <Spinner className="h-4 w-4 animate-spin" /> : "Create Draft"}
+                {isSubmitting ? (
+                  <Spinner className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Create Draft"
+                )}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Term Dialog */}
+      <Dialog
+        open={!!termToEdit}
+        onOpenChange={(open) => !open && setTermToEdit(null)}
+      >
+        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-bold text-base">
+              Edit Global Glossary Term
+            </DialogTitle>
+            <DialogDescription className="text-xs text-ink-muted">
+              Updates are audited and apply immediately when the term is published.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            onSubmit={editForm.handleSubmit(handleUpdate)}
+            className="flex flex-col gap-3 my-2 max-h-[60vh] overflow-y-auto pr-1"
+          >
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Term</label>
+              <Input className="h-8 border-hairline text-xs" {...editForm.register("term")} />
+              {editForm.formState.errors.term && (
+                <p className="text-[10px] text-destructive">
+                  {editForm.formState.errors.term.message}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Preferred Translation</label>
+              <Input
+                className="h-8 border-hairline text-xs"
+                {...editForm.register("preferredTranslation")}
+              />
+              {editForm.formState.errors.preferredTranslation && (
+                <p className="text-[10px] text-destructive">
+                  {editForm.formState.errors.preferredTranslation.message}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold">Source Lang</label>
+                <Input className="h-8 border-hairline text-xs" {...editForm.register("sourceLanguage")} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold">Target Lang</label>
+                <Input className="h-8 border-hairline text-xs" {...editForm.register("targetLanguage")} />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Business Domain</label>
+              <Input className="h-8 border-hairline text-xs" {...editForm.register("businessDomain")} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Definition</label>
+              <Input className="h-8 border-hairline text-xs" {...editForm.register("definition")} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Usage Note</label>
+              <Input className="h-8 border-hairline text-xs" {...editForm.register("usageNote")} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold">Priority (0-10)</label>
+              <Input
+                type="number"
+                min={0}
+                max={10}
+                className="h-8 border-hairline text-xs"
+                {...editForm.register("priority", { valueAsNumber: true })}
+              />
+            </div>
+            <DialogFooter className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTermToEdit(null)}
+                className="h-8 px-3 rounded border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="h-8 px-4 rounded bg-primary text-xs font-semibold text-white hover:bg-primary-hover transition disabled:opacity-50"
+              >
+                {updateMutation.isPending ? (
+                  <Spinner className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Save Changes"
+                )}
               </button>
             </DialogFooter>
           </form>
@@ -437,10 +692,14 @@ export default function AdminGlobalGlossaryPage() {
       <Dialog open={isBulkImportOpen} onOpenChange={setIsBulkImportOpen}>
         <DialogContent className="border-hairline bg-surface-1 max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-bold text-base">Bulk Import (CSV)</DialogTitle>
+            <DialogTitle className="font-bold text-base">
+              Bulk Import (CSV)
+            </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
-              Headers: Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority
-              (only Term and Translation are required). Imported rows land as drafts.
+              Headers:
+              Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority
+              (only Term and Translation are required). Imported rows land as
+              drafts.
             </DialogDescription>
           </DialogHeader>
           <textarea
@@ -462,18 +721,29 @@ export default function AdminGlobalGlossaryPage() {
               disabled={bulkImportMutation.isPending || !csvText.trim()}
               className="h-8 px-4 rounded bg-primary text-xs font-semibold text-white hover:bg-primary-hover transition disabled:opacity-50"
             >
-              {bulkImportMutation.isPending ? <Spinner className="h-4 w-4 animate-spin" /> : "Import"}
+              {bulkImportMutation.isPending ? (
+                <Spinner className="h-4 w-4 animate-spin" />
+              ) : (
+                "Import"
+              )}
             </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Audit History Dialog */}
-      <Dialog open={!!auditsTermId} onOpenChange={(open) => !open && setAuditsTermId(null)}>
+      <Dialog
+        open={!!auditsTermId}
+        onOpenChange={(open) => !open && setAuditsTermId(null)}
+      >
         <DialogContent className="border-hairline bg-surface-1 max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-bold text-base">Audit History</DialogTitle>
-            <DialogDescription className="text-xs text-ink-muted">Who changed this term, and when.</DialogDescription>
+            <DialogTitle className="font-bold text-base">
+              Audit History
+            </DialogTitle>
+            <DialogDescription className="text-xs text-ink-muted">
+              Who changed this term, and when.
+            </DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] overflow-y-auto flex flex-col gap-2">
             {auditsQuery.isLoading ? (
@@ -481,10 +751,15 @@ export default function AdminGlobalGlossaryPage() {
                 <Spinner className="h-5 w-5 animate-spin text-primary" />
               </div>
             ) : !auditsQuery.data || auditsQuery.data.length === 0 ? (
-              <p className="text-xs text-ink-muted text-center py-6">No audit entries yet.</p>
+              <p className="text-xs text-ink-muted text-center py-6">
+                No audit entries yet.
+              </p>
             ) : (
               auditsQuery.data.map((audit) => (
-                <div key={audit.id} className="rounded-md border border-hairline bg-surface-2 p-2.5">
+                <div
+                  key={audit.id}
+                  className="rounded-md border border-hairline bg-surface-2 p-2.5"
+                >
                   <div className="flex items-center justify-between">
                     <Badge variant="outline" className="capitalize text-[10px]">
                       {audit.action}
@@ -493,7 +768,9 @@ export default function AdminGlobalGlossaryPage() {
                       {new Date(audit.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-[10px] text-ink-muted mt-1">Actor: {audit.actorUserId}</p>
+                  <p className="text-[10px] text-ink-muted mt-1">
+                    Actor: {audit.actorUserId}
+                  </p>
                 </div>
               ))
             )}
@@ -502,13 +779,22 @@ export default function AdminGlobalGlossaryPage() {
       </Dialog>
 
       {/* Delete Confirmation */}
-      <Dialog open={!!termToDelete} onOpenChange={(open) => !open && setTermToDelete(null)}>
+      <Dialog
+        open={!!termToDelete}
+        onOpenChange={(open) => !open && setTermToDelete(null)}
+      >
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-center font-bold text-base">Delete Term?</DialogTitle>
+            <DialogTitle className="text-center font-bold text-base">
+              Delete Term?
+            </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted">
-              This removes <span className="font-semibold text-ink">{termToDelete?.term}</span> from
-              the global glossary for every workspace. This cannot be undone from the UI.
+              This removes{" "}
+              <span className="font-semibold text-ink">
+                {termToDelete?.term}
+              </span>{" "}
+              from the global glossary for every workspace. This cannot be
+              undone from the UI.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex gap-2">

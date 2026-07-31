@@ -5,7 +5,6 @@ import {
   CheckCircle,
   FileAudio,
   Funnel,
-  MagnifyingGlass,
   Microphone,
   Plus,
   SlidersHorizontal,
@@ -16,6 +15,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import {
   Dialog,
   DialogContent,
@@ -43,29 +43,6 @@ const LANGUAGE_OPTIONS = [
   { value: "ko-KR", label: "Korean (ko-KR)" },
 ];
 
-const FILTERS = ["Vietnamese", "Conversational", "Narration", "Meeting-ready", "Has sample"];
-
-const FEATURED_VOICES = [
-  {
-    name: "Thanh Ngoc - Warm & Trusted Expert",
-    category: "Conversational",
-    language: "Vietnamese",
-    className: "bg-[radial-gradient(circle_at_28%_24%,#d8f3ff_0,#7cc4e8_32%,#15384a_100%)]",
-  },
-  {
-    name: "Nhu - Calm and Confident",
-    category: "Educational",
-    language: "Vietnamese",
-    className: "bg-[radial-gradient(circle_at_28%_24%,#f9dda4_0,#88a57b_38%,#26342f_100%)]",
-  },
-  {
-    name: "Tram - Friendly Southern Vietnamese",
-    category: "Translation rooms",
-    language: "Vietnamese",
-    className: "bg-[radial-gradient(circle_at_24%_22%,#ffd6dc_0,#cf7d6f_35%,#382234_100%)]",
-  },
-];
-
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
 
 export default function VoiceProfilesPage() {
@@ -76,11 +53,41 @@ export default function VoiceProfilesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [language, setLanguage] = useState("vi-VN");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [languageFilter, setLanguageFilter] = useState("all");
+  const [sampleFilter, setSampleFilter] = useState<"all" | "ready" | "missing">("all");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const profileList = useMemo(() => profiles ?? [], [profiles]);
   const readyCount = useMemo(() => profileList.filter((p) => p.hasSample).length, [profileList]);
+  const voiceProfileFilters = [
+    { key: "all", label: "All profiles", language: "all", sample: "all" },
+    { key: "ready", label: "With sample", language: "all", sample: "ready" },
+    { key: "missing", label: "Missing sample", language: "all", sample: "missing" },
+    { key: "vi", label: "VI", language: "vi-VN", sample: "all" },
+    { key: "en", label: "EN", language: "en-US", sample: "all" },
+    { key: "ja", label: "JA", language: "ja-JP", sample: "all" },
+    { key: "ko", label: "KO", language: "ko-KR", sample: "all" },
+  ] as const;
+  const activeVoiceFilter =
+    voiceProfileFilters.find((item) => item.language === languageFilter && item.sample === sampleFilter)?.key ??
+    "custom";
+  const filteredProfiles = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return profileList.filter((profile) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        profile.displayName?.toLowerCase().includes(normalizedQuery) ||
+        profile.language?.toLowerCase().includes(normalizedQuery);
+      const matchesLanguage = languageFilter === "all" || profile.language === languageFilter;
+      const matchesSample =
+        sampleFilter === "all" ||
+        (sampleFilter === "ready" && profile.hasSample) ||
+        (sampleFilter === "missing" && !profile.hasSample);
+      return matchesQuery && matchesLanguage && matchesSample;
+    });
+  }, [languageFilter, profileList, sampleFilter, searchQuery]);
 
   function resetForm() {
     setDisplayName("");
@@ -131,88 +138,75 @@ export default function VoiceProfilesPage() {
   }
 
   return (
-    <div className="min-h-full bg-surface-1 px-5 py-8 text-ink sm:px-8">
-      <div className="mx-auto flex w-full max-w-[1560px] flex-col gap-7">
-        <section className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-4">
-            <div>
-              <h1 className="text-[32px] font-semibold leading-tight tracking-normal text-ink">Voice Profiles</h1>
-              <p className="mt-2 max-w-2xl text-[14px] leading-6 text-ink-muted">
-                Build reusable speaker identities for translation rooms, transcripts, and AI summaries.
-              </p>
-            </div>
-            <div className="flex w-fit rounded-[10px] border border-border bg-canvas p-1 text-[13px]">
-              <button className="flex h-8 items-center gap-2 rounded-[8px] bg-surface-1 px-3 font-medium text-ink shadow-sm">
-                <Waveform size={15} weight="bold" />
-                My profiles
-              </button>
-              <button className="flex h-8 items-center gap-2 rounded-[8px] px-3 text-ink-muted hover:text-ink">
-                Explore presets
-              </button>
-            </div>
-          </div>
-          <Button
-            className="h-10 w-fit rounded-full bg-neutral-950 px-5 text-white hover:bg-neutral-800"
-            onClick={() => setIsCreateOpen(true)}
-          >
-            <Plus size={16} weight="bold" />
-            Create profile
-          </Button>
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex flex-col gap-3 xl:flex-row">
-            <label className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-[14px] border border-neutral-950 bg-white px-4 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
-              <MagnifyingGlass size={20} className="shrink-0 text-ink" />
-              <input
-                className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-subtle"
-                placeholder="Search voice profiles..."
-                aria-label="Search voice profiles"
-              />
-              <FileAudio size={18} className="shrink-0 text-ink-muted" />
-            </label>
-            <div className="flex gap-2">
-              <Button variant="outline" className="h-12 rounded-[14px] border-border bg-white px-4 text-ink">
-                <SlidersHorizontal size={17} />
-                Filters
-              </Button>
-              <Button variant="outline" size="icon" className="h-12 w-12 rounded-[14px] border-border bg-white text-ink">
-                <Funnel size={17} />
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {FILTERS.map((filter) => (
+    <div className="flex h-full flex-col bg-surface-1 text-ink">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <section className="flex shrink-0 flex-col gap-4 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+            {voiceProfileFilters.map((item) => (
               <button
-                key={filter}
-                className="h-9 shrink-0 rounded-full border border-border bg-white px-4 text-[13px] font-medium text-ink-muted transition hover:border-hairline-strong hover:text-ink"
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  setLanguageFilter(item.language);
+                  setSampleFilter(item.sample);
+                }}
+                className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+                  activeVoiceFilter === item.key
+                    ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                    : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                }`}
               >
-                {filter}
+                {item.label}
               </button>
             ))}
           </div>
+
+          <div className="flex shrink-0 items-center gap-2 pl-4">
+            <ExpandingSearchDock
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              placeholder="Search voice profiles..."
+              ariaLabel="Search voice profiles"
+              collapsedWidth={28}
+              expandedWidth={220}
+              className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+              iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+              clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+              inputClassName="h-[26px] text-[12px]"
+            />
+            <button
+              className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              title="Voice profile filters"
+            >
+              <Funnel weight="bold" size={13} />
+              {(languageFilter !== "all" || sampleFilter !== "all") && (
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+              )}
+            </button>
+            <button
+              className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              title={`${filteredProfiles.length} profiles`}
+            >
+              <SlidersHorizontal weight="bold" size={13} />
+            </button>
+            <div className="mx-1 h-4 w-[1px] bg-border" />
+            <Button
+              className="h-[28px] rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm hover:opacity-90"
+              onClick={() => setIsCreateOpen(true)}
+            >
+              <Plus size={14} weight="bold" />
+              Create profile
+            </Button>
+          </div>
         </section>
 
-        <section className="grid gap-3 border-y border-border py-4 sm:grid-cols-3">
+        <section className="mx-4 grid gap-3 border-y border-border py-4 sm:grid-cols-3">
           <Metric icon={<Microphone size={16} weight="bold" />} label="Profiles" value={String(profileList.length)} />
           <Metric icon={<CheckCircle size={16} weight="bold" />} label="With sample" value={String(readyCount)} />
           <Metric icon={<Waveform size={16} weight="bold" />} label="Default language" value="vi-VN" />
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[18px] font-semibold text-ink">Trending voice presets</h2>
-            <button className="text-[13px] font-medium text-ink-muted hover:text-ink">View all</button>
-          </div>
-          <div className="grid gap-x-10 gap-y-5 lg:grid-cols-3">
-            {FEATURED_VOICES.map((voice) => (
-              <PresetVoice key={voice.name} {...voice} />
-            ))}
-          </div>
-        </section>
-
-        <section className="space-y-4">
+        <section className="mx-4 space-y-4 py-4 pb-6">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-[18px] font-semibold text-ink">Your voice profiles</h2>
@@ -239,7 +233,7 @@ export default function VoiceProfilesPage() {
                   <div>
                     <p className="text-[15px] font-semibold text-ink">No voice profiles yet</p>
                     <p className="mt-1 max-w-2xl text-[13px] leading-5 text-ink-muted">
-                      Create your first profile now, or start with one of the presets above and tune it later with a sample.
+                      Create your first profile and attach a reference sample when you are ready.
                     </p>
                   </div>
                 </div>
@@ -253,7 +247,13 @@ export default function VoiceProfilesPage() {
               </div>
             )}
 
-            {profileList.map((profile, index) => (
+            {!isLoading && profileList.length > 0 && filteredProfiles.length === 0 && (
+              <div className="px-5 py-8 text-center text-[14px] text-ink-muted">
+                No voice profile matches the current search and language filter.
+              </div>
+            )}
+
+            {filteredProfiles.map((profile, index) => (
               <VoiceProfileRow
                 key={profile.id}
                 profile={profile}
@@ -336,33 +336,6 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
         <p className="text-[18px] font-semibold leading-6 text-ink">{value}</p>
       </div>
     </div>
-  );
-}
-
-function PresetVoice({
-  name,
-  category,
-  language,
-  className,
-}: {
-  name: string;
-  category: string;
-  language: string;
-  className: string;
-}) {
-  return (
-    <button className="group flex min-w-0 items-center gap-4 rounded-[16px] border border-transparent p-3 text-left transition hover:border-border hover:bg-white">
-      <span className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] ${className}`}>
-        <Waveform size={22} weight="bold" className="text-white drop-shadow" />
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-[14px] font-semibold text-ink group-hover:underline">{name}</span>
-        <span className="mt-1 block text-[13px] text-ink-muted">{category}</span>
-        <span className="mt-2 inline-flex items-center rounded-full bg-neutral-950/5 px-2 py-0.5 text-[12px] text-ink-muted">
-          {language}
-        </span>
-      </span>
-    </button>
   );
 }
 

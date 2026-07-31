@@ -23,6 +23,7 @@ import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
+import { openArtifactDownload } from "@/lib/download-artifact";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
@@ -85,8 +86,7 @@ export default function HistoryPage() {
         await translationRoomService.approveArtifactConsent(artifact.id);
       }
       const { data } = await translationRoomService.artifactDownload(artifact.id);
-      if (!data.url) throw new Error("The download URL is unavailable.");
-      window.open(data.url, "_blank", "noopener,noreferrer");
+      openArtifactDownload(data);
       if (artifact.consentRequired) await history.refetch();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not download this output.");

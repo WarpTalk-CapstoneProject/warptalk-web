@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ElementType } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { motion } from "motion/react";
 import {
   CalendarBlank,
   FileText,
   Keyboard,
+  MagnifyingGlass,
   Plus,
   Sparkle,
   SquaresFour,
@@ -45,6 +47,18 @@ export function SearchMeetingDialog() {
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
   const slug = activeWorkspaceSlug || "workspace";
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchMeetingModalOpen(true);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [setSearchMeetingModalOpen]);
 
   const { data, isLoading } = useTranslationRooms({
     search: searchQuery,
@@ -105,16 +119,40 @@ export function SearchMeetingDialog() {
   const hasQuery = searchQuery.trim().length > 0;
 
   return (
-    <CommandDialog open={searchMeetingModalOpen} onOpenChange={setSearchMeetingModalOpen} className="max-w-[760px]">
-      <Command className="rounded-xl p-0" shouldFilter={false}>
-        <CommandInput
-          placeholder="Search meetings, rooms, notes, or actions..."
-          value={searchQuery}
-          onValueChange={setSearchQuery}
-          autoFocus
-        />
-        <CommandList className="max-h-[560px] border-t border-border/70 p-2">
-          <CommandGroup heading="Quick actions">
+    <CommandDialog
+      open={searchMeetingModalOpen}
+      onOpenChange={setSearchMeetingModalOpen}
+      className="top-1/2 !max-w-[640px] -translate-y-1/2 overflow-visible border-0 bg-transparent p-0 ring-0 shadow-none sm:max-w-[640px]"
+      showCloseButton={false}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 18, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className="overflow-hidden rounded-[22px] border border-border bg-popover/96 text-popover-foreground shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl dark:shadow-[0_24px_90px_rgba(0,0,0,0.65)]"
+      >
+        <Command className="rounded-[22px] bg-transparent p-0" shouldFilter={false}>
+          <div className="p-3">
+            <div className="flex h-12 items-center gap-3 rounded-full border border-border bg-surface-1 px-4 shadow-[0_16px_50px_rgba(0,0,0,0.10)]">
+              <MagnifyingGlass size={18} weight="regular" className="shrink-0 text-ink-muted" />
+              <CommandInput
+                placeholder="Search commands..."
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+                autoFocus
+                wrapperClassName="flex-1 p-0"
+                inputGroupClassName="h-full! border-0 bg-transparent p-0 shadow-none! ring-0"
+                showIcon={false}
+                className="h-full text-[15px] placeholder:text-ink-muted"
+              />
+              <kbd className="ml-auto shrink-0 rounded-full border border-border bg-canvas px-2 py-1 text-[11px] font-medium text-ink-subtle">
+                ⌘K
+              </kbd>
+            </div>
+          </div>
+
+          <CommandList className="max-h-[460px] border-t border-border/70 px-2 pb-2 pt-1">
+            <CommandGroup heading="Quick actions">
             {quickActions.map((action) => {
               const Icon = action.icon;
               return (
@@ -172,8 +210,9 @@ export function SearchMeetingDialog() {
               No meetings found. Try a room title, code, or one of the quick actions above.
             </div>
           )}
-        </CommandList>
-      </Command>
+          </CommandList>
+        </Command>
+      </motion.div>
     </CommandDialog>
   );
 }
