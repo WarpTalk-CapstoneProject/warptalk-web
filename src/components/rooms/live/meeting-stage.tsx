@@ -11,7 +11,6 @@ import {
   PushPinSimple,
   SpinnerGap,
   Star,
-  VideoCameraSlash,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   ConnectionState,
@@ -20,12 +19,18 @@ import {
   type Participant,
 } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { HandRaiseBadge } from "./hand-raise-badge";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
 import { NetworkQualityIcon } from "./network-quality-icon";
 
 const TILE_CLASSNAME =
-  "h-full w-full overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur";
+  "!h-full !w-full !border-0 overflow-hidden rounded-xl !bg-surface-3 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
+
+const STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1 p-3";
+const SINGLE_PARTICIPANT_STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1";
+const FULLSCREEN_FEATURED_STAGE_CLASSNAME =
+  "relative h-full min-h-0 w-full overflow-hidden bg-surface-1";
 
 export function LiveKitMeetingStage({
   fallbackName,
@@ -121,17 +126,32 @@ export function LiveKitMeetingStage({
           : pinnedUserId) ||
     null;
   const isSpotlight = Boolean(spotlightedUserId);
+  const localIdentity = room?.localParticipant.identity ?? null;
+
+  function renderThumbnail(trackRef: TrackReferenceOrPlaceholder) {
+    return renderTile(trackRef, {
+      className:
+        "aspect-video h-32 w-64 max-w-[min(18rem,34vw)] shrink-0 rounded-2xl border border-white/80 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.18)]",
+      tileClassName: "!rounded-2xl",
+      variant: "thumbnail",
+    });
+  }
 
   function renderTile(
     trackRef: TrackReferenceOrPlaceholder,
-    options?: { minHeight?: string },
+    options?: {
+      className?: string;
+      tileClassName?: string;
+      variant?: "featured" | "thumbnail";
+    },
   ) {
     const identity = trackRef.participant.identity;
     const isActiveSpeaker = activeSpeakerIdentities.has(identity);
     const isFeatured = featuredIdentity === identity;
     const handRaised = raisedHandUserIds?.has(identity) ?? false;
     const displayName = trackRef.participant.name || identity || fallbackName;
-    const cameraUnavailable = isCameraUnavailable(trackRef);
+    const showCameraOffState = isCameraUnavailable(trackRef);
+    const isThumbnail = options?.variant === "thumbnail";
 
     return (
       <div
@@ -139,32 +159,44 @@ export function LiveKitMeetingStage({
           trackRef.participant.sid +
           (trackRef.publication?.trackSid ?? "placeholder")
         }
-        className={`relative h-full min-h-[180px] overflow-hidden rounded-xl bg-surface-3 transition-shadow ${isActiveSpeaker ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-1" : ""}`}
+        className={`group relative h-full min-h-[180px] w-full overflow-hidden rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
         onClick={() => onPinParticipant?.(identity)}
       >
-        {cameraUnavailable ? (
+        <ParticipantTile
+          trackRef={trackRef}
+          className={`${TILE_CLASSNAME} ${options?.tileClassName ?? ""} ${onPinParticipant ? "cursor-pointer" : ""}`}
+        />
+        {showCameraOffState ? (
           <div
             data-camera-state="off"
-            className={`flex h-full w-full flex-col items-center justify-center bg-surface-3 px-6 text-center ${options?.minHeight ?? ""}`}
+            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm ${
+              isThumbnail ? "gap-1.5" : "gap-3"
+            }`}
           >
-            <div className="grid h-20 w-20 place-items-center rounded-full bg-surface-1 text-2xl font-semibold text-ink-muted shadow-sm">
-              {initials(displayName)}
-            </div>
-            <p className="mt-3 max-w-full truncate text-[15px] font-medium text-ink">
-              {displayName}
-            </p>
-            <p className="mt-1 flex items-center gap-1.5 text-[12px] text-ink-subtle">
-              <VideoCameraSlash className="h-4 w-4" />
+            <Avatar
+              size="lg"
+              className={`${isThumbnail ? "size-10" : "size-16"} border border-border bg-white shadow-sm`}
+            >
+              <AvatarFallback
+                className={`${isThumbnail ? "text-sm" : "text-lg"} bg-white font-semibold text-ink`}
+              >
+                {initials(displayName) || "?"}
+              </AvatarFallback>
+            </Avatar>
+            <div
+              className={`rounded-full border border-border bg-white px-2.5 py-0.5 font-medium text-ink shadow-sm ${
+                isThumbnail ? "text-[10px]" : "text-[12px]"
+              }`}
+            >
               Camera is off
-            </p>
+            </div>
           </div>
-        ) : (
-          <ParticipantTile
-            trackRef={trackRef}
-            className={`${TILE_CLASSNAME} ${options?.minHeight ?? ""} ${onPinParticipant ? "cursor-pointer" : ""}`}
-          />
-        )}
-        <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5">
+        ) : null}
+        <div
+          className={`pointer-events-none absolute flex items-center gap-1.5 ${
+            isThumbnail ? "right-2 top-2" : "right-3 top-3"
+          }`}
+        >
           {handRaised ? <HandRaiseBadge /> : null}
           {isFeatured ? (
             <span
@@ -182,14 +214,23 @@ export function LiveKitMeetingStage({
             <NetworkQualityIcon participantIdentity={identity} />
           </span>
         </div>
+        <div
+          className={`pointer-events-none absolute max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 font-medium text-white shadow-sm backdrop-blur ${
+            isThumbnail
+              ? "bottom-2 left-2 px-2 py-0.5 text-[11px]"
+              : "bottom-5 left-5 px-3 py-1 text-[13px]"
+          }`}
+        >
+          {displayName}
+        </div>
       </div>
     );
   }
 
   if (screenStream) {
     return (
-      <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_260px] bg-surface-1">
-        <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-1">
+      <div className={FULLSCREEN_FEATURED_STAGE_CLASSNAME}>
+        <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
           <video
             ref={screenVideoRef}
             className="h-full w-full object-contain"
@@ -202,11 +243,11 @@ export function LiveKitMeetingStage({
           </div>
         </div>
 
-        <div className="grid h-full gap-3 overflow-hidden grid-cols-1 overflow-y-auto">
-          {visibleTracks.map((trackRef) =>
-            renderTile(trackRef, { minHeight: "min-h-[160px]" }),
-          )}
-        </div>
+        {visibleTracks.length > 0 ? (
+          <div className="absolute bottom-28 left-5 z-20 flex max-h-[calc(100%-8rem)] flex-col gap-3 overflow-y-auto pr-1">
+            {visibleTracks.map((trackRef) => renderThumbnail(trackRef))}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -222,48 +263,67 @@ export function LiveKitMeetingStage({
       : [];
 
     if (featuredTrack) {
-      if (layoutMode === "sidebar") {
-        return (
-          <div className="grid h-full min-h-0 gap-2 bg-surface-1 p-2 lg:grid-cols-[minmax(0,1fr)_260px]">
-            <div className="min-h-0">
-              {renderTile(featuredTrack, { minHeight: "h-full" })}
-            </div>
-            {otherTracks.length > 0 ? (
-              <div className="grid h-full grid-cols-1 gap-2 overflow-y-auto">
-                {otherTracks.map((trackRef) =>
-                  renderTile(trackRef, { minHeight: "min-h-[160px]" }),
-                )}
-              </div>
-            ) : null}
-          </div>
-        );
-      }
+      const localTrack = localIdentity
+        ? visibleTracks.find(
+            (trackRef) => trackRef.participant.identity === localIdentity,
+          )
+        : undefined;
+      const isFeaturingSelf =
+        localIdentity !== null &&
+        featuredTrack.participant.identity === localIdentity;
+      const thumbnailTracks = isFeaturingSelf
+        ? otherTracks
+        : localTrack && localTrack !== featuredTrack
+          ? [localTrack]
+          : otherTracks.slice(0, 1);
 
       return (
-        <div className="relative flex h-full w-full flex-col gap-2 p-2 bg-surface-1">
-          <div className="min-h-0 flex-1">
-            {renderTile(featuredTrack, { minHeight: "h-full" })}
+        <div className={FULLSCREEN_FEATURED_STAGE_CLASSNAME}>
+          <div className="absolute inset-0">
+            {renderTile(featuredTrack, {
+              className: "!rounded-none",
+              tileClassName: "!rounded-none",
+            })}
           </div>
-          {otherTracks.length > 0 ? (
-            <div className="flex h-24 shrink-0 gap-2 overflow-x-auto">
-              {otherTracks.map((trackRef) => (
-                <div
-                  key={trackRef.participant.sid}
-                  className="aspect-video h-full shrink-0"
-                >
-                  {renderTile(trackRef, { minHeight: "h-full" })}
-                </div>
-              ))}
+          {thumbnailTracks.length > 0 ? (
+            <div className="absolute bottom-28 left-5 right-5 z-20 flex max-h-[clamp(84px,12vw,132px)] items-end gap-3 overflow-x-auto overflow-y-hidden pb-1">
+              {thumbnailTracks.map((trackRef) => renderThumbnail(trackRef))}
             </div>
           ) : null}
         </div>
       );
     }
 
-    return (
-      <div className="relative h-full w-full p-2 bg-surface-1">
+    if (visibleTracks.length === 1) {
+      const onlyTrack = visibleTracks[0];
+      if (!onlyTrack) return null;
+
+      return (
         <div
-          className={`grid h-full gap-3 ${gridClassName(visibleTracks.length)}`}
+          className={`${SINGLE_PARTICIPANT_STAGE_CLASSNAME} flex items-stretch justify-stretch`}
+        >
+          <div className="h-full min-h-0 w-full">
+            {renderTile(onlyTrack, {
+              className: "!rounded-2xl",
+              tileClassName: "!rounded-2xl",
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (visibleTracks.length === 2) {
+      return (
+        <div className={`${STAGE_CLASSNAME} grid grid-cols-1 gap-3 lg:grid-cols-2`}>
+          {visibleTracks.map((trackRef) => renderTile(trackRef))}
+        </div>
+      );
+    }
+
+    return (
+      <div className={STAGE_CLASSNAME}>
+        <div
+          className={`grid h-full min-h-0 gap-3 ${gridClassName(visibleTracks.length)}`}
         >
           {visibleTracks.map((trackRef) => renderTile(trackRef))}
         </div>

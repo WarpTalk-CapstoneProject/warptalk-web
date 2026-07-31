@@ -68,11 +68,18 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  wrapperClassName,
+  inputGroupClassName,
+  showIcon = true,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input>) {
+}: React.ComponentProps<typeof CommandPrimitive.Input> & {
+  wrapperClassName?: string
+  inputGroupClassName?: string
+  showIcon?: boolean
+}) {
   return (
-    <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-12! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-3!">
+    <div data-slot="command-input-wrapper" className={cn("p-1 pb-0", wrapperClassName)}>
+      <InputGroup className={cn("h-12! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-3!", inputGroupClassName)}>
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
@@ -81,9 +88,11 @@ function CommandInput({
           )}
           {...props}
         />
-        <InputGroupAddon>
-          <MagnifyingGlass weight="light" className="size-5 shrink-0 opacity-50" />
-        </InputGroupAddon>
+        {showIcon ? (
+          <InputGroupAddon>
+            <MagnifyingGlass weight="light" className="size-5 shrink-0 opacity-50" />
+          </InputGroupAddon>
+        ) : null}
       </InputGroup>
     </div>
   )

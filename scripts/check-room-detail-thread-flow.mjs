@@ -16,8 +16,13 @@ const checks = [
   ["room detail does not render inferred activity", !page.includes("function RoomThread(") && !page.includes("buildThreadEvents(")],
   ["room detail does not label synthesized room data as activity", !page.includes("Room events and participant changes.") && !page.includes(">Activity<")],
   ["join meeting button keeps white text on purple primary", page.includes("className=\"h-9 justify-between rounded-md text-[13px] !text-white")],
-  ["room detail uses a white surface", page.includes("bg-white text-ink")],
+  ["room detail uses a themed surface-1 background", page.includes("bg-surface-1 text-ink")],
   ["visible host fallback label is removed", !page.includes("\"Host\"") && !page.includes(">Host<")],
+  // WT-191: an invitee who already joined must appear once, not as a participant row
+  // plus a duplicate "pending"/"accepted" invitation row. That needs toUserIdentity to
+  // carry an email, and the dedupe to compare emails rather than an email against a UUID.
+  ["participant identities carry a resolvable email", page.includes("function resolveUserEmail(") && page.includes("email: resolveUserEmail(")],
+  ["invitation dedupe matches on email, never on participant id", page.includes("participant.email?.trim().toLowerCase() === invitationEmail") && !page.includes("participant.id === invitation.email")],
   ["live side panel only exposes transcript chat and people modes", sidePanel.includes('"transcript" | "chat" | "participants"') && !sidePanel.includes('"polls"') && !sidePanel.includes('"qa"') && !sidePanel.includes('"notes"')],
   ["live side panel removes notes polls and q-and-a tabs", !sidePanel.includes('label="Notes"') && !sidePanel.includes('label="Polls"') && !sidePanel.includes('label="Q&A"')],
   ["live side panel does not fetch removed feature badges", !sidePanel.includes("usePolls(") && !sidePanel.includes("useQuestions(")],

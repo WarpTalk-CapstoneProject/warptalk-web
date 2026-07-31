@@ -153,6 +153,12 @@ export function LinearSidebar() {
     router.push(`/join?code=${encodeURIComponent(trimmed)}`);
   }
 
+  function handleSignOut() {
+    logout();
+    router.replace("/login");
+    router.refresh();
+  }
+
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
@@ -465,7 +471,7 @@ export function LinearSidebar() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  logout();
+                  handleSignOut();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
                 title="Sign out"
@@ -561,7 +567,7 @@ export function LinearSidebar() {
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
-              onClick={() => logout()}
+              onClick={handleSignOut}
               className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2 text-destructive"
             >
               <SignOut size={14} />
@@ -687,7 +693,7 @@ export function LinearSidebar() {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                logout();
+                handleSignOut();
               }}
               className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
               title="Sign out"

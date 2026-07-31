@@ -151,10 +151,10 @@ export function useInviteWorkspaceMember(workspaceId: string) {
   });
 }
 
-export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "") {
+export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string) {
   return useQuery({
-    queryKey: WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search),
-    queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search),
+    queryKey: [...WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search), category],
+    queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search, category),
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
@@ -208,6 +208,44 @@ export function useAcceptWorkspaceInvitationById() {
     },
   });
 }
+
+export function useCreateJoinRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: { roomCode?: string; workspaceSlug?: string } | string) => {
+      const payload = typeof request === "string" ? { workspaceSlug: request } : request;
+      return WorkspaceService.createJoinRequest(payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
+    },
+  });
+}
+
+export function useApproveWorkspaceJoinRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: string | { invitationId: string; membershipType?: string }) =>
+      WorkspaceService.approveJoinRequest(workspaceId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members"] });
+    },
+  });
+}
+
+export function useRejectWorkspaceJoinRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (inviteId: string) => WorkspaceService.rejectJoinRequest(workspaceId, inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
+    },
+  });
+}
+
+export const useApproveJoinRequest = useApproveWorkspaceJoinRequest;
+export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
 
 // ─── Documents ───
 

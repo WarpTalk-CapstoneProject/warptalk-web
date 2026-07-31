@@ -220,9 +220,9 @@ export default function RoomInformationPage() {
   );
   const hostUser = getHostUser(room, participants, membersArray, user);
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white text-ink">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
       {copiedText ? (
-        <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md bg-black px-4 py-2 text-[13px] font-medium text-white shadow-lg">
+        <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md border border-border bg-surface-1 px-4 py-2 text-[13px] font-medium text-ink shadow-lg">
           {copiedText}
         </div>
       ) : null}
@@ -413,7 +413,7 @@ export default function RoomInformationPage() {
 
             <PropertyPanel title="Meeting access">
               <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
-                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-white text-ink">
+                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-1 text-ink">
                   <Video className="size-4" />
                 </div>
                 <div className="min-w-0">
@@ -505,7 +505,7 @@ function MeetingTranscriptArtifact({
       </div>
 
       {totalCount === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
+        <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
           {isEnded
             ? "No transcript was captured for this meeting."
             : "The transcript is saved here as the meeting is transcribed."}
@@ -535,7 +535,7 @@ function MeetingTranscriptArtifact({
                       <div
                         className={`rounded-2xl px-3 py-2 ${
                           isSelf
-                            ? "rounded-tr-sm bg-brand-primary"
+                            ? "rounded-tr-sm bg-primary"
                             : "rounded-tl-sm border border-border bg-white"
                         }`}
                       >
@@ -648,7 +648,7 @@ function RoomNotesEditor({
         openOnClick: "whenNotEditable",
         autolink: true,
         HTMLAttributes: {
-          class: "text-brand-primary underline underline-offset-2",
+          class: "text-primary underline underline-offset-2",
         },
       }),
       Placeholder.configure({
@@ -968,7 +968,7 @@ function LinkToolbarButton({
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             placeholder="Paste a link..."
-            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-white px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
           <Button
             type="submit"
@@ -1076,13 +1076,21 @@ function buildUserList(
         item.email === invitation.email,
     );
     const name = member?.fullName || invitation.email;
-    if (
-      !mapped.some(
-        (participant) =>
-          participant.email === invitation.email ||
-          participant.id === invitation.email,
-      )
-    ) {
+    // WT-191: match on email only. The previous check also compared against
+    // participant.id, which is a user UUID and can never equal an email — and
+    // toUserIdentity did not populate `email` at all, so nothing ever matched and
+    // every invitee was appended a second time. That is what produced one row for
+    // the participant ("Waiting"/"Left") and a duplicate for the invitation
+    // ("pending"/"accepted") for the same person.
+    const invitationEmail = invitation.email?.trim().toLowerCase();
+    const alreadyListed = invitationEmail
+      ? mapped.some(
+          (participant) =>
+            participant.email?.trim().toLowerCase() === invitationEmail,
+        )
+      : false;
+
+    if (!alreadyListed) {
       mapped.push({
         id: invitation.id ?? invitation.email,
         name,
@@ -1113,6 +1121,9 @@ function toUserIdentity(
       currentUser,
       participant.displayName,
     ),
+    // WT-191: required for buildUserList to recognise that an invitee has already
+    // joined. Without it every invitation was rendered as a second attendee row.
+    email: resolveUserEmail(participant.userId, membersArray, currentUser),
     role,
     status: normalizeLabel(participant.status),
     avatarUrl: participant.avatarUrl,
@@ -1347,6 +1358,28 @@ function normalizeLabel(value?: string) {
     .toLowerCase()
     .replace(/_/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+/**
+ * Best-effort email for a room participant. Participants only carry a user id, so an
+ * invitation (which is keyed by email) can only be matched back to someone who already
+ * joined by resolving that id through the workspace member list. Returns undefined for
+ * guests and for members the caller cannot see — callers must treat that as "unknown",
+ * never as "not the same person".
+ */
+function resolveUserEmail(
+  userId: string | undefined,
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null,
+): string | undefined {
+  if (!userId) return undefined;
+  if (userId === currentUser?.id) return currentUser?.email ?? undefined;
+
+  const member = membersArray.find(
+    (item) =>
+      item.userId === userId || item.id === userId || item.email === userId,
+  );
+  return member?.email ?? undefined;
 }
 
 function resolveUserName(

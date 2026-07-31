@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Hls from "hls.js";
@@ -10,9 +10,8 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
-import type { PlanDto, SalesPackagePricingEstimateDto } from "@/types/billing";
-import { BROADCAST_CHANNELS } from "@/constants/realtime";
-
+import { getPlanDescription, buildFeatureList } from "@/lib/utils";
+import { createHubConnection } from "@/lib/signalr";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
@@ -23,196 +22,13 @@ const navLinks = [
   { id: "contact", label: "Contact", href: "#contact" },
 ];
 
-const badges = ["Real-time Translation", "AI Summary Analysis", "Human Voice Cloning"];
+const badges = [
+  "Real-time Translation",
+  "AI Summary Analysis",
+  "Human Voice Cloning",
+];
 const logos = ["NOVA", "AXIS", "ORBIT", "PRISM", "LUMA", "ECHO"];
 const loaderWords = ["Translation", "Clone Voice", "AI"];
-
-const sampleEnterprisePlan = {
-  name: "Enterprise",
-  price: 1900000,
-  currency: "VND",
-  creditsPerCycle: 700000,
-  overageCapCredits: 105000,
-  overagePricePerCredit: 4,
-  invoiceTermsDays: 15,
-  rolloverCapCredits: 700000,
-};
-
-const pricingVolumes = [
-  { label: "Under 50 hours", value: 35 },
-  { label: "50-250 hours", value: 150 },
-  { label: "250-1,000 hours", value: 500 },
-  { label: "1,000+ hours", value: 1000 },
-];
-
-const pricingCapabilities = ["Vietnamese", "English", "Japanese", "Translated audio / dubbing"];
-const pricingCapabilityOrder = new Map(pricingCapabilities.map((capability, index) => [capability, index]));
-
-const pricingCreditEstimate = {
-  sttCreditsPerHour: 4764,
-  translationCreditsPerOutputLanguageHour: 2510,
-  summaryCreditsPerHour: 30,
-  assistantCreditsPerHour: 198,
-  translatedAudioCreditsPerOutputLanguageHour: 24356,
-};
-
-function getPricingVolumeLabel(hours: number) {
-  if (hours < 50) return pricingVolumes[0].label;
-  if (hours <= 250) return pricingVolumes[1].label;
-  if (hours <= 1000) return pricingVolumes[2].label;
-  return pricingVolumes[3].label;
-}
-
-function calculatePricingEstimate(
-  targetLanguageCount: number,
-  selectedFeatures: string[],
-  includesTranslatedAudio: boolean
-) {
-  const hasTranslation = selectedFeatures.includes("translation") || includesTranslatedAudio;
-  const hasSummary = selectedFeatures.includes("summaries");
-  const hasAssistant = selectedFeatures.includes("assistant");
-  const hasVoicePreview = selectedFeatures.includes("voice") || includesTranslatedAudio;
-  const breakdown: string[] = [];
-  let creditsPerHour = 0;
-
-  if (hasTranslation) {
-    creditsPerHour += pricingCreditEstimate.sttCreditsPerHour;
-    breakdown.push("STT");
-
-    const translationCredits = pricingCreditEstimate.translationCreditsPerOutputLanguageHour * targetLanguageCount;
-    creditsPerHour += translationCredits;
-    breakdown.push(`Translation x${targetLanguageCount}`);
-  }
-
-  if (hasVoicePreview) {
-    const audioCredits = pricingCreditEstimate.translatedAudioCreditsPerOutputLanguageHour * targetLanguageCount;
-    creditsPerHour += audioCredits;
-    breakdown.push(`Translated audio x${targetLanguageCount}`);
-  }
-
-  if (hasSummary) {
-    creditsPerHour += pricingCreditEstimate.summaryCreditsPerHour;
-    breakdown.push("AI summaries");
-  }
-
-  if (hasAssistant) {
-    creditsPerHour += pricingCreditEstimate.assistantCreditsPerHour;
-    breakdown.push("AI Assistant");
-  }
-
-  return { creditsPerHour, breakdown };
-}
-
-const salesInquiryInitialState = {
-  firstName: "",
-  lastName: "",
-  workEmail: "",
-  company: "",
-  helpTopic: "",
-  currentMeetingVolume: "",
-  expectedMeetingVolume: "",
-  targetLanguages: [] as string[],
-  featureInterests: [] as string[],
-  message: "",
-  consent: false,
-};
-
-const salesLanguageOptions = [
-  { label: "Vietnamese", value: "vi" },
-  { label: "English", value: "en" },
-  { label: "Japanese", value: "ja" },
-];
-
-const salesFeatureOptions = [
-  { label: "Real-time translation", value: "translation" },
-  { label: "AI summaries", value: "summaries" },
-  { label: "AI Assistant", value: "assistant" },
-  { label: "Voice preview", value: "voice" },
-  { label: "Google Meet integration", value: "google_meet" },
-];
-
-const salesVolumeOptions = [
-  { label: "Under 50 hours", value: "under-50" },
-  { label: "50-250 hours", value: "50-250" },
-  { label: "250-1,000 hours", value: "250-1000" },
-  { label: "1,000+ hours", value: "1000-plus" },
-];
-
-const salesIntentStorageKey = "warptalk:sales-package-intent";
-const pricingIntentStorageKey = "warptalk:pricing-intent";
-
-function readOptionalString(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
-
-function readOptionalNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function readPricingEstimateIntent(): SalesPackagePricingEstimateDto | null {
-  try {
-    const rawIntent = window.sessionStorage.getItem(pricingIntentStorageKey);
-    if (!rawIntent) return null;
-
-    const intent = JSON.parse(rawIntent) as Record<string, unknown>;
-    const estimatedCredits = readOptionalNumber(intent.estimatedCredits);
-    const meetingHours = readOptionalNumber(intent.meetingHours);
-
-    if (estimatedCredits === null && meetingHours === null) return null;
-
-    return {
-      packageMode: readOptionalString(intent.packageMode),
-      selectedVolume: readOptionalString(intent.selectedVolume),
-      meetingHours,
-      estimatedCredits,
-      usagePercent: readOptionalNumber(intent.usagePercent),
-      creditsPerHour: readOptionalNumber(intent.creditsPerHour),
-      estimateBreakdown: Array.isArray(intent.estimateBreakdown)
-        ? intent.estimateBreakdown.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-        : [],
-      targetLanguageCount: readOptionalNumber(intent.targetLanguageCount),
-      billableTargetLanguageCount: readOptionalNumber(intent.billableTargetLanguageCount),
-      includesTranslatedAudio: intent.includesTranslatedAudio === true,
-      planName: readOptionalString(intent.planName),
-      planPrice: readOptionalNumber(intent.planPrice),
-      creditsPerCycle: readOptionalNumber(intent.creditsPerCycle),
-    };
-  } catch {
-    window.sessionStorage.removeItem(pricingIntentStorageKey);
-    return null;
-  }
-}
-
-function readPricingContactDefaults() {
-  try {
-    const rawIntent = window.sessionStorage.getItem(pricingIntentStorageKey);
-    if (!rawIntent) return null;
-
-    const intent = JSON.parse(rawIntent) as Record<string, unknown>;
-    const selectedFeatures = Array.isArray(intent.selectedFeatures)
-      ? intent.selectedFeatures.filter((feature): feature is string =>
-          typeof feature === "string" && salesFeatureOptions.some((option) => option.value === feature)
-        )
-      : [];
-    const selectedCapabilities = Array.isArray(intent.selectedCapabilities)
-      ? intent.selectedCapabilities.filter((capability): capability is string => typeof capability === "string")
-      : [];
-    const targetLanguages = salesLanguageOptions
-      .filter((language) => selectedCapabilities.includes(language.label))
-      .map((language) => language.value);
-    const volumeLabel = readOptionalString(intent.selectedVolume);
-    const currentMonthlyMeetingVolume = salesVolumeOptions.find((option) => option.label === volumeLabel)?.value ?? "";
-
-    return {
-      featureInterests: selectedFeatures,
-      targetLanguages,
-      currentMonthlyMeetingVolume,
-    };
-  } catch {
-    window.sessionStorage.removeItem(pricingIntentStorageKey);
-    return null;
-  }
-}
 
 const featureSteps = [
   {
@@ -238,14 +54,32 @@ const featureSteps = [
 ];
 
 const signalRows = [
-  { number: "01", meta: "Capture / STT / Audio", label: "Capture", pattern: "wave" },
-  { number: "02", meta: "Understand / Context / Memory", label: "Understand", pattern: "ring" },
-  { number: "03", meta: "Translate / AI / Language", label: "Translate", pattern: "sine" },
+  {
+    number: "01",
+    meta: "Capture / STT / Audio",
+    label: "Capture",
+    pattern: "wave",
+  },
+  {
+    number: "02",
+    meta: "Understand / Context / Memory",
+    label: "Understand",
+    pattern: "ring",
+  },
+  {
+    number: "03",
+    meta: "Translate / AI / Language",
+    label: "Translate",
+    pattern: "sine",
+  },
   { number: "04", meta: "Speak / TTS / Voice", label: "Speak", pattern: "orb" },
-  { number: "05", meta: "Remember / Transcript / Assistant", label: "Remember", pattern: "arc" },
+  {
+    number: "05",
+    meta: "Remember / Transcript / Assistant",
+    label: "Remember",
+    pattern: "arc",
+  },
 ];
-
-
 
 const containerVariants = {
   hidden: {},
@@ -371,7 +205,11 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-const VideoPlayer = memo(function VideoPlayer({ onReady }: { onReady: () => void }) {
+const VideoPlayer = memo(function VideoPlayer({
+  onReady,
+}: {
+  onReady: () => void;
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const onReadyRef = useRef(onReady);
 
@@ -455,8 +293,22 @@ function PlaceholderLogo({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 opacity-40 grayscale">
       <svg viewBox="0 0 32 32" aria-hidden="true" className="size-7">
-        <rect x="4" y="4" width="24" height="24" rx="8" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M10 17h12M16 10v12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <rect
+          x="4"
+          y="4"
+          width="24"
+          height="24"
+          rx="8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <path
+          d="M10 17h12M16 10v12"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
       <span className="text-sm font-medium tracking-[0.24em]">{label}</span>
     </div>
@@ -465,7 +317,10 @@ function PlaceholderLogo({ label }: { label: string }) {
 
 function WarpTalkNavLogo() {
   return (
-    <span className="relative block h-9 w-32 overflow-hidden bg-black" aria-label="WarpTalk">
+    <span
+      className="relative block h-9 w-32 overflow-hidden bg-black"
+      aria-label="WarpTalk"
+    >
       <Image
         src="/assets/logos/warptalk-logo-darkmode.jpg"
         alt="WarpTalk"
@@ -545,12 +400,27 @@ function BranchLabel({
   revealAt: number;
   align?: "middle" | "start";
 }) {
-  const labelOpacity = useTransform(progress, [Math.max(0, revealAt - 0.12), revealAt], [0, 1]);
-  const tickLength = useTransform(progress, [Math.max(0, revealAt - 0.2), revealAt], [0, 1]);
-  const nodeScale = useTransform(progress, [Math.max(0, revealAt - 0.08), revealAt], [0, 1]);
+  const labelOpacity = useTransform(
+    progress,
+    [Math.max(0, revealAt - 0.12), revealAt],
+    [0, 1],
+  );
+  const tickLength = useTransform(
+    progress,
+    [Math.max(0, revealAt - 0.2), revealAt],
+    [0, 1],
+  );
+  const nodeScale = useTransform(
+    progress,
+    [Math.max(0, revealAt - 0.08), revealAt],
+    [0, 1],
+  );
 
   return (
-    <motion.g className="feature-branch-label" style={{ opacity: labelOpacity }}>
+    <motion.g
+      className="feature-branch-label"
+      style={{ opacity: labelOpacity }}
+    >
       <motion.line
         x1={x}
         y1={tickTop}
@@ -564,7 +434,11 @@ function BranchLabel({
         r="2.4"
         style={{ scale: nodeScale }}
       />
-      <text className={align === "start" ? "feature-branch-label-start" : undefined} x={x} y={y}>
+      <text
+        className={align === "start" ? "feature-branch-label-start" : undefined}
+        x={x}
+        y={y}
+      >
         {label}
       </text>
     </motion.g>
@@ -584,10 +458,19 @@ function BranchTextLabel({
   progress: MotionValue<number>;
   revealAt: number;
 }) {
-  const labelOpacity = useTransform(progress, [Math.max(0, revealAt - 0.1), revealAt], [0, 1]);
+  const labelOpacity = useTransform(
+    progress,
+    [Math.max(0, revealAt - 0.1), revealAt],
+    [0, 1],
+  );
 
   return (
-    <motion.text className="feature-branch-label-start" x={x} y={y} style={{ opacity: labelOpacity }}>
+    <motion.text
+      className="feature-branch-label-start"
+      x={x}
+      y={y}
+      style={{ opacity: labelOpacity }}
+    >
       {label}
     </motion.text>
   );
@@ -610,16 +493,40 @@ function FeatureStoryBoard() {
   const memoryOpacity = useTransform(memoryProgress, [0.04, 0.14], [0, 1]);
   const driftTrunkProgress = useTransform(driftProgress, [0, 0.42], [0, 1]);
   const driftForkProgress = useTransform(driftProgress, [0.42, 1], [0, 1]);
-  const driftForkOpacity = useTransform(driftForkProgress, [0.04, 0.12], [0, 1]);
-  const crossingTrunkProgress = useTransform(crossingProgress, [0, 0.38], [0, 1]);
-  const crossingForkProgress = useTransform(crossingProgress, [0.38, 1], [0, 1]);
-  const crossingForkOpacity = useTransform(crossingForkProgress, [0.04, 0.12], [0, 1]);
+  const driftForkOpacity = useTransform(
+    driftForkProgress,
+    [0.04, 0.12],
+    [0, 1],
+  );
+  const crossingTrunkProgress = useTransform(
+    crossingProgress,
+    [0, 0.38],
+    [0, 1],
+  );
+  const crossingForkProgress = useTransform(
+    crossingProgress,
+    [0.38, 1],
+    [0, 1],
+  );
+  const crossingForkOpacity = useTransform(
+    crossingForkProgress,
+    [0.04, 0.12],
+    [0, 1],
+  );
   const pauseTrunkProgress = useTransform(pauseProgress, [0, 0.58], [0, 1]);
   const pauseForkProgress = useTransform(pauseProgress, [0.58, 1], [0, 1]);
-  const pauseForkOpacity = useTransform(pauseForkProgress, [0.04, 0.12], [0, 1]);
+  const pauseForkOpacity = useTransform(
+    pauseForkProgress,
+    [0.04, 0.12],
+    [0, 1],
+  );
   const memoryTrunkProgress = useTransform(memoryProgress, [0, 0.46], [0, 1]);
   const memoryForkProgress = useTransform(memoryProgress, [0.46, 1], [0, 1]);
-  const memoryForkOpacity = useTransform(memoryForkProgress, [0.04, 0.12], [0, 1]);
+  const memoryForkOpacity = useTransform(
+    memoryForkProgress,
+    [0.04, 0.12],
+    [0, 1],
+  );
   const signalProgress = useTransform(spineProgress, [0.8, 1.015], [0, 1]);
   const signalCopyOpacity = useTransform(signalProgress, [0, 0.08], [0, 1]);
   const signalCopyY = useTransform(signalCopyOpacity, [0, 1], [18, 0]);
@@ -700,19 +607,49 @@ function FeatureStoryBoard() {
               }
               d={path}
               key={path}
-              style={{ pathLength: driftForkProgress, opacity: driftForkOpacity }}
+              style={{
+                pathLength: driftForkProgress,
+                opacity: driftForkOpacity,
+              }}
             />
           ))}
-          <BranchLabel x={586} y={484} tickTop={372} tickBottom={454} label="live" progress={driftForkProgress} revealAt={0.28} />
-          <BranchLabel x={820} y={484} tickTop={368} tickBottom={454} label="low latency" progress={driftForkProgress} revealAt={0.58} />
-          <BranchLabel x={1016} y={484} tickTop={372} tickBottom={454} label="room signal" progress={driftForkProgress} revealAt={0.86} />
+          <BranchLabel
+            x={586}
+            y={484}
+            tickTop={372}
+            tickBottom={454}
+            label="live"
+            progress={driftForkProgress}
+            revealAt={0.28}
+          />
+          <BranchLabel
+            x={820}
+            y={484}
+            tickTop={368}
+            tickBottom={454}
+            label="low latency"
+            progress={driftForkProgress}
+            revealAt={0.58}
+          />
+          <BranchLabel
+            x={1016}
+            y={484}
+            tickTop={372}
+            tickBottom={454}
+            label="room signal"
+            progress={driftForkProgress}
+            revealAt={0.86}
+          />
         </g>
 
         <g>
           <motion.path
             className="feature-story-branch"
             d="M108 620 C 176 664 246 720 370 720 H488"
-            style={{ pathLength: crossingTrunkProgress, opacity: crossingOpacity }}
+            style={{
+              pathLength: crossingTrunkProgress,
+              opacity: crossingOpacity,
+            }}
           />
           {[
             "M488 720 C 572 720 620 638 730 638 S 914 692 1094 664",
@@ -727,13 +664,48 @@ function FeatureStoryBoard() {
               }
               d={path}
               key={path}
-              style={{ pathLength: crossingForkProgress, opacity: crossingForkOpacity }}
+              style={{
+                pathLength: crossingForkProgress,
+                opacity: crossingForkOpacity,
+              }}
             />
           ))}
-          <BranchLabel x={594} y={652} tickTop={646} tickBottom={696} label="xin chao" progress={crossingForkProgress} revealAt={0.24} />
-          <BranchLabel x={756} y={686} tickTop={668} tickBottom={730} label="hello" progress={crossingForkProgress} revealAt={0.46} />
-          <BranchLabel x={908} y={628} tickTop={626} tickBottom={682} label="bonjour" progress={crossingForkProgress} revealAt={0.66} />
-          <BranchLabel x={1012} y={808} tickTop={742} tickBottom={800} label="konnichiwa" progress={crossingForkProgress} revealAt={0.84} />
+          <BranchLabel
+            x={594}
+            y={652}
+            tickTop={646}
+            tickBottom={696}
+            label="xin chao"
+            progress={crossingForkProgress}
+            revealAt={0.24}
+          />
+          <BranchLabel
+            x={756}
+            y={686}
+            tickTop={668}
+            tickBottom={730}
+            label="hello"
+            progress={crossingForkProgress}
+            revealAt={0.46}
+          />
+          <BranchLabel
+            x={908}
+            y={628}
+            tickTop={626}
+            tickBottom={682}
+            label="bonjour"
+            progress={crossingForkProgress}
+            revealAt={0.66}
+          />
+          <BranchLabel
+            x={1012}
+            y={808}
+            tickTop={742}
+            tickBottom={800}
+            label="konnichiwa"
+            progress={crossingForkProgress}
+            revealAt={0.84}
+          />
         </g>
 
         <g>
@@ -765,13 +737,40 @@ function FeatureStoryBoard() {
               className="feature-story-branch feature-story-child-branch"
               d={path}
               key={path}
-              style={{ pathLength: memoryForkProgress, opacity: memoryForkOpacity }}
+              style={{
+                pathLength: memoryForkProgress,
+                opacity: memoryForkOpacity,
+              }}
             />
           ))}
-          <BranchTextLabel x={982} y={1662} label="decisions" progress={memoryForkProgress} revealAt={0.54} />
-          <BranchTextLabel x={982} y={1708} label="questions" progress={memoryForkProgress} revealAt={0.62} />
-          <BranchTextLabel x={982} y={1754} label="next steps" progress={memoryForkProgress} revealAt={0.7} />
-          <BranchTextLabel x={982} y={1800} label="names" progress={memoryForkProgress} revealAt={0.78} />
+          <BranchTextLabel
+            x={982}
+            y={1662}
+            label="decisions"
+            progress={memoryForkProgress}
+            revealAt={0.54}
+          />
+          <BranchTextLabel
+            x={982}
+            y={1708}
+            label="questions"
+            progress={memoryForkProgress}
+            revealAt={0.62}
+          />
+          <BranchTextLabel
+            x={982}
+            y={1754}
+            label="next steps"
+            progress={memoryForkProgress}
+            revealAt={0.7}
+          />
+          <BranchTextLabel
+            x={982}
+            y={1800}
+            label="names"
+            progress={memoryForkProgress}
+            revealAt={0.78}
+          />
         </g>
 
         {[2254, 2346, 2438, 2530, 2622].map((point, index) => (
@@ -779,14 +778,20 @@ function FeatureStoryBoard() {
             <motion.path
               className="feature-story-signal-row-line"
               d={`M214 ${point} H1094`}
-              style={{ pathLength: signalLineProgress[index], opacity: signalLineProgress[index] }}
+              style={{
+                pathLength: signalLineProgress[index],
+                opacity: signalLineProgress[index],
+              }}
             />
             <motion.circle
               className="feature-story-signal-dot"
               cx="226"
               cy={point}
               r="4.5"
-              style={{ opacity: signalDotProgress[index], scale: signalDotProgress[index] }}
+              style={{
+                opacity: signalDotProgress[index],
+                scale: signalDotProgress[index],
+              }}
             />
           </g>
         ))}
@@ -819,7 +824,10 @@ function FeatureStoryBoard() {
           <p>Five core signals power every conversation across any language.</p>
         </motion.aside>
 
-        <motion.div className="feature-signal-list" style={{ opacity: signalCopyOpacity }}>
+        <motion.div
+          className="feature-signal-list"
+          style={{ opacity: signalCopyOpacity }}
+        >
           {signalRows.map((row, index) => (
             <motion.div
               className="feature-signal-row"
@@ -855,7 +863,11 @@ function FeatureTraceSection() {
   const pathLength = scrollYProgress;
 
   return (
-    <section ref={sectionRef} id="features" className="feature-trace-section scroll-mt-20">
+    <section
+      ref={sectionRef}
+      id="features"
+      className="feature-trace-section scroll-mt-20"
+    >
       <div className="feature-trace-inner">
         <FeatureStoryBoard />
 
@@ -883,13 +895,19 @@ function FeatureTraceSection() {
               <span>native flow</span>
             </div>
             <svg viewBox="0 0 900 220" aria-hidden="true">
-              <path className="feature-wave-base" d="M0 130 C 90 78 150 78 238 132 S 384 182 470 110 650 58 752 126 850 172 900 122" />
+              <path
+                className="feature-wave-base"
+                d="M0 130 C 90 78 150 78 238 132 S 384 182 470 110 650 58 752 126 850 172 900 122"
+              />
               <motion.path
                 className="feature-wave-live"
                 d="M0 130 C 90 78 150 78 238 132 S 384 182 470 110 650 58 752 126 850 172 900 122"
                 style={{ pathLength }}
               />
-              <path className="feature-wave-dots" d="M410 126 C 500 86 600 88 690 132 S 825 176 900 126" />
+              <path
+                className="feature-wave-dots"
+                d="M410 126 C 500 86 600 88 690 132 S 825 176 900 126"
+              />
             </svg>
           </div>
         </div>
@@ -897,7 +915,10 @@ function FeatureTraceSection() {
         <div className="feature-understand-row">
           <div>
             <h2>When the room understands.</h2>
-            <p>No switching tabs. No waiting for summaries. The conversation stays alive.</p>
+            <p>
+              No switching tabs. No waiting for summaries. The conversation
+              stays alive.
+            </p>
           </div>
           <div className="feature-language-line">
             <span>hello</span>
@@ -913,151 +934,36 @@ function FeatureTraceSection() {
 }
 
 function PricingSection() {
-  const queryClient = useQueryClient();
-  const [meetingHours, setMeetingHours] = useState(pricingVolumes[0].value);
-  const [selectedPricingFeatures, setSelectedPricingFeatures] = useState<string[]>([
-    salesFeatureOptions[0].value,
-    salesFeatureOptions[1].value,
-  ]);
-  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([
-    pricingCapabilities[0],
-    pricingCapabilities[1],
-  ]);
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
 
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["landing-plans"],
     queryFn: () => billingService.getPlans(),
-    staleTime: 0,
-    refetchOnWindowFocus: true,
   });
 
-  useEffect(() => {
-    const syncBroadcast = typeof window !== "undefined" && "BroadcastChannel" in window
-      ? new BroadcastChannel(BROADCAST_CHANNELS.NOTIFICATIONS_SYNC)
-      : null;
-
-    if (syncBroadcast) {
-      syncBroadcast.onmessage = (event) => {
-        if (event.data === "REFRESH_PLANS") {
-          queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
-        }
-      };
+  const handleChoosePlan = () => {
+    if (!isAuthenticated || !user) {
+      router.push("/login?redirect=/workspace");
+    } else {
+      router.push("/workspace");
     }
-
-    return () => {
-      syncBroadcast?.close();
-    };
-  }, [queryClient]);
-
-  const activePlans = plans
-    .filter((plan: PlanDto) => plan.isActive !== false)
-    .sort((a: PlanDto, b: PlanDto) => a.sortOrder - b.sortOrder);
-  const primaryPlan = activePlans.find((plan: PlanDto) => plan.slug === "enterprise") ?? activePlans[0];
-  const displayPlan = primaryPlan ?? sampleEnterprisePlan;
-  const selectedLanguageCount = selectedCapabilities.filter((capability) =>
-    ["Vietnamese", "English", "Japanese"].includes(capability)
-  ).length;
-  const targetLanguageCount = Math.max(0, selectedLanguageCount - 1);
-  const billableTargetLanguageCount = Math.max(1, targetLanguageCount);
-  const includesTranslatedAudio =
-    selectedCapabilities.includes("Translated audio / dubbing") || selectedPricingFeatures.includes("voice");
-  const selectedVolumeLabel = getPricingVolumeLabel(meetingHours);
-  const pricingEstimate = calculatePricingEstimate(
-    billableTargetLanguageCount,
-    selectedPricingFeatures,
-    includesTranslatedAudio
-  );
-  const creditsPerHour = pricingEstimate.creditsPerHour;
-  const estimateBreakdownText = pricingEstimate.breakdown.length > 0
-    ? pricingEstimate.breakdown.join(" + ")
-    : "No AI billing features selected";
-  const estimatedCredits = Math.round(meetingHours * creditsPerHour);
-  const estimateLabel = meetingHours >= 1000 ? "Minimum estimated usage" : "Estimated monthly usage";
-  const usagePercent = Math.min(100, Math.round((estimatedCredits / Math.max(displayPlan.creditsPerCycle, 1)) * 100));
-  const overBaselineCredits = Math.max(0, estimatedCredits - displayPlan.creditsPerCycle);
-  const baselineCoveredHours = creditsPerHour > 0
-    ? Math.floor(displayPlan.creditsPerCycle / creditsPerHour)
-    : null;
-  const isCustomFit = overBaselineCredits > 0 || usagePercent >= 80 || meetingHours >= 1000;
-  const packageMode = isCustomFit ? "Custom Enterprise review" : "Enterprise baseline fit";
-  const sortedSelectedCapabilities = [...selectedCapabilities].sort(
-    (first, second) => (pricingCapabilityOrder.get(first) ?? 999) - (pricingCapabilityOrder.get(second) ?? 999)
-  );
-  const selectedCapabilitiesText = sortedSelectedCapabilities.length > 0
-    ? sortedSelectedCapabilities.join(", ")
-    : "No capability selected";
-  const selectedPricingFeatureLabels = salesFeatureOptions
-    .filter((feature) => selectedPricingFeatures.includes(feature.value))
-    .map((feature) => feature.label);
-  const selectedPricingFeaturesText = selectedPricingFeatureLabels.length > 0
-    ? selectedPricingFeatureLabels.join(", ")
-    : "No feature selected";
-  const contractHighlights = [
-    `Volume: ${meetingHours.toLocaleString()} hours/month (${selectedVolumeLabel})`,
-    `Estimated usage: ${estimatedCredits.toLocaleString()} credits`,
-    overBaselineCredits > 0
-      ? `Over baseline: ${overBaselineCredits.toLocaleString()} credits`
-      : "Within baseline allowance",
-    `${selectedLanguageCount} selected language${selectedLanguageCount > 1 ? "s" : ""}`,
-    `${targetLanguageCount} translated output language${targetLanguageCount !== 1 ? "s" : ""}`,
-    includesTranslatedAudio ? "Audio mode: translated audio/dubbing" : "Audio mode: captions only",
-    creditsPerHour > 0
-      ? `Cost basis: ${creditsPerHour.toLocaleString()} credits/hour`
-      : "Cost basis: no AI usage selected",
-    baselineCoveredHours !== null
-      ? `Baseline covers about ${baselineCoveredHours.toLocaleString()} hours/month for this setup`
-      : "Baseline is not consumed until AI features are enabled",
-    `Credit drivers: ${estimateBreakdownText}`,
-  ];
-
-  const handleContactSales = () => {
-    persistPricingIntent();
-    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.history.pushState(null, "", "#contact");
-  };
-
-  const persistPricingIntent = () => {
-    window.sessionStorage.setItem(
-      pricingIntentStorageKey,
-      JSON.stringify({
-        packageMode,
-        selectedVolume: selectedVolumeLabel,
-        meetingHours,
-        selectedFeatures: selectedPricingFeatures,
-        selectedCapabilities: sortedSelectedCapabilities,
-        estimatedCredits,
-        usagePercent,
-        creditsPerHour,
-        estimateBreakdown: pricingEstimate.breakdown,
-        targetLanguageCount,
-        billableTargetLanguageCount,
-        includesTranslatedAudio,
-        planName: displayPlan.name,
-        planPrice: displayPlan.price,
-        creditsPerCycle: displayPlan.creditsPerCycle,
-        capturedAt: new Date().toISOString(),
-      })
-    );
-    window.dispatchEvent(new Event("warptalk:pricing-intent-updated"));
-  };
-
-  const togglePricingChoice = (
-    value: string,
-    currentValues: string[],
-    setter: (values: string[]) => void
-  ) => {
-    setter(
-      currentValues.includes(value)
-        ? currentValues.filter((item) => item !== value)
-        : [...currentValues, value]
-    );
   };
 
   return (
-    <section id="pricing" className="c3-pricing-section scroll-mt-20 bg-[#0c0c0c] text-white">
+    <section
+      id="pricing"
+      className="c3-pricing-section scroll-mt-20 bg-[#0c0c0c] text-white"
+    >
       <svg aria-hidden="true" className="pointer-events-none absolute size-0">
         <filter id="c3-noise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" stitchTiles="stitch" />
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.5"
+            numOctaves="2"
+            stitchTiles="stitch"
+          />
           <feComponentTransfer>
             <feFuncA type="linear" slope="0.075" />
           </feComponentTransfer>
@@ -1068,165 +974,90 @@ function PricingSection() {
 
       <div className="c3-watermark-container">
         <div className="c3-watermark-main">
-          <span className="c3-watermark-line-1">Find the</span>
-          <span className="c3-watermark-line-2">Right Plan</span>
+          <span className="c3-watermark-line-1">Translation</span>
+          <span className="c3-watermark-line-2">Native</span>
         </div>
-        <p className="c3-pricing-lede">
-          Estimate monthly usage against the Enterprise baseline before contract review.
-        </p>
       </div>
 
-      <div className="c3-pricing-shell">
-        <div className="c3-plan-builder">
-          <div className="c3-builder-step">
-            <div className="c3-step-marker">1</div>
-            <div className="c3-step-content">
-              <h3>Expected monthly meeting volume</h3>
-              <p>Use meeting hours to check whether the default Enterprise baseline is enough.</p>
-              <div className="c3-volume-control">
-                <div className="c3-volume-readout">
-                  <strong>{meetingHours.toLocaleString()} hours/month</strong>
-                  <span>{selectedVolumeLabel}</span>
-                </div>
-                <input
-                  type="range"
-                  min={10}
-                  max={1000}
-                  step={5}
-                  value={meetingHours}
-                  aria-label="Expected monthly meeting hours"
-                  onChange={(event) => setMeetingHours(Number(event.target.value))}
-                />
-                <div className="c3-volume-scale">
-                  <span>10h</span>
-                  <span>250h</span>
-                  <span>500h</span>
-                  <span>1,000h+</span>
-                </div>
-              </div>
-              <div className="c3-usage-meter">
-                <span style={{ width: `${usagePercent}%` }} />
-              </div>
-              <p className="c3-meter-caption">
-                {estimateLabel}: <strong>{estimatedCredits.toLocaleString()}</strong> / {displayPlan.creditsPerCycle.toLocaleString()} credits
-                {overBaselineCredits > 0 ? (
-                  <em>Over baseline by {overBaselineCredits.toLocaleString()} credits</em>
-                ) : null}
-                <small>
-                  {creditsPerHour > 0
-                    ? `Estimate uses ${creditsPerHour.toLocaleString()} credits/hour for ${billableTargetLanguageCount} billable output language${billableTargetLanguageCount > 1 ? "s" : ""}.`
-                    : "No AI usage is estimated until translation, summary, assistant, or voice mode is selected."}
-                </small>
-              </p>
-            </div>
+      <div className="c3-grid">
+        {isLoading ? (
+          <div className="col-span-full flex justify-center py-20 text-white/50">
+            Loading plans...
           </div>
+        ) : (
+          plans
+            .filter((p) => p.isActive !== false)
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+            .map((plan) => {
+              const featureList = buildFeatureList(plan);
 
-          <div className="c3-builder-step">
-            <div className="c3-step-marker">2</div>
-            <div className="c3-step-content">
-              <h3>Features to review</h3>
-              <p>Turn meeting modes on or off to update the usage estimate.</p>
-              <div className="c3-pill-row">
-                {salesFeatureOptions.map((feature) => (
+              return (
+                <article
+                  className={
+                    plan.sortOrder > 1 ? "c3-card c3-card-pro" : "c3-card"
+                  }
+                  key={plan.id}
+                >
+                  <p className="c3-tier-small">{plan.tier}</p>
+                  <h3 className="c3-tier-large">
+                    {plan.price === 0
+                      ? "Free"
+                      : `${plan.price.toLocaleString()} ${plan.currency}/mo`}
+                  </h3>
+                  <p className="c3-desc">{getPlanDescription(plan.name)}</p>
+                  <ul className="c3-list">
+                    {featureList.map((feature: string) => (
+                      <li key={feature}>
+                        <span className="c3-check" aria-hidden="true">
+                          <svg viewBox="0 0 16 16" className="size-3.5">
+                            <path
+                              d="M13.5 4.25 6.25 11.5 2.5 7.75"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
                   <button
-                    key={feature.value}
                     type="button"
-                    className={selectedPricingFeatures.includes(feature.value) ? "selected" : ""}
-                    onClick={() => togglePricingChoice(feature.value, selectedPricingFeatures, setSelectedPricingFeatures)}
+                    className="c3-btn cursor-pointer"
+                    onClick={handleChoosePlan}
                   >
-                    {feature.label}
+                    Choose Plan
                   </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="c3-builder-step">
-            <div className="c3-step-marker">3</div>
-            <div className="c3-step-content">
-              <h3>Languages and audio mode</h3>
-              <p>Select supported languages and whether translated audio/dubbing is required.</p>
-              <div className="c3-pill-row">
-                {pricingCapabilities.map((capability) => (
-                  <button
-                    key={capability}
-                    type="button"
-                    className={selectedCapabilities.includes(capability) ? "selected" : ""}
-                    onClick={() => togglePricingChoice(capability, selectedCapabilities, setSelectedCapabilities)}
-                  >
-                    {capability}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <article className="c3-contract-card">
-          <p className="c3-recommend-label">Estimate result</p>
-          <div className="c3-contract-main">
-            <div>
-              <p className="c3-tier-small">{isLoading ? "Loading plan" : packageMode}</p>
-              <h3 className="c3-contract-title">Enterprise</h3>
-              <p className="c3-contract-price">
-                Contract pricing after review
-              </p>
-              <p className="c3-desc">
-                {isCustomFit
-                  ? "Estimated usage is above the default baseline, so Sales should confirm credits, caps, and pricing before activation."
-                  : `Estimated usage fits the default ${displayPlan.creditsPerCycle.toLocaleString()}-credit baseline. Final terms are still confirmed before activation.`}
-              </p>
-              <div className="c3-selected-summary">
-                <span>Features to review</span>
-                <strong>{selectedPricingFeaturesText}</strong>
-                <span>Estimate basis</span>
-                <strong>{selectedCapabilitiesText}</strong>
-                <span>Baseline reference</span>
-                <strong>{displayPlan.creditsPerCycle.toLocaleString()} credits / month</strong>
-              </div>
-            </div>
-
-            <div className="c3-contract-includes">
-              <p className="c3-tier-small">Estimate includes</p>
-              <ul className="c3-list c3-contract-list">
-                {contractHighlights.map((feature) => (
-                  <li key={feature}>
-                    <span className="c3-check" aria-hidden="true">
-                      <svg viewBox="0 0 16 16" className="size-3.5">
-                        <path
-                          d="M13.5 4.25 6.25 11.5 2.5 7.75"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </span>
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          <button type="button" className="c3-btn cursor-pointer" onClick={handleContactSales}>
-            Contact Sales
-          </button>
-
-          <p className="c3-pricing-note">
-            The baseline is a starting point only. Final price, credit volume, invoice terms, and enabled features are confirmed after review.
-          </p>
-        </article>
+                </article>
+              );
+            })
+        )}
       </div>
     </section>
   );
 }
 
+const footerNavigation = [
+  "How it works",
+  "Features",
+  "Pricing",
+  "Testimonials",
+  "FAQ",
+];
+const footerCompany = [
+  "Blog",
+  "About",
+  "Terms and Condition",
+  "Privacy Policy",
+];
+
 const footerSocialIcons = [
   {
     label: "Discord",
-    path: "M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074-.037-.111.037-.148.111-.592 1.072-1.257 2.479-1.257 2.479a18.27 18.27 0 0 0-5.487 0s-.666-1.407-1.258-2.48c-.037-.073-.074-.11-.148-.11A19.736 19.736 0 0 0 3.23 4.37a.136.136 0 0 0-.074.074C.533 8.438-.204 12.318.099 16.15c0 .037.037.074.074.111a19.9 19.9 0 0 0 5.993 3.034c.074.037.148 0 .185-.074.462-.629.873-1.295 1.22-1.998.037-.074 0-.148-.074-.185a13.107 13.107 0 0 1-1.887-.888c-.074-.037-.074-.148-.037-.185.126-.092.252-.185.37-.281.037-.037.111-.037.148-.019a14.26 14.26 0 0 0 12.372 0c.037-.018.111-.018.148.019.118.096.244.189.37.281.037.037.037.148-.037.185-.592.35-1.22.647-1.887.888-.074.037-.111.111-.074.185.37.703.777 1.369 1.22 1.998.037.074.111.111.185.074a19.839 19.839 0 0 0 6.002-3.034c.037-.037.074-.074.074-.111.364-4.473-.613-8.316-3.548-11.706a.123.123 0 0 0-.074-.074ZM8.02 13.747c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.096 2.157 2.418 0 1.334-.955 2.419-2.157 2.419Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.096 2.157 2.418 0 1.334-.946 2.419-2.157 2.419Z",
+    path: "M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515c.074-.037-.111.037-.148.111-.592 1.072-1.257 2.479-1.257 2.479a18.27 18.27 0 0 0-5.487 0s-.666-1.407-1.258-2.48c-.037-.073-.074-.11-.148-.11A19.736 19.736 0 0 0 3.23 4.37a.136.136 0 0 0-.074.074C.533 8.438-.204 12.318.099 16.15c0 .037.037.074.074.111a19.9 19.9 0 0 0 5.993 3.034c.074.037.148 0 .185-.074.462-.629.873-1.295 1.22-1.998.037-.074 0-.148-.074-.185a13.107 13.107 0 0 1-1.887-.888c-.074-.037-.074-.148-.037-.185.126-.092.252-.185.37-.281.037-.037.111-.037.148-.019a14.26 14.26 0 0 0 12.372 0c.037-.018.111-.018.148.019.118.096.244.189.37.281.037.037.037.148-.037.185-.592.35-1.22.647-1.887.888-.074.037-.111.111-.074.185.37.703.777 1.369 1.22 1.998.037.074.111.111.185.074a19.839 19.839 0 0 0 6.002-3.034c.037-.037.074-.074.074-.111.364-4.473-.613-8.316-3.548-11.706a.123.123 0 0 0-.074-.074ZM8.02 13.747c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.096 2.157 2.418 0 1.334-.955 2.419-2.157 2.419Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.096 2.157 2.418 0 1.334-.946 2.419-2.157 2.419Z",
   },
   {
     label: "X",
@@ -1244,7 +1075,11 @@ const footerSocialIcons = [
 
 function FooterLogoMark({ large = false }: { large?: boolean }) {
   return (
-    <span className={large ? "footer-logo-mark footer-logo-mark-large" : "footer-logo-mark"}>
+    <span
+      className={
+        large ? "footer-logo-mark footer-logo-mark-large" : "footer-logo-mark"
+      }
+    >
       <Image
         src="/assets/logos/warptalk-icon-1k.jpg"
         alt=""
@@ -1257,40 +1092,20 @@ function FooterLogoMark({ large = false }: { large?: boolean }) {
 }
 
 function LandingFooter() {
-  const [salesInquiry, setSalesInquiry] = useState(salesInquiryInitialState);
-  const [salesInquiryStatus, setSalesInquiryStatus] = useState<"idle" | "submitting" | "sent" | "error">("idle");
-  const [salesStep, setSalesStep] = useState(1);
-
-  useEffect(() => {
-    const applyPricingDefaults = () => {
-      const defaults = readPricingContactDefaults();
-      if (!defaults) return;
-
-      setSalesInquiry((current) => ({
-        ...current,
-        featureInterests: defaults.featureInterests.length > 0 ? defaults.featureInterests : current.featureInterests,
-        targetLanguages: defaults.targetLanguages.length > 0 ? defaults.targetLanguages : current.targetLanguages,
-        currentMeetingVolume: defaults.currentMonthlyMeetingVolume || current.currentMeetingVolume,
-      }));
-    };
-
-    applyPricingDefaults();
-    window.addEventListener("warptalk:pricing-intent-updated", applyPricingDefaults);
-
-    return () => {
-      window.removeEventListener("warptalk:pricing-intent-updated", applyPricingDefaults);
-    };
-  }, []);
-
   useEffect(() => {
     function fitWatermark() {
       const svg = document.getElementById("watermarkSvg");
-      const text = document.getElementById("watermarkText") as SVGTextElement | null;
+      const text = document.getElementById(
+        "watermarkText",
+      ) as SVGTextElement | null;
       if (!svg || !text) return;
 
       try {
         const bbox = text.getBBox();
-        svg.setAttribute("viewBox", `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
+        svg.setAttribute(
+          "viewBox",
+          `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`,
+        );
       } catch {}
     }
 
@@ -1308,104 +1123,18 @@ function LandingFooter() {
     };
   }, []);
 
-  const persistSalesIntent = () => {
-    window.sessionStorage.setItem(
-      salesIntentStorageKey,
-      JSON.stringify({
-        firstName: salesInquiry.firstName.trim(),
-        lastName: salesInquiry.lastName.trim(),
-        workEmail: salesInquiry.workEmail.trim().toLowerCase(),
-        company: salesInquiry.company.trim(),
-        requestType: salesInquiry.helpTopic,
-        featureInterests: salesInquiry.featureInterests,
-        targetLanguages: salesInquiry.targetLanguages,
-        currentMonthlyMeetingVolume: salesInquiry.currentMeetingVolume,
-        expectedMonthlyMeetingVolumeInSixMonths: salesInquiry.expectedMeetingVolume || null,
-        useCaseNotes: salesInquiry.message.trim() || null,
-        consent: salesInquiry.consent,
-        pricingEstimate: readPricingEstimateIntent(),
-        capturedAt: new Date().toISOString(),
-      })
-    );
-  };
-
-  const handleSalesInquirySubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!canSubmitSalesInquiry) {
-      return;
-    }
-
-    setSalesInquiryStatus("submitting");
-    persistSalesIntent();
-
-    try {
-      await billingService.createSalesInquiry({
-        firstName: salesInquiry.firstName.trim(),
-        lastName: salesInquiry.lastName.trim(),
-        workEmail: salesInquiry.workEmail.trim().toLowerCase(),
-        company: salesInquiry.company.trim(),
-        requestType: salesInquiry.helpTopic,
-        featureInterests: salesInquiry.featureInterests,
-        targetLanguages: salesInquiry.targetLanguages,
-        currentMonthlyMeetingVolume: salesInquiry.currentMeetingVolume,
-        expectedMonthlyMeetingVolumeInSixMonths: salesInquiry.expectedMeetingVolume || null,
-        useCaseNotes: salesInquiry.message.trim() || null,
-        pricingEstimate: readPricingEstimateIntent(),
-        consent: salesInquiry.consent,
-        source: "landing_pricing",
-      });
-      setSalesInquiryStatus("sent");
-    } catch (error) {
-      console.error("Failed to submit sales inquiry", error);
-      setSalesInquiryStatus("error");
-    }
-  };
-
-  const toggleSalesLanguage = (language: string) => {
-    setSalesInquiry((current) => ({
-      ...current,
-      targetLanguages: current.targetLanguages.includes(language)
-        ? current.targetLanguages.filter((item) => item !== language)
-        : [...current.targetLanguages, language],
-    }));
-  };
-
-  const toggleSalesFeature = (feature: string) => {
-    setSalesInquiry((current) => ({
-      ...current,
-      featureInterests: current.featureInterests.includes(feature)
-        ? current.featureInterests.filter((item) => item !== feature)
-        : [...current.featureInterests, feature],
-    }));
-  };
-
-  const canGoToSalesStepTwo =
-    salesInquiry.firstName.trim().length > 0 &&
-    salesInquiry.lastName.trim().length > 0 &&
-    salesInquiry.workEmail.trim().length > 0 &&
-    salesInquiry.company.trim().length > 0;
-
-  const canGoToSalesStepThree =
-    salesInquiry.helpTopic.trim().length > 0 &&
-    salesInquiry.featureInterests.length > 0 &&
-    salesInquiry.targetLanguages.length > 0;
-
-  const canSubmitSalesInquiry =
-    canGoToSalesStepTwo &&
-    canGoToSalesStepThree &&
-    salesInquiry.currentMeetingVolume.trim().length > 0 &&
-    salesInquiry.consent;
-
-  const goToNextSalesStep = () => {
-    if (salesStep === 1 && canGoToSalesStepTwo) setSalesStep(2);
-    if (salesStep === 2 && canGoToSalesStepThree) setSalesStep(3);
-  };
-
   return (
     <section id="contact" className="footer-section">
       <div className="footer-wrapper">
         <div className="footer-left">
-          <video className="footer-left-video" autoPlay muted loop playsInline preload="auto">
+          <video
+            className="footer-left-video"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+          >
             <source
               src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260503_104800_bc43ae09-f494-43e3-97d7-2f8c1692cfd7.mp4"
               type="video/mp4"
@@ -1429,7 +1158,12 @@ function LandingFooter() {
             <span className="footer-social-label">Stay in touch!</span>
             <div className="footer-social-icons" aria-label="Social links">
               {footerSocialIcons.map((icon) => (
-                <div className="social-icon" key={icon.label} aria-label={icon.label} role="img">
+                <div
+                  className="social-icon"
+                  key={icon.label}
+                  aria-label={icon.label}
+                  role="img"
+                >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d={icon.path} />
                   </svg>
@@ -1440,249 +1174,80 @@ function LandingFooter() {
         </div>
 
         <div className="footer-right">
+          <div className="footer-lucky-graphic">
+            <div className="lucky-cube">
+              <span className="lucky-cube-mark">
+                <FooterLogoMark large />
+              </span>
+            </div>
+            <div className="lucky-text-row">
+              <svg
+                className="lucky-arrow"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M3 20 C 6 14, 10 9, 18 5" />
+                <path d="M18 5 L 12 5" />
+                <path d="M18 5 L 18 11" />
+              </svg>
+              <span className="lucky-text">Feeling lucky?</span>
+            </div>
+          </div>
+
           <div className="footer-right-top">
-            <div className="sales-contact-panel">
-              <div className="sales-contact-copy">
-                <p className="sales-contact-kicker">Contact sales</p>
-                <h3>Tell us about your WarpTalk Enterprise package.</h3>
-                <p>
-                  Share your team details, target languages, and expected meeting usage. This request does not create
-                  an account automatically.
-                </p>
-                <div className="sales-contact-next">
-                  <span>What happens next</span>
-                  <ul>
-                    <li>We match the request with the right workspace flow.</li>
-                    <li>Pricing is confirmed only after the package fits.</li>
-                  </ul>
-                </div>
+            <div className="footer-nav-cols">
+              <div className="footer-col">
+                <h3 className="footer-col-title">Navigation</h3>
+                {footerNavigation.map((item) => (
+                  <a href="#" key={item}>
+                    {item}
+                  </a>
+                ))}
               </div>
-
-              <form className="sales-contact-form" onSubmit={handleSalesInquirySubmit}>
-                <div className="sales-step-header">
-                  <span>Step {salesStep} of 3</span>
-                  <div className="sales-step-dots" aria-hidden="true">
-                    {[1, 2, 3].map((step) => (
-                      <i key={step} className={salesStep >= step ? "active" : ""} />
-                    ))}
-                  </div>
-                </div>
-
-                {salesStep === 1 ? (
-                  <div className="sales-form-section">
-                    <p className="sales-form-section-title">About you</p>
-                  <div className="sales-form-grid two-columns">
-                    <label>
-                      <span>First name</span>
-                      <input
-                        required
-                        value={salesInquiry.firstName}
-                        onChange={(event) => setSalesInquiry((current) => ({ ...current, firstName: event.target.value }))}
-                        placeholder="Janve"
-                      />
-                    </label>
-                    <label>
-                      <span>Last name</span>
-                      <input
-                        required
-                        value={salesInquiry.lastName}
-                        onChange={(event) => setSalesInquiry((current) => ({ ...current, lastName: event.target.value }))}
-                        placeholder="Sove"
-                      />
-                    </label>
-                  </div>
-                  <div className="sales-form-grid two-columns">
-                    <label>
-                      <span>Work email</span>
-                      <input
-                        required
-                        type="email"
-                        value={salesInquiry.workEmail}
-                        onChange={(event) => setSalesInquiry((current) => ({ ...current, workEmail: event.target.value }))}
-                        placeholder="name@company.com"
-                      />
-                    </label>
-                    <label>
-                      <span>Company</span>
-                      <input
-                        required
-                        value={salesInquiry.company}
-                        onChange={(event) => setSalesInquiry((current) => ({ ...current, company: event.target.value }))}
-                      placeholder="Company name"
-                    />
-                  </label>
-                </div>
-                  </div>
-                ) : null}
-
-                {salesStep === 2 ? (
-                  <div className="sales-form-section">
-                    <p className="sales-form-section-title">What do you need?</p>
-                  <label>
-                    <span>How can we help you?</span>
-                    <select
-                      required
-                      value={salesInquiry.helpTopic}
-                      onChange={(event) => setSalesInquiry((current) => ({ ...current, helpTopic: event.target.value }))}
-                    >
-                      <option value="" disabled hidden>Select a request type</option>
-                      <option value="enterprise-package">Request Enterprise package</option>
-                      <option value="billing-invoice">Discuss billing/invoice</option>
-                      <option value="support">Support issue</option>
-                      <option value="other">Other business request</option>
-                    </select>
-                  </label>
-
-                  <fieldset className="sales-choice-field">
-                    <span>Features interested in</span>
-                    <div className="sales-choice-options">
-                      {salesFeatureOptions.map((feature) => (
-                        <label key={feature.value}>
-                          <input
-                            type="checkbox"
-                            checked={salesInquiry.featureInterests.includes(feature.value)}
-                            onChange={() => toggleSalesFeature(feature.value)}
-                          />
-                          <span>{feature.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-
-                  <fieldset className="sales-choice-field">
-                    <span>Target languages</span>
-                    <div className="sales-choice-options">
-                      {salesLanguageOptions.map((language) => (
-                        <label key={language.value}>
-                          <input
-                            type="checkbox"
-                            checked={salesInquiry.targetLanguages.includes(language.value)}
-                            onChange={() => toggleSalesLanguage(language.value)}
-                          />
-                          <span>{language.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                  </div>
-                ) : null}
-
-                {salesStep === 3 ? (
-                  <div className="sales-form-section">
-                    <p className="sales-form-section-title">Usage</p>
-                    <div className="sales-form-grid two-columns">
-                      <label>
-                        <span>Current monthly meeting volume</span>
-                        <select
-                          required
-                          value={salesInquiry.currentMeetingVolume}
-                          onChange={(event) => setSalesInquiry((current) => ({ ...current, currentMeetingVolume: event.target.value }))}
-                        >
-                          <option value="" disabled hidden>Select a range</option>
-                          {salesVolumeOptions.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span>Expected volume in 6 months</span>
-                        <select
-                          value={salesInquiry.expectedMeetingVolume}
-                          onChange={(event) => setSalesInquiry((current) => ({ ...current, expectedMeetingVolume: event.target.value }))}
-                        >
-                          <option value="" disabled hidden>Select a range</option>
-                          {salesVolumeOptions.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-
-                    <label>
-                      <span>Tell us more about your use case</span>
-                      <textarea
-                        value={salesInquiry.message}
-                        onChange={(event) => setSalesInquiry((current) => ({ ...current, message: event.target.value }))}
-                        placeholder="Team size, meeting type, trial goal, rollout timeline..."
-                        rows={4}
-                      />
-                    </label>
-
-                    <label className="sales-consent-row">
-                      <input
-                        required
-                        type="checkbox"
-                        checked={salesInquiry.consent}
-                        onChange={(event) => setSalesInquiry((current) => ({ ...current, consent: event.target.checked }))}
-                      />
-                    <span>I agree that WarpTalk may use this information to contact me about its products and services.</span>
-                  </label>
-                  </div>
-                ) : null}
-
-                <div className="sales-form-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={salesStep === 1 || salesInquiryStatus === "submitting"}
-                    onClick={() => setSalesStep((current) => Math.max(1, current - 1))}
-                  >
-                    Back
-                  </button>
-                  {salesStep < 3 ? (
-                    <button
-                      type="button"
-                      disabled={
-                        salesInquiryStatus === "submitting" ||
-                        (salesStep === 1 && !canGoToSalesStepTwo) ||
-                        (salesStep === 2 && !canGoToSalesStepThree)
-                      }
-                      onClick={goToNextSalesStep}
-                    >
-                      Next
-                    </button>
-                  ) : (
-                    <button type="submit" disabled={salesInquiryStatus === "submitting" || !canSubmitSalesInquiry}>
-                      {salesInquiryStatus === "submitting" ? "Sending..." : "Request pricing"}
-                    </button>
-                  )}
-                </div>
-                <div className="sales-contact-trial">
-                  <span>Want to try first?</span>
-                  <Link
-                    href="/register"
-                    onClick={() => {
-                      if (canSubmitSalesInquiry) {
-                        persistSalesIntent();
-                      }
-                    }}
-                  >
-                    Start a 14-day trial
-                  </Link>
-                </div>
-                {salesInquiryStatus === "sent" ? (
-                  <p className="sales-contact-success">
-                    Thank you. Thanks for reaching out. Our team will review your request and follow up within 1-2 business days.
-                  </p>
-                ) : null}
-                {salesInquiryStatus === "error" ? (
-                  <p className="sales-contact-error">
-                    We could not send your pricing request. Please try again in a moment.
-                  </p>
-                ) : null}
-              </form>
+              <div className="footer-col">
+                <h3 className="footer-col-title">Company</h3>
+                {footerCompany.map((item) => (
+                  <a href="#" key={item}>
+                    {item}
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
 
           <div className="footer-bottom">
-            <p className="footer-copyright">© 2026 WarpTalk. All rights reserved.</p>
+            <p className="footer-copyright">
+              © 2026 WarpTalk. All rights reserved.
+            </p>
+            <div className="footer-cta-mini">
+              <h4>
+                AI moves fast.
+                <br />
+                <strong>Stay ahead with WarpTalk.</strong>
+              </h4>
+              <div className="footer-subscribe-row">
+                <input type="email" placeholder="Enter email address" />
+                <button type="button">Subscribe</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="footer-watermark" aria-hidden="true">
-        <svg id="watermarkSvg" viewBox="62 95 876 175" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-          <text id="watermarkText" x="500" y="240" textAnchor="middle" fontSize="320">
+        <svg
+          id="watermarkSvg"
+          viewBox="62 95 876 175"
+          preserveAspectRatio="xMidYMid meet"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <text
+            id="watermarkText"
+            x="500"
+            y="240"
+            textAnchor="middle"
+            fontSize="320"
+          >
             WarpTalk
           </text>
         </svg>
@@ -1692,23 +1257,50 @@ function LandingFooter() {
 }
 
 export default function HomePage() {
+  const queryClient = useQueryClient();
   const [hasLoaderFinished, setHasLoaderFinished] = useState(false);
   const [hasShellLoaded, setHasShellLoaded] = useState(false);
   const [hasHeroVideoLoaded, setHasHeroVideoLoaded] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
-  const isLoading = !hasLoaderFinished || !hasShellLoaded || !hasHeroVideoLoaded;
+  const isLoading =
+    !hasLoaderFinished || !hasShellLoaded || !hasHeroVideoLoaded;
 
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   const handleGetStarted = () => {
     if (!isAuthenticated || !user) {
-      router.push("/register");
+      router.push("/login?redirect=/workspace");
     } else {
       router.push("/workspace");
     }
   };
+
+  // SignalR connection for real-time landing page pricing updates
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken) return;
+
+    const connection = createHubConnection("/hubs/notification");
+
+    connection.on("NewNotification", (notification) => {
+      if (notification?.type === "billing.plan_changed") {
+        queryClient.invalidateQueries({ queryKey: ["landing-plans"] });
+      }
+    });
+
+    let isMounted = true;
+    connection.start().catch((err) => {
+      if (!isMounted) return;
+      if (err?.message?.includes("stop() was called")) return;
+    });
+
+    return () => {
+      isMounted = false;
+      connection.stop();
+    };
+  }, [accessToken, isAuthenticated, queryClient]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1772,20 +1364,32 @@ export default function HomePage() {
     };
   }, [isLoading]);
 
-  function handleNavClick(event: MouseEvent<HTMLAnchorElement>, sectionId: string) {
+  function handleNavClick(
+    event: MouseEvent<HTMLAnchorElement>,
+    sectionId: string,
+  ) {
     event.preventDefault();
     setActiveSection(sectionId);
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .getElementById(sectionId)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
     window.history.pushState(null, "", `#${sectionId}`);
   }
 
   return (
     <>
       <AnimatePresence mode="wait">
-        {isLoading ? <LoadingScreen onComplete={() => setHasLoaderFinished(true)} /> : null}
+        {isLoading ? (
+          <LoadingScreen onComplete={() => setHasLoaderFinished(true)} />
+        ) : null}
       </AnimatePresence>
 
-      <div style={{ opacity: isLoading ? 0 : 1, transition: "opacity 0.5s ease-out" }}>
+      <div
+        style={{
+          opacity: isLoading ? 0 : 1,
+          transition: "opacity 0.5s ease-out",
+        }}
+      >
         <main
           id="about"
           className="relative min-h-screen overflow-hidden bg-[#000000] scroll-mt-20 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal text-white antialiased"
@@ -1814,12 +1418,22 @@ export default function HomePage() {
                       <motion.span
                         layoutId="landing-nav-active"
                         className="absolute inset-0 rounded-full border border-white/35 bg-black/65 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
-                        transition={{ type: "spring", stiffness: 360, damping: 34 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 360,
+                          damping: 34,
+                        }}
                       />
                     ) : null}
                     <span
-                      data-nav-active={activeSection === link.id ? "true" : undefined}
-                      className={activeSection === link.id ? "relative z-10 text-white" : "relative z-10"}
+                      data-nav-active={
+                        activeSection === link.id ? "true" : undefined
+                      }
+                      className={
+                        activeSection === link.id
+                          ? "relative z-10 text-white"
+                          : "relative z-10"
+                      }
                     >
                       {link.label}
                     </span>
@@ -1837,9 +1451,7 @@ export default function HomePage() {
             </nav>
           </header>
 
-          <section
-            className="relative z-10 flex min-h-screen items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12"
-          >
+          <section className="relative z-10 flex min-h-screen items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12">
             <motion.div
               variants={containerVariants}
               initial="hidden"
@@ -1872,10 +1484,14 @@ export default function HomePage() {
                 variants={itemVariants}
                 className="mt-6 max-w-2xl text-base leading-7 text-white/58 md:text-lg"
               >
-                Real-time interpretation global teams. Natural conversations. Zero language barriers
+                Real-time interpretation global teams. Natural conversations.
+                Zero language barriers
               </motion.p>
 
-              <motion.div variants={itemVariants} className="mt-9 flex flex-wrap justify-center gap-4">
+              <motion.div
+                variants={itemVariants}
+                className="mt-9 flex flex-wrap justify-center gap-4"
+              >
                 <button
                   type="button"
                   onClick={handleGetStarted}

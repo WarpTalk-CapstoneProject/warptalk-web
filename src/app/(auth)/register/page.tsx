@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -42,39 +42,16 @@ type RegisterFormData = {
   email?: string;
   password: string;
 };
-
-type SalesPackageIntent = {
-  firstName?: string;
-  lastName?: string;
-  workEmail?: string;
-};
-
-const salesIntentStorageKey = "warptalk:sales-package-intent";
-const pricingIntentStorageKey = "warptalk:pricing-intent";
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
 function setAccessTokenCookie(accessToken: string) {
   const maxAge = 7 * 24 * 60 * 60; // 7 days
   document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
-function RegisterForm() {
+function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token");
-  const hasToken = Boolean(token);
-  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
-
   const login = useAuthStore((s) => s.login);
-  const [showPassword, setShowPassword] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<RegisterFormData>({
-    resolver: zodResolver(getRegisterSchema(hasToken)) as Resolver<RegisterFormData>,
-  });
 
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -98,23 +75,46 @@ function RegisterForm() {
     },
   });
 
-  useEffect(() => {
-    if (hasToken) return;
+  return (
+    <SocialButton
+      icon={<GoogleAuthIcon />}
+      label="Google"
+      onClick={() => handleGoogleLogin()}
+    />
+  );
+}
 
-    try {
-      const rawIntent =
-        window.sessionStorage.getItem(salesIntentStorageKey) ??
-        window.sessionStorage.getItem(pricingIntentStorageKey);
-      if (!rawIntent) return;
+function RegisterGoogleUnavailableButton() {
+  return (
+    <button
+      type="button"
+      disabled
+      title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable Google sign-in."
+      className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-white/10 bg-black text-sm font-medium text-white/35"
+    >
+      <GoogleAuthIcon />
+      Google
+    </button>
+  );
+}
 
-      const intent = JSON.parse(rawIntent) as SalesPackageIntent;
-      if (intent.firstName) setValue("firstName", intent.firstName);
-      if (intent.lastName) setValue("lastName", intent.lastName);
-      if (intent.workEmail) setValue("email", intent.workEmail);
-    } catch {
-      window.sessionStorage.removeItem(salesIntentStorageKey);
-    }
-  }, [hasToken, setValue]);
+function RegisterForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+  const hasToken = Boolean(token);
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
+
+  const login = useAuthStore((s) => s.login);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(getRegisterSchema(hasToken)) as Resolver<RegisterFormData>,
+  });
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
@@ -260,7 +260,11 @@ function RegisterForm() {
         </span>
       </div>
 
-      <SocialButton icon={<GoogleAuthIcon />} label="Google" onClick={() => handleGoogleLogin()} />
+      {GOOGLE_CLIENT_ID ? (
+        <RegisterGoogleButton callbackUrl={callbackUrl} />
+      ) : (
+        <RegisterGoogleUnavailableButton />
+      )}
     </CinematicAuthShell>
   );
 }

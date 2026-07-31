@@ -181,6 +181,7 @@ export function ChatPanel({
   }
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: false,
@@ -196,7 +197,7 @@ export function ChatPanel({
       Mention.configure({
         HTMLAttributes: {
           class:
-            "text-brand-primary font-medium bg-brand-primary/10 rounded px-1",
+            "text-primary font-medium bg-primary/10 rounded px-1",
         },
         suggestion,
       }),
@@ -338,7 +339,7 @@ export function ChatPanel({
           id="chat-translate-target"
           value={selectedTargetLanguage}
           onChange={(event) => handleTargetLanguageChange(event.target.value)}
-          className="rounded-md border border-border bg-surface-1 px-2 py-1 text-[12px] text-ink outline-none focus:border-brand-primary"
+          className="rounded-md border border-border bg-surface-1 px-2 py-1 text-[12px] text-ink outline-none focus:border-primary"
         >
           {SUPPORTED_LANGUAGES.map((language) => (
             <option key={language.code} value={language.code}>
@@ -366,7 +367,7 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => void historyQuery.refetch()}
-              className="text-[12px] font-medium text-brand-primary hover:underline"
+              className="text-[12px] font-medium text-primary hover:underline"
             >
               Retry
             </button>
@@ -407,7 +408,7 @@ export function ChatPanel({
                 className={`flex gap-3 items-start group ${isMine ? "flex-row-reverse" : ""}`}
               >
                 <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold shadow-sm ${isAssistant ? "bg-brand-primary text-white" : isMine ? "bg-ink text-white" : "bg-surface-3 text-ink"}`}
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold shadow-sm ${isAssistant ? "bg-primary text-white" : isMine ? "bg-ink text-white" : "bg-surface-3 text-ink"}`}
                 >
                   {displayName.substring(0, 2).toUpperCase()}
                 </div>
@@ -475,7 +476,7 @@ export function ChatPanel({
                     </button>
                   ) : (
                     <p
-                      className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-brand-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}
+                      className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}
                     >
                       {message.originalText}
                     </p>
@@ -521,7 +522,7 @@ export function ChatPanel({
           className="hidden"
           onChange={handleFileSelected}
         />
-        <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-brand-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0">
+        <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0">
           <button
             type="button"
             onClick={handleFileButtonClick}

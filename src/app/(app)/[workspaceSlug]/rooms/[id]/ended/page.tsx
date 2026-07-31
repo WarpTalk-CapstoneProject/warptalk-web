@@ -147,7 +147,7 @@ export default function RoomEndedPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Link
           href={`/${workspaceSlug}/rooms/${roomId}/artifacts`}
-          className="inline-flex h-8 items-center justify-center rounded-full bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800"
+          className="inline-flex h-8 items-center justify-center rounded-full bg-foreground px-3 text-sm font-medium text-background transition hover:bg-foreground/90"
         >
           <FileText className="mr-2 h-4 w-4" />
           Open artifacts
