@@ -62,13 +62,9 @@ export function CreateRoomDialog() {
   // The set of languages that will be spoken in this meeting. There is no source→target
   // direction: each participant's own speak/listen language comes from their profile at
   // join. Defaults to a common bilingual pair.
-  // TEMP: reverted to plain codes (2026-07-31) — the backend's supported_languages
-  // table doesn't have the locale-tagged rows yet (pending migration
-  // 20260730141000_seed_supported_languages.sql). Restore "en-US"/"vi-VN" here
-  // and in language-selector.tsx once that migration ships.
   const [meetingLanguages, setMeetingLanguages] = useState<string[]>([
-    "en",
-    "vi",
+    "en-US",
+    "vi-VN",
   ]);
   const [isDaily, setIsDaily] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
@@ -100,7 +96,7 @@ export function CreateRoomDialog() {
     setMeetingLanguages(
       editRoomData.targetLanguages?.length
         ? editRoomData.targetLanguages
-        : [editRoomData.sourceLanguage || "en"],
+        : [editRoomData.sourceLanguage || "en-US"],
     );
     setScheduledAt(
       editRoomData.scheduledAt ? new Date(editRoomData.scheduledAt) : null,
@@ -141,7 +137,7 @@ export function CreateRoomDialog() {
         setTitle("");
         setDescription("");
         setInvitedEmails([]);
-        setMeetingLanguages(["en", "vi"]);
+        setMeetingLanguages(["en-US", "vi-VN"]);
         setScheduledAt(null);
         setIsExpanded(false);
         setCreatedRoomId(null);
