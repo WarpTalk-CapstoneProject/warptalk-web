@@ -281,6 +281,11 @@ export const translationRoomService = {
     return apiClient.post<TranslationRoomFeedbackDto>(API.translationRooms.feedback(id), data);
   },
 
+  async preflight(roomCode: string): Promise<RoomPreflightResponse> {
+    const { data } = await apiClient.get<RoomPreflightResponse>(API.translationRooms.preflight(roomCode));
+    return data;
+  },
+
   downloadCalendarIcs(id: string) {
     return apiClient.get<Blob>(API.translationRooms.calendarIcs(id), {
       responseType: "blob",
