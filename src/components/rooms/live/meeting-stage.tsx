@@ -152,9 +152,7 @@ export function LiveKitMeetingStage({
     const isFeatured = featuredIdentity === identity;
     const handRaised = raisedHandUserIds?.has(identity) ?? false;
     const displayName = trackRef.participant.name || identity || fallbackName;
-    const showCameraOffState =
-      trackRef.source === Track.Source.Camera &&
-      (trackRef.publication?.isMuted ?? true);
+    const showCameraOffState = isCameraUnavailable(trackRef);
     const isThumbnail = options?.variant === "thumbnail";
 
     return (
@@ -172,6 +170,7 @@ export function LiveKitMeetingStage({
         />
         {showCameraOffState ? (
           <div
+            data-camera-state="off"
             className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm ${
               isThumbnail ? "gap-1.5" : "gap-3"
             }`}
@@ -191,7 +190,7 @@ export function LiveKitMeetingStage({
                 isThumbnail ? "text-[10px]" : "text-[12px]"
               }`}
             >
-              Camera off
+              Camera is off
             </div>
           </div>
         ) : null}
@@ -400,4 +399,11 @@ function initials(value: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+}
+
+function isCameraUnavailable(trackRef: TrackReferenceOrPlaceholder) {
+  return (
+    trackRef.source === Track.Source.Camera &&
+    (!trackRef.publication || trackRef.publication.isMuted)
+  );
 }
