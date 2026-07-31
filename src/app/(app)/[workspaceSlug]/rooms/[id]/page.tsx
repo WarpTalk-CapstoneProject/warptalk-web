@@ -220,7 +220,7 @@ export default function RoomInformationPage() {
   );
   const hostUser = getHostUser(room, participants, membersArray, user);
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-canvas text-ink">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
       {copiedText ? (
         <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md border border-border bg-surface-1 px-4 py-2 text-[13px] font-medium text-ink shadow-lg">
           {copiedText}
