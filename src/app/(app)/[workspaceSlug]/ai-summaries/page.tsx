@@ -597,7 +597,7 @@ function TranscriptPanel({
                     <div
                       className={`rounded-2xl px-3 py-2 text-[12px] leading-6 ${
                         isSelf
-                          ? "rounded-tr-sm bg-brand-primary text-white"
+                          ? "rounded-tr-sm bg-primary text-white"
                           : "rounded-tl-sm border border-border bg-surface-1 text-ink-muted"
                       }`}
                     >

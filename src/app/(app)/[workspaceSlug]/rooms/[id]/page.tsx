@@ -535,7 +535,7 @@ function MeetingTranscriptArtifact({
                       <div
                         className={`rounded-2xl px-3 py-2 ${
                           isSelf
-                            ? "rounded-tr-sm bg-brand-primary"
+                            ? "rounded-tr-sm bg-primary"
                             : "rounded-tl-sm border border-border bg-white"
                         }`}
                       >
@@ -648,7 +648,7 @@ function RoomNotesEditor({
         openOnClick: "whenNotEditable",
         autolink: true,
         HTMLAttributes: {
-          class: "text-brand-primary underline underline-offset-2",
+          class: "text-primary underline underline-offset-2",
         },
       }),
       Placeholder.configure({

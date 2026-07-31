@@ -117,7 +117,7 @@ function TranscriptBubble({ segment, isSelf }: { segment: TranscriptSegmentDto; 
         <div
           className={`rounded-2xl px-3 py-2 shadow-sm ${
             isSelf
-              ? "rounded-tr-sm bg-brand-primary"
+              ? "rounded-tr-sm bg-primary"
               : "rounded-tl-sm border border-border bg-surface-2/60"
           }`}
         >
