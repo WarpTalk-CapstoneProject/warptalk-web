@@ -1278,6 +1278,7 @@ export default function HomePage() {
 
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const accessToken = useAuthStore((state) => state.accessToken);
 

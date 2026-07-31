@@ -154,7 +154,6 @@ export interface WorkspaceDocumentDto {
   uploadedBy?: string | null;
   approvedBy?: string | null;
   ownerId?: string | null;
-  approvedBy?: string | null;
   name: string;
   fileName: string;
   fileExtension: string;

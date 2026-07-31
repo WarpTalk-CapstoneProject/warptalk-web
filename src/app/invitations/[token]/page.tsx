@@ -17,6 +17,7 @@ import {
   usePreviewWorkspaceInvitation,
 } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -26,6 +27,7 @@ export default function InvitationAcceptPage({ params }: PageProps) {
   const { token } = use(params);
   const router = useRouter();
   const currentUser = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const logout = useAuthStore((s) => s.logout);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
