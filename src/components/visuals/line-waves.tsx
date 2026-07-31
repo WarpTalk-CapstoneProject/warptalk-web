@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-// @ts-expect-error optional visual package
+// @ts-ignore optional visual package
 import { Mesh, Program, Renderer, Triangle } from "ogl";
 
 import { cn } from "@/lib/utils";
