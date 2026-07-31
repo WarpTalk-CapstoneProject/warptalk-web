@@ -15,6 +15,7 @@ export const WORKSPACE_KEYS = {
   invitations: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "invitations", workspaceId, { page, pageSize, search }] as const,
   pendingInvitations: () => ["workspaces", "invitations", "pending"] as const,
+  myJoinRequests: () => ["workspaces", "join-requests", "mine"] as const,
   invitationPreview: (token: string) => ["workspaces", "invitation-preview", token] as const,
   documentLists: (workspaceId: string) => ["workspaces", "documents", workspaceId] as const,
   documents: (workspaceId: string, page: number, pageSize: number, search: string) =>
@@ -246,6 +247,14 @@ export function useRejectWorkspaceJoinRequest(workspaceId: string) {
 
 export const useApproveJoinRequest = useApproveWorkspaceJoinRequest;
 export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
+
+export function useMyJoinRequests() {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.myJoinRequests(),
+    queryFn: WorkspaceService.getPendingInvitations, // Pending requests query fallback
+    staleTime: 30000,
+  });
+}
 
 // ─── Documents ───
 
