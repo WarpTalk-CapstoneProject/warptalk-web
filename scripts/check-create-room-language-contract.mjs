@@ -10,14 +10,11 @@ const selectorSource = readFileSync(
   "utf8",
 );
 
-const supportedLocales = [
-  "en-US",
-  "vi-VN",
-  "ja-JP",
-  "ko-KR",
-  "fr-FR",
-  "es-ES",
-];
+// TEMP: reverted to plain codes (2026-07-31) — the backend's supported_languages
+// table doesn't have the locale-tagged rows yet (pending migration
+// 20260730141000_seed_supported_languages.sql). Swap this list, and the two
+// regexes below, back to the locale-tagged codes once that migration ships.
+const supportedLocales = ["en", "vi", "ja", "ko", "fr", "es"];
 
 for (const locale of supportedLocales) {
   assert.match(
@@ -29,12 +26,12 @@ for (const locale of supportedLocales) {
 
 assert.match(
   dialogSource,
-  /useState<string\[\]>\(\[\s*"en-US",\s*"vi-VN",\s*\]\)/,
+  /useState<string\[\]>\(\[\s*"en",\s*"vi",\s*\]\)/,
   "Create-room defaults must use backend-supported locale codes.",
 );
 assert.match(
   dialogSource,
-  /setMeetingLanguages\(\["en-US",\s*"vi-VN"\]\)/,
+  /setMeetingLanguages\(\["en",\s*"vi"\]\)/,
   "Create-room reset must restore backend-supported locale codes.",
 );
 assert.match(
