@@ -43,6 +43,19 @@ export interface TranslationRoomDto {
   isHost?: boolean;
 }
 
+/** One Start→Pause (or Start→End) window — "Translation N" in the transcript is this
+ * list's chronological position (oldest first). */
+export interface TranslationRoomSessionDto {
+  id: string;
+  translationRoomId: string;
+  mainLanguage: string;
+  audioUrl?: string;
+  status: "ACTIVE" | "PAUSED" | "ENDED";
+  startedAt?: string;
+  endedAt?: string;
+  createdAt: string;
+}
+
 export interface TranslationRoomParticipantDto {
   id: string;
   translationRoomId: string;
@@ -62,7 +75,7 @@ export interface TranslationRoomParticipantDto {
 // ── Request DTOs ──────────────────────────────
 
 export interface CreateTranslationRoomRequest {
-  workspaceId?: string;
+  workspaceId: string;
   title: string;
   description?: string;
   translationRoomType:

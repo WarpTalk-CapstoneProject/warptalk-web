@@ -91,8 +91,8 @@ export function GlassOverlay({ src, className = "" }: GlassOverlayProps) {
 
   // ── Displacement animation ────────────────────────────────────────────────
 
-  const dispRef = useRef(0);        // current interpolated scale value
-  const targetDispRef = useRef(0);  // target: MAX_DISPLACEMENT or 0
+  const dispRef = useRef(0); // current interpolated scale value
+  const targetDispRef = useRef(0); // target: MAX_DISPLACEMENT or 0
   const rafRef = useRef<number | null>(null);
 
   /**
@@ -100,20 +100,27 @@ export function GlassOverlay({ src, className = "" }: GlassOverlayProps) {
    * writing directly to the SVG attribute so React stays out of the hot path.
    */
   const animateDisplacement = useCallback(() => {
-    dispRef.current += (targetDispRef.current - dispRef.current) * LERP_FACTOR;
-    const rounded = parseFloat(dispRef.current.toFixed(3));
+    function frame() {
+      dispRef.current +=
+        (targetDispRef.current - dispRef.current) * LERP_FACTOR;
+      const rounded = parseFloat(dispRef.current.toFixed(3));
 
-    dispMapRef.current?.setAttribute("scale", String(rounded));
+      dispMapRef.current?.setAttribute("scale", String(rounded));
 
-    const delta = Math.abs(dispRef.current - targetDispRef.current);
-    if (delta > 0.03) {
-      rafRef.current = requestAnimationFrame(animateDisplacement);
-    } else {
-      // Snap to exact target and stop the loop
-      dispRef.current = targetDispRef.current;
-      dispMapRef.current?.setAttribute("scale", String(targetDispRef.current));
-      rafRef.current = null;
+      const delta = Math.abs(dispRef.current - targetDispRef.current);
+      if (delta > 0.03) {
+        rafRef.current = requestAnimationFrame(frame);
+      } else {
+        // Snap to exact target and stop the loop
+        dispRef.current = targetDispRef.current;
+        dispMapRef.current?.setAttribute(
+          "scale",
+          String(targetDispRef.current),
+        );
+        rafRef.current = null;
+      }
     }
+    frame();
   }, []);
 
   const startLoop = useCallback(() => {
@@ -173,7 +180,7 @@ export function GlassOverlay({ src, className = "" }: GlassOverlayProps) {
       targetDispRef.current = MAX_DISPLACEMENT;
       startLoop();
     },
-    [startLoop]
+    [startLoop],
   );
 
   const handleMouseEnter = useCallback(() => {

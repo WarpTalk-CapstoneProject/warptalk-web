@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Broadcast, Lock, SignOut, UsersFour } from "@phosphor-icons/react/dist/ssr";
+import {
+  Broadcast,
+  Lock,
+  SignOut,
+  UsersFour,
+} from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -20,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { useEndMeetingForAll } from "@/hooks/use-meeting";
 import { getLanguageName } from "@/lib/languages";
+import { getErrorMessage } from "@/lib/errors";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 
@@ -44,7 +50,11 @@ export function MeetingTopBar({
   isLocked?: boolean;
   /** Breakout rooms (scoped-down): shows a persistent "Breakout: Group X — N:NN remaining"
    * chip while active. null/undefined hides it. */
-  breakoutInfo?: { label: string; startedAt: string | null; durationSeconds: number | null } | null;
+  breakoutInfo?: {
+    label: string;
+    startedAt: string | null;
+    durationSeconds: number | null;
+  } | null;
   /** Fired once, the moment the breakout countdown crosses into its final minute. */
   onBreakoutFinalMinute?: () => void;
 }) {
@@ -61,13 +71,18 @@ export function MeetingTopBar({
             <span className="max-w-[200px] truncate">{room.title}</span>
             <span className="text-ink-tertiary">/</span>
             <span className="text-ink-subtle">
-              {getLanguageName(sourceLanguage)} to {getLanguageName(targetLanguage)}
+              {getLanguageName(sourceLanguage)} to{" "}
+              {getLanguageName(targetLanguage)}
             </span>
             <span className="text-ink-tertiary">/</span>
-            <MeetingTimer startedAt={room.startedAt} />
+            <MeetingTimer createdAt={room.createdAt} endedAt={room.endedAt} />
           </div>
-          <div className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${warptalkStarted ? "bg-red-50 text-red-600" : "bg-surface-2 text-ink-subtle"}`}>
-            <div className={`h-1.5 w-1.5 rounded-full ${warptalkStarted ? "bg-destructive" : "bg-slate-400"}`} />
+          <div
+            className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${warptalkStarted ? "bg-red-50 text-red-600" : "bg-surface-2 text-ink-subtle"}`}
+          >
+            <div
+              className={`h-1.5 w-1.5 rounded-full ${warptalkStarted ? "bg-destructive" : "bg-slate-400"}`}
+            />
             {warptalkStarted ? "Live Translation" : "Translation Ready"}
           </div>
           {isHost ? (
@@ -97,17 +112,24 @@ export function MeetingTopBar({
         <div className="flex shrink-0 items-center gap-2">
           <div className="h-4 w-[1px] bg-surface-3 mx-1" />
           <DropdownMenu>
-            <DropdownMenuTrigger
-              className="flex h-7 w-7 items-center justify-center rounded-[6px] text-destructive transition-colors hover:bg-destructive/10 outline-none"
-            >
+            <DropdownMenuTrigger className="flex h-7 w-7 items-center justify-center rounded-[6px] text-destructive transition-colors hover:bg-destructive/10 outline-none">
               <SignOut className="h-4 w-4" weight="bold" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 bg-surface-1 border-border rounded-[8px] text-ink">
-              <DropdownMenuItem onClick={() => setShowLeaveDialog(true)} className="cursor-pointer hover:bg-surface-2">
+            <DropdownMenuContent
+              align="end"
+              className="w-48 bg-surface-1 border-border rounded-[8px] text-ink"
+            >
+              <DropdownMenuItem
+                onClick={() => setShowLeaveDialog(true)}
+                className="cursor-pointer hover:bg-surface-2"
+              >
                 Leave Meeting
               </DropdownMenuItem>
               {isHost && (
-                <DropdownMenuItem onClick={() => setShowEndDialog(true)} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => setShowEndDialog(true)}
+                  className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
+                >
                   End Meeting for All
                 </DropdownMenuItem>
               )}
@@ -123,12 +145,21 @@ export function MeetingTopBar({
             <DialogTitle>Leave Meeting</DialogTitle>
             <DialogDescription className="text-ink-subtle pt-2">
               Are you sure you want to leave the meeting?
-              {isHost && " You are the active host. The meeting will continue without an active host unless you end it for everyone."}
+              {isHost &&
+                " You are the active host. The meeting will continue without an active host unless you end it for everyone."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowLeaveDialog(false)} className="bg-surface-2 hover:bg-surface-3 text-ink border-border">Cancel</Button>
-            <Button variant="destructive" onClick={() => onExit("leave")}>Leave Room</Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowLeaveDialog(false)}
+              className="bg-surface-2 hover:bg-surface-3 text-ink border-border"
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => onExit("leave")}>
+              Leave Room
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -139,19 +170,32 @@ export function MeetingTopBar({
           <DialogHeader>
             <DialogTitle>End Meeting for All</DialogTitle>
             <DialogDescription className="text-ink-subtle pt-2">
-              This will end the meeting for everyone, kick all participants out, and finalize the artifacts and billing. This action cannot be undone.
+              This will end the meeting for everyone, kick all participants out,
+              and finalize the artifacts and billing. This action cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowEndDialog(false)} className="bg-surface-2 hover:bg-surface-3 text-ink border-border">Cancel</Button>
-            <Button variant="destructive" onClick={async () => {
-              try {
-                await endForAll.mutateAsync();
-                onExit("end");
-              } catch (e: any) {
-                toast.error(e.message || "Failed to end meeting");
-              }
-            }}>End for Everyone</Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowEndDialog(false)}
+              className="bg-surface-2 hover:bg-surface-3 text-ink border-border"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                try {
+                  await endForAll.mutateAsync();
+                  onExit("end");
+                } catch (error: unknown) {
+                  toast.error(getErrorMessage(error, "Failed to end meeting"));
+                }
+              }}
+            >
+              End for Everyone
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -187,7 +231,13 @@ function BreakoutIndicator({
 
   const remainingSeconds =
     startedAt && durationSeconds
-      ? Math.max(0, Math.floor((new Date(startedAt).getTime() + durationSeconds * 1000 - now) / 1000))
+      ? Math.max(
+          0,
+          Math.floor(
+            (new Date(startedAt).getTime() + durationSeconds * 1000 - now) /
+              1000,
+          ),
+        )
       : null;
 
   const firedFinalMinuteRef = useRef(false);
@@ -195,7 +245,11 @@ function BreakoutIndicator({
     firedFinalMinuteRef.current = false;
   }, [startedAt, durationSeconds]);
   useEffect(() => {
-    if (remainingSeconds !== null && remainingSeconds <= 60 && !firedFinalMinuteRef.current) {
+    if (
+      remainingSeconds !== null &&
+      remainingSeconds <= 60 &&
+      !firedFinalMinuteRef.current
+    ) {
       firedFinalMinuteRef.current = true;
       onEnterFinalMinute?.();
     }

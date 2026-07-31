@@ -5,7 +5,7 @@ export interface CreditBalanceDto {
   totalCredits: number;
   status: string;
   currentPeriodStart: string; // ISO datetime
-  currentPeriodEnd: string;   // ISO datetime
+  currentPeriodEnd: string; // ISO datetime
 }
 
 export interface SubscriptionDto {
@@ -27,11 +27,32 @@ export interface SubscriptionDto {
   workspaceName?: string | null;
 }
 
+export interface CreateCheckoutSessionRequest {
+  userId: string;
+  workspaceId: string;
+  amount: number;
+  currency: string;
+  paymentType: string;
+  planSlug?: string;
+  billingCycle?: string;
+}
+
+export interface CheckoutSessionDto {
+  id: string;
+  status: string;
+  paymentStatus?: string;
+  customerEmail?: string | null;
+  amountTotal?: number | null;
+  currency?: string | null;
+  paymentIntentId?: string | null;
+  metadata?: Record<string, string>;
+}
+
 export interface PlanDto {
   id: string;
   name: string;
   slug: string;
-  description: string;
+  description?: string;
   tier: string;
   price: number;
   currency: string;
@@ -42,7 +63,13 @@ export interface PlanDto {
   isActive: boolean;
   maxParticipants: number;
   maxLanguages: number;
+  voiceCloneEnabled: boolean;
+  aiAssistantEnabled: boolean;
+  glossaryEnabled: boolean;
+  dedicatedGpu: boolean;
 }
+
+export type PlanMutationDto = Omit<PlanDto, "id">;
 
 export interface CreditTransactionDto {
   id: string;
@@ -51,7 +78,7 @@ export interface CreditTransactionDto {
   userId: string;
   userName?: string | null;
   amount: number; // negative = consumption, positive = top-up
-  type: 'consumption' | 'top_up' | 'reserve' | 'refund' | 'adjustment';
+  type: "consumption" | "top_up" | "reserve" | "refund" | "adjustment";
   description?: string;
   referenceType?: string;
   referenceId?: string;
@@ -82,7 +109,6 @@ export interface PagedResult<T> {
   items: T[];
 }
 
-
 export interface CreditHistoryFilters {
   workspaceId?: string;
   type?: string;
@@ -90,6 +116,22 @@ export interface CreditHistoryFilters {
   toDate?: string;
   minAmount?: number;
   maxAmount?: number;
+}
+
+export interface CreditHistoryQueryParams extends CreditHistoryFilters {
+  pageNumber: number;
+  pageSize: number;
+}
+
+export interface GroupedCreditTransaction extends CreditTransactionDto {
+  originalTx: CreditTransactionDto[];
+  isGrouped?: boolean;
+}
+
+export interface UsageGroupSummary {
+  count: number;
+  cost: number;
+  rawType: string;
 }
 
 export interface GlobalBillingMetricsDto {
@@ -137,18 +179,6 @@ export interface UsageAlertDto {
   workspaceName: string;
   consumedCreditsIn24h: number;
   reason: string;
-}
-
-export interface MonthlyUsageDto {
-  month: number;
-  monthName: string;
-  consumedCredits: number;
-  topUpCredits: number;
-}
-
-export interface UsageChartDto {
-  year: number;
-  monthlyData: MonthlyUsageDto[];
 }
 
 export interface ServiceRatesDto {
