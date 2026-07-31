@@ -3,13 +3,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
 
+// TEMP: reverted to plain codes (2026-07-31) — see create-room-dialog.tsx for why.
 const languageOptions = [
-  { code: "vi-VN", label: "Vietnamese" },
-  { code: "en-US", label: "English" },
-  { code: "ja-JP", label: "Japanese" },
-  { code: "ko-KR", label: "Korean" },
-  { code: "fr-FR", label: "French" },
-  { code: "es-ES", label: "Spanish" },
+  { code: "vi", label: "Vietnamese" },
+  { code: "en", label: "English" },
+  { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
+  { code: "fr", label: "French" },
+  { code: "es", label: "Spanish" },
 ];
 
 function getFlagEmoji(locale: string) {
