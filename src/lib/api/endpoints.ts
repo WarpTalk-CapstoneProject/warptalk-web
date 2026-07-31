@@ -46,6 +46,7 @@ export const API = {
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
     voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
+    sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
