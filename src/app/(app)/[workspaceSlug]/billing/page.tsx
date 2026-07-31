@@ -11,6 +11,8 @@ import {
   ArrowDownRight,
   Spinner,
   Lock,
+  Funnel,
+  SlidersHorizontal,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,7 +40,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -188,6 +190,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   });
 
   const [historyPageNumber, setHistoryPageNumber] = useState(1);
+  const [billingTab, setBillingTab] = useState("overview");
   const [historyTypeFilter, setHistoryTypeFilter] = useState("ALL");
   const [filterFromDate, setFilterFromDate] = useState("");
   const [filterToDate, setFilterToDate] = useState("");
@@ -511,27 +514,63 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink max-w-7xl mx-auto w-full">
+    <div className="flex h-full flex-col bg-surface-1 px-4 pb-6 text-ink">
       {/* Header section with styling consistent with members and documents */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-hairline/20 gap-4 pt-2">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Billing & Usage</h1>
-          <p className="text-sm text-ink-muted mt-1">
-            Manage your subscription, credit balance, and monitor AI usage
-            statistics.
-          </p>
+      <div className="flex shrink-0 flex-col gap-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+          {[
+            { value: "overview", label: "Overview & Usage" },
+            { value: "history", label: "Transaction History" },
+            { value: "invoices", label: "Billing History" },
+          ].map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => setBillingTab(item.value)}
+              className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+                billingTab === item.value
+                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+
+        <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
+          <button
+            type="button"
+            onClick={() => setBillingTab("history")}
+            className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Transaction filters"
+          >
+            <Funnel weight="bold" size={13} />
+            {activeFiltersCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex size-3 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-white">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setBillingTab("history")}
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Billing display options"
+          >
+            <SlidersHorizontal weight="bold" size={13} />
+          </button>
+          <div className="mx-1 h-4 w-[1px] bg-border" />
           <button
             onClick={handleOpenExport}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-hairline bg-surface-2 hover:bg-surface-3 px-3 text-xs font-semibold text-ink transition duration-150 cursor-pointer"
+            className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2"
           >
             <Download className="h-3.5 w-3.5" />
             <span>Export usage</span>
           </button>
 
           <Link href={`/${workspaceSlug}/payment/plans`}>
-            <button className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-3 text-xs font-semibold text-white transition duration-150 cursor-pointer">
+            <button className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90">
               <Wallet className="h-3.5 w-3.5" />
               <span>Manage Plan &amp; Credits</span>
             </button>
@@ -590,28 +629,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         </Card>
       </section>
 
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="bg-surface-2/60 border border-hairline/30 p-1 rounded-lg inline-flex">
-          <TabsTrigger
-            value="overview"
-            className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
-          >
-            Overview & Usage
-          </TabsTrigger>
-          <TabsTrigger
-            value="history"
-            className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
-          >
-            Transaction History
-          </TabsTrigger>
-          <TabsTrigger
-            value="invoices"
-            className="rounded-md text-xs px-4 py-1.5 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
-          >
-            Billing History
-          </TabsTrigger>
-        </TabsList>
-
+      <Tabs value={billingTab} onValueChange={setBillingTab} className="w-full">
         <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
           <section className="flex flex-col gap-6">
             <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">

@@ -4,9 +4,10 @@ import { useMemo, useRef, useState } from "react";
 import {
   CheckCircle,
   FileAudio,
-  MagnifyingGlass,
+  Funnel,
   Microphone,
   Plus,
+  SlidersHorizontal,
   Trash,
   Waveform,
 } from "@phosphor-icons/react/dist/ssr";
@@ -14,6 +15,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import {
   Dialog,
   DialogContent,
@@ -53,11 +55,24 @@ export default function VoiceProfilesPage() {
   const [language, setLanguage] = useState("vi-VN");
   const [searchQuery, setSearchQuery] = useState("");
   const [languageFilter, setLanguageFilter] = useState("all");
+  const [sampleFilter, setSampleFilter] = useState<"all" | "ready" | "missing">("all");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const profileList = useMemo(() => profiles ?? [], [profiles]);
   const readyCount = useMemo(() => profileList.filter((p) => p.hasSample).length, [profileList]);
+  const voiceProfileFilters = [
+    { key: "all", label: "All profiles", language: "all", sample: "all" },
+    { key: "ready", label: "With sample", language: "all", sample: "ready" },
+    { key: "missing", label: "Missing sample", language: "all", sample: "missing" },
+    { key: "vi", label: "VI", language: "vi-VN", sample: "all" },
+    { key: "en", label: "EN", language: "en-US", sample: "all" },
+    { key: "ja", label: "JA", language: "ja-JP", sample: "all" },
+    { key: "ko", label: "KO", language: "ko-KR", sample: "all" },
+  ] as const;
+  const activeVoiceFilter =
+    voiceProfileFilters.find((item) => item.language === languageFilter && item.sample === sampleFilter)?.key ??
+    "custom";
   const filteredProfiles = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     return profileList.filter((profile) => {
@@ -66,9 +81,13 @@ export default function VoiceProfilesPage() {
         profile.displayName?.toLowerCase().includes(normalizedQuery) ||
         profile.language?.toLowerCase().includes(normalizedQuery);
       const matchesLanguage = languageFilter === "all" || profile.language === languageFilter;
-      return matchesQuery && matchesLanguage;
+      const matchesSample =
+        sampleFilter === "all" ||
+        (sampleFilter === "ready" && profile.hasSample) ||
+        (sampleFilter === "missing" && !profile.hasSample);
+      return matchesQuery && matchesLanguage && matchesSample;
     });
-  }, [languageFilter, profileList, searchQuery]);
+  }, [languageFilter, profileList, sampleFilter, searchQuery]);
 
   function resetForm() {
     setDisplayName("");
@@ -119,62 +138,75 @@ export default function VoiceProfilesPage() {
   }
 
   return (
-    <div className="min-h-full bg-surface-1 px-5 py-8 text-ink sm:px-8">
-      <div className="mx-auto flex w-full max-w-[1560px] flex-col gap-7">
-        <section className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-4">
-            <div>
-              <h1 className="text-[32px] font-semibold leading-tight tracking-normal text-ink">Voice Profiles</h1>
-              <p className="mt-2 max-w-2xl text-[14px] leading-6 text-ink-muted">
-                Build reusable speaker identities for translation rooms, transcripts, and AI summaries.
-              </p>
-            </div>
+    <div className="flex h-full flex-col bg-surface-1 text-ink">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <section className="flex shrink-0 flex-col gap-4 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+            {voiceProfileFilters.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  setLanguageFilter(item.language);
+                  setSampleFilter(item.sample);
+                }}
+                className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+                  activeVoiceFilter === item.key
+                    ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                    : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-          <Button
-            className="h-10 w-fit rounded-full bg-neutral-950 px-5 text-white hover:bg-neutral-800"
-            onClick={() => setIsCreateOpen(true)}
-          >
-            <Plus size={16} weight="bold" />
-            Create profile
-          </Button>
+
+          <div className="flex shrink-0 items-center gap-2 pl-4">
+            <ExpandingSearchDock
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              placeholder="Search voice profiles..."
+              ariaLabel="Search voice profiles"
+              collapsedWidth={28}
+              expandedWidth={220}
+              className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+              iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+              clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+              inputClassName="h-[26px] text-[12px]"
+            />
+            <button
+              className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              title="Voice profile filters"
+            >
+              <Funnel weight="bold" size={13} />
+              {(languageFilter !== "all" || sampleFilter !== "all") && (
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+              )}
+            </button>
+            <button
+              className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              title={`${filteredProfiles.length} profiles`}
+            >
+              <SlidersHorizontal weight="bold" size={13} />
+            </button>
+            <div className="mx-1 h-4 w-[1px] bg-border" />
+            <Button
+              className="h-[28px] rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm hover:opacity-90"
+              onClick={() => setIsCreateOpen(true)}
+            >
+              <Plus size={14} weight="bold" />
+              Create profile
+            </Button>
+          </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="flex flex-col gap-3 xl:flex-row">
-            <label className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-[14px] border border-neutral-950 bg-white px-4 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
-              <MagnifyingGlass size={20} className="shrink-0 text-ink" />
-              <input
-                className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-ink-subtle"
-                placeholder="Search voice profiles..."
-                aria-label="Search voice profiles"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-              <FileAudio size={18} className="shrink-0 text-ink-muted" />
-            </label>
-            <Select value={languageFilter} onValueChange={(value) => setLanguageFilter(value || "all")}>
-              <SelectTrigger className="h-12 min-w-52 rounded-[14px] border-border bg-white px-4 text-ink">
-                <SelectValue placeholder="All languages" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All languages</SelectItem>
-                {LANGUAGE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </section>
-
-        <section className="grid gap-3 border-y border-border py-4 sm:grid-cols-3">
+        <section className="mx-4 grid gap-3 border-y border-border py-4 sm:grid-cols-3">
           <Metric icon={<Microphone size={16} weight="bold" />} label="Profiles" value={String(profileList.length)} />
           <Metric icon={<CheckCircle size={16} weight="bold" />} label="With sample" value={String(readyCount)} />
           <Metric icon={<Waveform size={16} weight="bold" />} label="Default language" value="vi-VN" />
         </section>
 
-        <section className="space-y-4">
+        <section className="mx-4 space-y-4 py-4 pb-6">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-[18px] font-semibold text-ink">Your voice profiles</h2>

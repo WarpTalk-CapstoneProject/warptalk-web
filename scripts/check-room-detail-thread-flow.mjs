@@ -16,7 +16,7 @@ const checks = [
   ["room detail does not render inferred activity", !page.includes("function RoomThread(") && !page.includes("buildThreadEvents(")],
   ["room detail does not label synthesized room data as activity", !page.includes("Room events and participant changes.") && !page.includes(">Activity<")],
   ["join meeting button keeps white text on purple primary", page.includes("className=\"h-9 justify-between rounded-md text-[13px] !text-white")],
-  ["room detail uses a white surface", page.includes("bg-white text-ink")],
+  ["room detail uses a themed canvas surface", page.includes("bg-canvas text-ink")],
   ["visible host fallback label is removed", !page.includes("\"Host\"") && !page.includes(">Host<")],
   ["live side panel only exposes transcript chat and people modes", sidePanel.includes('"transcript" | "chat" | "participants"') && !sidePanel.includes('"polls"') && !sidePanel.includes('"qa"') && !sidePanel.includes('"notes"')],
   ["live side panel removes notes polls and q-and-a tabs", !sidePanel.includes('label="Notes"') && !sidePanel.includes('label="Polls"') && !sidePanel.includes('label="Q&A"')],
