@@ -27,9 +27,8 @@ import { NetworkQualityIcon } from "./network-quality-icon";
 const TILE_CLASSNAME =
   "!h-full !w-full !border-0 overflow-hidden rounded-xl !bg-surface-3 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
 
-const STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1 p-3 pb-28";
-const SINGLE_PARTICIPANT_STAGE_CLASSNAME =
-  "h-full min-h-0 w-full bg-surface-1 pb-28";
+const STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1 p-3";
+const SINGLE_PARTICIPANT_STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1";
 const FULLSCREEN_FEATURED_STAGE_CLASSNAME =
   "relative h-full min-h-0 w-full overflow-hidden bg-surface-1";
 

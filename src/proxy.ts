@@ -5,6 +5,7 @@ import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
 const PUBLIC_ROUTES = [
   "/",
   "/login",
+  "/desktop-login",
   "/register",
   "/forgot-password",
   "/verify-email",
