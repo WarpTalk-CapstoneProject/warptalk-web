@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { getWorkspaceEntryPath, parseWorkspaceSlugInput } from "@/lib/workspace-slug";
 
 export default function JoinWorkspacePage() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function JoinWorkspacePage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [token, setToken] = useState("");
+  const [inputError, setInputError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
@@ -23,46 +25,19 @@ export default function JoinWorkspacePage() {
   useEffect(() => {
     if (activeWorkspaceId) {
       const activeSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
-      router.replace(`/${activeSlug || "workspace"}/rooms`);
+      const entryPath = getWorkspaceEntryPath(activeSlug);
+      router.replace(entryPath === "/workspace" ? entryPath : entryPath.replace(/\/home$/, "/rooms"));
     }
   }, [activeWorkspaceId, router]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const inputVal = token.trim();
-    if (!inputVal) return;
-
-    let workspaceSlug = inputVal;
-
-    if (workspaceSlug.includes("://")) {
-      try {
-        const urlObj = new URL(workspaceSlug);
-        const paths = urlObj.pathname.split("/").filter(Boolean);
-        if (paths.length > 0) {
-          if (paths[0] === "workspace" && paths[1]) {
-            workspaceSlug = paths[1];
-          } else {
-            workspaceSlug = paths[0];
-          }
-        }
-      } catch {
-        // Fallback if URL parsing fails
-      }
-    } else {
-      const slashParts = workspaceSlug.split("/").filter(Boolean);
-      if (slashParts.length > 1) {
-        if (slashParts[1] === "workspace" && slashParts[2]) {
-          workspaceSlug = slashParts[2];
-        } else if (slashParts[0].includes(".") && slashParts[1]) {
-          workspaceSlug = slashParts[1];
-        }
-      }
-    }
-
-    workspaceSlug = workspaceSlug.split("?")[0].split("#")[0].trim();
-
+    const workspaceSlug = parseWorkspaceSlugInput(token);
     if (workspaceSlug) {
+      setInputError(null);
       router.push(`/${encodeURIComponent(workspaceSlug)}/rooms`);
+    } else {
+      setInputError("Enter a valid workspace slug or URL.");
     }
   }
 
@@ -112,8 +87,12 @@ export default function JoinWorkspacePage() {
               placeholder="e.g. acme or warptalk.app/workspace/acme"
               value={token}
               onChange={(event) => setToken(event.target.value)}
+              aria-invalid={inputError ? "true" : undefined}
               className="bg-surface-1 border-border rounded-md h-10 px-3 text-[14px] focus-visible:ring-1 focus-visible:ring-primary outline-none"
             />
+            {inputError && (
+              <p className="text-[11px] text-destructive">{inputError}</p>
+            )}
           </div>
 
           {/* Submit Button */}

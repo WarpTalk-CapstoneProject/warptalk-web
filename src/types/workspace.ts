@@ -33,6 +33,7 @@ export interface WorkspaceSettingsDto {
   voiceCloningEnabled: boolean;
   maxActiveRooms: number;
   artifactRetentionDays: number;
+  invitationExpiryDays: number;
   enforceHostApprovalDefault: boolean;
   verifiedDomains: string[];
   allowExternalCollaboration: boolean;
@@ -153,7 +154,6 @@ export interface WorkspaceDocumentDto {
   uploadedBy?: string | null;
   approvedBy?: string | null;
   ownerId?: string | null;
-  approvedBy?: string | null;
   name: string;
   fileName: string;
   fileExtension: string;

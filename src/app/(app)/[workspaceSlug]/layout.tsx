@@ -5,24 +5,33 @@ import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces } from "@/hooks/use-workspace";
 import { Spinner } from "@phosphor-icons/react";
+import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const params = useParams<{ workspaceSlug: string }>();
-  const workspaceSlug = params.workspaceSlug;
+  const workspaceSlug = normalizeWorkspaceSlug(params.workspaceSlug);
 
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   const { data: workspacesData, isLoading, isError } = useWorkspaces(1, 100);
-  const targetWorkspace = workspacesData?.items.find(
-    (workspace) => workspace.slug === workspaceSlug
-  );
+  const targetWorkspace = workspaceSlug && workspacesData?.items
+    ? workspacesData.items.find((w) => w.slug === workspaceSlug)
+    : undefined;
 
   useEffect(() => {
+    if (!workspaceSlug) {
+      useWorkspaceStore.getState().clearActiveWorkspace();
+      router.replace("/workspace");
+      return;
+    }
+
     if (isLoading) return;
 
-    if (isError || !workspacesData?.items) return;
+    if (isError || !workspacesData?.items) {
+      return;
+    }
 
     if (targetWorkspace) {
       const storedRole = useWorkspaceStore.getState().role;
@@ -61,13 +70,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     router,
   ]);
 
-  const isSyncing =
-    !isError &&
-    (!workspacesData?.items ||
-      !targetWorkspace ||
-      activeWorkspaceSlug !== workspaceSlug);
-
-  if (isLoading || isSyncing) {
+  if (!workspaceSlug || isLoading || (!isError && workspacesData?.items && !targetWorkspace)) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />

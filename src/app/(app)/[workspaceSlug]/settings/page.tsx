@@ -38,6 +38,7 @@ const settingsSchema = z.object({
   timezone: z.string().min(1, "Please select timezone"),
   maxActiveRooms: z.number().int("Must be a whole number").min(1, "Must be at least 1 room").max(50, "Max 50 rooms"),
   artifactRetentionDays: z.number().int("Must be a whole number").min(0, "Retention must be 0 (indefinite) or positive").max(3650, "Max 3650 days"),
+  invitationExpiryDays: z.number().int("Must be a whole number").min(1, "Expiry must be at least 1 day").max(365, "Max 365 days"),
   enforceHostApprovalDefault: z.boolean(),
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
@@ -83,6 +84,7 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   timezone: "UTC",
   maxActiveRooms: 5,
   artifactRetentionDays: 30,
+  invitationExpiryDays: 7,
   enforceHostApprovalDefault: true,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
@@ -117,6 +119,7 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     timezone: settings.timezone || DEFAULT_SETTINGS_FORM_DATA.timezone,
     maxActiveRooms: settings.maxActiveRooms ?? DEFAULT_SETTINGS_FORM_DATA.maxActiveRooms,
     artifactRetentionDays: settings.artifactRetentionDays ?? DEFAULT_SETTINGS_FORM_DATA.artifactRetentionDays,
+    invitationExpiryDays: settings.invitationExpiryDays ?? DEFAULT_SETTINGS_FORM_DATA.invitationExpiryDays,
     enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
@@ -268,8 +271,8 @@ export default function WorkspaceSettingsPage() {
     queuePatch(String(field), { [field]: value } as Partial<WorkspaceSettingsDto>, value);
   };
 
-  const commitNumericField = (field: "maxActiveRooms" | "artifactRetentionDays", rawValue: string) => {
-    const limits = field === "maxActiveRooms" ? [1, 50] : [0, 3650];
+  const commitNumericField = (field: "maxActiveRooms" | "artifactRetentionDays" | "invitationExpiryDays", rawValue: string) => {
+    const limits = field === "maxActiveRooms" ? [1, 50] : field === "invitationExpiryDays" ? [1, 365] : [0, 3650];
     const parsedInput = parseIntegerInRange(rawValue, limits[0], limits[1]);
     const value = parsedInput.value;
     setValue(field, value, { shouldDirty: true, shouldValidate: true });
@@ -563,6 +566,33 @@ export default function WorkspaceSettingsPage() {
               />
               {errors.artifactRetentionDays?.message && (
                 <span className="text-[11px] text-destructive">{errors.artifactRetentionDays.message}</span>
+              )}
+            </div>
+
+            {/* Invitation Expiry Days */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-ink">Invitation Expiry Days</span>
+                <span className="text-[11px] text-ink-muted">Days before a workspace invitation link expires (1 - 365 days).</span>
+              </div>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                {...register("invitationExpiryDays", { valueAsNumber: true })}
+                onBlur={(event) => commitNumericField("invitationExpiryDays", event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitNumericField("invitationExpiryDays", event.currentTarget.value);
+                    event.currentTarget.blur();
+                  }
+                }}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+                className="w-[140px] h-8 text-xs bg-surface-2 border-hairline"
+              />
+              {errors.invitationExpiryDays?.message && (
+                <span className="text-[11px] text-destructive">{errors.invitationExpiryDays.message}</span>
               )}
             </div>
 
