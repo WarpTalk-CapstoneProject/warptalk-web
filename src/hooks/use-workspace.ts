@@ -225,18 +225,11 @@ export function useCreateJoinRequest() {
 export function useApproveWorkspaceJoinRequest(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-<<<<<<< HEAD
-    mutationFn: (inviteId: string) => WorkspaceService.approveJoinRequest(workspaceId, inviteId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
-=======
     mutationFn: (payload: string | { invitationId: string; membershipType?: string }) =>
       WorkspaceService.approveJoinRequest(workspaceId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
       queryClient.invalidateQueries({ queryKey: ["workspaces", "members"] });
->>>>>>> development
     },
   });
 }
@@ -246,21 +239,14 @@ export function useRejectWorkspaceJoinRequest(workspaceId: string) {
   return useMutation({
     mutationFn: (inviteId: string) => WorkspaceService.rejectJoinRequest(workspaceId, inviteId),
     onSuccess: () => {
-<<<<<<< HEAD
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
-=======
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
->>>>>>> development
     },
   });
 }
 
-<<<<<<< HEAD
-=======
 export const useApproveJoinRequest = useApproveWorkspaceJoinRequest;
 export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
 
->>>>>>> development
 // ─── Documents ───
 
 export function useUploadWorkspaceDocument(workspaceId: string) {

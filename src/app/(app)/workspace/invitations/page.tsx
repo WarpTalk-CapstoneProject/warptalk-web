@@ -20,21 +20,14 @@ import {
   XCircle
 } from "@phosphor-icons/react";
 
-import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import {
   useWorkspaceInvitations,
   useInviteWorkspaceMember,
   useRevokeWorkspaceInvitation,
-<<<<<<< HEAD
-  useWorkspaceSettings,
-  useApproveWorkspaceJoinRequest,
-  useRejectWorkspaceJoinRequest
-=======
   useApproveJoinRequest,
   useRejectJoinRequest
->>>>>>> development
 } from "@/hooks/use-workspace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -56,7 +49,6 @@ export default function WorkspaceInvitationsPage() {
   const currentRole = useWorkspaceRole();
   const currentMembership = useWorkspaceStore((s) => s.membershipType);
 
-  const [activeTab, setActiveTab] = useState<"outbound" | "inbound">("outbound");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<"invitations" | "join-requests">("invitations");
@@ -70,13 +62,8 @@ export default function WorkspaceInvitationsPage() {
   const joinRequestsQuery = useWorkspaceInvitations(activeWorkspaceId || "", page, 100, query, "join-request");
   const inviteMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
   const revokeMutation = useRevokeWorkspaceInvitation(activeWorkspaceId || "");
-<<<<<<< HEAD
-  const approveMutation = useApproveWorkspaceJoinRequest(activeWorkspaceId || "");
-  const rejectMutation = useRejectWorkspaceJoinRequest(activeWorkspaceId || "");
-=======
   const approveJoinRequest = useApproveJoinRequest(activeWorkspaceId || "");
   const rejectJoinRequest = useRejectJoinRequest(activeWorkspaceId || "");
->>>>>>> development
 
   const {
     register,
@@ -162,33 +149,6 @@ export default function WorkspaceInvitationsPage() {
     }
   };
 
-<<<<<<< HEAD
-  const handleApproveRequest = async (inviteId: string, email: string) => {
-    try {
-      await approveMutation.mutateAsync(inviteId);
-      toast.success(`Yêu cầu gia nhập của ${email} đã được phê duyệt.`);
-      invitationsQuery.refetch();
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.error || "Phê duyệt thất bại.";
-      toast.error(errorMsg);
-    }
-  };
-
-  const handleRejectRequest = async (inviteId: string, email: string) => {
-    try {
-      await rejectMutation.mutateAsync(inviteId);
-      toast.success(`Yêu cầu gia nhập của ${email} đã bị từ chối.`);
-      invitationsQuery.refetch();
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.error || "Từ chối thất bại.";
-      toast.error(errorMsg);
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Invitation link copied to clipboard!");
-=======
   const allRecords = (activeTab === "invitations" ? invitationsQuery.data?.items : joinRequestsQuery.data?.items) || [];
   const joinRequestsList = activeTab === "join-requests" ? allRecords : [];
   const invitesList = activeTab === "invitations" ? allRecords : [];
@@ -202,7 +162,6 @@ export default function WorkspaceInvitationsPage() {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(error?.response?.data?.error || "Failed to approve join request");
     }
->>>>>>> development
   };
 
   const handleReject = async (invitationId: string) => {
@@ -220,27 +179,14 @@ export default function WorkspaceInvitationsPage() {
     toast.success("Email preview URL copied.");
   };
 
-  // Filter outbound invitations vs inbound join requests
-  const outboundList = invitesList.filter(
-    (invite) => invite.status.toUpperCase() !== "REQUESTED"
-  );
-
-  const inboundList = invitesList.filter(
-    (invite) => invite.status.toUpperCase() === "REQUESTED"
-  );
-
   return (
     <div className="flex min-h-full flex-col gap-6 pb-6 text-ink">
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">Access Control</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Invitations</h1>
         <p className="text-sm text-ink-muted">
-<<<<<<< HEAD
-          Manage outgoing invitations and incoming join requests for this workspace.
-=======
           Manage invitations sent by this workspace and review incoming Join Requests.
->>>>>>> development
-        </p >
-      </div >
+        </p>
+      </div>
 
       <div className="flex items-center gap-2">
         <button
@@ -264,243 +210,35 @@ export default function WorkspaceInvitationsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        {/* Pending Invites & Join Requests Tab List */}
+        {/* Pending Invites List */}
         <Card className="border-hairline bg-surface-1 shadow-sm">
-<<<<<<< HEAD
-  <CardHeader className="flex flex-col gap-4 pb-3 border-b border-hairline">
-    <div className="flex flex-row items-center justify-between">
-      <div>
-        <CardTitle className="text-base font-semibold">
-          {activeTab === "outbound" ? "Active Invitations" : "Join Requests"}
-        </CardTitle>
-        <CardDescription className="text-xs">
-          {activeTab === "outbound"
-            ? "List of pending invitations. Invitees must open the link to join."
-            : "List of pending requests from users asking to join this workspace."}
-        </CardDescription>
-      </div>
-      <div className="relative w-64">
-        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted">
-          <MagnifyingGlass className="h-4 w-4" />
-        </span>
-        <Input
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Search..."
-          className="h-8 pl-8 pr-3 text-xs bg-surface-2 border-hairline focus:ring-1 focus:ring-primary"
-        />
-      </div>
-=======
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-hairline">
-        <div>
-          <CardTitle className="text-base font-semibold">{activeTab === "invitations" ? "Invitations sent" : "Join Requests"}</CardTitle>
-          <CardDescription className="text-xs">
-            {activeTab === "invitations" ? "Invitees accept pending invitations after signing in with the matching email." : "Review requests from users asking to join this workspace."}
-          </CardDescription>
->>>>>>> development
-        </div>
-
-        {/* Pill Tab Selector */}
-        <div className="flex items-center gap-2 text-[11px]">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("outbound");
-              setPage(1);
-            }}
-<<<<<<< HEAD
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1 rounded-full font-medium transition-all duration-150 cursor-pointer border",
-              activeTab === "outbound"
-                ? "bg-surface-1 border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] text-ink"
-                : "bg-transparent border-transparent text-ink-muted hover:text-ink"
-            )}
-          >
-            <span>Lời mời đã gửi</span>
-            {outboundList.length > 0 && (
-              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold shrink-0">
-                {outboundList.length}
+            <div>
+                <CardTitle className="text-base font-semibold">{activeTab === "invitations" ? "Invitations sent" : "Join Requests"}</CardTitle>
+                <CardDescription className="text-xs">
+                  {activeTab === "invitations" ? "Invitees accept pending invitations after signing in with the matching email." : "Review requests from users asking to join this workspace."}
+                </CardDescription>
+            </div>
+            <div className="relative w-64">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted">
+                <MagnifyingGlass className="h-4 w-4" />
               </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("inbound");
-              setPage(1);
-            }}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1 rounded-full font-medium transition-all duration-150 cursor-pointer border",
-              activeTab === "inbound"
-                ? "bg-surface-1 border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] text-ink"
-                : "bg-transparent border-transparent text-ink-muted hover:text-ink"
-            )}
-          >
-            <span>Yêu cầu gia nhập</span>
-            {inboundList.length > 0 && (
-              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold shrink-0">
-                {inboundList.length}
-              </span>
-            )}
-          </button>
-=======
+              <Input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
                 placeholder={activeTab === "invitations" ? "Search invitations..." : "Search requests..."}
-          className="h-8 pl-8 pr-3 text-xs bg-surface-2 border-hairline focus:ring-1 focus:ring-primary"
+                className="h-8 pl-8 pr-3 text-xs bg-surface-2 border-hairline focus:ring-1 focus:ring-primary"
               />
->>>>>>> development
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-0 overflow-x-auto">
-        {invitationsQuery.isLoading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Spinner className="h-6 w-6 animate-spin text-primary" />
-          </div>
-<<<<<<< HEAD
-        ) : activeTab === "outbound" ? (
-          /* OUTBOUND LIST */
-          outboundList.length === 0 ? (
-            <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
-              <EnvelopeSimple className="h-8 w-8 text-ink-muted" />
-              <p className="text-sm font-medium">No pending invitations</p>
-              <p className="text-xs text-ink-muted">Create an invite on the right rail.</p>
             </div>
-          ) : (
-            <div className="min-w-[650px] divide-y divide-hairline">
-              <div className="grid grid-cols-[1.5fr_100px_110px_100px_100px_48px] items-center gap-4 px-4 py-2 bg-surface-2 text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-                <span>Email</span>
-                <span>Role</span>
-                <span>Type</span>
-                <span>Status</span>
-                <span>Expires</span>
-                <span className="text-right">Action</span>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            {invitationsQuery.isLoading ? (
+              <div className="flex h-48 items-center justify-center">
+                <Spinner className="h-6 w-6 animate-spin text-primary" />
               </div>
-
-              {outboundList.map((invite) => (
-                <div
-                  key={invite.id}
-                  className="grid grid-cols-[1.5fr_100px_110px_100px_100px_48px] items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors"
-                >
-                  {/* Initials Avatar Pill Style */}
-                  <div className="flex items-center gap-1.5 truncate">
-                    <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold shrink-0 uppercase">
-                      {invite.email.charAt(0)}
-                    </div>
-                    <span className="text-xs font-medium text-ink truncate">{invite.email}</span>
-                  </div>
-                  <span className="text-xs text-ink-muted">{invite.roleName}</span>
-                  <span className="text-xs text-ink-muted">{invite.membershipType}</span>
-                  <div>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase ${invite.status === "Pending"
-                        ? "bg-amber-500/5 text-amber-500 border-amber-500/20"
-                        : invite.status === "Accepted"
-                          ? "bg-emerald-500/5 text-emerald-500 border-emerald-500/20"
-                          : "bg-surface-3 border-hairline text-ink-muted"
-                        }`}
-                    >
-                      {invite.status}
-                    </Badge>
-                  </div>
-                  <span className="text-[10px] text-ink-muted">
-                    {new Date(invite.expiresAt).toLocaleDateString()}
-                  </span>
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => setInviteToRevoke({ id: invite.id, email: invite.email })}
-                      disabled={invite.status !== "Pending"}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                      title="Revoke Invitation"
-                    >
-                      <Trash className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          /* INBOUND LIST */
-          inboundList.length === 0 ? (
-            <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
-              <EnvelopeSimple className="h-8 w-8 text-ink-muted" />
-              <p className="text-sm font-medium">No pending join requests</p>
-              <p className="text-xs text-ink-muted">Requests from users will appear here.</p>
-            </div>
-          ) : (
-            <div className="min-w-[650px] divide-y divide-hairline">
-              <div className="grid grid-cols-[1.5fr_100px_110px_100px_100px_180px] items-center gap-4 px-4 py-2 bg-surface-2 text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-                <span>User</span>
-                <span>Role</span>
-                <span>Type</span>
-                <span>Status</span>
-                <span>Requested</span>
-                <span className="text-right">Actions</span>
-              </div>
-
-              {inboundList.map((invite) => (
-                <div
-                  key={invite.id}
-                  className="grid grid-cols-[1.5fr_100px_110px_100px_100px_180px] items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors"
-                >
-                  {/* Initials Avatar Pill Style */}
-                  <div className="flex items-center gap-1.5 truncate">
-                    <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold shrink-0 uppercase">
-                      {invite.email.charAt(0)}
-                    </div>
-                    <span className="text-xs font-medium text-ink truncate">{invite.email}</span>
-                  </div>
-                  <span className="text-xs text-ink-muted">{invite.roleName}</span>
-                  <span className="text-xs text-ink-muted">{invite.membershipType}</span>
-                  <div>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase bg-blue-500/5 text-blue-500 border-blue-500/20"
-                    >
-                      {invite.status}
-                    </Badge>
-                  </div>
-                  <span className="text-[10px] text-ink-muted">
-                    {new Date(invite.createdAt).toLocaleDateString()}
-                  </span>
-                  <div className="flex items-center gap-1.5 justify-end">
-                    <button
-                      onClick={() => handleApproveRequest(invite.id, invite.email)}
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
-                      className="inline-flex h-7 px-2.5 items-center justify-center gap-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 transition-colors disabled:opacity-50 text-[11px] font-semibold cursor-pointer"
-                      title="Approve Request"
-                    >
-                      {approveMutation.isPending ? (
-                        <Spinner className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Check className="h-3.5 w-3.5" />
-                      )}
-                      <span>Approve</span>
-                    </button>
-                    <button
-                      onClick={() => handleRejectRequest(invite.id, invite.email)}
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
-                      className="inline-flex h-7 px-2.5 items-center justify-center gap-1 rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 transition-colors disabled:opacity-50 text-[11px] font-semibold cursor-pointer"
-                      title="Reject Request"
-                    >
-                      {rejectMutation.isPending ? (
-                        <Spinner className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <X className="h-3.5 w-3.5" />
-                      )}
-                      <span>Reject</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-=======
             ) : (activeTab === "invitations" ? invitesList : joinRequestsList).length === 0 ? (
               <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
                 <EnvelopeSimple className="h-8 w-8 text-ink-muted" />
@@ -606,98 +344,97 @@ export default function WorkspaceInvitationsPage() {
                   );
                 })}
               </div>
->>>>>>> development
-        )}
-
-        {invitationsQuery.data && invitationsQuery.data.total > 100 && (
-          <div className="flex items-center justify-end px-4 py-3 border-t border-hairline gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(p - 1, 1))}
-              disabled={page === 1}
-              className="px-2.5 py-1 text-xs border border-hairline rounded hover:bg-surface-2 disabled:opacity-45"
-            >
-              Previous
-            </button>
-            <span className="text-xs text-ink-muted">Page {page}</span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={invitesList.length < 100}
-              className="px-2.5 py-1 text-xs border border-hairline rounded hover:bg-surface-2 disabled:opacity-45"
-            >
-              Next
-            </button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-
-    {/* Invite Form Panel */}
-    <Card className="border-hairline bg-surface-1 h-fit shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-base font-semibold">Invite Member</CardTitle>
-        <CardDescription className="text-xs">
-          Send an email-bound invitation to a user.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(handleInvite)} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold">Email Address</label>
-            <Input
-              type="email"
-              placeholder="user@domain.com"
-              className="h-9 border-hairline focus:ring-1 focus:ring-primary"
-              {...register("email")}
-              disabled={inviteMutation.isPending}
-            />
-            {errors.email && (
-              <p className="text-[11px] text-destructive mt-0.5">{errors.email.message}</p>
             )}
-          </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold">Workspace Role</label>
-            <Select
-              value={selectedRole}
-              onValueChange={(val) => setValue("roleName", val as "Admin" | "Member")}
-            >
-              <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Member" className="text-xs">Member (Standard)</SelectItem>
-                <SelectItem value="Admin" className="text-xs">Admin (Operational Manager)</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.roleName && (
-              <p className="text-[11px] text-destructive mt-0.5">{errors.roleName.message}</p>
+            {invitationsQuery.data && invitationsQuery.data.total > 100 && (
+              <div className="flex items-center justify-end px-4 py-3 border-t border-hairline gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                  disabled={page === 1}
+                  className="px-2.5 py-1 text-xs border border-hairline rounded hover:bg-surface-2 disabled:opacity-45"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-ink-muted">Page {page}</span>
+                <button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={invitesList.length < 100}
+                  className="px-2.5 py-1 text-xs border border-hairline rounded hover:bg-surface-2 disabled:opacity-45"
+                >
+                  Next
+                </button>
+              </div>
             )}
-          </div>
+          </CardContent>
+        </Card>
 
-          <p className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-5 text-ink-muted">
-            Access type is assigned automatically from the workspace&apos;s verified domains.
-          </p>
+        {/* Invite Form Panel */}
+        <Card className="border-hairline bg-surface-1 h-fit shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold">Invite Member</CardTitle>
+            <CardDescription className="text-xs">
+              Send an email-bound invitation to a user.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit(handleInvite)} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold">Email Address</label>
+                <Input
+                  type="email"
+                  placeholder="user@domain.com"
+                  className="h-9 border-hairline focus:ring-1 focus:ring-primary"
+                  {...register("email")}
+                  disabled={inviteMutation.isPending}
+                />
+                {errors.email && (
+                  <p className="text-[11px] text-destructive mt-0.5">{errors.email.message}</p>
+                )}
+              </div>
 
-          <button
-            type="submit"
-            className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary font-semibold text-white transition hover:bg-primary-hover disabled:pointer-events-none disabled:opacity-50 text-xs"
-            disabled={inviteMutation.isPending}
-          >
-            {inviteMutation.isPending ? (
-              <Spinner className="h-4 w-4 animate-spin text-white" />
-            ) : (
-              <>
-                <Plus className="h-4 w-4" />
-                <span>Invite member</span>
-              </>
-            )}
-          </button>
-        </form>
-      </CardContent>
-    </Card>
-  </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold">Workspace Role</label>
+                <Select
+                  value={selectedRole}
+                  onValueChange={(val) => setValue("roleName", val as "Admin" | "Member")}
+                >
+                  <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Member" className="text-xs">Member (Standard)</SelectItem>
+                    <SelectItem value="Admin" className="text-xs">Admin (Operational Manager)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.roleName && (
+                  <p className="text-[11px] text-destructive mt-0.5">{errors.roleName.message}</p>
+                )}
+              </div>
 
-  {/* Revocation Confirmation Dialog */ }
+              <p className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-5 text-ink-muted">
+                Access type is assigned automatically from the workspace&apos;s verified domains.
+              </p>
+
+              <button
+                type="submit"
+                className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary font-semibold text-white transition hover:bg-primary-hover disabled:pointer-events-none disabled:opacity-50 text-xs"
+                disabled={inviteMutation.isPending}
+              >
+                {inviteMutation.isPending ? (
+                  <Spinner className="h-4 w-4 animate-spin text-white" />
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    <span>Invite member</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Revocation Confirmation Dialog */}
       <Dialog open={!!inviteToRevoke} onOpenChange={(open) => !open && setInviteToRevoke(null)}>
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader className="flex flex-col gap-2">
@@ -772,6 +509,6 @@ export default function WorkspaceInvitationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div >
+    </div>
   );
 }
