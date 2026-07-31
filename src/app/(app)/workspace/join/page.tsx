@@ -7,27 +7,23 @@ import { ArrowLeft, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCreateJoinRequest } from "@/hooks/use-workspace";
+import type { WorkspaceInvitationDto } from "@/types/workspace";
 
 export default function JoinWorkspacePage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [token, setToken] = useState("");
+  const [joinRequest, setJoinRequest] = useState<WorkspaceInvitationDto | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const createJoinRequest = useCreateJoinRequest();
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
   }, [isAuthenticated, router]);
 
-  useEffect(() => {
-    if (activeWorkspaceId) {
-      const activeSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
-      router.replace(`/${activeSlug || "workspace"}/rooms`);
-    }
-  }, [activeWorkspaceId, router]);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const inputVal = token.trim();
     if (!inputVal) return;
@@ -61,12 +57,19 @@ export default function JoinWorkspacePage() {
 
     workspaceSlug = workspaceSlug.split("?")[0].split("#")[0].trim();
 
-    if (workspaceSlug) {
-      router.push(`/${encodeURIComponent(workspaceSlug)}/rooms`);
+    if (!workspaceSlug) return;
+
+    setErrorMessage(null);
+    try {
+      const result = await createJoinRequest.mutateAsync(workspaceSlug);
+      setJoinRequest(result);
+    } catch (err) {
+      const error = err as { response?: { data?: { error?: string; message?: string } } };
+      setErrorMessage(error.response?.data?.error || error.response?.data?.message || "Unable to create the join request.");
     }
   }
 
-  if (!isAuthenticated || activeWorkspaceId) {
+  if (!isAuthenticated) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -100,7 +103,24 @@ export default function JoinWorkspacePage() {
           </p>
         </div>
 
-        {/* Form */}
+        {joinRequest ? (
+          <div className="flex flex-col gap-5 rounded-lg border border-amber-500/25 bg-amber-500/5 p-5 text-left">
+            <div>
+              <p className="text-[15px] font-semibold text-foreground">Join request sent</p>
+              <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
+                Your request for <span className="font-medium text-ink">{token}</span> is waiting for a Workspace Owner/Admin to approve it.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button type="button" onClick={() => router.push("/workspace")} className="h-9 flex-1 rounded-md bg-primary text-xs text-white hover:bg-primary-hover">
+                Back to workspace hub
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setJoinRequest(null)} className="h-9 flex-1 rounded-md text-xs">
+                Request another workspace
+              </Button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           {/* URL Field */}
           <div className="flex flex-col gap-1.5">
@@ -116,15 +136,22 @@ export default function JoinWorkspacePage() {
             />
           </div>
 
+          {errorMessage && (
+            <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+              {errorMessage}
+            </p>
+          )}
+
           {/* Submit Button */}
           <Button
             type="submit"
-            disabled={!token.trim()}
+            disabled={!token.trim() || createJoinRequest.isPending}
             className="w-full rounded-md h-10 bg-primary text-white hover:bg-primary-hover font-medium text-[14px] transition-colors mt-2"
           >
-            Join workspace
+            {createJoinRequest.isPending ? "Sending request..." : "Send join request"}
           </Button>
         </form>
+        )}
       </div>
     </main>
   );
