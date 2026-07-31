@@ -1,13 +1,21 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { SquaresFour, VideoCamera, FileText, Buildings, CreditCard, Bell, GearSix, Shield, CaretLeft } from "@phosphor-icons/react/dist/ssr";
-import { cn } from "@/lib/utils";
+import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+import {
+  Bell,
+  CaretLeft,
+  CreditCard,
+  FileText,
+  GearSix,
+  Shield,
+  VideoCamera,
+} from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 
 const navigation = [
   { name: "Cuộc họp", href: "/rooms", icon: VideoCamera },
@@ -22,6 +30,7 @@ const secondaryNav = [
 
 const adminNav = [
   { name: "Admin", href: "/rooms", icon: Shield },
+  { name: "Notifications", href: "/notifications", icon: Bell },
 ];
 
 export function Sidebar() {
@@ -32,11 +41,16 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-16" : "w-64",
       )}
     >
       {/* Logo */}
-      <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "px-4")}>
+      <div
+        className={cn(
+          "flex h-16 items-center border-b",
+          collapsed ? "justify-center px-2" : "px-4",
+        )}
+      >
         <WarpTalkBrand compact={collapsed} />
       </div>
 
@@ -53,7 +67,7 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
               title={collapsed ? item.name : undefined}
             >
@@ -76,7 +90,7 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
               title={collapsed ? item.name : undefined}
             >
@@ -99,7 +113,7 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
               title={collapsed ? item.name : undefined}
             >
@@ -118,10 +132,11 @@ export function Sidebar() {
           className="w-full"
           onClick={() => setCollapsed(!collapsed)}
         >
-          <CaretLeft weight="light"
+          <CaretLeft
+            weight="light"
             className={cn(
               "h-4 w-4 transition-transform",
-              collapsed && "rotate-180"
+              collapsed && "rotate-180",
             )}
           />
         </Button>

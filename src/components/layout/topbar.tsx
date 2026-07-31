@@ -1,10 +1,7 @@
 "use client";
-import type { IconProps } from "@phosphor-icons/react";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { Bell, Buildings, BookOpen, Question, FileText, SquaresFour, SignOut, ChatCircle, Microphone, Moon, SidebarSimple, Plus, MagnifyingGlass, HardDrives, GearSix, Sparkle, Star, Flask, User, Users } from "@phosphor-icons/react/dist/ssr";
-import { toast } from "sonner";
+import { NotificationPopover } from "@/components/notifications/notification-popover";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Command,
   CommandDialog,
@@ -15,7 +12,6 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +20,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  BookOpen,
+  ChatCircle,
+  FileText,
+  Flask,
+  GearSix,
+  MagnifyingGlass,
+  Microphone,
+  Plus,
+  Question,
+  Scroll,
+  SidebarSimple,
+  SignOut,
+  SquaresFour,
+  Star,
+  User,
+} from "@phosphor-icons/react/dist/ssr";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -33,7 +50,7 @@ const routeLabels: Record<string, string> = {
   rooms: "Rooms",
   create: "Create Room",
   history: "History",
-  "ai-summaries": "AI Summaries",
+  "ai-summaries": "Transcripts",
   "ai-chat": "AI Chat",
   feedback: "Feedback",
   terminology: "Terminology",
@@ -42,6 +59,9 @@ const routeLabels: Record<string, string> = {
   workspace: "Workspace",
   admin: "Admin",
   "dev-test": "Dev Test",
+  billing: "Billing & Usage",
+  payment: "Payment",
+  plans: "Plans",
 };
 
 const searchItems: Array<{
@@ -51,30 +71,67 @@ const searchItems: Array<{
   icon: React.ElementType;
   shortcut?: string;
 }> = [
-  { title: "Rooms", url: "/rooms", group: "Workspace", icon: SquaresFour, shortcut: "R" },
-  { title: "Create Room", url: "/rooms/create", group: "Workspace", icon: Plus, shortcut: "N" },
-  { title: "History & Transcripts", url: "/history", group: "Workspace", icon: FileText, shortcut: "H" },
-  { title: "AI Summaries", url: "/ai-summaries", group: "AI", icon: Sparkle },
+  {
+    title: "Rooms",
+    url: "/rooms",
+    group: "Workspace",
+    icon: SquaresFour,
+    shortcut: "R",
+  },
+  {
+    title: "Create Room",
+    url: "/rooms/create",
+    group: "Workspace",
+    icon: Plus,
+    shortcut: "N",
+  },
+  {
+    title: "History & Transcripts",
+    url: "/history",
+    group: "Workspace",
+    icon: FileText,
+    shortcut: "H",
+  },
+  { title: "Transcripts", url: "/ai-summaries", group: "AI", icon: Scroll },
   { title: "Chat with AI", url: "/ai-chat", group: "AI", icon: Question },
-  { title: "Terminology", url: "/terminology", group: "Configuration", icon: BookOpen },
-  { title: "Voice Profiles", url: "/voice-profiles", group: "Configuration", icon: Microphone },
-  { title: "Post-room Feedback", url: "/feedback", group: "Operations", icon: Star },
+  {
+    title: "Terminology",
+    url: "/terminology",
+    group: "Configuration",
+    icon: BookOpen,
+  },
+  {
+    title: "Voice Profiles",
+    url: "/voice-profiles",
+    group: "Configuration",
+    icon: Microphone,
+  },
+  {
+    title: "Post-room Feedback",
+    url: "/feedback",
+    group: "Operations",
+    icon: Star,
+  },
   { title: "GearSix", url: "/settings", group: "Configuration", icon: GearSix },
   { title: "Dev Test", url: "/dev-test", group: "Developer", icon: Flask },
 ];
 
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
-import Link from "next/link";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
+import Link from "next/link";
+import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 
 function Breadcrumbs() {
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
   const current = segments.at(-1);
   const isRoomInformationPage = /^\/rooms\/[^/]+$/.test(pathname);
-  
+
   const roomId = isRoomInformationPage ? current : undefined;
   const roomQuery = useTranslationRoom(roomId as string);
   const roomTitle = roomQuery.data?.title;
@@ -84,20 +141,37 @@ function Breadcrumbs() {
   if (isRoomInformationPage) {
     return (
       <div className="min-w-0 flex items-center gap-2 text-[14px] font-medium tracking-tight">
-        <Link href="/rooms" className="text-muted-foreground hover:text-foreground transition-colors">Meetings</Link>
-        <CaretRight weight="bold" className="text-muted-foreground/40 w-3 h-3" />
+        <Link
+          href={`/${activeWorkspaceSlug || "workspace"}/rooms`}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Meetings
+        </Link>
+        <CaretRight
+          weight="bold"
+          className="text-muted-foreground/40 w-3 h-3"
+        />
         <span className="truncate text-foreground max-w-[300px] flex items-center gap-2">
-          {roomTitle ? roomTitle : <><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /><span>Loading...</span></>}
+          {roomTitle ? (
+            roomTitle
+          ) : (
+            <>
+              <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+              <span>Loading...</span>
+            </>
+          )}
         </span>
       </div>
     );
   }
 
-  const label = current ? routeLabels[current] ?? current : "Dashboard";
+  const label = current ? (routeLabels[current] ?? current) : "Dashboard";
 
   return (
     <div className="min-w-0">
-      <h1 className="truncate text-[16px] font-semibold tracking-tight text-foreground capitalize">{label}</h1>
+      <h1 className="truncate text-[16px] font-semibold tracking-tight text-foreground capitalize">
+        {label}
+      </h1>
     </div>
   );
 }
@@ -111,12 +185,20 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
     >
       <MagnifyingGlass weight="light" className="h-3.5 w-3.5" />
       <span className="flex-1 text-left">MagnifyingGlass pages...</span>
-      <kbd className="rounded-sm bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">Ctrl K</kbd>
+      <kbd className="rounded-sm bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+        Ctrl K
+      </kbd>
     </button>
   );
 }
 
-function IconButton({ children, label }: { children: ReactNode; label: string }) {
+function IconButton({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label: string;
+}) {
   return (
     <button
       type="button"
@@ -133,6 +215,9 @@ export function Topbar() {
   const router = useRouter();
   const pathname = usePathname();
   const logout = useAuthStore((state) => state.logout);
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
   const [searchOpen, setSearchOpen] = useState(false);
   const groupedItems = useMemo(
     () =>
@@ -140,7 +225,7 @@ export function Topbar() {
         groups[item.group] = [...(groups[item.group] ?? []), item];
         return groups;
       }, {}),
-    []
+    [],
   );
 
   useEffect(() => {
@@ -155,8 +240,14 @@ export function Topbar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const WORKSPACE_SCOPED_PREFIXES = ["/rooms", "/history", "/ai-summaries"];
   const handleSelect = (url: string) => {
-    router.push(url);
+    const slug = activeWorkspaceSlug || "workspace";
+    const isScoped = WORKSPACE_SCOPED_PREFIXES.some(
+      (p) => url === p || url.startsWith(p + "/"),
+    );
+    const finalUrl = isScoped ? `/${slug}${url}` : url;
+    router.push(finalUrl);
     setSearchOpen(false);
   };
 
@@ -164,7 +255,7 @@ export function Topbar() {
     ? "Participant"
     : pathname.startsWith("/workspace")
       ? "Workspace"
-      : pathname.startsWith("/internal")
+      : pathname.startsWith("/billing")
         ? "Internal"
         : "Host";
   const roleInitial = roleLabel.slice(0, 1);
@@ -172,9 +263,9 @@ export function Topbar() {
     ? "/participant/profile"
     : pathname.startsWith("/workspace")
       ? "/workspace/profile"
-      : pathname.startsWith("/internal")
-        ? "/internal/profile"
-        : "/host/profile";
+      : pathname.startsWith("/billing")
+        ? "/profile"
+        : `/${activeWorkspaceSlug || "workspace"}/profile`;
 
   const handleSignOut = () => {
     logout();
@@ -200,21 +291,21 @@ export function Topbar() {
           <IconButton label="Help">
             <Question weight="light" className="h-4 w-4" />
           </IconButton>
-          <IconButton label="Notifications">
-            <Bell weight="light" className="h-4 w-4" />
-          </IconButton>
-          <IconButton label="Theme">
-            <Moon weight="light" className="h-4 w-4" />
-          </IconButton>
+          <NotificationPopover />
+          <ThemeToggleButton />
           <DropdownMenu>
             <DropdownMenuTrigger
               className="ml-2 flex h-8 items-center gap-2 rounded-md bg-muted/50 px-2 text-foreground outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Open account menu"
             >
               <Avatar className="h-5 w-5">
-                <AvatarFallback className="bg-primary text-[10px] text-primary-foreground">{roleInitial}</AvatarFallback>
+                <AvatarFallback className="bg-primary text-[10px] text-primary-foreground">
+                  {roleInitial}
+                </AvatarFallback>
               </Avatar>
-              <span className="hidden text-[13px] font-medium sm:inline">{roleLabel}</span>
+              <span className="hidden text-[13px] font-medium sm:inline">
+                {roleLabel}
+              </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
@@ -255,18 +346,31 @@ export function Topbar() {
         </div>
       </header>
 
-      <CommandDialog open={searchOpen} onOpenChange={setSearchOpen} className="max-w-[640px]">
+      <CommandDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        className="max-w-[640px]"
+      >
         <Command className="rounded-xl">
-          <CommandInput placeholder="MagnifyingGlass WarpTalk pages..." autoFocus />
+          <CommandInput
+            placeholder="MagnifyingGlass WarpTalk pages..."
+            autoFocus
+          />
           <CommandList>
             <CommandEmpty>No page found.</CommandEmpty>
             {Object.entries(groupedItems).map(([group, items]) => (
               <CommandGroup key={group} heading={group}>
                 {items.map((item) => (
-                  <CommandItem key={item.url} value={item.title} onSelect={() => handleSelect(item.url)}>
+                  <CommandItem
+                    key={item.url}
+                    value={item.title}
+                    onSelect={() => handleSelect(item.url)}
+                  >
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
-                    {item.shortcut ? <CommandShortcut>{item.shortcut}</CommandShortcut> : null}
+                    {item.shortcut ? (
+                      <CommandShortcut>{item.shortcut}</CommandShortcut>
+                    ) : null}
                   </CommandItem>
                 ))}
               </CommandGroup>

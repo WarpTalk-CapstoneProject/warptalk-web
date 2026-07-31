@@ -1,48 +1,89 @@
 "use client";
 
-import { RefObject, useEffect, useRef } from "react";
-import { ConnectionState, Track } from "livekit-client";
-import { useConnectionState, ParticipantTile, useTracks, TrackLoop } from "@livekit/components-react";
-import { SpinnerGap, Microphone, MicrophoneSlash } from "@phosphor-icons/react/dist/ssr";
-import type { TranslationRoomParticipantDto } from "@/types/translationRoom";
+import {
+  ParticipantTile,
+  useConnectionState,
+  useMaybeRoomContext,
+  useTracks,
+  type TrackReferenceOrPlaceholder,
+} from "@livekit/components-react";
+import {
+  PushPinSimple,
+  SpinnerGap,
+  Star,
+} from "@phosphor-icons/react/dist/ssr";
+import {
+  ConnectionState,
+  RoomEvent,
+  Track,
+  type Participant,
+} from "livekit-client";
+import { useEffect, useRef, useState } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { HandRaiseBadge } from "./hand-raise-badge";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
+import { NetworkQualityIcon } from "./network-quality-icon";
+
+const TILE_CLASSNAME =
+  "!h-full !w-full !border-0 overflow-hidden rounded-xl !bg-surface-3 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
+
+const STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1 p-3";
+const SINGLE_PARTICIPANT_STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1";
+const FULLSCREEN_FEATURED_STAGE_CLASSNAME =
+  "relative h-full min-h-0 w-full overflow-hidden bg-surface-1";
 
 export function LiveKitMeetingStage({
   fallbackName,
-  currentUserId,
   isJoining,
   error,
   localStream,
   localMediaError,
-  cameraEnabled,
-  participants,
   screenStream,
   layoutMode,
+  pinnedUserId,
+  onPinParticipant,
+  spotlightedUserId,
+  raisedHandUserIds,
   onRetry,
 }: {
   fallbackName: string;
-  currentUserId?: string;
   isJoining: boolean;
   error: string | null;
   localStream: MediaStream | null;
   localMediaError: string | null;
-  cameraEnabled: boolean;
-  participants: TranslationRoomParticipantDto[];
   screenStream: MediaStream | null;
   layoutMode: MeetingLayoutMode;
+  /** Locally-pinned participant (this viewer only) — clicking a tile toggles it. */
+  pinnedUserId?: string | null;
+  onPinParticipant?: (userId: string) => void;
+  /** Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged. Overrides pinnedUserId when set. */
+  spotlightedUserId?: string | null;
+  raisedHandUserIds?: Set<string>;
   onRetry: () => void;
 }) {
   const connectionState = useConnectionState();
+  const room = useMaybeRoomContext();
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [activeSpeakerIdentities, setActiveSpeakerIdentities] = useState<
+    Set<string>
+  >(new Set());
   const tracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
       { source: Track.Source.ScreenShare, withPlaceholder: false },
     ],
-    { onlySubscribed: false }
+    { onlySubscribed: false },
   );
-  const hasParticipants = connectionState === ConnectionState.Connected && tracks.length > 0;
+  const visibleTracks = tracks.filter(
+    (trackRef) =>
+      !isAutomatedParticipant(
+        trackRef.participant.identity,
+        trackRef.participant.name,
+      ),
+  );
+  const hasParticipants =
+    connectionState === ConnectionState.Connected && visibleTracks.length > 0;
 
   useEffect(() => {
     if (!localVideoRef.current) return;
@@ -54,46 +95,250 @@ export function LiveKitMeetingStage({
     screenVideoRef.current.srcObject = screenStream;
   }, [screenStream]);
 
+  // Highlight whoever LiveKit currently reports as speaking. The SDK already applies a
+  // short hangover before dropping a participant from this list, so the ring clears
+  // roughly a second after they stop talking without extra debouncing here.
+  useEffect(() => {
+    if (!room) return;
+    const handleActiveSpeakers = (speakers: Participant[]) => {
+      setActiveSpeakerIdentities(
+        new Set(speakers.map((speaker) => speaker.identity)),
+      );
+    };
+    room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+    return () => {
+      room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+    };
+  }, [room]);
+
+  const activeSpeakerIdentity = visibleTracks.find((trackRef) =>
+    activeSpeakerIdentities.has(trackRef.participant.identity),
+  )?.participant.identity;
+  const firstVisibleIdentity = visibleTracks[0]?.participant.identity;
+  const featuredIdentity =
+    spotlightedUserId ||
+    (layoutMode === "grid"
+      ? null
+      : layoutMode === "spotlight"
+        ? pinnedUserId || activeSpeakerIdentity || firstVisibleIdentity
+        : layoutMode === "sidebar"
+          ? pinnedUserId || firstVisibleIdentity
+          : pinnedUserId) ||
+    null;
+  const isSpotlight = Boolean(spotlightedUserId);
+  const localIdentity = room?.localParticipant.identity ?? null;
+
+  function renderThumbnail(trackRef: TrackReferenceOrPlaceholder) {
+    return renderTile(trackRef, {
+      className:
+        "aspect-video h-32 w-64 max-w-[min(18rem,34vw)] shrink-0 rounded-2xl border border-white/80 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.18)]",
+      tileClassName: "!rounded-2xl",
+      variant: "thumbnail",
+    });
+  }
+
+  function renderTile(
+    trackRef: TrackReferenceOrPlaceholder,
+    options?: {
+      className?: string;
+      tileClassName?: string;
+      variant?: "featured" | "thumbnail";
+    },
+  ) {
+    const identity = trackRef.participant.identity;
+    const isActiveSpeaker = activeSpeakerIdentities.has(identity);
+    const isFeatured = featuredIdentity === identity;
+    const handRaised = raisedHandUserIds?.has(identity) ?? false;
+    const displayName = trackRef.participant.name || identity || fallbackName;
+    const showCameraOffState = isCameraUnavailable(trackRef);
+    const isThumbnail = options?.variant === "thumbnail";
+
+    return (
+      <div
+        key={
+          trackRef.participant.sid +
+          (trackRef.publication?.trackSid ?? "placeholder")
+        }
+        className={`group relative h-full min-h-[180px] w-full overflow-hidden rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
+        onClick={() => onPinParticipant?.(identity)}
+      >
+        <ParticipantTile
+          trackRef={trackRef}
+          className={`${TILE_CLASSNAME} ${options?.tileClassName ?? ""} ${onPinParticipant ? "cursor-pointer" : ""}`}
+        />
+        {showCameraOffState ? (
+          <div
+            data-camera-state="off"
+            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm ${
+              isThumbnail ? "gap-1.5" : "gap-3"
+            }`}
+          >
+            <Avatar
+              size="lg"
+              className={`${isThumbnail ? "size-10" : "size-16"} border border-border bg-white shadow-sm`}
+            >
+              <AvatarFallback
+                className={`${isThumbnail ? "text-sm" : "text-lg"} bg-white font-semibold text-ink`}
+              >
+                {initials(displayName) || "?"}
+              </AvatarFallback>
+            </Avatar>
+            <div
+              className={`rounded-full border border-border bg-white px-2.5 py-0.5 font-medium text-ink shadow-sm ${
+                isThumbnail ? "text-[10px]" : "text-[12px]"
+              }`}
+            >
+              Camera is off
+            </div>
+          </div>
+        ) : null}
+        <div
+          className={`pointer-events-none absolute flex items-center gap-1.5 ${
+            isThumbnail ? "right-2 top-2" : "right-3 top-3"
+          }`}
+        >
+          {handRaised ? <HandRaiseBadge /> : null}
+          {isFeatured ? (
+            <span
+              className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 text-primary shadow-sm backdrop-blur"
+              title={isSpotlight ? "Spotlighted by host" : "Pinned"}
+            >
+              {isSpotlight ? (
+                <Star className="h-3.5 w-3.5" weight="fill" />
+              ) : (
+                <PushPinSimple className="h-3.5 w-3.5" weight="fill" />
+              )}
+            </span>
+          ) : null}
+          <span className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 shadow-sm backdrop-blur">
+            <NetworkQualityIcon participantIdentity={identity} />
+          </span>
+        </div>
+        <div
+          className={`pointer-events-none absolute max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 font-medium text-white shadow-sm backdrop-blur ${
+            isThumbnail
+              ? "bottom-2 left-2 px-2 py-0.5 text-[11px]"
+              : "bottom-5 left-5 px-3 py-1 text-[13px]"
+          }`}
+        >
+          {displayName}
+        </div>
+      </div>
+    );
+  }
+
   if (screenStream) {
     return (
-      <div className="grid h-full min-h-0 gap-2 p-2 lg:grid-cols-[minmax(0,1fr)_260px] bg-surface-1">
-        <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-1">
-          <video ref={screenVideoRef} className="h-full w-full object-contain" autoPlay muted playsInline />
+      <div className={FULLSCREEN_FEATURED_STAGE_CLASSNAME}>
+        <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
+          <video
+            ref={screenVideoRef}
+            className="h-full w-full object-contain"
+            autoPlay
+            muted
+            playsInline
+          />
           <div className="absolute left-4 top-4 rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur">
             You are presenting
           </div>
         </div>
-        
-        <div className="grid h-full gap-3 overflow-hidden grid-cols-1 overflow-y-auto">
-          <TrackLoop tracks={tracks}>
-            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur min-h-[160px]" />
-          </TrackLoop>
-        </div>
-        <ConnectionBadge state={connectionState} />
+
+        {visibleTracks.length > 0 ? (
+          <div className="absolute bottom-28 left-5 z-20 flex max-h-[calc(100%-8rem)] flex-col gap-3 overflow-y-auto pr-1">
+            {visibleTracks.map((trackRef) => renderThumbnail(trackRef))}
+          </div>
+        ) : null}
       </div>
     );
   }
 
   if (hasParticipants) {
-    return (
-      <div className="relative h-full w-full p-2 bg-surface-1">
-        <div className={`grid h-full gap-3 ${gridClassName(tracks.length)}`}>
-          <TrackLoop tracks={tracks}>
-            <ParticipantTile className="overflow-hidden rounded-xl !bg-surface-3 [&_.lk-participant-name]:text-ink [&_.lk-participant-name]:!bg-surface-1/80 [&_.lk-participant-name]:backdrop-blur" />
-          </TrackLoop>
+    const featuredTrack = featuredIdentity
+      ? visibleTracks.find(
+          (trackRef) => trackRef.participant.identity === featuredIdentity,
+        )
+      : undefined;
+    const otherTracks = featuredTrack
+      ? visibleTracks.filter((trackRef) => trackRef !== featuredTrack)
+      : [];
+
+    if (featuredTrack) {
+      const localTrack = localIdentity
+        ? visibleTracks.find(
+            (trackRef) => trackRef.participant.identity === localIdentity,
+          )
+        : undefined;
+      const isFeaturingSelf =
+        localIdentity !== null &&
+        featuredTrack.participant.identity === localIdentity;
+      const thumbnailTracks = isFeaturingSelf
+        ? otherTracks
+        : localTrack && localTrack !== featuredTrack
+          ? [localTrack]
+          : otherTracks.slice(0, 1);
+
+      return (
+        <div className={FULLSCREEN_FEATURED_STAGE_CLASSNAME}>
+          <div className="absolute inset-0">
+            {renderTile(featuredTrack, {
+              className: "!rounded-none",
+              tileClassName: "!rounded-none",
+            })}
+          </div>
+          {thumbnailTracks.length > 0 ? (
+            <div className="absolute bottom-28 left-5 right-5 z-20 flex max-h-[clamp(84px,12vw,132px)] items-end gap-3 overflow-x-auto overflow-y-hidden pb-1">
+              {thumbnailTracks.map((trackRef) => renderThumbnail(trackRef))}
+            </div>
+          ) : null}
         </div>
-        <ConnectionBadge state={connectionState} />
+      );
+    }
+
+    if (visibleTracks.length === 1) {
+      const onlyTrack = visibleTracks[0];
+      if (!onlyTrack) return null;
+
+      return (
+        <div
+          className={`${SINGLE_PARTICIPANT_STAGE_CLASSNAME} flex items-stretch justify-stretch`}
+        >
+          <div className="h-full min-h-0 w-full">
+            {renderTile(onlyTrack, {
+              className: "!rounded-2xl",
+              tileClassName: "!rounded-2xl",
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (visibleTracks.length === 2) {
+      return (
+        <div className={`${STAGE_CLASSNAME} grid grid-cols-1 gap-3 lg:grid-cols-2`}>
+          {visibleTracks.map((trackRef) => renderTile(trackRef))}
+        </div>
+      );
+    }
+
+    return (
+      <div className={STAGE_CLASSNAME}>
+        <div
+          className={`grid h-full min-h-0 gap-3 ${gridClassName(visibleTracks.length)}`}
+        >
+          {visibleTracks.map((trackRef) => renderTile(trackRef))}
+        </div>
       </div>
     );
   }
-
 
   return (
     <div className="flex w-full flex-col items-center justify-center px-6 py-20 bg-surface-2">
       <div className="grid h-20 w-20 place-items-center rounded-full bg-surface-3 text-2xl font-medium text-ink-muted shadow-sm">
         {initials(fallbackName)}
       </div>
-      <p className="mt-4 max-w-xl truncate text-center text-[15px] font-medium text-ink">{fallbackName}</p>
+      <p className="mt-4 max-w-xl truncate text-center text-[15px] font-medium text-ink">
+        {fallbackName}
+      </p>
       <p className="mt-1 flex items-center gap-2 text-[13px] text-ink-subtle">
         {isJoining && <SpinnerGap className="h-3.5 w-3.5 animate-spin" />}
         {localMediaError || error || liveKitStateLabel(connectionState)}
@@ -111,10 +356,6 @@ export function LiveKitMeetingStage({
   );
 }
 
-function ConnectionBadge({ state }: { state: ConnectionState }) {
-  return null;
-}
-
 function liveKitStateLabel(state: ConnectionState) {
   if (state === ConnectionState.Connected) return "Connected";
   if (state === ConnectionState.Connecting) return "Connecting";
@@ -130,72 +371,22 @@ function gridClassName(count: number) {
   return "grid-cols-5";
 }
 
-function MeetingPreviewTile({
-  name,
-  stream,
-  videoRef,
-  cameraEnabled,
-  muted,
-  featured,
-}: {
-  name: string;
-  stream: MediaStream | null;
-  videoRef: RefObject<HTMLVideoElement | null>;
-  cameraEnabled: boolean;
-  muted: boolean;
-  featured?: boolean;
-}) {
-  const hasVideo = cameraEnabled && Boolean(stream?.getVideoTracks().length);
-
+function isCameraUnavailable(trackRef: TrackReferenceOrPlaceholder) {
   return (
-    <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-surface-3">
-      {hasVideo ? (
-        <video ref={videoRef} className="h-full w-full object-cover -scale-x-100" autoPlay muted playsInline />
-      ) : (
-        <div className="grid h-full min-h-[160px] place-items-center">
-          <div className={`${featured ? "h-24 w-24 text-3xl" : "h-14 w-14 text-xl"} grid place-items-center rounded-full bg-slate-300 font-medium text-ink shadow-sm`}>
-            {initials(name) || "H"}
-          </div>
-        </div>
-      )}
-      <TileLabel name={name} muted={muted} />
-    </div>
+    trackRef.source === Track.Source.Camera &&
+    (!trackRef.publication || trackRef.publication.isMuted)
   );
 }
 
-function ParticipantGridTile({ participant }: { participant: TranslationRoomParticipantDto }) {
-  const muted = participant.isTranslationAudioEnabled === false;
-  return (
-    <div className="relative min-h-[128px] overflow-hidden rounded-xl border border-border bg-surface-3">
-      <div className="grid h-full place-items-center">
-        <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-300 text-xl font-medium text-ink shadow-sm">
-          {initials(participant.displayName)}
-        </div>
-      </div>
-      <TileLabel name={participant.displayName} muted={muted} />
-    </div>
-  );
-}
+function isAutomatedParticipant(identity?: string, name?: string) {
+  const normalizedIdentity = identity?.toLowerCase() ?? "";
+  const normalizedName = name?.toLowerCase() ?? "";
 
-function TileLabel({ name, muted }: { name: string; muted: boolean }) {
   return (
-    <>
-      <div className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur">
-        {name}
-      </div>
-      <div className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 text-ink shadow-sm backdrop-blur">
-        {muted ? <MicrophoneSlash className="h-3.5 w-3.5" /> : <Microphone className="h-3.5 w-3.5" />}
-      </div>
-    </>
-  );
-}
-
-function LocalMediaError({ error }: { error: string | null }) {
-  if (!error) return null;
-  return (
-    <div className="absolute bottom-5 left-5 right-5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 shadow-sm backdrop-blur">
-      {error}
-    </div>
+    normalizedIdentity.startsWith("ai-interpreter-") ||
+    normalizedIdentity === "warptalk-ai" ||
+    normalizedName.includes("ai interpreter") ||
+    normalizedName.includes("warptalk ai")
   );
 }
 

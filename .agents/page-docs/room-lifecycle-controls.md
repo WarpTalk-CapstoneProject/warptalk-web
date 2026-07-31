@@ -39,6 +39,23 @@ The card displays:
 - `start`: moves a scheduled or waiting room into `in_progress`.
 - `end`: ends an active or in-progress room.
 - `cancel`: cancels a scheduled or waiting room.
+- `record`: the active host can start or stop LiveKit RoomComposite Egress from the
+  meeting control bar.
+
+Only the actual room host (original or current promoted Live host) receives the end-for-all
+control. Workspace Owner/Admin membership by itself does not authorize a provider-room end.
+
+Leaving or navigating Back only disconnects that participant. A natural LiveKit
+`room_finished` event from an empty provider room does not finish the WarpTalk meeting; the
+TranslationRoom idle worker owns the five-minute empty-room grace period.
+
+## Meeting Duration
+
+- Duration is derived at display time; it is not persisted when the room ends.
+- An active meeting uses `now - createdAt` and the in-meeting timer updates every second.
+- An ended meeting uses `endedAt - createdAt` and remains frozen after ending.
+- History, AI Summary, and Room Detail consume the same frontend calculation and ignore the
+  legacy `durationSeconds` response as a source of actual meeting duration.
 
 Start and cancel currently use typed frontend mock adapters because backend endpoints are not available yet. End calls the existing backend endpoint `POST /translationRooms/{id}/end`.
 
@@ -58,6 +75,29 @@ Suggested endpoint shape:
 
 Both endpoints should validate host ownership and legal transitions.
 
+## Recording Control
+
+- The host sees one record control in the floating meeting control bar.
+- The control starts recording when inactive and stops the active Egress when recording.
+- While the API request is pending, the control is disabled and pulses so repeated clicks
+  cannot start duplicate Egress jobs.
+- A successful response updates the caller immediately; `RecordingStateChanged` remains the
+  authoritative SignalR broadcast for every other participant.
+- The red "This meeting is being recorded" banner is visible to everyone while active.
+- Failures keep the prior state and show a start/stop-specific toast.
+- Cloud Egress writes to the S3-compatible HTTPS destination configured by the backend.
+- LiveKit `DeleteRoom` uses the `roomCreate` grant, while participant removal keeps the
+  room-scoped `roomAdmin` grant. MeetingService persists `FINISHED` only after provider
+  deletion succeeds.
+
+## LiveKit Cloud Media Effects
+
+- The room still requests browser `echoCancellation` and `noiseSuppression` during capture.
+- Krisp enhanced noise suppression is applied asynchronously after the local mic publishes.
+- If Krisp authentication or processor setup fails, the preference is turned off, the user
+  receives a toast, and browser-level noise suppression remains active instead of leaving an
+  unhandled promise rejection.
+
 ## Files Affected
 
 - `src/app/(app)/room/[id]/page.tsx`
@@ -65,6 +105,15 @@ Both endpoints should validate host ownership and legal transitions.
 - `src/services/translationRoom.service.ts`
 - `src/lib/api/endpoints.ts`
 - `src/types/translationRoom.ts`
+- `src/components/rooms/live/meeting-control-bar.tsx`
+- `src/components/rooms/live/meeting-timer.tsx`
+- `src/lib/meeting-duration.ts`
+- `src/services/roomHistory.service.ts`
+- `src/hooks/use-meeting.ts`
+- `src/hooks/use-track-processors.ts`
+- `src/services/meeting.service.ts`
+- `scripts/check-recording-control-contract.mjs`
+- `scripts/check-track-processors-contract.mjs`
 - `.agents/page-docs/room-lifecycle-controls.md`
 
 ## Testing Checklist
@@ -76,3 +125,15 @@ Both endpoints should validate host ownership and legal transitions.
 - Confirm action confirmation appears before start/end/cancel.
 - Confirm successful start/cancel updates local room state.
 - Confirm end attempts the backend endpoint and reports failure if the backend is unavailable.
+- Confirm Back/Leave keeps the meeting rejoinable during the five-minute empty-room grace period.
+- Confirm LiveKit DeleteRoom succeeds for the actual host and provider failure does not persist `FINISHED`.
+- Confirm the in-meeting WarpBot context reports `live` even if the fetched room status is stale.
+- Confirm the meeting timer starts at `createdAt`, keeps ticking while active, and freezes at
+  `endedAt` after the room ends.
+- Run `npm run test:meeting-duration`.
+- Confirm only the host sees the recording control.
+- Confirm the record control disables while Start/Stop Egress is pending.
+- Confirm all participants receive the recording banner through SignalR.
+- Run `npm run test:recording-control`.
+- Run `npm run test:track-processors`.
+- Run `npm run test:2807-hotfix`.

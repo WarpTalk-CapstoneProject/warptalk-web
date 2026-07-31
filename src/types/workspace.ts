@@ -4,8 +4,10 @@ export interface WorkspaceDto {
   slug: string;
   logoUrl?: string | null;
   role: string;
-  membershipType?: string;
+  membershipType?: string | null;
+  canApproveDocuments?: boolean;
   createdAt: string;
+  defaultLanguage?: string;
 }
 
 export interface CreateWorkspaceRequest {
@@ -27,6 +29,7 @@ export interface WorkspaceSettingsDto {
   allowExternalCollaboration: boolean;
   requireVerifiedDomainForInternal: boolean;
   aiUsagePolicy?: AiUsagePolicyDto | null;
+  isProfanityFilterEnabled: boolean;
 }
 
 export interface AiUsagePolicyDto {
@@ -76,6 +79,10 @@ export interface WorkspaceInvitationDto {
   roleName: string;
   status: string;
   membershipType: string;
+  deliveryStatus: string;
+  providerMessageId?: string | null;
+  lastSentAt?: string | null;
+  sentCount: number;
   expiresAt: string;
   createdAt: string;
   acceptedAt?: string | null;
@@ -83,8 +90,8 @@ export interface WorkspaceInvitationDto {
 
 export interface InviteMemberResponse {
   invitation: WorkspaceInvitationDto;
-  rawToken: string;
   emailLanguage: string;
+  warning?: string | null;
 }
 
 export interface PreviewInvitationResponse {
@@ -100,6 +107,7 @@ export interface WorkspaceDocumentDto {
   id: string;
   workspaceId: string;
   uploadedBy?: string | null;
+  approvedBy?: string | null;
   ownerId?: string | null;
   name: string;
   fileName: string;
@@ -109,7 +117,8 @@ export interface WorkspaceDocumentDto {
   sourceType: string;
   sourceId?: string | null;
   ingestionStatus: string;
-  isSensitive: boolean;
+  aiEligible: boolean;
+  isAiAllowed: boolean;
   confidentialityLevel: string;
   retentionState: string;
   status: string;
@@ -135,9 +144,9 @@ export interface GlossaryDto {
   workspaceId: string;
   name: string;
   description?: string | null;
-  businessDomain: string;
   sourceLanguage: string;
   targetLanguage: string;
+  termCount: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -146,11 +155,15 @@ export interface GlossaryDto {
 export interface GlossaryTermDto {
   id: string;
   glossaryId: string;
-  term: string;
-  preferredTranslation: string;
+  sourceTerm: string;
+  targetTerm: string;
+  context?: string | null;
+  domain?: string | null;
   definition?: string | null;
   usageNote?: string | null;
-  status: string;
+  partOfSpeech?: string | null;
+  priority: number;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -166,6 +179,7 @@ export interface SelectWorkspaceResponse {
   selectedWorkspaceId: string;
   name: string;
   slug: string;
+  defaultLanguage?: string;
 }
 
 export interface ExtractedPageDto {

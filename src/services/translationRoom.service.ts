@@ -14,6 +14,7 @@ import type {
   TranslationRoomParticipantDto,
   TranslationRoomInvitationDto,
   TranslationRoomPreflightDto,
+  TranslationRoomSessionDto,
   TranslationRoomStatus,
   UpdateRoomSettingsRequest,
   RoomPreflightResponse,
@@ -192,9 +193,28 @@ export const translationRoomService = {
     };
   },
 
+  async generateAudioRoutes(id: string) {
+    return apiClient.post<void>(API.translationRooms.generateAudioRoutes(id));
+  },
+
+  /** Consent (or withdraw consent) to have MY OWN voice cloned for every listener I
+   * currently speak to in this room — see TranslationRoomAudioRouteController.
+   * SetVoiceCloneConsent. Biometric data: only ever called from an explicit user action. */
+  async setVoiceCloneConsent(id: string, enabled: boolean) {
+    return apiClient.post<void>(API.translationRooms.voiceCloneConsent(id), { enabled });
+  },
+
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };
+  },
+
+  pause(id: string) {
+    return apiClient.post<void>(API.translationRooms.pause(id));
+  },
+
+  resume(id: string) {
+    return apiClient.post<void>(API.translationRooms.resume(id));
   },
 
   end(id: string) {
@@ -232,6 +252,19 @@ export const translationRoomService = {
     return apiClient.get<TranslationRoomArtifactDto[]>(API.translationRooms.artifacts(id));
   },
 
+  artifactDownload(id: string) {
+    return apiClient.get<{
+      url?: string | null;
+      content?: string | null;
+      fileName: string;
+      contentType: string;
+    }>(API.roomArtifacts.download(id));
+  },
+
+  approveArtifactConsent(id: string) {
+    return apiClient.post<void>(API.roomArtifacts.consent(id));
+  },
+
   async invitations(id: string) {
     return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
   },
@@ -248,8 +281,41 @@ export const translationRoomService = {
     return apiClient.post<TranslationRoomFeedbackDto>(API.translationRooms.feedback(id), data);
   },
 
-  async preflight(roomCode: string): Promise<RoomPreflightResponse> {
-    const { data } = await apiClient.get<RoomPreflightResponse>(API.translationRooms.preflight(roomCode));
-    return data;
+  downloadCalendarIcs(id: string) {
+    return apiClient.get<Blob>(API.translationRooms.calendarIcs(id), {
+      responseType: "blob",
+    });
+  },
+
+  /** Every Start/Resume→Pause/End window for this room, newest first — see
+   * TranslationRoomSessionsController.GetSessions. */
+  sessions(id: string) {
+    return apiClient.get<TranslationRoomSessionDto[]>(API.translationRooms.sessions(id));
   },
 };
+
+/** WT-14: "Add to Google Calendar" quick-add link — pure URL template, no backend call. */
+export function buildGoogleCalendarUrl(params: {
+  title: string;
+  scheduledAt: string;
+  joinLink: string;
+  description?: string;
+  durationMinutes?: number;
+}): string {
+  const start = new Date(params.scheduledAt);
+  const end = new Date(start.getTime() + (params.durationMinutes ?? 60) * 60_000);
+  const toGoogleDate = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+
+  const details = params.description
+    ? `${params.description}\n\nJoin link: ${params.joinLink}`
+    : `Join link: ${params.joinLink}`;
+
+  const search = new URLSearchParams({
+    action: "TEMPLATE",
+    text: params.title,
+    dates: `${toGoogleDate(start)}/${toGoogleDate(end)}`,
+    details,
+  });
+
+  return `https://calendar.google.com/calendar/render?${search.toString()}`;
+}

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
+import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
 // Query Keys
 export const WORKSPACE_KEYS = {
@@ -13,7 +14,9 @@ export const WORKSPACE_KEYS = {
     ["workspaces", "members", workspaceId, { page, pageSize, search }] as const,
   invitations: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "invitations", workspaceId, { page, pageSize, search }] as const,
+  pendingInvitations: () => ["workspaces", "invitations", "pending"] as const,
   invitationPreview: (token: string) => ["workspaces", "invitation-preview", token] as const,
+  documentLists: (workspaceId: string) => ["workspaces", "documents", workspaceId] as const,
   documents: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "documents", workspaceId, { page, pageSize, search }] as const,
   documentDetail: (workspaceId: string, docId: string) => ["workspaces", "document", workspaceId, docId] as const,
@@ -82,10 +85,10 @@ export function useUpdateWorkspaceSettings(workspaceId: string) {
 
 // ─── Members ───
 
-export function useWorkspaceMembers(workspaceId: string, page = 1, pageSize = 10, search = "") {
+export function useWorkspaceMembers(workspaceId: string | undefined, page = 1, pageSize = 10, search = "") {
   return useQuery({
-    queryKey: WORKSPACE_KEYS.members(workspaceId, page, pageSize, search),
-    queryFn: () => WorkspaceService.listMembers(workspaceId, page, pageSize, search),
+    queryKey: WORKSPACE_KEYS.members(workspaceId ?? "", page, pageSize, search),
+    queryFn: () => WorkspaceService.listMembers(workspaceId ?? "", page, pageSize, search),
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
@@ -140,18 +143,18 @@ export function useUpdateWorkspaceMember(workspaceId: string) {
 export function useInviteWorkspaceMember(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ email, roleName, membershipType }: { email: string; roleName: string; membershipType: string }) =>
-      WorkspaceService.invite(workspaceId, email, roleName, membershipType),
+    mutationFn: ({ email, roleName }: { email: string; roleName: string }) =>
+      WorkspaceService.invite(workspaceId, email, roleName),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
     },
   });
 }
 
-export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "") {
+export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string) {
   return useQuery({
-    queryKey: WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search),
-    queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search),
+    queryKey: [...WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search), category],
+    queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search, category),
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
@@ -187,10 +190,32 @@ export function useAcceptWorkspaceInvitation() {
   });
 }
 
+export function usePendingWorkspaceInvitations() {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.pendingInvitations(),
+    queryFn: WorkspaceService.getPendingInvitations,
+    staleTime: 30000,
+  });
+}
+
+export function useAcceptWorkspaceInvitationById() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: WorkspaceService.acceptInvitationById,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.pendingInvitations() });
+    },
+  });
+}
+
 export function useCreateJoinRequest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (request: { roomCode?: string; workspaceSlug?: string }) => WorkspaceService.createJoinRequest(request),
+    mutationFn: (request: { roomCode?: string; workspaceSlug?: string } | string) => {
+      const payload = typeof request === "string" ? { workspaceSlug: request } : request;
+      return WorkspaceService.createJoinRequest(payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
     },
@@ -200,10 +225,18 @@ export function useCreateJoinRequest() {
 export function useApproveWorkspaceJoinRequest(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+<<<<<<< HEAD
     mutationFn: (inviteId: string) => WorkspaceService.approveJoinRequest(workspaceId, inviteId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
+=======
+    mutationFn: (payload: string | { invitationId: string; membershipType?: string }) =>
+      WorkspaceService.approveJoinRequest(workspaceId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members"] });
+>>>>>>> development
     },
   });
 }
@@ -213,11 +246,21 @@ export function useRejectWorkspaceJoinRequest(workspaceId: string) {
   return useMutation({
     mutationFn: (inviteId: string) => WorkspaceService.rejectJoinRequest(workspaceId, inviteId),
     onSuccess: () => {
+<<<<<<< HEAD
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+=======
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
+>>>>>>> development
     },
   });
 }
 
+<<<<<<< HEAD
+=======
+export const useApproveJoinRequest = useApproveWorkspaceJoinRequest;
+export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
+
+>>>>>>> development
 // ─── Documents ───
 
 export function useUploadWorkspaceDocument(workspaceId: string) {
@@ -226,7 +269,7 @@ export function useUploadWorkspaceDocument(workspaceId: string) {
     mutationFn: (request: Parameters<typeof WorkspaceService.uploadDocument>[1]) =>
       WorkspaceService.uploadDocument(workspaceId, request),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "documents", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
     },
   });
 }
@@ -237,7 +280,7 @@ export function useArchiveWorkspaceDocument(workspaceId: string) {
     mutationFn: (docId: string) => WorkspaceService.archiveDocument(workspaceId, docId),
     onSuccess: (_, docId) => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "documents", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
     },
   });
 }
@@ -248,7 +291,7 @@ export function useRestoreWorkspaceDocument(workspaceId: string) {
     mutationFn: (docId: string) => WorkspaceService.restoreDocument(workspaceId, docId),
     onSuccess: (_, docId) => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "documents", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
     },
   });
 }
@@ -259,7 +302,16 @@ export function useWorkspaceDocuments(workspaceId: string, page = 1, pageSize = 
     queryFn: () => WorkspaceService.listDocuments(workspaceId, page, pageSize, search),
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
-    staleTime: 10000, // lower stale time to help track ingestion state
+    staleTime: 3000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data || !data.items) return false;
+      const hasActiveProcessing = data.items.some((doc: { ingestionStatus?: string }) => {
+        const status = doc.ingestionStatus?.toLowerCase();
+        return status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING || status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING;
+      });
+      return hasActiveProcessing ? 3000 : false;
+    },
   });
 }
 
@@ -268,27 +320,47 @@ export function useWorkspaceDocument(workspaceId: string, docId: string) {
     queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId),
     queryFn: () => WorkspaceService.getDocumentById(workspaceId, docId),
     enabled: !!workspaceId && !!docId,
+    staleTime: 3000,
+    refetchInterval: (query) => {
+      const status = query.state.data?.ingestionStatus?.toLowerCase();
+      const isProcessing = status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING || status === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING;
+      return isProcessing ? 3000 : false;
+    },
+  });
+}
+
+export function useWorkspaceDocumentExtractedText(
+  workspaceId: string,
+  docId: string,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: ["workspaces", "document-extracted-text", workspaceId, docId],
+    queryFn: () => WorkspaceService.getExtractedText(workspaceId, docId),
+    enabled: (options?.enabled ?? true) && !!workspaceId && !!docId,
     staleTime: 30000,
   });
 }
 
-export function useWorkspaceDocumentExtractedText(workspaceId: string, docId: string) {
-  return useQuery({
-    queryKey: ["workspaces", "document-extracted-text", workspaceId, docId],
-    queryFn: () => WorkspaceService.getExtractedText(workspaceId, docId),
-    enabled: !!workspaceId && !!docId,
-    staleTime: 30000,
+export function useUpdateWorkspaceDocumentExtractedText(workspaceId: string, docId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => WorkspaceService.updateExtractedText(workspaceId, docId, text),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "document-extracted-text", workspaceId, docId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+    },
   });
 }
 
 export function usePatchWorkspaceDocumentMetadata(workspaceId: string, docId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (request: { name?: string; isSensitive?: boolean }) =>
+    mutationFn: (request: { name?: string; confidentialityLevel?: string; isAiAllowed?: boolean }) =>
       WorkspaceService.patchDocumentMetadata(workspaceId, docId, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "documents", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
     },
   });
 }
@@ -300,7 +372,7 @@ export function useApproveWorkspaceDocument(workspaceId: string) {
       WorkspaceService.approveDocument(workspaceId, docId, approve),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, variables.docId) });
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "documents", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
     },
   });
 }
@@ -310,7 +382,7 @@ export function useDeleteWorkspaceDocument(workspaceId: string) {
   return useMutation({
     mutationFn: (docId: string) => WorkspaceService.deleteDocument(workspaceId, docId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "documents", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
     },
   });
 }
@@ -325,8 +397,8 @@ export function useAddWorkspaceDocumentAccessPolicy(workspaceId: string, docId: 
       permission: string;
       effect: string;
     }) => WorkspaceService.addAccessPolicy(workspaceId, docId, policy),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "document-policies", workspaceId, docId] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentPolicies(workspaceId, docId, 1, 100) });
     },
   });
 }
@@ -335,8 +407,8 @@ export function useRemoveWorkspaceDocumentAccessPolicy(workspaceId: string, docI
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (policyId: string) => WorkspaceService.removeAccessPolicy(workspaceId, docId, policyId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "document-policies", workspaceId, docId] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentPolicies(workspaceId, docId, 1, 100) });
     },
   });
 }
@@ -421,6 +493,14 @@ export function useGlossaryTerms(glossaryId: string) {
     queryFn: () => WorkspaceService.getTerms(glossaryId),
     enabled: !!glossaryId,
     staleTime: 30000,
+  });
+}
+
+export function usePublishedGlobalGlossaryTerms() {
+  return useQuery({
+    queryKey: ["glossaries", "global-published"] as const,
+    queryFn: () => WorkspaceService.getPublishedGlobalTerms(),
+    staleTime: 60000,
   });
 }
 

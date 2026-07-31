@@ -1,17 +1,11 @@
 /**
  * Centralized API endpoints matching Gateway YARP routes.
  * Base URL is set in apiClient (NEXT_PUBLIC_API_URL).
- *
- * Gateway routing:
- *   /api/v1/auth/*          → AuthService :5101  (transforms to /api/auth/*)
- *   /api/v1/translation-rooms/*      → TranslationRoomService :5102
- *   /api/v1/transcripts/*   → TranscriptService :5103
- *   /api/v1/notifications/* → NotificationService :5104
- *   /api/v1/meetings/*      → MeetingService :5105
  */
 export const API = {
   auth: {
     register: "/auth/register",
+    registerInvited: "/auth/register-invited",
     login: "/auth/login",
     googleLogin: "/auth/google-login",
     refresh: "/auth/refresh",
@@ -19,6 +13,11 @@ export const API = {
     me: "/auth/me",
     changePassword: "/auth/change-password",
     settings: "/auth/settings",
+  },
+  voiceProfiles: {
+    list: "/auth/voice-profiles",
+    create: "/auth/voice-profiles",
+    delete: (id: string) => `/auth/voice-profiles/${id}`,
   },
   translationRooms: {
     create: "/translation-rooms",
@@ -36,6 +35,8 @@ export const API = {
       `/translation-rooms/${id}/participants/${participantId}/kick`,
     leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
     start: (id: string) => `/translation-rooms/${id}/start`,
+    pause: (id: string) => `/translation-rooms/${id}/pause`,
+    resume: (id: string) => `/translation-rooms/${id}/resume`,
     end: (id: string) => `/translation-rooms/${id}/end`,
     cancel: (id: string) => `/translation-rooms/${id}/cancel`,
     artifacts: (id: string) => `/translation-rooms/${id}/artifacts`,
@@ -43,6 +44,14 @@ export const API = {
     feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
     preflight: (roomCode: string) => `/translation-rooms/preflight/${roomCode}`,
+    generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
+    voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
+    calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
+    sessions: (id: string) => `/translation-rooms/${id}/sessions`,
+  },
+  roomArtifacts: {
+    download: (id: string) => `/room-artifacts/${id}/download`,
+    consent: (id: string) => `/room-artifacts/${id}/consent`,
   },
   transcripts: {
     start: "/transcripts",
@@ -58,19 +67,38 @@ export const API = {
     finalize: (id: string) => `/transcripts/${id}/finalize`,
   },
   notifications: {
+    base: "/notifications",
     preferences: "/notifications/preferences",
+    read: (id: string) => `/notifications/${id}/read`,
+    readAll: "/notifications/read-all",
+    adminBase: "/admin/notifications",
   },
   meetings: {
     join: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/join`,
     triggerAi: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/trigger-ai`,
     chatList: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSend: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
+    chatSendFile: (roomId: string) => `/meetings/rooms/${roomId}/chat/files`,
     chatTranslate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/translate`,
     chatModerate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/moderate`,
     rejectParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/reject`,
     transferHost: (roomId: string, newHostId: string) => `/meetings/rooms/${roomId}/transfer-host/${newHostId}`,
     kickParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/kick`,
     endMeeting: (roomId: string) => `/meetings/rooms/${roomId}/end`,
+    setLock: (roomId: string) => `/meetings/rooms/${roomId}/lock`,
+    setMuteOnEntry: (roomId: string) => `/meetings/rooms/${roomId}/mute-on-entry`,
+    setRecording: (roomId: string) => `/meetings/rooms/${roomId}/recording`,
+    pollsList: (roomId: string) => `/meetings/rooms/${roomId}/polls`,
+    pollsCreate: (roomId: string) => `/meetings/rooms/${roomId}/polls`,
+    pollsVote: (roomId: string, pollId: string) => `/meetings/rooms/${roomId}/polls/${pollId}/vote`,
+    pollsClose: (roomId: string, pollId: string) => `/meetings/rooms/${roomId}/polls/${pollId}/close`,
+    questionsList: (roomId: string) => `/meetings/rooms/${roomId}/questions`,
+    questionsAsk: (roomId: string) => `/meetings/rooms/${roomId}/questions`,
+    questionsUpvote: (roomId: string, questionId: string) => `/meetings/rooms/${roomId}/questions/${questionId}/upvote`,
+    questionsAnswer: (roomId: string, questionId: string) => `/meetings/rooms/${roomId}/questions/${questionId}/answer`,
+    breakoutsStart: (roomId: string) => `/meetings/rooms/${roomId}/breakouts`,
+    breakoutsEnd: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/end`,
+    breakoutsMyAssignment: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/my-assignment`,
   },
   workspaces: {
     base: "/workspaces",
@@ -83,9 +111,12 @@ export const API = {
     memberRole: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role`,
     transferOwnership: (workspaceId: string) => `/workspaces/${workspaceId}/members/transfer-ownership`,
     invitations: (workspaceId: string) => `/workspaces/${workspaceId}/invitations`,
+    retryInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}/retry-delivery`,
     revokeInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}`,
     previewInvitation: (token: string) => `/workspaces/invitations/preview?token=${encodeURIComponent(token)}`,
+    pendingInvitations: "/workspaces/invitations/pending",
     acceptInvitation: "/workspaces/invitations/accept",
+    acceptInvitationById: (inviteId: string) => `/workspaces/invitations/${inviteId}/accept`,
     joinRequests: "/workspaces/join-requests",
     approveJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/approve`,
     rejectJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/reject`,
@@ -103,5 +134,20 @@ export const API = {
     byWorkspace: (workspaceId: string) => `/glossaries/workspace/${workspaceId}`,
     terms: (id: string) => `/glossaries/${id}/terms`,
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
+    global: "/glossaries/global",
+  },
+  assistant: {
+    conversations: "/assistant/conversations",
+    conversation: (id: string) => `/assistant/conversations/${id}`,
+    sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
+    skills: "/assistant/skills",
+  },
+  adminGlobalGlossary: {
+    base: "/admin/global-glossary",
+    detail: (id: string) => `/admin/global-glossary/${id}`,
+    publish: (id: string) => `/admin/global-glossary/${id}/publish`,
+    archive: (id: string) => `/admin/global-glossary/${id}/archive`,
+    bulkImport: "/admin/global-glossary/bulk-import",
+    audits: (id: string) => `/admin/global-glossary/${id}/audits`,
   },
 } as const;

@@ -1,51 +1,67 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
   Users,
-  Trash,
-  MagnifyingGlass,
+  UserMinus,
+  Funnel,
   Spinner,
   Warning,
   Plus,
-  Check
+  Check,
+  Copy,
+  Download,
+  SlidersHorizontal,
 } from "@phosphor-icons/react";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
-import { WorkspaceMemberDto } from "@/types/workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useWorkspaceMembers,
   useRemoveWorkspaceMember,
-  useChangeWorkspaceMemberRole,
   useUpdateWorkspaceMember,
   useInviteWorkspaceMember,
-  useWorkspaceSettings
 } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
-const ROLES = ["Owner", "Admin", "Member"];
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const inviteSchema = z.object({
   email: z.string().email("Invalid email address"),
   roleName: z.enum(["Admin", "Member"]),
-  membershipType: z.enum(["Internal", "External"]),
 });
 
 type InviteFormData = z.infer<typeof inviteSchema>;
 
 export default function WorkspaceMembersPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const currentRole = useWorkspaceStore((s) => s.role);
+  const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
+  const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
+  const currentRole = useWorkspaceRole();
   const currentUser = useAuthStore((s) => s.user);
 
   const [query, setQuery] = useState("");
@@ -55,23 +71,38 @@ export default function WorkspaceMembersPage() {
 
   // Modal and invitation states
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [memberToRemove, setMemberToRemove] = useState<{ id: string; name: string } | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<{
+    email: string;
+    previewUrl: string;
+    warning?: string | null;
+  } | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // TanStack Query Hooks
-  const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", page, 10, query);
-  const removeMemberMutation = useRemoveWorkspaceMember(activeWorkspaceId || "");
-  const changeRoleMutation = useChangeWorkspaceMemberRole(activeWorkspaceId || "");
-  const updateMemberMutation = useUpdateWorkspaceMember(activeWorkspaceId || "");
+  const membersQuery = useWorkspaceMembers(
+    activeWorkspaceId || "",
+    page,
+    10,
+    query,
+  );
+  const removeMemberMutation = useRemoveWorkspaceMember(
+    activeWorkspaceId || "",
+  );
+  const updateMemberMutation = useUpdateWorkspaceMember(
+    activeWorkspaceId || "",
+  );
   const inviteMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
-  const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
 
   // Invite form setup
   const {
     register: registerInvite,
     handleSubmit: handleSubmitInvite,
     setValue: setValueInvite,
-    watch: watchInvite,
+    control: inviteControl,
     reset: resetInvite,
     formState: { errors: inviteErrors },
   } = useForm<InviteFormData>({
@@ -79,45 +110,117 @@ export default function WorkspaceMembersPage() {
     defaultValues: {
       email: "",
       roleName: "Member",
-      membershipType: "Internal",
     },
   });
 
-  const selectedInviteRole = watchInvite("roleName");
-  const selectedInviteMembership = watchInvite("membershipType");
+  const selectedInviteRole = useWatch({
+    control: inviteControl,
+    name: "roleName",
+  });
 
   if (!activeWorkspaceId) return null;
 
-  const isOwner = currentRole === "Owner";
-  const isAdmin = currentRole === "Admin";
+  const isOwner = currentRole === "owner";
+  const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
 
   const membersList = membersQuery.data?.items || [];
+  const memberFilterPills = [
+    { key: "all", label: "All", role: "all", status: "all" },
+    { key: "owner", label: "Owner", role: "owner", status: "all" },
+    { key: "admin", label: "Admin", role: "admin", status: "all" },
+    { key: "member", label: "Member", role: "member", status: "all" },
+    { key: "active", label: "Active", role: "all", status: "active" },
+  ] as const;
+  const activeMemberFilter =
+    memberFilterPills.find(
+      (item) => item.role === roleFilter && item.status === statusFilter,
+    )?.key ?? "custom";
 
   // Client-side filtering for Role and Status
   const filteredMembers = membersList.filter((member) => {
-    const matchesRole = roleFilter === "all" || member.roleName.toLowerCase() === roleFilter.toLowerCase();
-    const matchesStatus = statusFilter === "all" || member.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesRole =
+      roleFilter === "all" ||
+      member.roleName.toLowerCase() === roleFilter.toLowerCase();
+    const matchesStatus =
+      statusFilter === "all" ||
+      member.status.toLowerCase() === statusFilter.toLowerCase();
     return matchesRole && matchesStatus;
   });
 
-  const handleToggleCanCreateMeetings = async (userId: string, currentVal: boolean) => {
+  const handleExportXlsx = async () => {
     try {
-      await updateMemberMutation.mutateAsync({ userId, canCreateMeetings: !currentVal });
-      toast.success("Meeting host permission updated.");
-    } catch (err) {
-      const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Failed to update meeting permission");
+      setIsExporting(true);
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Members");
+
+      worksheet.columns = [
+        { header: "Full Name", key: "fullName", width: 25 },
+        { header: "Email", key: "email", width: 30 },
+        { header: "Role", key: "roleName", width: 15 },
+        { header: "Membership Type", key: "membershipType", width: 18 },
+        { header: "Status", key: "status", width: 12 },
+        { header: "Joined Date", key: "joinedAt", width: 20 },
+        {
+          header: "Host Meetings Permission",
+          key: "canCreateMeetings",
+          width: 22,
+        },
+      ];
+
+      // Style header row
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFF" } };
+      headerRow.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "1E293B" },
+      };
+
+      filteredMembers.forEach((m) => {
+        worksheet.addRow({
+          fullName: m.fullName || "N/A",
+          email: m.email || "N/A",
+          roleName: m.roleName || "Member",
+          membershipType: m.membershipType || "Internal",
+          status: m.status || "Active",
+          joinedAt: m.joinedAt
+            ? new Date(m.joinedAt).toLocaleDateString()
+            : "N/A",
+          canCreateMeetings: m.canCreateMeetings ? "Yes" : "No",
+        });
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const dateStr = new Date().toISOString().split("T")[0];
+      const fileName = `${activeWorkspaceName || "Workspace"}_Members_${dateStr}.xlsx`;
+      saveAs(blob, fileName);
+      toast.success("Members list exported successfully!");
+    } catch {
+      toast.error("Failed to export members list.");
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: string) => {
+  const handleToggleCanCreateMeetings = async (
+    userId: string,
+    currentVal: boolean,
+  ) => {
     try {
-      await changeRoleMutation.mutateAsync({ userId, roleName: newRole });
-      toast.success(`Role updated to ${newRole}`);
+      await updateMemberMutation.mutateAsync({
+        userId,
+        canCreateMeetings: !currentVal,
+      });
+      toast.success("Meeting host permission updated.");
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Failed to update role");
+      toast.error(
+        error?.response?.data?.error || "Failed to update meeting permission",
+      );
     }
   };
 
@@ -134,50 +237,44 @@ export default function WorkspaceMembersPage() {
   };
 
   const handleInvite = async (formData: InviteFormData) => {
-    const settings = settingsQuery.data;
-    if (formData.membershipType === "External" && settings && !settings.allowExternalCollaboration) {
-      toast.error("External collaboration is disabled by workspace security policy.");
-      return;
-    }
-
-    if (formData.membershipType === "Internal" && settings?.requireVerifiedDomainForInternal && settings.verifiedDomains.length > 0) {
-      const emailDomain = formData.email.split("@")[1]?.toLowerCase();
-      const isVerified = settings.verifiedDomains.some((d) => d.toLowerCase() === emailDomain);
-      if (!isVerified) {
-        toast.error(`Internal members must have an email domain matching verified domains: ${settings.verifiedDomains.join(", ")}`);
-        return;
-      }
-    }
-
     try {
       const result = await inviteMutation.mutateAsync({
         email: formData.email,
         roleName: formData.roleName,
-        membershipType: formData.membershipType,
       });
 
-      const previewLink = `${window.location.origin}/invitations/${result.rawToken}`;
-      setGeneratedLink(previewLink);
+      const params = new URLSearchParams({
+        invitationId: result.invitation.id,
+        workspaceId: result.invitation.workspaceId,
+        workspaceName: activeWorkspaceName || "WarpTalk Workspace",
+        workspaceSlug: activeWorkspaceSlug || "workspace",
+        email: result.invitation.email,
+        roleName: result.invitation.roleName,
+        membershipType: result.invitation.membershipType,
+      });
+      setInviteNotice({
+        email: result.invitation.email,
+        previewUrl: `${window.location.origin}/dev/email/workspace-invite?${params.toString()}`,
+        warning: result.warning,
+      });
       setIsInviteOpen(false);
       resetInvite();
-      toast.success("Invitation generated!");
+      toast.success(
+        result.warning
+          ? "Invitation created, but email delivery failed."
+          : "Invitation sent.",
+      );
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Failed to create invitation");
+      toast.error(
+        error?.response?.data?.error || "Failed to create invitation",
+      );
     }
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success("Invitation link copied to clipboard!");
-  };
-
-  const canModifyRole = (targetMember: WorkspaceMemberDto) => {
-    if (isOwner) return true;
-    if (isAdmin) {
-      return targetMember.roleName !== "Owner" && targetMember.roleName !== "Admin";
-    }
-    return false;
+    toast.success("Email preview URL copied.");
   };
 
   const initials = (name: string) => {
@@ -190,67 +287,94 @@ export default function WorkspaceMembersPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink">
+    <div className="flex h-full flex-col bg-surface-1 text-ink">
       {/* Filter, Search, and Action triggers - Unified horizontal design */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-hairline gap-4 pt-2">
-        <div className="flex items-center flex-1 gap-2 max-w-xl">
-          <div className="relative flex-1">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted">
-              <MagnifyingGlass className="h-4 w-4" />
-            </span>
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
+      <div className="flex shrink-0 flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+          {memberFilterPills.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => {
+                setRoleFilter(item.role);
+                setStatusFilter(item.status);
               }}
-              placeholder="Search by name or email"
-              className="h-8 pl-8 pr-3 text-xs bg-surface-2/60 border-hairline focus:ring-1 focus:ring-primary focus-visible:ring-1 focus-visible:ring-primary w-full"
-            />
-          </div>
-
-          {/* Role Filter */}
-          <Select value={roleFilter} onValueChange={(val) => setRoleFilter(val || "all")}>
-            <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
-              <SelectValue placeholder="All Roles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Roles</SelectItem>
-              <SelectItem value="owner" className="text-xs">Owner</SelectItem>
-              <SelectItem value="admin" className="text-xs">Admin</SelectItem>
-              <SelectItem value="member" className="text-xs">Member</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || "all")}>
-            <SelectTrigger className="h-8 text-xs bg-surface-2/60 border-hairline w-32 font-medium">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Statuses</SelectItem>
-              <SelectItem value="active" className="text-xs">Active</SelectItem>
-            </SelectContent>
-          </Select>
+              className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+                activeMemberFilter === item.key
+                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
+                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        {/* Invite button next to filters */}
-        {isOwnerOrAdmin && (
-          <button
-            onClick={() => {
-              resetInvite();
-              setIsInviteOpen(true);
+        <div className="flex shrink-0 items-center gap-2 pl-4">
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={(value) => {
+              setQuery(value);
+              setPage(1);
             }}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-3 text-xs font-semibold text-white transition duration-150 cursor-pointer shrink-0"
+            placeholder="Search members..."
+            ariaLabel="Search members"
+            collapsedWidth={28}
+            expandedWidth={220}
+            className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+            iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+            clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+            inputClassName="h-[26px] text-[12px]"
+          />
+          <button
+            className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title="Member filters"
           >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Invite</span>
+            <Funnel weight="bold" size={13} />
+            {(roleFilter !== "all" || statusFilter !== "all") && (
+              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+            )}
           </button>
-        )}
+          <button
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            title={`${filteredMembers.length} members`}
+          >
+            <SlidersHorizontal weight="bold" size={13} />
+          </button>
+
+          {isOwnerOrAdmin && (
+            <>
+              <div className="mx-1 h-4 w-[1px] bg-border" />
+            <button
+              onClick={handleExportXlsx}
+              disabled={isExporting}
+              className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50"
+            >
+              {isExporting ? (
+                <Spinner className="h-3.5 w-3.5 animate-spin text-primary" />
+              ) : (
+                <Download className="h-3.5 w-3.5 text-primary" />
+              )}
+              <span>{isExporting ? "Exporting..." : "Export (.xlsx)"}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                resetInvite();
+                setIsInviteOpen(true);
+              }}
+              className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Invite</span>
+            </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Members Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-4 pb-6">
         {membersQuery.isLoading ? (
           <div className="flex h-48 items-center justify-center">
             <Spinner className="h-6 w-6 animate-spin text-primary" />
@@ -259,14 +383,17 @@ export default function WorkspaceMembersPage() {
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-center border border-dashed border-hairline rounded-lg bg-surface-1/10">
             <Users className="h-8 w-8 text-ink-muted" />
             <p className="text-sm font-medium">No members found</p>
-            <p className="text-xs text-ink-muted">Try adjusting your search terms or filters.</p>
+            <p className="text-xs text-ink-muted">
+              Try adjusting your search terms or filters.
+            </p>
           </div>
         ) : (
           <div className="min-w-[750px] divide-y divide-hairline/40">
             {/* Header row */}
-            <div className="grid grid-cols-[2.5fr_120px_100px_120px_110px_48px] items-center gap-4 px-2 py-2 text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
+            <div className="grid grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px] items-center gap-4 px-2 py-2 text-[11px] font-semibold uppercase text-ink-muted">
               <span>Name</span>
               <span>Role</span>
+              <span>Membership Type</span>
               <span>Status</span>
               <span>Joined</span>
               <span className="text-center">Host meetings</span>
@@ -276,12 +403,13 @@ export default function WorkspaceMembersPage() {
             {/* Data rows */}
             {filteredMembers.map((member) => {
               const isSelf = member.userId === currentUser?.id;
-              const canModifyThisMember = canModifyRole(member) && !isSelf;
+              const memberRole = member.roleName.toLowerCase();
+              const memberStatus = member.status.toLowerCase();
 
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[2.5fr_120px_100px_120px_110px_48px] items-center gap-4 px-2 py-3 hover:bg-surface-2/30 transition-colors rounded-md"
+                  className="grid grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px] items-center gap-4 rounded-md px-2 py-3 transition-colors hover:bg-surface-2/40"
                 >
                   {/* User name, email & avatar */}
                   <div className="flex items-center gap-3 min-w-0">
@@ -307,29 +435,28 @@ export default function WorkspaceMembersPage() {
                     </div>
                   </div>
 
-                  {/* Role selector */}
+                  {/* Role Badge */}
                   <div>
-                    {canModifyThisMember ? (
-                      <Select
-                        value={member.roleName}
-                        onValueChange={(val) => handleRoleChange(member.userId, val || "")}
-                      >
-                        <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ROLES.filter((r) => isOwner || r !== "Admin").map((r) => (
-                            <SelectItem key={r} value={r} className="text-xs">
-                              {r}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <span className="text-xs font-medium text-ink bg-surface-3/60 border border-hairline/80 px-2 py-0.8 rounded-[4px]">
-                        {member.roleName}
-                      </span>
-                    )}
+                    <Badge
+                      variant="outline"
+                      className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
+                    >
+                      {member.roleName}
+                    </Badge>
+                  </div>
+
+                  {/* Membership Type Badge */}
+                  <div>
+                    <Badge
+                      variant="outline"
+                      className={
+                        member.membershipType.toLowerCase() === "external"
+                          ? "rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                          : "rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
+                      }
+                    >
+                      {member.membershipType}
+                    </Badge>
                   </div>
 
                   {/* Status from Backend */}
@@ -337,7 +464,7 @@ export default function WorkspaceMembersPage() {
                     <Badge
                       variant="outline"
                       className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${
-                        member.status === "Active"
+                        memberStatus === "active"
                           ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20"
                           : "bg-surface-3/50 border-hairline text-ink-muted"
                       }`}
@@ -348,16 +475,25 @@ export default function WorkspaceMembersPage() {
 
                   {/* Joined Date */}
                   <span className="text-xs text-ink-muted font-medium">
-                    {new Date(member.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    {new Date(member.joinedAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
                   </span>
 
                   {/* Meeting host toggle */}
                   <div className="flex justify-center">
                     <Switch
                       checked={member.canCreateMeetings}
-                      disabled={!isOwnerOrAdmin || isSelf || member.roleName === "Owner"}
+                      disabled={
+                        !isOwnerOrAdmin || isSelf || memberRole === "owner"
+                      }
                       onCheckedChange={() =>
-                        handleToggleCanCreateMeetings(member.userId, member.canCreateMeetings)
+                        handleToggleCanCreateMeetings(
+                          member.userId,
+                          member.canCreateMeetings,
+                        )
                       }
                     />
                   </div>
@@ -365,12 +501,23 @@ export default function WorkspaceMembersPage() {
                   {/* Remove button */}
                   <div className="flex justify-end">
                     <button
-                      onClick={() => setMemberToRemove({ id: member.userId, name: member.fullName })}
-                      disabled={!isOwnerOrAdmin || isSelf || member.roleName === "Owner" || (isAdmin && member.roleName === "Admin")}
+                      onClick={() =>
+                        setMemberToRemove({
+                          id: member.userId,
+                          name: member.fullName,
+                        })
+                      }
+                      disabled={
+                        !isOwnerOrAdmin ||
+                        isSelf ||
+                        memberRole === "owner" ||
+                        (isAdmin && memberRole === "admin")
+                      }
                       className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
-                      title="Remove Member"
+                      title="Remove from workspace"
+                      aria-label={`Remove ${member.fullName} from workspace`}
                     >
-                      <Trash className="h-4 w-4" />
+                      <UserMinus className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -389,7 +536,9 @@ export default function WorkspaceMembersPage() {
             >
               Previous
             </button>
-            <span className="text-xs text-ink-muted font-medium">Page {page}</span>
+            <span className="text-xs text-ink-muted font-medium">
+              Page {page}
+            </span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={membersList.length < 10}
@@ -405,13 +554,18 @@ export default function WorkspaceMembersPage() {
       <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
         <DialogContent className="border-hairline bg-surface-1 max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-bold text-base text-foreground">Invite Member</DialogTitle>
+            <DialogTitle className="font-bold text-base text-foreground">
+              Invite Member
+            </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
               Generate a secure join link for a new member.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmitInvite(handleInvite)} className="flex flex-col gap-4 my-2">
+          <form
+            onSubmit={handleSubmitInvite(handleInvite)}
+            className="flex flex-col gap-4 my-2"
+          >
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold">Email Address</label>
               <Input
@@ -422,7 +576,9 @@ export default function WorkspaceMembersPage() {
                 disabled={inviteMutation.isPending}
               />
               {inviteErrors.email && (
-                <p className="text-[11px] text-destructive mt-0.5">{inviteErrors.email.message}</p>
+                <p className="text-[11px] text-destructive mt-0.5">
+                  {inviteErrors.email.message}
+                </p>
               )}
             </div>
 
@@ -430,39 +586,34 @@ export default function WorkspaceMembersPage() {
               <label className="text-xs font-semibold">Workspace Role</label>
               <Select
                 value={selectedInviteRole}
-                onValueChange={(val) => setValueInvite("roleName", val as "Admin" | "Member")}
+                onValueChange={(val: string | null) => {
+                  if (val)
+                    setValueInvite("roleName", val as "Admin" | "Member");
+                }}
               >
                 <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Member" className="text-xs">Member (Standard)</SelectItem>
-                  <SelectItem value="Admin" className="text-xs">Admin (Operational Manager)</SelectItem>
+                  <SelectItem value="Member" className="text-xs">
+                    Member (Standard)
+                  </SelectItem>
+                  <SelectItem value="Admin" className="text-xs">
+                    Admin (Operational Manager)
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {inviteErrors.roleName && (
-                <p className="text-[11px] text-destructive mt-0.5">{inviteErrors.roleName.message}</p>
+                <p className="text-[11px] text-destructive mt-0.5">
+                  {inviteErrors.roleName.message}
+                </p>
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold">Membership Type</label>
-              <Select
-                value={selectedInviteMembership}
-                onValueChange={(val) => setValueInvite("membershipType", val as "Internal" | "External")}
-              >
-                <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Internal" className="text-xs">Internal (Employee)</SelectItem>
-                  <SelectItem value="External" className="text-xs">External (Partner/Client)</SelectItem>
-                </SelectContent>
-              </Select>
-              {inviteErrors.membershipType && (
-                <p className="text-[11px] text-destructive mt-0.5">{inviteErrors.membershipType.message}</p>
-              )}
-            </div>
+            <p className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-5 text-ink-muted">
+              Internal or External access is assigned automatically from the
+              workspace&apos;s verified domains.
+            </p>
 
             <DialogFooter className="mt-4 flex gap-2">
               <button
@@ -489,35 +640,56 @@ export default function WorkspaceMembersPage() {
       </Dialog>
 
       {/* Generated Link Share Dialog */}
-      <Dialog open={!!generatedLink} onOpenChange={(open) => !open && setGeneratedLink(null)}>
+      <Dialog
+        open={!!inviteNotice}
+        onOpenChange={(open: boolean) => !open && setInviteNotice(null)}
+      >
         <DialogContent className="border-hairline bg-surface-1 max-w-md">
           <DialogHeader className="flex flex-col gap-1.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto">
               <Check className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-center font-bold text-base text-foreground">Invitation Link Ready</DialogTitle>
+            <DialogTitle className="text-center font-bold text-base text-foreground">
+              Invitation Created
+            </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Copy and share this link with the invitee manually so they can review and accept the invitation.
+              The invite is bound to{" "}
+              <span className="font-semibold text-ink">
+                {inviteNotice?.email}
+              </span>
+              . A secure invitation email has been sent to that address.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="my-4 flex gap-2">
-            <Input
-              readOnly
-              value={generatedLink || ""}
-              className="h-9 text-xs bg-surface-2 border-hairline flex-1 select-all cursor-text font-mono"
-            />
-            <button
-              onClick={() => generatedLink && copyToClipboard(generatedLink)}
-              className="h-9 px-3 flex items-center justify-center rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 transition text-xs font-semibold gap-1 cursor-pointer"
-            >
-              <span>Copy</span>
-            </button>
-          </div>
+          {process.env.NODE_ENV !== "production" && inviteNotice?.previewUrl && (
+            <div className="my-4 flex gap-2">
+              <Input
+                readOnly
+                value={inviteNotice.previewUrl}
+                className="h-9 flex-1 select-all border-hairline bg-surface-2 font-mono text-xs"
+              />
+              <button
+                onClick={() =>
+                  inviteNotice.previewUrl &&
+                  copyToClipboard(inviteNotice.previewUrl)
+                }
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-hairline bg-surface-1 px-3 text-xs font-semibold transition hover:bg-surface-2"
+              >
+                <Copy className="h-4 w-4" />
+                <span>Copy</span>
+              </button>
+            </div>
+          )}
+
+          {inviteNotice?.warning && (
+            <div className="my-4 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-600">
+              {inviteNotice.warning}
+            </div>
+          )}
 
           <DialogFooter>
             <button
-              onClick={() => setGeneratedLink(null)}
+              onClick={() => setInviteNotice(null)}
               className="w-full h-9 rounded-md bg-primary hover:bg-primary-hover text-xs font-semibold text-white transition cursor-pointer"
             >
               Done
@@ -527,16 +699,25 @@ export default function WorkspaceMembersPage() {
       </Dialog>
 
       {/* Remove Confirmation Dialog */}
-      <Dialog open={!!memberToRemove} onOpenChange={(open) => !open && setMemberToRemove(null)}>
+      <Dialog
+        open={!!memberToRemove}
+        onOpenChange={(open: boolean) => !open && setMemberToRemove(null)}
+      >
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader className="flex flex-col gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive mx-auto">
               <Warning className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-center font-bold text-base text-foreground">Remove Member?</DialogTitle>
+            <DialogTitle className="text-center font-bold text-base text-foreground">
+              Remove Member?
+            </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Are you sure you want to remove <span className="font-semibold text-ink">{memberToRemove?.name}</span>?
-              They will instantly lose access to all meetings, documents, and transcripts in this workspace.
+              Are you sure you want to remove{" "}
+              <span className="font-semibold text-ink">
+                {memberToRemove?.name}
+              </span>
+              ? They will instantly lose access to all meetings, documents, and
+              transcripts in this workspace.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">

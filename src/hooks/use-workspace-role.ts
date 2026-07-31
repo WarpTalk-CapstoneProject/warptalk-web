@@ -1,25 +1,17 @@
-import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 
-export type WorkspaceRole = "admin" | "owner" | "member";
+export type WorkspaceRole = "owner" | "admin" | "member";
 
 /**
  * Custom hook to get the current user's role in the active workspace.
- * Currently uses email-based mocking for testing the 3 roles since the
- * backend getWorkspaceMembers doesn't expose roleName fully yet.
+ * Always normalizes the role string to lowercase ("owner" | "admin" | "member").
  */
 export function useWorkspaceRole(): WorkspaceRole {
-  const user = useAuthStore((state) => state.user);
-
-  if (!user) return "member";
-
-  // Check roles or emails for demonstration/testing
-  if (user.roles?.includes("admin") || user.email.includes("admin")) {
-    return "admin";
+  const role = useWorkspaceStore((state) => state.role);
+  if (!role) return "member";
+  const lower = role.toLowerCase();
+  if (lower === "owner" || lower === "admin") {
+    return lower as WorkspaceRole;
   }
-  
-  if (user.roles?.includes("owner") || user.email.includes("owner")) {
-    return "owner";
-  }
-
   return "member";
 }

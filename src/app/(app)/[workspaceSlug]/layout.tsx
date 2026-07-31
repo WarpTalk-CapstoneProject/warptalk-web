@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces } from "@/hooks/use-workspace";
@@ -15,50 +15,57 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   const { data: workspacesData, isLoading, isError } = useWorkspaces(1, 100);
-  const [isSyncing, setIsSyncing] = useState(true);
+  const targetWorkspace = workspacesData?.items.find(
+    (workspace) => workspace.slug === workspaceSlug
+  );
 
   useEffect(() => {
     if (isLoading) return;
 
-    if (isError || !workspacesData?.items) {
-      setIsSyncing(false);
-      return;
-    }
-
-    // Check if the current URL slug matches the active store slug
-    if (activeWorkspaceSlug === workspaceSlug) {
-      setIsSyncing(false);
-      return;
-    }
-
-    // Slug does not match store: find the workspace matching the URL slug
-    const targetWorkspace = workspacesData.items.find(
-      (w) => w.slug === workspaceSlug
-    );
+    if (isError || !workspacesData?.items) return;
 
     if (targetWorkspace) {
-      // Sync the store with the target workspace
-      setActiveWorkspace(
-        targetWorkspace.id,
-        targetWorkspace.name,
-        targetWorkspace.slug,
-        targetWorkspace.role || "Member",
-        targetWorkspace.membershipType || "Internal"
-      );
-      setIsSyncing(false);
+      const storedRole = useWorkspaceStore.getState().role;
+      const storedId = useWorkspaceStore.getState().activeWorkspaceId;
+
+      if (
+        activeWorkspaceSlug !== workspaceSlug ||
+        storedId !== targetWorkspace.id ||
+        storedRole !== (targetWorkspace.role || "Member") ||
+        useWorkspaceStore.getState().defaultLanguage !== (targetWorkspace.defaultLanguage || "en")
+      ) {
+        setActiveWorkspace(
+          targetWorkspace.id,
+          targetWorkspace.name,
+          targetWorkspace.slug,
+          targetWorkspace.role || "Member",
+          "Internal",
+          targetWorkspace.defaultLanguage || "en"
+        );
+      }
     } else {
-      // Not a member or workspace doesn't exist, redirect to onboarding selection page
+      const currentSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
+      if (currentSlug === workspaceSlug) {
+        useWorkspaceStore.getState().clearActiveWorkspace();
+      }
       router.replace("/workspace");
     }
   }, [
     workspaceSlug,
     activeWorkspaceSlug,
     workspacesData,
+    targetWorkspace,
     isLoading,
     isError,
     setActiveWorkspace,
     router,
   ]);
+
+  const isSyncing =
+    !isError &&
+    (!workspacesData?.items ||
+      !targetWorkspace ||
+      activeWorkspaceSlug !== workspaceSlug);
 
   if (isLoading || isSyncing) {
     return (

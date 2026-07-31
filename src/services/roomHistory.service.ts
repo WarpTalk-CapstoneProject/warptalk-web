@@ -1,13 +1,20 @@
 import { translationRoomService } from "@/services/translationRoom.service";
-import type { EndedRoomHistoryItem, RoomArtifactStatus, RoomHistoryResponse } from "@/types/roomHistory";
+import { calculateMeetingDurationSeconds } from "@/lib/meeting-duration";
+import type { EndedRoomHistoryItem, RoomArtifactStatus, RoomHistoryResponse, TranslationRoomSummaryArtifact } from "@/types/roomHistory";
 import type { TranslationRoomArtifactDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
+import { parseMeetingSummaryContent } from "@/types/meetingSummary";
 
 function normalizeArtifactStatus(status: string): RoomArtifactStatus {
   const normalized = status.toLowerCase();
   if (["ready", "processing", "expired", "missing", "failed", "deleted"].includes(normalized)) {
     return normalized as RoomArtifactStatus;
   }
-  return normalized === "active" ? "ready" : "processing";
+  // Backend TranslationRoomArtifact.Status is set from ArtifactStatus/"COMPLETED" (see
+  // ArtifactMapper.ToEntity), never "active" or "ready" directly — without this mapping
+  // every finished artifact fell into the `processing` fallback below and never showed as
+  // ready, leaving downloads (and the AI summary) stuck looking like they never finished.
+  if (normalized === "active" || normalized === "completed") return "ready";
+  return "processing";
 }
 
 function normalizeArtifactType(type: string): EndedRoomHistoryItem["artifacts"][number]["type"] {
@@ -20,9 +27,16 @@ function normalizeArtifactType(type: string): EndedRoomHistoryItem["artifacts"][
 }
 
 function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHistoryItem["artifacts"][number] {
+  const type = normalizeArtifactType(artifact.type);
+  const backendSource = type === "summary_export"
+    ? "translation_room_summaries"
+    : type === "transcript_export"
+      ? "transcript_exports"
+      : "translation_room_recordings";
+
   return {
     id: artifact.id,
-    type: normalizeArtifactType(artifact.type),
+    type,
     title: artifact.title,
     description: artifact.fileUrl ? "Generated room artifact." : "Artifact metadata is available, but no file is linked yet.",
     status: normalizeArtifactStatus(artifact.status),
@@ -33,7 +47,31 @@ function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHistoryItem
     expiresAt: artifact.retentionUntil,
     consentRequired: artifact.consentRequired,
     consentStatus: artifact.consentRequired ? "granted" : "not_required",
-    backendSource: "translation_room_recordings",
+    content: artifact.content ?? undefined,
+    backendSource,
+  };
+}
+
+function buildSummaryArtifact(
+  translationRoomId: string,
+  artifact: ReturnType<typeof mapArtifact> | undefined
+): TranslationRoomSummaryArtifact | undefined {
+  if (!artifact) return undefined;
+  const parsed = parseMeetingSummaryContent(artifact.content);
+  if (!parsed) return undefined;
+
+  return {
+    id: artifact.id,
+    translationRoomId,
+    summary: parsed.summary,
+    keyPoints: [],
+    decisions: parsed.decisions,
+    actionItems: parsed.actionItems,
+    modelUsed: "",
+    processingTimeMs: 0,
+    generatedAt: artifact.createdAt ?? "",
+    insufficientData: parsed.insufficientData,
+    translations: parsed.translations,
   };
 }
 
@@ -41,6 +79,8 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
   const room = item.room;
   const artifacts = item.artifacts.map(mapArtifact);
   const firstExpiry = artifacts.find((artifact) => artifact.expiresAt)?.expiresAt;
+  const summaryArtifact = artifacts.find((artifact) => artifact.type === "summary_export");
+  const summary = buildSummaryArtifact(room.id, summaryArtifact);
 
   return {
     id: room.id,
@@ -53,7 +93,10 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
     status: room.status === "cancelled" ? "cancelled" : "ended",
     startedAt: room.startedAt ?? room.createdAt,
     endedAt: room.endedAt ?? room.startedAt ?? room.createdAt,
-    durationSeconds: room.durationSeconds ?? 0,
+    durationSeconds: calculateMeetingDurationSeconds(
+      room.createdAt,
+      room.endedAt ?? room.createdAt,
+    ),
     sourceLanguage: room.sourceLanguage ?? "en",
     targetLanguages: room.targetLanguages,
     participants: item.participants.map((participant) => ({
@@ -66,6 +109,7 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
       joinedAt: participant.joinedAt,
     })),
     participantCount: room.participantCount ?? item.participants.length,
+    summary,
     artifacts,
     retention: {
       policyName: "Workspace retention",

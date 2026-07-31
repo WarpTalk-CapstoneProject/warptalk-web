@@ -35,7 +35,6 @@ export default function ForgotPasswordPage() {
 
   const onSubmit = async (data: ForgotFormData) => {
     try {
-      // TODO: Backend forgot-password endpoint not yet implemented.
       await apiClient.post("/auth/forgot-password", data);
       toast.success("Password reset instructions have been sent.");
       router.push("/login");

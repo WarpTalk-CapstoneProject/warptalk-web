@@ -151,16 +151,19 @@ export function SocialButton({
   icon,
   label,
   className,
+  onClick,
 }: {
   icon: ReactNode;
   label: string;
   className?: string;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className={cn(
-        "flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-black text-sm font-medium text-white transition-colors hover:bg-white/5",
+        "flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-black text-sm font-medium text-white transition-colors hover:bg-white/5 cursor-pointer",
         className
       )}
     >

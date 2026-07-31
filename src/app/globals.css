@@ -13,6 +13,7 @@
   
   /* Linear Palette */
   --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
   --color-on-primary: var(--primary-foreground);
   --color-primary-hover: #828fff;
   --color-primary-focus: var(--ring);
@@ -68,6 +69,25 @@
 }
 
 :root {
+  --expo-out: linear(
+    0 0%,
+    0.1684 2.66%,
+    0.3165 5.49%,
+    0.446 8.52%,
+    0.5581 11.78%,
+    0.6535 15.29%,
+    0.7341 19.11%,
+    0.8011 23.3%,
+    0.8557 27.93%,
+    0.8962 32.68%,
+    0.9283 38.01%,
+    0.9529 44.08%,
+    0.9711 51.14%,
+    0.9833 59.06%,
+    0.9915 68.74%,
+    1 100%
+  );
+
   /* Linear Light Mode */
   --background: #f7f8f9;
   --foreground: #111214;
@@ -896,15 +916,34 @@
 }
 
 .c3-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
   gap: 24px;
   width: 100%;
-  max-width: 1040px;
-  margin-top: 24px;
+  max-width: 1200px;
+  margin: 24px auto 0 auto;
+  padding-bottom: 24px;
   transform: none;
   position: relative;
   z-index: 3;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.c3-grid::-webkit-scrollbar {
+  height: 8px;
+}
+.c3-grid::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+.c3-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.c3-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .c3-card {
@@ -914,6 +953,8 @@
   border-radius: 28px;
   padding: 22px 20px;
   min-height: 340px;
+  flex: 0 0 340px;
+  scroll-snap-align: center;
   display: flex;
   flex-direction: column;
   transition: all 0.6s cubic-bezier(.22,1,.36,1);
@@ -1067,6 +1108,7 @@
 
   .c3-grid {
     display:flex;
+    justify-content: flex-start;
     overflow-x:auto;
     scroll-snap-type:x mandatory;
     transform:none;
@@ -1533,4 +1575,21 @@
     width: 48px;
     height: 48px;
   }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-4);
+  border-radius: 9999px;
+  border: 2px solid var(--surface-1);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--hairline-tertiary);
 }

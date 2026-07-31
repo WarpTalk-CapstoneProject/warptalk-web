@@ -6,7 +6,6 @@ import {
   ArrowLeft, 
   EnvelopeSimple, 
   Lock, 
-  User, 
   Spinner, 
   CheckCircle, 
   WarningCircle, 
@@ -17,7 +16,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useCreateJoinRequest } from "@/hooks/use-workspace";
 import { useRoomPreflight } from "@/hooks/use-translationRooms";
 import apiClient from "@/lib/api/client";
@@ -79,6 +77,12 @@ function JoinWorkspaceContent() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (mounted && !isAuthenticated && !code) {
+      router.replace("/login");
+    }
+  }, [mounted, isAuthenticated, code, router]);
 
   // If already member, redirect to join meeting page
   useEffect(() => {
@@ -149,7 +153,7 @@ function JoinWorkspaceContent() {
         toast.error("Workspace không hoạt động hoặc không tồn tại.");
       } else if (status === 403) {
         toast.error("Không thể gửi yêu cầu: Email domain của bạn không khớp với Verified Domains của Workspace.");
-      } else if (errorMsg.includes("AlreadyMember") || status === 400 && errorMsg.includes("member")) {
+      } else if (errorMsg.includes("AlreadyMember") || (status === 400 && errorMsg.includes("member"))) {
         toast.error("Bạn đã là thành viên của Workspace này.");
       } else {
         toast.error(errorMsg || "Failed to submit request.");
@@ -176,8 +180,8 @@ function JoinWorkspaceContent() {
             workspaceSlug = paths[0];
           }
         }
-      } catch (e) {
-        // use fallback
+      } catch {
+        // Fallback if URL parsing fails
       }
     } else {
       const slashParts = workspaceSlug.split("/").filter(Boolean);
@@ -467,7 +471,6 @@ function JoinWorkspaceContent() {
             </form>
           </div>
         )}
-
       </div>
     </main>
   );

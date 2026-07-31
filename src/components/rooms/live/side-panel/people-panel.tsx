@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Microphone, MicrophoneSlash, UserCheck, UserMinus, CheckCircle } from "@phosphor-icons/react/dist/ssr";
+import {
+  Microphone,
+  MicrophoneSlash,
+  Star,
+  UserMinus,
+  CheckCircle,
+} from "@phosphor-icons/react/dist/ssr";
+import { HandRaiseBadge } from "@/components/rooms/live/hand-raise-badge";
 import {
   Dialog,
   DialogContent,
@@ -12,13 +19,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import {
   useKickMeetingParticipant,
   useTransferMeetingHost,
   useRejectMeetingParticipant,
 } from "@/hooks/use-meeting";
-import { useAdmitParticipant, useUpdateParticipantAudio } from "@/hooks/use-translationRooms";
-import type { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
+import {
+  useAdmitParticipant,
+  useUpdateParticipantAudio,
+} from "@/hooks/use-translationRooms";
+import type {
+  TranslationRoomDto,
+  TranslationRoomParticipantDto,
+} from "@/types/translationRoom";
 import { useParticipants } from "@livekit/components-react";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
@@ -32,6 +46,9 @@ export function PeoplePanel({
   participantsError,
   onCopyText,
   joinLink,
+  raisedHandUserIds,
+  spotlightedUserId,
+  onToggleSpotlight,
 }: {
   roomId: string;
   room: TranslationRoomDto;
@@ -39,40 +56,71 @@ export function PeoplePanel({
   participants: TranslationRoomParticipantDto[];
   participantsLoading: boolean;
   participantsError: boolean;
-  activeCount: number;
   onCopyText: (value: string, label: string) => void;
   joinLink: string;
+  raisedHandUserIds?: Set<string>;
+  spotlightedUserId?: string | null;
+  onToggleSpotlight?: (userId: string) => void;
 }) {
   const lkParticipants = useParticipants();
-  const lkParticipantIds = new Set(lkParticipants.map(p => p.identity));
+  const lkParticipantIds = new Set(lkParticipants.map((p) => p.identity));
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
+  const visibleParticipants = participants.filter(
+    (participant) =>
+      !["left", "removed", "kicked", "rejected"].includes(participant.status),
+  );
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-canvas p-3">
         <p className="text-[12px] font-medium text-ink-subtle">Room Code</p>
         <div className="flex items-center justify-between">
-          <span className="text-[13px] font-semibold tracking-wide text-ink">{room.translationRoomCode}</span>
-          <button onClick={() => onCopyText(joinLink, "Invite link")} className="text-[12px] font-medium text-primary hover:text-primary-hover">
+          <span className="text-[13px] font-semibold tracking-wide text-ink">
+            {room.translationRoomCode}
+          </span>
+          <button
+            onClick={() => onCopyText(joinLink, "Invite link")}
+            className="text-[12px] font-medium text-primary hover:text-primary-hover"
+          >
             Copy Link
           </button>
         </div>
       </div>
 
       <div className="space-y-1">
-        {participantsLoading ? <div className="flex items-center gap-2"><Lumidot variant={lumidotVariant} pattern="frame" glow={4} /><p className="text-[13px] text-ink-subtle">Loading participants...</p></div> : null}
-        {participantsError ? <p className="text-[13px] text-red-600">Could not load participant controls.</p> : null}
-        {participants.map((participant) => (
-          <ParticipantRow
-            key={participant.id}
-            participant={participant}
-            isHost={isHost}
-            roomId={roomId}
-            isRoomHost={participant.userId === room.hostId}
-            isInRoom={lkParticipantIds.has(participant.userId)}
-          />
-        ))}
+        {participantsLoading ? (
+          <div className="flex items-center gap-2">
+            <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+            <p className="text-[13px] text-ink-subtle">
+              Loading participants...
+            </p>
+          </div>
+        ) : null}
+        {participantsError ? (
+          <p className="text-[13px] text-red-600">
+            Could not load participant controls.
+          </p>
+        ) : null}
+        {visibleParticipants.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border px-3 py-4 text-[13px] text-ink-subtle">
+            No active participants in this room.
+          </p>
+        ) : (
+          visibleParticipants.map((participant) => (
+            <ParticipantRow
+              key={participant.id}
+              participant={participant}
+              isHost={isHost}
+              roomId={roomId}
+              isRoomHost={participant.userId === room.hostId}
+              isInRoom={lkParticipantIds.has(participant.userId)}
+              handRaised={raisedHandUserIds?.has(participant.userId) ?? false}
+              isSpotlighted={spotlightedUserId === participant.userId}
+              onToggleSpotlight={isHost ? onToggleSpotlight : undefined}
+            />
+          ))
+        )}
       </div>
     </div>
   );
@@ -84,23 +132,31 @@ function ParticipantRow({
   roomId,
   isRoomHost,
   isInRoom,
+  handRaised,
+  isSpotlighted,
+  onToggleSpotlight,
 }: {
   participant: TranslationRoomParticipantDto;
   isHost: boolean;
   roomId: string;
   isRoomHost: boolean;
   isInRoom: boolean;
+  handRaised?: boolean;
+  isSpotlighted?: boolean;
+  /** Host-only: spotlight this participant for everyone. Omit (or !isHost) to hide the control. */
+  onToggleSpotlight?: (userId: string) => void;
 }) {
   const updateAudio = useUpdateParticipantAudio(roomId);
   const admit = useAdmitParticipant(roomId);
   const reject = useRejectMeetingParticipant(roomId);
   const kickLivekit = useKickMeetingParticipant(roomId);
   const transferHost = useTransferMeetingHost(roomId);
-  
+
   const canManage = isHost && !isRoomHost;
   const audioEnabled = participant.isTranslationAudioEnabled ?? true;
 
   const [showKickDialog, setShowKickDialog] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [kickScope, setKickScope] = useState<"live" | "record">("live");
 
   async function runAction(action: "audio" | "admit" | "reject" | "transfer") {
@@ -123,6 +179,7 @@ function ParticipantRow({
       if (action === "transfer") {
         await transferHost.mutateAsync(participant.userId);
         toast.success("Host transferred.");
+        setShowTransferDialog(false);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Action failed.");
@@ -134,8 +191,8 @@ function ParticipantRow({
       await kickLivekit.mutateAsync(participant.userId);
       toast.success("Participant removed from meeting.");
       setShowKickDialog(false);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to kick participant.");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to kick participant."));
     }
   }
 
@@ -148,20 +205,37 @@ function ParticipantRow({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <p className="truncate text-[13px] font-medium text-ink">{participant.displayName}</p>
+              <p className="truncate text-[13px] font-medium text-ink">
+                {participant.displayName}
+              </p>
+              {handRaised ? (
+                <HandRaiseBadge className="h-4 w-4 text-[10px]" />
+              ) : null}
               {participant.isExternal && (
-                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">External</span>
+                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">
+                  External
+                </span>
               )}
               {isInRoom ? (
-                <span className="rounded bg-green-50 px-1 py-0.5 text-[10px] font-medium text-green-600 border border-green-200">In Room</span>
+                <span className="rounded bg-green-50 px-1 py-0.5 text-[10px] font-medium text-green-600 border border-green-200">
+                  In Room
+                </span>
               ) : participant.status === "invited" ? (
-                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">Not in room</span>
+                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">
+                  Not in room
+                </span>
               ) : participant.status === "waiting" ? (
-                <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-200">Waiting in Lobby</span>
+                <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-200">
+                  Waiting in Lobby
+                </span>
               ) : participant.status === "disconnected" ? (
-                <span className="rounded bg-red-50 px-1 py-0.5 text-[10px] font-medium text-red-600 border border-red-200">Disconnected</span>
+                <span className="rounded bg-red-50 px-1 py-0.5 text-[10px] font-medium text-red-600 border border-red-200">
+                  Disconnected
+                </span>
               ) : (
-                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">Left</span>
+                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">
+                  Left
+                </span>
               )}
             </div>
             <p className="truncate text-[11px] text-ink-subtle capitalize">
@@ -172,28 +246,78 @@ function ParticipantRow({
 
         <div className="flex shrink-0 items-center gap-1">
           <span className="grid h-6 w-6 place-items-center rounded-sm bg-canvas text-ink-subtle group-hover:hidden">
-            {audioEnabled ? <Microphone className="h-3.5 w-3.5" /> : <MicrophoneSlash className="h-3.5 w-3.5" />}
+            {audioEnabled ? (
+              <Microphone className="h-3.5 w-3.5" />
+            ) : (
+              <MicrophoneSlash className="h-3.5 w-3.5" />
+            )}
           </span>
+          {onToggleSpotlight && isInRoom && (
+            <button
+              onClick={() => onToggleSpotlight(participant.userId)}
+              className={`hidden h-6 w-6 place-items-center rounded-sm group-hover:grid ${isSpotlighted ? "text-primary" : "text-ink-muted hover:bg-surface-2"}`}
+              title={
+                isSpotlighted ? "Remove spotlight" : "Spotlight for everyone"
+              }
+            >
+              <Star
+                className="h-3.5 w-3.5"
+                weight={isSpotlighted ? "fill" : "regular"}
+              />
+            </button>
+          )}
           {canManage && (
-            <div className="hidden group-hover:flex items-center">
+            <div
+              className={
+                participant.status === "waiting"
+                  ? "flex items-center gap-1"
+                  : "hidden group-hover:flex items-center"
+              }
+            >
               {participant.status === "waiting" ? (
                 <>
-                  <button onClick={() => runAction("admit")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted" title="Admit">
-                    <UserCheck className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => runAction("reject")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-red-50 text-red-600" title="Reject">
+                  <Button
+                    size="sm"
+                    disabled={admit.isPending}
+                    onClick={() => runAction("admit")}
+                    className="h-7 px-2 text-[11px]"
+                  >
+                    {admit.isPending ? "Approving..." : "Approve"}
+                  </Button>
+                  <button
+                    onClick={() => runAction("reject")}
+                    disabled={reject.isPending}
+                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-red-50 text-red-600"
+                    title="Reject"
+                  >
                     <UserMinus className="h-3.5 w-3.5" />
                   </button>
                 </>
               ) : (
                 <>
-                  <button onClick={() => runAction("transfer")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted" title="Make Host">
+                  <button
+                    onClick={() => setShowTransferDialog(true)}
+                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted"
+                    title="Make Host"
+                  >
                     <CheckCircle className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={() => runAction("audio")} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted" title="Toggle audio">
-                    {audioEnabled ? <MicrophoneSlash className="h-3.5 w-3.5" /> : <Microphone className="h-3.5 w-3.5" />}
+                  <button
+                    onClick={() => runAction("audio")}
+                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted"
+                    title="Toggle audio"
+                  >
+                    {audioEnabled ? (
+                      <MicrophoneSlash className="h-3.5 w-3.5" />
+                    ) : (
+                      <Microphone className="h-3.5 w-3.5" />
+                    )}
                   </button>
-                  <button onClick={() => setShowKickDialog(true)} className="grid h-6 w-6 place-items-center rounded-sm hover:bg-red-50 text-red-600" title="Remove">
+                  <button
+                    onClick={() => setShowKickDialog(true)}
+                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-red-50 text-red-600"
+                    title="Remove"
+                  >
                     <UserMinus className="h-3.5 w-3.5" />
                   </button>
                 </>
@@ -203,49 +327,96 @@ function ParticipantRow({
         </div>
       </div>
 
+      <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+        <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Transfer Host Role</DialogTitle>
+            <DialogDescription className="text-ink-subtle pt-2">
+              Transfer host controls to <strong>{participant.displayName}</strong>?
+              You will immediately lose host-only controls for this meeting.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowTransferDialog(false)}
+              className="bg-surface-2 hover:bg-surface-3 text-ink border-border"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void runAction("transfer")}
+              disabled={transferHost.isPending}
+            >
+              {transferHost.isPending ? "Transferring..." : "Transfer Host"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showKickDialog} onOpenChange={setShowKickDialog}>
         <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Remove Participant</DialogTitle>
             <DialogDescription className="text-ink-subtle pt-2">
-              Are you sure you want to remove <strong>{participant.displayName}</strong>? They will not be able to rejoin with the same invitation.
+              Are you sure you want to remove{" "}
+              <strong>{participant.displayName}</strong>? They will not be able
+              to rejoin with the same invitation.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="flex flex-col gap-3 py-4">
             <div className="text-[13px] font-medium">Remove scope:</div>
             <label className="flex items-start gap-3 cursor-pointer">
-              <input 
-                type="radio" 
-                name="kickScope" 
-                checked={kickScope === "live"} 
+              <input
+                type="radio"
+                name="kickScope"
+                checked={kickScope === "live"}
                 onChange={() => setKickScope("live")}
-                className="mt-1 accent-primary" 
+                className="mt-1 accent-primary"
               />
               <div>
-                <div className="text-[13px] font-medium">Remove from Live Meeting Only</div>
-                <div className="text-[12px] text-ink-subtle">They are kicked from the live call but their chat messages and transcript contributions remain.</div>
+                <div className="text-[13px] font-medium">
+                  Remove from Live Meeting Only
+                </div>
+                <div className="text-[12px] text-ink-subtle">
+                  They are kicked from the live call but their chat messages and
+                  transcript contributions remain.
+                </div>
               </div>
             </label>
             <label className="flex items-start gap-3 cursor-pointer opacity-50">
-              <input 
-                type="radio" 
-                name="kickScope" 
-                checked={kickScope === "record"} 
+              <input
+                type="radio"
+                name="kickScope"
+                checked={kickScope === "record"}
                 onChange={() => setKickScope("record")}
                 disabled
-                className="mt-1 accent-primary" 
+                className="mt-1 accent-primary"
               />
               <div>
-                <div className="text-[13px] font-medium">Remove from History & Records (Coming soon)</div>
-                <div className="text-[12px] text-ink-subtle">Their messages and translations will be redacted from the final artifact.</div>
+                <div className="text-[13px] font-medium">
+                  Remove from History & Records (Coming soon)
+                </div>
+                <div className="text-[12px] text-ink-subtle">
+                  Their messages and translations will be redacted from the
+                  final artifact.
+                </div>
               </div>
             </label>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowKickDialog(false)} className="bg-surface-2 hover:bg-surface-3 text-ink border-border">Cancel</Button>
-            <Button variant="destructive" onClick={handleKick}>Remove Participant</Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowKickDialog(false)}
+              className="bg-surface-2 hover:bg-surface-3 text-ink border-border"
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleKick}>
+              Remove Participant
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

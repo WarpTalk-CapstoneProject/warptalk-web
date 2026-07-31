@@ -1,37 +1,117 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
+import Underline from "@tiptap/extension-underline";
+import {
+  EditorContent,
+  useEditor,
+  useEditorState,
+  type Editor,
+} from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
+import StarterKit from "@tiptap/starter-kit";
+import {
+  ArrowRight,
+  Bold,
+  CalendarPlus,
+  Check,
+  ChevronDown,
+  Clock,
+  Code,
+  Code2,
+  Copy,
+  Download,
+  FileText,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  Loader2,
+  MapPin,
+  MoreHorizontal,
+  Quote,
+  Star,
+  StopCircle,
+  Strikethrough,
+  Underline as UnderlineIcon,
+  Users,
+  Video,
+} from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-import { Globe2, Calendar, ArrowRight, Clock, MapPin, Video, Users, ChevronDown, Copy, Link as LinkIcon, Star, ArrowLeft, Info, FileText, StopCircle } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Markdown } from "tiptap-markdown";
 
-import { useTranslationRoom, useTranslationRoomParticipants, useTranslationRoomInvitations, useEndTranslationRoom } from "@/hooks/use-translationRooms";
-import { getLanguageName } from "@/lib/languages";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore } from "@/stores/ui-store";
-import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { Button } from "@/components/ui/button";
-import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
-import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
-import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import {
+  useTranscriptByRoom,
+  useTranscriptSegments,
+} from "@/hooks/use-transcripts";
+import {
+  useEndTranslationRoom,
+  useTranslationRoom,
+  useTranslationRoomInvitations,
+  useTranslationRoomParticipants,
+  useTranslationRoomSessions,
+  useUpdateTranslationRoomSettings,
+} from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { getLanguageName } from "@/lib/languages";
+import { saveBlobDownload } from "@/lib/download-artifact";
+import { canJoinTranslationRoom } from "@/lib/translation-room-access";
+import {
+  groupSavedTranscriptSegments,
+  groupSegmentsByTranslationSession,
+  type TranslationSessionBlock,
+} from "@/lib/transcript-display";
+import { cn } from "@/lib/utils";
+import {
+  buildGoogleCalendarUrl,
+  translationRoomService,
+} from "@/services/translationRoom.service";
+import { useAuthStore } from "@/stores/auth-store";
+import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { useUIStore } from "@/stores/ui-store";
+import type { UserDto } from "@/types/auth";
+import type { TranscriptSegmentDto } from "@/types/transcript";
+import type {
+  TranslationRoomDto,
+  TranslationRoomInvitationDto,
+  TranslationRoomParticipantDto,
+  TranslationRoomSessionDto,
+  TranslationRoomStatus,
+} from "@/types/translationRoom";
+import type { WorkspaceMemberDto } from "@/types/workspace";
+import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 
-const getShortLang = (val: string) => {
-  if (!val) return "";
-  const code = val.toLowerCase();
-  if (code.includes('vi')) return 'VN';
-  if (code.includes('en')) return 'EN';
-  if (code.includes('ja')) return 'JP';
-  if (code.includes('ko')) return 'KR';
-  if (code.includes('zh')) return 'CN';
-  if (code.includes('de')) return 'DE';
-  if (code.includes('fr')) return 'FR';
-  if (code.includes('es')) return 'ES';
-  return val.split('-')[0].toUpperCase();
+type UserIdentity = {
+  id: string;
+  name: string;
+  email?: string;
+  role?: string;
+  status?: string;
+  avatarUrl?: string;
+  speakLanguage?: string;
+  listenLanguage?: string;
 };
-import type { TranslationRoomDto, TranslationRoomStatus } from "@/types/translationRoom";
 
 const statusLabels: Record<TranslationRoomStatus, string> = {
   scheduled: "Scheduled",
@@ -45,42 +125,24 @@ const statusLabels: Record<TranslationRoomStatus, string> = {
   timeout: "Timed Out",
 };
 
-function TabButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`h-[32px] flex items-center text-[13px] font-medium transition-colors border-b-2 ${active
-        ? "border-foreground text-foreground"
-        : "border-transparent text-muted-foreground hover:text-foreground"
-        }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function RoomInformationPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const roomId = params.id;
-  const [activeTab, setActiveTab] = useState<"overview" | "transcript">("overview");
-  const [isActivityExpanded, setIsActivityExpanded] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
-
-  const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedText("Copied");
-    setTimeout(() => setCopiedText(null), 2000);
-  };
 
   const roomQuery = useTranslationRoom(roomId);
   const participantsQuery = useTranslationRoomParticipants(roomId);
   const invitationsQuery = useTranslationRoomInvitations(roomId);
   const endRoomMutation = useEndTranslationRoom();
-  const liveParticipants = useTranslationRoomStore((state) => state.participants);
-  const liveRoomState = useTranslationRoomStore((state) => state.translationRoomState);
+  const updateRoomSettings = useUpdateTranslationRoomSettings();
+  const liveParticipants = useTranslationRoomStore(
+    (state) => state.participants,
+  );
+  const liveRoomState = useTranslationRoomStore(
+    (state) => state.translationRoomState,
+  );
   const user = useAuthStore((state) => state.user);
-  const role = useWorkspaceRole();
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
@@ -89,585 +151,1263 @@ export default function RoomInformationPage() {
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
   const apiInvitations = invitationsQuery.data ?? [];
-  
   const { data: workspaces } = useWorkspaces();
-  const validWorkspaceId = room?.workspaceId && room.workspaceId !== '00000000-0000-0000-0000-000000000000'
-    ? room.workspaceId
-    : workspaces?.[0]?.id;
-    
-  const { data: members } = useWorkspaceMembers(validWorkspaceId);
-  const membersArray = Array.isArray(members) ? members : (members?.items || members?.data || []);
+  const validWorkspaceId =
+    room?.workspaceId &&
+    room.workspaceId !== "00000000-0000-0000-0000-000000000000"
+      ? room.workspaceId
+      : workspaces?.items?.[0]?.id;
+  const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
+  const membersArray = members?.items ?? [];
 
   const activeApiParticipants = apiParticipants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status.toLowerCase())
+    ["joined", "connected"].includes(participant.status.toLowerCase()),
   );
   const activeLiveParticipants = liveParticipants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status?.toLowerCase() ?? "")
+    ["joined", "connected"].includes(participant.status?.toLowerCase() ?? ""),
   );
-  const liveStateMatchesRoom = !liveRoomState || liveRoomState.translationRoomId === roomId;
+  const liveStateMatchesRoom =
+    !liveRoomState || liveRoomState.translationRoomId === roomId;
   const activeParticipantCount =
     liveStateMatchesRoom && activeLiveParticipants.length > 0
       ? activeLiveParticipants.length
       : activeApiParticipants.length > 0
         ? activeApiParticipants.length
         : room?.status === "in_progress"
-          ? room.participantCount ?? 0
+          ? (room.participantCount ?? 0)
           : 0;
+
+  useRegisterAssistantContext(
+    room
+      ? {
+          pageType: "room_detail",
+          entityId: room.id,
+          workspaceId: validWorkspaceId,
+          snapshot: {
+            title: room.title,
+            status: room.status,
+            participantCount: String(activeParticipantCount),
+          },
+        }
+      : null,
+  );
+
+  function handleCopy(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedText(`${label} copied`);
+    setTimeout(() => setCopiedText(null), 2000);
+  }
 
   if (!room) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-[13px] text-muted-foreground">Room information is unavailable.</p>
+        <p className="text-[13px] text-muted-foreground">
+          Room information is unavailable.
+        </p>
       </div>
     );
   }
 
-  const languageNames = [room.sourceLanguage, ...room.targetLanguages]
-    .filter((language): language is string => Boolean(language))
-    .map(getLanguageName);
-
   const isEnded = room.status === "ended";
-  const isLive = room.status === "in_progress";
-  const isHost = room.hostId === user?.id || role === "admin" || role === "owner";
-
+  const canJoinRoom = canJoinTranslationRoom(room.status);
+  const isHost = room.hostId === user?.id || Boolean(room.isHost);
+  const participants = buildUserList(
+    room,
+    apiParticipants,
+    apiInvitations,
+    membersArray,
+    user,
+  );
+  const hostUser = getHostUser(room, participants, membersArray, user);
   return (
-    <div className="flex flex-col h-full  overflow-hidden">
-      {copiedText && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-black text-white text-[13px] font-medium px-4 py-2 rounded-md shadow-lg z-[100] animate-in fade-in slide-in-from-top-4 duration-200">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
+      {copiedText ? (
+        <div className="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-md border border-border bg-surface-1 px-4 py-2 text-[13px] font-medium text-ink shadow-lg">
           {copiedText}
         </div>
-      )}
+      ) : null}
 
-      {/* Scrollable Container (holds both content and right sidebar) */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex w-full min-h-full">
-
-          {/* Main content area */}
-          <div className="flex-1 min-w-0 px-10 py-10 flex flex-col">
-            {/* Title section */}
-            <div className="mb-6 flex items-start justify-between">
-              <div className="flex-1 min-w-0 pr-4">
-                <h1 className="text-[24px] font-semibold text-foreground tracking-tight leading-snug">{room.title}</h1>
-                {room.description && (
-                  <p className="mt-1 text-[14px] text-muted-foreground">{room.description}</p>
-                )}
-                <MeetingPropertiesPills
-                  room={room}
-                  apiParticipants={apiParticipants}
-                  activeParticipantCount={activeParticipantCount}
-                  user={user}
-                />
-              </div>
-              <div className="flex flex-col items-end gap-2 shrink-0">
-                <div className="flex items-center gap-2 px-3 py-1 rounded-[6px] border border-border bg-surface-2 text-[12px] font-medium text-muted-foreground">
-                  <StatusDot status={room.status} />
-                  {statusLabels[room.status]}
-                </div>
-                {room.hostId === user?.id && (room.status === "scheduled" || room.status === "waiting") && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-[12px] w-full"
-                    onClick={() => {
-                      useUIStore.getState().setEditRoomId(room.id);
-                      useUIStore.getState().setCreateRoomModalOpen(true);
-                    }}
-                  >
-                    Edit Room
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Teams-like metadata rows */}
-            <div className="flex flex-col mb-8 text-[13px] text-foreground border-y border-border/50 divide-y divide-border/50">
-
-              {/* Participants Row */}
-              <div className="flex items-center min-h-[44px] py-2 group">
-                <div className="w-10 flex justify-center shrink-0 text-muted-foreground">
-                  <Users className="w-4 h-4" />
-                </div>
-                <div className="flex-1 pr-4 truncate">
-                  {apiParticipants.length > 0 ? apiParticipants.map(p => p.displayName).join("; ") : "No participants added"}
-                </div>
-                <div className="shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Popover>
-                    <PopoverTrigger className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors cursor-pointer">
-                      <Users className="w-3.5 h-3.5" />
-                      Tracking
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="w-[300px] p-3 rounded-xl bg-white shadow-xl border-border/20 z-[100]">
-                      <h4 className="text-[13px] font-medium text-ink mb-3">Participants</h4>
-                      {isHost && (
-                        <div className="mb-4">
-                          <label className="text-[11px] font-medium text-ink-muted px-1 mb-1.5 block">Invite by Email</label>
-                          <div className="relative">
-                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted/70 h-4 w-4 pointer-events-none" />
-                            <input
-                              type="email"
-                              placeholder="name@company.com..."
-                              className="w-full h-9 pl-9 pr-9 text-[13px] bg-surface-1 border border-border/30 rounded-lg focus:outline-none focus:ring-1 focus:ring-border/50 text-ink placeholder:text-ink-muted/50 transition-all"
-                            />
-                            <button className="absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded-md text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors">
-                              <ArrowRight className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                        <div className="text-[11px] font-medium text-ink-muted uppercase tracking-wider mb-2">Current ({apiParticipants.length})</div>
-                        {apiParticipants.length > 0 ? apiParticipants.map((p, i) => (
-                          <div key={`p-${i}`} className="flex items-center justify-between gap-2.5 text-[13px] text-ink p-1.5 hover:bg-surface-1 rounded-md transition-colors">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="h-7 w-7 rounded-full bg-surface-2 border border-border/40 flex items-center justify-center shrink-0">
-                                <span className="text-[11px] font-medium text-ink-muted">{p.displayName?.charAt(0).toUpperCase() || '?'}</span>
-                              </div>
-                              <div className="flex-1 truncate leading-tight">
-                                <div className="font-medium text-ink truncate">{p.displayName}</div>
-                              </div>
-                            </div>
-                            <span className="text-[10px] font-medium text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-sm shrink-0">
-                              Joined
-                            </span>
-                          </div>
-                        )) : null}
-
-                        {apiInvitations.length > 0 && (
-                          <div className="mt-3">
-                            <div className="text-[11px] font-medium text-ink-muted uppercase tracking-wider mb-2">Invited ({apiInvitations.length})</div>
-                            {apiInvitations.map((inv, i) => {
-                              const isAccepted = inv.status === 'ACCEPTED';
-                              const isDeclined = inv.status === 'DECLINED';
-                              const member = membersArray.find((m: any) => m.userId === inv.email || m.id === inv.email || m.email === inv.email);
-                              const displayEmail = member?.fullName || inv.email;
-                              return (
-                                <div key={`inv-${i}`} className="flex items-center justify-between gap-2.5 text-[13px] text-ink p-1.5 hover:bg-surface-1 rounded-md transition-colors">
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="h-7 w-7 rounded-full bg-surface-2 border border-border/40 flex items-center justify-center shrink-0">
-                                      <span className="text-[11px] font-medium text-ink-muted">{displayEmail.charAt(0).toUpperCase()}</span>
-                                    </div>
-                                    <div className="flex-1 truncate leading-tight">
-                                      <div className="font-medium text-ink truncate">{displayEmail}</div>
-                                    </div>
-                                  </div>
-                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-sm shrink-0 ${isAccepted ? "text-green-500 bg-green-500/10" :
-                                    isDeclined ? "text-red-500 bg-red-500/10" :
-                                      "text-orange-500 bg-orange-500/10"
-                                    }`}>
-                                    {inv.status}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {apiParticipants.length === 0 && apiInvitations.length === 0 && (
-                          <div className="text-[13px] text-ink-muted text-center py-4">No participants or invitations</div>
-                        )}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-
-              {/* Time Row */}
-              <div className="flex items-center min-h-[44px] py-2 group">
-                <div className="w-10 flex justify-center shrink-0 text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                </div>
-                <div className="flex-1 pr-4 flex items-center gap-2">
-                  <span>{formatDateTime(room.scheduledAt ?? room.createdAt)}</span>
-                  {room.endedAt && (
-                    <>
-                      <span className="text-muted-foreground">-</span>
-                      <span>{formatDateTime(room.endedAt)}</span>
-                    </>
-                  )}
-                </div>
-                <div className="shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                  {isHost && (
-                    <button className="flex items-center gap-1.5 text-foreground font-medium hover:bg-surface-2 px-2 py-1.5 rounded-[6px] transition-colors">
-                      <Calendar className="w-3.5 h-3.5" />
-                      Scheduling Assistant
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto grid min-h-full w-full max-w-[1500px] grid-cols-1 gap-8 px-6 py-8 xl:grid-cols-[minmax(0,1fr)_300px] xl:px-10">
+          <main className="min-w-0">
+            <div className="mb-8 flex flex-col gap-5 border-b border-border/60 pb-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-muted">
+                    <button
+                      type="button"
+                      onClick={() => router.back()}
+                      className="rounded-md px-1.5 py-1 hover:bg-surface-2"
+                    >
+                      Meetings
                     </button>
-                  )}
+                    <span>/</span>
+                    <span className="truncate text-ink">{room.title}</span>
+                  </div>
+                  <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground">
+                    {room.title}
+                  </h1>
+                  <MeetingPropertiesPills
+                    room={room}
+                    apiParticipants={apiParticipants}
+                    activeParticipantCount={activeParticipantCount}
+                    user={user}
+                  />
                 </div>
-              </div>
-
-              {/* Location Row */}
-              <div className="flex items-center min-h-[44px] py-2">
-                <div className="w-10 flex justify-center shrink-0 text-muted-foreground">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <div className="flex-1 pr-4 text-muted-foreground">
-                  Virtual Audio Bridge
-                </div>
-              </div>
-
-            </div>
-
-            {/* Tabs (no full-width border) */}
-            <div className="flex items-center gap-6 mt-8 mb-6 border-b border-border/50">
-              <TabButton active={activeTab === "overview"} onClick={() => setActiveTab("overview")}>Overview</TabButton>
-              <TabButton active={activeTab === "transcript"} onClick={() => setActiveTab("transcript")}>Transcript</TabButton>
-            </div>
-
-            <div className="flex-1 min-h-0">
-              {activeTab === "overview" && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  {/* Expandable Activity Section */}
-                  <div 
-                    onClick={() => !isActivityExpanded && setIsActivityExpanded(true)}
-                    className={`border border-border/40 rounded-xl bg-surface-1/50 p-4 transition-all duration-300 ${!isActivityExpanded ? "cursor-pointer hover:bg-surface-2/50 group" : ""}`}
-                  >
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsActivityExpanded(!isActivityExpanded);
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <StatusChip status={room.status} />
+                  {room.hostId === user?.id &&
+                  (room.status === "scheduled" || room.status === "waiting") ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[12px]"
+                      onClick={() => {
+                        useUIStore.getState().setEditRoomId(room.id);
+                        useUIStore.getState().setCreateRoomModalOpen(true);
                       }}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/50 bg-canvas text-[12px] font-medium text-ink-subtle hover:text-ink hover:bg-surface-2 transition-colors mb-4 relative z-10"
                     >
-                      Activity log
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isActivityExpanded ? "" : "-rotate-90"}`} />
-                    </button>
-                    
-                    <div 
-                      className={`relative transition-all duration-300 ${!isActivityExpanded ? "max-h-[110px] overflow-hidden" : ""}`}
-                      style={!isActivityExpanded ? {
-                        WebkitMaskImage: "linear-gradient(to bottom, black 30%, transparent 100%)",
-                        maskImage: "linear-gradient(to bottom, black 30%, transparent 100%)"
-                      } : {}}
-                    >
-                      <div className="relative pl-4 border-l border-border/60 space-y-6 ml-1 pb-2">
-                        <div className="relative">
-                          <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-primary" />
-                          <div className="text-[13px]">
-                            <span className="font-medium text-ink">Meeting scheduled</span>
-                            <span className="text-ink-muted ml-2">{formatDateTime(room.createdAt)}</span>
-                          </div>
-                          <div className="text-[13px] text-ink-subtle mt-0.5">Host set the languages to {languageNames.join(", ")}.</div>
-                        </div>
-                        {room.startedAt && (
-                          <div className="relative">
-                            <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full border border-border/80 bg-canvas" />
-                            <div className="text-[13px]">
-                              <span className="font-medium text-ink">Meeting started</span>
-                              <span className="text-ink-muted ml-2">{formatDateTime(room.startedAt)}</span>
-                            </div>
-                          </div>
-                        )}
-                        {isEnded && room.endedAt && (
-                          <div className="relative">
-                            <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full border border-border/80 bg-canvas" />
-                            <div className="text-[13px]">
-                              <span className="font-medium text-ink">Meeting ended</span>
-                              <span className="text-ink-muted ml-2">{formatDateTime(room.endedAt)}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Meeting Link Block */}
-                  <div className="border border-border rounded-xl bg-surface-1 overflow-hidden shadow-sm p-5 space-y-5">
-                    <div>
-                      <h2 className="text-[13px] font-medium text-ink-subtle uppercase tracking-wider">Meeting Access</h2>
-                      <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-3.5">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-surface-2 border border-border text-ink">
-                            <Video className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <p className="text-[14px] font-semibold text-ink">WarpTalk Session</p>
-                            <p className="text-[13px] text-ink-subtle mt-0.5">
-                              ID: <span className="font-mono bg-surface-2 border border-border px-1.5 py-0.5 rounded text-ink ml-1">{room.translationRoomCode}</span>
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            useUIStore.getState().setSetupRoomId(roomId as string);
-                            useUIStore.getState().setSetupRoomModalOpen(true);
-                          }}
-                          className="flex shrink-0 items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white text-[13px] font-semibold rounded-lg hover:bg-primary-hover transition-colors shadow-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                        >
-                          Join Meeting
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="pt-4 border-t border-border">
-                      <textarea
-                        placeholder="Add meeting agenda or notes..."
-                        className="w-full bg-canvas border border-border rounded-lg px-3 py-2.5 text-[13px] text-ink outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-ink-muted resize-none min-h-[80px] shadow-sm"
-                      />
-                    </div>
-                  </div>
+                      Edit room
+                    </Button>
+                  ) : null}
                 </div>
-              )}
-
-              {activeTab === "activity" && (
-                <div className="space-y-6">
-                  <div className="relative pl-4 border-l border-border space-y-8">
-                    <div className="relative">
-                      <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-foreground" />
-                      <div className="text-[13px]">
-                        <span className="font-medium text-foreground">Meeting scheduled</span>
-                        <span className="text-muted-foreground ml-2">{formatDateTime(room.createdAt)}</span>
-                      </div>
-                      <div className="text-[13px] text-muted-foreground mt-1">Host set the languages to {languageNames.join(", ")}.</div>
-                    </div>
-                    {room.startedAt && (
-                      <div className="relative">
-                        <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-border " />
-                        <div className="text-[13px]">
-                          <span className="font-medium text-foreground">Meeting started</span>
-                          <span className="text-muted-foreground ml-2">{formatDateTime(room.startedAt)}</span>
-                        </div>
-                      </div>
-                    )}
-                    {isEnded && room.endedAt && (
-                      <div className="relative">
-                        <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-border " />
-                        <div className="text-[13px]">
-                          <span className="font-medium text-foreground">Meeting ended</span>
-                          <span className="text-muted-foreground ml-2">{formatDateTime(room.endedAt)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "transcript" && (
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-[14px] font-medium text-foreground">Transcript</h3>
-                    <button className="text-[13px] text-muted-foreground hover:text-foreground">Download</button>
-                  </div>
-
-                  {isLive || isEnded ? (
-                    <div className="flex-1 overflow-y-auto space-y-6">
-                      {isLive && transcriptSegments.length === 0 ? (
-                        <div className="space-y-4">
-                          <div className="animate-pulse flex gap-4 opacity-50">
-                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0"></div>
-                            <div className="flex-1 space-y-2 py-1">
-                              <div className="h-3 bg-muted rounded w-1/4"></div>
-                              <div className="h-3 bg-muted rounded w-3/4"></div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {transcriptSegments.map((segment) => {
-                            const date = new Date(transcriptQuery.data?.createdAt || Date.now());
-                            date.setMilliseconds(date.getMilliseconds() + segment.startTimeMs);
-                            const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                            return (
-                              <div key={segment.id} className="flex gap-4 group">
-                                <div className="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center shrink-0">
-                                  <span className="text-[11px] font-medium text-ink-muted">{segment.speakerName?.charAt(0).toUpperCase() || '?'}</span>
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-baseline gap-2 mb-1">
-                                    <span className="text-[13px] font-medium text-ink">{segment.speakerName || 'Unknown Speaker'}</span>
-                                    <span className="text-[11px] text-ink-muted opacity-0 group-hover:opacity-100 transition-opacity">{timeString}</span>
-                                  </div>
-                                  <p className="text-[13px] text-ink-subtle leading-relaxed">
-                                    {segment.originalText}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-
-                          {isEnded && (
-                            <p className="text-[13px] text-muted-foreground text-center py-6 italic border-t border-border/50 mt-6">
-                              Transcript recording ended.
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-border rounded-xl">
-                      <p className="text-[13px] text-muted-foreground">
-                        The meeting hasn&apos;t started yet. Transcript will appear here.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right sidebar — Linear Properties panels */}
-          <div className="w-[280px] shrink-0 py-10 pr-2 flex flex-col gap-2 sticky top-0 self-start max-h-full overflow-y-auto">
-
-            {/* Tracking Card */}
-            <div className="rounded-[10px] border border-border bg-surface-1 shadow-[0px_3px_6px_-2px_rgba(0,0,0,0.02),0px_1px_1px_rgba(0,0,0,0.04)] overflow-visible mt-2">
-              <div className="px-2.5 pt-3 pb-2 flex items-center justify-between">
-                <span className="text-[12px] font-medium text-muted-foreground flex items-center gap-1 px-1.5">
-                  Tracking
-                  <ChevronDown size={12} strokeWidth={2} className="ml-0.5" />
-                </span>
               </div>
 
-              <div className="px-3 pb-3 flex flex-col gap-4">
-                {/* Organizer */}
-                <div>
-                  <h4 className="text-[12px] font-medium text-muted-foreground mb-2">Organizer</h4>
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0 uppercase">
-                      {room.hostId === user?.id ? user?.fullName?.charAt(0) : (apiParticipants.find(p => p.userId === room.hostId)?.displayName?.charAt(0) || room.hostId.charAt(0))}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[13px] text-foreground font-medium truncate">
-                        {room.hostId === user?.id ? user?.fullName : (apiParticipants.find(p => p.userId === room.hostId)?.displayName || room.hostId)}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground truncate">Organizer</span>
-                    </div>
+              <div className="grid gap-2 border-y border-border/60 py-2 text-[13px]">
+                <MetadataRow icon={<Users className="size-4" />} label="People">
+                  <div className="flex flex-wrap gap-1.5">
+                    {participants.length > 0
+                      ? participants
+                          .slice(0, 8)
+                          .map((participant) => (
+                            <UserChip key={participant.id} user={participant} />
+                          ))
+                      : "No participants added"}
                   </div>
-                </div>
-
-                {/* Attendees */}
-                <div>
-                  <h4 className="text-[12px] font-medium text-muted-foreground mb-2 flex items-center gap-1">
-                    <ChevronDown size={12} strokeWidth={2} />
-                    Attendees: {(apiParticipants.filter(p => p.userId !== room.hostId).length + (invitationsQuery.data || []).filter(i => i.status !== "ACCEPTED").length)}
-                  </h4>
-                  {((apiParticipants.filter(p => p.userId !== room.hostId).length + (invitationsQuery.data || []).filter(i => i.status !== "ACCEPTED").length) > 0) ? (
-                    <div className="space-y-2 mt-2">
-                      {apiParticipants.filter(p => p.userId !== room.hostId).map((p) => (
-                        <div key={p.id} className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-surface-2 text-muted-foreground flex items-center justify-center text-[10px] font-bold shrink-0 uppercase">
-                            {p.displayName?.charAt(0) || "U"}
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[13px] text-foreground truncate">{p.displayName || "Unknown User"}</span>
-                            <span className="text-[11px] text-muted-foreground truncate">
-                              {p.status === "joined" ? "In meeting" : p.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      {(invitationsQuery.data || []).filter(i => i.status !== "ACCEPTED").map((inv) => {
-                        const member = membersArray.find((m: any) => m.userId === inv.email || m.id === inv.email || m.email === inv.email);
-                        const displayEmail = member?.fullName || inv.email;
-                        return (
-                          <div key={inv.id} className="flex items-center gap-2 opacity-60">
-                            <div className="w-6 h-6 rounded-full bg-surface-2 text-muted-foreground flex items-center justify-center text-[10px] font-medium shrink-0 uppercase">
-                              {displayEmail.charAt(0)}
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-[13px] text-foreground truncate">{displayEmail}</span>
-                              <span className="text-[11px] text-muted-foreground truncate">Invited ({inv.status ? inv.status.charAt(0).toUpperCase() + inv.status.slice(1).toLowerCase() : 'Pending'})</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-[12px] text-muted-foreground">No attendees yet.</div>
-                  )}
-                </div>
+                </MetadataRow>
+                <MetadataRow icon={<Clock className="size-4" />} label="When">
+                  <span>
+                    {formatDateTime(room.scheduledAt ?? room.createdAt)}
+                  </span>
+                  {room.endedAt ? (
+                    <span className="text-muted-foreground">
+                      - {formatDateTime(room.endedAt)}
+                    </span>
+                  ) : null}
+                </MetadataRow>
+                <MetadataRow icon={<MapPin className="size-4" />} label="Where">
+                  <InlineChip icon={<Video className="size-3.5" />}>
+                    Virtual Audio Bridge
+                  </InlineChip>
+                </MetadataRow>
               </div>
             </div>
 
-            {/* Actions Card */}
-            <div className="rounded-[10px] border border-border bg-surface-1 shadow-[0px_3px_6px_-2px_rgba(0,0,0,0.02),0px_1px_1px_rgba(0,0,0,0.04)] overflow-visible mt-2">
-              <div className="px-2.5 pt-3 pb-2 flex items-center justify-between">
-                <span className="text-[12px] font-medium text-muted-foreground flex items-center gap-1 px-1.5">
-                  Actions
-                  <ChevronDown size={12} strokeWidth={2} className="ml-0.5" />
-                </span>
+            <RoomNotesEditor
+              key={room.id}
+              initialContent={room.description ?? ""}
+              canEdit={isHost}
+              onSave={(html) =>
+                updateRoomSettings.mutateAsync({
+                  id: room.id,
+                  data: { description: html },
+                })
+              }
+            />
+
+            {isEnded || transcriptSegments.length > 0 ? (
+              <MeetingTranscriptArtifact
+                segments={transcriptSegments}
+                baseTime={
+                  transcriptQuery.data?.createdAt ||
+                  room.startedAt ||
+                  room.createdAt
+                }
+                roomId={room.id}
+                currentUserId={user?.id}
+                isEnded={isEnded}
+                onCopy={handleCopy}
+              />
+            ) : null}
+
+          </main>
+
+          <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
+            <PropertyPanel title="Tracking">
+              <PropertyLine label="Organizer">
+                <UserChip user={hostUser} compact />
+              </PropertyLine>
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+                  <ChevronDown className="size-3" />
+                  Attendees:{" "}
+                  {
+                    participants.filter(
+                      (participant) => participant.id !== hostUser.id,
+                    ).length
+                  }
+                </div>
+                <div className="space-y-1.5">
+                  {participants.filter(
+                    (participant) => participant.id !== hostUser.id,
+                  ).length > 0 ? (
+                    participants
+                      .filter((participant) => participant.id !== hostUser.id)
+                      .map((participant) => (
+                        <UserRow key={participant.id} user={participant} />
+                      ))
+                  ) : (
+                    <p className="text-[12px] text-muted-foreground">
+                      No attendees yet.
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="px-1.5 pb-3 flex flex-col">
-                <button
-                  onClick={() => handleCopy(room.translationRoomCode, "Room code")}
-                  className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors"
+            </PropertyPanel>
+
+            <PropertyPanel title="Actions">
+              <ActionButton
+                icon={<Copy className="size-3.5" />}
+                onClick={() =>
+                  handleCopy(room.translationRoomCode, "Room code")
+                }
+              >
+                Copy room code
+              </ActionButton>
+              {isHost ? (
+                <ActionButton
+                  icon={<LinkIcon className="size-3.5" />}
+                  onClick={() =>
+                    handleCopy(
+                      `${window.location.origin}/join?code=${room.translationRoomCode}`,
+                      "Invite link",
+                    )
+                  }
                 >
-                  <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  <span className="text-foreground">Copy room code</span>
-                </button>
-                {isHost && (
-                  <button
-                    onClick={() => handleCopy(`${window.location.origin}/join?code=${room.translationRoomCode}`, "Invite link")}
-                    className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors"
-                  >
-                    <LinkIcon className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span className="text-foreground">Copy invite link</span>
-                  </button>
-                )}
-                <button className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-muted-foreground hover:bg-surface-2 transition-colors">
-                  <Star className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  <span className="text-foreground">Add to favorites</span>
-                </button>
-                {isHost && !isEnded && room.status !== "cancelled" && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        await endRoomMutation.mutateAsync(room.id);
-                      } catch (e) {
-                        // error handled by mutation
-                      }
-                    }}
-                    disabled={endRoomMutation.isPending}
-                    className="flex items-center gap-2 w-full min-h-[28px] px-1.5 rounded-[6px] text-[13px] text-red-500 hover:bg-red-500/10 transition-colors mt-2"
-                  >
-                    <StopCircle className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    <span className="text-foreground text-red-500">End Meeting</span>
-                  </button>
-                )}
-              </div>
-            </div>
+                  Copy invite link
+                </ActionButton>
+              ) : null}
+              {isUpcomingScheduledRoom(room) ? (
+                <AddToCalendarMenu room={room} />
+              ) : null}
+              <ActionButton icon={<Star className="size-3.5" />}>
+                Add to favorites
+              </ActionButton>
+              {isHost && !isEnded && room.status !== "cancelled" ? (
+                <ActionButton
+                  destructive
+                  icon={<StopCircle className="size-3.5" />}
+                  disabled={endRoomMutation.isPending}
+                  onClick={async () => {
+                    try {
+                      await endRoomMutation.mutateAsync(room.id);
+                    } catch {
+                      // Mutation toast handles the error.
+                    }
+                  }}
+                >
+                  End meeting
+                </ActionButton>
+              ) : null}
+            </PropertyPanel>
 
-          </div>
+            <PropertyPanel title="Meeting access">
+              <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
+                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-1 text-ink">
+                  <Video className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold">WarpTalk Session</p>
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                    {room.translationRoomCode}
+                  </p>
+                </div>
+              </div>
+              <Button
+                className="h-9 justify-between rounded-md text-[13px] !text-white [&_svg]:!text-white"
+                disabled={!canJoinRoom}
+                onClick={() => {
+                  useUIStore.getState().setSetupRoomId(roomId);
+                  useUIStore.getState().setSetupRoomModalOpen(true);
+                }}
+              >
+                {canJoinRoom ? "Join meeting" : statusLabels[room.status]}
+                <ArrowRight className="size-4" />
+              </Button>
+            </PropertyPanel>
+          </aside>
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Sub-components ── */
+/**
+ * The saved meeting transcript, rendered as a distinct artifact participants can read
+ * and copy after the meeting ends. Data is the persisted TranscriptService segments for
+ * this room (already fetched on the page), so it does not depend on any exported file
+ * being stored — it always reflects what was actually transcribed.
+ */
+function MeetingTranscriptArtifact({
+  segments,
+  baseTime,
+  roomId,
+  currentUserId,
+  isEnded,
+  onCopy,
+}: {
+  segments: TranscriptSegmentDto[];
+  baseTime?: string;
+  roomId: string;
+  currentUserId?: string;
+  isEnded: boolean;
+  onCopy: (text: string, label: string) => void;
+}) {
+  const ordered = [...segments].sort(
+    (left, right) => left.sequenceOrder - right.sequenceOrder,
+  );
+  const grouped = groupSavedTranscriptSegments(ordered);
+  const sessionsQuery = useTranslationRoomSessions(roomId);
+  const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
+  const showSessionLabels = blocks.length > 1;
+  const totalCount = grouped.length;
+  const base = baseTime ? new Date(baseTime) : null;
 
+  function segmentTime(startMs: number) {
+    if (!base) return "";
+    const stamp = new Date(base);
+    stamp.setMilliseconds(stamp.getMilliseconds() + startMs);
+    return stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
 
+  return (
+    <section className="mt-8 border-b border-border/60 pb-7">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[15px] font-semibold text-ink">
+            Meeting transcript
+          </h2>
+          <InlineChip icon={<FileText className="size-3.5" />}>
+            {isEnded ? "Saved" : "Live"} · {totalCount}{" "}
+            {totalCount === 1 ? "entry" : "entries"}
+          </InlineChip>
+        </div>
+        {totalCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => onCopy(assembleTranscriptText(blocks), "Transcript")}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <Copy className="size-3.5" />
+            Copy
+          </button>
+        ) : null}
+      </div>
+
+      {totalCount === 0 ? (
+        <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
+          {isEnded
+            ? "No transcript was captured for this meeting."
+            : "The transcript is saved here as the meeting is transcribed."}
+        </div>
+      ) : (
+        <div className="space-y-1 rounded-xl border border-border bg-surface-1 p-4">
+          {blocks.map((block) => (
+            <div key={block.sessionNumber} className="space-y-2">
+              {showSessionLabels ? (
+                <TranscriptSessionDivider sessionNumber={block.sessionNumber} session={block.session} />
+              ) : null}
+              {block.segments.map((segment) => {
+                const isSelf = Boolean(currentUserId) && segment.speakerParticipantId === currentUserId;
+                return (
+                  <div
+                    key={segment.id}
+                    className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
+                  >
+                    <div className={`flex max-w-[75%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
+                      <div className={`flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground ${isSelf ? "flex-row-reverse" : ""}`}>
+                        <span className="font-semibold text-ink">
+                          {isSelf ? "You" : segment.speakerName || "Unknown speaker"}
+                        </span>
+                        <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
+                        {base ? <span>{segmentTime(segment.startTimeMs)}</span> : null}
+                      </div>
+                      <div
+                        className={`rounded-2xl px-3 py-2 ${
+                          isSelf
+                            ? "rounded-tr-sm bg-primary"
+                            : "rounded-tl-sm border border-border bg-white"
+                        }`}
+                      >
+                        <p className={`text-[13px] leading-6 ${isSelf ? "text-white" : "text-ink-subtle"}`}>
+                          {segment.originalText}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TranscriptSessionDivider({
+  sessionNumber,
+  session,
+}: {
+  sessionNumber: number;
+  session: TranslationRoomSessionDto | null;
+}) {
+  const started = session?.startedAt
+    ? new Date(session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
+  const ended = session?.endedAt
+    ? new Date(session.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "now";
+
+  return (
+    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="h-px flex-1 bg-border" />
+      <span>
+        Translation {sessionNumber}
+        {started ? ` · ${started}–${ended}` : ""}
+      </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+function assembleTranscriptText(blocks: TranslationSessionBlock<TranscriptSegmentDto>[]): string {
+  const showSessionLabels = blocks.length > 1;
+  return blocks
+    .map((block) => {
+      const lines = block.segments.map(
+        (segment) =>
+          `[${segment.speakerName || "Unknown"} (${(segment.originalLanguage || "").toUpperCase()})] ${segment.originalText}`,
+      );
+      if (!showSessionLabels) return lines.join("\n");
+      return [`--- Translation ${block.sessionNumber} ---`, ...lines].join("\n");
+    })
+    .join("\n\n");
+}
+
+type SaveState = "idle" | "saving" | "saved";
+
+// tiptap-markdown doesn't augment @tiptap/core's Storage type, so its storage key is untyped.
+function getMarkdown(editor: Editor): string {
+  return (
+    editor.storage as unknown as { markdown: { getMarkdown(): string } }
+  ).markdown.getMarkdown();
+}
+
+function RoomNotesEditor({
+  initialContent,
+  canEdit,
+  onSave,
+}: {
+  initialContent: string;
+  canEdit: boolean;
+  onSave: (html: string) => Promise<void>;
+}) {
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef(initialContent);
+
+  const flushSave = useCallback(
+    (html: string) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (html === lastSavedRef.current) return;
+      lastSavedRef.current = html;
+      setSaveState("saving");
+      onSave(html)
+        .then(() => {
+          setSaveState("saved");
+          if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+          savedFlashRef.current = setTimeout(() => setSaveState("idle"), 1800);
+        })
+        .catch(() => {
+          // Mutation toast handles the error; just stop showing "Saving...".
+          setSaveState("idle");
+        });
+    },
+    [onSave],
+  );
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    editable: canEdit,
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({
+        openOnClick: "whenNotEditable",
+        autolink: true,
+        HTMLAttributes: {
+          class: "text-primary underline underline-offset-2",
+        },
+      }),
+      Placeholder.configure({
+        placeholder: canEdit
+          ? "Add agenda, context, decisions, or review notes..."
+          : "No room notes yet.",
+        showOnlyWhenEditable: false,
+      }),
+      Markdown.configure({
+        html: true,
+        transformPastedText: true,
+        transformCopiedText: true,
+      }),
+    ],
+    content: initialContent,
+    editorProps: {
+      attributes: {
+        class:
+          "min-h-[160px] w-full max-w-none text-[13px] leading-6 text-ink outline-none " +
+          "[&_p]:my-1.5 [&_h1]:mt-4 [&_h1]:mb-1.5 [&_h1]:text-[20px] [&_h1]:font-semibold [&_h1]:text-foreground " +
+          "[&_h2]:mt-3.5 [&_h2]:mb-1.5 [&_h2]:text-[17px] [&_h2]:font-semibold [&_h2]:text-foreground " +
+          "[&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:text-foreground " +
+          "[&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 " +
+          "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground " +
+          "[&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[12px] " +
+          "[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-surface-2 [&_pre]:p-3 [&_pre]:font-mono [&_pre]:text-[12px] [&_pre_code]:bg-transparent [&_pre_code]:p-0 " +
+          "[&_.is-empty::before]:pointer-events-none [&_.is-empty::before]:float-left [&_.is-empty::before]:h-0 [&_.is-empty::before]:text-muted-foreground [&_.is-empty::before]:content-[attr(data-placeholder)]",
+      },
+    },
+    onUpdate: ({ editor }) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(
+        () => flushSave(getMarkdown(editor)),
+        900,
+      );
+    },
+  });
+
+  useEffect(() => {
+    editor?.setEditable(canEdit);
+  }, [editor, canEdit]);
+
+  // Flush any pending debounced save immediately when the editor loses focus,
+  // so quickly navigating away doesn't drop the last edit.
+  useEffect(() => {
+    if (!editor) return;
+    const handleBlur = ({ editor: instance }: { editor: Editor }) =>
+      flushSave(getMarkdown(instance));
+    editor.on("blur", handleBlur);
+    return () => {
+      editor.off("blur", handleBlur);
+    };
+  }, [editor, flushSave]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (savedFlashRef.current) clearTimeout(savedFlashRef.current);
+    };
+  }, []);
+
+  const editorState = useEditorState({
+    editor,
+    selector: ({ editor }) =>
+      editor
+        ? {
+            bold: editor.isActive("bold"),
+            italic: editor.isActive("italic"),
+            underline: editor.isActive("underline"),
+            strike: editor.isActive("strike"),
+            link: editor.isActive("link"),
+            blockquote: editor.isActive("blockquote"),
+            code: editor.isActive("code"),
+            codeBlock: editor.isActive("codeBlock"),
+            bulletList: editor.isActive("bulletList"),
+            orderedList: editor.isActive("orderedList"),
+            heading1: editor.isActive("heading", { level: 1 }),
+            heading2: editor.isActive("heading", { level: 2 }),
+            heading3: editor.isActive("heading", { level: 3 }),
+          }
+        : null,
+  });
+
+  return (
+    <section className="border-b border-border/60 pb-7">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold text-ink">Room notes</h2>
+        <SaveIndicator state={saveState} />
+      </div>
+
+      {editor && canEdit ? (
+        <BubbleMenu
+          editor={editor}
+          className="flex items-center gap-0.5 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-[12px] font-medium text-muted-foreground outline-none hover:bg-surface-2 hover:text-ink">
+              Aa
+              <ChevronDown className="size-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-36">
+              <DropdownMenuItem
+                onClick={() => editor.chain().focus().setParagraph().run()}
+              >
+                Text
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 1 }).run()
+                }
+              >
+                Heading 1
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 2 }).run()
+                }
+              >
+                Heading 2
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 3 }).run()
+                }
+              >
+                Heading 3
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <ToolbarSeparator />
+
+          <ToolbarButton
+            label="Bold"
+            icon={<Bold className="size-3.5" />}
+            active={editorState?.bold}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+          />
+          <ToolbarButton
+            label="Italic"
+            icon={<Italic className="size-3.5" />}
+            active={editorState?.italic}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+          />
+          <ToolbarButton
+            label="Underline"
+            icon={<UnderlineIcon className="size-3.5" />}
+            active={editorState?.underline}
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+          />
+          <ToolbarButton
+            label="Strikethrough"
+            icon={<Strikethrough className="size-3.5" />}
+            active={editorState?.strike}
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+          />
+
+          <ToolbarSeparator />
+
+          <LinkToolbarButton editor={editor} active={editorState?.link} />
+
+          <ToolbarSeparator />
+
+          <ToolbarButton
+            label="Quote"
+            icon={<Quote className="size-3.5" />}
+            active={editorState?.blockquote}
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          />
+          <ToolbarButton
+            label="Inline code"
+            icon={<Code className="size-3.5" />}
+            active={editorState?.code}
+            onClick={() => editor.chain().focus().toggleCode().run()}
+          />
+          <ToolbarButton
+            label="Code block"
+            icon={<Code2 className="size-3.5" />}
+            active={editorState?.codeBlock}
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          />
+
+          <ToolbarSeparator />
+
+          <ToolbarButton
+            label="Bullet list"
+            icon={<List className="size-3.5" />}
+            active={editorState?.bulletList}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+          />
+          <ToolbarButton
+            label="Numbered list"
+            icon={<ListOrdered className="size-3.5" />}
+            active={editorState?.orderedList}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          />
+        </BubbleMenu>
+      ) : null}
+
+      <div
+        onClick={() => canEdit && editor?.chain().focus().run()}
+        className={cn("-mx-1 rounded-md px-1", canEdit ? "cursor-text" : "")}
+      >
+        <EditorContent editor={editor} />
+      </div>
+    </section>
+  );
+}
+
+function SaveIndicator({ state }: { state: SaveState }) {
+  if (state === "saving") {
+    return (
+      <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        Saving...
+      </span>
+    );
+  }
+  if (state === "saved") {
+    return (
+      <span className="flex items-center gap-1 text-[12px] text-muted-foreground transition-opacity">
+        <Check className="size-3" />
+        Saved
+      </span>
+    );
+  }
+  return null;
+}
+
+function ToolbarSeparator() {
+  return <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />;
+}
+
+function ToolbarButton({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className={cn(
+        "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink",
+        active ? "bg-surface-2 text-ink" : "",
+      )}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function LinkToolbarButton({
+  editor,
+  active,
+}: {
+  editor: Editor;
+  active?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+
+  function submitLink() {
+    const trimmed = url.trim();
+    if (trimmed) {
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .setLink({ href: trimmed })
+        .run();
+    } else {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    }
+    setOpen(false);
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setUrl((editor.getAttributes("link").href as string) ?? "");
+      }}
+    >
+      <PopoverTrigger
+        onMouseDown={(event) => event.preventDefault()}
+        className={cn(
+          "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink",
+          active ? "bg-surface-2 text-ink" : "",
+        )}
+        title="Link"
+        aria-label="Link"
+      >
+        <LinkIcon className="size-3.5" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-2">
+        <form
+          className="flex items-center gap-1.5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitLink();
+          }}
+        >
+          <input
+            autoFocus
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="Paste a link..."
+            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            className="h-8 shrink-0 rounded-md text-[12px] !text-white"
+          >
+            Apply
+          </Button>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function UserChip({
+  user,
+  compact = false,
+}: {
+  user: UserIdentity;
+  compact?: boolean;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        className={cn(
+          "inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          compact
+            ? "h-6 px-1.5 pr-2 text-[11px]"
+            : "h-7 px-2 pr-2.5 text-[12px]",
+        )}
+      >
+        <AvatarInitial
+          user={user}
+          className={compact ? "size-4 text-[9px]" : "size-5 text-[10px]"}
+        />
+        <span className="truncate font-medium">{user.name}</span>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[260px] rounded-xl border-border/70 p-3 shadow-xl"
+      >
+        <div className="flex items-start gap-3">
+          <AvatarInitial user={user} className="size-10 text-[14px]" />
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-semibold text-ink">
+              {user.name}
+            </p>
+            <p className="truncate text-[12px] text-muted-foreground">
+              {user.email ?? user.id}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {user.role ? <InlineChip>{user.role}</InlineChip> : null}
+              {user.status ? <InlineChip>{user.status}</InlineChip> : null}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
+          <div>
+            <p>Speaks</p>
+            <p className="mt-0.5 font-medium text-ink">
+              {user.speakLanguage
+                ? getLanguageName(user.speakLanguage)
+                : "Not set"}
+            </p>
+          </div>
+          <div>
+            <p>Listens</p>
+            <p className="mt-0.5 font-medium text-ink">
+              {user.listenLanguage
+                ? getLanguageName(user.listenLanguage)
+                : "Not set"}
+            </p>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function buildUserList(
+  room: TranslationRoomDto,
+  participants: TranslationRoomParticipantDto[],
+  invitations: TranslationRoomInvitationDto[],
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null,
+): UserIdentity[] {
+  const mapped = participants.map((participant) =>
+    toUserIdentity(participant, membersArray, currentUser),
+  );
+  if (!mapped.some((participant) => participant.id === room.hostId)) {
+    mapped.unshift({
+      id: room.hostId,
+      name: resolveUserName(room.hostId, membersArray, currentUser),
+      email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
+      role: "Organizer",
+      status: "Organizer",
+    });
+  }
+
+  for (const invitation of invitations) {
+    const member = membersArray.find(
+      (item) =>
+        item.userId === invitation.email ||
+        item.id === invitation.email ||
+        item.email === invitation.email,
+    );
+    const name = member?.fullName || invitation.email;
+    // WT-191: match on email only. The previous check also compared against
+    // participant.id, which is a user UUID and can never equal an email — and
+    // toUserIdentity did not populate `email` at all, so nothing ever matched and
+    // every invitee was appended a second time. That is what produced one row for
+    // the participant ("Waiting"/"Left") and a duplicate for the invitation
+    // ("pending"/"accepted") for the same person.
+    const invitationEmail = invitation.email?.trim().toLowerCase();
+    const alreadyListed = invitationEmail
+      ? mapped.some(
+          (participant) =>
+            participant.email?.trim().toLowerCase() === invitationEmail,
+        )
+      : false;
+
+    if (!alreadyListed) {
+      mapped.push({
+        id: invitation.id ?? invitation.email,
+        name,
+        email: invitation.email,
+        role: "Invitee",
+        status: invitation.status ? invitation.status.toLowerCase() : "pending",
+      });
+    }
+  }
+
+  return mapped;
+}
+
+function toUserIdentity(
+  participant: TranslationRoomParticipantDto,
+  membersArray: WorkspaceMemberDto[] = [],
+  currentUser: UserDto | null = null,
+): UserIdentity {
+  const role =
+    participant.role.toLowerCase() === "host"
+      ? "Organizer"
+      : normalizeLabel(participant.role);
+  return {
+    id: participant.userId || participant.id,
+    name: resolveUserName(
+      participant.userId,
+      membersArray,
+      currentUser,
+      participant.displayName,
+    ),
+    // WT-191: required for buildUserList to recognise that an invitee has already
+    // joined. Without it every invitation was rendered as a second attendee row.
+    email: resolveUserEmail(participant.userId, membersArray, currentUser),
+    role,
+    status: normalizeLabel(participant.status),
+    avatarUrl: participant.avatarUrl,
+    speakLanguage: participant.speakLanguage,
+    listenLanguage: participant.listenLanguage,
+  };
+}
+
+function getHostUser(
+  room: TranslationRoomDto,
+  participants: UserIdentity[],
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null,
+) {
+  return (
+    participants.find((participant) => participant.id === room.hostId) ?? {
+      id: room.hostId,
+      name: resolveUserName(room.hostId, membersArray, currentUser),
+      email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
+      role: "Organizer",
+      status: "Organizer",
+    }
+  );
+}
+
+function MetadataRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid min-h-9 grid-cols-[28px_90px_minmax(0,1fr)] items-center gap-2">
+      <div className="flex justify-center text-muted-foreground">{icon}</div>
+      <div className="text-[12px] text-muted-foreground">{label}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function PropertyPanel({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-[10px] border border-border bg-surface-1 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="flex items-center gap-1 px-0.5 text-[12px] font-medium text-muted-foreground">
+          {title}
+          <ChevronDown className="size-3" />
+        </span>
+        <MoreHorizontal className="size-4 text-muted-foreground" />
+      </div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function PropertyLine({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function UserRow({ user }: { user: UserIdentity }) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-2/70">
+      <UserChip user={user} compact />
+      {user.status ? (
+        <span className="truncate text-[11px] text-muted-foreground">
+          {user.status}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function ActionButton({
+  children,
+  icon,
+  destructive,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  destructive?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] transition-colors hover:bg-surface-2 disabled:opacity-50",
+        destructive
+          ? "text-red-500 hover:bg-red-500/10"
+          : "text-muted-foreground",
+      )}
+    >
+      {icon}
+      <span className={cn("text-foreground", destructive && "text-red-500")}>
+        {children}
+      </span>
+    </button>
+  );
+}
+
+/** WT-14: only offer calendar export for a room that is still SCHEDULED and hasn't started yet. */
+function isUpcomingScheduledRoom(room: TranslationRoomDto): boolean {
+  return (
+    room.status === "scheduled" &&
+    Boolean(room.scheduledAt) &&
+    new Date(room.scheduledAt!).getTime() > Date.now()
+  );
+}
+
+function AddToCalendarMenu({ room }: { room: TranslationRoomDto }) {
+  const joinLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
+
+  async function handleDownloadIcs() {
+    const { data } = await translationRoomService.downloadCalendarIcs(room.id);
+    saveBlobDownload(data, "meeting.ics");
+  }
+
+  function handleAddToGoogleCalendar() {
+    const url = buildGoogleCalendarUrl({
+      title: room.title,
+      scheduledAt: room.scheduledAt!,
+      joinLink,
+      description: room.description,
+    });
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] text-muted-foreground outline-none transition-colors hover:bg-surface-2">
+        <CalendarPlus className="size-3.5" />
+        <span className="text-foreground">Add to calendar</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuItem onClick={() => void handleDownloadIcs()}>
+          <Download className="mr-2 size-3.5" />
+          Download .ics
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleAddToGoogleCalendar}>
+          <CalendarPlus className="mr-2 size-3.5" />
+          Add to Google Calendar
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function StatusChip({ status }: { status: TranslationRoomStatus }) {
+  return (
+    <InlineChip icon={<StatusDot status={status} />}>
+      {statusLabels[status]}
+    </InlineChip>
+  );
+}
 
 function StatusDot({ status }: { status: string }) {
   const isLive = status === "in_progress";
   return (
-    <div className={`w-2 h-2 rounded-full shrink-0 ${isLive ? "bg-blue-500" : "bg-muted-foreground/50"}`} />
+    <span
+      className={cn(
+        "size-2 rounded-full",
+        isLive ? "bg-blue-500" : "bg-muted-foreground/50",
+      )}
+    />
   );
 }
 
-function PropertyRow({ label, value }: { label: string; value: string }) {
+function InlineChip({
+  children,
+  icon,
+}: {
+  children: ReactNode;
+  icon?: ReactNode;
+}) {
   return (
-    <div className="flex items-baseline justify-between text-[13px]">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground font-medium">{value}</span>
-    </div>
+    <span className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      {icon}
+      <span className="truncate">{children}</span>
+    </span>
   );
 }
 
-function SidebarProperty({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+function AvatarInitial({
+  user,
+  className,
+}: {
+  user: UserIdentity;
+  className?: string;
+}) {
   return (
-    <div className="flex items-center text-[13px] min-h-[28px] px-1.5 rounded-[6px] hover:bg-surface-2 transition-colors cursor-default">
-      <span className="text-muted-foreground w-[110px] shrink-0 flex items-center gap-2">
-        {icon}
-        {label}
-      </span>
-      <div className="text-foreground flex-1 flex items-center truncate">{children}</div>
-    </div>
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold uppercase text-primary",
+        className,
+      )}
+    >
+      {user.name?.charAt(0) || "U"}
+    </span>
   );
 }
 
-/* ── Utilities ── */
+function normalizeLabel(value?: string) {
+  if (!value) return undefined;
+  return value
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
+/**
+ * Best-effort email for a room participant. Participants only carry a user id, so an
+ * invitation (which is keyed by email) can only be matched back to someone who already
+ * joined by resolving that id through the workspace member list. Returns undefined for
+ * guests and for members the caller cannot see — callers must treat that as "unknown",
+ * never as "not the same person".
+ */
+function resolveUserEmail(
+  userId: string | undefined,
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null,
+): string | undefined {
+  if (!userId) return undefined;
+  if (userId === currentUser?.id) return currentUser?.email ?? undefined;
+
+  const member = membersArray.find(
+    (item) =>
+      item.userId === userId || item.id === userId || item.email === userId,
+  );
+  return member?.email ?? undefined;
+}
+
+function resolveUserName(
+  userId: string | undefined,
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null,
+  fallback?: string,
+) {
+  if (userId && userId === currentUser?.id) {
+    return currentUser.fullName || currentUser.email || "Current user";
+  }
+
+  const member = userId
+    ? membersArray.find(
+        (item) =>
+          item.userId === userId || item.id === userId || item.email === userId,
+      )
+    : undefined;
+  if (member?.fullName) return member.fullName;
+  if (member?.email) return member.email;
+
+  const normalizedFallback = fallback?.trim();
+  if (normalizedFallback && normalizedFallback.toLowerCase() !== "host") {
+    return normalizedFallback;
+  }
+
+  return "Organizer";
+}
 
 function formatDateTime(value?: string) {
   if (!value) return "Not set";
@@ -675,26 +1415,4 @@ function formatDateTime(value?: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatTimeAgo(value?: string) {
-  if (!value) return "";
-  const diff = Date.now() - new Date(value).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function formatDuration(room: TranslationRoomDto) {
-  const seconds =
-    room.durationSeconds ??
-    (room.startedAt && room.endedAt
-      ? Math.max(0, Math.round((new Date(room.endedAt).getTime() - new Date(room.startedAt).getTime()) / 1000))
-      : 0);
-  if (!seconds) return "—";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours ? `${hours}h ` : ""}${minutes}m`;
 }
