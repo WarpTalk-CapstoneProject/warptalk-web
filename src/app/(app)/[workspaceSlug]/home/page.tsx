@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import {
-  ArrowRight,
   ChartBar,
   ClockCounterClockwise,
   CreditCard,
@@ -17,9 +16,7 @@ import {
   VideoCamera,
 } from "@phosphor-icons/react";
 
-import { AppleHelloTextEffect } from "@/components/visuals/apple-hello-text-effect";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
@@ -90,15 +87,12 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
 }
 
 export default function WorkspaceHomePage() {
-  const user = useAuthStore((s) => s.user);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
-  const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
   const role = useWorkspaceRole();
   const setCreateRoomModalOpen = useUIStore((s) => s.setCreateRoomModalOpen);
   const setSearchMeetingModalOpen = useUIStore((s) => s.setSearchMeetingModalOpen);
 
   const slug = activeWorkspaceSlug || "workspace";
-  const displayName = user?.fullName || "User";
   const isOwnerOrAdmin = role === "owner" || role === "admin";
 
   const quickActions: QuickAction[] = [
@@ -178,78 +172,17 @@ export default function WorkspaceHomePage() {
 
   return (
     <div className="min-h-full bg-surface-1 px-4 py-5 text-ink sm:px-5 lg:px-6">
-      <div className="mx-auto flex w-full max-w-[1220px] flex-col gap-5 pb-8">
-        <motion.section
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-          className="overflow-hidden rounded-[18px] border border-border bg-surface-1 shadow-linear"
-        >
-          <div className="grid grid-cols-[minmax(360px,1.08fr)_minmax(300px,0.92fr)] gap-0 max-[760px]:grid-cols-1">
-            <div className="relative border-r border-border p-5 sm:p-7 max-[760px]:border-b max-[760px]:border-r-0">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_20%_0%,rgba(94,106,210,0.16),transparent_34%),linear-gradient(180deg,rgba(94,106,210,0.08),transparent)]" />
-              <div className="relative">
-                <p className="mb-3 text-[12px] font-medium text-ink-muted">{activeWorkspaceName || "My Workspace"}</p>
-                <h1 className="sr-only">Hello, {displayName}</h1>
-                <AppleHelloTextEffect
-                  text={displayName}
-                  durationScale={1}
-                  className="max-w-[920px] text-primary"
-                />
-              </div>
+      <div className="mx-auto flex w-full max-w-[1220px] flex-col gap-3 pb-8">
+        <div>
+          <h2 className="text-[15px] font-semibold text-ink">Quick jumps</h2>
+          <p className="mt-1 text-[12px] text-ink-muted">Shortcuts styled from the WarpTalk token system.</p>
+        </div>
 
-              <div className="relative mt-7 rounded-[16px] border border-border bg-canvas p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
-                <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-                  {[
-                    { label: "Speech", icon: VideoCamera, active: true },
-                    { label: "Notes", icon: FileText },
-                    { label: "AI", icon: Sparkle },
-                    { label: "Team", icon: Users },
-                  ].map((item) => (
-                    <span
-                      key={item.label}
-                      className={cn(
-                        "inline-flex h-8 items-center gap-2 rounded-[8px] px-3 text-[12px] font-semibold",
-                        item.active ? "bg-surface-1 text-ink shadow-linear" : "text-ink-muted"
-                      )}
-                    >
-                      <item.icon size={15} weight="duotone" />
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCreateRoomModalOpen(true)}
-                  className="group mt-3 flex min-h-[94px] w-full items-center justify-between gap-4 rounded-[12px] border border-dashed border-hairline-strong bg-surface-1 px-4 text-left transition hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                >
-                  <span>
-                    <span className="block text-[14px] font-semibold text-ink">Start typing a meeting topic...</span>
-                    <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
-                      Create a room with translation, notes, and AI capture ready.
-                    </span>
-                  </span>
-                  <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-primary text-on-primary transition group-hover:bg-primary-hover">
-                    <ArrowRight size={18} weight="bold" />
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 p-5 sm:p-7">
-              <div>
-                <h2 className="text-[15px] font-semibold text-ink">Quick jumps</h2>
-                <p className="mt-1 text-[12px] text-ink-muted">Shortcuts styled from the WarpTalk token system.</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {quickActions.map((action, index) => (
-                  <QuickActionCard key={`${action.title}-${action.href || "action"}`} action={action} index={index} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </motion.section>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          {quickActions.map((action, index) => (
+            <QuickActionCard key={`${action.title}-${action.href || "action"}`} action={action} index={index} />
+          ))}
+        </div>
       </div>
     </div>
   );
