@@ -89,24 +89,6 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
   );
 }
 
-function LaunchpadSquareGrid() {
-  return (
-    <div className="flex flex-1 items-center justify-center overflow-hidden p-3">
-      <div className="grid grid-cols-5 place-items-center gap-[clamp(0.55rem,1.1vw,0.95rem)]">
-        {Array.from({ length: 25 }).map((_, index) => (
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.22, delay: index * 0.014 }}
-            className="aspect-square size-[clamp(3.1rem,4.35vw,4.7rem)] rounded-[3px] border border-white/10 bg-black shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition hover:scale-[1.03] hover:border-primary/60"
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function WorkspaceHomePage() {
   const user = useAuthStore((s) => s.user);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
@@ -195,16 +177,16 @@ export default function WorkspaceHomePage() {
   }
 
   return (
-    <div className="min-h-full bg-canvas px-4 py-5 text-ink sm:px-5 lg:px-6">
+    <div className="min-h-full bg-surface-1 px-4 py-5 text-ink sm:px-5 lg:px-6">
       <div className="mx-auto flex w-full max-w-[1220px] flex-col gap-5 pb-8">
         <motion.section
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.28, ease: "easeOut" }}
-          className="min-h-[calc(100vh-112px)] overflow-hidden rounded-[18px] border border-border bg-surface-1 shadow-linear"
+          className="overflow-hidden rounded-[18px] border border-border bg-surface-1 shadow-linear"
         >
-          <div className="grid min-h-[calc(100vh-112px)] grid-cols-[minmax(360px,1.08fr)_minmax(300px,0.92fr)] gap-0 max-[760px]:grid-cols-1">
-            <div className="relative min-h-[520px] border-r border-border p-5 sm:p-7 max-[760px]:border-b max-[760px]:border-r-0">
+          <div className="grid grid-cols-[minmax(360px,1.08fr)_minmax(300px,0.92fr)] gap-0 max-[760px]:grid-cols-1">
+            <div className="relative border-r border-border p-5 sm:p-7 max-[760px]:border-b max-[760px]:border-r-0">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_20%_0%,rgba(94,106,210,0.16),transparent_34%),linear-gradient(180deg,rgba(94,106,210,0.08),transparent)]" />
               <div className="relative">
                 <p className="mb-3 text-[12px] font-medium text-ink-muted">{activeWorkspaceName || "My Workspace"}</p>
@@ -254,26 +236,20 @@ export default function WorkspaceHomePage() {
               </div>
             </div>
 
-            <div className="flex min-h-[520px] flex-col p-5 sm:p-7">
-              <LaunchpadSquareGrid />
+            <div className="flex flex-col gap-3 p-5 sm:p-7">
+              <div>
+                <h2 className="text-[15px] font-semibold text-ink">Quick jumps</h2>
+                <p className="mt-1 text-[12px] text-ink-muted">Shortcuts styled from the WarpTalk token system.</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {quickActions.map((action, index) => (
+                  <QuickActionCard key={`${action.title}-${action.href || "action"}`} action={action} index={index} />
+                ))}
+              </div>
             </div>
           </div>
         </motion.section>
-
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-[15px] font-semibold text-ink">Quick jumps</h2>
-              <p className="mt-1 text-[12px] text-ink-muted">Shortcuts styled from the WarpTalk token system.</p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {quickActions.map((action, index) => (
-              <QuickActionCard key={`${action.title}-${action.href || "action"}`} action={action} index={index} />
-            ))}
-          </div>
-        </section>
       </div>
     </div>
   );
