@@ -5,6 +5,7 @@ import { useLocalParticipant } from "@livekit/components-react";
 import { LocalAudioTrack, LocalVideoTrack } from "livekit-client";
 import { KrispNoiseFilter, isKrispNoiseFilterSupported, type KrispNoiseFilterProcessor } from "@livekit/krisp-noise-filter";
 import { BackgroundProcessor, type BackgroundProcessorWrapper } from "@livekit/track-processors";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 
 const DEVICE_PREVIEW_KEY = "warptalk.devices.preview";
 const BLUR_RADIUS = 10;
@@ -24,7 +25,18 @@ export interface TrackEffectsPreferences {
 export function writeTrackEffectsPreferences(prefs: Partial<TrackEffectsPreferences>) {
   if (typeof window === "undefined") return;
   const existing = JSON.parse(window.sessionStorage.getItem(DEVICE_PREVIEW_KEY) || "{}");
-  window.sessionStorage.setItem(DEVICE_PREVIEW_KEY, JSON.stringify({ ...existing, ...prefs }));
+  const versionedPrefs =
+    "noiseSuppressionEnabled" in prefs
+      ? {
+          ...prefs,
+          noiseSuppressionPreferenceVersion:
+            NOISE_SUPPRESSION_PREFERENCE_VERSION,
+        }
+      : prefs;
+  window.sessionStorage.setItem(
+    DEVICE_PREVIEW_KEY,
+    JSON.stringify({ ...existing, ...versionedPrefs }),
+  );
 }
 
 /**
@@ -57,6 +69,18 @@ export function useTrackProcessors({
     let cancelled = false;
     async function applyNoiseProcessor() {
       try {
+        const mediaStreamTrack = localAudioTrack.mediaStreamTrack;
+        // Run exactly one denoiser. Krisp receives AEC/AGC audio without the
+        // browser's noise suppression or voice isolation; disabling Krisp restores
+        // browser suppression. Stacking all three distorted the production mic PCM.
+        await mediaStreamTrack.applyConstraints({
+          echoCancellation: true,
+          noiseSuppression: !noiseSuppressionEnabled,
+          voiceIsolation: !noiseSuppressionEnabled,
+          autoGainControl: true,
+          channelCount: 1,
+        } as MediaTrackConstraints & { voiceIsolation: boolean });
+
         if (noiseSuppressionEnabled && isKrispNoiseFilterSupported()) {
           if (!krispRef.current) krispRef.current = KrispNoiseFilter();
           await localAudioTrack.setProcessor(krispRef.current);

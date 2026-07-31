@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces } from "@/hooks/use-workspace";
@@ -15,19 +15,14 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   const { data: workspacesData, isLoading, isError } = useWorkspaces(1, 100);
-  const [isSyncing, setIsSyncing] = useState(true);
+  const targetWorkspace = workspacesData?.items.find(
+    (workspace) => workspace.slug === workspaceSlug
+  );
 
   useEffect(() => {
     if (isLoading) return;
 
-    if (isError || !workspacesData?.items) {
-      setIsSyncing(false);
-      return;
-    }
-
-    const targetWorkspace = workspacesData.items.find(
-      (w) => w.slug === workspaceSlug
-    );
+    if (isError || !workspacesData?.items) return;
 
     if (targetWorkspace) {
       const storedRole = useWorkspaceStore.getState().role;
@@ -48,7 +43,6 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
           targetWorkspace.defaultLanguage || "en"
         );
       }
-      setIsSyncing(false);
     } else {
       const currentSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
       if (currentSlug === workspaceSlug) {
@@ -60,11 +54,18 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     workspaceSlug,
     activeWorkspaceSlug,
     workspacesData,
+    targetWorkspace,
     isLoading,
     isError,
     setActiveWorkspace,
     router,
   ]);
+
+  const isSyncing =
+    !isError &&
+    (!workspacesData?.items ||
+      !targetWorkspace ||
+      activeWorkspaceSlug !== workspaceSlug);
 
   if (isLoading || isSyncing) {
     return (

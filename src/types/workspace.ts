@@ -151,6 +151,7 @@ export interface WorkspaceDocumentDto {
   id: string;
   workspaceId: string;
   uploadedBy?: string | null;
+  approvedBy?: string | null;
   ownerId?: string | null;
   approvedBy?: string | null;
   name: string;

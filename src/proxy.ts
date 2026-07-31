@@ -1,23 +1,43 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/", "/pricing", "/about", "/login", "/register", "/forgot-password", "/dev-test", "/workspace/payment/plans"];
-const AUTH_ROUTES = ["/login", "/register", "/forgot-password"];
+const PUBLIC_ROUTES = [
+  "/",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/verify-email",
+  "/reset-password",
+  "/join",
+  "/invitations",
+  "/payment-cancelled",
+  "/workspace/payment/plans",
+  "/workspace/payment/success",
+];
+const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/verify-email", "/reset-password"];
 const ADMIN_PREFIX = "/billing";
+const DEVELOPMENT_ONLY_PREFIXES = [
+  "/dev",
+  "/dev-test",
+  "/glass-material",
+  "/test-meeting",
+  "/workspace/artifacts",
+];
 
-// Temporary frontend-only mode: backend/auth is not ready yet, so allow direct
-// access to app pages while dashboard and layout work is being reviewed.
-const DISABLE_AUTH_GUARD = true;
-
-export function middleware(request: NextRequest) {
-  if (DISABLE_AUTH_GUARD) {
-    return NextResponse.next();
-  }
-
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("access_token")?.value;
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    DEVELOPMENT_ONLY_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    )
+  ) {
+    return new NextResponse(null, { status: 404 });
+  }
 
   if (token && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
     const activeWorkspaceSlug = request.cookies.get("active_workspace_slug")?.value;

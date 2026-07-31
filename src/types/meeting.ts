@@ -2,6 +2,7 @@ export interface JoinMeetingResponseDto {
   token: string;
   providerRoomName: string;
   participantIdentity: string;
+  activeHostId?: string | null;
   isWaitingRoom?: boolean;
   /** WT-04: room's mute-on-entry setting — frontend defaults the local mic to muted on first mount when true. */
   muteOnEntry?: boolean;

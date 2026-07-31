@@ -173,16 +173,18 @@ Current backend support:
 
 - `POST /translationRooms/{id}/end`: implemented in `TranslationRoomsController.EndTranslationRoom` and `TranslationRoomService.EndTranslationRoomAsync`; verifies host ownership and writes `status = "ended"`.
 
-Proposed backend endpoints:
+Implemented backend endpoints:
 
-- `POST /translationRooms/{id}/start` -> returns `TranslationRoomDto`; legal transition `scheduled|waiting -> in_progress`; should set `StartedAt`.
-- `POST /translationRooms/{id}/cancel` -> returns `TranslationRoomDto`; legal transition `scheduled|waiting -> cancelled`; should reject `in_progress`, `ended`, `archived`, and already `cancelled`.
+- `POST /translationRooms/{id}/start` returns `TranslationRoomDto` and performs the legal transition to `in_progress`.
+- `POST /translationRooms/{id}/cancel` returns `TranslationRoomDto` and enforces lifecycle transition rules.
 
-Backend gaps intentionally represented in frontend:
+Frontend integration:
 
-- `translationRoom.service.ts` contains typed mock adapters for `start` and `cancel` with comments naming the proposed endpoint contracts.
-- The Live controls drawer tells host users that `/end` is live while `/start` and `/cancel` are frontend adapters until backend ships.
+- `translationRoom.service.ts` calls the real `start`, `cancel` and `end` endpoints.
+- Host controls surface provider/backend failures instead of simulating success.
 
-## Mock Fallback
+## Missing-data behavior
 
-The page does not hardcode `Demo User`. It prefers `useAuthStore().user` for the current participant. When auth/realtime data is unavailable, it uses typed mock participants named `MOCK_CONTRACT_PARTICIPANTS` and marks the roster as a mock contract preview in the participant panel.
+The page uses the authenticated user, API participants and live SignalR state.
+When data is unavailable it renders an explicit empty/error state; it does not
+inject contract-preview participants.

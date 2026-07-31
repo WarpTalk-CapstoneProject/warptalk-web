@@ -35,6 +35,8 @@ Not adopted:
 
 ## Testing Checklist
 
+- [ ] Suggested Workspace Members excludes the signed-in host by user ID and normalized email.
+- [ ] `npm run test:2807-hotfix` passes.
 - [ ] `/rooms/create` renders in the host shell.
 - [ ] Schedule/access tiles show selected states.
 - [ ] Language selects update the setup summary.

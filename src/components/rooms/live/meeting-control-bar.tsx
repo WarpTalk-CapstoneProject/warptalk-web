@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Copy, Fingerprint, HandPalm, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
+import { CaretLeft, CaretRight, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getLanguageName } from "@/lib/languages";
@@ -156,12 +156,17 @@ export function MeetingControlBar({
   /** Host-only: ends all active breakout rooms, returning everyone to the main room. Shown only while breakoutActive. */
   onEndBreakoutRooms?: () => void;
 }) {
-  const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false);
-  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-  const [isSpeakLanguageMenuOpen, setIsSpeakLanguageMenuOpen] = useState(false);
-  const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
+  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<
+    "root" | "layout" | "listenLanguage" | "speakLanguage" | "voice"
+  >("root");
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
   const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
+
+  function closeSettingsMenu() {
+    setIsSettingsMenuOpen(false);
+    setSettingsSection("root");
+  }
 
   return (
     <div className="flex h-12 items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2 shadow-sm backdrop-blur-xl">
@@ -292,22 +297,6 @@ export function MeetingControlBar({
       ) : null}
 
       <MeetControl
-        label={noiseSuppressionEnabled ? "Turn off noise suppression" : "Turn on noise suppression"}
-        active={noiseSuppressionEnabled}
-        icon={<WaveSine className="h-[18px] w-[18px]" />}
-        onClick={onToggleNoiseSuppression}
-      />
-
-      <MeetControl
-        label={backgroundBlurEnabled ? "Turn off background blur" : "Turn on background blur"}
-        active={backgroundBlurEnabled}
-        icon={<UserFocus className="h-[18px] w-[18px]" />}
-        onClick={onToggleBackgroundBlur}
-      />
-
-      <div className="h-6 w-[1px] bg-surface-3 mx-1" />
-
-      <MeetControl
         label={isScreenSharing ? "Stop presenting" : "Present now"}
         active={isScreenSharing}
         icon={<Screencast className="h-[18px] w-[18px]" />}
@@ -360,54 +349,107 @@ export function MeetingControlBar({
 
       <div className="h-6 w-[1px] bg-surface-3 mx-1" />
       
-      <MeetControl
-        label="Copy join link"
-        icon={<Copy className="h-[18px] w-[18px]" />}
-        onClick={() => onCopyText(joinLink || roomCode, joinLink ? "Join link" : "Room code")}
-      />
-
       <div className="relative">
         <MeetControl
-          label="Layout options"
-          icon={<Layout className="h-[18px] w-[18px]" />}
-          onClick={() => setIsLayoutMenuOpen((current) => !current)}
+          label="Settings"
+          active={isSettingsMenuOpen}
+          icon={<GearSix className="h-[18px] w-[18px]" />}
+          onClick={() =>
+            setIsSettingsMenuOpen((current) => {
+              if (current) setSettingsSection("root");
+              return !current;
+            })
+          }
         />
         <AnimatePresence>
-          {isLayoutMenuOpen ? (
-            <motion.div 
+          {isSettingsMenuOpen ? (
+            <motion.div
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
-              className="absolute bottom-14 right-0 z-50 w-44 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg origin-bottom-right"
+              className="absolute bottom-14 right-0 z-50 max-h-[70vh] w-64 overflow-y-auto rounded-lg border border-border bg-surface-1 p-1 shadow-lg origin-bottom-right"
             >
-              <LayoutOption label="Auto" value="auto" active={layoutMode === "auto"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-              <LayoutOption label="Grid" value="grid" active={layoutMode === "grid"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-              <LayoutOption label="Spotlight" value="spotlight" active={layoutMode === "spotlight"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-              <LayoutOption label="Sidebar" value="sidebar" active={layoutMode === "sidebar"} onSelect={onLayoutChange} close={() => setIsLayoutMenuOpen(false)} />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
+              {settingsSection === "root" ? (
+                <>
+                  <SettingsRow
+                    label="Noise suppression"
+                    icon={<WaveSine className="h-4 w-4" />}
+                    active={noiseSuppressionEnabled}
+                    value={noiseSuppressionEnabled ? "On" : "Off"}
+                    onClick={onToggleNoiseSuppression}
+                  />
+                  <SettingsRow
+                    label="Background blur"
+                    icon={<UserFocus className="h-4 w-4" />}
+                    active={backgroundBlurEnabled}
+                    value={backgroundBlurEnabled ? "On" : "Off"}
+                    onClick={onToggleBackgroundBlur}
+                  />
+                  <SettingsRow
+                    label="Layout"
+                    icon={<Layout className="h-4 w-4" />}
+                    value={layoutModeLabel(layoutMode)}
+                    onClick={() => setSettingsSection("layout")}
+                    hasSubmenu
+                  />
+                  {onChangeListenLanguage && availableListenLanguages && availableListenLanguages.length > 1 ? (
+                    <SettingsRow
+                      label="Listening in"
+                      icon={<Translate className="h-4 w-4" />}
+                      value={getLanguageName(listenLanguage)}
+                      onClick={() => setSettingsSection("listenLanguage")}
+                      hasSubmenu
+                    />
+                  ) : null}
+                  {onChangeSpeakLanguage && availableSpeakLanguages && availableSpeakLanguages.length > 1 ? (
+                    <SettingsRow
+                      label="Speaking"
+                      icon={<Microphone className="h-4 w-4" />}
+                      value={speakLanguage && speakLanguage !== "auto" ? getLanguageName(speakLanguage) : "Auto-detect"}
+                      onClick={() => setSettingsSection("speakLanguage")}
+                      hasSubmenu
+                    />
+                  ) : null}
+                  {onChangeVoiceEnabled || (onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0) ? (
+                    <SettingsRow
+                      label="Voice"
+                      icon={<SpeakerHigh className="h-4 w-4" />}
+                      value={voiceEnabled === false ? "Transcript only" : "On"}
+                      onClick={() => setSettingsSection("voice")}
+                      hasSubmenu
+                    />
+                  ) : null}
+                  {onChangeVoiceCloneConsent ? (
+                    <VoiceCloneRow enabled={Boolean(voiceCloneEnabled)} onToggle={onChangeVoiceCloneConsent} />
+                  ) : null}
+                  <div className="my-1 h-[1px] bg-surface-3" />
+                  <SettingsRow
+                    label="Copy join link"
+                    icon={<Copy className="h-4 w-4" />}
+                    onClick={() => onCopyText(joinLink || roomCode, joinLink ? "Join link" : "Room code")}
+                  />
+                  <SettingsRow
+                    label="Copy room code"
+                    icon={<Hash className="h-4 w-4" />}
+                    onClick={() => onCopyText(roomCode, "Room code")}
+                  />
+                </>
+              ) : null}
 
-      {onChangeListenLanguage && availableListenLanguages && availableListenLanguages.length > 1 ? (
-        <>
-          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
-          <div className="relative">
-            <MeetControl
-              label={`Listening in ${getLanguageName(listenLanguage)}`}
-              icon={<Translate className="h-[18px] w-[18px]" />}
-              onClick={() => setIsLanguageMenuOpen((current) => !current)}
-            />
-            <AnimatePresence>
-              {isLanguageMenuOpen ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute bottom-14 right-0 z-50 w-48 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg origin-bottom-right"
-                >
+              {settingsSection === "layout" ? (
+                <>
+                  <SettingsPanelHeader title="Layout" onBack={() => setSettingsSection("root")} />
+                  <LayoutOption label="Auto" value="auto" active={layoutMode === "auto"} onSelect={onLayoutChange} close={closeSettingsMenu} />
+                  <LayoutOption label="Grid" value="grid" active={layoutMode === "grid"} onSelect={onLayoutChange} close={closeSettingsMenu} />
+                  <LayoutOption label="Spotlight" value="spotlight" active={layoutMode === "spotlight"} onSelect={onLayoutChange} close={closeSettingsMenu} />
+                  <LayoutOption label="Sidebar" value="sidebar" active={layoutMode === "sidebar"} onSelect={onLayoutChange} close={closeSettingsMenu} />
+                </>
+              ) : null}
+
+              {settingsSection === "listenLanguage" && onChangeListenLanguage && availableListenLanguages ? (
+                <>
+                  <SettingsPanelHeader title="Listening in" onBack={() => setSettingsSection("root")} />
                   {availableListenLanguages.map((language) => (
                     <LanguageOption
                       key={language}
@@ -415,114 +457,126 @@ export function MeetingControlBar({
                       value={language}
                       active={listenLanguage === language}
                       onSelect={onChangeListenLanguage}
-                      close={() => setIsLanguageMenuOpen(false)}
+                      close={closeSettingsMenu}
                     />
                   ))}
-                </motion.div>
+                </>
               ) : null}
-            </AnimatePresence>
-          </div>
-        </>
-      ) : null}
 
-      {onChangeSpeakLanguage && availableSpeakLanguages && availableSpeakLanguages.length > 1 ? (
-        <div className="relative">
-          <MeetControl
-            label={speakLanguage && speakLanguage !== "auto" ? `Speaking ${getLanguageName(speakLanguage)}` : "Speaking language: Auto-detect"}
-            active={!speakLanguage || speakLanguage === "auto"}
-            icon={<Microphone className="h-[18px] w-[18px]" />}
-            onClick={() => setIsSpeakLanguageMenuOpen((current) => !current)}
-          />
-          <AnimatePresence>
-            {isSpeakLanguageMenuOpen ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute bottom-14 right-0 z-50 w-48 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg origin-bottom-right"
-              >
-                {availableSpeakLanguages.map((language) => (
-                  <LanguageOption
-                    key={language}
-                    label={getLanguageName(language)}
-                    value={language}
-                    active={speakLanguage === language}
-                    onSelect={onChangeSpeakLanguage}
-                    close={() => setIsSpeakLanguageMenuOpen(false)}
-                  />
-                ))}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-        </div>
-      ) : null}
-
-      {onChangeVoiceEnabled ? (
-        <>
-          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
-          <MeetControl
-            label={voiceEnabled === false ? "Transcript only — click to hear voice" : "Voice on — click for transcript only"}
-            active={voiceEnabled === false}
-            icon={voiceEnabled === false ? <SpeakerSlash className="h-[18px] w-[18px]" /> : <SpeakerHigh className="h-[18px] w-[18px]" />}
-            onClick={() => onChangeVoiceEnabled(voiceEnabled === false)}
-          />
-        </>
-      ) : null}
-
-      {onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0 && voiceEnabled !== false ? (
-        <>
-          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
-          <div className="relative">
-            <MeetControl
-              label={
-                voicePreference
-                  ? `Voice: ${voiceCatalog.find((v) => v.id === voicePreference)?.name ?? "Custom"}`
-                  : "Voice: Automatic"
-              }
-              icon={<SpeakerHigh className="h-[18px] w-[18px]" />}
-              onClick={() => setIsVoiceMenuOpen((current) => !current)}
-            />
-            <AnimatePresence>
-              {isVoiceMenuOpen ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute bottom-14 right-0 z-50 w-48 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-lg origin-bottom-right"
-                >
-                  <VoiceOption
-                    label="Automatic"
-                    value=""
-                    active={!voicePreference}
-                    onSelect={onChangeVoicePreference}
-                    close={() => setIsVoiceMenuOpen(false)}
-                  />
-                  {voiceCatalog.map((voice) => (
-                    <VoiceOption
-                      key={voice.id}
-                      label={voice.name}
-                      value={voice.id}
-                      active={voicePreference === voice.id}
-                      onSelect={onChangeVoicePreference}
-                      close={() => setIsVoiceMenuOpen(false)}
+              {settingsSection === "speakLanguage" && onChangeSpeakLanguage && availableSpeakLanguages ? (
+                <>
+                  <SettingsPanelHeader title="Speaking" onBack={() => setSettingsSection("root")} />
+                  {availableSpeakLanguages.map((language) => (
+                    <LanguageOption
+                      key={language}
+                      label={getLanguageName(language)}
+                      value={language}
+                      active={speakLanguage === language}
+                      onSelect={onChangeSpeakLanguage}
+                      close={closeSettingsMenu}
                     />
                   ))}
-                </motion.div>
+                </>
               ) : null}
-            </AnimatePresence>
-          </div>
-        </>
-      ) : null}
 
-      {onChangeVoiceCloneConsent ? (
-        <>
-          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
-          <VoiceCloneToggle enabled={Boolean(voiceCloneEnabled)} onToggle={onChangeVoiceCloneConsent} />
-        </>
-      ) : null}
+              {settingsSection === "voice" ? (
+                <>
+                  <SettingsPanelHeader title="Voice" onBack={() => setSettingsSection("root")} />
+                  {onChangeVoiceEnabled ? (
+                    <SettingsRow
+                      label={voiceEnabled === false ? "Transcript only" : "Voice on"}
+                      icon={voiceEnabled === false ? <SpeakerSlash className="h-4 w-4" /> : <SpeakerHigh className="h-4 w-4" />}
+                      active={voiceEnabled !== false}
+                      value={voiceEnabled === false ? "Tap to hear voice" : "Tap for transcript only"}
+                      onClick={() => onChangeVoiceEnabled(voiceEnabled === false)}
+                    />
+                  ) : null}
+                  {onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0 && voiceEnabled !== false ? (
+                    <>
+                      <div className="my-1 h-[1px] bg-surface-3" />
+                      <VoiceOption
+                        label="Automatic"
+                        value=""
+                        active={!voicePreference}
+                        onSelect={onChangeVoicePreference}
+                        close={closeSettingsMenu}
+                      />
+                      {voiceCatalog.map((voice) => (
+                        <VoiceOption
+                          key={voice.id}
+                          label={voice.name}
+                          value={voice.id}
+                          active={voicePreference === voice.id}
+                          onSelect={onChangeVoicePreference}
+                          close={closeSettingsMenu}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
     </div>
+  );
+}
+
+function layoutModeLabel(mode: MeetingLayoutMode): string {
+  switch (mode) {
+    case "grid":
+      return "Grid";
+    case "spotlight":
+      return "Spotlight";
+    case "sidebar":
+      return "Sidebar";
+    default:
+      return "Auto";
+  }
+}
+
+function SettingsPanelHeader({ title, onBack }: { title: string; onBack: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-ink-muted transition-colors hover:bg-canvas hover:text-ink"
+    >
+      <CaretLeft className="h-3.5 w-3.5" />
+      {title}
+    </button>
+  );
+}
+
+function SettingsRow({
+  label,
+  icon,
+  value,
+  active,
+  hasSubmenu,
+  onClick,
+}: {
+  label: string;
+  icon: ReactNode;
+  value?: string;
+  active?: boolean;
+  hasSubmenu?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors ${
+        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-canvas"
+      }`}
+    >
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">{icon}</span>
+      <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+      {value ? <span className="shrink-0 truncate text-[11px] text-ink-muted">{value}</span> : null}
+      {hasSubmenu ? <CaretRight className="h-3.5 w-3.5 shrink-0 text-ink-muted" /> : null}
+    </button>
   );
 }
 
@@ -556,7 +610,7 @@ function HostControlRow({
   );
 }
 
-function VoiceCloneToggle({
+function VoiceCloneRow({
   enabled,
   onToggle,
 }: {
@@ -567,8 +621,11 @@ function VoiceCloneToggle({
 
   return (
     <>
-      <button
-        type="button"
+      <SettingsRow
+        label="Voice Clone"
+        icon={<Fingerprint className="h-4 w-4" weight={enabled ? "fill" : "regular"} />}
+        active={enabled}
+        value={enabled ? "On" : "Off"}
         onClick={() => {
           if (enabled) {
             onToggle(false);
@@ -576,16 +633,7 @@ function VoiceCloneToggle({
             setShowConsentDialog(true);
           }
         }}
-        title={enabled ? "Đang dùng giọng thật của bạn — bấm để tắt" : "Dùng giọng thật của bạn khi dịch"}
-        className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors ${
-          enabled
-            ? "bg-primary/10 text-primary hover:bg-primary/15"
-            : "bg-transparent text-ink-muted hover:bg-surface-2"
-        }`}
-      >
-        <Fingerprint className="h-[18px] w-[18px]" weight={enabled ? "fill" : "regular"} />
-        Voice Clone
-      </button>
+      />
 
       <Dialog open={showConsentDialog} onOpenChange={setShowConsentDialog}>
         <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[425px]">

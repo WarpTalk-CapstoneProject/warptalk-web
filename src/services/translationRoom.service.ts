@@ -1,6 +1,5 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
-import { useAuthStore } from "@/stores/auth-store";
 import type {
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
@@ -15,6 +14,7 @@ import type {
   TranslationRoomParticipantDto,
   TranslationRoomInvitationDto,
   TranslationRoomPreflightDto,
+  TranslationRoomSessionDto,
   TranslationRoomStatus,
   UpdateRoomSettingsRequest,
 } from "@/types/translationRoom";
@@ -208,6 +208,14 @@ export const translationRoomService = {
     return { ...response, data: normalizeRoom(response.data) };
   },
 
+  pause(id: string) {
+    return apiClient.post<void>(API.translationRooms.pause(id));
+  },
+
+  resume(id: string) {
+    return apiClient.post<void>(API.translationRooms.resume(id));
+  },
+
   end(id: string) {
     return apiClient.post<void>(API.translationRooms.end(id));
   },
@@ -244,7 +252,12 @@ export const translationRoomService = {
   },
 
   artifactDownload(id: string) {
-    return apiClient.get<{ url: string }>(API.roomArtifacts.download(id));
+    return apiClient.get<{
+      url?: string | null;
+      content?: string | null;
+      fileName: string;
+      contentType: string;
+    }>(API.roomArtifacts.download(id));
   },
 
   approveArtifactConsent(id: string) {
@@ -267,16 +280,16 @@ export const translationRoomService = {
     return apiClient.post<TranslationRoomFeedbackDto>(API.translationRooms.feedback(id), data);
   },
 
-  /**
-   * WT-14: opened as a plain link/download (calendar apps can't attach an Authorization
-   * header), so the access token travels as "?access_token=" instead — see the matching
-   * JwtBearerEvents.OnMessageReceived fallback in the translation-room service's Program.cs.
-   */
-  getCalendarIcsUrl(id: string): string {
-    const baseURL = apiClient.defaults.baseURL ?? "";
-    const token = useAuthStore.getState().accessToken;
-    const query = token ? `?access_token=${encodeURIComponent(token)}` : "";
-    return `${baseURL}${API.translationRooms.calendarIcs(id)}${query}`;
+  downloadCalendarIcs(id: string) {
+    return apiClient.get<Blob>(API.translationRooms.calendarIcs(id), {
+      responseType: "blob",
+    });
+  },
+
+  /** Every Start/Resume→Pause/End window for this room, newest first — see
+   * TranslationRoomSessionsController.GetSessions. */
+  sessions(id: string) {
+    return apiClient.get<TranslationRoomSessionDto[]>(API.translationRooms.sessions(id));
   },
 };
 

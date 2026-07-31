@@ -1,14 +1,22 @@
 "use client";
 
-import { use, useEffect } from "react";
+import { Buildings, Spinner, UserCheck, Warning } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
+import { use } from "react";
 import { toast } from "sonner";
-import { Buildings, EnvelopeSimple, Spinner, Lock, UserCheck, Warning } from "@phosphor-icons/react";
 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  useAcceptWorkspaceInvitation,
+  usePreviewWorkspaceInvitation,
+} from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
-import { usePreviewWorkspaceInvitation, useAcceptWorkspaceInvitation, useSelectWorkspace } from "@/hooks/use-workspace";
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -19,25 +27,29 @@ export default function InvitationAcceptPage({ params }: PageProps) {
   const router = useRouter();
   const currentUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   // Preview & Accept Queries
-  const { data: previewData, isLoading, error } = usePreviewWorkspaceInvitation(token);
+  const {
+    data: previewData,
+    isLoading,
+    error,
+  } = usePreviewWorkspaceInvitation(token);
   const acceptMutation = useAcceptWorkspaceInvitation();
-  const selectMutation = useSelectWorkspace();
 
   const handleAccept = async () => {
     if (!isAuthenticated) {
       // Redirect to register/login with callback
       toast.info("Please log in or register to accept this invitation.");
-      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+      router.push(
+        `/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`,
+      );
       return;
     }
 
     try {
       await acceptMutation.mutateAsync(token);
       toast.success("Invitation accepted successfully!");
-      
+
       // Select the workspace we just joined
       // Since select API requires workspaceId, we need to know the workspace ID.
       // But the preview API doesn't return workspaceId directly, or it might be returned in the accept response.
@@ -45,8 +57,10 @@ export default function InvitationAcceptPage({ params }: PageProps) {
       // This is extremely safe and redirects the user to choose their active workspace context.
       router.push("/workspace");
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error 
-        || "Failed to accept invitation. Make sure your account email matches the invitation.";
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error ||
+        "Failed to accept invitation. Make sure your account email matches the invitation.";
       toast.error(errorMsg);
     }
   };
@@ -56,7 +70,9 @@ export default function InvitationAcceptPage({ params }: PageProps) {
       <div className="flex h-screen w-screen items-center justify-center bg-canvas text-ink">
         <div className="flex flex-col items-center gap-3">
           <Spinner className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-xs text-ink-muted">Loading invitation details...</p>
+          <p className="text-xs text-ink-muted">
+            Loading invitation details...
+          </p>
         </div>
       </div>
     );
@@ -70,9 +86,12 @@ export default function InvitationAcceptPage({ params }: PageProps) {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <Warning className="h-6 w-6" />
             </div>
-            <CardTitle className="text-lg font-bold">Invalid Invitation</CardTitle>
+            <CardTitle className="text-lg font-bold">
+              Invalid Invitation
+            </CardTitle>
             <CardDescription className="text-xs">
-              This invitation token is invalid, expired, or has already been accepted.
+              This invitation token is invalid, expired, or has already been
+              accepted.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -102,9 +121,14 @@ export default function InvitationAcceptPage({ params }: PageProps) {
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Buildings className="h-6 w-6" />
           </div>
-          <CardTitle className="text-lg font-bold">Workspace Invitation</CardTitle>
+          <CardTitle className="text-lg font-bold">
+            Workspace Invitation
+          </CardTitle>
           <CardDescription className="text-xs">
-            You have been invited to join <span className="font-semibold text-ink">{previewData.workspaceName}</span>
+            You have been invited to join{" "}
+            <span className="font-semibold text-ink">
+              {previewData.workspaceName}
+            </span>
           </CardDescription>
         </CardHeader>
 
@@ -112,22 +136,30 @@ export default function InvitationAcceptPage({ params }: PageProps) {
           <div className="rounded-md border border-hairline bg-surface-2 p-3.5 flex flex-col gap-2.5">
             <div className="flex justify-between text-xs border-b border-hairline pb-2">
               <span className="text-ink-muted">Target Role:</span>
-              <span className="font-semibold text-ink">{previewData.roleName}</span>
+              <span className="font-semibold text-ink">
+                {previewData.roleName}
+              </span>
             </div>
             <div className="flex justify-between text-xs border-b border-hairline pb-2">
               <span className="text-ink-muted">Invited Email:</span>
-              <span className="font-semibold text-ink font-mono">{previewData.maskedEmail}</span>
+              <span className="font-semibold text-ink font-mono">
+                {previewData.maskedEmail}
+              </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-ink-muted">Expires:</span>
-              <span className="text-ink-muted font-mono">{new Date(previewData.expiresAt).toLocaleDateString()}</span>
+              <span className="text-ink-muted font-mono">
+                {new Date(previewData.expiresAt).toLocaleDateString()}
+              </span>
             </div>
           </div>
 
           {isExpired && (
             <div className="flex items-center gap-2 p-2.5 rounded border border-destructive/20 bg-destructive/5 text-destructive text-xs">
               <Warning className="h-4.5 w-4.5 shrink-0" />
-              <span>This invitation has expired. Please contact the administrator.</span>
+              <span>
+                This invitation has expired. Please contact the administrator.
+              </span>
             </div>
           )}
 
@@ -140,7 +172,11 @@ export default function InvitationAcceptPage({ params }: PageProps) {
 
           {isAuthenticated && currentUser?.email && (
             <div className="text-[11px] text-ink-muted text-center leading-normal">
-              Accepting as <span className="font-semibold text-ink">{currentUser.email}</span>.
+              Accepting as{" "}
+              <span className="font-semibold text-ink">
+                {currentUser.email}
+              </span>
+              .
             </div>
           )}
 
