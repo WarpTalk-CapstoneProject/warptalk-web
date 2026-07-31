@@ -656,14 +656,14 @@ export default function WorkspaceDocumentsPage() {
                       <div className="flex items-center gap-3">
                         <DocumentActor
                           label="Uploader"
-                          member={workspaceMembersQuery.data?.items.find(
-                            (member) => member.userId === doc.uploadedBy,
+                          member={workspaceMembers.find(
+                            (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
                           )}
                         />
                         <DocumentActor
                           label="Approver"
-                          member={workspaceMembersQuery.data?.items.find(
-                            (member) => member.userId === doc.approvedBy,
+                          member={workspaceMembers.find(
+                            (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
                           )}
                         />
                       </div>
@@ -808,14 +808,14 @@ export default function WorkspaceDocumentsPage() {
                 <div className="flex items-center gap-3 pt-1">
                   <DocumentActor
                     label="Uploader"
-                    member={workspaceMembersQuery.data?.items.find(
-                      (member) => member.userId === doc.uploadedBy,
+                    member={workspaceMembers.find(
+                      (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
                     )}
                   />
                   <DocumentActor
                     label="Approver"
-                    member={workspaceMembersQuery.data?.items.find(
-                      (member) => member.userId === doc.approvedBy,
+                    member={workspaceMembers.find(
+                      (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
                     )}
                   />
                 </div>
