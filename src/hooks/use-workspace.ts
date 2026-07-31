@@ -225,7 +225,7 @@ export function useCreateJoinRequest() {
 export function useApproveWorkspaceJoinRequest(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: string | { invitationId: string; membershipType?: string }) =>
+    mutationFn: (payload: { inviteId: string; membershipType?: string }) =>
       WorkspaceService.approveJoinRequest(workspaceId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });

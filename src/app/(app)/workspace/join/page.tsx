@@ -104,89 +104,55 @@ export default function JoinWorkspacePage() {
         </div>
 
         {joinRequest ? (
-          <JoinRequestSentCard
-            token={token}
-            onBack={() => router.push("/workspace")}
-            onReset={() => setJoinRequest(null)}
-          />
+          <div className="flex flex-col gap-5 rounded-lg border border-amber-500/25 bg-amber-500/5 p-5 text-left">
+            <div>
+              <p className="text-[15px] font-semibold text-foreground">Join request sent</p>
+              <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
+                Your request for <span className="font-medium text-ink">{token}</span> is waiting for a Workspace Owner/Admin to approve it.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button type="button" onClick={() => router.push("/workspace")} className="h-9 flex-1 rounded-md bg-primary text-xs text-white hover:bg-primary-hover">
+                Back to workspace hub
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setJoinRequest(null)} className="h-9 flex-1 rounded-md text-xs">
+                Request another workspace
+              </Button>
+            </div>
+          </div>
         ) : (
-          <JoinRequestForm
-            token={token}
-            setToken={setToken}
-            onSubmit={handleSubmit}
-            isPending={createJoinRequest.isPending}
-            errorMessage={errorMessage}
-          />
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          {/* URL Field */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="workspace-url" className="text-[12px] font-medium text-ink-muted">
+              Workspace URL
+            </label>
+            <Input
+              id="workspace-url"
+              placeholder="e.g. acme or warptalk.app/workspace/acme"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              className="bg-surface-1 border-border rounded-md h-10 px-3 text-[14px] focus-visible:ring-1 focus-visible:ring-primary outline-none"
+            />
+          </div>
+
+          {errorMessage && (
+            <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+              {errorMessage}
+            </p>
+          )}
+
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            disabled={!token.trim() || createJoinRequest.isPending}
+            className="w-full rounded-md h-10 bg-primary text-white hover:bg-primary-hover font-medium text-[14px] transition-colors mt-2"
+          >
+            {createJoinRequest.isPending ? "Sending request..." : "Send join request"}
+          </Button>
+        </form>
         )}
       </div>
     </main>
-  );
-}
-
-interface JoinRequestSentCardProps {
-  token: string;
-  onBack: () => void;
-  onReset: () => void;
-}
-
-function JoinRequestSentCard({ token, onBack, onReset }: JoinRequestSentCardProps) {
-  return (
-    <div className="flex flex-col gap-5 rounded-lg border border-amber-500/25 bg-amber-500/5 p-5 text-left">
-      <div>
-        <p className="text-[15px] font-semibold text-foreground">Join request sent</p>
-        <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
-          Your request for <span className="font-medium text-ink">{token}</span> is waiting for a Workspace Owner/Admin to approve it.
-        </p>
-      </div>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button type="button" onClick={onBack} className="h-9 flex-1 rounded-md bg-primary text-xs text-white hover:bg-primary-hover">
-          Back to workspace hub
-        </Button>
-        <Button type="button" variant="outline" onClick={onReset} className="h-9 flex-1 rounded-md text-xs">
-          Request another workspace
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-interface JoinRequestFormProps {
-  token: string;
-  setToken: (val: string) => void;
-  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
-  isPending: boolean;
-  errorMessage: string | null;
-}
-
-function JoinRequestForm({ token, setToken, onSubmit, isPending, errorMessage }: JoinRequestFormProps) {
-  return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="workspace-url" className="text-[12px] font-medium text-ink-muted">
-          Workspace URL
-        </label>
-        <Input
-          id="workspace-url"
-          placeholder="e.g. acme or warptalk.app/workspace/acme"
-          value={token}
-          onChange={(event) => setToken(event.target.value)}
-          className="bg-surface-1 border-border rounded-md h-10 px-3 text-[14px] focus-visible:ring-1 focus-visible:ring-primary outline-none"
-        />
-      </div>
-
-      {errorMessage && (
-        <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
-          {errorMessage}
-        </p>
-      )}
-
-      <Button
-        type="submit"
-        disabled={!token.trim() || isPending}
-        className="w-full rounded-md h-10 bg-primary text-white hover:bg-primary-hover font-medium text-[14px] transition-colors mt-2"
-      >
-        {isPending ? "Sending request..." : "Send join request"}
-      </Button>
-    </form>
   );
 }

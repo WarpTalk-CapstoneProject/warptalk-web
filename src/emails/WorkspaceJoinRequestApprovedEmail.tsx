@@ -33,7 +33,7 @@ export const WorkspaceJoinRequestApprovedEmail = ({
       <Body style={main}>
         <Container style={container}>
           <Text style={logo}>WarpTalk</Text>
-          <Text style={header}>Request Approved for {workspaceName}</Text>
+          <Text style={header}>Request Approved!</Text>
 
           <Section style={contentSection}>
             <Text style={paragraph}>Hello,</Text>
@@ -41,7 +41,7 @@ export const WorkspaceJoinRequestApprovedEmail = ({
               Great news! Your request to join <strong style={highlight}>{workspaceName}</strong> has been approved as a <span style={roleBadge}>Member</span> with membership type <strong style={highlight}>{membershipType}</strong>.
             </Text>
             <Text style={paragraph}>
-              You can now access all shared translation rooms, workspace channels, documents, and AI-powered collaborative artifacts.
+              You can now access all shared translation rooms, workspace channels, and AI-powered collaborative artifacts.
             </Text>
 
             <Section style={btnContainer}>
@@ -98,8 +98,8 @@ const logo: React.CSSProperties = {
   fontSize: "24px",
   fontWeight: "800",
   color: "#38bdf8",
+  margin: "0 0 16px 0",
   letterSpacing: "-0.5px",
-  margin: "0 0 20px 0",
 };
 
 const header: React.CSSProperties = {
@@ -107,7 +107,6 @@ const header: React.CSSProperties = {
   fontWeight: "700",
   color: "#ffffff",
   margin: "0 0 24px 0",
-  lineHeight: "1.3",
 };
 
 const contentSection: React.CSSProperties = {
@@ -117,13 +116,12 @@ const contentSection: React.CSSProperties = {
 const paragraph: React.CSSProperties = {
   fontSize: "14px",
   lineHeight: "24px",
-  color: "#cbd5e1",
+  color: "#94a3b8",
   margin: "0 0 16px 0",
 };
 
 const highlight: React.CSSProperties = {
   color: "#f8fafc",
-  fontWeight: "600",
 };
 
 const roleBadge: React.CSSProperties = {
@@ -142,7 +140,6 @@ const btnContainer: React.CSSProperties = {
 
 const button: React.CSSProperties = {
   backgroundColor: "#0284c7",
-  backgroundImage: "linear-gradient(135deg, #0284c7 0%, #2563eb 100%)",
   borderRadius: "8px",
   color: "#ffffff",
   fontSize: "14px",
@@ -157,14 +154,13 @@ const button: React.CSSProperties = {
 const subtext: React.CSSProperties = {
   fontSize: "12px",
   lineHeight: "18px",
-  color: "#94a3b8",
+  color: "#64748b",
   margin: "16px 0 0 0",
 };
 
 const linkUrl: React.CSSProperties = {
   color: "#38bdf8",
   wordBreak: "break-all" as const,
-  textDecoration: "underline",
 };
 
 const hr: React.CSSProperties = {
