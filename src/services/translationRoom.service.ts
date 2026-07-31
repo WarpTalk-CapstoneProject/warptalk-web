@@ -14,6 +14,7 @@ import type {
   TranslationRoomParticipantDto,
   TranslationRoomInvitationDto,
   TranslationRoomPreflightDto,
+  TranslationRoomSessionDto,
   TranslationRoomStatus,
   UpdateRoomSettingsRequest,
 } from "@/types/translationRoom";
@@ -283,6 +284,12 @@ export const translationRoomService = {
     return apiClient.get<Blob>(API.translationRooms.calendarIcs(id), {
       responseType: "blob",
     });
+  },
+
+  /** Every Start/Resume→Pause/End window for this room, newest first — see
+   * TranslationRoomSessionsController.GetSessions. */
+  sessions(id: string) {
+    return apiClient.get<TranslationRoomSessionDto[]>(API.translationRooms.sessions(id));
   },
 };
 

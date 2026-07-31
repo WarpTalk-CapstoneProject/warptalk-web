@@ -70,12 +70,18 @@ import {
   useTranslationRoom,
   useTranslationRoomInvitations,
   useTranslationRoomParticipants,
+  useTranslationRoomSessions,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { getLanguageName } from "@/lib/languages";
 import { saveBlobDownload } from "@/lib/download-artifact";
 import { canJoinTranslationRoom } from "@/lib/translation-room-access";
+import {
+  groupSavedTranscriptSegments,
+  groupSegmentsByTranslationSession,
+  type TranslationSessionBlock,
+} from "@/lib/transcript-display";
 import { cn } from "@/lib/utils";
 import {
   buildGoogleCalendarUrl,
@@ -90,6 +96,7 @@ import type {
   TranslationRoomDto,
   TranslationRoomInvitationDto,
   TranslationRoomParticipantDto,
+  TranslationRoomSessionDto,
   TranslationRoomStatus,
 } from "@/types/translationRoom";
 import type { WorkspaceMemberDto } from "@/types/workspace";
@@ -316,6 +323,8 @@ export default function RoomInformationPage() {
                   room.startedAt ||
                   room.createdAt
                 }
+                roomId={room.id}
+                currentUserId={user?.id}
                 isEnded={isEnded}
                 onCopy={handleCopy}
               />
@@ -442,17 +451,26 @@ export default function RoomInformationPage() {
 function MeetingTranscriptArtifact({
   segments,
   baseTime,
+  roomId,
+  currentUserId,
   isEnded,
   onCopy,
 }: {
   segments: TranscriptSegmentDto[];
   baseTime?: string;
+  roomId: string;
+  currentUserId?: string;
   isEnded: boolean;
   onCopy: (text: string, label: string) => void;
 }) {
   const ordered = [...segments].sort(
     (left, right) => left.sequenceOrder - right.sequenceOrder,
   );
+  const grouped = groupSavedTranscriptSegments(ordered);
+  const sessionsQuery = useTranslationRoomSessions(roomId);
+  const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
+  const showSessionLabels = blocks.length > 1;
+  const totalCount = grouped.length;
   const base = baseTime ? new Date(baseTime) : null;
 
   function segmentTime(startMs: number) {
@@ -470,16 +488,14 @@ function MeetingTranscriptArtifact({
             Meeting transcript
           </h2>
           <InlineChip icon={<FileText className="size-3.5" />}>
-            {isEnded ? "Saved" : "Live"} · {ordered.length}{" "}
-            {ordered.length === 1 ? "entry" : "entries"}
+            {isEnded ? "Saved" : "Live"} · {totalCount}{" "}
+            {totalCount === 1 ? "entry" : "entries"}
           </InlineChip>
         </div>
-        {ordered.length > 0 ? (
+        {totalCount > 0 ? (
           <button
             type="button"
-            onClick={() =>
-              onCopy(assembleTranscriptText(ordered), "Transcript")
-            }
+            onClick={() => onCopy(assembleTranscriptText(blocks), "Transcript")}
             className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
           >
             <Copy className="size-3.5" />
@@ -488,32 +504,49 @@ function MeetingTranscriptArtifact({
         ) : null}
       </div>
 
-      {ordered.length === 0 ? (
+      {totalCount === 0 ? (
         <div className="rounded-md border border-dashed border-border bg-white px-3.5 py-3 text-[13px] text-muted-foreground">
           {isEnded
             ? "No transcript was captured for this meeting."
             : "The transcript is saved here as the meeting is transcribed."}
         </div>
       ) : (
-        <div className="space-y-3 rounded-xl border border-border bg-surface-1 p-4">
-          {ordered.map((segment) => (
-            <div key={segment.id} className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                <span className="font-semibold text-ink">
-                  {segment.speakerName || "Unknown speaker"}
-                </span>
-                <InlineChip>
-                  {segment.originalLanguage?.toUpperCase() || "?"}
-                </InlineChip>
-                {base ? (
-                  <span className="text-muted-foreground">
-                    {segmentTime(segment.startTimeMs)}
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-[13px] leading-6 text-ink-subtle">
-                {segment.originalText}
-              </p>
+        <div className="space-y-1 rounded-xl border border-border bg-surface-1 p-4">
+          {blocks.map((block) => (
+            <div key={block.sessionNumber} className="space-y-2">
+              {showSessionLabels ? (
+                <TranscriptSessionDivider sessionNumber={block.sessionNumber} session={block.session} />
+              ) : null}
+              {block.segments.map((segment) => {
+                const isSelf = Boolean(currentUserId) && segment.speakerParticipantId === currentUserId;
+                return (
+                  <div
+                    key={segment.id}
+                    className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
+                  >
+                    <div className={`flex max-w-[75%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
+                      <div className={`flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground ${isSelf ? "flex-row-reverse" : ""}`}>
+                        <span className="font-semibold text-ink">
+                          {isSelf ? "You" : segment.speakerName || "Unknown speaker"}
+                        </span>
+                        <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
+                        {base ? <span>{segmentTime(segment.startTimeMs)}</span> : null}
+                      </div>
+                      <div
+                        className={`rounded-2xl px-3 py-2 ${
+                          isSelf
+                            ? "rounded-tr-sm bg-brand-primary"
+                            : "rounded-tl-sm border border-border bg-white"
+                        }`}
+                      >
+                        <p className={`text-[13px] leading-6 ${isSelf ? "text-white" : "text-ink-subtle"}`}>
+                          {segment.originalText}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -522,13 +555,44 @@ function MeetingTranscriptArtifact({
   );
 }
 
-function assembleTranscriptText(segments: TranscriptSegmentDto[]): string {
-  return segments
-    .map(
-      (segment) =>
-        `[${segment.speakerName || "Unknown"} (${(segment.originalLanguage || "").toUpperCase()})] ${segment.originalText}`,
-    )
-    .join("\n");
+function TranscriptSessionDivider({
+  sessionNumber,
+  session,
+}: {
+  sessionNumber: number;
+  session: TranslationRoomSessionDto | null;
+}) {
+  const started = session?.startedAt
+    ? new Date(session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
+  const ended = session?.endedAt
+    ? new Date(session.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "now";
+
+  return (
+    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="h-px flex-1 bg-border" />
+      <span>
+        Translation {sessionNumber}
+        {started ? ` · ${started}–${ended}` : ""}
+      </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+function assembleTranscriptText(blocks: TranslationSessionBlock<TranscriptSegmentDto>[]): string {
+  const showSessionLabels = blocks.length > 1;
+  return blocks
+    .map((block) => {
+      const lines = block.segments.map(
+        (segment) =>
+          `[${segment.speakerName || "Unknown"} (${(segment.originalLanguage || "").toUpperCase()})] ${segment.originalText}`,
+      );
+      if (!showSessionLabels) return lines.join("\n");
+      return [`--- Translation ${block.sessionNumber} ---`, ...lines].join("\n");
+    })
+    .join("\n\n");
 }
 
 type SaveState = "idle" | "saving" | "saved";

@@ -23,10 +23,16 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
+import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+import {
+  groupSavedTranscriptSegments,
+  groupSegmentsByTranslationSession,
+} from "@/lib/transcript-display";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
 import { openArtifactDownload } from "@/lib/download-artifact";
 import { transcriptService } from "@/services/transcript.service";
+import { useAuthStore } from "@/stores/auth-store";
 import type {
   EndedRoomHistoryItem,
   RoomHistoryArtifact,
@@ -407,7 +413,11 @@ function TranscriptWorkspace({
       <div className="grid xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="p-5 lg:p-7">
           {tab === "transcript" ? (
-            <TranscriptPanel state={transcriptState} />
+            <TranscriptPanel
+              state={transcriptState}
+              roomId={room.id}
+              baseTime={transcriptState.data?.transcript.createdAt || room.startedAt}
+            />
           ) : null}
           {tab === "summary" ? (
             <SummaryPanel
@@ -496,7 +506,18 @@ function DetailTabButton({
   );
 }
 
-function TranscriptPanel({ state }: { state: UseQueryResult<TranscriptData> }) {
+function TranscriptPanel({
+  state,
+  roomId,
+  baseTime,
+}: {
+  state: UseQueryResult<TranscriptData>;
+  roomId: string;
+  baseTime?: string;
+}) {
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const sessionsQuery = useTranslationRoomSessions(roomId);
+
   if (state.isLoading) {
     return (
       <div className="flex min-h-[360px] items-center justify-center border border-border bg-canvas">
@@ -508,7 +529,9 @@ function TranscriptPanel({ state }: { state: UseQueryResult<TranscriptData> }) {
     );
   }
 
-  const segments = state.data?.segments ?? [];
+  const segments = groupSavedTranscriptSegments(state.data?.segments ?? []);
+  const blocks = groupSegmentsByTranslationSession(segments, sessionsQuery.data ?? [], baseTime);
+  const showSessionLabels = blocks.length > 1;
 
   if (!segments.length) {
     return (
@@ -535,18 +558,49 @@ function TranscriptPanel({ state }: { state: UseQueryResult<TranscriptData> }) {
           {segments.length} lines
         </span>
       </div>
-      <div className="max-h-[560px] flex-1 space-y-4 overflow-y-auto p-5">
-        {segments.map((segment) => (
-          <div key={segment.id} className="text-[12px] leading-6">
-            <span className="flex items-baseline gap-2">
-              <span className="font-medium text-ink">
-                {segment.speakerName}
-              </span>
-              <span className="text-[10px] text-ink-subtle">
-                {formatTimestamp(segment.startTimeMs)}
-              </span>
-            </span>
-            <p className="mt-0.5 text-ink-muted">{segment.originalText}</p>
+      <div className="max-h-[560px] flex-1 space-y-2 overflow-y-auto p-5">
+        {blocks.map((block) => (
+          <div key={block.sessionNumber} className="space-y-3">
+            {showSessionLabels ? (
+              <div className="flex items-center gap-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+                <div className="h-px flex-1 bg-border" />
+                <span>
+                  Translation {block.sessionNumber}
+                  {block.session?.startedAt
+                    ? ` · ${new Date(block.session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}–${
+                        block.session.endedAt
+                          ? new Date(block.session.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                          : "now"
+                      }`
+                    : ""}
+                </span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+            ) : null}
+            {block.segments.map((segment) => {
+              const isSelf = Boolean(currentUserId) && segment.speakerParticipantId === currentUserId;
+              return (
+                <div key={segment.id} className={`flex ${isSelf ? "justify-end" : "justify-start"}`}>
+                  <div className={`flex max-w-[75%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
+                    <span className={`flex items-baseline gap-2 text-[10px] text-ink-subtle ${isSelf ? "flex-row-reverse" : ""}`}>
+                      <span className="font-medium text-ink">
+                        {isSelf ? "You" : segment.speakerName}
+                      </span>
+                      <span>{formatTimestamp(segment.startTimeMs)}</span>
+                    </span>
+                    <div
+                      className={`rounded-2xl px-3 py-2 text-[12px] leading-6 ${
+                        isSelf
+                          ? "rounded-tr-sm bg-brand-primary text-white"
+                          : "rounded-tl-sm border border-border bg-surface-1 text-ink-muted"
+                      }`}
+                    >
+                      {segment.originalText}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
