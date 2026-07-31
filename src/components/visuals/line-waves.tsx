@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-// @ts-ignore optional visual package
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 import { Mesh, Program, Renderer, Triangle } from "ogl";
 
 import { cn } from "@/lib/utils";
