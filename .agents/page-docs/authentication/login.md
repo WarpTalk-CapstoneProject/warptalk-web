@@ -10,6 +10,7 @@ This document maintains the state, changes, and logic for the Login Page.
 
 ## Latest Changes
 
+- 2026-07-30: Landing Get Started now uses `/login?callbackUrl=%2Fworkspace` as the canonical guest entry point. When an `access_token` cookie and a valid `active_workspace_slug` cookie are present, landing skips login and opens `/<workspaceSlug>/home`. `/login` still accepts the legacy `redirect` parameter for existing callers, but new landing CTAs should use `callbackUrl`.
 - Rebuilt `/login` to share the new dark two-column auth visual system with `/register`.
 - The login page uses the same two-column shell, local Investor Deck background video, black form surface, social button, and rounded input styling.
 - The left video column now contains only the WarpTalk monochrome icon and lowercase `warptalk` wordmark; the previous Aurora label, heading, description, and steps are removed.
@@ -21,7 +22,7 @@ This document maintains the state, changes, and logic for the Login Page.
   - Post to `API.auth.login`
   - Store tokens with `useAuthStore`
   - Write `access_token` cookie
-  - Redirect to safe callback URL or `/dashboard`
+  - Redirect to a safe `callbackUrl`, legacy `redirect`, or `/workspace`
 - The Google social mark is shared from `src/components/auth/cinematic-auth-shell.tsx`.
 
 ## Current Behavior
@@ -29,6 +30,7 @@ This document maintains the state, changes, and logic for the Login Page.
 - The form includes email, password, show/hide password toggle, keep-me-logged-in checkbox, forgot-password link, and submit button.
 - The Google social button is presentational only.
 - The left video column is hidden below `lg` width.
+- `callbackUrl` is the preferred post-auth return parameter. It must be a same-origin path beginning with `/`; otherwise login falls back to `/workspace`.
 
 ## Known Limitations
 
@@ -44,4 +46,4 @@ This document maintains the state, changes, and logic for the Login Page.
 - [x] Verify GitHub is removed and the Google button is below the form.
 - [ ] Open `/login` below `lg` width and verify the form remains usable.
 - [ ] Submit invalid values to confirm validation messages render cleanly.
-- [ ] Confirm successful login redirects to the callback URL or `/dashboard`.
+- [ ] Confirm successful login redirects to the callback URL or `/workspace`.

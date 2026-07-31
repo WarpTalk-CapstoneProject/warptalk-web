@@ -19,6 +19,7 @@ export default function InvitationAcceptPage({ params }: PageProps) {
   const router = useRouter();
   const currentUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const logout = useAuthStore((s) => s.logout);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   // Preview & Accept Queries
@@ -30,7 +31,7 @@ export default function InvitationAcceptPage({ params }: PageProps) {
     if (!isAuthenticated) {
       // Redirect to register/login with callback
       toast.info("Please log in or register to accept this invitation.");
-      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+      router.push(`/register?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
 
@@ -140,7 +141,17 @@ export default function InvitationAcceptPage({ params }: PageProps) {
 
           {isAuthenticated && currentUser?.email && (
             <div className="text-[11px] text-ink-muted text-center leading-normal">
-              Accepting as <span className="font-semibold text-ink">{currentUser.email}</span>.
+              Accepting as <span className="font-semibold text-ink">{currentUser.email}</span>.{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  toast.info("Logged out. Please log in or register with your invited email.");
+                }}
+                className="text-primary underline hover:text-primary-hover ml-1 cursor-pointer font-medium"
+              >
+                Switch account
+              </button>
             </div>
           )}
 

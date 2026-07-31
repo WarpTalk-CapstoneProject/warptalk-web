@@ -33,6 +33,7 @@ export interface WorkspaceSettingsDto {
   voiceCloningEnabled: boolean;
   maxActiveRooms: number;
   artifactRetentionDays: number;
+  invitationExpiryDays: number;
   enforceHostApprovalDefault: boolean;
   verifiedDomains: string[];
   allowExternalCollaboration: boolean;

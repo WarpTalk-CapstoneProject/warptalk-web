@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
 
 interface WorkspaceState {
   activeWorkspaceId: string | null;
@@ -31,14 +32,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       defaultLanguage: null,
 
       setActiveWorkspace: (id, name, slug, role, membershipType, defaultLanguage) => {
+        const safeSlug = normalizeWorkspaceSlug(slug);
         if (typeof document !== "undefined") {
           if (id) {
             document.cookie = `active_workspace_id=${id}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
           } else {
             document.cookie = "active_workspace_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
           }
-          if (slug) {
-            document.cookie = `active_workspace_slug=${slug}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+          if (safeSlug) {
+            document.cookie = `active_workspace_slug=${safeSlug}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
           } else {
             document.cookie = "active_workspace_slug=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
           }
@@ -51,7 +53,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set({
           activeWorkspaceId: id,
           activeWorkspaceName: name,
-          activeWorkspaceSlug: slug,
+          activeWorkspaceSlug: safeSlug,
           role: role ? role.toLowerCase() : null,
           membershipType: membershipType,
           defaultLanguage: defaultLanguage,

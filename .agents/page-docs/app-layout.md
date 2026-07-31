@@ -6,6 +6,10 @@ The app layout shell defines the shared navigation and header surfaces used acro
 
 ## Current Behavior
 
+- Workspace slug routing is guarded by `src/lib/workspace-slug.ts`.
+- Invalid or reserved workspace route params such as `/localhost/home` clear the active workspace cookie/state and redirect to `/workspace` instead of being treated as a real `[workspaceSlug]`.
+- Middleware only trusts `active_workspace_slug` cookies after validation, so an old bad cookie like `active_workspace_slug=localhost` cannot redirect authenticated users to `/localhost/dashboard` when the auth guard is enabled.
+- `useWorkspaceStore.setActiveWorkspace` normalizes workspace slugs before writing `active_workspace_slug`; invalid slugs clear that cookie.
 - The root app font stack uses Inter for the main UI and JetBrains Mono for monospace content through Next.js font variables.
 - Authentication route guarding is temporarily disabled in `src/middleware.ts` so frontend pages can be reviewed directly while backend/auth is not available.
 - The host app shell now uses the same light monochrome frosted-glass direction as the dashboard: bright full-screen motion video background, floating white sidebar, acrylic topbar, and scoped frosted styling for shadcn cards, inputs, tabs, and tables.
@@ -41,6 +45,9 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - `src/app/(app)/dashboard/page.tsx`
 - `src/app/globals.css`
 - `src/middleware.ts`
+- `src/stores/workspace-store.ts`
+- `src/lib/workspace-slug.ts`
+- `src/lib/workspace-slug.test.ts`
 - `src/components/layout/topbar.tsx`
 - `src/components/layout/host-sidebar.tsx`
 - `src/app/(app)/terminology/page.tsx`
