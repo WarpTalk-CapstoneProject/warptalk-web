@@ -75,6 +75,7 @@ import {
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { getLanguageName } from "@/lib/languages";
 import { saveBlobDownload } from "@/lib/download-artifact";
+import { canJoinTranslationRoom } from "@/lib/translation-room-access";
 import { cn } from "@/lib/utils";
 import {
   buildGoogleCalendarUrl,
@@ -201,6 +202,7 @@ export default function RoomInformationPage() {
   }
 
   const isEnded = room.status === "ended";
+  const canJoinRoom = canJoinTranslationRoom(room.status);
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
   const participants = buildUserList(
     room,
@@ -414,12 +416,13 @@ export default function RoomInformationPage() {
               </div>
               <Button
                 className="h-9 justify-between rounded-md text-[13px] !text-white [&_svg]:!text-white"
+                disabled={!canJoinRoom}
                 onClick={() => {
                   useUIStore.getState().setSetupRoomId(roomId);
                   useUIStore.getState().setSetupRoomModalOpen(true);
                 }}
               >
-                Join meeting
+                {canJoinRoom ? "Join meeting" : statusLabels[room.status]}
                 <ArrowRight className="size-4" />
               </Button>
             </PropertyPanel>
