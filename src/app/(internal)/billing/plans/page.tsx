@@ -14,9 +14,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { BILLING_POLICY } from "@/constants/billing-policy";
+import { BROADCAST_CHANNELS } from "@/constants/realtime";
 import { billingService } from "@/services/billing.service";
 import type { PlanDto, PlanRequest, UsageRateCardDto } from "@/types/billing";
-import { BROADCAST_CHANNELS } from "@/constants/realtime";
 
 type BaselinePlan = PlanDto & {
   voiceCloneEnabled?: boolean;
@@ -106,9 +107,6 @@ const EMPTY_FORM: BaselineFormState = {
   isActive: true,
 };
 
-const PRICE_FLOOR_PER_CREDIT_VND = 2.6;
-const MIN_VND_PLAN_PRICE = 15000;
-
 function parseBaselineNumber(
   rawValue: string,
   label: string,
@@ -127,8 +125,11 @@ function parseBaselineNumber(
   return { value: parsed, error: null };
 }
 
-function validateBaselineForm(form: BaselineFormState): string | null {
-  const priceResult = parseBaselineNumber(form.price, "Price", { min: MIN_VND_PLAN_PRICE });
+function validateBaselineForm(
+  form: BaselineFormState,
+  policy: { minimumContractPriceVnd: number; minimumPricePerCreditVnd: number }
+): string | null {
+  const priceResult = parseBaselineNumber(form.price, "Price", { min: policy.minimumContractPriceVnd });
   if (priceResult.error) return priceResult.error;
 
   const creditsResult = parseBaselineNumber(form.creditsPerCycle, "Credits per cycle", { integer: true, minExclusive: 0 });
@@ -166,8 +167,8 @@ function validateBaselineForm(form: BaselineFormState): string | null {
   const overagePrice = overagePriceResult.value!;
   const rolloverCap = rolloverResult.value!;
 
-  if (price / credits < PRICE_FLOOR_PER_CREDIT_VND) {
-    return `Effective price per credit must be at least ${PRICE_FLOOR_PER_CREDIT_VND.toFixed(2)} VND.`;
+  if (price / credits < policy.minimumPricePerCreditVnd) {
+    return `Effective price per credit must be at least ${policy.minimumPricePerCreditVnd.toFixed(2)} VND.`;
   }
 
   if (overageCap > credits) return "Extra usage cap must not exceed credits per cycle.";
@@ -191,8 +192,8 @@ function toBaselineForm(plan: BaselinePlan): BaselineFormState {
     overagePricePerCredit: plan.overagePricePerCredit?.toString() ?? "0",
     lowBalanceThresholdCredits: plan.lowBalanceThresholdCredits?.toString() ?? "0",
     rolloverCapCredits: plan.rolloverCapCredits?.toString() ?? "0",
-    invoiceTermsDays: plan.invoiceTermsDays?.toString() ?? "15",
-    invoiceGraceHours: plan.invoiceGraceHours?.toString() ?? "360",
+    invoiceTermsDays: plan.invoiceTermsDays?.toString() ?? String(BILLING_POLICY.defaultInvoiceTermsDays),
+    invoiceGraceHours: plan.invoiceGraceHours?.toString() ?? String(BILLING_POLICY.defaultInvoiceGraceHours),
     maxParticipants: plan.maxParticipants?.toString() ?? "0",
     maxLanguages: plan.maxLanguages?.toString() ?? "0",
     voiceCloneEnabled: plan.voiceCloneEnabled ?? false,
@@ -216,8 +217,8 @@ function toPlanPayload(plan: BaselinePlan, form: BaselineFormState): BaselinePla
     overagePricePerCredit: Number(form.overagePricePerCredit) || 0,
     lowBalanceThresholdCredits: Number(form.lowBalanceThresholdCredits) || 0,
     rolloverCapCredits: Number(form.rolloverCapCredits) || 0,
-    invoiceTermsDays: Number(form.invoiceTermsDays) || 15,
-    invoiceGraceHours: Number(form.invoiceGraceHours) || 360,
+    invoiceTermsDays: Number(form.invoiceTermsDays) || BILLING_POLICY.defaultInvoiceTermsDays,
+    invoiceGraceHours: Number(form.invoiceGraceHours) || BILLING_POLICY.defaultInvoiceGraceHours,
     maxParticipants: Number(form.maxParticipants) || 0,
     maxLanguages: Number(form.maxLanguages) || 0,
     voiceCloneEnabled: form.voiceCloneEnabled,
@@ -278,6 +279,15 @@ export default function AdminPlansPage() {
   const [useDefaultPricingRows, setUseDefaultPricingRows] = useState(false);
   const [pricingFxRateEdit, setPricingFxRateEdit] = useState<string | null>(null);
   const [pricingCreditValueVndEdit, setPricingCreditValueVndEdit] = useState<string | null>(null);
+  const [minimumPricePerCreditEdit, setMinimumPricePerCreditEdit] = useState<string | null>(null);
+  const [minimumContractPriceEdit, setMinimumContractPriceEdit] = useState<string | null>(null);
+  const [salesUsageWeightEdit, setSalesUsageWeightEdit] = useState<string | null>(null);
+  const [salesMembersWeightEdit, setSalesMembersWeightEdit] = useState<string | null>(null);
+  const [salesLanguagesWeightEdit, setSalesLanguagesWeightEdit] = useState<string | null>(null);
+  const [salesAiServicesWeightEdit, setSalesAiServicesWeightEdit] = useState<string | null>(null);
+  const [defaultOverageCapRatioEdit, setDefaultOverageCapRatioEdit] = useState<string | null>(null);
+  const [defaultInvoiceTermsDaysEdit, setDefaultInvoiceTermsDaysEdit] = useState<string | null>(null);
+  const [defaultInvoiceGraceHoursEdit, setDefaultInvoiceGraceHoursEdit] = useState<string | null>(null);
   const [pricingDraftSavedAt, setPricingDraftSavedAt] = useState<string | null>(null);
 
   const { data: plans = [], isLoading } = useQuery({
@@ -319,9 +329,38 @@ export default function AdminPlansPage() {
     [basePricingDraftRows, pricingDraftEdits]
   );
 
-  const pricingFxRate = pricingFxRateEdit ?? pricingConfig?.fxRateUsdVnd.toString() ?? "26300";
-  const pricingCreditValueVnd = pricingCreditValueVndEdit ?? pricingConfig?.creditValueVnd.toString() ?? "4";
-  const canSaveServicePricing = true;
+  const pricingFxRate = pricingFxRateEdit ?? pricingConfig?.fxRateUsdVnd.toString() ?? "";
+  const pricingCreditValueVnd = pricingCreditValueVndEdit ?? pricingConfig?.creditValueVnd.toString() ?? "";
+  const minimumPricePerCredit = minimumPricePerCreditEdit ?? pricingConfig?.minimumPricePerCreditVnd.toString() ?? String(BILLING_POLICY.minimumPricePerCreditVnd);
+  const minimumContractPrice = minimumContractPriceEdit ?? pricingConfig?.minimumContractPriceVnd.toString() ?? String(BILLING_POLICY.minimumContractPriceVnd);
+  const salesUsageWeight = salesUsageWeightEdit ?? pricingConfig?.salesUsageWeight.toString() ?? String(BILLING_POLICY.suggestionWeights.usage);
+  const salesMembersWeight = salesMembersWeightEdit ?? pricingConfig?.salesMembersWeight.toString() ?? String(BILLING_POLICY.suggestionWeights.members);
+  const salesLanguagesWeight = salesLanguagesWeightEdit ?? pricingConfig?.salesLanguagesWeight.toString() ?? String(BILLING_POLICY.suggestionWeights.languages);
+  const salesAiServicesWeight = salesAiServicesWeightEdit ?? pricingConfig?.salesAiServicesWeight.toString() ?? String(BILLING_POLICY.suggestionWeights.aiServices);
+  const defaultOverageCapRatio = defaultOverageCapRatioEdit ?? pricingConfig?.defaultOverageCapRatio.toString() ?? String(BILLING_POLICY.defaultOverageCapRatio);
+  const defaultInvoiceTermsDays = defaultInvoiceTermsDaysEdit ?? pricingConfig?.defaultInvoiceTermsDays.toString() ?? String(BILLING_POLICY.defaultInvoiceTermsDays);
+  const defaultInvoiceGraceHours = defaultInvoiceGraceHoursEdit ?? pricingConfig?.defaultInvoiceGraceHours.toString() ?? String(BILLING_POLICY.defaultInvoiceGraceHours);
+  const salesWeightTotal =
+    Number(salesUsageWeight) +
+    Number(salesMembersWeight) +
+    Number(salesLanguagesWeight) +
+    Number(salesAiServicesWeight);
+  const pricingInputsAreValid =
+    Number(pricingFxRate) > 0 &&
+    Number(pricingCreditValueVnd) > 0 &&
+    Number(minimumPricePerCredit) > 0 &&
+    Number(minimumContractPrice) > 0 &&
+    salesWeightTotal > 0 &&
+    Number(defaultOverageCapRatio) >= 0 &&
+    Number(defaultOverageCapRatio) <= 1 &&
+    Number(defaultInvoiceTermsDays) > 0 &&
+    Number(defaultInvoiceGraceHours) > 0 &&
+    pricingDraftRows.length > 0;
+  const canSaveServicePricing =
+    pricingInputsAreValid &&
+    !isPricingConfigError &&
+    !isRateCardLoadError &&
+    (useDefaultPricingRows || activeRateCards.length > 0);
 
   const updatePlanMutation = useMutation({
     mutationFn: ({ id, plan }: { id: string; plan: BaselinePlanRequest }) => billingService.updatePlan(id, plan),
@@ -350,10 +389,28 @@ export default function AdminPlansPage() {
     mutationFn: () => billingService.updatePricingConfig({
       fxRateUsdVnd: Number(pricingFxRate) || 0,
       creditValueVnd: Number(pricingCreditValueVnd) || 0,
+      minimumPricePerCreditVnd: Number(minimumPricePerCredit) || 0,
+      minimumContractPriceVnd: Number(minimumContractPrice) || 0,
+      salesUsageWeight: Number(salesUsageWeight) || 0,
+      salesMembersWeight: Number(salesMembersWeight) || 0,
+      salesLanguagesWeight: Number(salesLanguagesWeight) || 0,
+      salesAiServicesWeight: Number(salesAiServicesWeight) || 0,
+      defaultOverageCapRatio: Number(defaultOverageCapRatio) || 0,
+      defaultInvoiceTermsDays: Number(defaultInvoiceTermsDays) || 0,
+      defaultInvoiceGraceHours: Number(defaultInvoiceGraceHours) || 0,
     }),
     onSuccess: (saved) => {
       setPricingFxRateEdit(saved.fxRateUsdVnd.toString());
       setPricingCreditValueVndEdit(saved.creditValueVnd.toString());
+      setMinimumPricePerCreditEdit(saved.minimumPricePerCreditVnd.toString());
+      setMinimumContractPriceEdit(saved.minimumContractPriceVnd.toString());
+      setSalesUsageWeightEdit(saved.salesUsageWeight.toString());
+      setSalesMembersWeightEdit(saved.salesMembersWeight.toString());
+      setSalesLanguagesWeightEdit(saved.salesLanguagesWeight.toString());
+      setSalesAiServicesWeightEdit(saved.salesAiServicesWeight.toString());
+      setDefaultOverageCapRatioEdit(saved.defaultOverageCapRatio.toString());
+      setDefaultInvoiceTermsDaysEdit(saved.defaultInvoiceTermsDays.toString());
+      setDefaultInvoiceGraceHoursEdit(saved.defaultInvoiceGraceHours.toString());
       queryClient.invalidateQueries({ queryKey: ["billing", "pricing-config"] });
     },
   });
@@ -410,7 +467,10 @@ export default function AdminPlansPage() {
       return;
     }
 
-    const validationError = validateBaselineForm(formState);
+    const validationError = validateBaselineForm(formState, {
+      minimumContractPriceVnd: Number(minimumContractPrice) || BILLING_POLICY.minimumContractPriceVnd,
+      minimumPricePerCreditVnd: Number(minimumPricePerCredit) || BILLING_POLICY.minimumPricePerCreditVnd,
+    });
     if (validationError) {
       setErrorMsg(validationError);
       return;
@@ -433,8 +493,17 @@ export default function AdminPlansPage() {
   const handleResetPricingDraftDefaults = () => {
     setUseDefaultPricingRows(true);
     setPricingDraftEdits({});
-    setPricingFxRateEdit("26300");
-    setPricingCreditValueVndEdit("4");
+    setPricingFxRateEdit(String(BILLING_POLICY.defaultFxRateUsdVnd));
+    setPricingCreditValueVndEdit(String(BILLING_POLICY.defaultCreditValueVnd));
+    setMinimumPricePerCreditEdit(String(BILLING_POLICY.minimumPricePerCreditVnd));
+    setMinimumContractPriceEdit(String(BILLING_POLICY.minimumContractPriceVnd));
+    setSalesUsageWeightEdit(String(BILLING_POLICY.suggestionWeights.usage));
+    setSalesMembersWeightEdit(String(BILLING_POLICY.suggestionWeights.members));
+    setSalesLanguagesWeightEdit(String(BILLING_POLICY.suggestionWeights.languages));
+    setSalesAiServicesWeightEdit(String(BILLING_POLICY.suggestionWeights.aiServices));
+    setDefaultOverageCapRatioEdit(String(BILLING_POLICY.defaultOverageCapRatio));
+    setDefaultInvoiceTermsDaysEdit(String(BILLING_POLICY.defaultInvoiceTermsDays));
+    setDefaultInvoiceGraceHoursEdit(String(BILLING_POLICY.defaultInvoiceGraceHours));
     setPricingDraftSavedAt(null);
   };
 
@@ -509,7 +578,10 @@ export default function AdminPlansPage() {
                         <span>Extra usage: {(plan.overageCapCredits ?? 0).toLocaleString()} @ {plan.overagePricePerCredit ?? 0}/credit</span>
                         <span>Warn: {(plan.lowBalanceThresholdCredits ?? 0).toLocaleString()}</span>
                         <span>Rollover: {(plan.rolloverCapCredits ?? 0).toLocaleString()}</span>
-                        <span>Invoice: NET-{plan.invoiceTermsDays ?? 15}, grace {plan.invoiceGraceHours ?? 360}h</span>
+                        <span>
+                          Invoice: NET-{plan.invoiceTermsDays ?? BILLING_POLICY.defaultInvoiceTermsDays}, grace{" "}
+                          {plan.invoiceGraceHours ?? BILLING_POLICY.defaultInvoiceGraceHours}h
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -594,6 +666,115 @@ export default function AdminPlansPage() {
                 className="h-9 text-sm"
                 value={pricingCreditValueVnd}
                 onChange={(e) => { setPricingCreditValueVndEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Minimum VND / credit</Label>
+              <Input
+                type="number"
+                min={0.01}
+                step="0.01"
+                className="h-9 text-sm"
+                value={minimumPricePerCredit}
+                onChange={(e) => { setMinimumPricePerCreditEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Minimum contract VND</Label>
+              <Input
+                type="number"
+                min={1}
+                className="h-9 text-sm"
+                value={minimumContractPrice}
+                onChange={(e) => { setMinimumContractPriceEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Default overage ratio</Label>
+              <Input
+                type="number"
+                min={0}
+                max={1}
+                step="0.01"
+                className="h-9 text-sm"
+                value={defaultOverageCapRatio}
+                onChange={(e) => { setDefaultOverageCapRatioEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Default invoice terms days</Label>
+              <Input
+                type="number"
+                min={1}
+                className="h-9 text-sm"
+                value={defaultInvoiceTermsDays}
+                onChange={(e) => { setDefaultInvoiceTermsDaysEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Default grace hours</Label>
+              <Input
+                type="number"
+                min={1}
+                className="h-9 text-sm"
+                value={defaultInvoiceGraceHours}
+                onChange={(e) => { setDefaultInvoiceGraceHoursEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Sales weight total</Label>
+              <div className="flex h-9 items-center rounded-md border border-hairline bg-muted/40 px-3 text-sm font-medium">
+                {Number.isFinite(salesWeightTotal) ? salesWeightTotal.toFixed(2) : "Invalid"}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Usage weight</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="h-9 text-sm"
+                value={salesUsageWeight}
+                onChange={(e) => { setSalesUsageWeightEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Members weight</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="h-9 text-sm"
+                value={salesMembersWeight}
+                onChange={(e) => { setSalesMembersWeightEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Languages weight</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="h-9 text-sm"
+                value={salesLanguagesWeight}
+                onChange={(e) => { setSalesLanguagesWeightEdit(e.target.value); setPricingDraftSavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">AI services weight</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="h-9 text-sm"
+                value={salesAiServicesWeight}
+                onChange={(e) => { setSalesAiServicesWeightEdit(e.target.value); setPricingDraftSavedAt(null); }}
               />
             </div>
           </div>
@@ -712,7 +893,7 @@ export default function AdminPlansPage() {
             <div className="grid gap-4 md:grid-cols-3">
               <div className="grid gap-2">
                 <Label>Price</Label>
-                <Input className="h-11" type="number" min={MIN_VND_PLAN_PRICE} step="1000" value={formState.price} onChange={(e) => updateFormField("price", e.target.value)} />
+                <Input className="h-11" type="number" min={Number(minimumContractPrice) || BILLING_POLICY.minimumContractPriceVnd} step="1000" value={formState.price} onChange={(e) => updateFormField("price", e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Credits/Cycle</Label>

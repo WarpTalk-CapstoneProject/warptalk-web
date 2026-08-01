@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import React, { useEffect, useState, useMemo, use } from "react";
+import React, { useState, useMemo } from "react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { Badge } from "@/components/ui/badge";
@@ -15,14 +15,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { UsageRateCardDto, InvoiceDto, SubscriptionDto, PlanDto, PlanRequest, SalesInquiryDto, CreditTransactionDto } from "@/types/billing";
-import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
+import type { InvoiceDto, SubscriptionDto, PlanDto, SalesInquiryDto, CreditTransactionDto } from "@/types/billing";
 import { toast } from "sonner";
 
 type ContractTermsFormState = {
@@ -63,17 +61,6 @@ const EMPTY_CONTRACT_TERMS_FORM: ContractTermsFormState = {
   billingContactEmail: "",
 };
 
-type PricingDraftRow = {
-  id: string;
-  chargeType: string;
-  unit: string;
-  provider: string;
-  model: string;
-  providerUnitCostUsd: number;
-  markupMultiplier: number;
-  enabled: boolean;
-};
-
 type PlanBaselineFormState = {
   price: string;
   creditsPerCycle: string;
@@ -84,85 +71,13 @@ type PlanBaselineFormState = {
 };
 
 const EMPTY_PLAN_BASELINE_FORM: PlanBaselineFormState = {
-  price: "1900000",
-  creditsPerCycle: "700000",
-  overagePricePerCredit: "4",
-  overageCapCredits: "105000",
-  rolloverCapCredits: "2000000",
-  invoiceTermsDays: "15",
+  price: "",
+  creditsPerCycle: "",
+  overagePricePerCredit: "",
+  overageCapCredits: "",
+  rolloverCapCredits: "",
+  invoiceTermsDays: "",
 };
-
-const DEFAULT_PRICING_DRAFT_ROWS: PricingDraftRow[] = [
-  { id: "stt-second", chargeType: "STT", unit: "second", provider: "openai", model: "gpt-4o-transcribe", providerUnitCostUsd: 0.0001, markupMultiplier: 2.5, enabled: true },
-  { id: "translation-token-in", chargeType: "TRANSLATION", unit: "token_in", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000004, markupMultiplier: 2.5, enabled: true },
-  { id: "translation-token-cached", chargeType: "TRANSLATION", unit: "token_in_cached", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000001, markupMultiplier: 2.5, enabled: true },
-  { id: "translation-token-out", chargeType: "TRANSLATION", unit: "token_out", provider: "openai", model: "gpt-4.1-mini", providerUnitCostUsd: 0.0000016, markupMultiplier: 2.5, enabled: true },
-  { id: "tts-standard", chargeType: "AUDIO_DUBBING_STANDARD", unit: "character", provider: "cartesia", model: "sonic-3.5", providerUnitCostUsd: 0.0000392, markupMultiplier: 3, enabled: true },
-  { id: "tts-clone", chargeType: "AUDIO_DUBBING_VOICE_CLONE", unit: "character", provider: "cartesia", model: "sonic-3.5-clone", providerUnitCostUsd: 0.0000588, markupMultiplier: 3.5, enabled: true },
-  { id: "voice-enrollment", chargeType: "VOICE_CLONE_ENROLLMENT", unit: "profile", provider: "cartesia", model: "cartesia-localizing-voice", providerUnitCostUsd: 0.00882, markupMultiplier: 3.5, enabled: true },
-  { id: "assistant-token-in", chargeType: "AI_ASSISTANT", unit: "token_in", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.000002, markupMultiplier: 2.5, enabled: true },
-  { id: "assistant-token-cached", chargeType: "AI_ASSISTANT", unit: "token_in_cached", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.0000005, markupMultiplier: 2.5, enabled: true },
-  { id: "assistant-token-out", chargeType: "AI_ASSISTANT", unit: "token_out", provider: "openai", model: "gpt-4.1", providerUnitCostUsd: 0.000008, markupMultiplier: 2.5, enabled: true },
-  { id: "summary-token-in", chargeType: "AI_SUMMARY", unit: "token_in", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.00000015, markupMultiplier: 2.5, enabled: true },
-  { id: "summary-token-cached", chargeType: "AI_SUMMARY", unit: "token_in_cached", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.000000075, markupMultiplier: 2.5, enabled: true },
-  { id: "summary-token-out", chargeType: "AI_SUMMARY", unit: "token_out", provider: "openai", model: "gpt-4o-mini", providerUnitCostUsd: 0.0000006, markupMultiplier: 2.5, enabled: true },
-];
-
-const RATE_CARD_SERVICE_DEFINITIONS = [
-  {
-    value: "STT",
-    label: "Speech to Text",
-    description: "Transcribes live meeting audio.",
-    provider: "openai",
-    units: ["second"],
-  },
-  {
-    value: "TRANSLATION",
-    label: "Translation",
-    description: "Translates meeting text with token billing.",
-    provider: "openai",
-    units: ["token_in", "token_in_cached", "token_out"],
-  },
-  {
-    value: "AUDIO_DUBBING_STANDARD",
-    label: "TTS standard",
-    description: "Generates speech with standard voices.",
-    provider: "cartesia",
-    units: ["character"],
-  },
-  {
-    value: "AUDIO_DUBBING_VOICE_CLONE",
-    label: "TTS voice clone",
-    description: "Generates speech with cloned voices.",
-    provider: "cartesia",
-    units: ["character"],
-  },
-  {
-    value: "VOICE_CLONE_ENROLLMENT",
-    label: "Voice enrollment",
-    description: "One-time voice profile/localizing charge.",
-    provider: "cartesia",
-    units: ["profile"],
-  },
-  {
-    value: "AI_ASSISTANT",
-    label: "AI Assistant",
-    description: "Workspace assistant and meeting Q&A.",
-    provider: "openai",
-    units: ["token_in", "token_in_cached", "token_out"],
-  },
-  {
-    value: "AI_SUMMARY",
-    label: "AI Summary",
-    description: "Meeting summary and action-item generation.",
-    provider: "openai",
-    units: ["token_in", "token_in_cached", "token_out"],
-  },
-];
-
-function getRateCardService(chargeType: string) {
-  return RATE_CARD_SERVICE_DEFINITIONS.find((service) => service.value === chargeType) ?? RATE_CARD_SERVICE_DEFINITIONS[0];
-}
 
 const SALES_FEATURE_LABELS: Record<string, string> = {
   enterprise_contract: "Enterprise contract",
@@ -205,29 +120,6 @@ function getWorkspaceServiceStateLabel(subscription?: SubscriptionDto | null): s
   return subscription.serviceState ?? "Unknown";
 }
 
-function calculateDraftUnitPrice(row: PricingDraftRow, fxRate: number, creditValueVnd: number): number {
-  if (!row.enabled || creditValueVnd <= 0) return 0;
-  return (row.providerUnitCostUsd * fxRate * row.markupMultiplier) / creditValueVnd;
-}
-
-function formatProviderCostUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "0";
-  return value.toFixed(12).replace(/\.?0+$/, "");
-}
-
-function toPricingDraftRow(rate: UsageRateCardDto): PricingDraftRow {
-  return {
-    id: rate.id,
-    chargeType: rate.chargeType,
-    unit: rate.unit,
-    provider: rate.provider,
-    model: rate.model,
-    providerUnitCostUsd: rate.providerUnitCostUsd ?? 0,
-    markupMultiplier: rate.markupMultiplier ?? 0,
-    enabled: rate.isActive,
-  };
-}
-
 function toContractTermsForm(subscription?: SubscriptionDto | null): ContractTermsFormState {
   if (!subscription) return EMPTY_CONTRACT_TERMS_FORM;
 
@@ -254,33 +146,6 @@ function toPlanBaselineForm(plan?: PlanDto | null): PlanBaselineFormState {
   };
 }
 
-function toPlanRequest(plan: PlanDto, form: PlanBaselineFormState): PlanRequest {
-  return {
-    name: plan.name,
-    slug: plan.slug,
-    tier: plan.tier,
-    price: Number(form.price) || 0,
-    currency: plan.currency || "VND",
-    billingCycle: plan.billingCycle || "monthly",
-    creditsPerCycle: Number(form.creditsPerCycle) || 0,
-    maxParticipants: plan.maxParticipants ?? 0,
-    maxLanguages: plan.maxLanguages ?? 0,
-    voiceCloneEnabled: plan.voiceCloneEnabled ?? false,
-    aiAssistantEnabled: plan.aiAssistantEnabled ?? false,
-    glossaryEnabled: plan.glossaryEnabled ?? false,
-    dedicatedGpu: plan.dedicatedGpu ?? false,
-    features: plan.features || "{}",
-    sortOrder: plan.sortOrder ?? 0,
-    overageCapCredits: Number(form.overageCapCredits) || 0,
-    overagePricePerCredit: Number(form.overagePricePerCredit) || 0,
-    lowBalanceThresholdCredits: plan.lowBalanceThresholdCredits ?? 0,
-    rolloverCapCredits: Number(form.rolloverCapCredits) || 0,
-    invoiceTermsDays: Number(form.invoiceTermsDays) || 15,
-    invoiceGraceHours: plan.invoiceGraceHours ?? 360,
-    isActive: plan.isActive,
-  };
-}
-
 function toOptionalNumber(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -300,13 +165,6 @@ function formatContractValue(value: number | null | undefined, inheritedValue: s
   if (value !== undefined && value !== null) return value.toLocaleString();
   const inherited = toOptionalNumber(inheritedValue);
   return inherited === null ? "N/A" : inherited.toLocaleString();
-}
-
-function getSalesEstimateNumber(inquiry: SalesInquiryDto | undefined, key: string): number | null {
-  const estimate = inquiry?.pricingEstimate;
-  if (!estimate || typeof estimate !== "object") return null;
-  const value = (estimate as Record<string, unknown>)[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function getLabelForUsage(usageType: string) {
@@ -411,13 +269,7 @@ export default function AdminWorkspaceBillingPage({
   const router = useRouter();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
-  const [workspaceSearch, setWorkspaceSearch] = useState("");
   const [contractTermsEdits, setContractTermsEdits] = useState<Partial<ContractTermsFormState>>({});
-  const [pricingDraftRows, setPricingDraftRows] = useState<PricingDraftRow[]>(DEFAULT_PRICING_DRAFT_ROWS);
-  const [pricingFxRate, setPricingFxRate] = useState("26300");
-  const [pricingCreditValueVnd, setPricingCreditValueVnd] = useState("4");
-  const [pricingDraftSavedAt, setPricingDraftSavedAt] = useState<string | null>(null);
-  const [planBaselineEdits, setPlanBaselineEdits] = useState<Partial<PlanBaselineFormState>>({});
 
   // In Next.js 15+, params is a Promise and must be unwrapped
   const resolvedParams = React.use(params);
@@ -444,14 +296,7 @@ export default function AdminWorkspaceBillingPage({
     retry: 1,
   });
 
-  const { data: workspacePickerPage, isLoading: isWorkspacePickerLoading } = useQuery({
-    queryKey: ["admin", "billing-workspace-picker", workspaceSearch],
-    queryFn: () => WorkspaceService.list(1, 8, workspaceSearch.trim()),
-    enabled: embedded,
-    retry: 1,
-  });
-
-  const [invoicesPageNumber, setInvoicesPageNumber] = useState(1);
+  const [invoicesPageNumber] = useState(1);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDto | null>(null);
   const [selectedTxGroup, setSelectedTxGroup] = useState<CreditTransactionGroup | null>(null);
 
@@ -471,7 +316,7 @@ export default function AdminWorkspaceBillingPage({
 
   const latestSalesInquiry = salesInquiryPage?.items?.[0];
 
-  const { data: plans = [], isError: isPlansLoadError } = useQuery({
+  const { data: plans = [] } = useQuery({
     queryKey: ["billing", "plans"],
     queryFn: () => billingService.getPlans(),
     enabled: embedded,
@@ -486,28 +331,14 @@ export default function AdminWorkspaceBillingPage({
     [plans]
   );
 
-  const { data: pricingConfig } = useQuery({
-    queryKey: ["billing", "pricing-config"],
-    queryFn: () => billingService.getPricingConfig(),
-    enabled: embedded,
-    retry: 1,
-  });
-
-  const { data: activeRateCards = [], isError: isRateCardLoadError } = useQuery({
-    queryKey: ["billing", "usage-rate-card"],
-    queryFn: () => billingService.getUsageRateCard(),
-    enabled: embedded,
-    retry: 1,
-  });
-
   const contractTermsForm = useMemo(
     () => ({ ...toContractTermsForm(subscription), ...contractTermsEdits }),
     [subscription, contractTermsEdits]
   );
 
   const planBaselineForm = useMemo(
-    () => ({ ...toPlanBaselineForm(enterprisePlan), ...planBaselineEdits }),
-    [enterprisePlan, planBaselineEdits]
+    () => toPlanBaselineForm(enterprisePlan),
+    [enterprisePlan]
   );
 
   const contractTermsDisplayForm = useMemo(
@@ -521,22 +352,6 @@ export default function AdminWorkspaceBillingPage({
     }),
     [contractTermsForm, planBaselineForm]
   );
-
-  const updateEnterprisePlanMutation = useMutation({
-    mutationFn: () => {
-      if (!enterprisePlan) throw new Error("Enterprise baseline plan is unavailable");
-      return billingService.updatePlan(enterprisePlan.id, toPlanRequest(enterprisePlan, planBaselineForm));
-    },
-    onSuccess: () => {
-      toast.success("Enterprise baseline updated");
-      setPlanBaselineEdits({});
-      queryClient.invalidateQueries({ queryKey: ["billing", "plans"] });
-      queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
-    },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to update Enterprise baseline"));
-    },
-  });
 
   const updateContractTermsMutation = useMutation({
     mutationFn: () => billingService.updateSubscriptionContractTerms(workspaceId, {
@@ -555,25 +370,6 @@ export default function AdminWorkspaceBillingPage({
     },
     onError: (err: unknown) => {
       toast.error(getErrorMessage(err, "Failed to update contract terms"));
-    },
-  });
-
-  const createSubscriptionMutation = useMutation({
-    mutationFn: async () => {
-      const plansList = plans.length > 0 ? plans : await billingService.getPlans();
-      const plan = plansList.find(
-        (p) => p.slug?.toLowerCase() === "enterprise" || p.tier?.toLowerCase() === "enterprise"
-      ) ?? plansList[0];
-      if (!plan) throw new Error("Enterprise plan is unavailable");
-      return billingService.createSubscription(workspaceId, plan.id);
-    },
-    onSuccess: () => {
-      toast.success("Enterprise contract initialized for workspace");
-      queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
-      queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
-    },
-    onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to initialize contract"));
     },
   });
 
@@ -627,49 +423,6 @@ export default function AdminWorkspaceBillingPage({
     },
   });
 
-  const updatePricingConfigMutation = useMutation({
-    mutationFn: () => billingService.updatePricingConfig({
-      fxRateUsdVnd: Number(pricingFxRate) || 0,
-      creditValueVnd: Number(pricingCreditValueVnd) || 0,
-    }),
-    onSuccess: (saved) => {
-      setPricingFxRate(saved.fxRateUsdVnd.toString());
-      setPricingCreditValueVnd(saved.creditValueVnd.toString());
-      queryClient.invalidateQueries({ queryKey: ["billing", "pricing-config"] });
-    },
-  });
-
-  const upsertUsageRateCardMutation = useMutation({
-    mutationFn: (row: PricingDraftRow) => {
-      const fxRate = Number(pricingFxRate) || 0;
-      const creditValue = Number(pricingCreditValueVnd) || 0;
-      return billingService.upsertUsageRateCard({
-        chargeType: row.chargeType.trim(),
-        unit: row.unit.trim(),
-        provider: row.provider.trim(),
-        model: row.model.trim(),
-        providerUnitCostUsd: row.providerUnitCostUsd,
-        markupMultiplier: row.markupMultiplier,
-        unitPrice: calculateDraftUnitPrice(row, fxRate, creditValue),
-        currency: "VND",
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["billing", "usage-rate-card"] });
-    },
-  });
-
-  useEffect(() => {
-    if (!pricingConfig) return;
-    setPricingFxRate(pricingConfig.fxRateUsdVnd.toString());
-    setPricingCreditValueVnd(pricingConfig.creditValueVnd.toString());
-  }, [pricingConfig]);
-
-  useEffect(() => {
-    if (activeRateCards.length === 0) return;
-    setPricingDraftRows(activeRateCards.map(toPricingDraftRow));
-  }, [activeRateCards]);
-
   const { data: invoicesPage, isLoading: isInvoicesLoading } = useQuery({
     queryKey: ["billing", "invoices", workspaceId, invoicesPageNumber],
     queryFn: () => billingService.getWorkspaceInvoices(workspaceId, invoicesPageNumber, 20),
@@ -702,40 +455,6 @@ export default function AdminWorkspaceBillingPage({
     setHistoryPageNumber(1);
   };
 
-  const updatePricingDraftRow = <K extends keyof PricingDraftRow>(
-    id: string,
-    key: K,
-    value: PricingDraftRow[K]
-  ) => {
-    setPricingDraftRows((rows) => rows.map((row) => row.id === id ? { ...row, [key]: value } : row));
-    setPricingDraftSavedAt(null);
-  };
-
-  const updatePlanBaselineField = <K extends keyof PlanBaselineFormState>(
-    key: K,
-    value: PlanBaselineFormState[K]
-  ) => {
-    setPlanBaselineEdits((current) => ({ ...current, [key]: value }));
-  };
-
-  const handleSavePricingDraft = async () => {
-    try {
-      await updatePricingConfigMutation.mutateAsync();
-      await Promise.all(pricingDraftRows.filter((row) => row.enabled).map((row) => upsertUsageRateCardMutation.mutateAsync(row)));
-      setPricingDraftSavedAt(format(new Date(), "MMM dd, yyyy HH:mm"));
-      toast.success("Pricing changes applied");
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, "Failed to apply pricing changes"));
-    }
-  };
-
-  const handleResetPricingDraftDefaults = () => {
-    setPricingFxRate("26300");
-    setPricingCreditValueVnd("4");
-    setPricingDraftRows(DEFAULT_PRICING_DRAFT_ROWS.map((row) => ({ ...row })));
-    setPricingDraftSavedAt(null);
-  };
-
   const { data: historyPage, isLoading: isHistoryLoading } = useQuery({
     queryKey: [
       "billing", "history", workspaceId, historyPageNumber, historyTypeFilter, 
@@ -754,12 +473,13 @@ export default function AdminWorkspaceBillingPage({
 
   const totalPages = historyPage ? Math.ceil(historyPage.totalCount / 100) : 0;
 
+  const historyItems = historyPage?.items;
   const groupedHistoryItems = useMemo(() => {
-    if (!historyPage?.items) return [];
+    if (!historyItems) return [];
     const groups: CreditTransactionGroup[] = [];
     let currentGroup: CreditTransactionGroup | null = null;
 
-    historyPage.items.forEach(tx => {
+    historyItems.forEach(tx => {
       if (!currentGroup) {
         currentGroup = { ...tx, originalTx: [tx] };
         return;
@@ -782,7 +502,7 @@ export default function AdminWorkspaceBillingPage({
       groups.push(currentGroup);
     }
     return groups;
-  }, [historyPage?.items]);
+  }, [historyItems]);
 
   const currentCredits = balance?.currentCredits ?? 0;
   const creditsUsed = balance?.creditsUsedThisCycle ?? 0;
@@ -1647,7 +1367,7 @@ export default function AdminWorkspaceBillingPage({
                 disabled={!subscription || subscription.status !== "active" || simulateCycleCloseMutation.isPending}
                 onClick={() => simulateCycleCloseMutation.mutate()}
               >
-                {simulateCycleCloseMutation.isPending ? "Closing..." : "Simulate Cycle Close"}
+                {simulateCycleCloseMutation.isPending ? "Closing..." : "Close Cycle Now"}
               </Button>
             </CardHeader>
             <CardContent className="p-0">

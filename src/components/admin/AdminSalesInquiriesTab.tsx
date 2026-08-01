@@ -12,14 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { BILLING_POLICY } from "@/constants/billing-policy";
 import { billingService } from "@/services/billing.service";
-import type { PlanDto, SalesInquiryDto, UpdateSubscriptionContractTermsRequest } from "@/types/billing";
+import type { PlanDto, PricingConfigDto, SalesInquiryDto, UpdateSubscriptionContractTermsRequest } from "@/types/billing";
 
 const statusOptions = ["new", "reviewing", "closed"];
-const minimumPricePerCreditVnd = 2.6;
-const minimumContractPriceVnd = 15000;
-const supportedLanguageCount = 3;
-const supportedAiServiceCount = 6;
 const statusSortRank: Record<string, number> = {
   new: 0,
   reviewing: 1,
@@ -100,10 +97,25 @@ function parseInteger(value?: string | null): number | null {
 
 function normalizePaymentTerms(value?: string | null, fallback = 15) {
   const parsed = parseInteger(value);
-  return parsed === 15 || parsed === 30 ? parsed : fallback;
+  return BILLING_POLICY.allowedInvoiceTermsDays.includes(parsed as 15 | 30) ? parsed! : fallback;
 }
 
-function calculateSuggestedTerms(inquiry: SalesInquiryDto, plan?: PlanDto | null): UpdateSubscriptionContractTermsRequest {
+function getEffectiveBillingPolicy(config?: PricingConfigDto | null) {
+  return {
+    minimumPricePerCreditVnd: config?.minimumPricePerCreditVnd ?? BILLING_POLICY.minimumPricePerCreditVnd,
+    minimumContractPriceVnd: config?.minimumContractPriceVnd ?? BILLING_POLICY.minimumContractPriceVnd,
+    defaultOverageCapRatio: config?.defaultOverageCapRatio ?? BILLING_POLICY.defaultOverageCapRatio,
+    suggestionWeights: {
+      usage: config?.salesUsageWeight ?? BILLING_POLICY.suggestionWeights.usage,
+      members: config?.salesMembersWeight ?? BILLING_POLICY.suggestionWeights.members,
+      languages: config?.salesLanguagesWeight ?? BILLING_POLICY.suggestionWeights.languages,
+      aiServices: config?.salesAiServicesWeight ?? BILLING_POLICY.suggestionWeights.aiServices,
+    },
+  };
+}
+
+function calculateSuggestedTerms(inquiry: SalesInquiryDto, plan?: PlanDto | null, pricingConfig?: PricingConfigDto | null): UpdateSubscriptionContractTermsRequest {
+  const policy = getEffectiveBillingPolicy(pricingConfig);
   const requestDetails = parseRequestNotes(inquiry);
   const baselineCredits = getBaselineCredits(plan) ?? 0;
   const requestedCredits = getRequestedCredits(inquiry) ?? baselineCredits;
@@ -111,22 +123,31 @@ function calculateSuggestedTerms(inquiry: SalesInquiryDto, plan?: PlanDto | null
   const requestedMembers = parseInteger(requestDetails.workspaceMembers);
   const baselineMembers = plan?.maxParticipants ?? requestedMembers ?? 1;
   const approvedMembers = Math.max(1, Math.min(requestedMembers ?? baselineMembers, baselineMembers));
-  const languageCount = Math.min(countCsvItems(requestDetails.languages) ?? supportedLanguageCount, plan?.maxLanguages ?? supportedLanguageCount);
-  const aiServiceCount = Math.min(countCsvItems(requestDetails.aiServices) ?? supportedAiServiceCount, supportedAiServiceCount);
+  const languageCount = Math.min(
+    countCsvItems(requestDetails.languages) ?? BILLING_POLICY.supportedLanguageCount,
+    plan?.maxLanguages ?? BILLING_POLICY.supportedLanguageCount
+  );
+  const aiServiceCount = Math.min(
+    countCsvItems(requestDetails.aiServices) ?? BILLING_POLICY.supportedAiServiceCount,
+    BILLING_POLICY.supportedAiServiceCount
+  );
   const usageRatio = baselineCredits > 0 ? approvedCredits / baselineCredits : 1;
   const featureRatio =
-    0.45 * usageRatio
-    + 0.15 * (baselineMembers > 0 ? approvedMembers / baselineMembers : 1)
-    + 0.15 * (languageCount / supportedLanguageCount)
-    + 0.25 * (aiServiceCount / supportedAiServiceCount);
+    policy.suggestionWeights.usage * usageRatio
+    + policy.suggestionWeights.members * (baselineMembers > 0 ? approvedMembers / baselineMembers : 1)
+    + policy.suggestionWeights.languages * (languageCount / BILLING_POLICY.supportedLanguageCount)
+    + policy.suggestionWeights.aiServices * (aiServiceCount / BILLING_POLICY.supportedAiServiceCount);
   const rawSuggestedPrice = (plan?.price ?? 0) * featureRatio;
-  const creditFloorPrice = approvedCredits * minimumPricePerCreditVnd;
-  const suggestedPrice = Math.ceil(Math.max(minimumContractPriceVnd, rawSuggestedPrice, creditFloorPrice));
+  const creditFloorPrice = approvedCredits * policy.minimumPricePerCreditVnd;
+  const suggestedPrice = Math.ceil(Math.max(policy.minimumContractPriceVnd, rawSuggestedPrice, creditFloorPrice));
 
   return {
     creditsPerCycleOverride: Math.ceil(approvedCredits),
     contractPriceVnd: suggestedPrice,
-    overageCapCreditsOverride: Math.min(plan?.overageCapCredits ?? Math.ceil(approvedCredits * 0.15), Math.ceil(approvedCredits)),
+    overageCapCreditsOverride: Math.min(
+      plan?.overageCapCredits ?? Math.ceil(approvedCredits * policy.defaultOverageCapRatio),
+      Math.ceil(approvedCredits)
+    ),
     overagePricePerCreditOverride: plan?.overagePricePerCredit ?? null,
     invoiceTermsDaysOverride: normalizePaymentTerms(requestDetails.paymentTerms, plan?.invoiceTermsDays ?? 15),
     billingContactEmail: inquiry.workEmail,
@@ -185,8 +206,8 @@ function statusClass(status: string) {
   }
 }
 
-function buildInitialTerms(inquiry: SalesInquiryDto, plan?: PlanDto | null): UpdateSubscriptionContractTermsRequest {
-  return calculateSuggestedTerms(inquiry, plan);
+function buildInitialTerms(inquiry: SalesInquiryDto, plan?: PlanDto | null, pricingConfig?: PricingConfigDto | null): UpdateSubscriptionContractTermsRequest {
+  return calculateSuggestedTerms(inquiry, plan, pricingConfig);
 }
 
 export function AdminSalesInquiriesTab() {
@@ -208,6 +229,11 @@ export function AdminSalesInquiriesTab() {
   const { data: plans = [] } = useQuery({
     queryKey: ["billing-plans-for-sales-inquiries"],
     queryFn: () => billingService.getPlans(),
+  });
+
+  const { data: pricingConfig } = useQuery({
+    queryKey: ["billing", "pricing-config"],
+    queryFn: () => billingService.getPricingConfig(),
   });
 
   const enterprisePlan = useMemo(
@@ -252,7 +278,7 @@ export function AdminSalesInquiriesTab() {
   const openConvertDialog = (inquiry: SalesInquiryDto) => {
     setSelectedInquiry(inquiry);
     setWorkspaceId(inquiry.workspaceId ?? "");
-    setTerms(buildInitialTerms(inquiry, enterprisePlan));
+    setTerms(buildInitialTerms(inquiry, enterprisePlan, pricingConfig));
   };
 
   const updateTerm = (key: keyof UpdateSubscriptionContractTermsRequest, value: string) => {
@@ -527,8 +553,9 @@ export function AdminSalesInquiriesTab() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="15">NET 15</SelectItem>
-                      <SelectItem value="30">NET 30</SelectItem>
+                      {BILLING_POLICY.allowedInvoiceTermsDays.map((days) => (
+                        <SelectItem key={days} value={String(days)}>NET {days}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -10,7 +10,10 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
   const [mounted, setMounted] = useState(false);
+  const isBillingAdminRoute = pathname === "/billing" || pathname.startsWith("/billing/");
+  const isSystemAdmin = user?.roles?.some((role) => role.toLowerCase() === "admin") ?? false;
 
   useEffect(() => {
     const handle = requestAnimationFrame(() => setMounted(true));
@@ -23,7 +26,13 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     }
   }, [mounted, isAuthenticated, router]);
 
-  if (!mounted || !isAuthenticated) {
+  useEffect(() => {
+    if (mounted && isAuthenticated && isBillingAdminRoute && !isSystemAdmin) {
+      router.replace("/workspace");
+    }
+  }, [isBillingAdminRoute, isAuthenticated, isSystemAdmin, mounted, router]);
+
+  if (!mounted || !isAuthenticated || (isBillingAdminRoute && !isSystemAdmin)) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />

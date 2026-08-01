@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
+  MagnifyingGlass,
   Plus,
   Question,
   SidebarSimple,
@@ -97,6 +98,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     toggleRightSidebar,
     leftSidebarOpen,
     toggleLeftSidebar,
+    setSearchMeetingModalOpen,
   } = useUIStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);

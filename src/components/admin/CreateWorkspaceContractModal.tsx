@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Plus, Loader2 } from "lucide-react";
@@ -14,13 +14,13 @@ import { billingService } from "@/services/billing.service";
 import { toast } from "sonner";
 import type { PlanDto, SalesInquiryDto, SubscriptionDto, UpdateSubscriptionContractTermsRequest } from "@/types/billing";
 import type { WorkspaceDto } from "@/types/workspace";
+import { BILLING_POLICY } from "@/constants/billing-policy";
 
 const toInputNumber = (value: number | null | undefined) =>
   value === null || value === undefined ? "" : String(value);
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const maxInvoiceTermsDays = 30;
-const priceFloorPerCredit = 2.6;
+const maxInvoiceTermsDays = Math.max(...BILLING_POLICY.allowedInvoiceTermsDays);
 const closedInquiryStatuses = new Set(["converted", "closed"]);
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -87,6 +87,12 @@ export function CreateWorkspaceContractModal({
   const { data: plans = [], isLoading: isLoadingPlans } = useQuery({
     queryKey: ["billing-plans-for-contract-template"],
     queryFn: () => billingService.getPlans(),
+    enabled: open,
+  });
+
+  const { data: pricingConfig } = useQuery({
+    queryKey: ["billing", "pricing-config"],
+    queryFn: () => billingService.getPricingConfig(),
     enabled: open,
   });
 
@@ -205,24 +211,6 @@ export function CreateWorkspaceContractModal({
     applyBaselineTerms(enterprisePlan);
   };
 
-  useEffect(() => {
-    if (!open || !enterprisePlan) return;
-    const hasManualTerms =
-      creditsOverride || priceOverride || overageCapOverride || overagePriceOverride || invoiceTermsDaysOverride;
-    if (!hasManualTerms) {
-      applyBaselineTerms(enterprisePlan);
-    }
-  }, [
-    open,
-    enterprisePlan,
-    creditsOverride,
-    priceOverride,
-    overageCapOverride,
-    overagePriceOverride,
-    invoiceTermsDaysOverride,
-    applyBaselineTerms,
-  ]);
-
   const resolveBillingEmail = (name: string) =>
     (contactEmail.trim() || `billing@${name.toLowerCase().replace(/[^a-z0-9]/g, "") || "company"}.com`).toLowerCase();
 
@@ -264,7 +252,10 @@ export function CreateWorkspaceContractModal({
       min: 1,
       max: maxInvoiceTermsDays,
     });
-    if (parsedInvoiceTermsDaysOverride !== null && ![15, 30].includes(parsedInvoiceTermsDaysOverride)) {
+    if (
+      parsedInvoiceTermsDaysOverride !== null &&
+      !BILLING_POLICY.allowedInvoiceTermsDays.includes(parsedInvoiceTermsDaysOverride as 15 | 30)
+    ) {
       throw new Error("Invoice terms must be NET 15 or NET 30.");
     }
 
@@ -272,6 +263,7 @@ export function CreateWorkspaceContractModal({
     const effectivePrice = parsedContractPriceVnd ?? enterprisePlan.price;
     const effectiveOverageCap = parsedOverageCapCreditsOverride ?? enterprisePlan.overageCapCredits;
     const effectiveOveragePrice = parsedOveragePricePerCreditOverride ?? enterprisePlan.overagePricePerCredit;
+    const priceFloorPerCredit = pricingConfig?.minimumPricePerCreditVnd ?? BILLING_POLICY.minimumPricePerCreditVnd;
 
     if (effectivePrice / effectiveCredits < priceFloorPerCredit) {
       throw new Error(`Contract price must be at least ${priceFloorPerCredit.toFixed(2)} VND per credit.`);
@@ -512,7 +504,7 @@ export function CreateWorkspaceContractModal({
                 <Label className="text-[11px] text-muted-foreground">Credits / Cycle</Label>
                 <Input
                   type="number"
-                  placeholder="700000"
+                  placeholder={toInputNumber(enterprisePlan?.creditsPerCycle)}
                   value={creditsOverride}
                   onChange={(e) => setCreditsOverride(e.target.value)}
                   className="h-9 text-sm bg-surface-1"
@@ -522,7 +514,7 @@ export function CreateWorkspaceContractModal({
                 <Label className="text-[11px] text-muted-foreground">Price before VAT</Label>
                 <Input
                   type="number"
-                  placeholder="1900000"
+                  placeholder={toInputNumber(enterprisePlan?.price)}
                   value={priceOverride}
                   onChange={(e) => setPriceOverride(e.target.value)}
                   className="h-9 text-sm bg-surface-1"
@@ -532,7 +524,7 @@ export function CreateWorkspaceContractModal({
                 <Label className="text-[11px] text-muted-foreground">Overage Cap</Label>
                 <Input
                   type="number"
-                  placeholder="105000"
+                  placeholder={toInputNumber(enterprisePlan?.overageCapCredits)}
                   value={overageCapOverride}
                   onChange={(e) => setOverageCapOverride(e.target.value)}
                   className="h-9 text-sm bg-surface-1"
@@ -542,7 +534,7 @@ export function CreateWorkspaceContractModal({
                 <Label className="text-[11px] text-muted-foreground">Overage / Credit</Label>
                 <Input
                   type="number"
-                  placeholder="3"
+                  placeholder={toInputNumber(enterprisePlan?.overagePricePerCredit)}
                   value={overagePriceOverride}
                   onChange={(e) => setOveragePriceOverride(e.target.value)}
                   className="h-9 text-sm bg-surface-1"
@@ -555,8 +547,9 @@ export function CreateWorkspaceContractModal({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="15">NET 15</SelectItem>
-                    <SelectItem value="30">NET 30</SelectItem>
+                    {BILLING_POLICY.allowedInvoiceTermsDays.map((days) => (
+                      <SelectItem key={days} value={String(days)}>NET {days}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

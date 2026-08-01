@@ -343,6 +343,15 @@ export interface UpsertUsageRateCardRequest {
 export interface PricingConfigDto {
   fxRateUsdVnd: number;
   creditValueVnd: number;
+  minimumPricePerCreditVnd: number;
+  minimumContractPriceVnd: number;
+  salesUsageWeight: number;
+  salesMembersWeight: number;
+  salesLanguagesWeight: number;
+  salesAiServicesWeight: number;
+  defaultOverageCapRatio: number;
+  defaultInvoiceTermsDays: number;
+  defaultInvoiceGraceHours: number;
   formula: string;
   resolverKey: string;
 }
@@ -350,4 +359,13 @@ export interface PricingConfigDto {
 export interface UpdatePricingConfigRequest {
   fxRateUsdVnd: number;
   creditValueVnd: number;
+  minimumPricePerCreditVnd: number;
+  minimumContractPriceVnd: number;
+  salesUsageWeight: number;
+  salesMembersWeight: number;
+  salesLanguagesWeight: number;
+  salesAiServicesWeight: number;
+  defaultOverageCapRatio: number;
+  defaultInvoiceTermsDays: number;
+  defaultInvoiceGraceHours: number;
 }

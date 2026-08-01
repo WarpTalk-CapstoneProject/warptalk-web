@@ -119,7 +119,7 @@ export const billingService = {
    * Manually adjust credits for a workspace (admin only).
    */
   adjustCredits: async (workspaceId: string, amount: number, reason: string): Promise<CreditTransactionDto> => {
-    const { data } = await apiClient.post<CreditTransactionDto>(`/credits/adjust`, { workspaceId, amount, reason, adminUserId: "" });
+    const { data } = await apiClient.post<CreditTransactionDto>(`/credits/manual-adjust`, { workspaceId, amount, reason, adminUserId: "" });
     return data;
   },
 
