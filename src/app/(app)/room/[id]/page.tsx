@@ -34,6 +34,8 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { mergeParticipants } from "@/lib/merge-participants";
+import { resolveVoicePreference } from "@/lib/voice-preference";
+import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   ParticipantInfoDto,
@@ -503,16 +505,31 @@ export default function RoomDetailPage() {
     language: string;
     voiceId: string | null;
   } | null>(null);
-  const voicePreference =
-    voiceSelection?.language === targetLanguage ? voiceSelection.voiceId : null;
   const [voiceCatalogState, setVoiceCatalogState] = useState<{
     language: string;
     items: VoiceOptionDto[];
   } | null>(null);
-  const voiceCatalog =
-    voiceCatalogState?.language === targetLanguage
-      ? voiceCatalogState.items
-      : [];
+  const voiceCatalog = useMemo(
+    () =>
+      voiceCatalogState?.language === targetLanguage ? voiceCatalogState.items : [],
+    [voiceCatalogState, targetLanguage],
+  );
+
+  // An in-room pick always wins; only when this user has made no choice for this language
+  // does their saved Voice Profiles default apply. Derived rather than copied into state on
+  // join, so switching listen language re-resolves on its own — see resolveVoicePreference
+  // for the precedence rule and its tests.
+  const { data: savedVoiceProfiles } = useVoiceProfiles();
+  const voicePreference = useMemo(
+    () =>
+      resolveVoicePreference(
+        voiceSelection,
+        targetLanguage,
+        savedVoiceProfiles,
+        voiceCatalog,
+      ),
+    [voiceSelection, targetLanguage, savedVoiceProfiles, voiceCatalog],
+  );
 
   // Voices are language-specific (Cartesia's own voice table), so switching listen
   // language must both clear any voice pick made for the PREVIOUS language (it may not
