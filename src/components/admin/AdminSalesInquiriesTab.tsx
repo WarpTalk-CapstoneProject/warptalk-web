@@ -95,9 +95,13 @@ function parseInteger(value?: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizePaymentTerms(value?: string | null, fallback = 15) {
+function normalizePaymentTerms(value?: string | null, fallback: number = BILLING_POLICY.defaultInvoiceTermsDays): number {
   const parsed = parseInteger(value);
-  return BILLING_POLICY.allowedInvoiceTermsDays.includes(parsed as 15 | 30) ? parsed! : fallback;
+  return parsed && parsed > 0 ? parsed : fallback;
+}
+
+function getDefaultInvoiceTerms(plan?: PlanDto | null, pricingConfig?: PricingConfigDto | null) {
+  return plan?.invoiceTermsDays ?? pricingConfig?.defaultInvoiceTermsDays ?? BILLING_POLICY.defaultInvoiceTermsDays;
 }
 
 function getEffectiveBillingPolicy(config?: PricingConfigDto | null) {
@@ -149,7 +153,7 @@ function calculateSuggestedTerms(inquiry: SalesInquiryDto, plan?: PlanDto | null
       Math.ceil(approvedCredits)
     ),
     overagePricePerCreditOverride: plan?.overagePricePerCredit ?? null,
-    invoiceTermsDaysOverride: normalizePaymentTerms(requestDetails.paymentTerms, plan?.invoiceTermsDays ?? 15),
+    invoiceTermsDaysOverride: normalizePaymentTerms(requestDetails.paymentTerms, getDefaultInvoiceTerms(plan, pricingConfig)),
     billingContactEmail: inquiry.workEmail,
   };
 }
@@ -417,7 +421,8 @@ export function AdminSalesInquiriesTab() {
                 const requestDetails = parseRequestNotes(selectedInquiry);
                 const requestedCredits = getRequestedCredits(selectedInquiry);
                 const baselineCredits = getBaselineCredits(enterprisePlan);
-                const suggestedTerms = calculateSuggestedTerms(selectedInquiry, enterprisePlan);
+                const suggestedTerms = calculateSuggestedTerms(selectedInquiry, enterprisePlan, pricingConfig);
+                const defaultInvoiceTerms = getDefaultInvoiceTerms(enterprisePlan, pricingConfig);
                 return (
               <>
               <div className="overflow-hidden rounded-lg border border-hairline">
@@ -440,7 +445,7 @@ export function AdminSalesInquiriesTab() {
                     },
                     {
                       item: "Payment terms",
-                      baseline: `NET ${enterprisePlan?.invoiceTermsDays ?? 15}`,
+                      baseline: `NET ${defaultInvoiceTerms}`,
                       request: requestDetails.paymentTerms ?? "N/A",
                     },
                     {
@@ -488,7 +493,7 @@ export function AdminSalesInquiriesTab() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Suggested terms</p>
-                  <p className="mt-1 font-semibold text-foreground">NET {suggestedTerms.invoiceTermsDaysOverride ?? 15}</p>
+                  <p className="mt-1 font-semibold text-foreground">NET {suggestedTerms.invoiceTermsDaysOverride ?? defaultInvoiceTerms}</p>
                 </div>
               </div>
               </>
@@ -545,19 +550,15 @@ export function AdminSalesInquiriesTab() {
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs text-muted-foreground">Invoice terms days</Label>
-                  <Select
-                    value={String(terms.invoiceTermsDaysOverride ?? 15)}
-                    onValueChange={(value) => updateTerm("invoiceTermsDaysOverride", value ?? "15")}
-                  >
-                    <SelectTrigger className="h-11 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BILLING_POLICY.allowedInvoiceTermsDays.map((days) => (
-                        <SelectItem key={days} value={String(days)}>NET {days}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={terms.invoiceTermsDaysOverride ?? ""}
+                    placeholder={String(getDefaultInvoiceTerms(enterprisePlan, pricingConfig))}
+                    onChange={(event) => updateTerm("invoiceTermsDaysOverride", event.target.value)}
+                    className="h-11"
+                  />
                 </div>
               </div>
             </div>

@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WorkspaceService } from "@/services/workspace.service";
 import { billingService } from "@/services/billing.service";
 import { toast } from "sonner";
@@ -20,8 +19,13 @@ const toInputNumber = (value: number | null | undefined) =>
   value === null || value === undefined ? "" : String(value);
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const maxInvoiceTermsDays = Math.max(...BILLING_POLICY.allowedInvoiceTermsDays);
 const closedInquiryStatuses = new Set(["converted", "closed"]);
+
+function formatVatRate(vatRate?: number | null) {
+  return typeof vatRate === "number" && Number.isFinite(vatRate)
+    ? `${(vatRate * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}% VAT`
+    : "configured VAT";
+}
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
@@ -93,6 +97,12 @@ export function CreateWorkspaceContractModal({
   const { data: pricingConfig } = useQuery({
     queryKey: ["billing", "pricing-config"],
     queryFn: () => billingService.getPricingConfig(),
+    enabled: open,
+  });
+
+  const { data: billingPolicy } = useQuery({
+    queryKey: ["billing", "billing-policy"],
+    queryFn: () => billingService.getBillingPolicy(),
     enabled: open,
   });
 
@@ -183,8 +193,8 @@ export function CreateWorkspaceContractModal({
     setPriceOverride(toInputNumber(plan.price));
     setOverageCapOverride(toInputNumber(plan.overageCapCredits));
     setOveragePriceOverride(toInputNumber(plan.overagePricePerCredit));
-    setInvoiceTermsDaysOverride(toInputNumber(plan.invoiceTermsDays));
-  }, [enterprisePlan]);
+    setInvoiceTermsDaysOverride(toInputNumber(plan.invoiceTermsDays ?? pricingConfig?.defaultInvoiceTermsDays));
+  }, [enterprisePlan, pricingConfig?.defaultInvoiceTermsDays]);
 
   const resetForm = () => {
     setWorkspaceName("");
@@ -250,14 +260,7 @@ export function CreateWorkspaceContractModal({
     const parsedInvoiceTermsDaysOverride = parseNumberField(invoiceTermsDaysOverride, "Terms (Days)", {
       integer: true,
       min: 1,
-      max: maxInvoiceTermsDays,
     });
-    if (
-      parsedInvoiceTermsDaysOverride !== null &&
-      !BILLING_POLICY.allowedInvoiceTermsDays.includes(parsedInvoiceTermsDaysOverride as 15 | 30)
-    ) {
-      throw new Error("Invoice terms must be NET 15 or NET 30.");
-    }
 
     const effectiveCredits = parsedCreditsPerCycleOverride ?? enterprisePlan.creditsPerCycle;
     const effectivePrice = parsedContractPriceVnd ?? enterprisePlan.price;
@@ -471,7 +474,7 @@ export function CreateWorkspaceContractModal({
               <div>
                 <p className="text-sm font-semibold text-foreground">Enterprise contract terms</p>
                 <p className="text-xs text-muted-foreground">
-                  Based on the baseline plan template. Prices are before 10% VAT; invoices include VAT.
+                  Based on the baseline plan template. Prices are before {formatVatRate(billingPolicy?.vatRate)}; invoices include VAT.
                 </p>
               </div>
               <Button
@@ -492,7 +495,7 @@ export function CreateWorkspaceContractModal({
               ) : enterprisePlan ? (
                 <>
                   <span className="font-semibold text-foreground">{enterprisePlan.name}</span>
-                  {` baseline: ${enterprisePlan.creditsPerCycle.toLocaleString()} credits, ${enterprisePlan.price.toLocaleString()} VND before VAT, ${enterprisePlan.overageCapCredits.toLocaleString()} overage cap, ${enterprisePlan.invoiceTermsDays} day terms.`}
+                  {` baseline: ${enterprisePlan.creditsPerCycle.toLocaleString()} credits, ${enterprisePlan.price.toLocaleString()} VND before VAT, ${enterprisePlan.overageCapCredits.toLocaleString()} overage cap, ${enterprisePlan.invoiceTermsDays ?? pricingConfig?.defaultInvoiceTermsDays ?? "configured"} day terms.`}
                 </>
               ) : (
                 "No active billing plan template is available."
@@ -542,16 +545,15 @@ export function CreateWorkspaceContractModal({
               </div>
               <div className="space-y-1 lg:col-span-1">
                 <Label className="text-[11px] text-muted-foreground">Terms (Days)</Label>
-                <Select value={invoiceTermsDaysOverride || "15"} onValueChange={(value) => setInvoiceTermsDaysOverride(value ?? "15")}>
-                  <SelectTrigger className="h-9 bg-surface-1 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BILLING_POLICY.allowedInvoiceTermsDays.map((days) => (
-                      <SelectItem key={days} value={String(days)}>NET {days}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  placeholder={toInputNumber(enterprisePlan?.invoiceTermsDays ?? pricingConfig?.defaultInvoiceTermsDays)}
+                  value={invoiceTermsDaysOverride}
+                  onChange={(e) => setInvoiceTermsDaysOverride(e.target.value)}
+                  className="h-9 text-sm bg-surface-1"
+                />
               </div>
             </div>
           </section>

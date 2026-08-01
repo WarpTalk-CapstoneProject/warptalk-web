@@ -15,5 +15,4 @@ export const BILLING_POLICY = {
   defaultCreditValueVnd: 4,
   defaultInvoiceTermsDays: 15,
   defaultInvoiceGraceHours: 360,
-  allowedInvoiceTermsDays: [15, 30] as const,
 } as const;

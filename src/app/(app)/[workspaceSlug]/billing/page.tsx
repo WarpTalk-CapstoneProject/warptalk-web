@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { getLanguageName, SUPPORTED_LANGUAGES } from "@/lib/languages";
@@ -127,7 +126,7 @@ function WorkspaceEnterpriseBillingContent() {
     requestedMonthlyCredits: "",
     contractTerm: "Annual",
     invoiceEmail: user?.email ?? "",
-    paymentTerms: "Net 15",
+    paymentTerms: "",
     requestedWorkspaceMembers: String(TRIAL_WORKSPACE_MEMBER_LIMIT),
     requestedLanguages: ["en", "vi"],
     requestedAiServices: DEFAULT_AI_SERVICE_OPTIONS,
@@ -192,6 +191,13 @@ function WorkspaceEnterpriseBillingContent() {
     retry: 1,
   });
 
+  const { data: pricingConfig } = useQuery({
+    queryKey: ["billing", "pricing-config"],
+    queryFn: () => billingService.getPricingConfig(),
+    enabled: !!workspaceId && canViewBilling,
+    retry: 1,
+  });
+
   const hasSubscription = !!subscription;
 
   const { data: balance, isLoading: isBalanceLoading } = useQuery({
@@ -234,7 +240,10 @@ function WorkspaceEnterpriseBillingContent() {
   const cycleCredits = subscription?.effectiveCreditsPerCycle ?? balance?.totalCredits ?? 0;
   const consumedCredits = Math.max(0, (balance?.totalCredits ?? cycleCredits) - currentCredits);
   const usagePercent = cycleCredits > 0 ? Math.min(100, Math.round((consumedCredits / cycleCredits) * 100)) : 0;
-  const invoiceTerms = subscription?.effectiveInvoiceTermsDays ?? subscription?.invoiceTermsDaysOverride ?? 15;
+  const invoiceTerms = subscription?.effectiveInvoiceTermsDays
+    ?? subscription?.invoiceTermsDaysOverride
+    ?? pricingConfig?.defaultInvoiceTermsDays
+    ?? 0;
   const extraUsageCap = subscription?.effectiveOverageCapCredits ?? subscription?.overageCapCreditsOverride ?? 0;
   const invoices = invoicesPage?.items ?? [];
   const latestContractInquiry = salesInquiryPage?.items?.find((inquiry) =>
@@ -290,6 +299,7 @@ function WorkspaceEnterpriseBillingContent() {
       const contractTerm = contractRequest.contractTerm.trim();
       const invoiceEmail = contractRequest.invoiceEmail.trim();
       const paymentTerms = contractRequest.paymentTerms.trim();
+      const effectivePaymentTerms = paymentTerms || (invoiceTerms > 0 ? `Net ${invoiceTerms}` : "Configured NET terms");
       const requestedWorkspaceMembers = contractRequest.requestedWorkspaceMembers.trim();
       const requestedLanguages = contractRequest.requestedLanguages.length
         ? contractRequest.requestedLanguages
@@ -305,7 +315,7 @@ function WorkspaceEnterpriseBillingContent() {
         `Company legal name: ${companyLegalName}`,
         `Billing contact: ${billingContactName} <${billingContactEmail}>`,
         `Invoice email: ${invoiceEmail}`,
-        `Payment terms: ${paymentTerms}`,
+        `Payment terms: ${effectivePaymentTerms}`,
         `Requested monthly credits: ${requestedMonthlyCredits}`,
         `Contract term: ${contractTerm}`,
         `Required features / limits: ${requiredFeatures}`,
@@ -338,7 +348,7 @@ function WorkspaceEnterpriseBillingContent() {
           billingContactName,
           billingContactEmail: billingContactEmail || user.email,
           invoiceEmail,
-          paymentTerms,
+          paymentTerms: effectivePaymentTerms,
           requestedMonthlyCredits,
           contractTerm,
           requiredFeatures,
@@ -538,8 +548,8 @@ function WorkspaceEnterpriseBillingContent() {
               </CardHeader>
               <CardContent className="flex flex-col gap-5">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <StatusRow label="Trial length" value="14 days" />
-                  <StatusRow label="Trial credits" value="20,000 credits" />
+                  <StatusRow label="Trial length" value="Configured trial" />
+                  <StatusRow label="Trial credits" value="Granted when trial starts" />
                   <StatusRow label="Workspace seats" value={`Up to ${TRIAL_WORKSPACE_MEMBER_LIMIT} members`} />
                   <StatusRow label="Extra usage" value="Disabled during trial" />
                   <StatusRow label="Contract flow" value="Admin creates approved terms" />
@@ -606,7 +616,7 @@ function WorkspaceEnterpriseBillingContent() {
             icon={CalendarBlank}
             title={hasTrialPeriod ? (isTrial ? "Trial ends" : "Trial ended") : "Cycle renews"}
             value={isLoading ? "Loading..." : hasTrialPeriod ? trialEndsAt : formatDate(balance?.currentPeriodEnd ?? subscription?.currentPeriodEnd)}
-            detail={hasTrialPeriod ? "Trial does not create invoices or extra usage" : `Net ${invoiceTerms} invoice terms`}
+            detail={hasTrialPeriod ? "Trial does not create invoices or extra usage" : invoiceTerms > 0 ? `Net ${invoiceTerms} invoice terms` : "Configured invoice terms"}
           />
           <MetricCard
             icon={Buildings}
@@ -646,7 +656,7 @@ function WorkspaceEnterpriseBillingContent() {
             ) : (
               <>
                 <StatusRow label="Contract value" value={formatVnd(subscription?.effectiveContractPriceVnd ?? subscription?.contractPriceVnd)} />
-                <StatusRow label="Invoice terms" value={`Net ${invoiceTerms}`} />
+                <StatusRow label="Invoice terms" value={invoiceTerms > 0 ? `Net ${invoiceTerms}` : "Configured"} />
               </>
             )}
           </CardContent>
@@ -866,17 +876,14 @@ function WorkspaceEnterpriseBillingContent() {
 
                 <label className="grid gap-1.5 text-sm font-medium text-ink">
                   Payment terms
-                  <select
+                  <Input
                     value={contractRequest.paymentTerms}
                     onChange={(event) => setContractRequest((current) => ({
                       ...current,
                       paymentTerms: event.target.value,
                     }))}
-                    className="h-9 w-full rounded-[8px] border border-border bg-surface-1 px-3 text-sm text-ink outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-                  >
-                    <option>Net 15</option>
-                    <option>Net 30</option>
-                  </select>
+                    placeholder={invoiceTerms > 0 ? `Net ${invoiceTerms}` : "Configured NET terms"}
+                  />
                 </label>
               </div>
 

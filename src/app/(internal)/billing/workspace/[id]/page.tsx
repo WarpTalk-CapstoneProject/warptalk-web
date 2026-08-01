@@ -167,6 +167,12 @@ function formatContractValue(value: number | null | undefined, inheritedValue: s
   return inherited === null ? "N/A" : inherited.toLocaleString();
 }
 
+function formatVatRate(vatRate?: number | null): string {
+  return typeof vatRate === "number" && Number.isFinite(vatRate)
+    ? `VAT ${(vatRate * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`
+    : "VAT";
+}
+
 function getLabelForUsage(usageType: string) {
   if (usageType === "translation" || usageType === "voice_translation") return "Real-time Translation";
   if (usageType === "summary" || usageType === "meeting_summary") return "AI meeting insights";
@@ -319,6 +325,20 @@ export default function AdminWorkspaceBillingPage({
   const { data: plans = [] } = useQuery({
     queryKey: ["billing", "plans"],
     queryFn: () => billingService.getPlans(),
+    enabled: embedded,
+    retry: 1,
+  });
+
+  const { data: pricingConfig } = useQuery({
+    queryKey: ["billing", "pricing-config"],
+    queryFn: () => billingService.getPricingConfig(),
+    enabled: embedded,
+    retry: 1,
+  });
+
+  const { data: billingPolicy } = useQuery({
+    queryKey: ["billing", "billing-policy"],
+    queryFn: () => billingService.getBillingPolicy(),
     enabled: embedded,
     retry: 1,
   });
@@ -512,7 +532,10 @@ export default function AdminWorkspaceBillingPage({
   const isTrialSubscription = !!trialEndsAt && trialEndsAt.getTime() > renderNowMs;
   const committedCredits = subscription?.effectiveCreditsPerCycle ?? toOptionalNumber(planBaselineForm.creditsPerCycle) ?? 0;
   const effectiveOveragePrice = subscription?.effectiveOveragePricePerCredit ?? toOptionalNumber(planBaselineForm.overagePricePerCredit) ?? 0;
-  const effectiveInvoiceTerms = subscription?.effectiveInvoiceTermsDays ?? toOptionalNumber(planBaselineForm.invoiceTermsDays) ?? 15;
+  const effectiveInvoiceTerms = subscription?.effectiveInvoiceTermsDays
+    ?? toOptionalNumber(planBaselineForm.invoiceTermsDays)
+    ?? pricingConfig?.defaultInvoiceTermsDays
+    ?? 0;
   const subscriptionStatusLabel = subscription?.status
     ? subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)
     : "No contract";
@@ -522,8 +545,9 @@ export default function AdminWorkspaceBillingPage({
     ? subscription.price.toLocaleString("vi-VN") + (subscription.price > 1000 ? "đ" : " VND")
     : "0đ";
   const contractPriceBeforeVat = subscription?.effectiveContractPriceVnd ?? toOptionalNumber(planBaselineForm.price) ?? 0;
-  const contractVatAmount = Math.round(contractPriceBeforeVat * 0.1);
+  const contractVatAmount = Math.round(contractPriceBeforeVat * (billingPolicy?.vatRate ?? 0));
   const contractTotalWithVat = contractPriceBeforeVat + contractVatAmount;
+  const vatLabel = formatVatRate(billingPolicy?.vatRate);
   const totalTopUp = historyPage?.items?.filter(t => t.type === 'top_up').reduce((s, t) => s + t.amount, 0) || 0;
   const totalConsumed = historyPage?.items?.filter(t => t.type !== 'top_up').reduce((s, t) => s + t.amount, 0) || 0;
   const netChange = totalTopUp + totalConsumed;
@@ -929,7 +953,7 @@ export default function AdminWorkspaceBillingPage({
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {isTrialSubscription
-              ? "20,000 credits, no extra usage during trial."
+              ? `${committedCredits.toLocaleString()} credits, no extra usage during trial.`
               : subscription
                 ? `${displayPlanName} contract is assigned to this workspace.`
                 : "Create an Enterprise contract before billing this workspace."}
@@ -947,7 +971,7 @@ export default function AdminWorkspaceBillingPage({
         </div>
         <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Invoice terms</p>
-          <p className="mt-1 text-lg font-semibold text-foreground">Net {effectiveInvoiceTerms}</p>
+          <p className="mt-1 text-lg font-semibold text-foreground">{effectiveInvoiceTerms > 0 ? `Net ${effectiveInvoiceTerms}` : "Configured"}</p>
           <p className="mt-1 text-xs text-muted-foreground">Default due date, adjustable per customer.</p>
         </div>
       </section>
@@ -1004,7 +1028,7 @@ export default function AdminWorkspaceBillingPage({
             <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
               <CardHeader>
                 <CardTitle className="text-base font-medium">Enterprise contract terms</CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">Baseline values are pre-filled. Contract prices are before 10% VAT; invoices include VAT.</p>
+                <p className="text-xs text-muted-foreground mt-1">Baseline values are pre-filled. Contract prices are before {vatLabel}; invoices include VAT.</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 text-xs">
@@ -1148,7 +1172,7 @@ export default function AdminWorkspaceBillingPage({
                     <strong>{contractPriceBeforeVat.toLocaleString("vi-VN")} VND</strong>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">VAT 10%</span>
+                    <span className="text-muted-foreground">{vatLabel}</span>
                     <strong>{contractVatAmount.toLocaleString("vi-VN")} VND</strong>
                   </div>
                   <div className="flex items-center justify-between border-t border-hairline pt-3 text-sm">

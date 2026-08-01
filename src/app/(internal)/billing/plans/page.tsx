@@ -11,13 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BILLING_POLICY } from "@/constants/billing-policy";
 import { BROADCAST_CHANNELS } from "@/constants/realtime";
 import { billingService } from "@/services/billing.service";
-import type { PlanDto, PlanRequest, UsageRateCardDto } from "@/types/billing";
+import type { PlanDto, PlanRequest, PricingConfigDto, UsageRateCardDto } from "@/types/billing";
 
 type BaselinePlan = PlanDto & {
   voiceCloneEnabled?: boolean;
@@ -149,7 +148,6 @@ function validateBaselineForm(
 
   const invoiceTermsResult = parseBaselineNumber(form.invoiceTermsDays, "Invoice terms days", { integer: true, minExclusive: 0 });
   if (invoiceTermsResult.error) return invoiceTermsResult.error;
-  if (![15, 30].includes(invoiceTermsResult.value!)) return "Invoice terms must be NET 15 or NET 30.";
 
   const invoiceGraceResult = parseBaselineNumber(form.invoiceGraceHours, "Invoice grace hours", { integer: true, minExclusive: 0 });
   if (invoiceGraceResult.error) return invoiceGraceResult.error;
@@ -184,7 +182,7 @@ function isEnterprisePlan(plan: BaselinePlan) {
   return [plan.slug, plan.tier, plan.name].some((value) => value?.toLowerCase().includes("enterprise"));
 }
 
-function toBaselineForm(plan: BaselinePlan): BaselineFormState {
+function toBaselineForm(plan: BaselinePlan, pricingConfig?: PricingConfigDto | null): BaselineFormState {
   return {
     price: plan.price?.toString() ?? "0",
     creditsPerCycle: plan.creditsPerCycle?.toString() ?? "0",
@@ -192,8 +190,8 @@ function toBaselineForm(plan: BaselinePlan): BaselineFormState {
     overagePricePerCredit: plan.overagePricePerCredit?.toString() ?? "0",
     lowBalanceThresholdCredits: plan.lowBalanceThresholdCredits?.toString() ?? "0",
     rolloverCapCredits: plan.rolloverCapCredits?.toString() ?? "0",
-    invoiceTermsDays: plan.invoiceTermsDays?.toString() ?? String(BILLING_POLICY.defaultInvoiceTermsDays),
-    invoiceGraceHours: plan.invoiceGraceHours?.toString() ?? String(BILLING_POLICY.defaultInvoiceGraceHours),
+    invoiceTermsDays: plan.invoiceTermsDays?.toString() ?? pricingConfig?.defaultInvoiceTermsDays.toString() ?? String(BILLING_POLICY.defaultInvoiceTermsDays),
+    invoiceGraceHours: plan.invoiceGraceHours?.toString() ?? pricingConfig?.defaultInvoiceGraceHours.toString() ?? String(BILLING_POLICY.defaultInvoiceGraceHours),
     maxParticipants: plan.maxParticipants?.toString() ?? "0",
     maxLanguages: plan.maxLanguages?.toString() ?? "0",
     voiceCloneEnabled: plan.voiceCloneEnabled ?? false,
@@ -340,6 +338,8 @@ export default function AdminPlansPage() {
   const defaultOverageCapRatio = defaultOverageCapRatioEdit ?? pricingConfig?.defaultOverageCapRatio.toString() ?? String(BILLING_POLICY.defaultOverageCapRatio);
   const defaultInvoiceTermsDays = defaultInvoiceTermsDaysEdit ?? pricingConfig?.defaultInvoiceTermsDays.toString() ?? String(BILLING_POLICY.defaultInvoiceTermsDays);
   const defaultInvoiceGraceHours = defaultInvoiceGraceHoursEdit ?? pricingConfig?.defaultInvoiceGraceHours.toString() ?? String(BILLING_POLICY.defaultInvoiceGraceHours);
+  const pricingFormula = pricingConfig?.formula ?? "";
+  const pricingResolverKey = pricingConfig?.resolverKey ?? "";
   const salesWeightTotal =
     Number(salesUsageWeight) +
     Number(salesMembersWeight) +
@@ -439,7 +439,7 @@ export default function AdminPlansPage() {
 
   const openEnterpriseEditor = (plan: BaselinePlan) => {
     setEditingPlan(plan);
-    setFormState(toBaselineForm(plan));
+    setFormState(toBaselineForm(plan, pricingConfig));
     setErrorMsg(null);
   };
 
@@ -860,7 +860,15 @@ export default function AdminPlansPage() {
 
           <div className="flex flex-col gap-3 rounded-lg border border-hairline bg-surface-2/50 p-3 md:flex-row md:items-center md:justify-between">
             <p className="text-xs text-muted-foreground">
-              Formula: <span className="font-mono text-foreground">Unit price = provider cost x FX x markup / credit value</span>
+              Formula:{" "}
+              <span className="font-mono text-foreground">
+                {pricingFormula || "Loaded from billing pricing config"}
+              </span>
+              {pricingResolverKey && (
+                <>
+                  {" "}Resolver: <span className="font-mono text-foreground">{pricingResolverKey}</span>
+                </>
+              )}
             </p>
             <Button
               variant="outline"
@@ -924,15 +932,7 @@ export default function AdminPlansPage() {
             <div className="grid gap-4 md:grid-cols-4">
               <div className="grid gap-2">
                 <Label>Invoice terms days</Label>
-                <Select value={formState.invoiceTermsDays || "15"} onValueChange={(value) => updateFormField("invoiceTermsDays", value ?? "15")}>
-                  <SelectTrigger className="h-11 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="15">NET 15</SelectItem>
-                    <SelectItem value="30">NET 30</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input className="h-11" type="number" min={1} step="1" value={formState.invoiceTermsDays} onChange={(e) => updateFormField("invoiceTermsDays", e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label>Invoice grace hours</Label>
