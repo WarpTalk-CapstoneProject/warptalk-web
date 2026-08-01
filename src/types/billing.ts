@@ -345,6 +345,7 @@ export interface PricingConfigDto {
   creditValueVnd: number;
   minimumPricePerCreditVnd: number;
   minimumContractPriceVnd: number;
+  minimumContractPriceUsd: number;
   salesUsageWeight: number;
   salesMembersWeight: number;
   salesLanguagesWeight: number;
@@ -361,6 +362,7 @@ export interface UpdatePricingConfigRequest {
   creditValueVnd: number;
   minimumPricePerCreditVnd: number;
   minimumContractPriceVnd: number;
+  minimumContractPriceUsd: number;
   salesUsageWeight: number;
   salesMembersWeight: number;
   salesLanguagesWeight: number;
@@ -368,4 +370,14 @@ export interface UpdatePricingConfigRequest {
   defaultOverageCapRatio: number;
   defaultInvoiceTermsDays: number;
   defaultInvoiceGraceHours: number;
+}
+
+export interface BillingPolicyDto {
+  vatRate: number;
+  yearlyDiscountMultiplier: number;
+}
+
+export interface UpdateBillingPolicyRequest {
+  vatRate: number;
+  yearlyDiscountMultiplier: number;
 }

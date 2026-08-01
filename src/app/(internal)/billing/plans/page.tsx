@@ -391,6 +391,7 @@ export default function AdminPlansPage() {
       creditValueVnd: Number(pricingCreditValueVnd) || 0,
       minimumPricePerCreditVnd: Number(minimumPricePerCredit) || 0,
       minimumContractPriceVnd: Number(minimumContractPrice) || 0,
+      minimumContractPriceUsd: pricingConfig?.minimumContractPriceUsd ?? BILLING_POLICY.minimumContractPriceUsd,
       salesUsageWeight: Number(salesUsageWeight) || 0,
       salesMembersWeight: Number(salesMembersWeight) || 0,
       salesLanguagesWeight: Number(salesLanguagesWeight) || 0,

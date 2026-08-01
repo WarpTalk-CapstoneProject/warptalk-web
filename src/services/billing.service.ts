@@ -1,5 +1,5 @@
 import apiClient from "@/lib/api/client";
-import type { CreditBalanceDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto, UsageAlertDto, TopWorkspaceDto, UsageChartDto, UpdateSubscriptionContractTermsRequest, PricingConfigDto, UpdatePricingConfigRequest, UsageRateCardDto, UpsertUsageRateCardRequest, PlanRequest, TrialSubscriptionRequest, CreateWorkspaceContractSubscriptionRequest, CheckoutSessionDto, CreateSalesInquiryRequest, CreateWorkspaceSalesInquiryRequest, SalesInquiryDto, ConvertSalesInquiryToContractRequest, LinkSalesInquiryWorkspaceRequest } from "@/types/billing";
+import type { CreditBalanceDto, BillingPolicyDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto, UsageAlertDto, TopWorkspaceDto, UsageChartDto, UpdateBillingPolicyRequest, UpdateSubscriptionContractTermsRequest, PricingConfigDto, UpdatePricingConfigRequest, UsageRateCardDto, UpsertUsageRateCardRequest, PlanRequest, TrialSubscriptionRequest, CreateWorkspaceContractSubscriptionRequest, CheckoutSessionDto, CreateSalesInquiryRequest, CreateWorkspaceSalesInquiryRequest, SalesInquiryDto, ConvertSalesInquiryToContractRequest, LinkSalesInquiryWorkspaceRequest } from "@/types/billing";
 
 export const billingService = {
   /**
@@ -331,6 +331,16 @@ export const billingService = {
 
   updatePricingConfig: async (config: UpdatePricingConfigRequest): Promise<PricingConfigDto> => {
     const { data } = await apiClient.put<PricingConfigDto>(`/usages/pricing-config`, config);
+    return data;
+  },
+
+  getBillingPolicy: async (): Promise<BillingPolicyDto> => {
+    const { data } = await apiClient.get<BillingPolicyDto>(`/billing-policy`);
+    return data;
+  },
+
+  updateBillingPolicy: async (policy: UpdateBillingPolicyRequest): Promise<BillingPolicyDto> => {
+    const { data } = await apiClient.put<BillingPolicyDto>(`/billing-policy`, policy);
     return data;
   },
 

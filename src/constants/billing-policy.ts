@@ -1,6 +1,7 @@
 export const BILLING_POLICY = {
   minimumPricePerCreditVnd: 2.6,
   minimumContractPriceVnd: 15000,
+  minimumContractPriceUsd: 0.5,
   supportedLanguageCount: 3,
   supportedAiServiceCount: 6,
   suggestionWeights: {
