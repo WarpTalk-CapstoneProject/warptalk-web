@@ -23,6 +23,8 @@ interface InvoiceDto {
   id: string;
   invoiceNumber?: string | null;
   stripeInvoiceId?: string | null;
+  subtotal?: number | null;
+  tax?: number | null;
   amount?: number | null;
   total?: number | null;
   pdfUrl?: string | null;
@@ -37,6 +39,18 @@ interface InvoiceDto {
 
 function getInvoiceAmount(invoice: InvoiceDto): number {
   return invoice.total ?? invoice.amount ?? 0;
+}
+
+function getInvoiceTax(invoice: InvoiceDto): number {
+  return invoice.tax ?? 0;
+}
+
+function getInvoiceSubtotal(invoice: InvoiceDto): number {
+  return invoice.subtotal ?? Math.max(0, getInvoiceAmount(invoice) - getInvoiceTax(invoice));
+}
+
+function formatInvoiceMoney(invoice: InvoiceDto, value: number): string {
+  return `${value.toLocaleString("vi-VN")}${invoice.currency.toLowerCase() === "vnd" ? " VND" : ` ${invoice.currency.toUpperCase()}`}`;
 }
 
 function getInvoiceNumber(invoice: InvoiceDto): string {
@@ -511,10 +525,10 @@ export function AdminInvoicesTab() {
                 </td>
                 <td className="py-4 px-3 text-center text-gray-700">1</td>
                 <td className="py-4 px-3 text-right text-gray-700 font-mono">
-                  {getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatInvoiceMoney(selectedInvoice, getInvoiceSubtotal(selectedInvoice))}
                 </td>
                 <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
-                  {getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatInvoiceMoney(selectedInvoice, getInvoiceSubtotal(selectedInvoice))}
                 </td>
               </tr>
             )}
@@ -527,17 +541,19 @@ export function AdminInvoicesTab() {
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Subtotal:</span>
               <span className="font-semibold text-gray-900 font-mono">
-                {selectedInvoice && getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatInvoiceMoney(selectedInvoice, getInvoiceSubtotal(selectedInvoice))}
               </span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-gray-500">Tax (0%):</span>
-              <span className="text-gray-900 font-mono">0đ</span>
+              <span className="text-gray-500">Tax:</span>
+              <span className="text-gray-900 font-mono">
+                {selectedInvoice && formatInvoiceMoney(selectedInvoice, getInvoiceTax(selectedInvoice))}
+              </span>
             </div>
             <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
               <span className="text-gray-900">Total Paid:</span>
               <span className="text-gray-950 font-mono text-base">
-                {selectedInvoice && getInvoiceAmount(selectedInvoice).toLocaleString("vi-VN")}{selectedInvoice && (selectedInvoice.currency.toLowerCase() === "vnd" ? "đ" : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatInvoiceMoney(selectedInvoice, getInvoiceAmount(selectedInvoice))}
               </span>
             </div>
           </div>

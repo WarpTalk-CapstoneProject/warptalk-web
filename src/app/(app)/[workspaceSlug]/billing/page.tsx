@@ -268,7 +268,7 @@ function WorkspaceEnterpriseBillingContent() {
       });
     },
     onSuccess: () => {
-      toast.success("14-day Enterprise trial started");
+      toast.success("Enterprise trial started");
       queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["billing", "invoices", workspaceId] });
@@ -561,7 +561,7 @@ function WorkspaceEnterpriseBillingContent() {
                     disabled={startTrialMutation.isPending || !user?.id || !user.email}
                     className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/80 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {startTrialMutation.isPending ? "Starting trial..." : "Start 14-day trial"}
+                    {startTrialMutation.isPending ? "Starting trial..." : "Start trial"}
                   </button>
                 </div>
               </CardContent>
