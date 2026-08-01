@@ -953,7 +953,7 @@ export default function AdminPlansPage() {
 
           <div className="flex flex-col gap-3 rounded-lg border border-hairline bg-surface-2/50 p-3 md:flex-row md:items-center md:justify-between">
             <p className="text-xs text-muted-foreground">
-              Formula:{" "}
+              Credit formula is backend-controlled and read-only. Admin edits pricing inputs and rate-card rows only:{" "}
               <span className="font-mono text-foreground">
                 {pricingFormula || "Loaded from billing pricing config"}
               </span>

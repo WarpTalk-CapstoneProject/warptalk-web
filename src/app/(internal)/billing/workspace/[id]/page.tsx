@@ -426,7 +426,7 @@ export default function AdminWorkspaceBillingPage({
   const simulateCycleCloseMutation = useMutation({
     mutationFn: () => billingService.simulateCycleClose(workspaceId),
     onSuccess: () => {
-      toast.success("Billing cycle closed and invoice generated for this workspace");
+      toast.success("Manual billing cycle close generated an invoice for this workspace");
       queryClient.invalidateQueries({ queryKey: ["billing", "subscription", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["billing", "balance", workspaceId] });
       queryClient.invalidateQueries({ queryKey: ["billing", "invoices", workspaceId] });
@@ -437,7 +437,7 @@ export default function AdminWorkspaceBillingPage({
       queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
     },
     onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to simulate billing cycle close"));
+      toast.error(getErrorMessage(err, "Failed to run manual billing cycle close"));
     },
   });
 
@@ -1393,7 +1393,7 @@ export default function AdminWorkspaceBillingPage({
               <div>
                 <CardTitle className="text-base font-semibold">Billing History</CardTitle>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Cycle close issues an open NET invoice. Admins record payment only after finance confirms settlement.
+                  Admin/manual cycle close issues an open NET invoice for demo and finance reconciliation. Admins record payment only after finance confirms settlement.
                 </p>
               </div>
               <Button
@@ -1403,7 +1403,7 @@ export default function AdminWorkspaceBillingPage({
                 disabled={!subscription || subscription.status !== "active" || simulateCycleCloseMutation.isPending}
                 onClick={() => simulateCycleCloseMutation.mutate()}
               >
-                {simulateCycleCloseMutation.isPending ? "Closing..." : "Close Cycle Now"}
+                {simulateCycleCloseMutation.isPending ? "Closing..." : "Manual Cycle Close"}
               </Button>
             </CardHeader>
             <CardContent className="p-0">
