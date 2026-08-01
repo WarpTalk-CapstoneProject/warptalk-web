@@ -53,12 +53,21 @@ const AI_INTERPRETER_PREFIX = "ai-interpreter-";
  * unsubscribed, so no audio plays at all. TranslationTextDto keeps arriving over
  * SignalR regardless (that path doesn't touch LiveKit tracks), so captions are
  * unaffected — this only silences playback.
+ *
+ * `translationActive = false` disables the language routing entirely: the room is an
+ * ordinary call, so every participant is audible and no interpreter track is played.
+ * Without this the filter ran before Start Translation — muting speakers for a dub that
+ * no pipeline was ever going to produce — and kept running after Stop Translation,
+ * because tts_worker only sweeps idle bots from inside _get_or_create_bot: once synthesis
+ * stops there is no next creation to trigger the sweep, so the bot lingers in the room
+ * and its mere presence kept the raw microphone muted.
  */
 export function FilteredRoomAudio({
   targetLanguageNormalized,
   speakerLanguageByUserId,
   voicePreference,
   voiceEnabled = true,
+  translationActive,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
   targetLanguageNormalized: string;
@@ -68,6 +77,8 @@ export function FilteredRoomAudio({
   voicePreference: string | null;
   /** false = transcript-only mode: no audio track is ever wanted, regardless of language/voice. Defaults to true. */
   voiceEnabled?: boolean;
+  /** room.status === "in_progress" — false means no STT/MT/TTS pipeline is running, so this is a plain call. */
+  translationActive: boolean;
 }) {
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], {
     onlySubscribed: false,
@@ -114,8 +125,14 @@ export function FilteredRoomAudio({
   const isWanted = (identity: string) => {
     if (!voiceEnabled) return false;
     if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
-      return dubbedSpeakerId(identity) !== null;
+      // A lingering bot must not be played once translation has stopped: tts_worker only
+      // sweeps idle bots from inside _get_or_create_bot, so when synthesis stops there is
+      // no next creation to trigger the sweep and the bot stays in the room indefinitely.
+      return translationActive && dubbedSpeakerId(identity) !== null;
     }
+    // With no pipeline running there is no dub to prefer over anyone, and a stale bot must
+    // not be mistaken for one — this is an ordinary call, so every participant is audible.
+    if (!translationActive) return true;
     // Real participant's own microphone. Audible if THEY speak the language this
     // listener chose to hear — otherwise the AI interpreter track above is this
     // listener's version of that speaker, and the raw original would just double up.
@@ -148,7 +165,7 @@ export function FilteredRoomAudio({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, trackIdentityFingerprint]);
+  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, translationActive, trackIdentityFingerprint]);
 
   const audibleTracks = trackRefs.filter((trackRef) => isWanted(trackRef.participant.identity));
 
