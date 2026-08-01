@@ -1550,6 +1550,7 @@ export default function RoomDetailPage() {
                 speakerLanguageByUserId={speakerLanguageByUserId}
                 voicePreference={voicePreference}
                 voiceEnabled={voiceEnabled}
+                translationActive={warptalkStarted}
               />
               <TrackProcessorsController
                 noiseSuppressionEnabled={noiseSuppressionEnabled}
