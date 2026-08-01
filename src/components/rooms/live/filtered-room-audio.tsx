@@ -30,6 +30,13 @@ const AI_INTERPRETER_PREFIX = "ai-interpreter-";
  * classified in speakerLanguageByUserId — fail open) is always audible, unfiltered,
  * since there's no dub to prefer over the original in that case.
  *
+ * That mute is conditional on the dub actually being published, though, NOT on the
+ * language mismatch alone: an interpreter bot is spawned lazily by the first synthesized
+ * chunk, so a mismatched speaker has no dub until they have already spoken. Cutting them
+ * on the mismatch alone silenced the very utterance that creates their interpreter, and
+ * left only same-language listeners hearing anything. Prefer the dub whenever it is on
+ * the wire; fall back to the untranslated original rather than to silence when it isn't.
+ *
  * Deliberately scoped to only this hook's own useTracks() call — the room's global
  * autoSubscribe stays at its default (true), so camera/screen-share tracks elsewhere
  * (see meeting-stage.tsx) are unaffected.
@@ -79,18 +86,46 @@ export function FilteredRoomAudio({
   // "ai-interpreter-{lang}-" prefix rather than a full-identity equality.
   const languagePrefix = `${AI_INTERPRETER_PREFIX}${targetLanguageNormalized}-`;
   const voiceSegmentPrefix = voicePreference ? `voice-${voicePreference.slice(0, 8)}-` : "";
+
+  /** An interpreter identity this listener would accept → the speaker it dubs, else null. */
+  const dubbedSpeakerId = (identity: string) => {
+    if (!identity.startsWith(languagePrefix)) return null;
+    const rest = identity.slice(languagePrefix.length); // "{speakerId}" or "voice-{id8}-{speakerId}"
+    if (voicePreference) {
+      return rest.startsWith(voiceSegmentPrefix) ? rest.slice(voiceSegmentPrefix.length) : null;
+    }
+    return rest.startsWith("voice-") ? null : rest;
+  };
+
+  // Speakers whose dub is ACTUALLY on the wire right now. tts_worker creates an
+  // interpreter bot lazily, on the first synthesized chunk for a (speaker, language,
+  // voice) — see LiveKitTTSPublisher._get_or_create_bot — so between "this listener's
+  // language differs from that speaker's" becoming known and that speaker's first
+  // utterance completing the STT→MT→TTS round trip, the dub simply does not exist yet.
+  // Cutting the raw mic on the language mismatch alone therefore silenced the speaker
+  // for exactly the utterance that would have summoned their interpreter, leaving only
+  // listeners who happen to share the speaker's language able to hear anything at all.
+  const dubbedSpeakerIds = new Set(
+    trackRefs
+      .map((trackRef) => dubbedSpeakerId(trackRef.participant.identity))
+      .filter((speakerId): speakerId is string => speakerId !== null),
+  );
+
   const isWanted = (identity: string) => {
     if (!voiceEnabled) return false;
     if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
-      if (!identity.startsWith(languagePrefix)) return false;
-      const rest = identity.slice(languagePrefix.length); // "{speakerId}" or "voice-{id8}-{speakerId}"
-      return voicePreference ? rest.startsWith(voiceSegmentPrefix) : !rest.startsWith("voice-");
+      return dubbedSpeakerId(identity) !== null;
     }
-    // Real participant's own microphone. Audible only if THEY speak the language this
+    // Real participant's own microphone. Audible if THEY speak the language this
     // listener chose to hear — otherwise the AI interpreter track above is this
     // listener's version of that speaker, and the raw original would just double up.
     const speakerLang = speakerLanguageByUserId[identity];
-    return !speakerLang || speakerLang === targetLanguageNormalized;
+    if (!speakerLang || speakerLang === targetLanguageNormalized) return true;
+    // Mismatched language: the dub is preferred, but only once it exists. Falling back
+    // to the untranslated original is a worse listen than the dub and a far better one
+    // than dead air, and it self-corrects — the moment the bot publishes, the identity
+    // list changes, this recomputes, and the raw mic is dropped in favour of the dub.
+    return !dubbedSpeakerIds.has(identity);
   };
 
   // trackRefs is a fresh array every render (useTracks), so the effect below keys on
