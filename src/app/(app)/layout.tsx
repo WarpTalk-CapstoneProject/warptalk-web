@@ -7,7 +7,6 @@ import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
-  Plus,
   Question,
   SidebarSimple,
   Spinner,
@@ -19,11 +18,9 @@ import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
-import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
@@ -101,7 +98,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
-  const addWorkspaceTab = useWorkspaceTabsStore((state) => state.addTab);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [mounted, setMounted] = useState(false);
   
@@ -123,15 +119,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const roomQuery = useTranslationRoom(roomId ?? "");
   const roomTitle = roomId && roomQuery?.data ? roomQuery.data.title : undefined;
-  const workspaceTabScope = activeWorkspaceSlug || "global";
-  const workspaceTabOptions = useMemo(
-    () => buildTabOptions(activeWorkspaceSlug || "workspace"),
-    [activeWorkspaceSlug]
-  );
-  const currentWorkspaceTab = useMemo(
-    () => resolveCurrentTab(pathname, workspaceTabOptions),
-    [pathname, workspaceTabOptions]
-  );
 
   const isOnboardingRoute =
     pathname === "/workspace" ||
@@ -196,11 +183,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
       </div>
     );
-  }
-
-  function handleAddCurrentWorkspaceTab() {
-    if (!currentWorkspaceTab) return;
-    addWorkspaceTab(workspaceTabScope, currentWorkspaceTab);
   }
 
   return (
@@ -310,17 +292,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 );
               });
             })()}
-            {currentWorkspaceTab ? (
-              <button
-                type="button"
-                onClick={handleAddCurrentWorkspaceTab}
-                className="ml-0.5 grid size-5 shrink-0 place-items-center rounded-[6px] border border-transparent text-ink-muted transition-colors hover:border-border hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                title={`Add ${currentWorkspaceTab.title} tab`}
-                aria-label={`Add ${currentWorkspaceTab.title} tab`}
-              >
-                <Plus size={11} weight="bold" />
-              </button>
-            ) : null}
           </div>
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
@@ -336,8 +307,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </header>
-
-        <WorkspaceTabs />
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <main className="min-h-0 flex-1 overflow-y-auto">
