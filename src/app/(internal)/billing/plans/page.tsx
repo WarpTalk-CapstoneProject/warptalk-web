@@ -286,7 +286,10 @@ export default function AdminPlansPage() {
   const [defaultOverageCapRatioEdit, setDefaultOverageCapRatioEdit] = useState<string | null>(null);
   const [defaultInvoiceTermsDaysEdit, setDefaultInvoiceTermsDaysEdit] = useState<string | null>(null);
   const [defaultInvoiceGraceHoursEdit, setDefaultInvoiceGraceHoursEdit] = useState<string | null>(null);
+  const [vatRateEdit, setVatRateEdit] = useState<string | null>(null);
+  const [yearlyDiscountMultiplierEdit, setYearlyDiscountMultiplierEdit] = useState<string | null>(null);
   const [pricingDraftSavedAt, setPricingDraftSavedAt] = useState<string | null>(null);
+  const [billingPolicySavedAt, setBillingPolicySavedAt] = useState<string | null>(null);
 
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["admin-plans"],
@@ -306,6 +309,12 @@ export default function AdminPlansPage() {
   const { data: pricingConfig, isError: isPricingConfigError } = useQuery({
     queryKey: ["billing", "pricing-config"],
     queryFn: () => billingService.getPricingConfig(),
+    retry: 1,
+  });
+
+  const { data: billingPolicy, isError: isBillingPolicyError } = useQuery({
+    queryKey: ["billing", "billing-policy"],
+    queryFn: () => billingService.getBillingPolicy(),
     retry: 1,
   });
 
@@ -338,6 +347,8 @@ export default function AdminPlansPage() {
   const defaultOverageCapRatio = defaultOverageCapRatioEdit ?? pricingConfig?.defaultOverageCapRatio.toString() ?? String(BILLING_POLICY.defaultOverageCapRatio);
   const defaultInvoiceTermsDays = defaultInvoiceTermsDaysEdit ?? pricingConfig?.defaultInvoiceTermsDays.toString() ?? String(BILLING_POLICY.defaultInvoiceTermsDays);
   const defaultInvoiceGraceHours = defaultInvoiceGraceHoursEdit ?? pricingConfig?.defaultInvoiceGraceHours.toString() ?? String(BILLING_POLICY.defaultInvoiceGraceHours);
+  const vatRate = vatRateEdit ?? billingPolicy?.vatRate.toString() ?? "";
+  const yearlyDiscountMultiplier = yearlyDiscountMultiplierEdit ?? billingPolicy?.yearlyDiscountMultiplier.toString() ?? "";
   const pricingFormula = pricingConfig?.formula ?? "";
   const pricingResolverKey = pricingConfig?.resolverKey ?? "";
   const salesWeightTotal =
@@ -361,6 +372,12 @@ export default function AdminPlansPage() {
     !isPricingConfigError &&
     !isRateCardLoadError &&
     (useDefaultPricingRows || activeRateCards.length > 0);
+  const billingPolicyInputsAreValid =
+    Number(vatRate) >= 0 &&
+    Number(vatRate) <= 1 &&
+    Number(yearlyDiscountMultiplier) > 0 &&
+    Number(yearlyDiscountMultiplier) <= 1;
+  const canSaveBillingPolicy = billingPolicyInputsAreValid && !isBillingPolicyError;
 
   const updatePlanMutation = useMutation({
     mutationFn: ({ id, plan }: { id: string; plan: BaselinePlanRequest }) => billingService.updatePlan(id, plan),
@@ -413,6 +430,23 @@ export default function AdminPlansPage() {
       setDefaultInvoiceTermsDaysEdit(saved.defaultInvoiceTermsDays.toString());
       setDefaultInvoiceGraceHoursEdit(saved.defaultInvoiceGraceHours.toString());
       queryClient.invalidateQueries({ queryKey: ["billing", "pricing-config"] });
+    },
+  });
+
+  const updateBillingPolicyMutation = useMutation({
+    mutationFn: () => billingService.updateBillingPolicy({
+      vatRate: Number(vatRate) || 0,
+      yearlyDiscountMultiplier: Number(yearlyDiscountMultiplier) || 0,
+    }),
+    onSuccess: (saved) => {
+      setVatRateEdit(saved.vatRate.toString());
+      setYearlyDiscountMultiplierEdit(saved.yearlyDiscountMultiplier.toString());
+      setBillingPolicySavedAt(new Date().toLocaleTimeString());
+      queryClient.invalidateQueries({ queryKey: ["billing", "billing-policy"] });
+      toast.success("Invoice policy updated");
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to update invoice policy"));
     },
   });
 
@@ -621,6 +655,65 @@ export default function AdminPlansPage() {
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
+        <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base font-medium">
+              <SlidersHorizontal className="h-4 w-4 text-primary" /> Invoice policy
+            </CardTitle>
+          </div>
+          {billingPolicySavedAt && (
+            <Badge variant="outline" className="w-fit rounded-md">Applied {billingPolicySavedAt}</Badge>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">VAT rate</Label>
+              <Input
+                type="number"
+                min={0}
+                max={1}
+                step="0.01"
+                className="h-9 text-sm"
+                value={vatRate}
+                onChange={(e) => { setVatRateEdit(e.target.value); setBillingPolicySavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Yearly discount multiplier</Label>
+              <Input
+                type="number"
+                min={0.01}
+                max={1}
+                step="0.01"
+                className="h-9 text-sm"
+                value={yearlyDiscountMultiplier}
+                onChange={(e) => { setYearlyDiscountMultiplierEdit(e.target.value); setBillingPolicySavedAt(null); }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground">Invoice multiplier preview</Label>
+              <div className="flex h-9 items-center rounded-md border border-hairline bg-muted/40 px-3 text-sm font-medium">
+                VAT {(Number(vatRate) * 100 || 0).toFixed(2)}% / yearly x{Number(yearlyDiscountMultiplier || 0).toFixed(2)}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-md bg-surface-2"
+              disabled={!canSaveBillingPolicy || updateBillingPolicyMutation.isPending}
+              onClick={() => updateBillingPolicyMutation.mutate()}
+            >
+              {updateBillingPolicyMutation.isPending ? "Saving..." : "Save invoice policy"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
