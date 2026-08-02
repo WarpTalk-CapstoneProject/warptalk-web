@@ -60,7 +60,10 @@ import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
 } from "@/hooks/use-track-processors";
-import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
+import {
+  readMeetingJoinState,
+  readMeetingMediaPreferences,
+} from "@/lib/meeting-join-state";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import {
   MeetingSidePanel,
@@ -145,36 +148,32 @@ export default function RoomDetailPage() {
   const languagePickerShownRef = useRef(false);
 
   // Read config from sessionStorage
-  const savedDevices =
-    typeof window !== "undefined"
-      ? JSON.parse(
-          window.sessionStorage.getItem("warptalk.devices.preview") || "{}",
-        )
-      : {};
   const savedJoinConfig =
     typeof window !== "undefined"
-      ? JSON.parse(
-          window.sessionStorage.getItem("warptalk.join.preview") || "{}",
-        )
+      ? readMeetingJoinState(window.sessionStorage, roomId)
       : {};
-  const [cameraEnabled, setCameraEnabled] = useState<boolean>(
-    savedDevices.cameraEnabled ?? savedJoinConfig.cameraEnabled ?? true,
-  );
-  const [microphoneEnabled, setMicrophoneEnabled] = useState<boolean>(
-    savedDevices.microphoneEnabled ?? savedJoinConfig.microphoneEnabled ?? true,
-  );
+  // Fail closed until the browser has loaded preferences for this exact room. This
+  // prevents LiveKit from briefly publishing tracks with SSR/default `true` values.
+  const [mediaPreferencesHydrated, setMediaPreferencesHydrated] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] =
-    useState<boolean>(
-      savedDevices.noiseSuppressionPreferenceVersion ===
-        NOISE_SUPPRESSION_PREFERENCE_VERSION
-        ? (savedDevices.noiseSuppressionEnabled ?? false)
-        : false,
+    useState(false);
+  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
+
+  useEffect(() => {
+    const preferences = readMeetingMediaPreferences(
+      window.sessionStorage,
+      roomId,
     );
-  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState<boolean>(
-    savedDevices.backgroundBlurEnabled ??
-      savedJoinConfig.backgroundBlurEnabled ??
-      false,
-  );
+    // sessionStorage is an external browser source and must be applied after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCameraEnabled(preferences.cameraEnabled);
+    setMicrophoneEnabled(preferences.microphoneEnabled);
+    setNoiseSuppressionEnabled(preferences.noiseSuppressionEnabled);
+    setBackgroundBlurEnabled(preferences.backgroundBlurEnabled);
+    setMediaPreferencesHydrated(true);
+  }, [roomId]);
 
   function handleToggleNoiseSuppression() {
     setNoiseSuppressionEnabled((current) => {
@@ -1462,6 +1461,15 @@ export default function RoomDetailPage() {
         icon={<WarningCircle className="h-8 w-8" />}
         title="Room unavailable"
         description="The room does not exist or your account cannot access it."
+      />
+    );
+  }
+
+  if (!mediaPreferencesHydrated) {
+    return (
+      <StatePanel
+        title="Preparing devices..."
+        description="Applying your camera and microphone choices."
       />
     );
   }

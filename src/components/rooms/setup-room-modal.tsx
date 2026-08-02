@@ -20,6 +20,7 @@ import {
   useTranslationRoom,
 } from "@/hooks/use-translationRooms";
 import { canJoinTranslationRoom } from "@/lib/translation-room-access";
+import { completeMeetingJoin } from "@/lib/meeting-join-state";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -306,9 +307,10 @@ export function SetupRoomModal() {
         return;
       }
 
-      window.sessionStorage.setItem(
-        "warptalk.join.preview",
-        JSON.stringify({
+      completeMeetingJoin({
+        storage: window.sessionStorage,
+        roomId: result.room.id,
+        joinState: {
           displayName,
           roomCode: room.translationRoomCode,
           speakLanguage,
@@ -316,24 +318,19 @@ export function SetupRoomModal() {
           cameraEnabled,
           microphoneEnabled,
           speakerEnabled: true,
-          roomId: result.room.id,
           participantId: result.participant?.id,
-        }),
-      );
-      window.sessionStorage.setItem(
-        "warptalk.devices.preview",
-        JSON.stringify({
+        },
+        deviceState: {
           cameraEnabled,
           microphoneEnabled,
           noiseSuppressionEnabled,
           noiseSuppressionPreferenceVersion:
             NOISE_SUPPRESSION_PREFERENCE_VERSION,
           backgroundBlurEnabled,
-        }),
-      );
-
-      setIsOpen(false);
-      router.push(`/room/${result.room.id}`);
+        },
+        navigate: (path) => router.push(path),
+        closePreview: () => setIsOpen(false),
+      });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not join the room.",
