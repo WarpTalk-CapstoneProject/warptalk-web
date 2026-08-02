@@ -29,6 +29,7 @@ import {
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
 } from "@/lib/transcript-display";
+import { loadSavedTranscript } from "@/lib/transcript-history";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
 import { openArtifactDownload } from "@/lib/download-artifact";
@@ -109,22 +110,7 @@ export default function TranscriptsPage() {
     queryKey: ["room-transcript", selected?.room.id],
     queryFn: async (): Promise<TranscriptData> => {
       if (!selected) return null;
-      try {
-        const { data: transcript } = await transcriptService.getByRoom(
-          selected.room.id,
-        );
-        const { data: paged } = await transcriptService.segments(
-          transcript.id,
-          { skip: 0, take: 500 },
-        );
-        return { transcript, segments: paged.items };
-      } catch {
-        // No transcript row exists yet (or the room never had any speech) — an honest
-        // empty state, not a failure. Segments persist per-utterance in real time, so
-        // this can still succeed even when the transcript_export ARTIFACT (a generated
-        // file, produced only at meeting finalization) is still "missing".
-        return null;
-      }
+      return loadSavedTranscript(selected.room.id, transcriptService);
     },
     enabled: Boolean(selected?.room.id),
   });
@@ -531,6 +517,30 @@ function TranscriptPanel({
           <SpinnerGap size={15} className="animate-spin" />
           Loading transcript
         </div>
+      </div>
+    );
+  }
+
+  if (state.isError) {
+    return (
+      <div className="flex min-h-[360px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
+        <WarningCircle size={28} className="text-danger" />
+        <h3 className="mt-4 text-[15px] font-semibold">
+          Couldn&apos;t load transcript
+        </h3>
+        <p className="mt-2 max-w-[360px] text-[11px] leading-5 text-ink-muted">
+          The transcript service returned an error. Your meeting data has not
+          been replaced with an empty result.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          onClick={() => state.refetch()}
+        >
+          Try again
+        </Button>
       </div>
     );
   }
