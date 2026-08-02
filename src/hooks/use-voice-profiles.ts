@@ -2,10 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { VoiceProfileService } from "@/services/voice-profile.service";
-import type { CreateVoiceProfileRequest } from "@/types/voice-profile";
+import type {
+  CreateVoiceProfileRequest,
+  SetPreferredVoiceRequest,
+} from "@/types/voice-profile";
 
 export const VOICE_PROFILE_KEYS = {
   list: () => ["voiceProfiles", "list"] as const,
+  catalog: (language: string) => ["voiceProfiles", "catalog", language] as const,
 };
 
 export function useVoiceProfiles() {
@@ -30,6 +34,31 @@ export function useDeleteVoiceProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => VoiceProfileService.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.list() });
+    },
+  });
+}
+
+/**
+ * Voices offered for `language`. The catalog is a 6h Redis cache the AI worker fills, so it
+ * barely changes — but it starts empty until that worker's first synthesis for the language,
+ * which is why this refetches rather than caching for the whole session.
+ */
+export function useVoiceCatalog(language: string, enabled = true) {
+  return useQuery({
+    queryKey: VOICE_PROFILE_KEYS.catalog(language),
+    queryFn: () => VoiceProfileService.catalog(language),
+    enabled: enabled && Boolean(language),
+    staleTime: 60_000,
+  });
+}
+
+export function useSetPreferredVoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: SetPreferredVoiceRequest) =>
+      VoiceProfileService.setPreferredVoice(request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.list() });
     },

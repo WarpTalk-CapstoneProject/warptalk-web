@@ -12,6 +12,7 @@ import gsap from "gsap";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { meetingTypeByLabel, meetingTypeHighlights } from "@/lib/meeting-types";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -114,7 +115,9 @@ export function CreateRoomDialog() {
 
   const completionRef = useRef<HTMLDivElement | null>(null);
 
-  const participantCount = 100; // default for UI
+  // Deliberately not sent any more: the meeting type decides the seat count server-side
+  // (a Virtual Appointment is 1:1, a Live Event is not), and a hardcoded 100 here would
+  // override every one of those.
   const validation = {
     title: title.trim().length > 0,
     languages: meetingLanguages.length > 0,
@@ -187,7 +190,6 @@ export function CreateRoomDialog() {
           data: {
             title: title.trim(),
             description: description.trim() || undefined,
-            maxParticipants: participantCount,
             sourceLanguage: sourceLanguage,
             targetLanguages: targetLanguages,
             scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
@@ -205,8 +207,11 @@ export function CreateRoomDialog() {
           workspaceId: activeWorkspaceId,
           title: title.trim(),
           description: description.trim() || undefined,
-          translationRoomType: scheduledAt ? "scheduled" : "instant",
-          maxParticipants: participantCount,
+          // The picked type is what the room actually becomes now — it decides the lobby,
+          // mute-on-entry, auto-record, breakouts and seat count server-side. It used to be
+          // discarded here in favour of instant/scheduled, which is why every type behaved
+          // identically.
+          translationRoomType: meetingTypeByLabel(meetingTemplate).value,
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
           scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
@@ -265,6 +270,17 @@ export function CreateRoomDialog() {
                     value={meetingTemplate}
                     onChange={setMeetingTemplate}
                   />
+                  {/* The type is no longer cosmetic — say out loud what it will configure,
+                      rather than letting the host discover it after the room exists. */}
+                  {!editRoomId &&
+                    meetingTypeHighlights(meetingTemplate).map((highlight) => (
+                      <span
+                        key={highlight}
+                        className="hidden sm:inline rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-ink-muted"
+                      >
+                        {highlight}
+                      </span>
+                    ))}
                 </div>
 
                 <button

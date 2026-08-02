@@ -1,6 +1,11 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
-import type { VoiceProfileDto, CreateVoiceProfileRequest } from "@/types/voice-profile";
+import type {
+  VoiceProfileDto,
+  CreateVoiceProfileRequest,
+  VoiceCatalogItemDto,
+  SetPreferredVoiceRequest,
+} from "@/types/voice-profile";
 
 export const VoiceProfileService = {
   async list(): Promise<VoiceProfileDto[]> {
@@ -24,5 +29,25 @@ export const VoiceProfileService = {
 
   async remove(id: string): Promise<void> {
     await apiClient.delete(API.voiceProfiles.delete(id));
+  },
+
+  /**
+   * Voices offered for a language. An empty list is a normal answer, not an error — the
+   * catalog is a cache the AI worker fills on its next synthesis for that language.
+   */
+  async catalog(language: string): Promise<VoiceCatalogItemDto[]> {
+    const { data } = await apiClient.get<VoiceCatalogItemDto[]>(API.voiceProfiles.catalog, {
+      params: { language },
+    });
+    return data;
+  },
+
+  /** Returns the stored profile, or null when the preference was cleared (204). */
+  async setPreferredVoice(request: SetPreferredVoiceRequest): Promise<VoiceProfileDto | null> {
+    const { data, status } = await apiClient.put<VoiceProfileDto | "">(
+      API.voiceProfiles.preferredVoice,
+      request,
+    );
+    return status === 204 || !data ? null : (data as VoiceProfileDto);
   },
 };
