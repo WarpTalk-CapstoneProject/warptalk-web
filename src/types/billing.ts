@@ -374,10 +374,8 @@ export interface UpdatePricingConfigRequest {
 
 export interface BillingPolicyDto {
   vatRate: number;
-  yearlyDiscountMultiplier: number;
 }
 
 export interface UpdateBillingPolicyRequest {
   vatRate: number;
-  yearlyDiscountMultiplier: number;
 }

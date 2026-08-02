@@ -287,7 +287,6 @@ export default function AdminPlansPage() {
   const [defaultInvoiceTermsDaysEdit, setDefaultInvoiceTermsDaysEdit] = useState<string | null>(null);
   const [defaultInvoiceGraceHoursEdit, setDefaultInvoiceGraceHoursEdit] = useState<string | null>(null);
   const [vatRateEdit, setVatRateEdit] = useState<string | null>(null);
-  const [yearlyDiscountMultiplierEdit, setYearlyDiscountMultiplierEdit] = useState<string | null>(null);
   const [pricingDraftSavedAt, setPricingDraftSavedAt] = useState<string | null>(null);
   const [billingPolicySavedAt, setBillingPolicySavedAt] = useState<string | null>(null);
 
@@ -348,7 +347,6 @@ export default function AdminPlansPage() {
   const defaultInvoiceTermsDays = defaultInvoiceTermsDaysEdit ?? pricingConfig?.defaultInvoiceTermsDays.toString() ?? String(BILLING_POLICY.defaultInvoiceTermsDays);
   const defaultInvoiceGraceHours = defaultInvoiceGraceHoursEdit ?? pricingConfig?.defaultInvoiceGraceHours.toString() ?? String(BILLING_POLICY.defaultInvoiceGraceHours);
   const vatRate = vatRateEdit ?? billingPolicy?.vatRate.toString() ?? "";
-  const yearlyDiscountMultiplier = yearlyDiscountMultiplierEdit ?? billingPolicy?.yearlyDiscountMultiplier.toString() ?? "";
   const pricingFormula = pricingConfig?.formula ?? "";
   const pricingResolverKey = pricingConfig?.resolverKey ?? "";
   const salesWeightTotal =
@@ -374,9 +372,7 @@ export default function AdminPlansPage() {
     (useDefaultPricingRows || activeRateCards.length > 0);
   const billingPolicyInputsAreValid =
     Number(vatRate) >= 0 &&
-    Number(vatRate) <= 1 &&
-    Number(yearlyDiscountMultiplier) > 0 &&
-    Number(yearlyDiscountMultiplier) <= 1;
+    Number(vatRate) <= 1;
   const canSaveBillingPolicy = billingPolicyInputsAreValid && !isBillingPolicyError;
 
   const updatePlanMutation = useMutation({
@@ -436,11 +432,9 @@ export default function AdminPlansPage() {
   const updateBillingPolicyMutation = useMutation({
     mutationFn: () => billingService.updateBillingPolicy({
       vatRate: Number(vatRate) || 0,
-      yearlyDiscountMultiplier: Number(yearlyDiscountMultiplier) || 0,
     }),
     onSuccess: (saved) => {
       setVatRateEdit(saved.vatRate.toString());
-      setYearlyDiscountMultiplierEdit(saved.yearlyDiscountMultiplier.toString());
       setBillingPolicySavedAt(new Date().toLocaleTimeString());
       queryClient.invalidateQueries({ queryKey: ["billing", "billing-policy"] });
       toast.success("Invoice policy updated");
@@ -670,7 +664,7 @@ export default function AdminPlansPage() {
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <div className="grid gap-1">
               <Label className="text-xs text-muted-foreground">VAT rate</Label>
               <Input
@@ -684,21 +678,9 @@ export default function AdminPlansPage() {
               />
             </div>
             <div className="grid gap-1">
-              <Label className="text-xs text-muted-foreground">Yearly discount multiplier</Label>
-              <Input
-                type="number"
-                min={0.01}
-                max={1}
-                step="0.01"
-                className="h-9 text-sm"
-                value={yearlyDiscountMultiplier}
-                onChange={(e) => { setYearlyDiscountMultiplierEdit(e.target.value); setBillingPolicySavedAt(null); }}
-              />
-            </div>
-            <div className="grid gap-1">
-              <Label className="text-xs text-muted-foreground">Invoice multiplier preview</Label>
+              <Label className="text-xs text-muted-foreground">Invoice tax preview</Label>
               <div className="flex h-9 items-center rounded-md border border-hairline bg-muted/40 px-3 text-sm font-medium">
-                VAT {(Number(vatRate) * 100 || 0).toFixed(2)}% / yearly x{Number(yearlyDiscountMultiplier || 0).toFixed(2)}
+                VAT {(Number(vatRate) * 100 || 0).toFixed(2)}%
               </div>
             </div>
           </div>
