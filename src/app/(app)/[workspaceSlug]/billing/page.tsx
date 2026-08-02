@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { getLanguageName, SUPPORTED_LANGUAGES } from "@/lib/languages";
@@ -35,6 +36,8 @@ const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
 const BILLING_REALTIME_REFETCH_MS = 10_000;
 const TRIAL_WORKSPACE_MEMBER_LIMIT = 5;
+const MAX_REQUESTED_MONTHLY_CREDITS = 10_000_000;
+const MAX_REQUESTED_WORKSPACE_MEMBERS = 10_000;
 const MAX_ENTERPRISE_LANGUAGES = 3;
 const CONTRACT_LANGUAGE_CODES = ["en", "vi", "ja"];
 const CONTRACT_LANGUAGE_OPTIONS = SUPPORTED_LANGUAGES.filter((language) =>
@@ -53,6 +56,7 @@ const CONTRACT_AI_SERVICE_OPTIONS = [
   "Google Meet integration",
 ];
 const GOOGLE_MEET_INTEGRATION_LABEL = "Google Meet integration";
+const PAYMENT_TERM_OPTIONS = ["Net 15", "Net 30"];
 
 function formatDate(value?: string | null) {
   return value ? format(new Date(value), "MMM d, yyyy") : "--";
@@ -61,6 +65,10 @@ function formatDate(value?: string | null) {
 function formatVnd(value?: number | null) {
   if (value == null) return "--";
   return `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("vi-VN").format(value);
 }
 
 function formatInvoiceAmount(invoice: InvoiceDto) {
@@ -124,7 +132,6 @@ function WorkspaceEnterpriseBillingContent() {
     billingContactName: user?.fullName ?? "",
     billingContactEmail: user?.email ?? "",
     requestedMonthlyCredits: "",
-    contractTerm: "Annual",
     invoiceEmail: user?.email ?? "",
     paymentTerms: "",
     requestedWorkspaceMembers: String(TRIAL_WORKSPACE_MEMBER_LIMIT),
@@ -244,6 +251,11 @@ function WorkspaceEnterpriseBillingContent() {
     ?? subscription?.invoiceTermsDaysOverride
     ?? pricingConfig?.defaultInvoiceTermsDays
     ?? 0;
+  const defaultPaymentTerms = invoiceTerms > 0 ? `Net ${invoiceTerms}` : "Net 15";
+  const paymentTermOptions = useMemo(
+    () => Array.from(new Set([defaultPaymentTerms, ...PAYMENT_TERM_OPTIONS])),
+    [defaultPaymentTerms],
+  );
   const extraUsageCap = subscription?.effectiveOverageCapCredits ?? subscription?.overageCapCreditsOverride ?? 0;
   const invoices = invoicesPage?.items ?? [];
   const latestContractInquiry = salesInquiryPage?.items?.find((inquiry) =>
@@ -296,10 +308,9 @@ function WorkspaceEnterpriseBillingContent() {
       const billingContactName = contractRequest.billingContactName.trim();
       const billingContactEmail = contractRequest.billingContactEmail.trim();
       const requestedMonthlyCredits = contractRequest.requestedMonthlyCredits.trim();
-      const contractTerm = contractRequest.contractTerm.trim();
       const invoiceEmail = contractRequest.invoiceEmail.trim();
       const paymentTerms = contractRequest.paymentTerms.trim();
-      const effectivePaymentTerms = paymentTerms || (invoiceTerms > 0 ? `Net ${invoiceTerms}` : "Configured NET terms");
+      const effectivePaymentTerms = paymentTerms || defaultPaymentTerms;
       const requestedWorkspaceMembers = contractRequest.requestedWorkspaceMembers.trim();
       const requestedLanguages = contractRequest.requestedLanguages.length
         ? contractRequest.requestedLanguages
@@ -317,7 +328,7 @@ function WorkspaceEnterpriseBillingContent() {
         `Invoice email: ${invoiceEmail}`,
         `Payment terms: ${effectivePaymentTerms}`,
         `Requested monthly credits: ${requestedMonthlyCredits}`,
-        `Contract term: ${contractTerm}`,
+        "Billing frequency: Monthly",
         `Required features / limits: ${requiredFeatures}`,
       ].filter(Boolean).join("\n");
 
@@ -350,7 +361,7 @@ function WorkspaceEnterpriseBillingContent() {
           invoiceEmail,
           paymentTerms: effectivePaymentTerms,
           requestedMonthlyCredits,
-          contractTerm,
+          billingFrequency: "Monthly",
           requiredFeatures,
           requestedWorkspaceMembers,
           requestedLanguages,
@@ -415,9 +426,19 @@ function WorkspaceEnterpriseBillingContent() {
       return;
     }
 
+    if (requestedMonthlyCredits > MAX_REQUESTED_MONTHLY_CREDITS) {
+      toast.error(`Monthly credits cannot exceed ${formatNumber(MAX_REQUESTED_MONTHLY_CREDITS)}`);
+      return;
+    }
+
     const requestedWorkspaceMembers = Number(contractRequest.requestedWorkspaceMembers);
     if (!Number.isInteger(requestedWorkspaceMembers) || requestedWorkspaceMembers < 1) {
       toast.error("Enter a valid workspace member count");
+      return;
+    }
+
+    if (requestedWorkspaceMembers > MAX_REQUESTED_WORKSPACE_MEMBERS) {
+      toast.error(`Workspace members cannot exceed ${formatNumber(MAX_REQUESTED_WORKSPACE_MEMBERS)}`);
       return;
     }
 
@@ -834,6 +855,7 @@ function WorkspaceEnterpriseBillingContent() {
                     <Input
                       type="number"
                       min={1}
+                      max={MAX_REQUESTED_MONTHLY_CREDITS}
                       step={1}
                       value={contractRequest.requestedMonthlyCredits}
                     onChange={(event) => setContractRequest((current) => ({
@@ -843,21 +865,6 @@ function WorkspaceEnterpriseBillingContent() {
                     placeholder="Example: 700000 credits / month"
                     required
                   />
-                </label>
-
-                <label className="grid gap-1.5 text-sm font-medium text-ink">
-                  Contract term
-                  <select
-                    value={contractRequest.contractTerm}
-                    onChange={(event) => setContractRequest((current) => ({
-                      ...current,
-                      contractTerm: event.target.value,
-                    }))}
-                    className="h-9 w-full rounded-[8px] border border-border bg-surface-1 px-3 text-sm text-ink outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-                  >
-                    <option>Annual</option>
-                    <option>Monthly</option>
-                  </select>
                 </label>
 
                 <label className="grid gap-1.5 text-sm font-medium text-ink">
@@ -876,14 +883,24 @@ function WorkspaceEnterpriseBillingContent() {
 
                 <label className="grid gap-1.5 text-sm font-medium text-ink">
                   Payment terms
-                  <Input
-                    value={contractRequest.paymentTerms}
-                    onChange={(event) => setContractRequest((current) => ({
+                  <Select
+                    value={contractRequest.paymentTerms || defaultPaymentTerms}
+                    onValueChange={(value) => setContractRequest((current) => ({
                       ...current,
-                      paymentTerms: event.target.value,
+                      paymentTerms: value ?? defaultPaymentTerms,
                     }))}
-                    placeholder={invoiceTerms > 0 ? `Net ${invoiceTerms}` : "Configured NET terms"}
-                  />
+                  >
+                    <SelectTrigger className="h-10 w-full rounded-md">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {paymentTermOptions.map((term) => (
+                        <SelectItem key={term} value={term}>
+                          {term}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </label>
               </div>
 
@@ -896,6 +913,7 @@ function WorkspaceEnterpriseBillingContent() {
                       <Input
                         type="number"
                         min={1}
+                        max={MAX_REQUESTED_WORKSPACE_MEMBERS}
                         value={contractRequest.requestedWorkspaceMembers}
                         onChange={(event) => setContractRequest((current) => ({
                           ...current,

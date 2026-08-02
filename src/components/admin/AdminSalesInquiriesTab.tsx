@@ -109,12 +109,6 @@ function getEffectiveBillingPolicy(config?: PricingConfigDto | null) {
     minimumPricePerCreditVnd: config?.minimumPricePerCreditVnd ?? BILLING_POLICY.minimumPricePerCreditVnd,
     minimumContractPriceVnd: config?.minimumContractPriceVnd ?? BILLING_POLICY.minimumContractPriceVnd,
     defaultOverageCapRatio: config?.defaultOverageCapRatio ?? BILLING_POLICY.defaultOverageCapRatio,
-    suggestionWeights: {
-      usage: config?.salesUsageWeight ?? BILLING_POLICY.suggestionWeights.usage,
-      members: config?.salesMembersWeight ?? BILLING_POLICY.suggestionWeights.members,
-      languages: config?.salesLanguagesWeight ?? BILLING_POLICY.suggestionWeights.languages,
-      aiServices: config?.salesAiServicesWeight ?? BILLING_POLICY.suggestionWeights.aiServices,
-    },
   };
 }
 
@@ -123,27 +117,9 @@ function calculateSuggestedTerms(inquiry: SalesInquiryDto, plan?: PlanDto | null
   const requestDetails = parseRequestNotes(inquiry);
   const baselineCredits = getBaselineCredits(plan) ?? 0;
   const requestedCredits = getRequestedCredits(inquiry) ?? baselineCredits;
-  const approvedCredits = Math.max(1, Math.min(requestedCredits, baselineCredits || requestedCredits));
-  const requestedMembers = parseInteger(requestDetails.workspaceMembers);
-  const baselineMembers = plan?.maxParticipants ?? requestedMembers ?? 1;
-  const approvedMembers = Math.max(1, Math.min(requestedMembers ?? baselineMembers, baselineMembers));
-  const languageCount = Math.min(
-    countCsvItems(requestDetails.languages) ?? BILLING_POLICY.supportedLanguageCount,
-    plan?.maxLanguages ?? BILLING_POLICY.supportedLanguageCount
-  );
-  const aiServiceCount = Math.min(
-    countCsvItems(requestDetails.aiServices) ?? BILLING_POLICY.supportedAiServiceCount,
-    BILLING_POLICY.supportedAiServiceCount
-  );
-  const usageRatio = baselineCredits > 0 ? approvedCredits / baselineCredits : 1;
-  const featureRatio =
-    policy.suggestionWeights.usage * usageRatio
-    + policy.suggestionWeights.members * (baselineMembers > 0 ? approvedMembers / baselineMembers : 1)
-    + policy.suggestionWeights.languages * (languageCount / BILLING_POLICY.supportedLanguageCount)
-    + policy.suggestionWeights.aiServices * (aiServiceCount / BILLING_POLICY.supportedAiServiceCount);
-  const rawSuggestedPrice = (plan?.price ?? 0) * featureRatio;
+  const approvedCredits = Math.max(1, requestedCredits || baselineCredits);
   const creditFloorPrice = approvedCredits * policy.minimumPricePerCreditVnd;
-  const suggestedPrice = Math.ceil(Math.max(policy.minimumContractPriceVnd, rawSuggestedPrice, creditFloorPrice));
+  const suggestedPrice = Math.ceil(Math.max(policy.minimumContractPriceVnd, plan?.price ?? 0, creditFloorPrice));
 
   return {
     creditsPerCycleOverride: Math.ceil(approvedCredits),
@@ -173,7 +149,7 @@ function parseRequestNotes(inquiry: SalesInquiryDto) {
     const invoice = readValue(line, "Invoice email");
     const payment = readValue(line, "Payment terms");
     const credits = readValue(line, "Requested monthly credits");
-    const term = readValue(line, "Contract term");
+    const frequency = readValue(line, "Billing frequency");
     const members = readValue(line, "Workspace members requested");
     const languages = readValue(line, "Languages");
     const aiServices = readValue(line, "AI services");
@@ -184,7 +160,7 @@ function parseRequestNotes(inquiry: SalesInquiryDto) {
     if (invoice) details.invoiceEmail = invoice;
     if (payment) details.paymentTerms = payment;
     if (credits) details.requestedMonthlyCredits = credits;
-    if (term) details.contractTerm = term;
+    if (frequency) details.billingFrequency = frequency;
     if (members) details.workspaceMembers = members;
     if (languages) details.languages = languages;
     if (aiServices) details.aiServices = aiServices;
@@ -437,11 +413,6 @@ export function AdminSalesInquiriesTab() {
                       item: "Credits",
                       baseline: `${formatNumber(baselineCredits)} / month`,
                       request: `${formatNumber(requestedCredits)} / month`,
-                    },
-                    {
-                      item: "Contract term",
-                      baseline: "Template default",
-                      request: requestDetails.contractTerm ?? "N/A",
                     },
                     {
                       item: "Payment terms",
