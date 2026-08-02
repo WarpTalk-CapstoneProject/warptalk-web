@@ -78,18 +78,22 @@ export interface CreateTranslationRoomRequest {
   workspaceId: string;
   title: string;
   description?: string;
-  translationRoomType:
-    | "instant"
-    | "scheduled"
-    | "one_to_one"
-    | "group"
-    | "webinar"
-    | "b2b_virtual_mic";
-  maxParticipants: number;
-      sourceLanguage: string;
+  /** One of MEETING_TYPES' `value` (src/lib/meeting-types.ts). */
+  translationRoomType: string;
+  /** Omit to let the meeting type decide the seat count. */
+  maxParticipants?: number;
+  sourceLanguage: string;
   targetLanguages: string[];
+  /**
+   * Every field optional and only sent when the user overrides it — the meeting type seeds
+   * whatever is left out, so sending `false` is not the same as sending nothing.
+   */
   settings?: {
-    requiresApproval: boolean;
+    requiresApproval?: boolean;
+    artifactAccess?: string;
+    muteOnEntry?: boolean;
+    autoRecord?: boolean;
+    breakoutsEnabled?: boolean;
   };
   scheduledAt?: string;
   invitedEmails?: string[];
