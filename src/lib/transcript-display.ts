@@ -28,13 +28,25 @@ export function dedupeTranscriptSegments(
   return Array.from(byId.values());
 }
 
-export function groupTranscriptSegments(segments: TranscriptSegmentDto[]): TranscriptSegmentDto[] {
-  const utterances: TranscriptSegmentDto[] = [];
+/**
+ * A rendered utterance bubble. `segmentId` is the FIRST segment folded into it, so it is
+ * not a complete identity: anything keyed by the segment ids the backend emitted (AI
+ * suggestions, for one) has to look at `mergedSegmentIds` instead, which lists every
+ * segment this bubble absorbed — including that first one.
+ */
+export type GroupedTranscriptSegment = TranscriptSegmentDto & {
+  mergedSegmentIds: string[];
+};
+
+export function groupTranscriptSegments(
+  segments: TranscriptSegmentDto[],
+): GroupedTranscriptSegment[] {
+  const utterances: GroupedTranscriptSegment[] = [];
 
   for (const segment of segments) {
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameUtterance(previous, segment)) {
-      utterances.push({ ...segment });
+      utterances.push({ ...segment, mergedSegmentIds: [segment.segmentId] });
       continue;
     }
 
@@ -44,10 +56,26 @@ export function groupTranscriptSegments(segments: TranscriptSegmentDto[]): Trans
       translatedText: appendText(previous.translatedText, segment.translatedText) || undefined,
       confidence: Math.min(previous.confidence, segment.confidence),
       endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
+      // Merging drops the absorbed segment's id from `segmentId` forever. Without this
+      // list, a suggestion anchored to the 2nd or 3rd segment of an utterance matches no
+      // bubble at all and silently never renders.
+      mergedSegmentIds: [...previous.mergedSegmentIds, segment.segmentId],
     };
   }
 
   return utterances;
+}
+
+/** The suggestion (if any) anchored to any segment this bubble absorbed. */
+export function findSuggestionForUtterance<T>(
+  utterance: GroupedTranscriptSegment,
+  suggestions: Record<string, T>,
+): T | undefined {
+  for (const segmentId of utterance.mergedSegmentIds) {
+    const match = suggestions[segmentId];
+    if (match) return match;
+  }
+  return undefined;
 }
 
 /**
