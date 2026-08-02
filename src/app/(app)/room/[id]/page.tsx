@@ -38,6 +38,7 @@ import { resolveVoicePreference } from "@/lib/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
+  AiSuggestionDto,
   ParticipantInfoDto,
   TranscriptSegmentDto,
   TranslationRoomStateDto,
@@ -234,6 +235,7 @@ export default function RoomDetailPage() {
   const addOrMergeTranslationText = useTranslationRoomStore(
     (state) => state.addOrMergeTranslationText,
   );
+  const addSuggestion = useTranslationRoomStore((state) => state.addSuggestion);
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
   const addChatMessage = useTranslationRoomStore(
     (state) => state.addChatMessage,
@@ -862,6 +864,12 @@ export default function RoomDetailPage() {
         addOrMergeTranslationText(translation);
       },
     );
+    connection.on("AiSuggestionReceived", (suggestion: AiSuggestionDto) => {
+      // Same gate the transcript handlers use: a suggestion belongs to a live segment, so
+      // it has nothing to attach to once translation has stopped.
+      if (!translationActiveRef.current) return;
+      addSuggestion(suggestion);
+    });
     connection.on("TranslationRoomEnded", () => {
       void refetchRoom();
       toast.info("This meeting has ended.");
@@ -1095,6 +1103,7 @@ export default function RoomDetailPage() {
   }, [
     addLiveParticipant,
     addOrMergeTranslationText,
+    addSuggestion,
     addTranscriptSegment,
     refetchParticipants,
     refetchRoom,
