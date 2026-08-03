@@ -794,6 +794,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   exact: true,
                 }}
                 pathname={pathname}
+                collapsed={collapsed}
               />
               <NavLink
                 item={{
@@ -802,6 +803,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   href: "/admin/workspaces",
                 }}
                 pathname={pathname}
+                collapsed={collapsed}
               />
               <NavLink
                 item={{
@@ -810,6 +812,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   href: "/admin/billing",
                 }}
                 pathname={pathname}
+                collapsed={collapsed}
               />
               <NavLink
                 item={{
