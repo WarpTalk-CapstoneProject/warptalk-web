@@ -16,7 +16,6 @@ import {
   Users,
   FileText,
   User,
-  Shield,
   Warning,
   House,
   Sliders,
@@ -729,7 +728,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleSignOut();
+                  logout();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
                 title="Sign out"
@@ -746,8 +745,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </button>
             )}
           </div>
-        )
-      }
+        </div>
+        )}
 
       {/* Join Room Dialog */}
       <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
