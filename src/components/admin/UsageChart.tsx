@@ -137,7 +137,7 @@ export function UsageChart({ workspaceId, className, refetchIntervalMs }: UsageC
 
   return (
     <Card
-      className={`bg-surface-1 border-hairline shadow-linear ${className || ""}`}
+      className={`min-w-0 bg-surface-1 border-hairline shadow-linear ${className || ""}`}
     >
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="space-y-1">
@@ -212,8 +212,8 @@ export function UsageChart({ workspaceId, className, refetchIntervalMs }: UsageC
             No data available for selected period
           </div>
         ) : (
-          <div className="h-[300px] w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="mt-4 h-[300px] min-h-[300px] w-full min-w-0 overflow-hidden">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={300}>
               <BarChart
                 data={chartData}
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}

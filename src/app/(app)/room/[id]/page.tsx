@@ -1136,7 +1136,9 @@ export default function RoomDetailPage() {
 
   useEffect(() => {
     if (!roomId) return;
-    const chatConnection = createHubConnection("/api/v1/meetings/chat-hub");
+    const chatConnection = createHubConnection("/api/v1/meetings/chat-hub", {
+      webSocketsOnly: true,
+    });
     chatConnection.on("ChatMessageHidden", (messageId: string) => {
       useTranslationRoomStore.getState().hideChatMessage(messageId);
     });

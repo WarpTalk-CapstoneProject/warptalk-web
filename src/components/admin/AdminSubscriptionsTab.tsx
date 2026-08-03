@@ -118,11 +118,6 @@ export function AdminSubscriptionsTab() {
     enabled: subscriptions.some((sub) => Boolean(sub.workspaceId)),
   });
 
-  const { data: salesInquiries } = useQuery({
-    queryKey: ["admin-subscription-sales-inquiry-names"],
-    queryFn: () => billingService.getSalesInquiries(1, 500),
-  });
-
   const cancelSubscriptionMutation = useMutation({
     mutationFn: (workspaceId: string) => billingService.cancelSubscription(workspaceId, "Cancelled by Admin"),
     onSuccess: () => {
@@ -147,9 +142,6 @@ export function AdminSubscriptionsTab() {
 
   const workspaceNamesById = useMemo(() => {
     const names = new Map<string, string>();
-    (salesInquiries?.items ?? []).forEach((inquiry) => {
-      if (inquiry.workspaceId && inquiry.company) names.set(inquiry.workspaceId, inquiry.company);
-    });
     (workspaces?.items ?? []).forEach((workspace) => {
       names.set(workspace.id, workspace.name);
     });
@@ -157,7 +149,7 @@ export function AdminSubscriptionsTab() {
       names.set(id, name);
     });
     return names;
-  }, [salesInquiries?.items, workspaceDetailsById, workspaces?.items]);
+  }, [workspaceDetailsById, workspaces?.items]);
 
   const filteredSubscriptions = useMemo(() => {
     const query = workspaceFilter.trim().toLowerCase();

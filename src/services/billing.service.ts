@@ -1,5 +1,5 @@
 import apiClient from "@/lib/api/client";
-import type { CreditBalanceDto, BillingPolicyDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto, UsageAlertDto, TopWorkspaceDto, UsageChartDto, UpdateBillingPolicyRequest, UpdateSubscriptionContractTermsRequest, PricingConfigDto, UpdatePricingConfigRequest, UsageRateCardDto, UpsertUsageRateCardRequest, PlanRequest, TrialSubscriptionRequest, CreateWorkspaceContractSubscriptionRequest, CheckoutSessionDto, CreateSalesInquiryRequest, CreateWorkspaceSalesInquiryRequest, SalesInquiryDto, ConvertSalesInquiryToContractRequest, LinkSalesInquiryWorkspaceRequest } from "@/types/billing";
+import type { CreditBalanceDto, BillingPolicyDto, BillingReportDto, CreditHistoryFilters, CreditTransactionDto, PagedResult, SubscriptionDto, InvoiceDto, UsageAlertDto, TopWorkspaceDto, UsageChartDto, UpdateBillingPolicyRequest, UpdateSubscriptionContractTermsRequest, PricingConfigDto, UpdatePricingConfigRequest, UsageRateCardDto, UpsertUsageRateCardRequest, PlanRequest, TrialSubscriptionRequest, CreateWorkspaceContractSubscriptionRequest, CheckoutSessionDto, CreateWorkspaceSalesInquiryRequest, SalesInquiryDto } from "@/types/billing";
 
 export const billingService = {
   /**
@@ -149,51 +149,22 @@ export const billingService = {
     return data;
   },
 
-  createSalesInquiry: async (request: CreateSalesInquiryRequest): Promise<SalesInquiryDto> => {
-    const { data } = await apiClient.post<SalesInquiryDto>(`/sales-inquiries`, request);
-    return data;
-  },
-
   createWorkspaceSalesInquiry: async (request: CreateWorkspaceSalesInquiryRequest): Promise<SalesInquiryDto> => {
     const { data } = await apiClient.post<SalesInquiryDto>(`/sales-inquiries/workspace`, request);
     return data;
   },
 
-  getSalesInquiries: async (
+  getWorkspaceSalesInquiries: async (
+    workspaceId: string,
     pageNumber = 1,
-    pageSize = 20,
-    filters?: { status?: string; search?: string; workspaceId?: string }
+    pageSize = 20
   ): Promise<PagedResult<SalesInquiryDto>> => {
-    const { data } = await apiClient.get<PagedResult<SalesInquiryDto>>(`/sales-inquiries`, {
+    const { data } = await apiClient.get<PagedResult<SalesInquiryDto>>(`/sales-inquiries/workspace/${workspaceId}`, {
       params: {
         page: pageNumber,
         pageSize,
-        status: filters?.status && filters.status !== "all" ? filters.status : undefined,
-        search: filters?.search || undefined,
-        workspaceId: filters?.workspaceId || undefined,
       },
     });
-    return data;
-  },
-
-  updateSalesInquiryStatus: async (id: string, status: string): Promise<SalesInquiryDto> => {
-    const { data } = await apiClient.patch<SalesInquiryDto>(`/sales-inquiries/${id}/status`, { status });
-    return data;
-  },
-
-  linkSalesInquiryWorkspace: async (
-    id: string,
-    request: LinkSalesInquiryWorkspaceRequest
-  ): Promise<SalesInquiryDto> => {
-    const { data } = await apiClient.patch<SalesInquiryDto>(`/sales-inquiries/${id}/workspace`, request);
-    return data;
-  },
-
-  convertSalesInquiryToContract: async (
-    id: string,
-    request: ConvertSalesInquiryToContractRequest
-  ): Promise<SalesInquiryDto> => {
-    const { data } = await apiClient.post<SalesInquiryDto>(`/sales-inquiries/${id}/convert-to-contract`, request);
     return data;
   },
 

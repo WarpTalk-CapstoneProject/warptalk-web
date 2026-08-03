@@ -142,16 +142,8 @@ export function AdminInvoicesTab() {
     enabled: invoiceWorkspaceIds.length > 0,
   });
 
-  const { data: salesInquiries } = useQuery({
-    queryKey: ["admin-invoice-sales-inquiry-names"],
-    queryFn: () => billingService.getSalesInquiries(1, 500),
-  });
-
   const workspaceNamesById = useMemo(() => {
     const names = new Map<string, string>();
-    (salesInquiries?.items ?? []).forEach((inquiry) => {
-      if (inquiry.workspaceId && inquiry.company) names.set(inquiry.workspaceId, inquiry.company);
-    });
     (workspaces?.items ?? []).forEach((workspace) => {
       names.set(workspace.id, workspace.name);
     });
@@ -159,7 +151,7 @@ export function AdminInvoicesTab() {
       names.set(id, name);
     });
     return names;
-  }, [salesInquiries?.items, workspaceDetailsById, workspaces?.items]);
+  }, [workspaceDetailsById, workspaces?.items]);
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter(inv => {

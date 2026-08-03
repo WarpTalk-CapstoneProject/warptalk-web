@@ -83,7 +83,7 @@ export function FeatureBreakdownChart({
 
   return (
     <Card
-      className={`bg-surface-1 border-hairline shadow-linear ${className || ""}`}
+      className={`min-w-0 bg-surface-1 border-hairline shadow-linear ${className || ""}`}
     >
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="space-y-1">
@@ -125,8 +125,8 @@ export function FeatureBreakdownChart({
             No consumption recorded for this period
           </div>
         ) : (
-          <div className="h-[250px] w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="mt-4 h-[250px] min-h-[250px] w-full min-w-0 overflow-hidden">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={250}>
               <PieChart>
                 <Pie
                   data={chartData}

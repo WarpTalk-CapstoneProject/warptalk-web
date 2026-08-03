@@ -327,7 +327,7 @@ export default function AdminWorkspaceBillingPage({
 
   const { data: salesInquiryPage } = useQuery({
     queryKey: ["sales-inquiries", "workspace", workspaceId],
-    queryFn: () => billingService.getSalesInquiries(1, 5, { workspaceId }),
+    queryFn: () => billingService.getWorkspaceSalesInquiries(workspaceId, 1, 5),
     enabled: embedded && !!workspaceId && isWorkspaceIdValid,
     retry: 1,
   });

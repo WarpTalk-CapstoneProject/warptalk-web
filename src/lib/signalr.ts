@@ -66,11 +66,17 @@ export function createHubConnection(
     | "/hubs/translation-room"
     | "/hubs/notification"
     | "/api/v1/meetings/chat-hub"
-    | "/api/v1/assistant/chat-hub"
+    | "/api/v1/assistant/chat-hub",
+  options?: { webSocketsOnly?: boolean },
 ): signalR.HubConnection {
+  const transport = options?.webSocketsOnly
+    ? signalR.HttpTransportType.WebSockets
+    : signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling;
+
   const connection = new signalR.HubConnectionBuilder()
     .withUrl(`${BASE_URL}${hubPath}`, {
-      transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling,
+      transport,
+      skipNegotiation: options?.webSocketsOnly,
       accessTokenFactory: async () => (await refreshAccessToken()) ?? "",
     })
     .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])

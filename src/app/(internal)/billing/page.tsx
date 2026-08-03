@@ -27,7 +27,6 @@ import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { AdminInvoicesTab } from "@/components/admin/AdminInvoicesTab";
 import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
 import { AdminAlertsTab } from "@/components/admin/AdminAlertsTab";
-import { AdminSalesInquiriesTab } from "@/components/admin/AdminSalesInquiriesTab";
 import { CreateWorkspaceContractModal } from "@/components/admin/CreateWorkspaceContractModal";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -374,7 +373,6 @@ export default function AdminBillingPage() {
 
       <Tabs defaultValue="subscriptions" className="w-full">
         <TabsList className="bg-surface-2 p-1 rounded-lg">
-          <TabsTrigger value="sales" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Sales inquiries</TabsTrigger>
           <TabsTrigger value="subscriptions" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Contracts</TabsTrigger>
           <TabsTrigger value="alerts" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Review Queue</TabsTrigger>
           <TabsTrigger value="invoices" className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm">Invoices</TabsTrigger>
@@ -592,10 +590,6 @@ export default function AdminBillingPage() {
 
         <TabsContent value="invoices" className="mt-6 outline-none">
           <AdminInvoicesTab />
-        </TabsContent>
-
-        <TabsContent value="sales" className="mt-6 outline-none">
-          <AdminSalesInquiriesTab />
         </TabsContent>
 
         <TabsContent value="subscriptions" className="mt-6 outline-none">

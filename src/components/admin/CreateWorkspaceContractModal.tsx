@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { WorkspaceService } from "@/services/workspace.service";
 import { billingService } from "@/services/billing.service";
 import { toast } from "sonner";
-import type { PlanDto, SalesInquiryDto, SubscriptionDto, UpdateSubscriptionContractTermsRequest } from "@/types/billing";
+import type { PlanDto, SubscriptionDto, UpdateSubscriptionContractTermsRequest } from "@/types/billing";
 import type { WorkspaceDto } from "@/types/workspace";
 import { BILLING_POLICY } from "@/constants/billing-policy";
 
@@ -19,7 +19,6 @@ const toInputNumber = (value: number | null | undefined) =>
   value === null || value === undefined ? "" : String(value);
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const closedInquiryStatuses = new Set(["converted", "closed"]);
 
 function formatVatRate(vatRate?: number | null) {
   return typeof vatRate === "number" && Number.isFinite(vatRate)
@@ -46,26 +45,12 @@ function getHttpStatus(error: unknown) {
 type WorkspaceContractCandidate = {
   workspace: WorkspaceDto;
   subscription?: SubscriptionDto;
-  inquiry?: SalesInquiryDto;
   priority: number;
   label: string;
-  requestedCredits: number | null;
 };
 
 const formatCredits = (value: number | null | undefined) =>
   typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "N/A";
-
-const parseRequestedCredits = (inquiry?: SalesInquiryDto) => {
-  if (!inquiry) return null;
-  const estimate = inquiry.pricingEstimate as { estimatedCredits?: unknown; creditsPerCycle?: unknown } | null | undefined;
-  const estimatedCredits = Number(estimate?.estimatedCredits ?? estimate?.creditsPerCycle);
-  if (Number.isFinite(estimatedCredits) && estimatedCredits > 0) return estimatedCredits;
-
-  const match = inquiry.currentMonthlyMeetingVolume?.match(/[\d,.]+/);
-  if (!match) return null;
-  const parsed = Number(match[0].replace(/,/g, ""));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-};
 
 export function CreateWorkspaceContractModal({
   open,
@@ -85,7 +70,6 @@ export function CreateWorkspaceContractModal({
   const [overagePriceOverride, setOveragePriceOverride] = useState("");
   const [invoiceTermsDaysOverride, setInvoiceTermsDaysOverride] = useState("");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
-  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: plans = [], isLoading: isLoadingPlans } = useQuery({
@@ -118,12 +102,6 @@ export function CreateWorkspaceContractModal({
     enabled: open,
   });
 
-  const { data: salesInquiries } = useQuery({
-    queryKey: ["admin-contract-sales-inquiry-candidates"],
-    queryFn: () => billingService.getSalesInquiries(1, 200),
-    enabled: open,
-  });
-
   const enterprisePlan = useMemo<PlanDto | undefined>(() => {
     return plans.find((p) => p.slug?.toLowerCase() === "enterprise" || p.tier?.toLowerCase() === "enterprise")
       ?? plans.find((p) => p.isActive)
@@ -136,36 +114,17 @@ export function CreateWorkspaceContractModal({
         .filter((subscription) => subscription.workspaceId)
         .map((subscription) => [subscription.workspaceId as string, subscription])
     );
-    const openInquiriesByWorkspaceId = new Map<string, SalesInquiryDto>();
-
-    (salesInquiries?.items ?? [])
-      .filter((inquiry) => inquiry.workspaceId && !closedInquiryStatuses.has(inquiry.status?.toLowerCase()))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .forEach((inquiry) => {
-        if (inquiry.workspaceId && !openInquiriesByWorkspaceId.has(inquiry.workspaceId)) {
-          openInquiriesByWorkspaceId.set(inquiry.workspaceId, inquiry);
-        }
-      });
 
     return (workspaces?.items ?? [])
       .map((workspace) => {
         const subscription = subscriptionsByWorkspaceId.get(workspace.id);
-        const inquiry = openInquiriesByWorkspaceId.get(workspace.id);
         const hasContract = Boolean(subscription);
         const hasTrial = Boolean(subscription?.trialEndsAt);
-        const hasOpenRequest = Boolean(inquiry);
-        const requestedCredits = parseRequestedCredits(inquiry);
 
         let priority = 4;
         let label = "No contract";
 
-        if (hasTrial && hasOpenRequest) {
-          priority = 0;
-          label = "Trial + request";
-        } else if (!hasContract && hasOpenRequest) {
-          priority = 1;
-          label = "Request, no contract";
-        } else if (!hasContract) {
+        if (!hasContract) {
           priority = 2;
           label = "No contract";
         } else if (hasTrial) {
@@ -173,7 +132,7 @@ export function CreateWorkspaceContractModal({
           label = "Trial";
         }
 
-        return { workspace, subscription, inquiry, priority, label, requestedCredits };
+        return { workspace, subscription, priority, label };
       })
       .filter((candidate) => candidate.priority <= 3)
       .sort((a, b) => {
@@ -181,7 +140,7 @@ export function CreateWorkspaceContractModal({
         return new Date(b.workspace.createdAt).getTime() - new Date(a.workspace.createdAt).getTime();
       })
       .slice(0, 8);
-  }, [globalSubscriptions, salesInquiries, workspaces]);
+  }, [globalSubscriptions, workspaces]);
 
   const selectedCandidate = useMemo(() => {
     return workspaceCandidates.find((candidate) => candidate.workspace.id === selectedWorkspaceId);
@@ -205,17 +164,14 @@ export function CreateWorkspaceContractModal({
     setOveragePriceOverride("");
     setInvoiceTermsDaysOverride("");
     setSelectedWorkspaceId(null);
-    setSelectedInquiryId(null);
     setIsSubmitting(false);
   };
 
   const applyCandidate = (candidate: WorkspaceContractCandidate) => {
     setSelectedWorkspaceId(candidate.workspace.id);
-    setSelectedInquiryId(candidate.inquiry?.id ?? null);
     setWorkspaceName(candidate.workspace.name);
     setContactEmail(
-      candidate.inquiry?.workEmail
-        ?? candidate.subscription?.billingContactEmail
+      candidate.subscription?.billingContactEmail
         ?? ""
     );
     applyBaselineTerms(enterprisePlan);
@@ -340,24 +296,13 @@ export function CreateWorkspaceContractModal({
       const contractTerms = buildContractTerms(resolveBillingEmail(name));
 
       const newWs = selectedCandidate?.workspace ?? await getOrCreateWorkspace(name);
-
-      if (selectedInquiryId) {
-        await billingService.convertSalesInquiryToContract(selectedInquiryId, {
-          workspaceId: newWs.id,
-          planId: enterprisePlan.id,
-          contractTerms,
-        });
-      } else {
-        await createOrUpdateEnterpriseContract(newWs.id, enterprisePlan.id, contractTerms);
-      }
+      await createOrUpdateEnterpriseContract(newWs.id, enterprisePlan.id, contractTerms);
 
       toast.success(`Workspace "${newWs.name}" saved with an Enterprise contract.`);
       
       queryClient.invalidateQueries({ queryKey: ["admin-billing-workspaces"] });
       queryClient.invalidateQueries({ queryKey: ["global-subscriptions-list"] });
       queryClient.invalidateQueries({ queryKey: ["global-billing-metrics"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-contract-sales-inquiry-candidates"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-sales-inquiries"] });
 
       onOpenChange(false);
       resetForm();
@@ -398,8 +343,6 @@ export function CreateWorkspaceContractModal({
               {workspaceCandidates.length > 0 ? (
                 workspaceCandidates.map((candidate) => {
                   const baseline = enterprisePlan?.creditsPerCycle ?? null;
-                  const requested = candidate.requestedCredits;
-                  const delta = requested !== null && baseline !== null ? requested - baseline : null;
                   return (
                     <button
                       key={candidate.workspace.id}
@@ -418,14 +361,10 @@ export function CreateWorkspaceContractModal({
                         </span>
                       </div>
                       <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {candidate.inquiry?.workEmail ?? candidate.subscription?.billingContactEmail ?? candidate.workspace.slug}
+                        {candidate.subscription?.billingContactEmail ?? candidate.workspace.slug}
                       </p>
-                      <p className="mt-2 text-xs font-medium text-foreground">
-                        Request: {requested ? `${formatCredits(requested)} credits / month` : "No credit request"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         Baseline: {formatCredits(baseline)} credits
-                        {delta !== null ? ` (${delta === 0 ? "matches" : `${delta > 0 ? "+" : ""}${formatCredits(delta)} vs baseline`})` : ""}
                       </p>
                     </button>
                   );
@@ -447,7 +386,6 @@ export function CreateWorkspaceContractModal({
                 onChange={(e) => {
                   setWorkspaceName(e.target.value);
                   setSelectedWorkspaceId(null);
-                  setSelectedInquiryId(null);
                 }}
                 className="h-10 bg-surface-2 border-hairline"
                 autoFocus

@@ -233,7 +233,7 @@ function WorkspaceEnterpriseBillingContent() {
 
   const { data: salesInquiryPage, isLoading: isSalesInquiryLoading } = useQuery({
     queryKey: ["sales-inquiries", "workspace", workspaceId],
-    queryFn: () => billingService.getSalesInquiries(1, 5, { workspaceId }),
+    queryFn: () => billingService.getWorkspaceSalesInquiries(workspaceId, 1, 5),
     enabled: !!workspaceId && canViewBilling && !!subscription?.trialEndsAt,
     retry: 1,
   });
