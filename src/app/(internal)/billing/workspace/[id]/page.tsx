@@ -1200,13 +1200,13 @@ export default function AdminWorkspaceBillingPage({
                           <SelectValue placeholder="All types">
                             {historyTypeFilter === "ALL" && "All types"}
                             {historyTypeFilter === "top_up" && "Credits Added"}
-                            {historyTypeFilter === "consumption" && "Consumption"}
+                            {historyTypeFilter === "consume" && "Consumption"}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ALL">All types</SelectItem>
                           <SelectItem value="top_up">Credits Added</SelectItem>
-                          <SelectItem value="consumption">Consumption</SelectItem>
+                          <SelectItem value="consume">Consumption</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

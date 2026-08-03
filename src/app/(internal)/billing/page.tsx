@@ -136,7 +136,7 @@ export default function AdminBillingPage() {
   }, [logs]);
 
   const totalTopUp = logs.filter(t => t.type === "top_up").reduce((s, t) => s + t.amount, 0);
-  const totalConsumed = logs.filter(t => t.type === "consumption").reduce((s, t) => s + t.amount, 0);
+  const totalConsumed = logs.filter(t => t.type === "consume").reduce((s, t) => s + t.amount, 0);
   const totalAdjusted = logs.filter(t => t.type === "adjustment").reduce((s, t) => s + t.amount, 0);
 
   const buildHistoryFilters = () => ({
@@ -173,7 +173,7 @@ export default function AdminBillingPage() {
       const exportHistory = await fetchAllFilteredHistory();
       const exportLogs = exportHistory.items ?? [];
       const exportTotalTopUp = exportLogs.filter(t => t.type === "top_up").reduce((s, t) => s + t.amount, 0);
-      const exportTotalConsumed = exportLogs.filter(t => t.type === "consumption").reduce((s, t) => s + t.amount, 0);
+      const exportTotalConsumed = exportLogs.filter(t => t.type === "consume").reduce((s, t) => s + t.amount, 0);
       const exportTotalAdjusted = exportLogs.filter(t => t.type === "adjustment").reduce((s, t) => s + t.amount, 0);
 
       const workbook = new ExcelJS.Workbook();
@@ -415,7 +415,7 @@ export default function AdminBillingPage() {
                 <SelectContent>
                   <SelectItem value="ALL">All Types</SelectItem>
                   <SelectItem value="top_up">Top Up</SelectItem>
-                  <SelectItem value="consumption">Consumption</SelectItem>
+                  <SelectItem value="consume">Consumption</SelectItem>
                   <SelectItem value="adjustment">Adjustment</SelectItem>
                 </SelectContent>
               </Select>
@@ -514,7 +514,7 @@ export default function AdminBillingPage() {
                       <Badge variant="secondary" className={`rounded-sm text-[10px] tracking-wider font-medium ${
                         isRaw ? "bg-surface-3 text-ink uppercase" :
                         log.type === "top_up"      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" :
-                        log.type === "consumption" ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30" :
+                        log.type === "consume" ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30" :
                         log.type === "adjustment"  ? "bg-primary/15 text-primary border border-primary/30" :
                         log.type === "reserve"     ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30" :
                         "bg-surface-2 text-ink border-hairline"
@@ -532,7 +532,7 @@ export default function AdminBillingPage() {
                       {isRaw ? log.balanceAfter : log.balanceAfter.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right pr-4">
-                      {(isGrouped || log.type === "consumption") && (
+                      {(isGrouped || log.type === "consume") && (
                         <Button 
                           variant="ghost" 
                           size="sm"

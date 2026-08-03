@@ -194,7 +194,7 @@ export interface CreditTransactionDto {
   userId: string;
   userName?: string | null;
   amount: number; // negative = consumption, positive = top-up
-  type: 'consumption' | 'top_up' | 'reserve' | 'refund' | 'adjustment';
+  type: 'consume' | 'top_up' | 'reserve' | 'refund' | 'adjustment';
   description?: string;
   referenceType?: string;
   referenceId?: string;
