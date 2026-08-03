@@ -36,6 +36,7 @@ import {
   CreditCard,
   FileText,
   GearSix,
+  Gauge,
   Globe,
   House,
   Keyboard,
@@ -61,6 +62,7 @@ interface NavItem {
   icon: IconType;
   label: string;
   href: string;
+  exact?: boolean;
   actions?: Array<{
     icon: IconType;
     href?: string;
@@ -71,7 +73,8 @@ interface NavItem {
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const isActive =
-    pathname === item.href || pathname.startsWith(item.href + "/");
+    pathname === item.href ||
+    (!item.exact && pathname.startsWith(item.href + "/"));
   return (
     <div
       className={cn(
@@ -612,6 +615,31 @@ export function LinearSidebar() {
               </span>
             </div>
             <div className="flex flex-col gap-px">
+              <NavLink
+                item={{
+                  icon: Gauge,
+                  label: "Overview",
+                  href: "/admin",
+                  exact: true,
+                }}
+                pathname={pathname}
+              />
+              <NavLink
+                item={{
+                  icon: Users,
+                  label: "Workspaces",
+                  href: "/admin/workspaces",
+                }}
+                pathname={pathname}
+              />
+              <NavLink
+                item={{
+                  icon: CreditCard,
+                  label: "Billing",
+                  href: "/admin/billing",
+                }}
+                pathname={pathname}
+              />
               <NavLink
                 item={{
                   icon: Globe,

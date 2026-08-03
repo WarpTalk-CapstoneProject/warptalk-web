@@ -137,6 +137,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace" ||
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
 
   useEffect(() => {
     const handle = requestAnimationFrame(() => setMounted(true));
@@ -150,7 +151,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [mounted, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!mounted || !isAuthenticated || isOnboardingRoute || workspacesLoading) return;
+    if (!mounted || !isAuthenticated || isOnboardingRoute || isAdminRoute || workspacesLoading) return;
 
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
@@ -176,7 +177,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
 
   if (!mounted || !isAuthenticated) {
     return (
@@ -190,7 +191,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  if (!activeWorkspaceId || workspacesLoading) {
+  if (!isAdminRoute && (!activeWorkspaceId || workspacesLoading)) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -337,7 +338,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <WorkspaceTabs />
+        {!isAdminRoute && <WorkspaceTabs />}
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <main className="min-h-0 flex-1 overflow-y-auto">
@@ -345,7 +346,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </main>
 
           {/* Right Sidebar (Context/Properties) */}
-          {!pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
+          {!isAdminRoute && !pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
             <AnimatedWidthPanel
               open={rightSidebarOpen}
               width={260}
