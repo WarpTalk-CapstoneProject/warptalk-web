@@ -115,13 +115,6 @@ export const billingService = {
     return data;
   },
 
-  /**
-   * Manually adjust credits for a workspace (admin only).
-   */
-  adjustCredits: async (workspaceId: string, amount: number, reason: string): Promise<CreditTransactionDto> => {
-    const { data } = await apiClient.post<CreditTransactionDto>(`/credits/manual-adjust`, { workspaceId, amount, reason, adminUserId: "" });
-    return data;
-  },
 
   /**
    * Get the active subscription for a workspace.
@@ -221,22 +214,6 @@ export const billingService = {
     });
   },
 
-  /**
-   * Upgrade or downgrade the active subscription plan for a workspace.
-   */
-  changeSubscription: async (workspaceId: string, newPlanId: string): Promise<import("@/types/billing").SubscriptionDto> => {
-    const { data } = await apiClient.put<import("@/types/billing").SubscriptionDto>(
-      `/subscriptions/workspace/${workspaceId}/change-plan`,
-      { workspaceId, planId: newPlanId }
-    );
-    return data;
-  },
-
-  createSubscription: async (workspaceId: string, planId: string): Promise<SubscriptionDto> => {
-    const { data } = await apiClient.post<SubscriptionDto>(`/subscriptions`, { workspaceId, planId });
-    return data;
-  },
-
   createWorkspaceContractSubscription: async (
     request: CreateWorkspaceContractSubscriptionRequest
   ): Promise<SubscriptionDto> => {
@@ -268,19 +245,6 @@ export const billingService = {
     return data;
   },
 
-  simulateCycleClose: async (workspaceId: string): Promise<{ closedCycles: number }> => {
-    const { data } = await apiClient.post<{ closedCycles: number }>(`/subscriptions/workspace/${workspaceId}/simulate-cycle-close`);
-    return data;
-  },
-
-  /**
-   * Create a new subscription plan (Admin only).
-   */
-  createPlan: async (plan: PlanRequest): Promise<import("@/types/billing").PlanDto> => {
-    const { data } = await apiClient.post<import("@/types/billing").PlanDto>(`/plans`, plan);
-    return data;
-  },
-
   /**
    * Update an existing subscription plan (Admin only).
    */
@@ -289,12 +253,6 @@ export const billingService = {
     return data;
   },
 
-  /**
-   * Deactivate a subscription plan (Admin only).
-   */
-  deactivatePlan: async (id: string): Promise<void> => {
-    await apiClient.delete(`/plans/${id}`);
-  },
 
   /**
    * Get all global invoices (Admin only)

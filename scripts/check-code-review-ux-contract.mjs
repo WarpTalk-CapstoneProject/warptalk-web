@@ -3,12 +3,11 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-const [setup, chat, stage, invite, adjust] = await Promise.all([
+const [setup, chat, stage, invite] = await Promise.all([
   read("src/components/rooms/setup-room-modal.tsx"),
   read("src/components/rooms/live/chat-panel.tsx"),
   read("src/components/rooms/live/meeting-stage.tsx"),
   read("src/components/rooms/create/invite-people-picker.tsx"),
-  read("src/components/admin/AdjustCreditModal.tsx"),
 ]);
 
 assert.match(setup, /mediaGenerationRef/, "media preview must invalidate stale starts");
@@ -32,12 +31,4 @@ assert.doesNotMatch(
   /member\.email \|\| member\.userId/,
   "member IDs must never be submitted as email addresses",
 );
-assert.match(
-  adjust,
-  /MAX_CREDIT_ADJUSTMENT/,
-  "credit changes need a bounded amount",
-);
-assert.match(adjust, /Number\.isFinite/, "credit changes must reject non-finite values");
-assert.match(adjust, /confirmation/, "credit changes need an explicit confirmation step");
-
 console.log("Code-review UX contracts passed.");
