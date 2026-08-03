@@ -31,17 +31,19 @@ import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 function AnimatedWidthPanel({
   open,
   width,
+  collapsedWidth = 0,
   side,
   className,
   children,
 }: {
   open: boolean;
   width: number;
+  collapsedWidth?: number;
   side: "left" | "right";
   className?: string;
   children: React.ReactNode;
 }) {
-  const [initialWidth] = useState(() => (open ? width : 0));
+  const [initialWidth] = useState(() => (open ? width : collapsedWidth));
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const hasMounted = useRef(false);
@@ -52,10 +54,10 @@ function AnimatedWidthPanel({
     if (!panel || !content) return;
 
     if (!hasMounted.current) {
-      gsap.set(panel, { width: open ? width : 0 });
+      gsap.set(panel, { width: open ? width : collapsedWidth });
       gsap.set(content, {
-        autoAlpha: open ? 1 : 0,
-        x: open ? 0 : side === "left" ? -14 : 14,
+        autoAlpha: open || collapsedWidth > 0 ? 1 : 0,
+        x: open || collapsedWidth > 0 ? 0 : side === "left" ? -14 : 14,
       });
       hasMounted.current = true;
       return;
@@ -63,23 +65,27 @@ function AnimatedWidthPanel({
 
     gsap.killTweensOf([panel, content]);
     gsap.to(panel, {
-      width: open ? width : 0,
+      width: open ? width : collapsedWidth,
       duration: 0.42,
       ease: "power3.inOut",
     });
     gsap.to(content, {
-      autoAlpha: open ? 1 : 0,
-      x: open ? 0 : side === "left" ? -14 : 14,
+      autoAlpha: open || collapsedWidth > 0 ? 1 : 0,
+      x: open || collapsedWidth > 0 ? 0 : side === "left" ? -14 : 14,
       duration: 0.28,
       ease: open ? "power3.out" : "power2.in",
     });
-  }, [open, side, width]);
+  }, [collapsedWidth, open, side, width]);
 
   return (
     <div
       ref={panelRef}
-      aria-hidden={!open}
-      className={cn("h-full shrink-0 overflow-hidden", !open && "pointer-events-none", className)}
+      aria-hidden={collapsedWidth === 0 && !open}
+      className={cn(
+        "h-full shrink-0 overflow-hidden",
+        collapsedWidth === 0 && !open && "pointer-events-none",
+        className,
+      )}
       style={{ width: initialWidth }}
     >
       <div ref={contentRef} className="h-full" style={{ width }}>
@@ -206,8 +212,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
-      <AnimatedWidthPanel open={leftSidebarOpen} width={224} side="left">
-        <LinearSidebar />
+      <AnimatedWidthPanel
+        open={leftSidebarOpen}
+        width={224}
+        collapsedWidth={64}
+        side="left"
+      >
+        <LinearSidebar collapsed={!leftSidebarOpen} />
       </AnimatedWidthPanel>
       {/* Main Column */}
       <div className="relative flex flex-col flex-1 overflow-hidden min-w-0">
@@ -219,7 +230,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button
               onClick={toggleLeftSidebar}
               className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
-              title="Toggle Sidebar"
+              title={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+              aria-label={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
             >
               <SidebarSimple size={13} weight="bold" />
             </button>

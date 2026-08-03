@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
+import { completeMeetingJoin } from "@/lib/meeting-join-state";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -283,9 +284,10 @@ function JoinMeetingContent() {
       });
 
       if (result.status === "success" && result.room) {
-        window.sessionStorage.setItem(
-          `warptalk.join.preview`,
-          JSON.stringify({
+        completeMeetingJoin({
+          storage: window.sessionStorage,
+          roomId: result.room.id,
+          joinState: {
             displayName: displayName.trim(),
             roomCode: normalizedCode,
             speakLanguage,
@@ -294,25 +296,21 @@ function JoinMeetingContent() {
             cameraEnabled,
             microphoneEnabled,
             speakerEnabled: true,
-            roomId: result.room.id,
             participantId: result.participant?.id,
-          }),
-        );
-        window.sessionStorage.setItem(
-          "warptalk.devices.preview",
-          JSON.stringify({
+          },
+          deviceState: {
             cameraEnabled,
             microphoneEnabled,
             noiseSuppressionEnabled,
             noiseSuppressionPreferenceVersion:
               NOISE_SUPPRESSION_PREFERENCE_VERSION,
             backgroundBlurEnabled,
-          }),
-        );
+          },
+          navigate: (path) => router.push(path),
+          closePreview: () => undefined,
+        });
 
         toast.success("Joined room successfully.");
-        // Go straight to the room since they just setup their devices!
-        router.push(`/room/${result.room.id}`);
       } else {
         toast.error(result.message || "Failed to join room.");
       }
