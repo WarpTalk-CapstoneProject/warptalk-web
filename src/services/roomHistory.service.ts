@@ -127,7 +127,8 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
 }
 
 export const roomHistoryService = {
-  async listEndedRooms(options?: {
+  async listEndedRooms(options: {
+    workspaceId: string;
     state?: "ready" | "empty" | "permission_denied" | "error";
     artifactStatus?: RoomArtifactStatus;
   }): Promise<RoomHistoryResponse> {
@@ -136,6 +137,7 @@ export const roomHistoryService = {
     }
 
     const { data } = await translationRoomService.history({
+      workspaceId: options.workspaceId,
       status: "ENDED,CANCELLED",
       pageSize: 100,
     });

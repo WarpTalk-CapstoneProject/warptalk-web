@@ -35,6 +35,7 @@ import { translationRoomService } from "@/services/translationRoom.service";
 import { openArtifactDownload } from "@/lib/download-artifact";
 import { transcriptService } from "@/services/transcript.service";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import type {
   EndedRoomHistoryItem,
   RoomHistoryArtifact,
@@ -64,12 +65,13 @@ const transcriptFilters: Array<{ value: TranscriptFilter; label: string }> = [
 ];
 
 export default function TranscriptsPage() {
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TranscriptFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("transcript");
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
-  const history = useRoomHistory();
+  const history = useRoomHistory(activeWorkspaceId);
 
   const items = useMemo(() => {
     const normalized = query.trim().toLowerCase();
