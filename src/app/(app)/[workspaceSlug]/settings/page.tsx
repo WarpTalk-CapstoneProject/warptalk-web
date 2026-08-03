@@ -297,7 +297,7 @@ export default function WorkspaceSettingsPage() {
   };
 
   const verifiedDomainList = verifiedDomainsQuery.data || [];
-  const activeDomains = verifiedDomainList.map((vd) => vd.domain);
+  const activeDomains = verifiedDomainList.map((vd: { domain: string }) => vd.domain);
 
   const handleAddDomain = async () => {
     const trimmed = newDomain.trim().toLowerCase();
@@ -329,7 +329,7 @@ export default function WorkspaceSettingsPage() {
   };
 
   const handleRemoveDomain = async (domainString: string) => {
-    const target = verifiedDomainList.find((vd) => vd.domain.toLowerCase() === domainString.toLowerCase());
+    const target = verifiedDomainList.find((vd: { id: string; domain: string }) => vd.domain.toLowerCase() === domainString.toLowerCase());
     if (!target) return;
 
     setDomainError(false);
@@ -734,7 +734,7 @@ export default function WorkspaceSettingsPage() {
                 ) : activeDomains.length === 0 ? (
                   <span className="text-[10px] text-ink-muted italic">No verified domains. Add one above.</span>
                 ) : (
-                  activeDomains.map((d) => (
+                  activeDomains.map((d: string) => (
                     <div key={d} className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs">
                       <Globe size={11} className="text-primary" />
                       <span className="font-mono text-[10px] text-ink">{d}</span>

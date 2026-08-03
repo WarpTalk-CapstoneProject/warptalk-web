@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { WorkspaceSettingsDto } from "@/types/workspace";
+import type { WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
 // Query Keys
@@ -77,7 +77,68 @@ export function useWorkspaceSettings(id: string) {
 export function useUpdateWorkspaceSettings(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (settings: WorkspaceSettingsDto) => WorkspaceService.updateSettings(workspaceId, settings),
+    mutationFn: (settings: Partial<WorkspaceSettingsDto>) => WorkspaceService.updateSettings(workspaceId, settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
+    },
+  });
+}
+
+export const usePatchWorkspaceSettings = useUpdateWorkspaceSettings;
+
+export function useVerifiedDomains(workspaceId: string) {
+  const settings = useWorkspaceSettings(workspaceId);
+  return {
+    ...settings,
+    data: (settings.data?.verifiedDomains || []).map((domain) => ({
+      id: domain,
+      domain,
+      status: "Verified",
+      createdAt: new Date().toISOString(),
+    })) as VerifiedDomainDto[],
+  };
+}
+
+export function useAddVerifiedDomain(workspaceId: string) {
+  const queryClient = useQueryClient();
+  const settingsQuery = useWorkspaceSettings(workspaceId);
+  const updateSettings = useUpdateWorkspaceSettings(workspaceId);
+
+  return useMutation({
+    mutationFn: async (domain: string) => {
+      if (!settingsQuery.data) throw new Error("Settings not loaded");
+      const currentDomains = settingsQuery.data.verifiedDomains || [];
+      if (currentDomains.includes(domain)) return;
+      const updated = {
+        ...settingsQuery.data,
+        verifiedDomains: [...currentDomains, domain],
+      };
+      await updateSettings.mutateAsync(updated);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
+    },
+  });
+}
+
+export function useRevokeVerifiedDomain(workspaceId: string) {
+  const queryClient = useQueryClient();
+  const settingsQuery = useWorkspaceSettings(workspaceId);
+  const updateSettings = useUpdateWorkspaceSettings(workspaceId);
+
+  return useMutation({
+    mutationFn: async (domainIdOrName: string) => {
+      if (!settingsQuery.data) throw new Error("Settings not loaded");
+      const currentDomains = settingsQuery.data.verifiedDomains || [];
+      const updatedDomains = currentDomains.filter(
+        (d) => d.toLowerCase() !== domainIdOrName.toLowerCase()
+      );
+      const updated = {
+        ...settingsQuery.data,
+        verifiedDomains: updatedDomains,
+      };
+      await updateSettings.mutateAsync(updated);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
@@ -111,6 +172,34 @@ export function useChangeWorkspaceMemberRole(workspaceId: string) {
   return useMutation({
     mutationFn: ({ userId, roleName }: { userId: string; roleName: string }) =>
       WorkspaceService.changeMemberRole(workspaceId, userId, roleName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
+    },
+  });
+}
+
+export function usePreviewWorkspaceMemberRoleChange(workspaceId: string) {
+  return useMutation({
+    mutationFn: ({ userId, toRole }: { userId: string; toRole: string }) =>
+      WorkspaceService.previewMemberRoleChange(workspaceId, userId, toRole),
+  });
+}
+
+export function useApplyWorkspaceMemberRoleChange(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      userId,
+      request,
+    }: {
+      userId: string;
+      request: {
+        targetRole: string;
+        idempotencyKey?: string;
+        previewToken?: string;
+        correlationId?: string;
+      };
+    }) => WorkspaceService.applyMemberRoleChange(workspaceId, userId, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
     },

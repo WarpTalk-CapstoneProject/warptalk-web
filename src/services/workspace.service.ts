@@ -15,7 +15,9 @@ import type {
   SelectWorkspaceResponse,
   InviteMemberResponse,
   PreviewInvitationResponse,
-  ExtractedTextDto
+  ExtractedTextDto,
+  WorkspaceRoleChangePreview,
+  WorkspaceRoleChangeResult
 } from "@/types/workspace";
 
 export const WorkspaceService = {
@@ -47,8 +49,37 @@ export const WorkspaceService = {
     return data;
   },
 
-  async updateSettings(id: string, settings: WorkspaceSettingsDto): Promise<void> {
+  async updateSettings(id: string, settings: Partial<WorkspaceSettingsDto>): Promise<void> {
     await apiClient.put(API.workspaces.settings(id), settings);
+  },
+
+  async previewMemberRoleChange(
+    workspaceId: string,
+    userId: string,
+    toRole: string
+  ): Promise<WorkspaceRoleChangePreview> {
+    const { data } = await apiClient.post<WorkspaceRoleChangePreview>(
+      `/workspaces/${workspaceId}/members/${userId}/role/preview`,
+      { toRole }
+    );
+    return data;
+  },
+
+  async applyMemberRoleChange(
+    workspaceId: string,
+    userId: string,
+    request: {
+      targetRole: string;
+      idempotencyKey?: string;
+      previewToken?: string;
+      correlationId?: string;
+    }
+  ): Promise<WorkspaceRoleChangeResult> {
+    const { data } = await apiClient.put<WorkspaceRoleChangeResult>(
+      `/workspaces/${workspaceId}/members/${userId}/role`,
+      request
+    );
+    return data;
   },
 
   async deleteWorkspace(id: string): Promise<void> {
