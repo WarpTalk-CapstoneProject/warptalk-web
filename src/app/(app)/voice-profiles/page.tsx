@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
 import { useCreateVoiceProfile, useDeleteVoiceProfile, useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
@@ -205,6 +206,8 @@ export default function VoiceProfilesPage() {
           <Metric icon={<CheckCircle size={16} weight="bold" />} label="With sample" value={String(readyCount)} />
           <Metric icon={<Waveform size={16} weight="bold" />} label="Default language" value="vi-VN" />
         </section>
+
+        <LibraryVoicePicker profiles={profileList} />
 
         <section className="mx-4 space-y-4 py-4 pb-6">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">

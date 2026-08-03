@@ -227,6 +227,7 @@ export const translationRoomService = {
   },
 
   async history(params?: {
+    workspaceId?: string;
     status?: string;
     search?: string;
     from?: string;

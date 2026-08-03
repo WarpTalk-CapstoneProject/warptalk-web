@@ -2,6 +2,7 @@ import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
+import { getFlagEmoji } from "@/lib/language-flag";
 
 const languageOptions = [
   { code: "vi-VN", label: "Vietnamese" },
@@ -11,18 +12,6 @@ const languageOptions = [
   { code: "fr-FR", label: "French" },
   { code: "es-ES", label: "Spanish" },
 ];
-
-function getFlagEmoji(locale: string) {
-  if (!locale) return "";
-  const parts = locale.split("-");
-  let countryCode = parts.length > 1 ? parts[1].toUpperCase() : "";
-  if (!countryCode) {
-    const map: Record<string, string> = { en: "US", vi: "VN", ja: "JP", ko: "KR", fr: "FR", es: "ES" };
-    countryCode = map[locale.toLowerCase()] || locale.toUpperCase();
-  }
-  const codePoints = countryCode.split("").map(char => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
-}
 
 /**
  * Meeting-language picker. A meeting is defined by the SET of languages that will be

@@ -18,6 +18,8 @@ export const API = {
     list: "/auth/voice-profiles",
     create: "/auth/voice-profiles",
     delete: (id: string) => `/auth/voice-profiles/${id}`,
+    catalog: "/auth/voice-profiles/catalog",
+    preferredVoice: "/auth/voice-profiles/preferred-voice",
   },
   translationRooms: {
     create: "/translation-rooms",

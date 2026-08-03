@@ -34,8 +34,11 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { mergeParticipants } from "@/lib/merge-participants";
+import { resolveVoicePreference } from "@/lib/voice-preference";
+import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
+  AiSuggestionDto,
   ParticipantInfoDto,
   TranscriptSegmentDto,
   TranslationRoomStateDto,
@@ -57,7 +60,10 @@ import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
 } from "@/hooks/use-track-processors";
-import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
+import {
+  readMeetingJoinState,
+  readMeetingMediaPreferences,
+} from "@/lib/meeting-join-state";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import {
   MeetingSidePanel,
@@ -142,36 +148,32 @@ export default function RoomDetailPage() {
   const languagePickerShownRef = useRef(false);
 
   // Read config from sessionStorage
-  const savedDevices =
-    typeof window !== "undefined"
-      ? JSON.parse(
-          window.sessionStorage.getItem("warptalk.devices.preview") || "{}",
-        )
-      : {};
   const savedJoinConfig =
     typeof window !== "undefined"
-      ? JSON.parse(
-          window.sessionStorage.getItem("warptalk.join.preview") || "{}",
-        )
+      ? readMeetingJoinState(window.sessionStorage, roomId)
       : {};
-  const [cameraEnabled, setCameraEnabled] = useState<boolean>(
-    savedDevices.cameraEnabled ?? savedJoinConfig.cameraEnabled ?? true,
-  );
-  const [microphoneEnabled, setMicrophoneEnabled] = useState<boolean>(
-    savedDevices.microphoneEnabled ?? savedJoinConfig.microphoneEnabled ?? true,
-  );
+  // Fail closed until the browser has loaded preferences for this exact room. This
+  // prevents LiveKit from briefly publishing tracks with SSR/default `true` values.
+  const [mediaPreferencesHydrated, setMediaPreferencesHydrated] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] =
-    useState<boolean>(
-      savedDevices.noiseSuppressionPreferenceVersion ===
-        NOISE_SUPPRESSION_PREFERENCE_VERSION
-        ? (savedDevices.noiseSuppressionEnabled ?? false)
-        : false,
+    useState(false);
+  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
+
+  useEffect(() => {
+    const preferences = readMeetingMediaPreferences(
+      window.sessionStorage,
+      roomId,
     );
-  const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState<boolean>(
-    savedDevices.backgroundBlurEnabled ??
-      savedJoinConfig.backgroundBlurEnabled ??
-      false,
-  );
+    // sessionStorage is an external browser source and must be applied after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCameraEnabled(preferences.cameraEnabled);
+    setMicrophoneEnabled(preferences.microphoneEnabled);
+    setNoiseSuppressionEnabled(preferences.noiseSuppressionEnabled);
+    setBackgroundBlurEnabled(preferences.backgroundBlurEnabled);
+    setMediaPreferencesHydrated(true);
+  }, [roomId]);
 
   function handleToggleNoiseSuppression() {
     setNoiseSuppressionEnabled((current) => {
@@ -232,6 +234,7 @@ export default function RoomDetailPage() {
   const addOrMergeTranslationText = useTranslationRoomStore(
     (state) => state.addOrMergeTranslationText,
   );
+  const addSuggestion = useTranslationRoomStore((state) => state.addSuggestion);
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
   const addChatMessage = useTranslationRoomStore(
     (state) => state.addChatMessage,
@@ -503,16 +506,31 @@ export default function RoomDetailPage() {
     language: string;
     voiceId: string | null;
   } | null>(null);
-  const voicePreference =
-    voiceSelection?.language === targetLanguage ? voiceSelection.voiceId : null;
   const [voiceCatalogState, setVoiceCatalogState] = useState<{
     language: string;
     items: VoiceOptionDto[];
   } | null>(null);
-  const voiceCatalog =
-    voiceCatalogState?.language === targetLanguage
-      ? voiceCatalogState.items
-      : [];
+  const voiceCatalog = useMemo(
+    () =>
+      voiceCatalogState?.language === targetLanguage ? voiceCatalogState.items : [],
+    [voiceCatalogState, targetLanguage],
+  );
+
+  // An in-room pick always wins; only when this user has made no choice for this language
+  // does their saved Voice Profiles default apply. Derived rather than copied into state on
+  // join, so switching listen language re-resolves on its own — see resolveVoicePreference
+  // for the precedence rule and its tests.
+  const { data: savedVoiceProfiles } = useVoiceProfiles();
+  const voicePreference = useMemo(
+    () =>
+      resolveVoicePreference(
+        voiceSelection,
+        targetLanguage,
+        savedVoiceProfiles,
+        voiceCatalog,
+      ),
+    [voiceSelection, targetLanguage, savedVoiceProfiles, voiceCatalog],
+  );
 
   // Voices are language-specific (Cartesia's own voice table), so switching listen
   // language must both clear any voice pick made for the PREVIOUS language (it may not
@@ -845,6 +863,12 @@ export default function RoomDetailPage() {
         addOrMergeTranslationText(translation);
       },
     );
+    connection.on("AiSuggestionReceived", (suggestion: AiSuggestionDto) => {
+      // Same gate the transcript handlers use: a suggestion belongs to a live segment, so
+      // it has nothing to attach to once translation has stopped.
+      if (!translationActiveRef.current) return;
+      addSuggestion(suggestion);
+    });
     connection.on("TranslationRoomEnded", () => {
       void refetchRoom();
       toast.info("This meeting has ended.");
@@ -1078,6 +1102,7 @@ export default function RoomDetailPage() {
   }, [
     addLiveParticipant,
     addOrMergeTranslationText,
+    addSuggestion,
     addTranscriptSegment,
     refetchParticipants,
     refetchRoom,
@@ -1440,6 +1465,15 @@ export default function RoomDetailPage() {
     );
   }
 
+  if (!mediaPreferencesHydrated) {
+    return (
+      <StatePanel
+        title="Preparing devices..."
+        description="Applying your camera and microphone choices."
+      />
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-ink font-sans selection:bg-surface-3">
       <LiveKitRoom
@@ -1533,6 +1567,7 @@ export default function RoomDetailPage() {
                 speakerLanguageByUserId={speakerLanguageByUserId}
                 voicePreference={voicePreference}
                 voiceEnabled={voiceEnabled}
+                translationActive={warptalkStarted}
               />
               <TrackProcessorsController
                 noiseSuppressionEnabled={noiseSuppressionEnabled}
