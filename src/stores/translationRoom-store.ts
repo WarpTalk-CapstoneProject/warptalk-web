@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  AiSuggestionDto,
   ChatMessageDto,
   TranslationRoomStateDto,
   ParticipantInfoDto,
@@ -12,6 +13,11 @@ interface TranslationRoomStoreState {
   translationRoomState: TranslationRoomStateDto | null;
   participants: ParticipantInfoDto[];
   transcriptSegments: TranscriptSegmentDto[];
+  // AI suggestions keyed by the segment id they were anchored to. A record rather than a
+  // list because at most one suggestion exists per segment and dismissing must be O(1);
+  // note the key is a BACKEND segment id, which may have been merged into a bubble with a
+  // different id — see findSuggestionForUtterance.
+  suggestions: Record<string, AiSuggestionDto>;
   chatMessages: ChatMessageDto[];
   isMuted: boolean;
   // userIds of OTHER participants with a raised hand — TranslationRoomHub.RaiseHand
@@ -28,6 +34,8 @@ interface TranslationRoomStoreState {
   updateParticipantSpeakLanguage: (userId: string, speakLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
+  addSuggestion: (suggestion: AiSuggestionDto) => void;
+  dismissSuggestion: (segmentId: string) => void;
   setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
   hideChatMessage: (messageId: string) => void;
@@ -40,6 +48,7 @@ const initialState = {
   translationRoomState: null,
   participants: [],
   transcriptSegments: [],
+  suggestions: {},
   chatMessages: [],
   isMuted: false,
   raisedHands: [],
@@ -150,6 +159,22 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       const transcriptSegments = s.transcriptSegments.slice();
       transcriptSegments[existingIndex] = updated;
       return { transcriptSegments };
+    }),
+
+  addSuggestion: (suggestion) =>
+    set((s) => ({
+      suggestions: { ...s.suggestions, [suggestion.segmentId]: suggestion },
+    })),
+
+  dismissSuggestion: (segmentId) =>
+    set((s) => {
+      // Nothing here is persisted, so a dismissal only has to survive until the room is
+      // left — deleting the key is enough, and it can never come back: the worker takes a
+      // one-shot Redis slot per suggestion and never republishes one.
+      if (!(segmentId in s.suggestions)) return s;
+      const remaining = { ...s.suggestions };
+      delete remaining[segmentId];
+      return { suggestions: remaining };
     }),
 
   setChatMessages: (messages) =>

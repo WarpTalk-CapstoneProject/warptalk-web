@@ -4,6 +4,7 @@ import { ReactNode, useState } from "react";
 import { CaretLeft, CaretRight, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
+import { getFlagEmoji } from "@/lib/language-flag";
 import { getLanguageName } from "@/lib/languages";
 import { Button } from "@/components/ui/button";
 import {
@@ -696,6 +697,14 @@ function VoiceOption({
   );
 }
 
+/**
+ * One row of the in-meeting language menu, styled to match the create-meeting language
+ * picker: flag, name, and a filled check on the active one.
+ *
+ * Single-select on purpose, unlike the create picker. There the set of languages defines the
+ * ROOM; here the choice is this participant's own listen (or speak) language, of which there
+ * is exactly one.
+ */
 function LanguageOption({
   label,
   value,
@@ -709,6 +718,8 @@ function LanguageOption({
   onSelect: (language: string) => void;
   close: () => void;
 }) {
+  const flag = getFlagEmoji(value);
+
   return (
     <button
       type="button"
@@ -716,10 +727,20 @@ function LanguageOption({
         onSelect(value);
         close();
       }}
-      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
+      aria-pressed={active}
+      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
     >
-      {label}
-      {active ? <CheckCircle className="h-3.5 w-3.5 text-ink" weight="fill" /> : null}
+      <span className="flex min-w-0 items-center gap-2">
+        {flag ? (
+          <span aria-hidden className="text-[14px] leading-none">
+            {flag}
+          </span>
+        ) : null}
+        <span className="truncate">{label}</span>
+      </span>
+      {active ? (
+        <CheckCircle className="h-4 w-4 shrink-0 text-primary" weight="fill" />
+      ) : null}
     </button>
   );
 }

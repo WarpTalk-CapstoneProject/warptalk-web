@@ -174,9 +174,48 @@ async function getUsableAccessToken(): Promise<string | null> {
   return refreshAccessToken(token);
 }
 
+/**
+ * True when the server itself rejected the refresh token (4xx), as opposed to a network
+ * blip or a 5xx. Only the former means the session is genuinely dead — retrying through a
+ * transient failure is worth doing, retrying a rejected token never succeeds.
+ */
+function isRefreshRejectedByServer(error: unknown): boolean {
+  return (
+    axios.isAxiosError(error)
+    && Boolean(error.response)
+    && error.response!.status >= 400
+    && error.response!.status < 500
+  );
+}
+
+/**
+ * Drop the dead session and send the user to sign in again.
+ *
+ * The pathname guard matters: without it, a failing request on /login itself would
+ * reassign window.location to /login over and over.
+ */
+function endDeadSession() {
+  useAuthStore.getState().logout();
+  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    window.location.href = "/login";
+  }
+}
+
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   if (!isAuthEndpoint(config.url)) {
-    const token = await getUsableAccessToken();
+    let token: string | null = null;
+    try {
+      token = await getUsableAccessToken();
+    } catch (error) {
+      // The refresh that runs BEFORE a request is sent fails here, not in the response
+      // interceptor below — which is why a rejected refresh token used to leave the app
+      // running with isAuthenticated: true in localStorage, retrying forever and never
+      // reaching a login screen. Whoever notices the session is dead has to end it.
+      if (isRefreshRejectedByServer(error)) {
+        endDeadSession();
+      }
+      throw error;
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -254,16 +293,10 @@ apiClient.interceptors.response.use(
       originalRequest.headers.Authorization = `Bearer ${accessToken}`;
       return apiClient(originalRequest);
     } catch (refreshError) {
-      const isAxiosError = axios.isAxiosError(refreshError);
-      const isAuthError = isAxiosError && refreshError.response && refreshError.response.status >= 400 && refreshError.response.status < 500;
-
-      // Only log out if the server explicitly rejected the refresh token
-      // Do not log out on network errors or 5xx server errors
-      if (isAuthError) {
-        useAuthStore.getState().logout();
-        if (typeof window !== "undefined") {
-          window.location.href = "/login";
-        }
+      // Only log out if the server explicitly rejected the refresh token.
+      // Do not log out on network errors or 5xx server errors.
+      if (isRefreshRejectedByServer(refreshError)) {
+        endDeadSession();
       }
       return Promise.reject(refreshError);
     }

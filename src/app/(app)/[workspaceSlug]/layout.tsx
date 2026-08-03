@@ -13,6 +13,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   const workspaceSlug = normalizeWorkspaceSlug(params.workspaceSlug);
 
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   const { data: workspacesData, isLoading, isError } = useWorkspaces(1, 100);
@@ -70,7 +71,14 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     router,
   ]);
 
-  if (!workspaceSlug || isLoading || (!isError && workspacesData?.items && !targetWorkspace)) {
+  const isSyncing =
+    !isError &&
+    (!workspacesData?.items ||
+      !targetWorkspace ||
+      activeWorkspaceSlug !== workspaceSlug ||
+      activeWorkspaceId !== targetWorkspace.id);
+
+  if (isLoading || isSyncing) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />

@@ -62,18 +62,53 @@ interface NavItem {
   }>;
 }
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+function NavLink({
+  item,
+  pathname,
+  collapsed = false,
+}: {
+  item: NavItem;
+  pathname: string;
+  collapsed?: boolean;
+}) {
+  const isActive =
+    pathname === item.href || pathname.startsWith(item.href + "/");
   return (
-    <div className={cn(
-      "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-      isActive ? "bg-surface-2" : "hover:bg-surface-2"
-    )}>
-      <Link href={item.href} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-        <item.icon size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-        <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">{item.label}</span>
+    <div
+      className={cn(
+        "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+        collapsed && "mx-auto size-9 justify-center rounded-full px-0",
+        isActive
+          ? collapsed
+            ? "bg-surface-3 text-ink"
+            : "bg-surface-2"
+          : "hover:bg-surface-2",
+      )}
+    >
+      <Link
+        href={item.href}
+        className={cn(
+          "flex items-center gap-2.5 flex-1 min-w-0 h-full",
+          collapsed && "justify-center",
+        )}
+        title={collapsed ? item.label : undefined}
+        aria-label={collapsed ? item.label : undefined}
+      >
+        <item.icon
+          size={16}
+          className={cn(
+            "shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors",
+            collapsed && isActive && "text-ink",
+          )}
+          weight="duotone"
+        />
+        {!collapsed && (
+          <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+            {item.label}
+          </span>
+        )}
       </Link>
-      {item.actions && (
+      {!collapsed && item.actions && (
         <div className="flex items-center">
           {item.actions.map((action, i) => (
             action.onClick ? (
@@ -108,7 +143,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-export function LinearSidebar() {
+export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
@@ -214,6 +249,89 @@ export function LinearSidebar() {
   }
 
   const isSettingsPage = pathname.includes("/settings") || pathname.includes("/advanced");
+
+  if (isSettingsPage && collapsed) {
+    const appHref = activeWorkspaceSlug
+      ? `/${activeWorkspaceSlug}/rooms`
+      : "/workspace";
+    const settingsItems: NavItem[] = [
+      {
+        icon: Sliders,
+        label: "Preferences",
+        href: activeWorkspaceSlug
+          ? `/${activeWorkspaceSlug}/settings/account/preferences`
+          : "/workspace",
+      },
+      {
+        icon: User,
+        label: "Profile",
+        href: activeWorkspaceSlug
+          ? `/${activeWorkspaceSlug}/settings/account/profile`
+          : "/workspace",
+      },
+    ];
+
+    if (isOwnerOrAdmin && activeWorkspaceSlug) {
+      settingsItems.push({
+        icon: GearSix,
+        label: "Workspace settings",
+        href: `/${activeWorkspaceSlug}/settings`,
+      });
+    }
+    if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
+      settingsItems.push({
+        icon: Warning,
+        label: "Advanced",
+        href: `/${activeWorkspaceSlug}/advanced`,
+      });
+    }
+
+    return (
+      <aside className="flex h-full w-16 shrink-0 select-none flex-col border-r border-border/40 bg-canvas text-ink">
+        <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
+          <Link
+            href={appHref}
+            title="Back to app"
+            aria-label="Back to app"
+            className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <CaretLeft size={16} weight="bold" />
+          </Link>
+        </div>
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
+          {settingsItems.map((item, index) => (
+            <div
+              key={item.href}
+              className={cn(
+                index === 2 && "mt-3 border-t border-border/50 pt-3",
+              )}
+            >
+              <NavLink item={item} pathname={pathname} collapsed />
+            </div>
+          ))}
+        </nav>
+        {user && (
+          <Link
+            href={
+              activeWorkspaceSlug
+                ? `/${activeWorkspaceSlug}/settings/account/profile`
+                : "/workspace"
+            }
+            title={user.fullName || "Profile"}
+            aria-label={user.fullName || "Profile"}
+            className="m-3 grid size-10 place-items-center rounded-xl border border-border/50 bg-surface-1 transition hover:border-border/80 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <Avatar className="size-8 rounded-lg">
+              <AvatarImage src={user.avatarUrl} alt="" />
+              <AvatarFallback className="rounded-lg bg-primary/10 text-[13px] font-semibold text-primary">
+                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+              </AvatarFallback>
+            </Avatar>
+          </Link>
+        )}
+      </aside>
+    );
+  }
 
   if (isSettingsPage) {
     return (
@@ -353,18 +471,57 @@ export function LinearSidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-[224px] bg-canvas text-ink h-full shrink-0 select-none">
+    <aside
+      className={cn(
+        "flex h-full shrink-0 select-none flex-col bg-canvas text-ink",
+        collapsed ? "w-16" : "w-[224px]",
+        collapsed && "border-r border-border/40",
+      )}
+    >
       {/* Workspace Selector Dropdown */}
-      <div className="flex items-center justify-between px-3 h-[48px] shrink-0">
+      <div
+        className={cn(
+          "flex h-[48px] shrink-0 items-center",
+          collapsed ? "justify-center px-2" : "justify-between px-3",
+        )}
+      >
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2 hover:bg-surface-2 px-1.5 py-1 -ml-1.5 rounded-md cursor-pointer transition-colors min-w-0 max-w-[170px]">
-            <div className="w-[20px] h-[20px] rounded bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shrink-0 text-white border border-white/10">
-              <span className="text-[10px] font-bold leading-none tracking-tight">{workspaceInitials}</span>
+          <DropdownMenuTrigger
+            title={
+              collapsed ? activeWorkspaceName || "Switch workspace" : undefined
+            }
+            aria-label={
+              collapsed ? activeWorkspaceName || "Switch workspace" : undefined
+            }
+            className={cn(
+              "flex min-w-0 cursor-pointer items-center gap-2 rounded-md transition-colors hover:bg-surface-2",
+              collapsed
+                ? "size-9 justify-center p-0"
+                : "-ml-1.5 max-w-[170px] px-1.5 py-1",
+            )}
+          >
+            <div
+              className={cn(
+                "flex shrink-0 items-center justify-center rounded bg-gradient-to-br from-pink-500 to-rose-500 text-white border border-white/10",
+                collapsed ? "size-7" : "size-5",
+              )}
+            >
+              <span className="text-[10px] font-bold leading-none tracking-tight">
+                {workspaceInitials}
+              </span>
             </div>
-            <span className="text-[14px] font-semibold text-ink truncate tracking-tight">
-              {activeWorkspaceName || "Workspace"}
-            </span>
-            <CaretDown size={12} className="text-ink-muted ml-1 shrink-0" weight="bold" />
+            {!collapsed && (
+              <>
+                <span className="text-[14px] font-semibold text-ink truncate tracking-tight">
+                  {activeWorkspaceName || "Workspace"}
+                </span>
+                <CaretDown
+                  size={12}
+                  className="text-ink-muted ml-1 shrink-0"
+                  weight="bold"
+                />
+              </>
+            )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[220px] bg-popover border border-border shadow-md rounded-lg p-1">
             <div className="px-2 py-1.5 text-xs text-ink-muted font-medium">
@@ -411,51 +568,88 @@ export function LinearSidebar() {
               <SignOut size={14} />
               <span>Sign out</span>
             </DropdownMenuItem>
-          </DropdownMenuContent >
-        </DropdownMenu >
-        <div className="flex items-center gap-1.5 text-ink-muted shrink-0">
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {!collapsed && (
+          <div className="flex items-center gap-1.5 text-ink-muted shrink-0">
+            <button
+              onClick={() => setSearchMeetingModalOpen(true)}
+              aria-label="Search meetings"
+              className="flex size-7 items-center justify-center rounded-[6px] hover:bg-surface-2 hover:text-ink transition-colors"
+            >
+              <MagnifyingGlass size={16} weight="regular" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-3">
+        {collapsed && (
           <button
+            type="button"
             onClick={() => setSearchMeetingModalOpen(true)}
-            className="flex size-7 items-center justify-center rounded-[6px] hover:bg-surface-2 hover:text-ink transition-colors"
+            title="Search meetings"
+            aria-label="Search meetings"
+            className="mb-2 grid size-9 w-full place-items-center rounded-[6px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <MagnifyingGlass size={16} weight="regular" />
           </button>
-        </div>
-      </div >
-
-      {/* Nav */}
-      < nav className="flex-1 overflow-y-auto px-3" >
+        )}
         <div className="flex flex-col gap-[2px]">
           {mainNav.map((item) => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
+            <NavLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              collapsed={collapsed}
+            />
           ))}
         </div>
 
-        <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
-          <span className="text-[12px] font-medium text-ink-subtle">Workspace</span>
-        </div>
+        {collapsed ? (
+          <div className="mx-2 my-3 h-px bg-border/60" />
+        ) : (
+          <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
+            <span className="text-[12px] font-medium text-ink-subtle">
+              Workspace
+            </span>
+          </div>
+        )}
         <div className="flex flex-col gap-px">
           {workspaceNav.map((item) => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
+            <NavLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              collapsed={collapsed}
+            />
           ))}
         </div>
 
         {isSystemAdmin && (
           <>
-            <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
-              <span className="text-[12px] font-medium text-ink-subtle">Platform</span>
-            </div>
+            {collapsed ? (
+              <div className="mx-2 my-3 h-px bg-border/60" />
+            ) : (
+              <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
+                <span className="text-[12px] font-medium text-ink-subtle">
+                  Platform
+                </span>
+              </div>
+            )}
             <div className="flex flex-col gap-px">
               <NavLink
                 item={{ icon: Globe, label: "Global Glossary", href: "/admin/global-glossary" }}
                 pathname={pathname}
+                collapsed={collapsed}
               />
             </div>
           </>
         )}
       </nav>
 
-      {isOwnerOrAdmin && activeWorkspaceId && (
+      {isOwnerOrAdmin && activeWorkspaceId && !collapsed && (
         <div className="px-3 pb-2 pt-3">
           <button
             type="button"
@@ -473,20 +667,45 @@ export function LinearSidebar() {
         </div>
       )}
 
+      {isOwnerOrAdmin && activeWorkspaceId && collapsed && (
+        <div className="px-3 pb-1 pt-2">
+          <button
+            type="button"
+            onClick={() => setIsInviteModalOpen(true)}
+            title="Invite team members"
+            aria-label="Invite team members"
+            className="grid size-10 w-full place-items-center rounded-xl border border-border/50 bg-surface-1 text-ink-muted transition-colors hover:border-border/80 hover:bg-surface-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <PaperPlaneTilt size={17} weight="duotone" />
+          </button>
+        </div>
+      )}
+
       {/* User Account Panel */}
-      {
-        user && (
-          <div className="p-3 mt-auto shrink-0">
-            <div
-              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
-              className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
-            >
-              <Avatar className="size-8 rounded-lg border border-border/50">
-                <AvatarImage src={user.avatarUrl} alt={user.fullName} />
-                <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
-                  {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
-                </AvatarFallback>
-              </Avatar>
+      {user && (
+        <div className="mt-auto shrink-0 p-3">
+          <div
+            onClick={() =>
+              router.push(
+                activeWorkspaceSlug
+                  ? `/${activeWorkspaceSlug}/settings/account/profile`
+                  : "/workspace",
+              )
+            }
+            title={collapsed ? user.fullName || "Profile" : undefined}
+            aria-label={collapsed ? user.fullName || "Profile" : undefined}
+            className={cn(
+              "flex items-center bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80",
+              collapsed ? "justify-center p-1" : "gap-2.5 p-2",
+            )}
+          >
+            <Avatar className="size-8 rounded-lg border border-border/50">
+              <AvatarImage src={user.avatarUrl} alt={user.fullName} />
+              <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
+                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+              </AvatarFallback>
+            </Avatar>
+            {!collapsed && (
               <div className="flex flex-col min-w-0 flex-1">
                 <span className="text-[13px] font-medium text-ink truncate leading-tight">
                   {user.fullName}
@@ -495,25 +714,37 @@ export function LinearSidebar() {
                   {user.email}
                 </span>
                 <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
-                  {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+                  {role
+                    ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}`
+                    : "Member"}
                   {" · "}
                   {membershipType
                     ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
                     : "Internal"}
                 </span>
               </div>
+            )}
+            {!collapsed && (
               <button
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  logout();
+                  handleSignOut();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
                 title="Sign out"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path></svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  fill="currentColor"
+                  viewBox="0 0 256 256"
+                >
+                  <path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path>
+                </svg>
               </button>
-            </div>
+            )}
           </div>
         )
       }
