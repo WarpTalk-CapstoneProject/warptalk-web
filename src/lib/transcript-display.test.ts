@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   dedupeTranscriptSegments,
+  findSuggestionForUtterance,
   formatTranscriptTimestamp,
   getAnimatedWordTokens,
   getLiveCaptionText,
@@ -139,4 +140,53 @@ test("formats AI worker offsets as meeting-relative transcript timestamps", () =
   assert.equal(formatTranscriptTimestamp(0), "0:00");
   assert.equal(formatTranscriptTimestamp(65_000), "1:05");
   assert.equal(formatTranscriptTimestamp(3_723_000), "1:02:03");
+});
+
+test("records every merged segment id so a suggestion can find its bubble", () => {
+  const groups = groupTranscriptSegments([
+    segment(),
+    segment({ segmentId: "segment-2", originalText: "how are you?", startTimeMs: 2_200, endTimeMs: 3_100 }),
+    segment({ segmentId: "segment-3", originalText: "still there?", startTimeMs: 3_300, endTimeMs: 4_000 }),
+  ]);
+
+  assert.equal(groups.length, 1);
+  // The bubble is still identified by the FIRST segment — the other two ids survive only here.
+  assert.equal(groups[0].segmentId, "segment-1");
+  assert.deepEqual(groups[0].mergedSegmentIds, ["segment-1", "segment-2", "segment-3"]);
+});
+
+test("starts a fresh merged id list for each separate utterance", () => {
+  const groups = groupTranscriptSegments([
+    segment(),
+    segment({ segmentId: "segment-2", speakerId: "speaker-2", startTimeMs: 5_000, endTimeMs: 6_000 }),
+  ]);
+
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups[0].mergedSegmentIds, ["segment-1"]);
+  assert.deepEqual(groups[1].mergedSegmentIds, ["segment-2"]);
+});
+
+test("finds a suggestion anchored to a segment that was merged away", () => {
+  const [utterance] = groupTranscriptSegments([
+    segment(),
+    segment({ segmentId: "segment-2", originalText: "how are you?", startTimeMs: 2_200, endTimeMs: 3_100 }),
+  ]);
+
+  // This is the case a plain `suggestions[utterance.segmentId]` lookup silently misses:
+  // the worker anchored to segment-2, but the rendered bubble is keyed by segment-1.
+  assert.equal(findSuggestionForUtterance(utterance, { "segment-2": "hint" }), "hint");
+  assert.equal(findSuggestionForUtterance(utterance, { "segment-1": "hint" }), "hint");
+  assert.equal(findSuggestionForUtterance(utterance, { "segment-9": "hint" }), undefined);
+});
+
+test("returns the earliest suggestion when a merged utterance has more than one", () => {
+  const [utterance] = groupTranscriptSegments([
+    segment(),
+    segment({ segmentId: "segment-2", originalText: "how are you?", startTimeMs: 2_200, endTimeMs: 3_100 }),
+  ]);
+
+  assert.equal(
+    findSuggestionForUtterance(utterance, { "segment-1": "first", "segment-2": "second" }),
+    "first",
+  );
 });

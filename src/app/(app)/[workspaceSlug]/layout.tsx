@@ -14,6 +14,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   const isBillingRoute = pathname.split("/").filter(Boolean)[1] === "billing";
 
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   const { data: workspacesData, isLoading, isError } = useWorkspaces(1, 100);
@@ -67,7 +68,12 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
 
   const workspaceListReady = !isLoading && !isError && !!workspacesData?.items;
   const workspaceNotAvailable = workspaceListReady && !targetWorkspace;
-  const isLoadingWorkspace = !isError && !workspacesData?.items;
+  const isSyncing =
+    !isError &&
+    (!workspacesData?.items ||
+      !targetWorkspace ||
+      activeWorkspaceSlug !== workspaceSlug ||
+      activeWorkspaceId !== targetWorkspace.id);
 
   if (isBillingRoute) {
     return <>{children}</>;
@@ -86,7 +92,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     );
   }
 
-  if (isLoading || isLoadingWorkspace) {
+  if (isLoading || isSyncing) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
