@@ -16,6 +16,8 @@ const checks = [
   ["collapsed navigation keeps icon labels accessible", sidebar.includes("aria-label={collapsed ? item.label : undefined}")],
   ["collapsed navigation hides only visible text", sidebar.includes("{!collapsed && (")],
   ["sidebar rail uses the compact width", sidebar.includes('collapsed ? "w-16" : "w-[224px]"')],
+  ["collapsed active icon uses a gray circle", sidebar.includes('collapsed && "mx-auto size-9 justify-center rounded-full px-0"') && sidebar.includes('? "bg-surface-3 text-ink"')],
+  ["collapsed active icon has no one-sided indicator", !sidebar.includes("inset_2px_0_0")],
   ["collapsed rail preserves meeting search", sidebar.includes('aria-label="Search meetings"')],
   ["collapsed rail preserves team invite", sidebar.includes('aria-label="Invite team members"')],
   ["toggle announces the resulting action", layout.includes('leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"')],

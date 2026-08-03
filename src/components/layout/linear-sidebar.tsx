@@ -84,10 +84,10 @@ function NavLink({
     <div
       className={cn(
         "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-        collapsed && "h-9 justify-center px-0",
+        collapsed && "mx-auto size-9 justify-center rounded-full px-0",
         isActive
           ? collapsed
-            ? "bg-primary/10 text-primary shadow-[inset_2px_0_0_var(--primary)]"
+            ? "bg-surface-3 text-ink"
             : "bg-surface-2"
           : "hover:bg-surface-2",
       )}
@@ -105,7 +105,7 @@ function NavLink({
           size={16}
           className={cn(
             "shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors",
-            collapsed && isActive && "text-primary",
+            collapsed && isActive && "text-ink",
           )}
           weight="duotone"
         />
