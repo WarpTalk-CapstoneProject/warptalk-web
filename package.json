@@ -23,7 +23,7 @@
     "test:code-review-ux": "node scripts/check-code-review-ux-contract.mjs",
     "email:dev": "email dev --dir src/emails --port 3001",
     "email:render": "npx tsx scripts/render-email-templates.ts",
-    "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript-display.test.ts",
+    "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript-display.test.ts src/lib/transcript-history.test.ts",
     "test:create-room-language": "node scripts/check-create-room-language-contract.mjs",
     "test:terminal-room-join": "node scripts/check-terminal-room-join-contract.mjs",
     "test:waiting-room-admission": "node scripts/check-waiting-room-admission-contract.mjs",
