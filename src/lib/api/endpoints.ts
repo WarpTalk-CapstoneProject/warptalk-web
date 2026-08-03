@@ -143,6 +143,12 @@ export const API = {
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
   },
+  adminWorkspaces: {
+    base: "/admin/workspaces",
+    detail: (id: string) => `/admin/workspaces/${id}`,
+    suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
+    reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
+  },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",
     detail: (id: string) => `/admin/global-glossary/${id}`,
