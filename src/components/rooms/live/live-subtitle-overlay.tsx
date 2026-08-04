@@ -10,7 +10,7 @@ import type { TranscriptSegmentDto } from "@/types/realtime";
 const HIDE_AFTER_MS = 6000;
 
 /**
- * Live caption overlay rendered over the meeting video.
+ * Live caption display rendered in the meeting's reserved subtitle lane.
  *
  * Shows ONLY real transcript/translation segments coming from the AI pipeline
  * via SignalR (TranscriptSegmentReceived / TranslationTextReceived) — there is
@@ -41,7 +41,7 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
   const showTranslated = Boolean(translated);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-24 z-20 flex justify-center px-4">
+    <div className="pointer-events-none flex h-full w-full items-center justify-center px-4">
       <AnimatePresence>
         {visible && latest && (original || translated) ? (
           <motion.div

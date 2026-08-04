@@ -45,6 +45,7 @@ export const API = {
     settings: (id: string) => `/translation-rooms/${id}/settings`,
     feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
+    preflight: (roomCode: string) => `/translation-rooms/preflight/${roomCode}`,
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
     voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
@@ -80,6 +81,8 @@ export const API = {
     chatList: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSend: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSendFile: (roomId: string) => `/meetings/rooms/${roomId}/chat/files`,
+    chatDownload: (roomId: string, messageId: string) =>
+      `/meetings/rooms/${roomId}/chat/files/${messageId}/download`,
     chatTranslate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/translate`,
     chatModerate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/moderate`,
     rejectParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/reject`,
@@ -144,6 +147,12 @@ export const API = {
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
+  },
+  adminWorkspaces: {
+    base: "/admin/workspaces",
+    detail: (id: string) => `/admin/workspaces/${id}`,
+    suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
+    reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
   },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",

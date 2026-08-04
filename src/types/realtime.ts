@@ -64,6 +64,28 @@ export interface TranslatedAudioDto {
   fallbackReason?: string;
 }
 
+/**
+ * An unprompted one-line hint about a transcript segment — pushed by the gateway as
+ * "AiSuggestionReceived", produced by warptalk-ai/suggestion_worker.
+ *
+ * `segmentId` is the STT segment that triggered it, which is NOT necessarily the
+ * `segmentId` of the bubble it belongs to: consecutive segments from one speaker are
+ * merged into a single bubble whose id is the first segment's. Resolve it through
+ * `findSuggestionForUtterance` rather than a direct lookup.
+ *
+ * Ephemeral — nothing about this is persisted, so it is gone after a reload.
+ */
+export interface AiSuggestionDto {
+  translationRoomId: string;
+  segmentId: string;
+  category: "clarification" | "term" | "action" | "correction" | "fact" | (string & {});
+  content: string;
+  detail?: string | null;
+  confidence: number;
+  language: string;
+  createdAt: string;
+}
+
 export interface ChatMentionDto {
   id: string;
   display: string;

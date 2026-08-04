@@ -52,6 +52,8 @@ jobs:
             echo "External Dockerfile base images must be pinned by digest." >&2
             exit 1
           fi
+      - name: Production runtime image security contract
+        run: sh scripts/check-runtime-image-security-contract.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22

@@ -5,15 +5,19 @@ import { ClosedCaptioning } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
 import { getLanguageName } from "@/lib/languages";
 import {
+  findSuggestionForUtterance,
   formatTranscriptTimestamp,
   groupSegmentsByTranslationSession,
   groupTranscriptSegments,
+  type GroupedTranscriptSegment,
   type TranslationSessionBlock,
 } from "@/lib/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
+import { SuggestionStrip } from "@/components/rooms/live/side-panel/suggestion-strip";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
-import type { TranscriptSegmentDto } from "@/types/realtime";
+import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import type { AiSuggestionDto, TranscriptSegmentDto } from "@/types/realtime";
 
 export function TranscriptPanel({
   segments,
@@ -28,6 +32,8 @@ export function TranscriptPanel({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const suggestions = useTranslationRoomStore((state) => state.suggestions);
+  const dismissSuggestion = useTranslationRoomStore((state) => state.dismissSuggestion);
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const sessions = sessionsQuery.data;
 
@@ -59,6 +65,8 @@ export function TranscriptPanel({
                 key={segment.segmentId}
                 segment={segment}
                 isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
+                suggestion={findSuggestionForUtterance(segment, suggestions)}
+                onDismissSuggestion={dismissSuggestion}
               />
             ))}
           </div>
@@ -68,7 +76,7 @@ export function TranscriptPanel({
   );
 }
 
-function SessionDivider({ block }: { block: TranslationSessionBlock<TranscriptSegmentDto> }) {
+function SessionDivider({ block }: { block: TranslationSessionBlock<GroupedTranscriptSegment> }) {
   return (
     <div className="flex items-center gap-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
       <div className="h-px flex-1 bg-border" />
@@ -90,7 +98,17 @@ function formatSessionWindow(session: TranslationSessionBlock<unknown>["session"
   return ` · ${started}–${ended}`;
 }
 
-function TranscriptBubble({ segment, isSelf }: { segment: TranscriptSegmentDto; isSelf: boolean }) {
+function TranscriptBubble({
+  segment,
+  isSelf,
+  suggestion,
+  onDismissSuggestion,
+}: {
+  segment: TranscriptSegmentDto;
+  isSelf: boolean;
+  suggestion?: AiSuggestionDto;
+  onDismissSuggestion: (segmentId: string) => void;
+}) {
   const speakerName = segment.speakerName || "Speaker";
 
   return (
@@ -102,6 +120,17 @@ function TranscriptBubble({ segment, isSelf }: { segment: TranscriptSegmentDto; 
       className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
     >
       <div className={`flex max-w-[85%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
+        <AnimatePresence>
+          {suggestion ? (
+            <SuggestionStrip
+              key={suggestion.segmentId}
+              suggestion={suggestion}
+              isSelf={isSelf}
+              onDismiss={() => onDismissSuggestion(suggestion.segmentId)}
+            />
+          ) : null}
+        </AnimatePresence>
+
         <div className={`flex min-w-0 items-baseline gap-1.5 px-1 text-[10px] text-ink-subtle ${isSelf ? "flex-row-reverse" : ""}`}>
           <span className="min-w-0 truncate font-semibold text-ink-muted">
             {isSelf ? "You" : speakerName}

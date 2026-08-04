@@ -26,21 +26,22 @@ export interface UpdateNotificationPreferenceRequest {
 
 export interface NotificationMessageDto {
   id: string;
-  userId: string;
   type: string;
   title: string;
   content: string;
-  payload?: string;
+  actionUrl?: string | null;
+  payloadJson: string;
   isRead: boolean;
+  readAt?: string | null;
   createdAt: string;
 }
 
 export interface PaginatedResponse<T> {
   items: T[];
   totalCount: number;
+  unreadCount: number;
   page: number;
   pageSize: number;
-  totalPages: number;
 }
 
 export interface CreateAdminNotificationDto {
