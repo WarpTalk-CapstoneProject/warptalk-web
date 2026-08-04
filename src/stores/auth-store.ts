@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserDto } from "@/types/auth";
 import { useWorkspaceStore } from "./workspace-store";
+import { usePresenceStore } from "./presence-store";
 
 interface AuthState {
   user: UserDto | null;
@@ -39,6 +40,8 @@ export const useAuthStore = create<AuthState>()(
           document.cookie = "access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         }
         useWorkspaceStore.getState().clearActiveWorkspace();
+        // Whose colleagues were online is not the next account holder's business.
+        usePresenceStore.getState().clear();
         set({
           user: null,
           accessToken: null,
