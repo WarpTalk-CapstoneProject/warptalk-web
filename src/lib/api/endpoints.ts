@@ -45,6 +45,7 @@ export const API = {
     settings: (id: string) => `/translation-rooms/${id}/settings`,
     feedbackState: (id: string) => `/translation-rooms/${id}/feedback/me`,
     feedback: (id: string) => `/translation-rooms/${id}/feedback`,
+    preflight: (roomCode: string) => `/translation-rooms/preflight/${roomCode}`,
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
     voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
