@@ -80,6 +80,8 @@ export const API = {
     chatList: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSend: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSendFile: (roomId: string) => `/meetings/rooms/${roomId}/chat/files`,
+    chatDownload: (roomId: string, messageId: string) =>
+      `/meetings/rooms/${roomId}/chat/files/${messageId}/download`,
     chatTranslate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/translate`,
     chatModerate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/moderate`,
     rejectParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/reject`,

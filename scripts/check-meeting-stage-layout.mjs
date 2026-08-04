@@ -9,10 +9,13 @@ async function source(relativePath) {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
-const [roomPage, meetingChrome, meetingStage] = await Promise.all([
-  source("src/app/(app)/room/[id]/page.tsx"),
+const [roomPage, meetingChrome, meetingStage, meetingControlBar, liveSubtitle, appLayout] = await Promise.all([
+  source("src/components/rooms/live/persistent-meeting-session.tsx"),
   source("src/components/rooms/live/meeting-top-bar.tsx"),
   source("src/components/rooms/live/meeting-stage.tsx"),
+  source("src/components/rooms/live/meeting-control-bar.tsx"),
+  source("src/components/rooms/live/live-subtitle-overlay.tsx"),
+  source("src/app/(app)/layout.tsx"),
 ]);
 
 assert.match(
@@ -74,6 +77,51 @@ assert.doesNotMatch(
   meetingStage,
   /otherTracks\.slice\(0, 1\)/,
   "the thumbnail filmstrip must not discard participants after the first one",
+);
+assert.match(
+  appLayout,
+  /const isLiveMeetingRoute = pathname\.startsWith\("\/room\/"\)/,
+  "the app shell must identify the active meeting route",
+);
+assert.match(
+  appLayout,
+  /<header[\s\S]*cn\([\s\S]*!isLiveMeetingRoute && "border-b border-border"/,
+  "the app header divider must be removed only while inside a live meeting",
+);
+assert.match(
+  roomPage,
+  /const \[subtitlesEnabled, setSubtitlesEnabled\] = useState\(true\)/,
+  "live subtitles must have an explicit local visibility state",
+);
+assert.match(
+  roomPage,
+  /<\/section>[\s\S]*subtitlesEnabled[\s\S]*data-meeting-subtitle-lane[\s\S]*<LiveSubtitleOverlay[\s\S]*data-meeting-bottom-dock/,
+  "enabled subtitles must render in a reserved lane between camera and controls",
+);
+assert.doesNotMatch(
+  roomPage,
+  /data-meeting-bottom-dock[\s\S]{0,180}overflow-x-auto/,
+  "the bottom dock must not clip control flyouts with overflow scrolling",
+);
+assert.match(
+  roomPage,
+  /subtitlesEnabled=\{subtitlesEnabled\}[\s\S]*onToggleSubtitles=\{\(\) =>[\s\S]*setSubtitlesEnabled/,
+  "the room page must wire subtitle state into the control bar",
+);
+assert.match(
+  meetingControlBar,
+  /label=\{subtitlesEnabled \? "Hide subtitles" : "Show subtitles"\}[\s\S]*<ClosedCaptioning/,
+  "the control bar must expose an accessible subtitle toggle",
+);
+assert.doesNotMatch(
+  meetingControlBar,
+  /NetworkQualityIcon|Your connection quality/,
+  "the redundant connection-quality icon must not remain in the control bar",
+);
+assert.doesNotMatch(
+  liveSubtitle,
+  /absolute inset-x-0 bottom-24/,
+  "live subtitles must not overlay the camera view",
 );
 
 console.log("Meeting stage layout contract passed.");

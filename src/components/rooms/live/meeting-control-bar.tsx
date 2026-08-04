@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { CaretLeft, CaretRight, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
+import { CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getFlagEmoji } from "@/lib/language-flag";
@@ -15,7 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { NetworkQualityIcon } from "@/components/rooms/live/network-quality-icon";
 import type { VoiceOptionDto } from "@/types/realtime";
 
 import { ALLOWED_REACTION_EMOJIS } from "@/constants/realtime";
@@ -37,6 +36,7 @@ export function MeetingControlBar({
   joinLink,
   isHost,
   warptalkStarted,
+  subtitlesEnabled,
   listenLanguage,
   availableListenLanguages,
   speakLanguage,
@@ -59,6 +59,7 @@ export function MeetingControlBar({
   onLayoutChange,
   onStartWarptalk,
   onStopWarptalk,
+  onToggleSubtitles,
   onChangeListenLanguage,
   onChangeSpeakLanguage,
   onChangeVoicePreference,
@@ -89,6 +90,8 @@ export function MeetingControlBar({
   isHost?: boolean;
   /** Whether the AI translation pipeline is currently running for this room. */
   warptalkStarted?: boolean;
+  /** Whether live subtitles are visible in the reserved caption lane. */
+  subtitlesEnabled: boolean;
   /** The language this participant currently hears translations/captions in. */
   listenLanguage?: string;
   /** Languages selectable in the dropdown — omit or pass a single-item list to hide it. */
@@ -128,6 +131,8 @@ export function MeetingControlBar({
   onStartWarptalk?: () => void;
   /** Stops the AI translation pipeline for the room. Host-only; omit to hide the control. */
   onStopWarptalk?: () => void;
+  /** Toggles the local live-subtitle lane without changing transcript collection. */
+  onToggleSubtitles: () => void;
   /** Called when the participant picks a different listen language from the dropdown. */
   onChangeListenLanguage?: (language: string) => void;
   /** Called when the participant picks the language they're speaking from the dropdown. */
@@ -291,11 +296,17 @@ export function MeetingControlBar({
         onToggleMicrophone={onToggleMicrophone}
       />
 
-      {meetingEnabled ? (
-        <span className="grid h-8 w-8 place-items-center" title="Your connection quality">
-          <NetworkQualityIcon />
-        </span>
-      ) : null}
+      <MeetControl
+        label={subtitlesEnabled ? "Hide subtitles" : "Show subtitles"}
+        active={subtitlesEnabled}
+        icon={
+          <ClosedCaptioning
+            className="h-[18px] w-[18px]"
+            weight={subtitlesEnabled ? "fill" : "regular"}
+          />
+        }
+        onClick={onToggleSubtitles}
+      />
 
       <MeetControl
         label={isScreenSharing ? "Stop presenting" : "Present now"}

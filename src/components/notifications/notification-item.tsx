@@ -5,18 +5,22 @@ import { notificationService } from "@/services/notification.service";
 import type { NotificationMessageDto } from "@/types/notification";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2, Info, Megaphone, Wrench } from "lucide-react";
+import { CalendarClock, CheckCircle2, CreditCard, Info, Megaphone, Wrench } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface NotificationItemProps {
   notification: NotificationMessageDto;
   onRead?: () => void;
+  onNavigate?: () => void;
 }
 
 export function NotificationItem({
   notification,
   onRead,
+  onNavigate,
 }: NotificationItemProps) {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const markReadMutation = useMutation({
     mutationFn: () => notificationService.markAsRead(notification.id),
@@ -34,10 +38,26 @@ export function NotificationItem({
         return <Megaphone className="h-5 w-5 text-emerald-500" />;
       case "MAINTENANCE":
         return <Wrench className="h-5 w-5 text-orange-500" />;
+      case "MEETING_REMINDER":
+        return <CalendarClock className="h-5 w-5 text-blue-500" />;
+      case "BILLING_PAYMENT_SUCCEEDED":
+      case "BILLING_PAYMENT_FAILED":
+      case "BILLING_PAYMENT_REFUNDED":
+      case "BILLING_PAYMENT_DISPUTED":
+        return <CreditCard className="h-5 w-5 text-violet-500" />;
       case "ANNOUNCEMENT":
       default:
         return <Megaphone className="h-5 w-5 text-primary" />;
     }
+  };
+
+  const handleOpen = () => {
+    if (!notification.actionUrl) return;
+    if (!notification.isRead) {
+      markReadMutation.mutate();
+    }
+    onNavigate?.();
+    router.push(notification.actionUrl);
   };
 
   const handleMarkRead = (e: React.MouseEvent) => {
@@ -50,7 +70,16 @@ export function NotificationItem({
 
   return (
     <div
-      className={`relative flex items-start gap-3 p-4 transition-colors hover:bg-surface-2/30 ${
+      role={notification.actionUrl ? "link" : undefined}
+      tabIndex={notification.actionUrl ? 0 : undefined}
+      onClick={handleOpen}
+      onKeyDown={(event) => {
+        if (notification.actionUrl && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          handleOpen();
+        }
+      }}
+      className={`group relative flex items-start gap-3 p-4 transition-colors hover:bg-surface-2/30 ${notification.actionUrl ? "cursor-pointer" : ""} ${
         notification.isRead ? "opacity-75" : "bg-primary/5"
       }`}
     >
