@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   Archive,
@@ -12,6 +13,7 @@ import {
   Copy,
   DownloadSimple,
   Funnel,
+  PencilSimple,
   Scroll,
   SlidersHorizontal,
   SpinnerGap,
@@ -32,7 +34,7 @@ import {
 import { loadSavedTranscript } from "@/lib/transcript-history";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
-import { openArtifactDownload } from "@/lib/download-artifact";
+import { openArtifactDownload, saveBlobDownload } from "@/lib/download-artifact";
 import { transcriptService } from "@/services/transcript.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -65,6 +67,8 @@ const transcriptFilters: Array<{ value: TranscriptFilter; label: string }> = [
 ];
 
 export default function TranscriptsPage() {
+  const searchParams = useSearchParams();
+  const requestedRoomId = searchParams.get("room");
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TranscriptFilter>("all");
@@ -106,7 +110,9 @@ export default function TranscriptsPage() {
   }, [filter, history.data?.rooms, query]);
 
   const selected =
-    items.find((item) => item.room.id === selectedId) ?? items[0];
+    items.find((item) => item.room.id === selectedId) ??
+    items.find((item) => item.room.id === requestedRoomId) ??
+    items[0];
 
   const transcriptQuery = useQuery({
     queryKey: ["room-transcript", selected?.room.id],
@@ -410,6 +416,7 @@ function TranscriptWorkspace({
             <TranscriptPanel
               state={transcriptState}
               roomId={room.id}
+              canEdit={room.hostId === useAuthStore.getState().user?.id}
               baseTime={transcriptState.data?.transcript.createdAt || room.startedAt}
             />
           ) : null}
@@ -503,14 +510,20 @@ function DetailTabButton({
 function TranscriptPanel({
   state,
   roomId,
+  canEdit,
   baseTime,
 }: {
   state: UseQueryResult<TranscriptData>;
   roomId: string;
+  canEdit: boolean;
   baseTime?: string;
 }) {
   const currentUserId = useAuthStore((s) => s.user?.id);
   const sessionsQuery = useTranslationRoomSessions(roomId);
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
+  const [draftText, setDraftText] = useState("");
+  const [isSavingCorrection, setIsSavingCorrection] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
 
   if (state.isLoading) {
     return (
@@ -550,6 +563,53 @@ function TranscriptPanel({
   const segments = groupSavedTranscriptSegments(state.data?.segments ?? []);
   const blocks = groupSegmentsByTranslationSession(segments, sessionsQuery.data ?? [], baseTime);
   const showSessionLabels = blocks.length > 1;
+  const transcript = state.data?.transcript;
+
+  async function saveCorrection(segment: TranscriptSegmentDto) {
+    const correctedText = draftText.trim();
+    if (!transcript || !correctedText || correctedText === segment.originalText.trim()) {
+      setEditingSegmentId(null);
+      return;
+    }
+
+    setIsSavingCorrection(true);
+    try {
+      await transcriptService.correctSegment(transcript.id, segment.id, {
+        originalText: segment.originalText,
+        correctedText,
+        correctionType: "stt",
+        triggeredRetranslation: false,
+      });
+      await state.refetch();
+      setEditingSegmentId(null);
+      toast.success("Transcript correction saved.");
+    } catch {
+      toast.error("Could not save the transcript correction.");
+    } finally {
+      setIsSavingCorrection(false);
+    }
+  }
+
+  async function finalizeTranscript() {
+    if (!transcript) return;
+    setIsFinalizing(true);
+    try {
+      await transcriptService.finalize(transcript.id);
+      await state.refetch();
+      toast.success("Transcript finalized.");
+    } catch {
+      toast.error("Could not finalize the transcript.");
+    } finally {
+      setIsFinalizing(false);
+    }
+  }
+
+  function downloadTranscript() {
+    const content = segments
+      .map((segment) => `[${formatTimestamp(segment.startTimeMs)}] ${segment.speakerName}: ${segment.originalText}`)
+      .join("\n");
+    saveBlobDownload(new Blob([content], { type: "text/plain;charset=utf-8" }), `transcript-${roomId}.txt`);
+  }
 
   if (!segments.length) {
     return (
@@ -572,9 +632,18 @@ function TranscriptPanel({
         <span className="text-[10px] font-medium text-ink-subtle">
           DIALOGUE
         </span>
-        <span className="text-[10px] text-ink-subtle">
-          {segments.length} lines
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-ink-subtle">{segments.length} lines</span>
+          <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={downloadTranscript}>
+            <DownloadSimple size={12} /> Download
+          </Button>
+          {canEdit && transcript?.status !== "finalized" ? (
+            <Button type="button" size="sm" className="h-7 px-2 text-[10px] text-white" disabled={isFinalizing} onClick={finalizeTranscript}>
+              {isFinalizing ? <SpinnerGap size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+              Finalize transcript
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="max-h-[560px] flex-1 space-y-2 overflow-y-auto p-5">
         {blocks.map((block) => (
@@ -606,15 +675,48 @@ function TranscriptPanel({
                       </span>
                       <span>{formatTimestamp(segment.startTimeMs)}</span>
                     </span>
+                    {editingSegmentId === segment.id ? (
+                      <div className="w-full min-w-[280px] space-y-2 rounded-xl border border-primary/40 bg-surface-1 p-2">
+                        <textarea
+                          value={draftText}
+                          onChange={(event) => setDraftText(event.target.value)}
+                          className="min-h-20 w-full resize-y rounded-md border border-border bg-canvas px-2 py-1.5 text-[12px] text-ink outline-none focus:border-primary"
+                          aria-label={`Edit transcript line by ${segment.speakerName}`}
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button type="button" size="sm" variant="ghost" className="h-7 text-[10px]" onClick={() => setEditingSegmentId(null)}>
+                            Cancel
+                          </Button>
+                          <Button type="button" size="sm" className="h-7 text-[10px] text-white" disabled={isSavingCorrection || !draftText.trim()} onClick={() => void saveCorrection(segment)}>
+                            {isSavingCorrection ? <SpinnerGap size={12} className="animate-spin" /> : null}
+                            Save correction
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
                     <div
-                      className={`rounded-2xl px-3 py-2 text-[12px] leading-6 ${
+                      className={`group/line relative rounded-2xl px-3 py-2 pr-8 text-[12px] leading-6 ${
                         isSelf
                           ? "rounded-tr-sm bg-primary text-white"
                           : "rounded-tl-sm border border-border bg-surface-1 text-ink-muted"
                       }`}
                     >
                       {segment.originalText}
+                      {canEdit && transcript?.status !== "finalized" ? (
+                        <button
+                          type="button"
+                          aria-label="Edit transcript line"
+                          className="absolute right-2 top-2 opacity-0 transition-opacity group-hover/line:opacity-100 focus:opacity-100"
+                          onClick={() => {
+                            setEditingSegmentId(segment.id);
+                            setDraftText(segment.originalText);
+                          }}
+                        >
+                          <PencilSimple size={13} />
+                        </button>
+                      ) : null}
                     </div>
+                    )}
                   </div>
                 </div>
               );

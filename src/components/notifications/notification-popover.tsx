@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, Loader2 } from "lucide-react";
+import { AlertCircle, Bell, Check, Loader2, RefreshCw } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { notificationService } from "@/services/notification.service";
@@ -11,11 +11,13 @@ import { Badge } from "@/components/ui/badge";
 
 export function NotificationPopover() {
   const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [showAll, setShowAll] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => notificationService.getNotifications(1, 10),
+    queryFn: () => notificationService.getNotifications(1, 50),
     retry: false,
   });
 
@@ -27,7 +29,14 @@ export function NotificationPopover() {
   });
 
   const notifications = data?.data?.items || [];
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = data?.data?.unreadCount ?? 0;
+  const totalCount = data?.data?.totalCount ?? 0;
+  const filteredNotifications = notifications.filter((notification) =>
+    filter === "unread" ? !notification.isRead : true,
+  );
+  const visibleNotifications = showAll
+    ? filteredNotifications
+    : filteredNotifications.slice(0, 10);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -68,6 +77,30 @@ export function NotificationPopover() {
             </Button>
           )}
         </div>
+
+        <div className="flex items-center gap-1 border-b border-hairline px-3 py-2">
+          <Button
+            type="button"
+            variant={filter === "all" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 rounded-full px-3 text-xs"
+            onClick={() => setFilter("all")}
+          >
+            All {totalCount > 0 ? `(${totalCount})` : ""}
+          </Button>
+          <Button
+            type="button"
+            variant={filter === "unread" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 rounded-full px-3 text-xs"
+            onClick={() => setFilter("unread")}
+          >
+            Unread {unreadCount > 0 ? `(${unreadCount})` : ""}
+          </Button>
+          {isFetching && !isLoading && (
+            <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-ink-muted" />
+          )}
+        </div>
         
         <div className="max-h-[400px] overflow-y-auto overflow-x-hidden flex flex-col divide-y divide-hairline">
           {isLoading ? (
@@ -75,23 +108,45 @@ export function NotificationPopover() {
               <Loader2 className="h-5 w-5 animate-spin mb-2" />
               <p className="text-xs">Loading notifications...</p>
             </div>
-          ) : notifications.length === 0 ? (
+          ) : isError ? (
+            <div className="flex flex-col items-center justify-center gap-2 p-8 text-center text-muted-foreground">
+              <AlertCircle className="h-7 w-7 text-destructive/80" />
+              <p className="text-sm font-medium text-ink">Couldn&apos;t load notifications</p>
+              <p className="text-xs">Check your connection and try again.</p>
+              <Button type="button" variant="outline" size="sm" className="mt-1 h-8 gap-1.5" onClick={() => refetch()}>
+                <RefreshCw className="h-3.5 w-3.5" />
+                Retry
+              </Button>
+            </div>
+          ) : filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-muted-foreground text-center">
               <Bell className="h-8 w-8 mb-2 opacity-20" />
               <p className="text-sm font-medium">All caught up!</p>
-              <p className="text-xs opacity-75 mt-1">You have no new notifications.</p>
+              <p className="text-xs opacity-75 mt-1">
+                {filter === "unread" ? "You have no unread notifications." : "New updates will appear here."}
+              </p>
             </div>
           ) : (
-            notifications.map((notif) => (
-              <NotificationItem key={notif.id} notification={notif} />
+            visibleNotifications.map((notif) => (
+              <NotificationItem
+                key={notif.id}
+                notification={notif}
+                onNavigate={() => setOpen(false)}
+              />
             ))
           )}
         </div>
         
-        {notifications.length > 0 && (
+        {filteredNotifications.length > 10 && (
           <div className="p-2 border-t border-hairline bg-surface-2/30 text-center">
-            <Button variant="ghost" size="sm" className="w-full text-xs text-primary hover:text-primary-hover hover:bg-primary/5">
-              View all notifications
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs text-primary hover:text-primary-hover hover:bg-primary/5"
+              onClick={() => setShowAll((current) => !current)}
+            >
+              {showAll ? "Show recent" : `View all ${filteredNotifications.length} notifications`}
             </Button>
           </div>
         )}

@@ -1,43 +1,44 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import type { IconProps } from "@phosphor-icons/react";
 import {
-  SquaresFour,
-  Scroll,
-  Waveform,
-  GearSix,
-  MagnifyingGlass,
   CaretDown,
   CaretLeft,
-  Plus,
-  Keyboard,
   CreditCard,
-  Users,
-  FileText,
-  User,
-  Warning,
-  House,
-  Sliders,
-  PaperPlaneTilt,
-  Globe,
   EnvelopeSimple,
+  FileText,
+  Gauge,
+  GearSix,
+  Globe,
+  House,
+  Keyboard,
+  MagnifyingGlass,
+  PaperPlaneTilt,
+  Plus,
+  Scroll,
+  SignOut,
+  Sliders,
+  SquaresFour,
+  User,
+  Users,
+  Warning,
+  Waveform,
 } from "@phosphor-icons/react/dist/ssr";
-import type { IconProps } from "@phosphor-icons/react";
-type IconType = React.ElementType<IconProps>;
-import { cn } from "@/lib/utils";
-import { useUIStore } from "@/stores/ui-store";
-import { useAuthStore } from "@/stores/auth-store";
-import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useInviteWorkspaceMember, useWorkspaces } from "@/hooks/use-workspace";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,14 +46,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSelectWorkspace } from "@/hooks/use-workspace";
-import { toast } from "sonner";
-import { SignOut } from "@phosphor-icons/react/dist/ssr";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import {
+  useInviteWorkspaceMember,
+  useSelectWorkspace,
+  useWorkspaces,
+} from "@/hooks/use-workspace";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+
+type IconType = React.ElementType<IconProps>;
 
 interface NavItem {
   icon: IconType;
   label: string;
   href: string;
+  exact?: boolean;
   actions?: Array<{
     icon: IconType;
     href?: string;
@@ -71,7 +84,8 @@ function NavLink({
   collapsed?: boolean;
 }) {
   const isActive =
-    pathname === item.href || pathname.startsWith(item.href + "/");
+    pathname === item.href ||
+    (!item.exact && pathname.startsWith(item.href + "/"));
   return (
     <div
       className={cn(
@@ -639,7 +653,39 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             )}
             <div className="flex flex-col gap-px">
               <NavLink
-                item={{ icon: Globe, label: "Global Glossary", href: "/admin/global-glossary" }}
+                item={{
+                  icon: Gauge,
+                  label: "Overview",
+                  href: "/admin",
+                  exact: true,
+                }}
+                pathname={pathname}
+                collapsed={collapsed}
+              />
+              <NavLink
+                item={{
+                  icon: Users,
+                  label: "Workspaces",
+                  href: "/admin/workspaces",
+                }}
+                pathname={pathname}
+                collapsed={collapsed}
+              />
+              <NavLink
+                item={{
+                  icon: CreditCard,
+                  label: "Billing",
+                  href: "/admin/billing",
+                }}
+                pathname={pathname}
+                collapsed={collapsed}
+              />
+              <NavLink
+                item={{
+                  icon: Globe,
+                  label: "Global Glossary",
+                  href: "/admin/global-glossary",
+                }}
                 pathname={pathname}
                 collapsed={collapsed}
               />

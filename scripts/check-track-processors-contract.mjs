@@ -14,7 +14,7 @@ const meetingJoinState = await readFile(
   "utf8",
 );
 const roomPage = await readFile(
-  new URL("../src/app/(app)/room/[id]/page.tsx", import.meta.url),
+  new URL("../src/components/rooms/live/persistent-meeting-session.tsx", import.meta.url),
   "utf8",
 );
 const joinPage = await readFile(
