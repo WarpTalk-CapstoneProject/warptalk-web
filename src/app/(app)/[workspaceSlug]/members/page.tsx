@@ -30,6 +30,8 @@ import {
   useInviteWorkspaceMember,
 } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { usePresence } from "@/hooks/use-presence";
 import { Badge } from "@/components/ui/badge";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
@@ -125,6 +127,9 @@ export default function WorkspaceMembersPage() {
   const isOwnerOrAdmin = isOwner || isAdmin;
 
   const membersList = membersQuery.data?.items || [];
+
+  // One presence lookup for the page of members being shown.
+  usePresence(membersList.map((member) => member.userId));
   const memberFilterPills = [
     { key: "all", label: "All", role: "all", status: "all" },
     { key: "owner", label: "Owner", role: "owner", status: "all" },
@@ -413,11 +418,14 @@ export default function WorkspaceMembersPage() {
                 >
                   {/* User name, email & avatar */}
                   <div className="flex items-center gap-3 min-w-0">
-                    <Avatar className="h-8 w-8 border border-hairline/80">
-                      <AvatarFallback className="bg-surface-3/80 text-xs font-semibold text-ink">
-                        {initials(member.fullName)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative h-8 w-8 shrink-0">
+                      <Avatar className="h-8 w-8 border border-hairline/80">
+                        <AvatarFallback className="bg-surface-3/80 text-xs font-semibold text-ink">
+                          {initials(member.fullName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <AvatarPresenceDot userId={member.userId} size="md" />
+                    </div>
                     <div className="flex flex-col min-w-0">
                       <span className="text-xs font-semibold text-ink truncate flex items-center gap-1.5">
                         {member.fullName}

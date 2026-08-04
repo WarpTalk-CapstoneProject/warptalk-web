@@ -1,5 +1,6 @@
 "use client";
 
+import { LanguageLabel, languageLabelText } from "@/components/language/language-label";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle,
@@ -38,10 +39,12 @@ import { useCreateVoiceProfile, useDeleteVoiceProfile, useVoiceProfiles } from "
 import { analyzeVoiceSample } from "@/lib/voice-sample-quality";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
+// Values are the locale tags the backend stores and must not change; the label is what a
+// person reads, and a raw tag in parentheses is not that.
 const LANGUAGE_OPTIONS = [
-  { value: "vi-VN", label: "Vietnamese (vi-VN)" },
-  { value: "en-US", label: "English (en-US)" },
-  { value: "ja-JP", label: "Japanese (ja-JP)" },
+  { value: "vi-VN", label: languageLabelText("vi-VN") },
+  { value: "en-US", label: languageLabelText("en-US") },
+  { value: "ja-JP", label: languageLabelText("ja-JP") },
 ];
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -473,7 +476,11 @@ function VoiceProfileRow({
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold text-ink">{profile.displayName || "Untitled profile"}</p>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-ink-muted">
-            <span>{profile.language ?? "No language set"}</span>
+            {profile.language ? (
+              <LanguageLabel value={profile.language} />
+            ) : (
+              <span>No language set</span>
+            )}
             {profile.hasSample && (
               <span className="inline-flex items-center gap-1">
                 <FileAudio size={14} /> sample attached

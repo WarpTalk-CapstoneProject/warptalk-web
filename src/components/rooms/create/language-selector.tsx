@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
 import { getFlagEmoji } from "@/lib/language-flag";
+import { LanguageLabel } from "@/components/language/language-label";
 
 const languageOptions = [
   { code: "vi-VN", label: "Vietnamese" },
@@ -44,12 +45,10 @@ export function LanguageSelector({
             <div key={code} className="flex items-center">
               {i > 0 && <span className="text-muted-foreground/40 font-bold text-[13px] px-1">;</span>}
               <div className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full hover:bg-surface-2 transition-colors">
-                <span className="leading-none text-[14px]">{getFlagEmoji(code)}</span>
-                {languages.length === 1 && (
-                  <span className="font-medium text-ink">
-                    {languageOptions.find(o => o.code === code)?.label.substring(0, 2).toUpperCase() || code.split('-')[0].toUpperCase()}
-                  </span>
-                )}
+                {/* Full name rather than the first two letters of it: "VI" is not a language
+                    anyone recognises, and a single picked language has room to say so. Several
+                    at once stay flags-only, where the label carries the name on hover. */}
+                <LanguageLabel value={code} showName={languages.length === 1} />
               </div>
             </div>
           ))}
