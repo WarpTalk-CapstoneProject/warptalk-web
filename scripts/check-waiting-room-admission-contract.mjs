@@ -8,7 +8,7 @@ const hooks = fs.readFileSync(
   "utf8",
 );
 const liveRoom = fs.readFileSync(
-  path.join(root, "src/app/(app)/room/[id]/page.tsx"),
+  path.join(root, "src/components/rooms/live/persistent-meeting-session.tsx"),
   "utf8",
 );
 

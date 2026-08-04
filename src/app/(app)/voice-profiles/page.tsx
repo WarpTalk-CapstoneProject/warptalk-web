@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle,
   FileAudio,
@@ -35,13 +35,13 @@ import {
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
 import { useCreateVoiceProfile, useDeleteVoiceProfile, useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import { analyzeVoiceSample } from "@/lib/voice-sample-quality";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
 const LANGUAGE_OPTIONS = [
   { value: "vi-VN", label: "Vietnamese (vi-VN)" },
   { value: "en-US", label: "English (en-US)" },
   { value: "ja-JP", label: "Japanese (ja-JP)" },
-  { value: "ko-KR", label: "Korean (ko-KR)" },
 ];
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -58,7 +58,13 @@ export default function VoiceProfilesPage() {
   const [languageFilter, setLanguageFilter] = useState("all");
   const [sampleFilter, setSampleFilter] = useState<"all" | "ready" | "missing">("all");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
+  const [sampleAssessment, setSampleAssessment] = useState<string | null>(null);
+  const [isCheckingSample, setIsCheckingSample] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
 
   const profileList = useMemo(() => profiles ?? [], [profiles]);
   const readyCount = useMemo(() => profileList.filter((p) => p.hasSample).length, [profileList]);
@@ -69,7 +75,6 @@ export default function VoiceProfilesPage() {
     { key: "vi", label: "VI", language: "vi-VN", sample: "all" },
     { key: "en", label: "EN", language: "en-US", sample: "all" },
     { key: "ja", label: "JA", language: "ja-JP", sample: "all" },
-    { key: "ko", label: "KO", language: "ko-KR", sample: "all" },
   ] as const;
   const activeVoiceFilter =
     voiceProfileFilters.find((item) => item.language === languageFilter && item.sample === sampleFilter)?.key ??
@@ -91,27 +96,111 @@ export default function VoiceProfilesPage() {
   }, [languageFilter, profileList, sampleFilter, searchQuery]);
 
   function resetForm() {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+    }
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    mediaRecorderRef.current = null;
+    recordingChunksRef.current = [];
+    setIsRecording(false);
     setDisplayName("");
     setLanguage("vi-VN");
     setSampleFile(null);
+    setSampleAssessment(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    if (file && file.size > MAX_SAMPLE_SIZE_BYTES) {
-      toast.error("Audio sample must be under 20 MB.");
-      e.target.value = "";
+  useEffect(() => () => {
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  async function checkAndSetSample(file: File | null): Promise<boolean> {
+    if (!file) {
       setSampleFile(null);
+      setSampleAssessment(null);
+      return false;
+    }
+    if (file.size > MAX_SAMPLE_SIZE_BYTES) {
+      toast.error("Audio sample must be under 20 MB.");
+      setSampleFile(null);
+      setSampleAssessment(null);
+      return false;
+    }
+
+    setIsCheckingSample(true);
+    const assessment = await analyzeVoiceSample(file);
+    setIsCheckingSample(false);
+    setSampleAssessment(assessment.message);
+    if (!assessment.accepted) {
+      setSampleFile(null);
+      toast.error(assessment.message);
+      return false;
+    }
+
+    setSampleFile(file);
+    toast.success("Voice sample passed the quality check.");
+    return true;
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    const accepted = await checkAndSetSample(file);
+    if (!accepted) e.target.value = "";
+  }
+
+  async function startRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      toast.error("This browser does not support direct audio recording.");
       return;
     }
-    setSampleFile(file);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      const preferredType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"]
+        .find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = preferredType
+        ? new MediaRecorder(stream, { mimeType: preferredType })
+        : new MediaRecorder(stream);
+      recordingStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      recordingChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) recordingChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const mimeType = recorder.mimeType || "audio/webm";
+        const extension = mimeType.includes("ogg") ? "ogg" : "webm";
+        const recording = new File(recordingChunksRef.current, `voice-sample.${extension}`, { type: mimeType });
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        setIsRecording(false);
+        void checkAndSetSample(recording);
+      };
+      recorder.start(250);
+      setIsRecording(true);
+      setSampleAssessment("Recording… Read the sample paragraph in a quiet room.");
+    } catch {
+      toast.error("Microphone access was denied or unavailable.");
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!displayName.trim()) {
       toast.error("Please enter a profile name.");
+      return;
+    }
+    if (!sampleFile) {
+      toast.error("Record or upload a clear voice sample first.");
       return;
     }
 
@@ -274,7 +363,7 @@ export default function VoiceProfilesPage() {
           <DialogHeader>
             <DialogTitle>Create voice profile</DialogTitle>
             <DialogDescription>
-              Give your voice profile a name and language. You can optionally attach a reference audio sample now.
+              Give your voice profile a name and language, then record or upload one clear speaker sample.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="grid gap-4 pt-2">
@@ -302,7 +391,10 @@ export default function VoiceProfilesPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="sample">Reference sample (optional)</Label>
+              <Label htmlFor="sample">Reference voice sample</Label>
+              <div className="rounded-lg border border-border bg-canvas p-3 text-xs leading-5 text-ink-muted">
+                Read this sample in your normal voice: “WarpTalk helps my team understand every conversation clearly.” Use one speaker, no music, and a quiet room.
+              </div>
               <Input
                 id="sample"
                 type="file"
@@ -310,12 +402,25 @@ export default function VoiceProfilesPage() {
                 ref={fileInputRef}
                 onChange={handleFileChange}
               />
-              <p className="text-xs text-neutral-500">WAV, MP3, M4A or OGG, up to 20 MB.</p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant={isRecording ? "destructive" : "outline"}
+                  size="sm"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={isCheckingSample}
+                >
+                  <Microphone size={14} /> {isRecording ? "Stop recording" : "Record sample"}
+                </Button>
+                {sampleFile ? <span className="truncate text-xs text-ink-muted">{sampleFile.name}</span> : null}
+              </div>
+              <p className="text-xs text-neutral-500">WAV, MP3, M4A, OGG or WebM, 5–120 seconds, up to 20 MB.</p>
+              {sampleAssessment ? <p className="text-xs text-ink-muted">{sampleAssessment}</p> : null}
             </div>
             <DialogFooter className="pt-2">
               <Button
                 type="submit"
-                disabled={createMutation.isPending}
+                disabled={createMutation.isPending || isCheckingSample || isRecording}
                 className="min-w-[80px] text-white"
               >
                 {createMutation.isPending ? "Creating..." : "Create"}

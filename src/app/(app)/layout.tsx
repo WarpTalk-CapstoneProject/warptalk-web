@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -27,6 +28,15 @@ import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
+import { useActiveMeetingStore } from "@/stores/active-meeting-store";
+
+const PersistentMeetingSession = dynamic(
+  () =>
+    import("@/components/rooms/live/persistent-meeting-session").then(
+      (module) => module.PersistentMeetingSession,
+    ),
+  { ssr: false },
+);
 
 function AnimatedWidthPanel({
   open,
@@ -109,6 +119,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const addWorkspaceTab = useWorkspaceTabsStore((state) => state.addTab);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const activeMeetingRoomId = useActiveMeetingStore(
+    (state) => state.activeRoomId,
+  );
+  const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
   const [mounted, setMounted] = useState(false);
   
   const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
@@ -143,6 +157,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace" ||
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isLiveMeetingRoute = pathname.startsWith("/room/");
 
   useEffect(() => {
     const handle = requestAnimationFrame(() => setMounted(true));
@@ -156,7 +172,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [mounted, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!mounted || !isAuthenticated || isOnboardingRoute || workspacesLoading) return;
+    if (!mounted || !isAuthenticated || isOnboardingRoute || isAdminRoute || workspacesLoading) return;
 
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
@@ -182,7 +198,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
 
   if (!mounted || !isAuthenticated) {
     return (
@@ -196,7 +212,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  if (!activeWorkspaceId || workspacesLoading) {
+  if (!isAdminRoute && (!activeWorkspaceId || workspacesLoading)) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -224,7 +240,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main content box */}
         <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-surface-1 shadow-sm">
           {/* Top bar */}
-        <header className="h-[44px] border-b border-border grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 shrink-0">
+        <header
+          className={cn(
+            "h-[44px] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 shrink-0",
+            !isLiveMeetingRoute && "border-b border-border",
+          )}
+        >
           <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-muted">
             <button
               onClick={toggleLeftSidebar}
@@ -349,15 +370,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <WorkspaceTabs />
+        {!isAdminRoute && <WorkspaceTabs />}
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          <main className="min-h-0 flex-1 overflow-y-auto">
+          <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}
+            {activeMeetingRoomId ? (
+              <div
+                className={cn(
+                  isLiveMeetingRoute && "absolute inset-0 z-30",
+                  !isLiveMeetingRoute &&
+                    "fixed bottom-[72px] right-5 z-[70] h-[220px] w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[20px] border border-white/70 bg-surface-1 shadow-[0_24px_70px_rgba(15,23,42,0.28)] ring-1 ring-black/5",
+                )}
+              >
+                <PersistentMeetingSession
+                  key={activeMeetingRoomId}
+                  roomId={activeMeetingRoomId}
+                  compact={!isLiveMeetingRoute}
+                  onMeetingClosed={closeMeeting}
+                />
+              </div>
+            ) : null}
           </main>
 
           {/* Right Sidebar (Context/Properties) */}
-          {!pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
+          {!isAdminRoute && !pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
             <AnimatedWidthPanel
               open={rightSidebarOpen}
               width={260}
