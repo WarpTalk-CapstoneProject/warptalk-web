@@ -49,7 +49,10 @@ import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
 // Import Refactored Components
-import { MeetingTopBar } from "@/components/rooms/live/meeting-top-bar";
+import {
+  MeetingExitControl,
+  MeetingStageTimer,
+} from "@/components/rooms/live/meeting-top-bar";
 import {
   MeetingControlBar,
   type MeetingLayoutMode,
@@ -1435,13 +1438,6 @@ export default function RoomDetailPage() {
     });
   }
 
-  function handleBreakoutFinalMinute() {
-    toast("Returning to the main room soon.", {
-      description:
-        "The host can also end breakouts early from the host controls menu.",
-    });
-  }
-
   if (roomQuery.isLoading) {
     return (
       <StatePanel
@@ -1505,26 +1501,6 @@ export default function RoomDetailPage() {
           onReconnected={() => setIsLiveKitReconnecting(false)}
         />
 
-        <MeetingTopBar
-          room={room}
-          isHost={isRoomHost}
-          sourceLanguage={sourceLanguage}
-          targetLanguage={targetLanguage}
-          onExit={handleExit}
-          warptalkStarted={warptalkStarted}
-          isLocked={isRoomLocked}
-          breakoutInfo={
-            breakoutState.active
-              ? {
-                  label: breakoutState.label ?? "",
-                  startedAt: breakoutState.startedAt,
-                  durationSeconds: breakoutState.durationSeconds,
-                }
-              : null
-          }
-          onBreakoutFinalMinute={handleBreakoutFinalMinute}
-        />
-
         {isReconnecting ? (
           <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-1.5 text-xs font-medium text-white">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
@@ -1539,113 +1515,142 @@ export default function RoomDetailPage() {
           </div>
         ) : null}
 
-        <main className="flex min-h-0 flex-1 gap-4 p-4 pt-0">
-          <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface-1 shadow-sm">
-            <div className="relative flex-1 min-h-0 w-full">
-              {isRecording ? (
-                <div className="absolute left-4 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-                  REC
-                </div>
-              ) : null}
-              <LiveKitMeetingStage
-                fallbackName={user?.fullName || user?.email || room.title}
-                isJoining={isMeetingJoining}
-                error={meetingError}
-                localStream={localStream}
-                localMediaError={localMediaError}
-                screenStream={screenStream}
-                layoutMode={meetingLayout}
-                pinnedUserId={pinnedUserId}
-                onPinParticipant={handlePinParticipant}
-                spotlightedUserId={spotlightedUserId}
-                raisedHandUserIds={raisedHandUserIds}
-                onRetry={retryMeetingConnection}
+        <main
+          data-meeting-content
+          className="flex min-h-0 flex-1 gap-3 p-3 pt-0"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <section
+              data-meeting-camera-view
+              className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-border/40 bg-surface-1 shadow-none"
+            >
+              <MeetingStageTimer
+                createdAt={room.createdAt}
+                endedAt={room.endedAt}
               />
-              <FilteredRoomAudio
-                targetLanguageNormalized={targetLanguageNormalized}
-                speakerLanguageByUserId={speakerLanguageByUserId}
-                voicePreference={voicePreference}
-                voiceEnabled={voiceEnabled}
-                translationActive={warptalkStarted}
-              />
-              <TrackProcessorsController
-                noiseSuppressionEnabled={noiseSuppressionEnabled}
-                backgroundBlurEnabled={backgroundBlurEnabled}
-                onNoiseSuppressionError={handleNoiseSuppressionError}
-              />
-
-              {/* Live captions — real pipeline segments only */}
-              <LiveSubtitleOverlay enabled={warptalkStarted} />
-
-              {/* Emoji reactions — TranslationRoomHub.ReactionReceived */}
-              <ReactionOverlay
-                reactions={reactions}
-                onReactionExpired={handleReactionExpired}
-              />
-
-              {/* Floating Control Bar */}
-              <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 transition-opacity hover:opacity-100">
-                <MeetingControlBar
-                  meetingEnabled={Boolean(meetingSession?.token)}
-                  cameraEnabled={cameraEnabled}
-                  microphoneEnabled={microphoneEnabled}
+              <div className="relative min-h-0 w-full flex-1">
+                {isRecording ? (
+                  <div className="absolute right-4 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                    REC
+                  </div>
+                ) : null}
+                <LiveKitMeetingStage
+                  fallbackName={user?.fullName || user?.email || room.title}
+                  isJoining={isMeetingJoining}
+                  error={meetingError}
+                  localStream={localStream}
+                  localMediaError={localMediaError}
+                  screenStream={screenStream}
+                  layoutMode={meetingLayout}
+                  pinnedUserId={pinnedUserId}
+                  onPinParticipant={handlePinParticipant}
+                  spotlightedUserId={spotlightedUserId}
+                  raisedHandUserIds={raisedHandUserIds}
+                  onRetry={retryMeetingConnection}
+                />
+                <FilteredRoomAudio
+                  targetLanguageNormalized={targetLanguageNormalized}
+                  speakerLanguageByUserId={speakerLanguageByUserId}
+                  voicePreference={voicePreference}
+                  voiceEnabled={voiceEnabled}
+                  translationActive={warptalkStarted}
+                />
+                <TrackProcessorsController
                   noiseSuppressionEnabled={noiseSuppressionEnabled}
                   backgroundBlurEnabled={backgroundBlurEnabled}
-                  isScreenSharing={Boolean(screenStream)}
-                  layoutMode={meetingLayout}
-                  roomCode={room.translationRoomCode}
-                  joinLink={joinLink}
-                  isHost={isHost}
-                  warptalkStarted={warptalkStarted}
-                  listenLanguage={targetLanguage}
-                  availableListenLanguages={availableListenLanguages}
-                  speakLanguage={sourceLanguage}
-                  availableSpeakLanguages={availableListenLanguages}
-                  voicePreference={voicePreference}
-                  voiceCatalog={voiceCatalog}
-                  voiceCloneEnabled={voiceCloneEnabled}
-                  voiceEnabled={voiceEnabled}
-                  handRaised={handRaised}
-                  onCopyText={copyText}
-                  onToggleCamera={() => setCameraEnabled((current) => !current)}
-                  onToggleMicrophone={() =>
-                    setMicrophoneEnabled((current) => !current)
-                  }
-                  onToggleNoiseSuppression={handleToggleNoiseSuppression}
-                  onToggleBackgroundBlur={handleToggleBackgroundBlur}
-                  onToggleScreenShare={handleToggleScreenShare}
-                  onLayoutChange={setMeetingLayout}
-                  onStartWarptalk={handleStartWarptalk}
-                  onStopWarptalk={handleStopWarptalk}
-                  onChangeListenLanguage={handleChangeListenLanguage}
-                  onChangeSpeakLanguage={handleChangeSpeakLanguage}
-                  onChangeVoicePreference={handleChangeVoicePreference}
-                  onChangeVoiceCloneConsent={handleChangeVoiceCloneConsent}
-                  onChangeVoiceEnabled={handleChangeVoiceEnabled}
-                  onToggleRaiseHand={handleToggleRaiseHand}
-                  onSendReaction={handleSendReaction}
-                  isLocked={isRoomLocked}
-                  muteOnEntry={muteOnEntryEnabled}
-                  isRecording={isRecording}
-                  recordingPending={setRecordingMutation.isPending}
-                  onToggleLock={isHost ? handleToggleLock : undefined}
-                  onToggleMuteOnEntry={
-                    isHost ? handleToggleMuteOnEntry : undefined
-                  }
-                  onMuteAll={isHost ? handleMuteAll : undefined}
-                  onToggleRecording={isHost ? handleToggleRecording : undefined}
-                  breakoutActive={breakoutsRunning}
-                  onOpenBreakoutSetup={
-                    isHost ? () => setShowBreakoutSetup(true) : undefined
-                  }
-                  onEndBreakoutRooms={
-                    isHost ? handleEndBreakoutRooms : undefined
-                  }
+                  onNoiseSuppressionError={handleNoiseSuppressionError}
+                />
+
+                {/* Live captions — real pipeline segments only */}
+                <LiveSubtitleOverlay enabled={warptalkStarted} />
+
+                {/* Emoji reactions — TranslationRoomHub.ReactionReceived */}
+                <ReactionOverlay
+                  reactions={reactions}
+                  onReactionExpired={handleReactionExpired}
                 />
               </div>
+            </section>
+
+            <div
+              data-meeting-bottom-dock
+              className="flex min-h-12 shrink-0 items-center overflow-x-auto"
+            >
+              <div className="mx-auto flex w-max items-center gap-2 px-1">
+                <div data-meeting-control-bar className="shrink-0">
+                  <MeetingControlBar
+                    meetingEnabled={Boolean(meetingSession?.token)}
+                    cameraEnabled={cameraEnabled}
+                    microphoneEnabled={microphoneEnabled}
+                    noiseSuppressionEnabled={noiseSuppressionEnabled}
+                    backgroundBlurEnabled={backgroundBlurEnabled}
+                    isScreenSharing={Boolean(screenStream)}
+                    layoutMode={meetingLayout}
+                    roomCode={room.translationRoomCode}
+                    joinLink={joinLink}
+                    isHost={isHost}
+                    warptalkStarted={warptalkStarted}
+                    listenLanguage={targetLanguage}
+                    availableListenLanguages={availableListenLanguages}
+                    speakLanguage={sourceLanguage}
+                    availableSpeakLanguages={availableListenLanguages}
+                    voicePreference={voicePreference}
+                    voiceCatalog={voiceCatalog}
+                    voiceCloneEnabled={voiceCloneEnabled}
+                    voiceEnabled={voiceEnabled}
+                    handRaised={handRaised}
+                    onCopyText={copyText}
+                    onToggleCamera={() =>
+                      setCameraEnabled((current) => !current)
+                    }
+                    onToggleMicrophone={() =>
+                      setMicrophoneEnabled((current) => !current)
+                    }
+                    onToggleNoiseSuppression={handleToggleNoiseSuppression}
+                    onToggleBackgroundBlur={handleToggleBackgroundBlur}
+                    onToggleScreenShare={handleToggleScreenShare}
+                    onLayoutChange={setMeetingLayout}
+                    onStartWarptalk={handleStartWarptalk}
+                    onStopWarptalk={handleStopWarptalk}
+                    onChangeListenLanguage={handleChangeListenLanguage}
+                    onChangeSpeakLanguage={handleChangeSpeakLanguage}
+                    onChangeVoicePreference={handleChangeVoicePreference}
+                    onChangeVoiceCloneConsent={handleChangeVoiceCloneConsent}
+                    onChangeVoiceEnabled={handleChangeVoiceEnabled}
+                    onToggleRaiseHand={handleToggleRaiseHand}
+                    onSendReaction={handleSendReaction}
+                    isLocked={isRoomLocked}
+                    muteOnEntry={muteOnEntryEnabled}
+                    isRecording={isRecording}
+                    recordingPending={setRecordingMutation.isPending}
+                    onToggleLock={isHost ? handleToggleLock : undefined}
+                    onToggleMuteOnEntry={
+                      isHost ? handleToggleMuteOnEntry : undefined
+                    }
+                    onMuteAll={isHost ? handleMuteAll : undefined}
+                    onToggleRecording={
+                      isHost ? handleToggleRecording : undefined
+                    }
+                    breakoutActive={breakoutsRunning}
+                    onOpenBreakoutSetup={
+                      isHost ? () => setShowBreakoutSetup(true) : undefined
+                    }
+                    onEndBreakoutRooms={
+                      isHost ? handleEndBreakoutRooms : undefined
+                    }
+                  />
+                </div>
+                <div data-meeting-exit-control className="shrink-0">
+                  <MeetingExitControl
+                    room={room}
+                    isHost={isRoomHost}
+                    onExit={handleExit}
+                  />
+                </div>
+              </div>
             </div>
-          </section>
+          </div>
 
           {rightSidebarOpen && (
             <MeetingSidePanel
