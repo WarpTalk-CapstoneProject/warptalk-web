@@ -340,7 +340,7 @@ export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
 export function useMyJoinRequests() {
   return useQuery({
     queryKey: WORKSPACE_KEYS.myJoinRequests(),
-    queryFn: WorkspaceService.getPendingInvitations, // Pending requests query fallback
+    queryFn: WorkspaceService.getMyJoinRequests,
     staleTime: 30000,
   });
 }

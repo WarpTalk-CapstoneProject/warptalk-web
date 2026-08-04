@@ -119,6 +119,7 @@ export const API = {
     acceptInvitation: "/workspaces/invitations/accept",
     acceptInvitationById: (inviteId: string) => `/workspaces/invitations/${inviteId}/accept`,
     joinRequests: "/workspaces/join-requests",
+    myJoinRequests: "/workspaces/join-requests/mine",
     approveJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/approve`,
     rejectJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/reject`,
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,

@@ -125,6 +125,10 @@ export interface WorkspaceInvitationDto {
   reviewedAt?: string | null;
   workspaceName?: string | null;
   workspaceSlug?: string | null;
+  allowedFinalMembershipTypes?: string[] | null;
+  requiresPolicyAction?: boolean | null;
+  policyReason?: string | null;
+  suggestedActions?: string[] | null;
 }
 
 export interface ApproveJoinRequestResponse {

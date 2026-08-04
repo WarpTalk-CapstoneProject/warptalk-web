@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -34,6 +34,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  getAllowedFinalMembershipTypes,
+  getDefaultApprovalMembershipType,
+  getJoinRequestPolicyMessage,
+  getSuggestedActionLabel,
+  isJoinRequestApprovalBlocked
+} from "@/lib/join-request-eligibility";
+import type { WorkspaceInvitationDto } from "@/types/workspace";
 
 const inviteSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -52,7 +60,7 @@ export default function WorkspaceInvitationsPage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<"invitations" | "join-requests">("invitations");
-  const [approvalType, setApprovalType] = useState<Record<string, "Internal" | "External">>({});
+  const [approvalType, setApprovalType] = useState<Record<string, string>>({});
 
   const [inviteNotice, setInviteNotice] = useState<{ email: string; previewUrl: string; warning?: string | null } | null>(null);
   const [inviteToRevoke, setInviteToRevoke] = useState<{ id: string; email: string } | null>(null);
@@ -69,7 +77,7 @@ export default function WorkspaceInvitationsPage() {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     reset,
     formState: { errors },
   } = useForm<InviteFormData>({
@@ -80,7 +88,7 @@ export default function WorkspaceInvitationsPage() {
     },
   });
 
-  const selectedRole = watch("roleName");
+  const selectedRole = useWatch({ control, name: "roleName" });
 
   if (!activeWorkspaceId) return null;
 
@@ -153,10 +161,15 @@ export default function WorkspaceInvitationsPage() {
   const joinRequestsList = activeTab === "join-requests" ? allRecords : [];
   const invitesList = activeTab === "invitations" ? allRecords : [];
 
-  const handleApprove = async (inviteId: string, provisionalType: string) => {
-    const membershipType = approvalType[inviteId] || (provisionalType.toLowerCase() === "internal" ? "Internal" : "External");
+  const handleApprove = async (invite: WorkspaceInvitationDto) => {
+    const membershipType = getDefaultApprovalMembershipType(invite, approvalType[invite.id]);
+    if (!membershipType) {
+      toast.error(invite.policyReason || "Workspace policy must be updated before this request can be approved.");
+      return;
+    }
+
     try {
-      const result = await approveJoinRequest.mutateAsync({ inviteId, membershipType });
+      const result = await approveJoinRequest.mutateAsync({ inviteId: invite.id, membershipType });
       toast.success(result.approvalEmailStatus === "Failed" ? "Member approved; approval email delivery failed." : "Join request approved and email sent.");
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
@@ -247,7 +260,7 @@ export default function WorkspaceInvitationsPage() {
               </div>
             ) : (
                 <div className="min-w-[650px] divide-y divide-hairline">
-                <div className="grid grid-cols-[1.5fr_100px_110px_100px_100px_48px] items-center gap-4 px-4 py-2 bg-surface-2 text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
+                <div className="grid grid-cols-[1.4fr_90px_180px_100px_90px_180px] items-center gap-4 px-4 py-2 bg-surface-2 text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
                   <span>Email</span>
                   <span>Role</span>
                   <span>Type</span>
@@ -260,23 +273,43 @@ export default function WorkspaceInvitationsPage() {
                   const normalizedStatus = invite.status.toUpperCase();
                   const isJoinRequest = activeTab === "join-requests";
                   const isRequested = normalizedStatus === "REQUESTED";
+                  const allowedTypes = getAllowedFinalMembershipTypes(invite);
+                  const selectedMembershipType = getDefaultApprovalMembershipType(invite, approvalType[invite.id]);
+                  const approvalBlocked = isJoinRequestApprovalBlocked(invite);
+                  const policyMessage = getJoinRequestPolicyMessage(invite);
+                  const suggestedActionLabels = (invite.suggestedActions ?? [])
+                    .map(getSuggestedActionLabel)
+                    .filter((label): label is string => Boolean(label));
                   return (
                   <div
                     key={invite.id}
-                    className="grid grid-cols-[1.5fr_100px_110px_100px_100px_48px] items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors"
+                    className="grid grid-cols-[1.4fr_90px_180px_100px_90px_180px] items-center gap-4 px-4 py-3 hover:bg-surface-2/30 transition-colors"
                   >
                     <span className="text-xs font-medium text-ink truncate">{invite.email}</span>
                     <span className="text-xs text-ink-muted">{isJoinRequest ? "Member" : invite.roleName}</span>
                     {isJoinRequest ? (
-                      <select
-                        value={approvalType[invite.id] || (invite.membershipType.toLowerCase() === "internal" ? "Internal" : "External")}
-                        onChange={(event) => setApprovalType((current) => ({ ...current, [invite.id]: event.target.value as "Internal" | "External" }))}
-                        disabled={!isRequested || approveJoinRequest.isPending}
-                        className="h-7 rounded-md border border-hairline bg-surface-2 px-2 text-[11px] text-ink disabled:opacity-60"
-                      >
-                        <option value="Internal">Internal</option>
-                        <option value="External">External</option>
-                      </select>
+                      <div className="min-w-0">
+                        {approvalBlocked ? (
+                          <span className="text-[11px] font-semibold text-amber-600">Policy action needed</span>
+                        ) : (
+                          <select
+                            value={selectedMembershipType ?? ""}
+                            onChange={(event) => setApprovalType((current) => ({ ...current, [invite.id]: event.target.value }))}
+                            disabled={!isRequested || approveJoinRequest.isPending || allowedTypes.length === 0}
+                            className="h-7 w-full rounded-md border border-hairline bg-surface-2 px-2 text-[11px] text-ink disabled:opacity-60"
+                          >
+                            {allowedTypes.map((type) => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                        )}
+                        {policyMessage && (
+                          <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-ink-muted">{policyMessage}</p>
+                        )}
+                        {suggestedActionLabels.length > 0 && (
+                          <p className="mt-1 text-[10px] leading-4 text-ink-muted">{suggestedActionLabels.join(" / ")}</p>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-xs text-ink-muted">
                         {isRequested && invite.membershipType.toLowerCase() === "external"
@@ -309,8 +342,8 @@ export default function WorkspaceInvitationsPage() {
                           <>
                             <button
                               type="button"
-                              onClick={() => handleApprove(invite.id, invite.membershipType)}
-                              disabled={approveJoinRequest.isPending || rejectJoinRequest.isPending}
+                              onClick={() => handleApprove(invite)}
+                              disabled={approvalBlocked || approveJoinRequest.isPending || rejectJoinRequest.isPending}
                               className="inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2 text-[10px] font-semibold text-white hover:bg-primary-hover disabled:opacity-50"
                               title="Approve as Member"
                             >
