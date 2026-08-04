@@ -10,6 +10,7 @@ import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName, SUPPORTED_LANGUAGES } from "@/lib/languages";
 import { downloadAuthenticatedFile } from "@/lib/download-artifact";
+import { API } from "@/lib/api/endpoints";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
@@ -314,11 +315,10 @@ export function ChatPanel({
   }
 
   async function handleFileDownload(file: ChatFileMessageDto) {
-    if (!file.fileUrl) return;
     setFileError(null);
     try {
       await downloadAuthenticatedFile(
-        file.fileUrl,
+        API.meetings.chatDownload(roomId, file.id),
         file.fileName || file.originalText || "download",
       );
     } catch {

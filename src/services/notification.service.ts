@@ -23,24 +23,10 @@ export const notificationService = {
     );
   },
 
-  async getNotifications(page = 1, pageSize = 50) {
-    try {
-      return await apiClient.get<PaginatedResponse<NotificationMessageDto>>(
-        `${API.notifications.base}?page=${page}&pageSize=${pageSize}`
-      );
-    } catch {
-      return {
-        data: {
-          items: [],
-          pageIndex: page,
-          pageSize,
-          totalCount: 0,
-          totalPages: 0,
-          hasPreviousPage: false,
-          hasNextPage: false,
-        },
-      };
-    }
+  getNotifications(page = 1, pageSize = 50) {
+    return apiClient.get<PaginatedResponse<NotificationMessageDto>>(
+      `${API.notifications.base}?page=${page}&pageSize=${pageSize}`,
+    );
   },
 
   markAsRead(id: string) {

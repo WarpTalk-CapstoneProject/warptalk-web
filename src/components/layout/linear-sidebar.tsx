@@ -36,6 +36,7 @@ import {
   CreditCard,
   FileText,
   GearSix,
+  Gauge,
   Globe,
   House,
   Keyboard,
@@ -61,6 +62,7 @@ interface NavItem {
   icon: IconType;
   label: string;
   href: string;
+  exact?: boolean;
   actions?: Array<{
     icon: IconType;
     href?: string;
@@ -79,7 +81,8 @@ function NavLink({
   collapsed?: boolean;
 }) {
   const isActive =
-    pathname === item.href || pathname.startsWith(item.href + "/");
+    pathname === item.href ||
+    (!item.exact && pathname.startsWith(item.href + "/"));
   return (
     <div
       className={cn(
@@ -785,11 +788,31 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             <div className="flex flex-col gap-px">
               <NavLink
                 item={{
-                  icon: CreditCard,
-                  label: "Billing",
-                  href: "/billing",
+                  icon: Gauge,
+                  label: "Overview",
+                  href: "/admin",
+                  exact: true,
                 }}
                 pathname={pathname}
+                collapsed={collapsed}
+              />
+              <NavLink
+                item={{
+                  icon: Users,
+                  label: "Workspaces",
+                  href: "/admin/workspaces",
+                }}
+                pathname={pathname}
+                collapsed={collapsed}
+              />
+              <NavLink
+                item={{
+                  icon: CreditCard,
+                  label: "Billing",
+                  href: "/admin/billing",
+                }}
+                pathname={pathname}
+                collapsed={collapsed}
               />
               <NavLink
                 item={{
