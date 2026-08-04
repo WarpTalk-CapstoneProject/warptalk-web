@@ -46,6 +46,18 @@ function formatTimeShort(value?: string) {
   }).format(new Date(value));
 }
 
+/**
+ * Whether this room was booked for the given calendar day.
+ *
+ * Status is deliberately not part of the question (WT-247): a meeting that has started, or
+ * already ended, still belongs on the day it was scheduled for. Rooms with no scheduledAt are
+ * instant meetings and belong to no day at all.
+ */
+function isScheduledOn(room: TranslationRoomDto, day: Date) {
+  if (!room.scheduledAt) return false;
+  return new Date(room.scheduledAt).toDateString() === day.toDateString();
+}
+
 function StatusIcon({ status }: { status: string }) {
   if (status === "in_progress")
     return (
@@ -473,6 +485,30 @@ export default function MeetingsPageLinear() {
     return roomList.data?.rooms ?? [];
   }, [roomList.data?.rooms]);
 
+  // WT-251/WT-232: the calendar gave no hint which days hold anything, and it opens on today,
+  // so a meeting booked for any other day was invisible in this tab — findable only under
+  // "All". Marking the days that have meetings is what makes the tab navigable at all.
+  const daysWithMeetings = useMemo(
+    () =>
+      rooms
+        .filter((room) => room.scheduledAt)
+        .map((room) => new Date(room.scheduledAt as string)),
+    [rooms],
+  );
+
+  // The soonest meeting still ahead of now, so a day with nothing on it can point somewhere
+  // instead of being a dead end.
+  const nextUpcoming = useMemo(() => {
+    const now = Date.now();
+    return rooms
+      .filter(
+        (room) =>
+          room.scheduledAt && new Date(room.scheduledAt).getTime() >= now,
+      )
+      .map((room) => new Date(room.scheduledAt as string))
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+  }, [rooms]);
+
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const matchesSearch = (room: TranslationRoomDto) => {
@@ -504,17 +540,12 @@ export default function MeetingsPageLinear() {
       );
     }
     if (activeTab === "scheduled") {
-      if (!selectedDate)
-        return rooms.filter(
-          (r) => r.status === "scheduled" && matchesSearch(r),
-        );
+      // WT-247: keyed off the day a room was scheduled for, not off its current status. The
+      // old filter also required status === "scheduled", so a meeting vanished from its own
+      // day in the calendar the moment it started. What belongs on a day is what was booked
+      // for it; the row already renders whatever state it has now.
       return rooms.filter(
-        (r) =>
-          matchesSearch(r) &&
-          r.status === "scheduled" &&
-          r.scheduledAt &&
-          new Date(r.scheduledAt).toDateString() ===
-            selectedDate.toDateString(),
+        (r) => matchesSearch(r) && isScheduledOn(r, selectedDate),
       );
     }
     if (activeTab === "history")
@@ -600,6 +631,11 @@ export default function MeetingsPageLinear() {
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 className="w-full"
+                modifiers={{ hasMeeting: daysWithMeetings }}
+                modifiersClassNames={{
+                  hasMeeting:
+                    "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary",
+                }}
               />
             </div>
             <div className="mt-6 text-[13px] text-muted-foreground w-full px-1">
@@ -616,6 +652,22 @@ export default function MeetingsPageLinear() {
                   ? "You have no meetings scheduled for this day."
                   : `You have ${filteredRooms.length} meeting${filteredRooms.length === 1 ? "" : "s"} scheduled for this day.`}
               </p>
+              {filteredRooms.length === 0 &&
+              nextUpcoming &&
+              nextUpcoming.toDateString() !== selectedDate.toDateString() ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(nextUpcoming)}
+                  className="mt-2 text-[13px] font-medium text-primary hover:text-primary-hover"
+                >
+                  Go to next meeting —{" "}
+                  {nextUpcoming.toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </button>
+              ) : null}
             </div>
           </div>
         )}

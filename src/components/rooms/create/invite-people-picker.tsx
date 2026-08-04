@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   Popover,
@@ -10,6 +10,7 @@ import { PillButton } from "./pill-button";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { matchesSearchText } from "@/lib/search-text";
 
 export function isValidInviteEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
@@ -30,12 +31,34 @@ export function InvitePeoplePicker({
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
+
+  // The server holds the authoritative member list and only returns one page, so the typed
+  // term has to reach it — a workspace with more members than the page size would otherwise
+  // never surface anyone past the first page. Debounced so each keystroke is not a request.
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(input.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [input]);
+
   const { data: membersData } = useWorkspaceMembers(
     activeWorkspaceId || "",
     1,
     100,
+    search,
   );
   const members = membersData?.items ?? [];
+
+  // Names for the invited chips have to survive the list narrowing: once a search term is in
+  // flight the fetched page no longer contains the members already added, so remember every
+  // name seen instead of looking it up in the current page.
+  const knownNamesRef = useRef(new Map<string, string>());
+  for (const member of members) {
+    const email = member.email?.toLowerCase();
+    if (email && member.fullName && member.fullName !== "Unknown") {
+      knownNamesRef.current.set(email, member.fullName);
+    }
+  }
 
   const suggestedMembers = members.filter(
     (m) =>
@@ -45,7 +68,10 @@ export function InvitePeoplePicker({
       isValidInviteEmail(m.email ?? "") &&
       m.userId !== user?.id &&
       m.email?.toLowerCase() !== user?.email.toLowerCase() &&
-      !emails.includes((m.email ?? "").toLowerCase()),
+      !emails.includes((m.email ?? "").toLowerCase()) &&
+      // Narrow locally too: the debounced request lags the keystroke, and without this the
+      // list keeps showing everyone until it lands (WT-231).
+      matchesSearchText(input, m.fullName, m.email),
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -125,10 +151,7 @@ export function InvitePeoplePicker({
           {emails.length > 0 && (
             <div className="mt-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
               {emails.map((email) => {
-                const member = members.find(
-                  (m) => m.email?.toLowerCase() === email,
-                );
-                const displayText = member?.fullName || email;
+                const displayText = knownNamesRef.current.get(email) || email;
                 return (
                   <div
                     key={email}

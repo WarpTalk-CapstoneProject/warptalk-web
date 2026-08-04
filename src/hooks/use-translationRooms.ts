@@ -35,7 +35,12 @@ export function useTranslationRooms(params?: {
 }
 
 /** Fetch a single translationRoom by ID */
-export function useTranslationRoom(id: string) {
+/**
+ * @param refetchInterval poll the room's state, in ms. Off by default — only the waiting room
+ * needs it, so it can notice the host starting the meeting (WT-232) without every other screen
+ * paying for a poll.
+ */
+export function useTranslationRoom(id: string, refetchInterval?: number) {
   return useQuery({
     queryKey: [...MEETING_KEY, id],
     queryFn: async () => {
@@ -43,6 +48,7 @@ export function useTranslationRoom(id: string) {
       return data;
     },
     enabled: !!id,
+    refetchInterval,
   });
 }
 
