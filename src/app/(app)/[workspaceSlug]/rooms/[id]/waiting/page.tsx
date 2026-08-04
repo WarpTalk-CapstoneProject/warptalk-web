@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackToSetupButton } from "@/components/rooms/setup/back-to-setup-button";
+import { LanguageLabel } from "@/components/language/language-label";
 import { getErrorMessage } from "@/lib/errors";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -120,8 +121,10 @@ export default function WaitingRoomPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-medium">{participant.displayName || "Participant"}</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {participant.speakLanguage} → {participant.listenLanguage}
+                  <p className="flex items-center gap-1 truncate text-sm text-muted-foreground">
+                    <LanguageLabel value={participant.speakLanguage} />
+                    <span aria-hidden>→</span>
+                    <LanguageLabel value={participant.listenLanguage} />
                   </p>
                 </div>
               </div>
