@@ -120,16 +120,19 @@ export default function WorkspaceMembersPage() {
     name: "roleName",
   });
 
+  const membersList = membersQuery.data?.items || [];
+
+  // One presence lookup for the page of members being shown. Above the early return below:
+  // a hook after it would not run on the render where there is no active workspace, which
+  // changes hook order between renders.
+  usePresence(membersList.map((member) => member.userId));
+
+  if (!activeWorkspaceId) return null;
+
   const isOwner = currentRole === "owner";
   const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
 
-  const membersList = membersQuery.data?.items || [];
-
-  // One presence lookup for the page of members being shown.
-  usePresence(membersList.map((member) => member.userId));
-
-  if (!activeWorkspaceId) return null;
   const memberFilterPills = [
     { key: "all", label: "All", role: "all", status: "all" },
     { key: "owner", label: "Owner", role: "owner", status: "all" },

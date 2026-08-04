@@ -47,6 +47,11 @@ function formatTimeShort(value?: string) {
   }).format(new Date(value));
 }
 
+/** Midnight of the given date as a timestamp, for comparing days without comparing times. */
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
 /**
  * Whether this room was booked for the given calendar day.
  *
@@ -472,23 +477,21 @@ export default function MeetingsPageLinear() {
     () =>
       rooms
         .filter((room) => room.scheduledAt)
-        .map((room) => new Date(room.scheduledAt as string)),
+        .map((room) => new Date(room.scheduledAt as string))
+        .sort((a, b) => a.getTime() - b.getTime()),
     [rooms],
   );
 
-  // The soonest meeting still ahead of now, so a day with nothing on it can point somewhere
-  // instead of being a dead end.
-  const nextUpcoming = useMemo(() => {
-    // eslint-disable-next-line react-hooks/purity
-    const now = Date.now();
-    return rooms
-      .filter(
-        (room) =>
-          room.scheduledAt && new Date(room.scheduledAt).getTime() >= now,
-      )
-      .map((room) => new Date(room.scheduledAt as string))
-      .sort((a, b) => a.getTime() - b.getTime())[0];
-  }, [rooms]);
+  // The next day after the one being viewed that actually holds something, so an empty day can
+  // point somewhere instead of being a dead end.
+  //
+  // Measured against the selected day rather than against the clock: reading the current time
+  // during render is impure, and "next after where you are" is the more useful answer anyway —
+  // it works the same whether the user has paged backwards or forwards.
+  const selectedDayKey = startOfDay(selectedDate);
+  const nextUpcoming = daysWithMeetings.find(
+    (date) => startOfDay(date) > selectedDayKey,
+  );
 
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -633,9 +636,7 @@ export default function MeetingsPageLinear() {
                   ? "You have no meetings scheduled for this day."
                   : `You have ${filteredRooms.length} meeting${filteredRooms.length === 1 ? "" : "s"} scheduled for this day.`}
               </p>
-              {filteredRooms.length === 0 &&
-              nextUpcoming &&
-              nextUpcoming.toDateString() !== selectedDate.toDateString() ? (
+              {filteredRooms.length === 0 && nextUpcoming ? (
                 <button
                   type="button"
                   onClick={() => setSelectedDate(nextUpcoming)}

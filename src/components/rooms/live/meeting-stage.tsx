@@ -137,49 +137,24 @@ export function LiveKitMeetingStage({
   const isSpotlight = Boolean(spotlightedUserId);
 
   // WT-245: a camera-off participant's TrackReference is not stable — LiveKit swaps between a
-  // muted camera publication and the withPlaceholder entry, so the lookup below intermittently
-  // finds nothing. When that happened the render fell straight through to the generic two-up
-  // layout, handing the stage to whoever WAS on camera, and the pin appeared to flip back and
-  // forth. An explicit pin has to outrank a momentary gap: remember the last reference resolved
-  // for this identity and keep using it until either the pin changes or that person leaves.
-  const heldFeaturedRef = useRef<{
-    identity: string;
-    trackRef: TrackReferenceOrPlaceholder;
-  } | null>(null);
-
-  const featuredStillInRoom = Boolean(
-    featuredIdentity &&
-      (featuredIdentity === localIdentity ||
-        (room &&
-          Array.from(room.remoteParticipants.values()).some(
+  // muted camera publication and the withPlaceholder entry, so looking them up in the track list
+  // intermittently finds nothing. When that happened the render fell straight through to the
+  // generic two-up layout, handing the stage to whoever WAS on camera, and the pin appeared to
+  // flip back and forth.
+  //
+  // Resolved from the room's participants rather than from the track list, so a pin depends on
+  // the person being here and not on whether a publication happens to exist this tick. Purely
+  // derived — nothing is remembered between renders, so someone who leaves releases the stage
+  // on their own.
+  const featuredParticipant = !featuredIdentity
+    ? undefined
+    : featuredIdentity === localIdentity
+      ? room?.localParticipant
+      : room
+        ? Array.from(room.remoteParticipants.values()).find(
             (participant) => participant.identity === featuredIdentity,
-          ))),
-  );
-
-  function resolveFeaturedTrack() {
-    if (!featuredIdentity) {
-      heldFeaturedRef.current = null;
-      return undefined;
-    }
-
-    const live = visibleTracks.find(
-      (trackRef) => trackRef.participant.identity === featuredIdentity,
-    );
-    if (live) {
-      heldFeaturedRef.current = { identity: featuredIdentity, trackRef: live };
-      return live;
-    }
-
-    // Only hold across a gap while they are still here — someone who actually left must
-    // release the stage rather than freeze on it.
-    const held = heldFeaturedRef.current;
-    if (held?.identity === featuredIdentity && featuredStillInRoom) {
-      return held.trackRef;
-    }
-
-    heldFeaturedRef.current = null;
-    return undefined;
-  }
+          )
+        : undefined;
 
   function renderThumbnail(trackRef: TrackReferenceOrPlaceholder) {
     return renderTile(trackRef, {
@@ -306,8 +281,18 @@ export function LiveKitMeetingStage({
   }
 
   if (hasParticipants) {
-    // eslint-disable-next-line react-hooks/refs
-    const featuredTrack = resolveFeaturedTrack();
+    const featuredTrack =
+      visibleTracks.find(
+        (trackRef) => trackRef.participant.identity === featuredIdentity,
+      ) ??
+      // No publication for them this tick — render the camera placeholder for the person
+      // themselves, which is what a pinned camera-off participant should look like anyway.
+      (featuredParticipant
+        ? {
+            participant: featuredParticipant,
+            source: Track.Source.Camera,
+          }
+        : undefined);
     const otherTracks = featuredTrack
       ? visibleTracks.filter(
           (trackRef) =>
