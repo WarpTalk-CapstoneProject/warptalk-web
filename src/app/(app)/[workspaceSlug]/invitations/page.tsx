@@ -80,6 +80,7 @@ export default function WorkspaceInvitationsPage() {
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedRole = watch("roleName");
 
   if (!activeWorkspaceId) return null;

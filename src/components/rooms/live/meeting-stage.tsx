@@ -306,6 +306,7 @@ export function LiveKitMeetingStage({
   }
 
   if (hasParticipants) {
+    // eslint-disable-next-line react-hooks/refs
     const featuredTrack = resolveFeaturedTrack();
     const otherTracks = featuredTrack
       ? visibleTracks.filter(

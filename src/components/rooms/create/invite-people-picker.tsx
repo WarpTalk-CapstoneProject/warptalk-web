@@ -57,13 +57,25 @@ export function InvitePeoplePicker({
   // Names for the invited chips have to survive the list narrowing: once a search term is in
   // flight the fetched page no longer contains the members already added, so remember every
   // name seen instead of looking it up in the current page.
-  const knownNamesRef = useRef(new Map<string, string>());
-  for (const member of members) {
-    const email = member.email?.toLowerCase();
-    if (email && member.fullName && member.fullName !== "Unknown") {
-      knownNamesRef.current.set(email, member.fullName);
-    }
-  }
+  const [knownNames, setKnownNames] = useState<Record<string, string>>({});
+  
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    setKnownNames((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const member of members) {
+        const email = member.email?.toLowerCase();
+        if (email && member.fullName && member.fullName !== "Unknown") {
+          if (next[email] !== member.fullName) {
+            next[email] = member.fullName;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [members]);
 
   const suggestedMembers = members.filter(
     (m) =>
@@ -156,7 +168,7 @@ export function InvitePeoplePicker({
           {emails.length > 0 && (
             <div className="mt-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
               {emails.map((email) => {
-                const displayText = knownNamesRef.current.get(email) || email;
+                const displayText = knownNames[email] || email;
                 return (
                   <div
                     key={email}

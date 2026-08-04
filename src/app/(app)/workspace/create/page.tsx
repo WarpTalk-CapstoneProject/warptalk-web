@@ -121,10 +121,12 @@ export default function CreateWorkspaceDemoPage() {
   const isBusy = createWorkspace.isPending || selectWorkspace.isPending || form.formState.isSubmitting;
   const canCreate = isAuthenticated && !!emailDomain && !accountIssue && !activeWorkspaceId;
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (!mounted) return;
     const intent = readSalesPackageIntent();

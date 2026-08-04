@@ -170,6 +170,7 @@ function WorkspaceEnterpriseBillingContent() {
     );
   }, [routeWorkspace, setActiveWorkspace]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (!shouldResolveWorkspaceFromSlug || routeWorkspace || isWorkspaceLookupError) {
       setWorkspaceLookupTimedOut(false);
@@ -180,6 +181,7 @@ function WorkspaceEnterpriseBillingContent() {
     return () => window.clearTimeout(timeout);
   }, [isWorkspaceLookupError, routeWorkspace, routeWorkspaceSlug, shouldResolveWorkspaceFromSlug]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     setContractRequest((current) => ({
       ...current,

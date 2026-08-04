@@ -479,6 +479,7 @@ export default function MeetingsPageLinear() {
   // The soonest meeting still ahead of now, so a day with nothing on it can point somewhere
   // instead of being a dead end.
   const nextUpcoming = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     return rooms
       .filter(

@@ -29,7 +29,7 @@ export const billingService = {
     pageSize = 20,
     filters?: CreditHistoryFilters
   ): Promise<PagedResult<CreditTransactionDto>> => {
-    const params: any = { pageNumber, pageSize };
+    const params: Record<string, string | number> = { pageNumber, pageSize };
 
     if (filters) {
       if (filters.type && filters.type !== "ALL") params.type = filters.type;
@@ -52,7 +52,7 @@ export const billingService = {
     pageSize = 20,
     filters?: CreditHistoryFilters
   ): Promise<PagedResult<CreditTransactionDto>> => {
-    const params: any = { pageNumber, pageSize };
+    const params: Record<string, string | number> = { pageNumber, pageSize };
 
     if (filters) {
       if (filters.workspaceId) params.workspaceId = filters.workspaceId;

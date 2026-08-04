@@ -120,8 +120,6 @@ export default function WorkspaceMembersPage() {
     name: "roleName",
   });
 
-  if (!activeWorkspaceId) return null;
-
   const isOwner = currentRole === "owner";
   const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
@@ -130,6 +128,8 @@ export default function WorkspaceMembersPage() {
 
   // One presence lookup for the page of members being shown.
   usePresence(membersList.map((member) => member.userId));
+
+  if (!activeWorkspaceId) return null;
   const memberFilterPills = [
     { key: "all", label: "All", role: "all", status: "all" },
     { key: "owner", label: "Owner", role: "owner", status: "all" },
