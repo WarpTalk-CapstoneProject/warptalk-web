@@ -33,8 +33,17 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { WorkspaceDto } from "@/types/workspace";
 
 const createWorkspaceSchema = z.object({
-  name: z.string().trim().min(2, "Workspace name must be at least 2 characters").max(100, "Workspace name must be 100 characters or fewer"),
-  logoUrl: z.string().trim().url("Logo URL must be a valid URL").optional().or(z.literal("")),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Workspace name must be at least 2 characters")
+    .max(100, "Workspace name must be 100 characters or fewer"),
+  logoUrl: z
+    .string()
+    .trim()
+    .url("Logo URL must be a valid URL")
+    .optional()
+    .or(z.literal("")),
 });
 
 type CreateWorkspaceFormData = z.infer<typeof createWorkspaceSchema>;
@@ -91,15 +100,23 @@ export default function CreateWorkspaceDemoPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
-  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
+  const setActiveWorkspace = useWorkspaceStore(
+    (state) => state.setActiveWorkspace,
+  );
   const createWorkspace = useCreateWorkspace();
   const selectWorkspace = useSelectWorkspace();
   const [serverError, setServerError] = useState<ServerErrorState | null>(null);
-  const [createdWorkspace, setCreatedWorkspace] = useState<WorkspaceDto | null>(null);
+
   const [mounted, setMounted] = useState(false);
-  const [salesIntent, setSalesIntent] = useState<SalesPackageIntent | null>(null);
+  const [salesIntent, setSalesIntent] = useState<SalesPackageIntent | null>(
+    null,
+  );
 
   const rawDomain = extractEmailDomain(user?.email);
   const emailDomain = getDomainFromEmail(user?.email);
@@ -116,25 +133,35 @@ export default function CreateWorkspaceDemoPage() {
   });
 
   const watchedName = useWatch({ control: form.control, name: "name" }) ?? "";
-  const watchedLogoUrl = useWatch({ control: form.control, name: "logoUrl" }) ?? "";
-  const slugPreview = useMemo(() => slugPreviewFromName(watchedName), [watchedName]);
-  const isBusy = createWorkspace.isPending || selectWorkspace.isPending || form.formState.isSubmitting;
-  const canCreate = isAuthenticated && !!emailDomain && !accountIssue && !activeWorkspaceId;
+  const slugPreview = useMemo(
+    () => slugPreviewFromName(watchedName),
+    [watchedName],
+  );
+  const isBusy =
+    createWorkspace.isPending ||
+    selectWorkspace.isPending ||
+    form.formState.isSubmitting;
+  const canCreate =
+    isAuthenticated && !!emailDomain && !accountIssue && !activeWorkspaceId;
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Using a ref to track if we've initialized the sales intent to avoid cascading updates
+  const initializedSalesIntent = React.useRef(false);
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => {
-    if (!mounted) return;
-    const intent = readSalesPackageIntent();
-    setSalesIntent(intent);
-    if (intent?.company && !form.getValues("name")) {
-      form.setValue("name", intent.company, { shouldDirty: true, shouldValidate: true });
+    if (!initializedSalesIntent.current) {
+      initializedSalesIntent.current = true;
+      const intent = readSalesPackageIntent();
+      setSalesIntent(intent);
+      if (intent?.company && !form.getValues("name")) {
+        form.setValue("name", intent.company, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
     }
-  }, [mounted, form]);
+  }, [form]);
 
   useEffect(() => {
     if (mounted && !isAuthenticated) router.replace("/login");
@@ -150,7 +177,9 @@ export default function CreateWorkspaceDemoPage() {
     if (!emailDomain) {
       setServerError({
         kind: "account",
-        message: accountIssue ?? "A valid business email is required before creating a workspace.",
+        message:
+          accountIssue ??
+          "A valid business email is required before creating a workspace.",
       });
       return;
     }
@@ -165,9 +194,15 @@ export default function CreateWorkspaceDemoPage() {
         requireVerifiedDomainForInternal: true,
       });
 
-      setCreatedWorkspace(workspace);
       await selectWorkspace.mutateAsync(workspace.id);
-      setActiveWorkspace(workspace.id, workspace.name, workspace.slug, workspace.role || "Owner", "Internal", "en");
+      setActiveWorkspace(
+        workspace.id,
+        workspace.name,
+        workspace.slug,
+        workspace.role || "Owner",
+        "Internal",
+        "en",
+      );
       window.sessionStorage.removeItem(salesIntentStorageKey);
       toast.success(`Workspace "${workspace.name}" created.`);
       router.push(`/${workspace.slug}/home`);
@@ -213,7 +248,10 @@ export default function CreateWorkspaceDemoPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex flex-col gap-5"
+        >
           {/* Server/Account Errors */}
           {(accountIssue || serverError) && (
             <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-[12px] text-destructive leading-relaxed">
@@ -223,7 +261,10 @@ export default function CreateWorkspaceDemoPage() {
 
           {/* Name Field */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="workspace-name" className="text-[12px] font-medium text-ink-muted">
+            <label
+              htmlFor="workspace-name"
+              className="text-[12px] font-medium text-ink-muted"
+            >
               Name
             </label>
             <Input
@@ -234,13 +275,18 @@ export default function CreateWorkspaceDemoPage() {
               {...form.register("name")}
             />
             {form.formState.errors.name && (
-              <p className="text-[11px] text-destructive">{form.formState.errors.name.message}</p>
+              <p className="text-[11px] text-destructive">
+                {form.formState.errors.name.message}
+              </p>
             )}
           </div>
 
           {/* URL Field */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="workspace-url" className="text-[12px] font-medium text-ink-muted">
+            <label
+              htmlFor="workspace-url"
+              className="text-[12px] font-medium text-ink-muted"
+            >
               URL
             </label>
             <div className="flex items-center rounded-md border border-border bg-surface-2/40 px-3 h-10 text-[14px] text-ink select-none font-mono">
@@ -251,7 +297,10 @@ export default function CreateWorkspaceDemoPage() {
             </div>
             {emailDomain && (
               <p className="text-[11px] text-ink-muted mt-1">
-                Workspace will be verified for <span className="font-semibold text-foreground">{emailDomain}</span>
+                Workspace will be verified for{" "}
+                <span className="font-semibold text-foreground">
+                  {emailDomain}
+                </span>
               </p>
             )}
           </div>
@@ -283,10 +332,15 @@ function DtoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function getAccountIssue(email: string | undefined, rawDomain: string | null, isPublicDomain: boolean): string | null {
+function getAccountIssue(
+  email: string | undefined,
+  rawDomain: string | null,
+  isPublicDomain: boolean,
+): string | null {
   if (!email) return "Signed-in account email is missing.";
   if (!rawDomain) return "Signed-in account email is invalid.";
-  if (isPublicDomain) return "Use a business email or join by invitation. Public email domains cannot be system-verified for an Enterprise Workspace.";
+  if (isPublicDomain)
+    return "Use a business email or join by invitation. Public email domains cannot be system-verified for an Enterprise Workspace.";
   return null;
 }
 
@@ -298,7 +352,11 @@ function classifyCreateError(error: unknown): ServerErrorState {
     return { kind: "domain", message };
   }
 
-  if (normalized.includes("already internal") || normalized.includes("internal home") || normalized.includes("useralreadyinternal")) {
+  if (
+    normalized.includes("already internal") ||
+    normalized.includes("internal home") ||
+    normalized.includes("useralreadyinternal")
+  ) {
     return { kind: "internal-home", message };
   }
 
