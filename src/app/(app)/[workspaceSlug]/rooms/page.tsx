@@ -19,6 +19,7 @@ import { resolveRoomHost } from "@/lib/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
+import { LanguageLabel } from "@/components/language/language-label";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -81,32 +82,6 @@ function StatusIcon({ status }: { status: string }) {
     );
   return (
     <Circle size={13} weight="light" className="text-muted-foreground/40" />
-  );
-}
-
-function LanguageWithFlag({
-  locale,
-  hideText,
-}: {
-  locale: string;
-  hideText?: boolean;
-}) {
-  if (!locale) return null;
-  const parts = locale.split("-");
-  const langCode = parts[0].toUpperCase();
-  const countryCode = parts.length > 1 ? parts[1].toUpperCase() : "";
-  let flag = "";
-  if (countryCode) {
-    const codePoints = countryCode
-      .split("")
-      .map((char) => 127397 + char.charCodeAt(0));
-    flag = String.fromCodePoint(...codePoints);
-  }
-  return (
-    <div className="flex items-center gap-1">
-      {flag && <span className="text-[14px] leading-none">{flag}</span>}
-      {!hideText && <span className="font-medium">{langCode}</span>}
-    </div>
   );
 }
 
@@ -181,7 +156,7 @@ function LinearRow({
         </div>
 
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <LanguageWithFlag locale={room.sourceLanguage || "en-US"} />
+          <LanguageLabel value={room.sourceLanguage || "en-US"} />
           {room.targetLanguages.length > 1 ? (
             <>
               <span className="text-muted-foreground/40 font-bold px-1 text-[13px]">
@@ -195,7 +170,7 @@ function LinearRow({
                         ;
                       </span>
                     )}
-                    <LanguageWithFlag locale={t} hideText={true} />
+                    <LanguageLabel value={t} showName={false} />
                   </div>
                 ))}
                 <div className="flex items-center">
@@ -211,7 +186,7 @@ function LinearRow({
           ) : (
             <>
               <span className="text-border mx-0.5 font-bold">→</span>
-              <LanguageWithFlag locale={room.targetLanguages[0]} />
+              <LanguageLabel value={room.targetLanguages[0]} />
             </>
           )}
         </div>
@@ -422,10 +397,15 @@ function DailyTimeline({
                     </div>
                     {height >= 40 && (
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">
-                        <span>
-                          {room.sourceLanguage}{" "}
-                          {room.targetLanguages.length > 1 ? ";" : "→"}{" "}
-                          {room.targetLanguages.join(", ")}
+                        <span className="inline-flex items-center gap-1">
+                          <LanguageLabel value={room.sourceLanguage} />
+                          {room.targetLanguages.length > 1 ? ";" : "→"}
+                          {room.targetLanguages.map((target, index) => (
+                            <span key={target} className="inline-flex items-center gap-1">
+                              {index > 0 ? "," : null}
+                              <LanguageLabel value={target} />
+                            </span>
+                          ))}
                         </span>
                         <span>•</span>
                         <span className="font-mono">

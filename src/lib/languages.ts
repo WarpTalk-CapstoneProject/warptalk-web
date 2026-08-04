@@ -46,7 +46,17 @@ export function getLanguageByCode(code?: string) {
 export function normalizeLanguageCode(value?: string) {
   if (!value) return "en";
   const normalized = value.trim().toLowerCase();
-  return LANGUAGE_ALIASES[normalized] ?? normalized;
+
+  const alias = LANGUAGE_ALIASES[normalized];
+  if (alias) return alias;
+
+  // Locale tags reach here from rooms and browser settings ("vi-VN", "en_US") while everything
+  // downstream — the alias table, SUPPORTED_LANGUAGES, the backend's supported_languages rows —
+  // is keyed by the bare ISO-639-1 code. Without dropping the region subtag "vi-VN" matched
+  // nothing, so getLanguageName fell through to its raw-value fallback and the UI printed the
+  // tag itself instead of "Vietnamese".
+  const base = normalized.split(/[-_]/)[0];
+  return LANGUAGE_ALIASES[base] ?? base;
 }
 
 export function getLanguageName(value?: string) {

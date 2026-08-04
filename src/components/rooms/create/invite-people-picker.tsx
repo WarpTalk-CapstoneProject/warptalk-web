@@ -11,6 +11,8 @@ import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { matchesSearchText } from "@/lib/search-text";
+import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { usePresence } from "@/hooks/use-presence";
 
 export function isValidInviteEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
@@ -48,6 +50,9 @@ export function InvitePeoplePicker({
     search,
   );
   const members = membersData?.items ?? [];
+
+  // Resolves the dots for everyone in the fetched page in one request rather than one per row.
+  usePresence(members.map((member) => member.userId));
 
   // Names for the invited chips have to survive the list narrowing: once a search term is in
   // flight the fetched page no longer contains the members already added, so remember every
@@ -183,20 +188,23 @@ export function InvitePeoplePicker({
                     onClick={() => addEmail(member.email ?? "")}
                     className="flex items-center gap-2 text-[12px] hover:bg-surface-2 px-2 py-1.5 rounded transition-colors text-left"
                   >
-                    <div className="relative h-6 w-6 rounded-full bg-surface-3 flex items-center justify-center shrink-0 overflow-hidden text-ink-muted font-medium text-[10px]">
-                      {member.avatarUrl ? (
-                        <Image
-                          src={member.avatarUrl}
-                          alt={member.fullName || "User"}
-                          fill
-                          sizes="24px"
-                          className="object-cover"
-                        />
-                      ) : (
-                        (member.fullName || member.email || "U")
-                          .charAt(0)
-                          .toUpperCase()
-                      )}
+                    <div className="relative h-6 w-6 shrink-0">
+                      <div className="h-full w-full rounded-full bg-surface-3 flex items-center justify-center overflow-hidden text-ink-muted font-medium text-[10px] relative">
+                        {member.avatarUrl ? (
+                          <Image
+                            src={member.avatarUrl}
+                            alt={member.fullName || "User"}
+                            fill
+                            sizes="24px"
+                            className="object-cover"
+                          />
+                        ) : (
+                          (member.fullName || member.email || "U")
+                            .charAt(0)
+                            .toUpperCase()
+                        )}
+                      </div>
+                      <AvatarPresenceDot userId={member.userId} />
                     </div>
                     <div className="flex flex-col overflow-hidden">
                       <span className="truncate font-medium text-ink leading-tight">
