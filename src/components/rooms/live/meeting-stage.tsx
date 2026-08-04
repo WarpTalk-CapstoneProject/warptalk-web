@@ -114,7 +114,11 @@ export function LiveKitMeetingStage({
   const activeSpeakerIdentity = visibleTracks.find((trackRef) =>
     activeSpeakerIdentities.has(trackRef.participant.identity),
   )?.participant.identity;
+  const localIdentity = room?.localParticipant.identity ?? null;
   const firstVisibleIdentity = visibleTracks[0]?.participant.identity;
+  const firstRemoteIdentity = visibleTracks.find(
+    (trackRef) => trackRef.participant.identity !== localIdentity,
+  )?.participant.identity;
   const featuredIdentity =
     spotlightedUserId ||
     (layoutMode === "grid"
@@ -123,10 +127,14 @@ export function LiveKitMeetingStage({
         ? pinnedUserId || activeSpeakerIdentity || firstVisibleIdentity
         : layoutMode === "sidebar"
           ? pinnedUserId || firstVisibleIdentity
-          : pinnedUserId) ||
+          : layoutMode === "auto" && visibleTracks.length > 1
+            ? pinnedUserId ||
+              activeSpeakerIdentity ||
+              firstRemoteIdentity ||
+              firstVisibleIdentity
+            : pinnedUserId) ||
     null;
   const isSpotlight = Boolean(spotlightedUserId);
-  const localIdentity = room?.localParticipant.identity ?? null;
 
   function renderThumbnail(trackRef: TrackReferenceOrPlaceholder) {
     return renderTile(trackRef, {
@@ -263,19 +271,10 @@ export function LiveKitMeetingStage({
       : [];
 
     if (featuredTrack) {
-      const localTrack = localIdentity
-        ? visibleTracks.find(
-            (trackRef) => trackRef.participant.identity === localIdentity,
-          )
-        : undefined;
-      const isFeaturingSelf =
-        localIdentity !== null &&
-        featuredTrack.participant.identity === localIdentity;
-      const thumbnailTracks = isFeaturingSelf
-        ? otherTracks
-        : localTrack && localTrack !== featuredTrack
-          ? [localTrack]
-          : otherTracks.slice(0, 1);
+      const thumbnailTracks = orderThumbnailTracks(
+        otherTracks,
+        localIdentity,
+      );
 
       return (
         <div className={FULLSCREEN_FEATURED_STAGE_CLASSNAME}>
@@ -369,6 +368,19 @@ function gridClassName(count: number) {
   if (count <= 9) return "grid-cols-3";
   if (count <= 16) return "grid-cols-4";
   return "grid-cols-5";
+}
+
+function orderThumbnailTracks(
+  otherTracks: TrackReferenceOrPlaceholder[],
+  localIdentity: string | null,
+) {
+  if (!localIdentity) return otherTracks;
+
+  return [...otherTracks].sort((left, right) => {
+    const leftIsLocal = left.participant.identity === localIdentity;
+    const rightIsLocal = right.participant.identity === localIdentity;
+    return Number(rightIsLocal) - Number(leftIsLocal);
+  });
 }
 
 function isCameraUnavailable(trackRef: TrackReferenceOrPlaceholder) {
