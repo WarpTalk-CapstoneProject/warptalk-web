@@ -59,6 +59,7 @@ import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context"
 // Import Refactored Components
 import {
   MeetingExitControl,
+  MeetingMinimizeControl,
   MeetingStageTimer,
 } from "@/components/rooms/live/meeting-top-bar";
 import {
@@ -1389,6 +1390,14 @@ export function PersistentMeetingSession({
     setPinnedUserId((current) => (current === userId ? null : userId));
   }
 
+  // WT-246: minimising is leaving the room route, not tearing the call down. The session lives
+  // in the app layout and keeps its LiveKit connection across navigation — the layout already
+  // renders it as the floating panel whenever the route is not the live one, which is why this
+  // navigates rather than setting a flag.
+  function handleMinimize() {
+    router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+  }
+
   function handleToggleSpotlight(userId: string) {
     const connection = translationConnectionRef.current;
     if (connection?.state !== HubConnectionState.Connected) return;
@@ -1558,7 +1567,10 @@ export function PersistentMeetingSession({
               localStream={localStream}
               localMediaError={localMediaError}
               screenStream={screenStream}
-              layoutMode="auto"
+              // WT-246 asks to still see everyone while minimised. "auto" gives one large tile
+              // with the rest as thumbnails, which at this size leaves the others unreadable —
+              // a grid fits more faces into the same 360x220.
+              layoutMode="grid"
               pinnedUserId={pinnedUserId}
               onPinParticipant={handlePinParticipant}
               spotlightedUserId={spotlightedUserId}
@@ -1645,9 +1657,12 @@ export function PersistentMeetingSession({
                 createdAt={room.createdAt}
                 endedAt={room.endedAt}
               />
+              <div className="absolute right-4 top-4 z-30">
+                <MeetingMinimizeControl onMinimize={handleMinimize} />
+              </div>
               <div className="relative min-h-0 w-full flex-1">
                 {isRecording ? (
-                  <div className="absolute right-4 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                  <div className="absolute right-16 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                     REC
                   </div>
