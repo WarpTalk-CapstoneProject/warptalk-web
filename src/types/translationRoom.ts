@@ -42,7 +42,6 @@ export interface TranslationRoomDto {
   participantCount?: number;
   isHost?: boolean;
 }
-
 /** One Start→Pause (or Start→End) window — "Translation N" in the transcript is this
  * list's chronological position (oldest first). */
 export interface TranslationRoomSessionDto {
@@ -231,4 +230,15 @@ export interface UpdateRoomSettingsRequest {
   sourceLanguage?: string;
   targetLanguages?: string[];
   settings?: Record<string, unknown>;
+}
+
+export interface RoomPreflightResponse {
+  roomCode: string;
+  requiresJoinRequest: boolean;
+  isUserMember: boolean;
+  isDomainMatched: boolean;
+  allowExternalCollaboration: boolean;
+  workspaceName?: string | null;
+  workspaceSlug?: string | null;
+  isAuthenticated: boolean;
 }
