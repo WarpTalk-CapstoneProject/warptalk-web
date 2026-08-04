@@ -4,7 +4,7 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const page = await readFile(path.join(root, "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"), "utf8");
-const livePage = await readFile(path.join(root, "src/app/(app)/room/[id]/page.tsx"), "utf8");
+const livePage = await readFile(path.join(root, "src/components/rooms/live/persistent-meeting-session.tsx"), "utf8");
 const sidePanel = await readFile(
   path.join(root, "src/components/rooms/live/side-panel/meeting-side-panel.tsx"),
   "utf8",
