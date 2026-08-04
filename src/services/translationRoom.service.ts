@@ -17,6 +17,7 @@ import type {
   TranslationRoomSessionDto,
   TranslationRoomStatus,
   UpdateRoomSettingsRequest,
+  RoomPreflightResponse,
 } from "@/types/translationRoom";
 
 type BackendRoom = Omit<TranslationRoomDto, "status" | "translationRoomType" | "targetLanguages"> & {
@@ -279,6 +280,11 @@ export const translationRoomService = {
 
   submitFeedback(id: string, data: SubmitTranslationRoomFeedbackRequest) {
     return apiClient.post<TranslationRoomFeedbackDto>(API.translationRooms.feedback(id), data);
+  },
+
+  async preflight(roomCode: string): Promise<RoomPreflightResponse> {
+    const { data } = await apiClient.get<RoomPreflightResponse>(API.translationRooms.preflight(roomCode));
+    return data;
   },
 
   downloadCalendarIcs(id: string) {

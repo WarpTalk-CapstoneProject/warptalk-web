@@ -315,3 +315,12 @@ export function useSubmitTranslationRoomFeedback(roomId: string) {
     },
   });
 }
+
+export function useRoomPreflight(roomCode: string, enabled = true) {
+  return useQuery({
+    queryKey: ["translationRooms", "preflight", roomCode],
+    queryFn: () => translationRoomService.preflight(roomCode),
+    enabled: enabled && !!roomCode,
+    staleTime: 5000,
+  });
+}

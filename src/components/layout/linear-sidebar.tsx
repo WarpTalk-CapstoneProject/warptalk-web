@@ -974,66 +974,47 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         <DialogContent className="overflow-hidden p-0 sm:max-w-[520px]">
           <div className="h-36 border-b border-border bg-[radial-gradient(circle_at_28%_18%,rgba(94,106,210,0.30),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(16,185,129,0.18),transparent_30%),linear-gradient(135deg,var(--surface-2),var(--surface-1))]">
             <div className="flex h-full items-end p-5">
-              <span className="grid size-12 place-items-center rounded-[14px] border border-white/35 bg-white/40 text-primary shadow-[0_12px_28px_rgba(16,24,40,0.12)] backdrop-blur">
-                <PaperPlaneTilt size={24} weight="duotone" />
-              </span>
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                  <PaperPlaneTilt size={12} weight="bold" />
+                  Workspace Invite
+                </span>
+                <h3 className="mt-2 text-lg font-semibold text-foreground">
+                  Invite your team to {activeWorkspaceName || "this workspace"}
+                </h3>
+              </div>
             </div>
           </div>
-
-          <form onSubmit={handleInviteMember} className="grid gap-4 p-5 pt-4">
-            <DialogHeader>
-              <DialogTitle>Invite team members</DialogTitle>
-              <DialogDescription>
-                Send an invitation to join{" "}
-                {activeWorkspaceName || "this workspace"} and collaborate on
-                rooms, documents, and summaries.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid gap-2">
-              <Label
-                htmlFor="invite-email"
-                className="text-[13px] font-medium text-foreground"
-              >
+          <form onSubmit={handleInviteMember} className="space-y-4 p-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-email" className="text-xs font-medium">
                 Email address
               </Label>
               <Input
                 id="invite-email"
                 type="email"
-                placeholder="teammate@company.com"
+                placeholder="colleague@company.com"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                autoComplete="email"
+                required
                 className="bg-surface-1"
               />
             </div>
-
-            <div className="grid gap-3">
-              <div className="grid gap-2">
-                <Label
-                  htmlFor="invite-role"
-                  className="text-[13px] font-medium text-foreground"
-                >
-                  Role
-                </Label>
-                <select
-                  id="invite-role"
-                  value={inviteRoleName}
-                  onChange={(e) => setInviteRoleName(e.target.value)}
-                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
-                >
-                  <option value="Member">Member</option>
-                  <option value="Admin">Admin</option>
-                </select>
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-role" className="text-xs font-medium">
+                Role
+              </Label>
+              <select
+                id="invite-role"
+                value={inviteRoleName}
+                onChange={(e) => setInviteRoleName(e.target.value)}
+                className="w-full h-9 rounded-md border border-border bg-surface-1 px-3 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="Member">Member</option>
+                <option value="Admin">Admin</option>
+              </select>
             </div>
-
-            <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-[12px] leading-5 text-ink-muted">
-              Internal or External access is assigned automatically from
-              verified email domains.
-            </p>
-
-            <DialogFooter className="-mx-5 -mb-5 mt-1">
+            <DialogFooter className="pt-2">
               <Button
                 type="button"
                 variant="outline"
@@ -1043,10 +1024,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </Button>
               <Button
                 type="submit"
-                disabled={!inviteEmail.trim() || inviteMemberMutation.isPending}
-                className="min-w-[92px] text-white disabled:bg-surface-3 disabled:text-ink-muted disabled:opacity-100"
+                disabled={inviteMemberMutation.isPending || !inviteEmail.trim()}
+                className="text-white"
               >
-                {inviteMemberMutation.isPending ? "Inviting..." : "Invite"}
+                {inviteMemberMutation.isPending ? "Sending..." : "Send invite"}
               </Button>
             </DialogFooter>
           </form>
