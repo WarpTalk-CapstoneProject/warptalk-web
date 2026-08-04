@@ -810,7 +810,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 item={{
                   icon: CreditCard,
                   label: "Billing",
-                  href: "/admin/billing",
+                  href: "/billing",
                 }}
                 pathname={pathname}
                 collapsed={collapsed}
