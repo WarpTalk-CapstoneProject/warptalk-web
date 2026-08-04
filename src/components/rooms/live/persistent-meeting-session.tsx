@@ -1146,31 +1146,17 @@ export function PersistentMeetingSession({
     onMeetingClosed,
   ]);
 
-  // WT-183: joining a room and starting its translation pipeline used to be two separate
-  // manual steps — the room kept showing "Waiting" in the Meetings list even after the
-  // host was already in the call, since nothing had called /start yet. Once the HOST
-  // actually enters the live call (not just the pre-call waiting screen), auto-start
-  // translation for them instead of requiring a second explicit click. Guarded to fire at
-  // most once per mount and only from a genuinely-not-started state, so it can never
-  // re-trigger a room the host explicitly paused via "Stop Translation".
-  const autoStartTriggeredRef = useRef(false);
-  useEffect(() => {
-    if (autoStartTriggeredRef.current) return;
-    if (!meetingSession || meetingSession.isWaitingRoom) return;
-    if (!isRoomHost || !room?.id) return;
-    if (room.status !== "waiting" && room.status !== "scheduled") return;
-
-    autoStartTriggeredRef.current = true;
-    startRoom.mutate(room.id, {
-      onSuccess: () => {
-        toast.success("WarpTalk realtime translation started.");
-      },
-      onError: () => {
-        // Let a later join attempt (or the manual Start button) retry.
-        autoStartTriggeredRef.current = false;
-      },
-    });
-  }, [meetingSession, isRoomHost, room?.id, room?.status, startRoom]);
+  // WT-248 removed the auto-start that used to live here. WT-183 had added it because a room
+  // stayed "Waiting" in the Meetings list while the host was already inside — but starting to
+  // record and translate a conversation without being asked is not a display fix, and the
+  // report was that translation began before anyone chose to begin it.
+  //
+  // The status it was papering over is handled where it actually goes wrong: entering a room
+  // nobody has started now lands in the lobby (WT-232), where "Start meeting" calls the same
+  // endpoint this effect did. A host who reaches the live surface directly still has the
+  // control bar's "Start Translation", which runs the identical mutation via
+  // handleStartWarptalk below. Either way a person decides, and the room leaves "Waiting"
+  // because someone started it.
 
   useEffect(() => {
     if (!roomId) return;
