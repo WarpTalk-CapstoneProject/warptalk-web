@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -145,8 +145,7 @@ export default function CreateWorkspaceDemoPage() {
     isAuthenticated && !!emailDomain && !accountIssue && !activeWorkspaceId;
 
   // Using a ref to track if we've initialized the sales intent to avoid cascading updates
-  const initializedSalesIntent = React.useRef(false);
-  const [mounted, setMounted] = useState(false);
+  const initializedSalesIntent = useRef(false);
 
   useEffect(() => {
     setMounted(true);
