@@ -24,6 +24,7 @@ import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context"
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
 import { openArtifactDownload } from "@/lib/download-artifact";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
@@ -36,11 +37,12 @@ const historyFilters: Array<{ value: HistoryFilter; label: string }> = [
 ];
 
 export default function HistoryPage() {
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
-  const history = useRoomHistory();
+  const history = useRoomHistory(activeWorkspaceId);
 
   const rooms = useMemo(() => {
     const normalized = query.trim().toLowerCase();

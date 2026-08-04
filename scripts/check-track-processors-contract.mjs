@@ -9,8 +9,12 @@ const preferences = await readFile(
   new URL("../src/lib/track-effects-preferences.ts", import.meta.url),
   "utf8",
 );
+const meetingJoinState = await readFile(
+  new URL("../src/lib/meeting-join-state.ts", import.meta.url),
+  "utf8",
+);
 const roomPage = await readFile(
-  new URL("../src/app/(app)/room/[id]/page.tsx", import.meta.url),
+  new URL("../src/components/rooms/live/persistent-meeting-session.tsx", import.meta.url),
   "utf8",
 );
 const joinPage = await readFile(
@@ -38,8 +42,8 @@ assert.match(
   /NOISE_SUPPRESSION_PREFERENCE_VERSION\s*=\s*3/,
 );
 assert.match(
-  roomPage,
-  /noiseSuppressionPreferenceVersion\s*===\s*[\s\S]*?NOISE_SUPPRESSION_PREFERENCE_VERSION[\s\S]*?noiseSuppressionEnabled\s*\?\?\s*false[\s\S]*?:\s*false/,
+  meetingJoinState,
+  /noiseSuppressionPreferenceVersion\s*===\s*[\s\S]*?NOISE_SUPPRESSION_PREFERENCE_VERSION[\s\S]*?noiseSuppressionEnabled\s*===\s*true/,
   "Krisp must remain opt-in after a production room published frames but no speech chunks",
 );
 assert.match(

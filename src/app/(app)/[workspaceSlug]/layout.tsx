@@ -12,6 +12,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   const workspaceSlug = params.workspaceSlug;
 
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   const { data: workspacesData, isLoading, isError } = useWorkspaces(1, 100);
@@ -65,7 +66,8 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     !isError &&
     (!workspacesData?.items ||
       !targetWorkspace ||
-      activeWorkspaceSlug !== workspaceSlug);
+      activeWorkspaceSlug !== workspaceSlug ||
+      activeWorkspaceId !== targetWorkspace.id);
 
   if (isLoading || isSyncing) {
     return (
