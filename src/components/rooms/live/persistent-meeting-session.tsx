@@ -268,10 +268,13 @@ export function PersistentMeetingSession({
   const refetchRoom = roomQuery.refetch;
   const apiParticipants = participantsQuery.data ?? [];
   const role = useWorkspaceRole();
-  // WT-08: HostChanged (broadcast after MeetingRoomService.HandleHostOfflineAsync elects a
-  // replacement) overrides the room DTO's original host once it fires — the DTO itself is
-  // never refetched just for this, so without this override a promoted participant's
-  // host-only UI would stay hidden until their next full room refetch.
+  // WT-08: HostChanged overrides the room DTO's original host once it fires — the DTO itself
+  // is never refetched just for this, so without this override the new host's host-only UI
+  // would stay hidden until their next full room refetch.
+  //
+  // WT-234: this now only ever arrives from an explicit TransferHostAsync. A host who simply
+  // goes offline leaves the room host-less rather than handing control to whoever joined
+  // first, so nobody's UI flips to host without someone deliberately granting it.
   const [liveHostUserId, setLiveHostUserId] = useState<string | null>(null);
   const isHost = Boolean(
     (liveHostUserId
