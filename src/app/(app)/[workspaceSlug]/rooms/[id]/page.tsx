@@ -293,6 +293,20 @@ export default function RoomInformationPage() {
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <StatusChip status={room.status} />
+                  {/* WT-197: the primary action lives here, at the top of the page, next to the
+                      title. It used to exist only in "Meeting access" — the last panel of a
+                      sticky, independently scrolling right column — so it sat below the fold
+                      with nothing on screen hinting that more content existed. A mentor lost
+                      ~40 minutes hunting for it during a live demo. The panel keeps its copy of
+                      the control; both render the same `entryIntent`. */}
+                  {entryIntent.isActionable ? (
+                    <RoomEntryButton
+                      intent={entryIntent}
+                      pending={startRoomMutation.isPending}
+                      onActivate={handleRoomEntry}
+                      className="h-9 px-4"
+                    />
+                  ) : null}
                   {room.hostId === user?.id &&
                   (room.status === "scheduled" || room.status === "waiting") ? (
                     <Button

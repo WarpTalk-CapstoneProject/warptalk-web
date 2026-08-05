@@ -15,7 +15,10 @@ const checks = [
   ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes("Room notes") && page.includes("useEditor(")],
   ["room detail does not render inferred activity", !page.includes("function RoomThread(") && !page.includes("buildThreadEvents(")],
   ["room detail does not label synthesized room data as activity", !page.includes("Room events and participant changes.") && !page.includes(">Activity<")],
-  ["join meeting button keeps white text on purple primary", page.includes("className=\"h-9 justify-between rounded-md text-[13px] !text-white")],
+  // WT-197 moved this button into a shared `RoomEntryButton` so the promoted header copy and
+  // the "Meeting access" copy cannot drift. The styling it must keep is the same as before;
+  // only the place it is written down changed.
+  ["join meeting button keeps white text on purple primary", page.includes("function RoomEntryButton(") && page.includes("\"rounded-md text-[13px] !text-white [&_svg]:!text-white\"")],
   ["room detail uses a themed surface-1 background", page.includes("bg-surface-1 text-ink")],
   ["visible host fallback label is removed", !page.includes("\"Host\"") && !page.includes(">Host<")],
   // WT-191: an invitee who already joined must appear once, not as a participant row
