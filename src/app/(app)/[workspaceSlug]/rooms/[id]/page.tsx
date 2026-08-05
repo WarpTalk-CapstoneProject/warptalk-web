@@ -30,6 +30,7 @@ import {
   Loader2,
   MapPin,
   MoreHorizontal,
+  Play,
   Quote,
   Star,
   StopCircle,
@@ -46,6 +47,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
@@ -67,6 +69,7 @@ import {
 } from "@/hooks/use-transcripts";
 import {
   useEndTranslationRoom,
+  useStartTranslationRoom,
   useTranslationRoom,
   useTranslationRoomInvitations,
   useTranslationRoomParticipants,
@@ -74,11 +77,12 @@ import {
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { getErrorMessage } from "@/lib/errors";
 import { getLanguageName } from "@/lib/languages";
 import { saveBlobDownload } from "@/lib/download-artifact";
 import {
-  canJoinTranslationRoom,
-  shouldEnterWaitingRoom,
+  resolveRoomEntryIntent,
+  type RoomEntryIntent,
 } from "@/lib/translation-room-access";
 import {
   groupSavedTranscriptSegments,
@@ -139,6 +143,7 @@ export default function RoomInformationPage() {
   const participantsQuery = useTranslationRoomParticipants(roomId);
   const invitationsQuery = useTranslationRoomInvitations(roomId);
   const endRoomMutation = useEndTranslationRoom();
+  const startRoomMutation = useStartTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
   const liveParticipants = useTranslationRoomStore(
     (state) => state.participants,
@@ -213,9 +218,44 @@ export default function RoomInformationPage() {
   }
 
   const isEnded = room.status === "ended";
-  const canJoinRoom = canJoinTranslationRoom(room.status);
-  const entersWaitingRoom = shouldEnterWaitingRoom(room.status);
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
+  // WT-273: the CTA is one decision, taken with the viewer's host identity in hand. It used to
+  // be derived from room.status alone, three lines above where `isHost` was computed, so the
+  // host was offered the lobby CTA and told to wait for himself.
+  const entryIntent = resolveRoomEntryIntent({
+    status: room.status,
+    isHost,
+    statusLabel: statusLabels[room.status],
+    scheduledAtLabel: room.scheduledAt ? formatDateTime(room.scheduledAt) : null,
+  });
+
+  async function handleRoomEntry() {
+    if (!room) return;
+    switch (entryIntent.mode) {
+      case "unavailable":
+        return;
+      case "host_start":
+        // The host opens the room rather than queueing for it. Mirrors the lobby console's
+        // own start action (rooms/[id]/waiting/page.tsx).
+        try {
+          await startRoomMutation.mutateAsync(room.id);
+          router.push(`/room/${room.id}`);
+        } catch (error) {
+          toast.error(getErrorMessage(error, "Could not start the meeting."));
+        }
+        return;
+      case "lobby":
+        // WT-232: a room nobody has started yet has no call to join. Sending people through
+        // device setup into an empty session was the confusing part of that report — the lobby
+        // is where they actually wait, and it says so.
+        router.push(`/${workspaceSlug}/rooms/${roomId}/waiting`);
+        return;
+      case "join":
+        useUIStore.getState().setSetupRoomId(roomId);
+        useUIStore.getState().setSetupRoomModalOpen(true);
+    }
+  }
+
   const participants = buildUserList(
     room,
     apiParticipants,
@@ -428,33 +468,15 @@ export default function RoomInformationPage() {
                   </p>
                 </div>
               </div>
-              <Button
-                className="h-9 justify-between rounded-md text-[13px] !text-white [&_svg]:!text-white"
-                disabled={!canJoinRoom}
-                onClick={() => {
-                  // WT-232: a room nobody has started yet has no call to join. Sending people
-                  // through device setup into an empty session was the confusing part of the
-                  // report — the lobby is where they actually wait, and it says so.
-                  if (entersWaitingRoom) {
-                    router.push(`/${workspaceSlug}/rooms/${roomId}/waiting`);
-                    return;
-                  }
-                  useUIStore.getState().setSetupRoomId(roomId);
-                  useUIStore.getState().setSetupRoomModalOpen(true);
-                }}
-              >
-                {!canJoinRoom
-                  ? statusLabels[room.status]
-                  : entersWaitingRoom
-                    ? "Enter waiting room"
-                    : "Join meeting"}
-                <ArrowRight className="size-4" />
-              </Button>
-              {entersWaitingRoom ? (
+              <RoomEntryButton
+                intent={entryIntent}
+                pending={startRoomMutation.isPending}
+                onActivate={handleRoomEntry}
+                className="h-9 w-full justify-between"
+              />
+              {entryIntent.helpText ? (
                 <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-                  {room.scheduledAt
-                    ? `This meeting starts ${formatDateTime(room.scheduledAt)}. You'll wait in the lobby until the host opens it.`
-                    : "You'll wait in the lobby until the host opens this meeting."}
+                  {entryIntent.helpText}
                 </p>
               ) : null}
             </PropertyPanel>
@@ -462,6 +484,43 @@ export default function RoomInformationPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * WT-197 / WT-273: the room's primary action, rendered identically wherever it appears.
+ *
+ * It exists as a component because WT-197 puts a second copy of it in the page header — the
+ * one place a visitor is guaranteed to be looking — while the "Meeting access" panel keeps
+ * its own. Both are driven by the same `RoomEntryIntent`, so the label, the disabled state and
+ * the action cannot drift between them.
+ */
+function RoomEntryButton({
+  intent,
+  pending,
+  onActivate,
+  className,
+}: {
+  intent: RoomEntryIntent;
+  pending: boolean;
+  onActivate: () => void;
+  className?: string;
+}) {
+  const isStart = intent.mode === "host_start";
+
+  return (
+    <Button
+      className={cn(
+        "rounded-md text-[13px] !text-white [&_svg]:!text-white",
+        className,
+      )}
+      disabled={!intent.isActionable || pending}
+      onClick={onActivate}
+    >
+      {isStart ? <Play className="size-4" /> : null}
+      {pending ? "Starting..." : intent.label}
+      {isStart ? null : <ArrowRight className="size-4" />}
+    </Button>
   );
 }
 
