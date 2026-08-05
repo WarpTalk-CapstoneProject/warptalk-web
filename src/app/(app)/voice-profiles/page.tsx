@@ -1,16 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import {
-  CheckCircle,
-  FileAudio,
+  CaretDown,
+  CaretUp,
+  Check,
+  Checks,
   Funnel,
   Microphone,
   Plus,
-  SlidersHorizontal,
+  PaperPlaneTilt,
+  PencilSimple,
   Trash,
+  SlidersHorizontal,
+  UploadSimple,
   Waveform,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
+import gsap from "gsap";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -33,67 +41,237 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
-import { useCreateVoiceProfile, useDeleteVoiceProfile, useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import {
+  useCreateVoiceProfile,
+  useDeleteVoiceProfile,
+  useVoiceProfiles,
+} from "@/hooks/use-voice-profiles";
+import { useWorkspaceMembers } from "@/hooks/use-workspace";
+import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { analyzeVoiceSample } from "@/lib/voice-sample-quality";
+import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { UserDto } from "@/types/auth";
 import type { VoiceProfileDto } from "@/types/voice-profile";
+import type { WorkspaceMemberDto } from "@/types/workspace";
 
 const LANGUAGE_OPTIONS = [
-  { value: "vi-VN", label: "Vietnamese (vi-VN)" },
-  { value: "en-US", label: "English (en-US)" },
-  { value: "ja-JP", label: "Japanese (ja-JP)" },
+  { value: "vi-VN", label: "Vietnamese", short: "VI" },
+  { value: "en-US", label: "English", short: "EN" },
+  { value: "ja-JP", label: "Japanese", short: "JA" },
 ];
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
+const MAX_PROFILE_NAME_LENGTH = 100;
+type VoiceProfileFilter = "active" | "ready" | "missing" | "all";
+type VoiceProfileSortKey = "name" | "member" | "health" | "language" | "status";
+type SortDirection = "asc" | "desc";
+
+const VOICE_PROFILE_FILTERS: Array<{ value: VoiceProfileFilter; label: string }> = [
+  { value: "active", label: "Active" },
+  { value: "ready", label: "Ready" },
+  { value: "missing", label: "Missing" },
+  { value: "all", label: "All" },
+];
+
+const VOICE_PROFILE_FILTER_WIDTH_CLASS: Record<VoiceProfileFilter, string> = {
+  active: "w-[78px]",
+  ready: "w-[78px]",
+  missing: "w-[92px]",
+  all: "w-[58px]",
+};
+
+const VOICE_PROFILE_SORT_COLUMNS: Array<{
+  key: VoiceProfileSortKey;
+  label: string;
+  align?: "right";
+}> = [
+    { key: "name", label: "Name" },
+    { key: "member", label: "Member" },
+    { key: "health", label: "Health" },
+    { key: "language", label: "Language" },
+    { key: "status", label: "Status" },
+  ];
+
+const VOICE_PROFILE_GRID_CLASS =
+  "grid-cols-[28px_minmax(320px,1.6fr)_220px_150px_130px_120px]";
+
+type VoiceProfileOwnerOption = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
 
 export default function VoiceProfilesPage() {
   const { data: profiles, isLoading } = useVoiceProfiles();
   const createMutation = useCreateVoiceProfile();
   const deleteMutation = useDeleteVoiceProfile();
+  const user = useAuthStore((state) => state.user);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspaceRole = useWorkspaceStore((state) => state.role);
+  const workspaceLanguage = useWorkspaceStore((state) => state.defaultLanguage);
+  const membersQuery = useWorkspaceMembers(activeWorkspaceId ?? undefined, 1, 100);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [language, setLanguage] = useState("vi-VN");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [languageFilter, setLanguageFilter] = useState("all");
-  const [sampleFilter, setSampleFilter] = useState<"all" | "ready" | "missing">("all");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [sampleAssessment, setSampleAssessment] = useState<string | null>(null);
   const [isCheckingSample, setIsCheckingSample] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
+  const [hoveredProfileId, setHoveredProfileId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<VoiceProfileFilter>("active");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<VoiceProfileSortKey>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
+  const selectionActionRef = useRef<HTMLDivElement | null>(null);
 
   const profileList = useMemo(() => profiles ?? [], [profiles]);
-  const readyCount = useMemo(() => profileList.filter((p) => p.hasSample).length, [profileList]);
-  const voiceProfileFilters = [
-    { key: "all", label: "All profiles", language: "all", sample: "all" },
-    { key: "ready", label: "With sample", language: "all", sample: "ready" },
-    { key: "missing", label: "Missing sample", language: "all", sample: "missing" },
-    { key: "vi", label: "VI", language: "vi-VN", sample: "all" },
-    { key: "en", label: "EN", language: "en-US", sample: "all" },
-    { key: "ja", label: "JA", language: "ja-JP", sample: "all" },
-  ] as const;
-  const activeVoiceFilter =
-    voiceProfileFilters.find((item) => item.language === languageFilter && item.sample === sampleFilter)?.key ??
-    "custom";
-  const filteredProfiles = useMemo(() => {
+  const currentUserName = user?.fullName || user?.email || "Current user";
+  const currentUserEmail = user?.email ?? "Signed-in user";
+  const roleLabel = workspaceRole ? toTitleCase(workspaceRole) : "Participant";
+  const canAssignVoiceOwner = isVoiceProfileManager(workspaceRole);
+  const voiceOwnerOptions = useMemo(
+    () => buildVoiceOwnerOptions(membersQuery.data?.items ?? [], user, roleLabel),
+    [membersQuery.data?.items, roleLabel, user]
+  );
+  const selectedOwner = useMemo(
+    () => voiceOwnerOptions.find((owner) => owner.id === selectedOwnerId) ?? voiceOwnerOptions[0],
+    [selectedOwnerId, voiceOwnerOptions]
+  );
+  const filteredProfileList = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    return profileList.filter((profile) => {
-      const matchesQuery =
+    const filtered = profileList.filter((profile) => {
+      const matchesFilter =
+        activeFilter === "all" ||
+        (activeFilter === "active" && profile.isActive) ||
+        (activeFilter === "ready" && profile.hasSample) ||
+        (activeFilter === "missing" && !profile.hasSample);
+      const matchesSearch =
         !normalizedQuery ||
+        currentUserName.toLowerCase().includes(normalizedQuery) ||
+        currentUserEmail.toLowerCase().includes(normalizedQuery) ||
         profile.displayName?.toLowerCase().includes(normalizedQuery) ||
-        profile.language?.toLowerCase().includes(normalizedQuery);
-      const matchesLanguage = languageFilter === "all" || profile.language === languageFilter;
-      const matchesSample =
-        sampleFilter === "all" ||
-        (sampleFilter === "ready" && profile.hasSample) ||
-        (sampleFilter === "missing" && !profile.hasSample);
-      return matchesQuery && matchesLanguage && matchesSample;
+        profile.language?.toLowerCase().includes(normalizedQuery) ||
+        profile.status.toLowerCase().includes(normalizedQuery);
+
+      return matchesFilter && matchesSearch;
     });
-  }, [languageFilter, profileList, sampleFilter, searchQuery]);
+
+    return [...filtered].sort((first, second) => {
+      const result = compareVoiceProfiles(first, second, sortKey, currentUserName);
+      return sortDirection === "asc" ? result : -result;
+    });
+  }, [activeFilter, currentUserEmail, currentUserName, profileList, searchQuery, sortDirection, sortKey]);
+  const selectedProfiles = useMemo(
+    () => profileList.filter((profile) => selectedProfileIds.includes(profile.id)),
+    [profileList, selectedProfileIds]
+  );
+  const filteredProfileIds = useMemo(() => filteredProfileList.map((profile) => profile.id), [filteredProfileList]);
+  const allVisibleProfilesSelected =
+    filteredProfileIds.length > 0 && filteredProfileIds.every((id) => selectedProfileIds.includes(id));
+  const hasSelectedProfiles = selectedProfiles.length > 0;
+
+  useEffect(() => {
+    if (!hasSelectedProfiles || !selectionActionRef.current) return;
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        selectionActionRef.current,
+        {
+          autoAlpha: 0,
+          y: 14,
+          scale: 0.96,
+          filter: "blur(6px)",
+          transformOrigin: "50% 100%",
+        },
+        {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          filter: "blur(0px)",
+          duration: 0.34,
+          ease: "power3.out",
+        }
+      );
+    }, selectionActionRef);
+
+    return () => ctx.revert();
+  }, [hasSelectedProfiles]);
+
+  useRegisterAssistantContext({
+    pageType: "voice_profiles",
+    entityId: selectedProfileIds.length > 0 ? selectedProfileIds.join(",") : "voice-profiles",
+    workspaceId: activeWorkspaceId ?? undefined,
+    snapshot: {
+      selectedCount: String(selectedProfiles.length),
+      selectedProfiles: formatSelectedVoiceProfileNames(selectedProfiles, currentUserName),
+      readyCount: String(selectedProfiles.filter((profile) => profile.hasSample).length),
+    },
+  });
+
+  function toggleProfileSelection(profileId: string) {
+    setSelectedProfileIds((current) =>
+      current.includes(profileId) ? current.filter((id) => id !== profileId) : [...current, profileId]
+    );
+  }
+
+  function toggleSelectAllVisibleProfiles() {
+    setSelectedProfileIds((current) => {
+      if (allVisibleProfilesSelected) {
+        return current.filter((id) => !filteredProfileIds.includes(id));
+      }
+
+      return Array.from(new Set([...current, ...filteredProfileIds]));
+    });
+  }
+
+  function handleAskAiAboutSelection() {
+    if (selectedProfiles.length === 0) return;
+
+    const prompt =
+      selectedProfiles.length === 1
+        ? `Review this voice clone profile: ${getVoiceProfileDisplayName(selectedProfiles[0], currentUserName)}.`
+        : `Review these ${selectedProfiles.length} selected voice clone profiles and suggest what needs attention.`;
+
+    window.dispatchEvent(new CustomEvent("warptalk:open-assistant", { detail: { prompt } }));
+    toast.success("Selected voice profiles attached to WarpBot.");
+  }
+
+  async function handleDeleteSelectedProfiles() {
+    if (selectedProfiles.length === 0) return;
+    const confirmed = window.confirm(
+      `Delete ${selectedProfiles.length} selected voice profile${selectedProfiles.length === 1 ? "" : "s"}?`
+    );
+    if (!confirmed) return;
+
+    try {
+      for (const profile of selectedProfiles) {
+        await deleteMutation.mutateAsync(profile.id);
+      }
+      setSelectedProfileIds([]);
+      toast.success("Selected voice profiles deleted.");
+    } catch {
+      toast.error("Failed to delete selected voice profiles.");
+    }
+  }
+
+  function handleSort(nextSortKey: VoiceProfileSortKey) {
+    if (sortKey === nextSortKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(nextSortKey);
+    setSortDirection("asc");
+  }
 
   function resetForm() {
     if (mediaRecorderRef.current?.state === "recording") {
@@ -105,15 +283,28 @@ export default function VoiceProfilesPage() {
     mediaRecorderRef.current = null;
     recordingChunksRef.current = [];
     setIsRecording(false);
+    setSelectedOwnerId(user?.id ?? "");
     setDisplayName("");
-    setLanguage("vi-VN");
+    setLanguage(normalizeLanguage(workspaceLanguage) ?? "vi-VN");
     setSampleFile(null);
     setSampleAssessment(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  useEffect(() => () => {
-    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+  function openCreateDialog(profile?: VoiceProfileDto) {
+    setSelectedOwnerId(user?.id ?? voiceOwnerOptions[0]?.id ?? "");
+    setDisplayName(profile?.displayName ?? "");
+    setLanguage(normalizeLanguage(profile?.language) ?? normalizeLanguage(workspaceLanguage) ?? "vi-VN");
+    setSampleFile(null);
+    setSampleAssessment(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setIsCreateOpen(true);
+  }
+
+  useEffect(() => {
+    return () => {
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
   }, []);
 
   async function checkAndSetSample(file: File | null): Promise<boolean> {
@@ -144,10 +335,10 @@ export default function VoiceProfilesPage() {
     return true;
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
     const accepted = await checkAndSetSample(file);
-    if (!accepted) e.target.value = "";
+    if (!accepted) event.target.value = "";
   }
 
   async function startRecording() {
@@ -160,8 +351,9 @@ export default function VoiceProfilesPage() {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      const preferredType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"]
-        .find((type) => MediaRecorder.isTypeSupported(type));
+      const preferredType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"].find((type) =>
+        MediaRecorder.isTypeSupported(type)
+      );
       const recorder = preferredType
         ? new MediaRecorder(stream, { mimeType: preferredType })
         : new MediaRecorder(stream);
@@ -183,7 +375,7 @@ export default function VoiceProfilesPage() {
       };
       recorder.start(250);
       setIsRecording(true);
-      setSampleAssessment("Recording… Read the sample paragraph in a quiet room.");
+      setSampleAssessment("Recording... read the sample paragraph in a quiet room.");
     } catch {
       toast.error("Microphone access was denied or unavailable.");
     }
@@ -193,8 +385,8 @@ export default function VoiceProfilesPage() {
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
   }
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleCreate(event: FormEvent) {
+    event.preventDefault();
     if (!displayName.trim()) {
       toast.error("Please enter a profile name.");
       return;
@@ -218,35 +410,22 @@ export default function VoiceProfilesPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    try {
-      await deleteMutation.mutateAsync(id);
-      toast.success("Voice profile deleted");
-    } catch {
-      toast.error("Failed to delete voice profile");
-    }
-  }
-
   return (
     <div className="flex h-full flex-col bg-surface-1 text-ink">
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <section className="flex shrink-0 flex-col gap-4 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <section className="flex shrink-0 flex-col gap-2 px-4 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
-            {voiceProfileFilters.map((item) => (
+            {VOICE_PROFILE_FILTERS.map((filter) => (
               <button
-                key={item.key}
+                key={filter.value}
                 type="button"
-                onClick={() => {
-                  setLanguageFilter(item.language);
-                  setSampleFilter(item.sample);
-                }}
-                className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
-                  activeVoiceFilter === item.key
-                    ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                    : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
-                }`}
+                onClick={() => setActiveFilter(filter.value)}
+                className={`flex h-[26px] ${VOICE_PROFILE_FILTER_WIDTH_CLASS[filter.value]} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${activeFilter === filter.value
+                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
+                  }`}
               >
-                {item.label}
+                {filter.label}
               </button>
             ))}
           </div>
@@ -265,165 +444,303 @@ export default function VoiceProfilesPage() {
               inputClassName="h-[26px] text-[12px]"
             />
             <button
+              type="button"
               className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
               title="Voice profile filters"
             >
               <Funnel weight="bold" size={13} />
-              {(languageFilter !== "all" || sampleFilter !== "all") && (
+              {activeFilter !== "all" && (
                 <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
               )}
             </button>
             <button
+              type="button"
               className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-              title={`${filteredProfiles.length} profiles`}
+              title={`${filteredProfileList.length} profiles`}
             >
               <SlidersHorizontal weight="bold" size={13} />
             </button>
             <div className="mx-1 h-4 w-[1px] bg-border" />
-            <Button
-              className="h-[28px] rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm hover:opacity-90"
-              onClick={() => setIsCreateOpen(true)}
+            <button
+              type="button"
+              onClick={() => openCreateDialog()}
+              className="flex h-[28px] items-center gap-1.5 rounded-full bg-foreground pl-2.5 pr-3 text-[13px] font-medium text-background shadow-sm transition-opacity hover:opacity-90"
             >
-              <Plus size={14} weight="bold" />
-              Create profile
-            </Button>
+              <Plus weight="bold" size={12} />
+              New Profile
+            </button>
           </div>
         </section>
 
-        <section className="mx-4 grid gap-3 border-y border-border py-4 sm:grid-cols-3">
-          <Metric icon={<Microphone size={16} weight="bold" />} label="Profiles" value={String(profileList.length)} />
-          <Metric icon={<CheckCircle size={16} weight="bold" />} label="With sample" value={String(readyCount)} />
-          <Metric icon={<Waveform size={16} weight="bold" />} label="Default language" value="vi-VN" />
-        </section>
-
-        <LibraryVoicePicker profiles={profileList} />
-
-        <section className="mx-4 space-y-4 py-4 pb-6">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-[18px] font-semibold text-ink">Your voice profiles</h2>
-              <p className="text-[13px] leading-5 text-ink-muted">
-                Attach a short reference sample so WarpTalk can personalize your future room audio.
-              </p>
+        <section className="mt-0.2 min-h-full overflow-x-auto px-4">
+          <div className="min-w-[1040px]">
+            <div className={`grid ${VOICE_PROFILE_GRID_CLASS} px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
+              <div />
+              {VOICE_PROFILE_SORT_COLUMNS.map((column) => (
+                <SortableColumnHeader
+                  key={column.key}
+                  label={column.label}
+                  active={sortKey === column.key}
+                  direction={sortDirection}
+                  align={column.align}
+                  onClick={() => handleSort(column.key)}
+                />
+              ))}
             </div>
-            <Badge variant="outline" className="w-fit rounded-full bg-white px-3 py-1 text-[12px] text-ink-muted">
-              {readyCount}/{profileList.length} sample ready
-            </Badge>
-          </div>
 
-          <div className="divide-y divide-border rounded-[16px] border border-border bg-white">
-            {isLoading && (
-              <div className="px-5 py-6 text-[14px] text-ink-muted">Loading voice profiles...</div>
-            )}
-
-            {!isLoading && profileList.length === 0 && (
-              <div className="grid gap-4 px-5 py-8 md:grid-cols-[1fr_auto] md:items-center">
-                <div className="flex items-start gap-4">
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-neutral-950 text-white">
-                    <Waveform size={20} weight="bold" />
-                  </span>
-                  <div>
-                    <p className="text-[15px] font-semibold text-ink">No voice profiles yet</p>
-                    <p className="mt-1 max-w-2xl text-[13px] leading-5 text-ink-muted">
-                      Create your first profile and attach a reference sample when you are ready.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  className="h-9 w-fit rounded-full bg-neutral-950 px-4 text-white hover:bg-neutral-800"
-                  onClick={() => setIsCreateOpen(true)}
-                >
-                  <Plus size={15} weight="bold" />
-                  Create profile
-                </Button>
-              </div>
-            )}
-
-            {!isLoading && profileList.length > 0 && filteredProfiles.length === 0 && (
-              <div className="px-5 py-8 text-center text-[14px] text-ink-muted">
-                No voice profile matches the current search and language filter.
-              </div>
-            )}
-
-            {filteredProfiles.map((profile, index) => (
-              <VoiceProfileRow
-                key={profile.id}
-                profile={profile}
-                index={index}
-                onDelete={handleDelete}
-                disabled={deleteMutation.isPending}
+            {isLoading ? (
+              <VoiceProfileNotice icon={<Waveform size={18} weight="bold" />} title="Loading voice profiles..." />
+            ) : profileList.length === 0 ? (
+              <VoiceProfileEmptyRow
+                userName={currentUserName}
+                title="No voice profiles yet"
+                description="Upload a short reference sample to create a voice clone profile."
               />
-            ))}
+            ) : filteredProfileList.length === 0 ? (
+              <VoiceProfileEmptyRow
+                userName={currentUserName}
+                title="No matching voice profiles"
+                description="Try another filter or search term."
+              />
+            ) : (
+              <div className="space-y-0">
+                {filteredProfileList.map((profile, index) => {
+                  const selected = selectedProfileIds.includes(profile.id);
+                  const previousProfile = index > 0 ? filteredProfileList[index - 1] : null;
+                  const nextProfile = index < filteredProfileList.length - 1 ? filteredProfileList[index + 1] : null;
+                  const previousHighlighted =
+                    Boolean(previousProfile) &&
+                    (selectedProfileIds.includes(previousProfile!.id) || hoveredProfileId === previousProfile!.id);
+                  const nextHighlighted =
+                    Boolean(nextProfile) &&
+                    (selectedProfileIds.includes(nextProfile!.id) || hoveredProfileId === nextProfile!.id);
+
+                  return (
+                    <VoiceProfileRow
+                      key={profile.id}
+                      profile={profile}
+                      userName={currentUserName}
+                      userEmail={currentUserEmail}
+                      roleLabel={roleLabel}
+                      selected={selected}
+                      hovered={hoveredProfileId === profile.id}
+                      previousHighlighted={previousHighlighted}
+                      nextHighlighted={nextHighlighted}
+                      onToggleSelected={() => toggleProfileSelection(profile.id)}
+                      onHoverChange={(hovered) => setHoveredProfileId(hovered ? profile.id : null)}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
+
+        {hasSelectedProfiles ? (
+          <div className="pointer-events-none sticky bottom-5 z-10 flex justify-center">
+            <div
+              ref={selectionActionRef}
+              className="pointer-events-auto flex h-10 w-[344px] items-center justify-center gap-1.5 rounded-full border border-border/60 bg-surface-2/95 px-2.5 text-[11px] font-medium text-ink shadow-xl shadow-black/10 backdrop-blur will-change-transform"
+            >
+              <span className="w-[74px] shrink-0 text-center">{selectedProfiles.length} selected</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-[96px] shrink-0 rounded-full px-2 text-[11px]"
+                onClick={toggleSelectAllVisibleProfiles}
+              >
+                <Checks size={12} />
+                {allVisibleProfilesSelected ? "Unselect all" : "Select all"}
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedProfiles.length === 1) openCreateDialog(selectedProfiles[0]);
+                }}
+                disabled={selectedProfiles.length !== 1}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink ${selectedProfiles.length === 1 ? "" : "invisible pointer-events-none"
+                  }`}
+                aria-label="Edit selected voice profile"
+                title="Edit profile"
+              >
+                <PencilSimple size={12} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={handleAskAiAboutSelection}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+                aria-label="Ask AI about selected voice profiles"
+                title="Ask AI"
+              >
+                <PaperPlaneTilt size={12} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelectedProfiles}
+                disabled={deleteMutation.isPending}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
+                aria-label="Delete selected voice profiles"
+                title="Delete"
+              >
+                <Trash size={12} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedProfileIds([])}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+                aria-label="Clear selected voice profiles"
+              >
+                <X size={13} weight="bold" />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Create voice profile</DialogTitle>
+      <Dialog
+        open={isCreateOpen}
+        onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="max-h-[calc(100vh-48px)] w-[calc(100vw-32px)] overflow-y-auto p-5 sm:max-w-[620px]">
+          <DialogHeader className="gap-1 pr-8">
+            <DialogTitle>Upload voice sample</DialogTitle>
             <DialogDescription>
-              Give your voice profile a name and language, then record or upload one clear speaker sample.
+              Create or replace a voice profile with one clear speaker sample.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="grid gap-4 pt-2">
-            <div className="grid gap-2">
-              <Label htmlFor="displayName">Profile name</Label>
-              <Input
-                id="displayName"
-                placeholder="e.g. My presenting voice"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Language</Label>
-              <Select value={language} onValueChange={(val) => setLanguage(val || "vi-VN")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select language..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {LANGUAGE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="sample">Reference voice sample</Label>
-              <div className="rounded-lg border border-border bg-canvas p-3 text-xs leading-5 text-ink-muted">
-                Read this sample in your normal voice: “WarpTalk helps my team understand every conversation clearly.” Use one speaker, no music, and a quiet room.
-              </div>
-              <Input
-                id="sample"
-                type="file"
-                accept="audio/*"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-              />
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant={isRecording ? "destructive" : "outline"}
-                  size="sm"
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={isCheckingSample}
+          <form onSubmit={handleCreate} className="grid min-w-0 gap-3 pt-1">
+            <div className="grid min-w-0 gap-1.5">
+              <Label>Assigned member</Label>
+              {canAssignVoiceOwner ? (
+                <Select
+                  value={selectedOwner?.id ?? ""}
+                  onValueChange={(value) => setSelectedOwnerId(value ?? "")}
                 >
-                  <Microphone size={14} /> {isRecording ? "Stop recording" : "Record sample"}
-                </Button>
-                {sampleFile ? <span className="truncate text-xs text-ink-muted">{sampleFile.name}</span> : null}
-              </div>
-              <p className="text-xs text-neutral-500">WAV, MP3, M4A, OGG or WebM, 5–120 seconds, up to 20 MB.</p>
-              {sampleAssessment ? <p className="text-xs text-ink-muted">{sampleAssessment}</p> : null}
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue placeholder="Select member..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {voiceOwnerOptions.map((owner) => (
+                      <SelectItem key={owner.id} value={owner.id}>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                            {getInitials(owner.name)}
+                          </span>
+                          <span className="min-w-0 truncate">
+                            {owner.name} - {owner.role}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex h-10 min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                    {getInitials(selectedOwner?.name ?? currentUserName)}
+                  </span>
+                  <span className="min-w-0 truncate">
+                    {selectedOwner?.name ?? currentUserName} - {selectedOwner?.role ?? roleLabel}
+                  </span>
+                </div>
+              )}
             </div>
-            <DialogFooter className="pt-2">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_150px]">
+              <div className="grid min-w-0 gap-1.5">
+                <Label htmlFor="displayName">Profile name</Label>
+                <div className="relative min-w-0">
+                  <Input
+                    id="displayName"
+                    className="min-w-0 pr-16"
+                    placeholder={`Enter profile name (max ${MAX_PROFILE_NAME_LENGTH} characters)`}
+                    value={displayName}
+                    maxLength={MAX_PROFILE_NAME_LENGTH}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    autoFocus
+                  />
+                  <span
+                    className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] ${displayName.length >= MAX_PROFILE_NAME_LENGTH
+                      ? "text-amber-500"
+                      : "text-ink-muted"
+                      }`}
+                  >
+                    {displayName.length}/{MAX_PROFILE_NAME_LENGTH}
+                  </span>
+                </div>
+              </div>
+              <div className="grid min-w-0 gap-1.5">
+                <Label>Language</Label>
+                <Select value={language} onValueChange={(value) => setLanguage(value || "vi-VN")}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select language..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label} ({option.short})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid min-w-0 gap-1.5">
+              <Label htmlFor="sample">Reference voice sample</Label>
+              <div className="grid min-w-0 gap-3 rounded-lg border border-border bg-canvas p-3">
+                <p className="text-xs leading-5 text-ink-muted">
+                  Read: "WarpTalk helps my team understand every conversation clearly." Use one speaker in a quiet room.
+                </p>
+                <input
+                  id="sample"
+                  type="file"
+                  accept="audio/*"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
+                <div className="grid min-w-0 gap-2 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:items-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-fit"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isCheckingSample || isRecording}
+                  >
+                    <UploadSimple size={14} />
+                    Choose file
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={isRecording ? "destructive" : "outline"}
+                    size="sm"
+                    className="w-fit"
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isCheckingSample}
+                  >
+                    <Microphone size={14} />
+                    {isRecording ? "Stop" : "Record"}
+                  </Button>
+                  <span className="min-w-0 truncate text-xs text-ink-muted">
+                    {sampleFile ? sampleFile.name : "No file selected"}
+                  </span>
+                </div>
+                <div className="grid min-w-0 gap-1 text-xs leading-5 text-ink-muted sm:grid-cols-[1fr_1fr]">
+                  <p>WAV, MP3, M4A, OGG or WebM, 5-120 seconds, up to 20 MB.</p>
+                  {sampleAssessment ? <p className="min-w-0 truncate sm:text-right">{sampleAssessment}</p> : null}
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="!mx-[-20px] !mb-[-20px] border-t border-border !p-3">
               <Button
                 type="submit"
                 disabled={createMutation.isPending || isCheckingSample || isRecording}
-                className="min-w-[80px] text-white"
+                className="min-w-[96px] text-white"
               >
-                {createMutation.isPending ? "Creating..." : "Create"}
+                {createMutation.isPending ? "Uploading..." : "Save sample"}
               </Button>
             </DialogFooter>
           </form>
@@ -433,70 +750,343 @@ export default function VoiceProfilesPage() {
   );
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function VoiceProfileRow({
+  profile,
+  userName,
+  userEmail,
+  roleLabel,
+  selected,
+  hovered,
+  previousHighlighted,
+  nextHighlighted,
+  onToggleSelected,
+  onHoverChange,
+}: {
+  profile: VoiceProfileDto;
+  userName: string;
+  userEmail: string;
+  roleLabel: string;
+  selected: boolean;
+  hovered: boolean;
+  previousHighlighted: boolean;
+  nextHighlighted: boolean;
+  onToggleSelected: () => void;
+  onHoverChange: (hovered: boolean) => void;
+}) {
+  const language = getLanguageMeta(profile.language);
+  const healthLabel = profile.hasSample ? "Ready" : "Needs sample";
+  const providerLabel = getProviderLabel(profile);
+  const profileName = getVoiceProfileDisplayName(profile, userName);
+  const highlighted = selected || hovered;
+  const rowBlockShape = getConnectedRowBlockShape(highlighted, previousHighlighted, nextHighlighted);
+  const rowStateClass = selected
+    ? hovered
+      ? `${rowBlockShape} bg-primary/25 text-ink shadow-[inset_3px_0_0_hsl(var(--primary)/0.65)]`
+      : `${rowBlockShape} bg-primary/15 text-ink hover:!bg-primary/25 hover:!shadow-[inset_3px_0_0_hsl(var(--primary)/0.65)]`
+    : hovered
+      ? `${rowBlockShape} bg-surface-2 text-ink shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`
+      : "rounded-[7px] hover:!bg-surface-2 hover:!shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]";
+
   return (
-    <div className="flex items-center gap-3">
-      <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-neutral-950/5 text-neutral-950">
-        {icon}
-      </span>
+    <div
+      role="button"
+      tabIndex={0}
+      onPointerEnter={() => onHoverChange(true)}
+      onPointerLeave={() => onHoverChange(false)}
+      onFocus={() => onHoverChange(true)}
+      onBlur={() => onHoverChange(false)}
+      onClick={onToggleSelected}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggleSelected();
+        }
+      }}
+      className={`group relative grid min-h-[36px] ${VOICE_PROFILE_GRID_CLASS} cursor-pointer items-center px-2 py-1 text-[11px] transition-none ${rowStateClass}`}
+    >
       <div>
-        <p className="text-[12px] text-ink-muted">{label}</p>
-        <p className="text-[18px] font-semibold leading-6 text-ink">{value}</p>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSelected();
+          }}
+          tabIndex={selected || hovered ? 0 : -1}
+          className={`flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border transition-none ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"} ${selected
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-border bg-surface-1/70 hover:border-primary/70"
+            }`}
+          aria-label={`${selected ? "Unselect" : "Select"} ${profileName}`}
+        >
+          {selected ? <Check size={10} weight="bold" /> : null}
+        </button>
+      </div>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">
+          {getInitials(profileName)}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-ink">{profileName}</p>
+          <p className="truncate text-[10px] text-ink-muted">{providerLabel}</p>
+        </div>
+      </div>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[8px] font-semibold text-primary">
+          {getInitials(userName)}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-ink">{userName}</p>
+          <p className="truncate text-[10px] text-ink-muted">
+            {userEmail} - {roleLabel}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 text-ink-muted">
+        <span
+          className={`h-3 w-3 rounded-full border border-dashed ${profile.hasSample ? "border-emerald-500/60 bg-emerald-500/10" : "border-amber-500/70 bg-transparent"
+            }`}
+        />
+        <span className={profile.hasSample ? "text-emerald-600" : "text-ink-muted"}>{healthLabel}</span>
+      </div>
+      <div>
+        <Badge variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px]">
+          {language.short}
+        </Badge>
+      </div>
+      <div>
+        <Badge
+          variant="outline"
+          className={`rounded-full px-1.5 py-0 text-[9px] capitalize ${profile.isActive ? "bg-emerald-500/10 text-emerald-600" : "bg-surface-1/70 text-ink-muted"
+            }`}
+        >
+          {profile.isActive ? "Active" : profile.status}
+        </Badge>
       </div>
     </div>
   );
 }
 
-function VoiceProfileRow({
-  profile,
-  index,
-  onDelete,
-  disabled,
+function SortableColumnHeader({
+  label,
+  active,
+  direction,
+  align,
+  onClick,
 }: {
-  profile: VoiceProfileDto;
-  index: number;
-  onDelete: (id: string) => void;
-  disabled: boolean;
+  label: string;
+  active: boolean;
+  direction: SortDirection;
+  align?: "right";
+  onClick: () => void;
 }) {
-  const avatarClasses = [
-    "bg-[radial-gradient(circle_at_28%_24%,#d8f3ff_0,#7cc4e8_32%,#15384a_100%)]",
-    "bg-[radial-gradient(circle_at_28%_24%,#f9dda4_0,#88a57b_38%,#26342f_100%)]",
-    "bg-[radial-gradient(circle_at_24%_22%,#ffd6dc_0,#cf7d6f_35%,#382234_100%)]",
-  ];
-
   return (
-    <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
-      <div className="flex min-w-0 items-center gap-4">
-        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] ${avatarClasses[index % avatarClasses.length]}`}>
-          <Waveform size={18} weight="bold" className="text-white" />
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-fit rounded-full py-1 text-left transition-colors ${align === "right" ? "justify-self-end pr-2 text-right" : ""
+        } ${active
+          ? align === "right"
+            ? "bg-surface-2 px-2 text-foreground font-semibold"
+            : "-ml-2 bg-surface-2 px-2 text-foreground font-semibold"
+          : "px-0 text-ink-muted hover:text-ink"
+        }`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? direction === "asc" ? <CaretUp size={10} weight="bold" /> : <CaretDown size={10} weight="bold" /> : null}
+      </span>
+    </button>
+  );
+}
+
+function VoiceProfileEmptyRow({
+  userName,
+  title,
+  description,
+}: {
+  userName: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className={`grid min-h-[36px] ${VOICE_PROFILE_GRID_CLASS} items-center rounded-[7px] px-2 py-1 text-[11px] transition-colors hover:bg-surface-2`}>
+      <div />
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">
+          {getInitials(userName)}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold text-ink">{profile.displayName || "Untitled profile"}</p>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-ink-muted">
-            <span>{profile.language ?? "No language set"}</span>
-            {profile.hasSample && (
-              <span className="inline-flex items-center gap-1">
-                <FileAudio size={14} /> sample attached
-              </span>
-            )}
-          </p>
+          <p className="truncate font-medium text-ink">{title}</p>
+          <p className="truncate text-[10px] text-ink-muted">{description}</p>
         </div>
       </div>
-      <div className="flex items-center gap-2 md:justify-end">
-        <Badge variant="outline" className="w-fit rounded-full bg-white capitalize text-ink-muted">
-          {profile.status}
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[8px] font-semibold text-primary">
+          {getInitials(userName)}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-ink">{userName}</p>
+          <p className="truncate text-[10px] text-ink-muted">Signed-in user</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 text-ink-muted">
+        <span className="h-3 w-3 rounded-full border border-dashed border-amber-500/70" />
+        <span>Needs sample</span>
+      </div>
+      <div className="flex items-center gap-1">
+        {LANGUAGE_OPTIONS.map((option) => (
+          <Badge key={option.value} variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px]">
+            {option.short}
+          </Badge>
+        ))}
+      </div>
+      <div>
+        <Badge variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px] text-ink-muted">
+          Not created
         </Badge>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-ink-muted hover:text-destructive"
-          disabled={disabled}
-          onClick={() => onDelete(profile.id)}
-          aria-label={`Delete ${profile.displayName || "voice profile"}`}
-        >
-          <Trash weight="light" className="h-4 w-4" />
-        </Button>
       </div>
     </div>
   );
+}
+
+function VoiceProfileNotice({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="grid gap-4 px-5 py-8 md:grid-cols-[1fr_auto] md:items-center">
+      <div className="flex items-start gap-4">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-neutral-950 text-white">
+          {icon}
+        </span>
+        <div>
+          <p className="text-[15px] font-semibold text-ink">{title}</p>
+          {description ? <p className="mt-1 max-w-2xl text-[13px] leading-5 text-ink-muted">{description}</p> : null}
+        </div>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "VP";
+}
+
+function getVoiceProfileDisplayName(profile: VoiceProfileDto, fallbackName: string) {
+  return profile.displayName || fallbackName;
+}
+
+function formatSelectedVoiceProfileNames(profiles: VoiceProfileDto[], fallbackName: string) {
+  if (profiles.length === 0) return "None";
+  const names = profiles.slice(0, 5).map((profile) => getVoiceProfileDisplayName(profile, fallbackName));
+  const suffix = profiles.length > names.length ? ` +${profiles.length - names.length} more` : "";
+  return `${names.join(", ")}${suffix}`;
+}
+
+function compareVoiceProfiles(
+  first: VoiceProfileDto,
+  second: VoiceProfileDto,
+  sortKey: VoiceProfileSortKey,
+  userName: string
+) {
+  if (sortKey === "name") {
+    return compareText(first.displayName || userName, second.displayName || userName);
+  }
+  if (sortKey === "health") {
+    return Number(second.hasSample) - Number(first.hasSample);
+  }
+  if (sortKey === "member") {
+    return compareText(userName, userName);
+  }
+  if (sortKey === "language") {
+    return compareText(getLanguageMeta(first.language).short, getLanguageMeta(second.language).short);
+  }
+  return compareText(first.isActive ? "active" : first.status, second.isActive ? "active" : second.status);
+}
+
+function compareText(first: string, second: string) {
+  return first.localeCompare(second, undefined, { sensitivity: "base" });
+}
+
+function getConnectedRowBlockShape(highlighted: boolean, previousHighlighted: boolean, nextHighlighted: boolean) {
+  if (!highlighted) return "rounded-[7px]";
+  if (previousHighlighted && nextHighlighted) return "rounded-none";
+  if (previousHighlighted) return "rounded-b-[7px] rounded-t-none";
+  if (nextHighlighted) return "rounded-b-none rounded-t-[7px]";
+  return "rounded-[7px]";
+}
+
+function getLanguageMeta(language: string | null | undefined) {
+  const normalized = normalizeLanguage(language);
+  return LANGUAGE_OPTIONS.find((option) => option.value === normalized) ?? LANGUAGE_OPTIONS[0];
+}
+
+function normalizeLanguage(language: string | null | undefined) {
+  if (!language) return null;
+  const normalized = language.toLowerCase();
+  if (normalized.startsWith("vi")) return "vi-VN";
+  if (normalized.startsWith("en")) return "en-US";
+  if (normalized.startsWith("ja")) return "ja-JP";
+  return null;
+}
+
+function getProviderLabel(profile: VoiceProfileDto) {
+  if (profile.provider) return toTitleCase(profile.provider);
+  if (profile.providerVoiceId) return "Provider voice";
+  if (profile.hasSample) return "Local sample";
+  return "Not assigned";
+}
+
+function buildVoiceOwnerOptions(
+  members: WorkspaceMemberDto[],
+  user: UserDto | null,
+  roleLabel: string
+): VoiceProfileOwnerOption[] {
+  const options = new Map<string, VoiceProfileOwnerOption>();
+
+  if (user?.id) {
+    options.set(user.id, {
+      id: user.id,
+      name: user.fullName || user.email,
+      email: user.email,
+      role: roleLabel,
+    });
+  }
+
+  for (const member of members) {
+    options.set(member.userId, {
+      id: member.userId,
+      name: member.fullName || member.email,
+      email: member.email,
+      role: member.roleName || "Member",
+    });
+  }
+
+  return Array.from(options.values()).sort((first, second) => {
+    if (first.id === user?.id) return -1;
+    if (second.id === user?.id) return 1;
+    return compareText(first.name, second.name);
+  });
+}
+
+function isVoiceProfileManager(role: string | null) {
+  const normalized = role?.toLowerCase();
+  return normalized === "owner" || normalized === "admin" || normalized === "manager";
+}
+
+function toTitleCase(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
