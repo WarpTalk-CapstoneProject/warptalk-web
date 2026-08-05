@@ -4,8 +4,12 @@ import {
   SUPPORTED_LANGUAGES,
   formatLanguageRoute,
   getLanguageName,
+  isLanguageAllowedByPolicy,
   languagesInScope,
+  meetingLanguagesForPolicy,
   normalizeLanguageCode,
+  normalizeLanguagePolicy,
+  reconcileMeetingLanguages,
 } from "./languages.ts";
 
 test("locale tags fold to the bare code the rest of the app is keyed by", () => {
@@ -80,6 +84,65 @@ test("the language route reads as names, with the source not repeated", () => {
 test("a single-language route is just that language", () => {
   assert.equal(formatLanguageRoute("vi-VN", ["vi-VN"]), "Vietnamese");
   assert.equal(formatLanguageRoute("vi-VN", []), "Vietnamese");
+});
+
+test("an empty workspace policy means unrestricted, not forbidden", () => {
+  // The load-bearing rule of WT-271. The server disables its whitelist check entirely when
+  // the stored list is empty (WorkspaceGrpcService.cs:151); reading empty as "nothing
+  // allowed" here would leave every workspace that never set a policy unable to pick a
+  // language at all.
+  for (const policy of [[], undefined, null]) {
+    assert.deepEqual(
+      meetingLanguagesForPolicy(policy).map((language) => language.code),
+      ["vi", "en", "ja", "ko", "fr", "es"],
+    );
+    assert.equal(isLanguageAllowedByPolicy("ko", policy), true);
+    assert.equal(isLanguageAllowedByPolicy("ko-KR", policy), true);
+  }
+
+  // A list of nothing but blanks is still an empty policy, not a policy of one blank code.
+  assert.equal(normalizeLanguagePolicy(["", "   "]).length, 0);
+  assert.equal(isLanguageAllowedByPolicy("ko", ["", "   "]), true);
+});
+
+test("a non-empty workspace policy is a whitelist", () => {
+  // The production case: policy ["en","vi","ja"], and the picker offered ko/fr/es anyway.
+  const policy = ["en", "vi", "ja"];
+  assert.deepEqual(
+    meetingLanguagesForPolicy(policy).map((language) => language.code),
+    ["vi", "en", "ja"],
+  );
+  assert.equal(isLanguageAllowedByPolicy("ko", policy), false);
+  assert.equal(isLanguageAllowedByPolicy("fr", policy), false);
+  assert.equal(isLanguageAllowedByPolicy("es", policy), false);
+});
+
+test("the policy is compared on bare codes however either side spells them", () => {
+  // The picker's option values are locale tags while the workspace setting stores bare
+  // codes; comparing the raw strings is how a whitelist matches nothing at all.
+  assert.equal(isLanguageAllowedByPolicy("vi-VN", ["vi"]), true);
+  assert.equal(isLanguageAllowedByPolicy("en-US", ["en", "vi"]), true);
+  assert.equal(isLanguageAllowedByPolicy("ko-KR", ["en", "vi"]), false);
+  assert.deepEqual(normalizeLanguagePolicy(["EN", "vi-VN", "en"]), ["en", "vi"]);
+});
+
+test("a picked set is trimmed to the policy, never emptied", () => {
+  // At least one language must stay selected, so a default pair the policy forbids outright
+  // falls back to the first language it does permit rather than to nothing.
+  assert.deepEqual(reconcileMeetingLanguages(["en-US", "vi-VN"], ["en", "vi", "ja"]), [
+    "en-US",
+    "vi-VN",
+  ]);
+  assert.deepEqual(reconcileMeetingLanguages(["en-US", "ko-KR"], ["en"]), ["en-US"]);
+  assert.deepEqual(reconcileMeetingLanguages(["en-US", "vi-VN"], ["ja"]), ["ja-JP"]);
+
+  // Empty policy leaves the selection exactly as it was.
+  assert.deepEqual(reconcileMeetingLanguages(["en-US", "ko-KR"], []), ["en-US", "ko-KR"]);
+
+  // A policy naming only non-meeting languages permits nothing to fall back to; returning
+  // an empty set lets the dialog's own validation block submit rather than sending a set
+  // the server would refuse.
+  assert.deepEqual(reconcileMeetingLanguages(["en-US"], ["zh"]), []);
 });
 
 test("an unknown language is passed through rather than guessed at", () => {
