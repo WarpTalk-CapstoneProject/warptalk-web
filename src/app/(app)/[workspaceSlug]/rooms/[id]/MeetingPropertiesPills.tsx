@@ -9,12 +9,18 @@ import { Calendar } from "@/components/ui/calendar";
 export function MeetingPropertiesPills({
   room,
   apiParticipants,
-  activeParticipantCount,
+  occupancyLabel,
   user
 }: {
   room: TranslationRoomDto;
   apiParticipants: TranslationRoomParticipantDto[];
-  activeParticipantCount: number;
+  /**
+   * WT-274: the already-formatted "seats/capacity" pair from `useRoomOccupancy`. This takes a
+   * finished string rather than a count on purpose — the component has no business deciding
+   * which participant statuses occupy a seat, and when it did the chip disagreed with the
+   * Tracking panel beside it.
+   */
+  occupancyLabel: string;
   user: { id: string; fullName?: string } | null;
 }) {
   const updateSettings = useUpdateTranslationRoomSettings();
@@ -48,7 +54,7 @@ export function MeetingPropertiesPills({
       />
 
       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-        <span className="tabular-nums text-[12px] font-medium">{activeParticipantCount}/{room.maxParticipants}</span>
+        <span className="tabular-nums text-[12px] font-medium">{occupancyLabel}</span>
       </div>
 
       <Popover>

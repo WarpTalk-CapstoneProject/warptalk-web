@@ -63,6 +63,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import {
   useTranscriptByRoom,
   useTranscriptSegments,
@@ -95,7 +96,6 @@ import {
   translationRoomService,
 } from "@/services/translationRoom.service";
 import { useAuthStore } from "@/stores/auth-store";
-import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { UserDto } from "@/types/auth";
 import type { TranscriptSegmentDto } from "@/types/transcript";
@@ -145,12 +145,6 @@ export default function RoomInformationPage() {
   const endRoomMutation = useEndTranslationRoom();
   const startRoomMutation = useStartTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
-  const liveParticipants = useTranslationRoomStore(
-    (state) => state.participants,
-  );
-  const liveRoomState = useTranslationRoomStore(
-    (state) => state.translationRoomState,
-  );
   const user = useAuthStore((state) => state.user);
 
   const transcriptQuery = useTranscriptByRoom(roomId);
@@ -169,22 +163,10 @@ export default function RoomInformationPage() {
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
-  const activeApiParticipants = apiParticipants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status.toLowerCase()),
-  );
-  const activeLiveParticipants = liveParticipants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status?.toLowerCase() ?? ""),
-  );
-  const liveStateMatchesRoom =
-    !liveRoomState || liveRoomState.translationRoomId === roomId;
-  const activeParticipantCount =
-    liveStateMatchesRoom && activeLiveParticipants.length > 0
-      ? activeLiveParticipants.length
-      : activeApiParticipants.length > 0
-        ? activeApiParticipants.length
-        : room?.status === "in_progress"
-          ? (room.participantCount ?? 0)
-          : 0;
+  // WT-274: the ONE read of "who is in this room" on this page. The header chip and the
+  // Tracking panel both render off this object; neither one filters a status itself, which is
+  // what let them show 1/100 and "Attendees: 0" at the same moment.
+  const occupancy = useRoomOccupancy(room, participantsQuery.data ?? null);
 
   useRegisterAssistantContext(
     room
@@ -195,7 +177,7 @@ export default function RoomInformationPage() {
           snapshot: {
             title: room.title,
             status: room.status,
-            participantCount: String(activeParticipantCount),
+            participantCount: String(occupancy.seatCount),
           },
         }
       : null,
@@ -264,6 +246,16 @@ export default function RoomInformationPage() {
     user,
   );
   const hostUser = getHostUser(room, participants, membersArray, user);
+  // WT-274: the Tracking panel's rows are the seat holders `occupancy` already resolved,
+  // mapped through the same identity resolver the rest of the page uses. It does not re-decide
+  // who counts.
+  const seatedIdentities = occupancy.seated.map((participant) =>
+    toUserIdentity(participant, membersArray, user),
+  );
+  const seatedIds = new Set(seatedIdentities.map((identity) => identity.id));
+  const notInRoom = participants.filter(
+    (participant) => !seatedIds.has(participant.id),
+  );
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
       {copiedText ? (
@@ -295,7 +287,7 @@ export default function RoomInformationPage() {
                   <MeetingPropertiesPills
                     room={room}
                     apiParticipants={apiParticipants}
-                    activeParticipantCount={activeParticipantCount}
+                    occupancyLabel={occupancy.label}
                     user={user}
                   />
                 </div>
@@ -385,29 +377,33 @@ export default function RoomInformationPage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
                   <ChevronDown className="size-3" />
-                  Attendees:{" "}
-                  {
-                    participants.filter(
-                      (participant) => participant.id !== hostUser.id,
-                    ).length
-                  }
+                  Attendees: {occupancy.label}
                 </div>
                 <div className="space-y-1.5">
-                  {participants.filter(
-                    (participant) => participant.id !== hostUser.id,
-                  ).length > 0 ? (
-                    participants
-                      .filter((participant) => participant.id !== hostUser.id)
-                      .map((participant) => (
-                        <UserRow key={participant.id} user={participant} />
-                      ))
+                  {seatedIdentities.length > 0 ? (
+                    seatedIdentities.map((participant) => (
+                      <UserRow key={participant.id} user={participant} />
+                    ))
                   ) : (
                     <p className="text-[12px] text-muted-foreground">
-                      No attendees yet.
+                      Nobody is in the room right now.
                     </p>
                   )}
                 </div>
               </div>
+              {notInRoom.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+                    <ChevronDown className="size-3" />
+                    Invited: {notInRoom.length}
+                  </div>
+                  <div className="space-y-1.5">
+                    {notInRoom.map((participant) => (
+                      <UserRow key={participant.id} user={participant} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </PropertyPanel>
 
             <PropertyPanel title="Actions">

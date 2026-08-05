@@ -41,6 +41,7 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { mergeParticipants } from "@/lib/merge-participants";
+import { roomOccupancy } from "@/lib/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { buildTranscriptReviewPath } from "@/lib/meeting-navigation";
@@ -358,10 +359,13 @@ export function PersistentMeetingSession({
   useEffect(() => {
     participantsRef.current = participants;
   }, [participants]);
-  const activeCount = participants.filter(
-    (participant) =>
-      !["left", "removed", "kicked"].includes(participant.status),
-  ).length;
+  // WT-274: the same seat rule the room detail page and the meetings list read. This used to
+  // count "everyone not left/removed/kicked", which includes the lobby and people who merely
+  // disconnected — a fourth, private definition of presence in a codebase that now has one.
+  const activeCount = roomOccupancy({
+    capacity: room?.maxParticipants,
+    participants,
+  }).seatCount;
   const joinLink = room?.translationRoomCode
     ? getJoinLink(room.translationRoomCode)
     : "";
