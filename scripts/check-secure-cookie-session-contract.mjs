@@ -12,6 +12,7 @@ const useAuth = read("src/hooks/use-auth.ts");
 const loginPage = read("src/app/(auth)/login/page.tsx");
 const registerPage = read("src/app/(auth)/register/page.tsx");
 const desktopLoginPage = read("src/app/desktop-login/page.tsx");
+const workspaceJoinPage = read("src/app/(app)/workspace/join/page.tsx");
 const proxy = read("src/proxy.ts");
 
 assert.match(client, /withCredentials:\s*true/);
@@ -33,7 +34,10 @@ assert.doesNotMatch(useAuth, /res\.refreshToken|\{\s*refreshToken\s*,\s*logout\s
 assert.match(signalr, /credentials:\s*"include"/);
 assert.doesNotMatch(signalr, /JSON\.stringify\(\{\s*refreshToken\s*\}\)/);
 
-for (const source of [loginPage, registerPage, desktopLoginPage]) {
+// Every surface that authenticates. The workspace join page is here because it
+// grew its own document.cookie writer independently of the login pages, which
+// is exactly the drift this contract exists to catch.
+for (const source of [loginPage, registerPage, desktopLoginPage, workspaceJoinPage]) {
   assert.doesNotMatch(source, /document\.cookie\s*=\s*`access_token=/);
   assert.doesNotMatch(source, /res\.data[\s\S]{0,120}refreshToken/);
 }

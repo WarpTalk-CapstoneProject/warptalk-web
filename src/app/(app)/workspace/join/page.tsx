@@ -23,11 +23,6 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { AuthResponse } from "@/types/auth";
 
-function setAccessTokenCookie(accessToken: string) {
-  const maxAge = 7 * 24 * 60 * 60; // 7 days
-  document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
-}
-
 type ApiErrorPayload = {
   error?: string;
 };
@@ -127,9 +122,8 @@ function JoinWorkspaceContent() {
           email: email.trim(),
           password: password.trim(),
         });
-        const { user: userDto, accessToken, refreshToken } = res.data;
-        loginAction(userDto, accessToken, refreshToken);
-        setAccessTokenCookie(accessToken);
+        const { user: userDto, accessToken } = res.data;
+        loginAction(userDto, accessToken);
         toast.success("Logged in successfully!");
         if (code) {
           refetchPreflight();
@@ -140,9 +134,8 @@ function JoinWorkspaceContent() {
           password: password.trim(),
           fullName: `${firstName.trim()} ${lastName.trim()}`.trim(),
         });
-        const { user: userDto, accessToken, refreshToken } = res.data;
-        loginAction(userDto, accessToken, refreshToken);
-        setAccessTokenCookie(accessToken);
+        const { user: userDto, accessToken } = res.data;
+        loginAction(userDto, accessToken);
         toast.success("Account created successfully!");
         if (code) {
           refetchPreflight();
