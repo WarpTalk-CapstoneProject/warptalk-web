@@ -230,7 +230,8 @@ function LoginForm() {
             alt="WarpTalk"
             width={100}
             height={24}
-            className="h-6 w-auto object-contain mix-blend-multiply"
+            className="object-contain mix-blend-multiply"
+            style={{ width: "auto", height: 24 }}
             priority
           />
         </Link>

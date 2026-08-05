@@ -19,6 +19,7 @@ import { resolveRoomHost } from "@/lib/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
+import { LanguageLabel } from "@/components/language/language-label";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -46,6 +47,23 @@ function formatTimeShort(value?: string) {
   }).format(new Date(value));
 }
 
+/** Midnight of the given date as a timestamp, for comparing days without comparing times. */
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+/**
+ * Whether this room was booked for the given calendar day.
+ *
+ * Status is deliberately not part of the question (WT-247): a meeting that has started, or
+ * already ended, still belongs on the day it was scheduled for. Rooms with no scheduledAt are
+ * instant meetings and belong to no day at all.
+ */
+function isScheduledOn(room: TranslationRoomDto, day: Date) {
+  if (!room.scheduledAt) return false;
+  return new Date(room.scheduledAt).toDateString() === day.toDateString();
+}
+
 function StatusIcon({ status }: { status: string }) {
   if (status === "in_progress")
     return (
@@ -69,32 +87,6 @@ function StatusIcon({ status }: { status: string }) {
     );
   return (
     <Circle size={13} weight="light" className="text-muted-foreground/40" />
-  );
-}
-
-function LanguageWithFlag({
-  locale,
-  hideText,
-}: {
-  locale: string;
-  hideText?: boolean;
-}) {
-  if (!locale) return null;
-  const parts = locale.split("-");
-  const langCode = parts[0].toUpperCase();
-  const countryCode = parts.length > 1 ? parts[1].toUpperCase() : "";
-  let flag = "";
-  if (countryCode) {
-    const codePoints = countryCode
-      .split("")
-      .map((char) => 127397 + char.charCodeAt(0));
-    flag = String.fromCodePoint(...codePoints);
-  }
-  return (
-    <div className="flex items-center gap-1">
-      {flag && <span className="text-[14px] leading-none">{flag}</span>}
-      {!hideText && <span className="font-medium">{langCode}</span>}
-    </div>
   );
 }
 
@@ -169,7 +161,7 @@ function LinearRow({
         </div>
 
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <LanguageWithFlag locale={room.sourceLanguage || "en-US"} />
+          <LanguageLabel value={room.sourceLanguage || "en-US"} />
           {room.targetLanguages.length > 1 ? (
             <>
               <span className="text-muted-foreground/40 font-bold px-1 text-[13px]">
@@ -183,7 +175,7 @@ function LinearRow({
                         ;
                       </span>
                     )}
-                    <LanguageWithFlag locale={t} hideText={true} />
+                    <LanguageLabel value={t} showName={false} />
                   </div>
                 ))}
                 <div className="flex items-center">
@@ -199,7 +191,7 @@ function LinearRow({
           ) : (
             <>
               <span className="text-border mx-0.5 font-bold">→</span>
-              <LanguageWithFlag locale={room.targetLanguages[0]} />
+              <LanguageLabel value={room.targetLanguages[0]} />
             </>
           )}
         </div>
@@ -410,10 +402,15 @@ function DailyTimeline({
                     </div>
                     {height >= 40 && (
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">
-                        <span>
-                          {room.sourceLanguage}{" "}
-                          {room.targetLanguages.length > 1 ? ";" : "→"}{" "}
-                          {room.targetLanguages.join(", ")}
+                        <span className="inline-flex items-center gap-1">
+                          <LanguageLabel value={room.sourceLanguage} />
+                          {room.targetLanguages.length > 1 ? ";" : "→"}
+                          {room.targetLanguages.map((target, index) => (
+                            <span key={target} className="inline-flex items-center gap-1">
+                              {index > 0 ? "," : null}
+                              <LanguageLabel value={target} />
+                            </span>
+                          ))}
                         </span>
                         <span>•</span>
                         <span className="font-mono">
@@ -473,6 +470,29 @@ export default function MeetingsPageLinear() {
     return roomList.data?.rooms ?? [];
   }, [roomList.data?.rooms]);
 
+  // WT-251/WT-232: the calendar gave no hint which days hold anything, and it opens on today,
+  // so a meeting booked for any other day was invisible in this tab — findable only under
+  // "All". Marking the days that have meetings is what makes the tab navigable at all.
+  const daysWithMeetings = useMemo(
+    () =>
+      rooms
+        .filter((room) => room.scheduledAt)
+        .map((room) => new Date(room.scheduledAt as string))
+        .sort((a, b) => a.getTime() - b.getTime()),
+    [rooms],
+  );
+
+  // The next day after the one being viewed that actually holds something, so an empty day can
+  // point somewhere instead of being a dead end.
+  //
+  // Measured against the selected day rather than against the clock: reading the current time
+  // during render is impure, and "next after where you are" is the more useful answer anyway —
+  // it works the same whether the user has paged backwards or forwards.
+  const selectedDayKey = startOfDay(selectedDate);
+  const nextUpcoming = daysWithMeetings.find(
+    (date) => startOfDay(date) > selectedDayKey,
+  );
+
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const matchesSearch = (room: TranslationRoomDto) => {
@@ -504,17 +524,12 @@ export default function MeetingsPageLinear() {
       );
     }
     if (activeTab === "scheduled") {
-      if (!selectedDate)
-        return rooms.filter(
-          (r) => r.status === "scheduled" && matchesSearch(r),
-        );
+      // WT-247: keyed off the day a room was scheduled for, not off its current status. The
+      // old filter also required status === "scheduled", so a meeting vanished from its own
+      // day in the calendar the moment it started. What belongs on a day is what was booked
+      // for it; the row already renders whatever state it has now.
       return rooms.filter(
-        (r) =>
-          matchesSearch(r) &&
-          r.status === "scheduled" &&
-          r.scheduledAt &&
-          new Date(r.scheduledAt).toDateString() ===
-            selectedDate.toDateString(),
+        (r) => matchesSearch(r) && isScheduledOn(r, selectedDate),
       );
     }
     if (activeTab === "history")
@@ -600,6 +615,11 @@ export default function MeetingsPageLinear() {
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 className="w-full"
+                modifiers={{ hasMeeting: daysWithMeetings }}
+                modifiersClassNames={{
+                  hasMeeting:
+                    "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary",
+                }}
               />
             </div>
             <div className="mt-6 text-[13px] text-muted-foreground w-full px-1">
@@ -616,6 +636,20 @@ export default function MeetingsPageLinear() {
                   ? "You have no meetings scheduled for this day."
                   : `You have ${filteredRooms.length} meeting${filteredRooms.length === 1 ? "" : "s"} scheduled for this day.`}
               </p>
+              {filteredRooms.length === 0 && nextUpcoming ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(nextUpcoming)}
+                  className="mt-2 text-[13px] font-medium text-primary hover:text-primary-hover"
+                >
+                  Go to next meeting —{" "}
+                  {nextUpcoming.toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </button>
+              ) : null}
             </div>
           </div>
         )}

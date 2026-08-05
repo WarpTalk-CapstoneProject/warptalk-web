@@ -8,15 +8,19 @@ type WarpTalkBrandProps = {
 };
 
 export function WarpTalkBrand({ compact = false, className }: WarpTalkBrandProps) {
+  const width = compact ? 18 : 65;
+  const height = 16;
+
   return (
     <span className={cn("relative block shrink-0 overflow-hidden", compact ? "h-4 w-[18px]" : "h-4 w-[65px]", className)}>
       <Image
         src={compact ? "/assets/logos/warptalk-sidebar-icon.png" : "/assets/logos/warptalk-sidebar-logo.png"}
         alt="WarpTalk"
-        fill
+        width={width}
+        height={height}
         priority
-        sizes={compact ? "18px" : "65px"}
         className="object-contain object-left mix-blend-multiply"
+        style={{ width: "auto", height }}
       />
     </span>
   );

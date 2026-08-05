@@ -1,5 +1,6 @@
 "use client";
 
+import { languageLabelText } from "@/components/language/language-label";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import {
@@ -55,10 +56,12 @@ import type { UserDto } from "@/types/auth";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 
+// Values are the locale tags the backend stores and must not change; the label is what a
+// person reads, and a raw tag in parentheses is not that.
 const LANGUAGE_OPTIONS = [
-  { value: "vi-VN", label: "Vietnamese", short: "VI" },
-  { value: "en-US", label: "English", short: "EN" },
-  { value: "ja-JP", label: "Japanese", short: "JA" },
+  { value: "vi-VN", label: languageLabelText("vi-VN"), short: "VI" },
+  { value: "en-US", label: languageLabelText("en-US"), short: "EN" },
+  { value: "ja-JP", label: languageLabelText("ja-JP"), short: "JA" },
 ];
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -715,6 +718,7 @@ export default function VoiceProfilesPage() {
                   </Button>
                   <Button
                     type="button"
+                    aria-label="Record sample"
                     variant={isRecording ? "destructive" : "outline"}
                     size="sm"
                     className="w-fit"

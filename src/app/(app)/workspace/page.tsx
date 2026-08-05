@@ -91,7 +91,8 @@ export default function WorkspaceOnboardingGatePage() {
             alt="WarpTalk"
             width={100}
             height={24}
-            className="h-6 w-auto object-contain mix-blend-multiply opacity-80"
+            className="object-contain mix-blend-multiply opacity-80"
+            style={{ width: "auto", height: 24 }}
             priority
           />
         </div>
