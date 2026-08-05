@@ -648,9 +648,10 @@ export function PersistentMeetingSession({
   // from that speaker's, so the listener hears ONLY the AI interpreter dub instead of the
   // original layered underneath it. speakLanguage/targetLanguage can each independently be
   // a bare code ("vi") or locale-tagged ("vi-VN") depending on where the value came from —
-  // normalizeLanguageCode (this file's, not @/lib/languages' — that one doesn't strip
-  // locale tags) is what makes the comparison correct regardless of which form either side
-  // happens to be in.
+  // normalizeLanguageCode is what makes the comparison correct regardless of which form
+  // either side happens to be in. This file keeps its own copy (below) rather than using
+  // @/lib/languages': audio routing must not start depending on the language registry, so
+  // that an unlisted language degrades to "no dub" rather than to an unmuted raw mic.
   const speakerLanguageByUserId = useMemo(() => {
     const map: Record<string, string> = {};
     for (const participant of participants) {

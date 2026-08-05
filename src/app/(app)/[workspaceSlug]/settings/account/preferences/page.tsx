@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { languagesInScope } from "@/lib/languages";
 import { authService } from "@/services/auth.service";
 
 const preferencesSchema = z.object({
@@ -41,11 +42,11 @@ const preferencesSchema = z.object({
 
 type PreferencesFormData = z.infer<typeof preferencesSchema>;
 
-const languages = [
-  { code: "en", label: "English" },
-  { code: "vi", label: "Vietnamese" },
-  { code: "ja", label: "Japanese" },
-];
+// Default speak/listen language — meeting languages, so they come from the registry.
+const languages = languagesInScope("meeting").map((language) => ({
+  code: language.code,
+  label: language.name,
+}));
 
 export default function PersonalPreferencesPage() {
   const queryClient = useQueryClient();

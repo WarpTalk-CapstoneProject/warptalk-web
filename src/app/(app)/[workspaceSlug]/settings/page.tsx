@@ -37,6 +37,7 @@ import {
   useWorkspaceSettings,
 } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { languagesInScope } from "@/lib/languages";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
 
 const settingsSchema = z.object({
@@ -79,11 +80,12 @@ type ApiErrorLike = {
   };
 };
 
-const languages = [
-  { code: "en", label: "English" },
-  { code: "vi", label: "Vietnamese" },
-  { code: "ja", label: "Japanese" },
-];
+// The workspace default language and the allowed-target list are both meeting languages, so
+// they follow the registry rather than a third copy that only ever listed en/vi/ja.
+const languages = languagesInScope("meeting").map((language) => ({
+  code: language.code,
+  label: language.name,
+}));
 
 const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   defaultLanguage: "en",

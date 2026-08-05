@@ -8,7 +8,7 @@ import {
 } from "@/hooks/use-meeting";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
-import { getLanguageName, SUPPORTED_LANGUAGES } from "@/lib/languages";
+import { getLanguageName, languagesInScope } from "@/lib/languages";
 import { downloadAuthenticatedFile } from "@/lib/download-artifact";
 import { API } from "@/lib/api/endpoints";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -364,7 +364,7 @@ export function ChatPanel({
           onChange={(event) => handleTargetLanguageChange(event.target.value)}
           className="rounded-md border border-border bg-surface-1 px-2 py-1 text-[12px] text-ink outline-none focus:border-primary"
         >
-          {SUPPORTED_LANGUAGES.map((language) => (
+          {languagesInScope("chatTarget").map((language) => (
             <option key={language.code} value={language.code}>
               {language.name}
             </option>

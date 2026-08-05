@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/errors";
 import { useSetPreferredVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
+import { languagesInScope } from "@/lib/languages";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
 /**
@@ -25,10 +26,12 @@ function bareLanguage(language: string) {
   return language.split(/[-_]/)[0]?.toLowerCase() ?? language;
 }
 
-const LANGUAGES = [
-  { value: "vi", label: "Tiếng Việt" },
-  { value: "en", label: "English" },
-];
+// Native names rather than English ones, because the surrounding copy in this section is
+// Vietnamese. Both come from the registry, so neither can drift into a bare code.
+const LANGUAGES = languagesInScope("voiceCatalog").map((language) => ({
+  value: language.code,
+  label: language.nativeName,
+}));
 
 /**
  * Browse the provider's public voices for a language and keep one as this user's default.
