@@ -35,7 +35,7 @@ export function useLogin() {
       return res;
     },
     onSuccess: (res) => {
-      login(res.user, res.accessToken, res.refreshToken);
+      login(res.user, res.accessToken);
     },
   });
 }
@@ -49,20 +49,18 @@ export function useRegister() {
       return res;
     },
     onSuccess: (res) => {
-      login(res.user, res.accessToken, res.refreshToken);
+      login(res.user, res.accessToken);
     },
   });
 }
 
 /** Logout mutation */
 export function useLogout() {
-  const { refreshToken, logout } = useAuthStore.getState();
+  const { logout } = useAuthStore.getState();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      if (refreshToken) {
-        await authService.logout({ refreshToken });
-      }
+      await authService.logout();
     },
     onSettled: () => {
       logout();

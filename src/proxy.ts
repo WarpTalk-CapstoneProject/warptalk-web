@@ -27,7 +27,7 @@ const DEVELOPMENT_ONLY_PREFIXES = [
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get("access_token")?.value;
+  const hasSession = request.cookies.get("warptalk_session")?.value === "active";
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
@@ -40,7 +40,7 @@ export function proxy(request: NextRequest) {
     return new NextResponse(null, { status: 404 });
   }
 
-  if (token && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
+  if (hasSession && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
     const activeWorkspaceSlug = request.cookies.get("active_workspace_slug")?.value;
     if (activeWorkspaceSlug) {
       return NextResponse.redirect(new URL(`/${activeWorkspaceSlug}/dashboard`, request.url));
@@ -49,13 +49,13 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  if (!token && !isPublicRoute) {
+  if (!hasSession && !isPublicRoute) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (pathname.startsWith(ADMIN_PREFIX) && token) {
+  if (pathname.startsWith(ADMIN_PREFIX) && hasSession) {
     return NextResponse.next();
   }
 

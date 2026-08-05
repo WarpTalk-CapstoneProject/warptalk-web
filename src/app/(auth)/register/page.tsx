@@ -44,11 +44,6 @@ type RegisterFormData = {
 };
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
-function setAccessTokenCookie(accessToken: string) {
-  const maxAge = 7 * 24 * 60 * 60; // 7 days
-  document.cookie = `access_token=${accessToken}; path=/; max-age=${maxAge}; SameSite=Lax`;
-}
-
 function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
@@ -58,10 +53,9 @@ function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
       try {
         const idToken = tokenResponse.access_token;
         const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, { idToken });
-        const { user, accessToken, refreshToken } = res.data;
+        const { user, accessToken } = res.data;
 
-        login(user, accessToken, refreshToken);
-        setAccessTokenCookie(accessToken);
+        login(user, accessToken);
 
         toast.success("Google sign-in successful!");
         router.replace(callbackUrl);
@@ -133,10 +127,9 @@ function RegisterForm() {
         });
       }
 
-      const { user, accessToken, refreshToken } = res.data;
+      const { user, accessToken } = res.data;
 
-      login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken);
+      login(user, accessToken);
 
       toast.success("Registration successful!");
       router.replace(callbackUrl);

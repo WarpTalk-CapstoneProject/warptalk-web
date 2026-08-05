@@ -43,7 +43,7 @@ async function request(route, authenticated = false) {
   return fetch(`${baseUrl}${route}`, {
     redirect: "manual",
     headers: authenticated
-      ? { cookie: "access_token=route-contract-placeholder" }
+      ? { cookie: "warptalk_session=active" }
       : undefined,
   });
 }

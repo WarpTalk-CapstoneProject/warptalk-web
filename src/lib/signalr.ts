@@ -21,20 +21,19 @@ function isTokenExpiring(token: string) {
 }
 
 async function refreshAccessToken() {
-  const { accessToken, refreshToken } = useAuthStore.getState();
+  const { accessToken } = useAuthStore.getState();
   if (accessToken && !isTokenExpiring(accessToken)) return accessToken;
-  if (!refreshToken) return accessToken;
 
   refreshPromise ??= fetch(`${API_BASE_URL}/auth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
+    credentials: "include",
+    body: JSON.stringify({}),
   })
     .then(async (response) => {
       if (!response.ok) return accessToken;
-      const data = (await response.json()) as { accessToken: string; refreshToken: string };
-      useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
-      document.cookie = `access_token=${data.accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+      const data = (await response.json()) as { accessToken: string };
+      useAuthStore.getState().setAccessToken(data.accessToken);
       return data.accessToken;
     })
     .catch(() => accessToken)

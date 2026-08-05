@@ -1,10 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
-import {
-  chooseNewestAccessToken,
-  isAccessTokenExpiring,
-} from "@/lib/api/token-lifecycle";
+import { isAccessTokenExpiring } from "@/lib/api/token-lifecycle";
 
 /**
  * Client-side Axios instance with token interceptors.
@@ -13,68 +10,11 @@ import {
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200/api/v1",
   timeout: 30_000,
+  withCredentials: true,
 });
 
-function getCookieValue(name: string): string | null {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const prefix = `${name}=`;
-  for (const part of document.cookie.split("; ")) {
-    if (part.startsWith(prefix)) {
-      return decodeURIComponent(part.slice(prefix.length));
-    }
-  }
-
-  return null;
-}
-
-function getPersistedAuthState(): {
-  accessToken?: string | null;
-  refreshToken?: string | null;
-} | null {
-  if (typeof localStorage === "undefined") {
-    return null;
-  }
-
-  try {
-    const persisted = localStorage.getItem("warptalk-auth");
-    if (!persisted) return null;
-    const parsed = JSON.parse(persisted) as {
-      state?: {
-        accessToken?: string | null;
-        refreshToken?: string | null;
-      };
-    };
-    return parsed.state ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function getAccessToken(): string | null {
-  const storeToken = useAuthStore.getState().accessToken;
-  const persistedToken = getPersistedAuthState()?.accessToken;
-  const cookieToken = getCookieValue("access_token");
-
-  return chooseNewestAccessToken(
-    chooseNewestAccessToken(storeToken, persistedToken),
-    cookieToken,
-  );
-}
-
-function getRefreshToken(): string | null {
-  return getPersistedAuthState()?.refreshToken
-    ?? useAuthStore.getState().refreshToken;
-}
-
-function persistTokens(accessToken: string, refreshToken: string) {
-  useAuthStore.getState().setTokens(accessToken, refreshToken);
-
-  if (typeof document !== "undefined") {
-    document.cookie = `access_token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-  }
+  return useAuthStore.getState().accessToken;
 }
 
 function isAuthEndpoint(url?: string) {
@@ -132,17 +72,13 @@ async function requestNewAccessToken(failedAccessToken?: string | null): Promise
       return latestAccessToken!;
     }
 
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) {
-      throw new Error("No refresh token");
-    }
-
     const { data } = await axios.post<AuthResponse>(
       `${apiClient.defaults.baseURL}/auth/refresh`,
-      { refreshToken },
+      {},
+      { withCredentials: true },
     );
 
-    persistTokens(data.accessToken, data.refreshToken);
+    useAuthStore.getState().setAccessToken(data.accessToken);
     return data.accessToken;
   };
 
@@ -166,9 +102,6 @@ function refreshAccessToken(failedAccessToken?: string | null): Promise<string> 
 async function getUsableAccessToken(): Promise<string | null> {
   const token = getAccessToken();
   if (token && !isAccessTokenExpiring(token)) {
-    return token;
-  }
-  if (!getRefreshToken()) {
     return token;
   }
   return refreshAccessToken(token);

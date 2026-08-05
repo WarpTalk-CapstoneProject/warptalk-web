@@ -62,19 +62,6 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
-  let expiresString = "";
-  if (expiresAt) {
-    const expiresDate = new Date(expiresAt);
-    if (!isNaN(expiresDate.getTime())) {
-      expiresString = `; expires=${expiresDate.toUTCString()}`;
-    }
-  }
-
-  const maxAgeString = expiresString ? "" : `; max-age=${7 * 24 * 60 * 60}`;
-  document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
-}
-
 function openContactPage() {
   const bridge = window as Window & { warptalk?: ExternalBridge };
 
@@ -97,10 +84,9 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, {
           idToken,
         });
-        const { user, accessToken, refreshToken } = res.data;
+        const { user, accessToken } = res.data;
 
-        login(user, accessToken, refreshToken);
-        setAccessTokenCookie(accessToken);
+        login(user, accessToken);
 
         const isAdmin = user.roles?.some(
           (role: string) => role.toLowerCase() === "admin",
@@ -273,10 +259,9 @@ function LoginContent() {
         email: data.email,
         password: data.password,
       });
-      const { user, accessToken, refreshToken } = res.data;
+      const { user, accessToken } = res.data;
 
-      login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken);
+      login(user, accessToken);
 
       const isAdmin = user.roles?.some(
         (role: string) => role.toLowerCase() === "admin",

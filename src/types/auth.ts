@@ -19,7 +19,6 @@ export interface UserDto {
 
 export interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
   expiresAt: string; // ISO DateTime
   user: UserDto;
 }
@@ -39,14 +38,6 @@ export interface RegisterRequest {
 
 export interface GoogleLoginRequest {
   idToken: string;
-}
-
-export interface RefreshTokenRequest {
-  refreshToken: string;
-}
-
-export interface LogoutRequest {
-  refreshToken: string;
 }
 
 export interface UpdateProfileRequest {

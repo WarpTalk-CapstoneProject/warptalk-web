@@ -5,7 +5,6 @@ import type {
   ChangePasswordRequest,
   GoogleLoginRequest,
   LoginRequest,
-  LogoutRequest,
   RegisterRequest,
   UpdateProfileRequest,
   UserDto,
@@ -27,12 +26,12 @@ export const authService = {
     return apiClient.post<AuthResponse>(API.auth.googleLogin, data);
   },
 
-  refresh(refreshToken: string) {
-    return apiClient.post<AuthResponse>(API.auth.refresh, { refreshToken });
+  refresh() {
+    return apiClient.post<AuthResponse>(API.auth.refresh, {});
   },
 
-  logout(data: LogoutRequest) {
-    return apiClient.post<void>(API.auth.logout, data);
+  logout() {
+    return apiClient.post<void>(API.auth.logout, {});
   },
 
   getProfile() {
