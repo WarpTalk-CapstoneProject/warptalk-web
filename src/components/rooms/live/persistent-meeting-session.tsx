@@ -296,8 +296,22 @@ export function PersistentMeetingSession({
   // WT-04/WT-06: host controls + recording state, synced live via TranslationRoomHub's
   // RoomLockChanged/RecordingStateChanged broadcasts (see the SignalR effect below).
   const [isRoomLocked, setIsRoomLocked] = useState(false);
-  const [muteOnEntryEnabled, setMuteOnEntryEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  // WT-272: mute-on-entry is READ from the room's persisted setting, which the join response
+  // already carries, and only overridden once this host actually toggles it (null = untouched).
+  // It used to be plain `useState(false)`, so the flyout always opened claiming "off" no matter
+  // how the room was configured; the host's first tap then re-sent the value the room already
+  // had and visibly did nothing. Derived rather than synced in an effect so there is no
+  // cascading render.
+  //
+  // There is no equivalent field for the lock — see the PR's BACKEND note: JoinMeetingResponse
+  // does not report it, so `isRoomLocked` can still only be learned from a RoomLockChanged
+  // broadcast that fires after somebody toggles it.
+  const [muteOnEntryOverride, setMuteOnEntryOverride] = useState<boolean | null>(
+    null,
+  );
+  const muteOnEntryEnabled =
+    muteOnEntryOverride ?? Boolean(meetingSession?.muteOnEntry);
   const setLockMutation = useSetRoomLock(roomId);
   const setMuteOnEntryMutation = useSetMuteOnEntry(roomId);
   const setRecordingMutation = useSetRecording(roomId);
@@ -1418,11 +1432,11 @@ export function PersistentMeetingSession({
   }
 
   function handleToggleMuteOnEntry(enabled: boolean) {
-    const previous = muteOnEntryEnabled;
-    setMuteOnEntryEnabled(enabled); // optimistic — not broadcast live, see MeetingRoomService.SetMuteOnEntryAsync
+    const previous = muteOnEntryOverride;
+    setMuteOnEntryOverride(enabled); // optimistic — not broadcast live, see MeetingRoomService.SetMuteOnEntryAsync
     setMuteOnEntryMutation.mutate(enabled, {
       onError: () => {
-        setMuteOnEntryEnabled(previous);
+        setMuteOnEntryOverride(previous);
         toast.error("Could not update mute-on-entry.");
       },
     });
