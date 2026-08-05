@@ -11,7 +11,9 @@ import {
 import { WORKSPACE_KEYS } from "@/hooks/use-workspace";
 import { createHubConnection } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
+import { usePresenceStore } from "@/stores/presence-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { PresenceChangedEvent } from "@/types/presence";
 import * as signalR from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bell, Calendar, FileText, Settings, Video } from "lucide-react";
@@ -250,11 +252,16 @@ export function RealtimeNotificationProvider({
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.WORKSPACES] });
     });
 
-    hubConn.on(SIGNALR_EVENTS.USER_PRESENCE_CHANGED, () => {
-      queryClient.invalidateQueries({
-        queryKey: [QUERY_KEYS.WORKSPACE_MEMBERS],
-      });
-    });
+    // Presence lands in its own store rather than invalidating the member list: the member DTO
+    // carries no presence field, so a refetch would cost a round-trip per dot and still not
+    // change what came back.
+    hubConn.on(
+      SIGNALR_EVENTS.USER_PRESENCE_CHANGED,
+      (payload: PresenceChangedEvent) => {
+        if (!payload?.userId || !payload.state) return;
+        usePresenceStore.getState().setState(payload.userId, payload.state);
+      },
+    );
 
     hubConn.on(
       SIGNALR_EVENTS.WORKSPACE_SETTINGS_UPDATED,

@@ -136,6 +136,26 @@ export function LiveKitMeetingStage({
     null;
   const isSpotlight = Boolean(spotlightedUserId);
 
+  // WT-245: a camera-off participant's TrackReference is not stable — LiveKit swaps between a
+  // muted camera publication and the withPlaceholder entry, so looking them up in the track list
+  // intermittently finds nothing. When that happened the render fell straight through to the
+  // generic two-up layout, handing the stage to whoever WAS on camera, and the pin appeared to
+  // flip back and forth.
+  //
+  // Resolved from the room's participants rather than from the track list, so a pin depends on
+  // the person being here and not on whether a publication happens to exist this tick. Purely
+  // derived — nothing is remembered between renders, so someone who leaves releases the stage
+  // on their own.
+  const featuredParticipant = !featuredIdentity
+    ? undefined
+    : featuredIdentity === localIdentity
+      ? room?.localParticipant
+      : room
+        ? Array.from(room.remoteParticipants.values()).find(
+            (participant) => participant.identity === featuredIdentity,
+          )
+        : undefined;
+
   function renderThumbnail(trackRef: TrackReferenceOrPlaceholder) {
     return renderTile(trackRef, {
       className:
@@ -261,13 +281,26 @@ export function LiveKitMeetingStage({
   }
 
   if (hasParticipants) {
-    const featuredTrack = featuredIdentity
-      ? visibleTracks.find(
-          (trackRef) => trackRef.participant.identity === featuredIdentity,
-        )
-      : undefined;
+    const featuredTrack =
+      visibleTracks.find(
+        (trackRef) => trackRef.participant.identity === featuredIdentity,
+      ) ??
+      // No publication for them this tick — render the camera placeholder for the person
+      // themselves, which is what a pinned camera-off participant should look like anyway.
+      (featuredParticipant
+        ? {
+            participant: featuredParticipant,
+            source: Track.Source.Camera,
+          }
+        : undefined);
     const otherTracks = featuredTrack
-      ? visibleTracks.filter((trackRef) => trackRef !== featuredTrack)
+      ? visibleTracks.filter(
+          (trackRef) =>
+            trackRef !== featuredTrack &&
+            // A held reference is not the same object as anything in visibleTracks, so filter
+            // by identity too or the featured participant also shows up as a thumbnail.
+            trackRef.participant.identity !== featuredTrack.participant.identity,
+        )
       : [];
 
     if (featuredTrack) {

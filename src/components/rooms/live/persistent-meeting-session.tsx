@@ -59,6 +59,7 @@ import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context"
 // Import Refactored Components
 import {
   MeetingExitControl,
+  MeetingMinimizeControl,
   MeetingStageTimer,
 } from "@/components/rooms/live/meeting-top-bar";
 import {
@@ -268,10 +269,13 @@ export function PersistentMeetingSession({
   const refetchRoom = roomQuery.refetch;
   const apiParticipants = participantsQuery.data ?? [];
   const role = useWorkspaceRole();
-  // WT-08: HostChanged (broadcast after MeetingRoomService.HandleHostOfflineAsync elects a
-  // replacement) overrides the room DTO's original host once it fires — the DTO itself is
-  // never refetched just for this, so without this override a promoted participant's
-  // host-only UI would stay hidden until their next full room refetch.
+  // WT-08: HostChanged overrides the room DTO's original host once it fires — the DTO itself
+  // is never refetched just for this, so without this override the new host's host-only UI
+  // would stay hidden until their next full room refetch.
+  //
+  // WT-234: this now only ever arrives from an explicit TransferHostAsync. A host who simply
+  // goes offline leaves the room host-less rather than handing control to whoever joined
+  // first, so nobody's UI flips to host without someone deliberately granting it.
   const [liveHostUserId, setLiveHostUserId] = useState<string | null>(null);
   const isHost = Boolean(
     (liveHostUserId
@@ -1143,31 +1147,17 @@ export function PersistentMeetingSession({
     onMeetingClosed,
   ]);
 
-  // WT-183: joining a room and starting its translation pipeline used to be two separate
-  // manual steps — the room kept showing "Waiting" in the Meetings list even after the
-  // host was already in the call, since nothing had called /start yet. Once the HOST
-  // actually enters the live call (not just the pre-call waiting screen), auto-start
-  // translation for them instead of requiring a second explicit click. Guarded to fire at
-  // most once per mount and only from a genuinely-not-started state, so it can never
-  // re-trigger a room the host explicitly paused via "Stop Translation".
-  const autoStartTriggeredRef = useRef(false);
-  useEffect(() => {
-    if (autoStartTriggeredRef.current) return;
-    if (!meetingSession || meetingSession.isWaitingRoom) return;
-    if (!isRoomHost || !room?.id) return;
-    if (room.status !== "waiting" && room.status !== "scheduled") return;
-
-    autoStartTriggeredRef.current = true;
-    startRoom.mutate(room.id, {
-      onSuccess: () => {
-        toast.success("WarpTalk realtime translation started.");
-      },
-      onError: () => {
-        // Let a later join attempt (or the manual Start button) retry.
-        autoStartTriggeredRef.current = false;
-      },
-    });
-  }, [meetingSession, isRoomHost, room?.id, room?.status, startRoom]);
+  // WT-248 removed the auto-start that used to live here. WT-183 had added it because a room
+  // stayed "Waiting" in the Meetings list while the host was already inside — but starting to
+  // record and translate a conversation without being asked is not a display fix, and the
+  // report was that translation began before anyone chose to begin it.
+  //
+  // The status it was papering over is handled where it actually goes wrong: entering a room
+  // nobody has started now lands in the lobby (WT-232), where "Start meeting" calls the same
+  // endpoint this effect did. A host who reaches the live surface directly still has the
+  // control bar's "Start Translation", which runs the identical mutation via
+  // handleStartWarptalk below. Either way a person decides, and the room leaves "Waiting"
+  // because someone started it.
 
   useEffect(() => {
     if (!roomId) return;
@@ -1400,6 +1390,14 @@ export function PersistentMeetingSession({
     setPinnedUserId((current) => (current === userId ? null : userId));
   }
 
+  // WT-246: minimising is leaving the room route, not tearing the call down. The session lives
+  // in the app layout and keeps its LiveKit connection across navigation — the layout already
+  // renders it as the floating panel whenever the route is not the live one, which is why this
+  // navigates rather than setting a flag.
+  function handleMinimize() {
+    router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+  }
+
   function handleToggleSpotlight(userId: string) {
     const connection = translationConnectionRef.current;
     if (connection?.state !== HubConnectionState.Connected) return;
@@ -1569,7 +1567,10 @@ export function PersistentMeetingSession({
               localStream={localStream}
               localMediaError={localMediaError}
               screenStream={screenStream}
-              layoutMode="auto"
+              // WT-246 asks to still see everyone while minimised. "auto" gives one large tile
+              // with the rest as thumbnails, which at this size leaves the others unreadable —
+              // a grid fits more faces into the same 360x220.
+              layoutMode="grid"
               pinnedUserId={pinnedUserId}
               onPinParticipant={handlePinParticipant}
               spotlightedUserId={spotlightedUserId}
@@ -1656,9 +1657,12 @@ export function PersistentMeetingSession({
                 createdAt={room.createdAt}
                 endedAt={room.endedAt}
               />
+              <div className="absolute right-4 top-4 z-30">
+                <MeetingMinimizeControl onMinimize={handleMinimize} />
+              </div>
               <div className="relative min-h-0 w-full flex-1">
                 {isRecording ? (
-                  <div className="absolute right-4 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                  <div className="absolute right-16 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                     REC
                   </div>

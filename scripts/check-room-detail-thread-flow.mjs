@@ -27,9 +27,13 @@ const checks = [
   ["live side panel removes notes polls and q-and-a tabs", !sidePanel.includes('label="Notes"') && !sidePanel.includes('label="Polls"') && !sidePanel.includes('label="Q&A"')],
   ["live side panel does not fetch removed feature badges", !sidePanel.includes("usePolls(") && !sidePanel.includes("useQuestions(")],
   ["live room no longer subscribes to removed polls and q-and-a events", !livePage.includes('connection.on("PollCreated"') && !livePage.includes('connection.on("QuestionAsked"')],
-  // WT-183: superseded 2026-07-30's "never auto-starts" contract — the host joining the
-  // live call now auto-starts translation instead of requiring a separate manual click.
-  ["live room auto-starts translation once the host joins the call", livePage.includes("autoStartTriggeredRef") && livePage.includes("startRoom.mutate(room.id")],
+  // This has now flipped twice. 2026-07-30 pinned "never auto-starts"; WT-183 replaced it with
+  // auto-start because a room stayed "Waiting" in the list while its host was already inside;
+  // WT-248 reverted that, because starting to record and translate a conversation unasked is
+  // not an acceptable fix for a status label. The label is handled by the lobby (WT-232) and by
+  // the control bar's Start Translation, both of which call the same endpoint deliberately.
+  // Do not re-add auto-start to fix a display problem — fix the display.
+  ["live room never starts translation on its own", !livePage.includes("autoStartTriggeredRef") && !livePage.includes("startRoom.mutate(room.id")],
   ["translation controls follow persisted room lifecycle", livePage.includes('room?.status === "in_progress"') && livePage.includes('room.status === "paused"')],
   ["stop translation pauses the backend pipeline", livePage.includes("usePauseTranslationRoom") && livePage.includes("pauseRoom.mutate")],
   ["resume translation resumes the backend pipeline", livePage.includes("useResumeTranslationRoom") && livePage.includes('room.status === "paused" ? resumeRoom : startRoom')],
