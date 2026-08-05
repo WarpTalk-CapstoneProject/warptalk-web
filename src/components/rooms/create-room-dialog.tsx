@@ -27,6 +27,12 @@ import {
   useTranslationRoomInvitations,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
+import { useWorkspaceSettings } from "@/hooks/use-workspace";
+import { getErrorMessage } from "@/lib/errors";
+import {
+  normalizeLanguagePolicy,
+  reconcileMeetingLanguages,
+} from "@/lib/languages";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -76,12 +82,25 @@ export function CreateRoomDialog() {
   >(null);
   const [initializedInvitationsRoomId, setInitializedInvitationsRoomId] =
     useState<string | null>(null);
+  // Which workspace language policy the picked set has already been trimmed to (WT-271).
+  const [appliedLanguagePolicyKey, setAppliedLanguagePolicyKey] = useState<
+    string | null
+  >(null);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
+  // WT-270: the server's own explanation for a refused submit, kept on screen. A toast alone
+  // was not enough — it expires, and the dialog it refers to stays open behind it.
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const createRoomMutation = useCreateTranslationRoom();
   const updateRoomMutation = useUpdateTranslationRoomSettings();
+
+  // WT-271: the workspace's language policy, so the picker offers only what the server will
+  // accept. `allowedTargetLanguages` is a list of bare ISO-639-1 codes; empty means
+  // unrestricted, matching the server's own whitelist check.
+  const { data: workspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
+  const allowedTargetLanguages = workspaceSettings?.allowedTargetLanguages;
 
   const { data: editRoomData } = useTranslationRoom(editRoomId || "");
   const { data: editInvitations } = useTranslationRoomInvitations(
@@ -113,6 +132,30 @@ export function CreateRoomDialog() {
     setInvitedEmails(editInvitations.map((invitation) => invitation.email));
   }
 
+  // WT-271: the defaults above are a fixed en/vi pair, so a workspace whose policy excludes
+  // either one opens the dialog already holding a language the server will refuse. Trim the
+  // selection to the policy as soon as the policy is known, rather than letting the 403 be
+  // the first the host hears of it. Derived during render — the same shape as the edit-room
+  // initialization above — because doing it in an effect costs an extra render pass with the
+  // forbidden default briefly on screen. Keyed by workspace AND policy so that switching
+  // workspace, or an admin tightening the policy mid-session, re-applies it.
+  const languagePolicyKey =
+    !editRoomId && activeWorkspaceId && workspaceSettings
+      ? `${activeWorkspaceId}:${normalizeLanguagePolicy(allowedTargetLanguages).join(",")}`
+      : null;
+
+  if (languagePolicyKey && appliedLanguagePolicyKey !== languagePolicyKey) {
+    setAppliedLanguagePolicyKey(languagePolicyKey);
+    const reconciled = reconcileMeetingLanguages(
+      meetingLanguages,
+      allowedTargetLanguages,
+    );
+    const unchanged =
+      reconciled.length === meetingLanguages.length &&
+      reconciled.every((language, index) => language === meetingLanguages[index]);
+    if (!unchanged) setMeetingLanguages(reconciled);
+  }
+
   const completionRef = useRef<HTMLDivElement | null>(null);
 
   // Deliberately not sent any more: the meeting type decides the seat count server-side
@@ -141,10 +184,14 @@ export function CreateRoomDialog() {
         setDescription("");
         setInvitedEmails([]);
         setMeetingLanguages(["en-US", "vi-VN"]);
+        // The reset puts the fixed default pair back, so the policy has to be re-applied to
+        // it on the next open — otherwise a forbidden default returns unchecked.
+        setAppliedLanguagePolicyKey(null);
         setScheduledAt(null);
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
+        setSubmitError(null);
         setInitializedEditRoomId(null);
         setInitializedInvitationsRoomId(null);
         setEditRoomId(null);
@@ -170,9 +217,15 @@ export function CreateRoomDialog() {
     }
   }, [createdRoomId]);
 
+  function failSubmit(message: string) {
+    setSubmitError(message);
+    toast.error(message);
+  }
+
   async function handleSubmit() {
+    setSubmitError(null);
     if (!canSubmit) {
-      toast.error("Please complete all required fields.");
+      failSubmit("Please complete all required fields.");
       return;
     }
     try {
@@ -200,7 +253,7 @@ export function CreateRoomDialog() {
         handleOpenChange(false);
       } else {
         if (!activeWorkspaceId) {
-          toast.error("Please select a workspace before creating a room.");
+          failSubmit("Please select a workspace before creating a room.");
           return;
         }
         const room = await createRoomMutation.mutateAsync({
@@ -222,10 +275,16 @@ export function CreateRoomDialog() {
         toast.success("Room created successfully. Invites sent!");
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : `Failed to ${editRoomId ? "update" : "create"} room.`,
+      // WT-270: the server explains itself — "Target language 'ko' is not allowed by the
+      // workspace policy.", "Workspace active room limit (5) has been reached." — and this
+      // used to throw all of it away in favour of the AxiosError's own `message`, which is
+      // never more than "Request failed with status code 403". `getErrorMessage` reads the
+      // response body first. Both the create and the edit path land here, so both are fixed.
+      failSubmit(
+        getErrorMessage(
+          error,
+          `Failed to ${editRoomId ? "update" : "create"} room.`,
+        ),
       );
     }
   }
@@ -332,6 +391,7 @@ export function CreateRoomDialog() {
                 <LanguageSelector
                   languages={meetingLanguages}
                   onLanguagesChange={setMeetingLanguages}
+                  allowedTargetLanguages={allowedTargetLanguages}
                 />
                 {scheduledAt && (
                   <StartTimePicker
@@ -349,9 +409,21 @@ export function CreateRoomDialog() {
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between px-5 py-3 bg-surface-1/50 shrink-0">
-                <span />
-                <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between gap-4 px-5 py-3 bg-surface-1/50 shrink-0">
+                {/* WT-270: the refusal stays put next to the button that caused it, so a
+                    dismissed or missed toast does not leave the host staring at a dialog
+                    that simply refuses to close for no stated reason. */}
+                {submitError ? (
+                  <p
+                    role="alert"
+                    className="text-[12px] leading-snug text-destructive min-w-0"
+                  >
+                    {submitError}
+                  </p>
+                ) : (
+                  <span />
+                )}
+                <div className="flex items-center gap-4 shrink-0">
                   <Button
                     onClick={handleSubmit}
                     disabled={
