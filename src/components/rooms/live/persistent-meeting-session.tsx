@@ -74,9 +74,15 @@ import {
   writeTrackEffectsPreferences,
 } from "@/hooks/use-track-processors";
 import {
+  JOIN_PREVIEW_KEY,
   readMeetingJoinState,
   readMeetingMediaPreferences,
 } from "@/lib/meeting-join-state";
+import {
+  isResolvedSpeakLanguage,
+  resolveListenLanguage,
+  resolveSpeakLanguage,
+} from "@/lib/participant-language-preference";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import {
   MeetingSidePanel,
@@ -268,7 +274,12 @@ export function PersistentMeetingSession({
     translationActiveRef.current = warptalkStarted;
   }, [warptalkStarted]);
   const refetchRoom = roomQuery.refetch;
-  const apiParticipants = participantsQuery.data ?? [];
+  // Memoized so the identity is stable across renders where the query result has not
+  // changed — the language-resolution memos below key off it.
+  const apiParticipants = useMemo(
+    () => participantsQuery.data ?? [],
+    [participantsQuery.data],
+  );
   const role = useWorkspaceRole();
   // WT-08: HostChanged overrides the room DTO's original host once it fires — the DTO itself
   // is never refetched just for this, so without this override the new host's host-only UI
@@ -400,40 +411,64 @@ export function PersistentMeetingSession({
     user?.email ||
     "Participant";
   const roomSourceLanguage = room?.sourceLanguage || "auto";
-  // Spoken (source) language is now a live, user-changeable choice too — the counterpart
-  // to listenLanguage below — via the media bar's speak-language dropdown +
-  // TranslationRoomHub.SetSpeakLanguage, instead of a value fixed for the whole meeting at
-  // setup time. Initializes once from the saved join config (or "auto" if never set); after
-  // that a manual pick always wins.
-  const [sourceLanguage, setSourceLanguageState] = useState<string>(
-    savedJoinConfig.speakLanguage
-      ? normalizeLanguageCode(savedJoinConfig.speakLanguage)
-      : "auto",
+  // In-session picks only — the media bar's speak/listen dropdowns and the language picker
+  // modal. NOT seeded from session storage any more: that is one source among several, and
+  // resolving them all in one place (see @/lib/participant-language-preference) is what
+  // stops a room default from outranking a choice the user actually made. Starting at null
+  // also keeps the first client render identical to SSR, which reading sessionStorage in a
+  // useState initializer did not.
+  const [speakLanguageOverride, setSpeakLanguageState] = useState<string | null>(
+    null,
   );
-  // Listen (output) language is now a live, user-changeable choice — see the media bar's
-  // language dropdown + TranslationRoomHub.SetListenLanguage — instead of a value fixed
-  // for the whole meeting at setup time. State auto-initializes ONCE (guarded by the
-  // null check in the effect below) from the saved join config or the room's configured
-  // targets; after that, a manual pick always wins even as `room` refetches.
   const [listenLanguageOverride, setListenLanguageState] = useState<
     string | null
-  >(
-    savedJoinConfig.listenLanguage
-      ? normalizeLanguageCode(savedJoinConfig.listenLanguage)
-      : null,
+  >(null);
+  // This viewer's own row as the SERVER has it — written by the REST join with whatever they
+  // picked on the join screen / setup modal. It is the authority whenever this tab has no
+  // session storage for this room: direct navigation to /room/{id}, a reload, a second tab.
+  // Without it the client had nothing but the room default to fall back on, and a room
+  // created as [en, vi] (WT-297) then handed everyone a listen language of "vi".
+  const currentUserId = user?.id;
+  const myParticipantRecord = useMemo(
+    () =>
+      currentUserId
+        ? apiParticipants.find(
+            (participant) => participant.userId === currentUserId,
+          )
+        : undefined,
+    [apiParticipants, currentUserId],
   );
-  const roomDefaultListenLanguage = room
-    ? normalizeLanguageCode(
-        room.targetLanguages?.find(
-          (language) =>
-            normalizeLanguageCode(language) !==
-            normalizeLanguageCode(roomSourceLanguage),
-        ) ||
-          room.targetLanguages?.[0] ||
-          "en",
-      )
-    : "en";
-  const listenLanguage = listenLanguageOverride ?? roomDefaultListenLanguage;
+  const languageSources = useMemo(
+    () => ({
+      speak: {
+        pick: speakLanguageOverride,
+        saved: savedJoinConfig.speakLanguage,
+        participant: myParticipantRecord?.speakLanguage,
+      },
+      listen: {
+        pick: listenLanguageOverride,
+        saved: savedJoinConfig.listenLanguage,
+        participant: myParticipantRecord?.listenLanguage,
+      },
+    }),
+    [
+      speakLanguageOverride,
+      listenLanguageOverride,
+      savedJoinConfig.speakLanguage,
+      savedJoinConfig.listenLanguage,
+      myParticipantRecord,
+    ],
+  );
+  // Spoken (source) language — a live, user-changeable choice via the media bar's
+  // speak-language dropdown + TranslationRoomHub.SetSpeakLanguage. May still be the
+  // "auto" sentinel for the first moments of a cold direct navigation, while both the room
+  // and the participants query are in flight; isResolvedSpeakLanguage guards every place
+  // that would otherwise send it onward.
+  const sourceLanguage = resolveSpeakLanguage(languageSources.speak, room);
+  // Listen (output) language — see the media bar's language dropdown +
+  // TranslationRoomHub.SetListenLanguage. Always concrete: a listener with no language has
+  // nothing to receive.
+  const listenLanguage = resolveListenLanguage(languageSources.listen, room);
   const targetLanguage = listenLanguage;
 
   // Read inside the TranslationTextReceived handler below instead of closing over
@@ -506,10 +541,13 @@ export function PersistentMeetingSession({
   // Last speak language actually sent to the hub — mirrors appliedListenLanguageRef.
   const appliedSpeakLanguageRef = useRef<string | null>(null);
 
+  // Also the reconcile path for a join that had to go out before the participant record or
+  // the room DTO had loaded: the moment either resolves sourceLanguage to a real language
+  // this fires and overwrites whatever placeholder JoinTranslationRoom wrote into
+  // translationRoom:{id}:speak_languages.
   useEffect(() => {
     if (
-      !sourceLanguage ||
-      sourceLanguage === "auto" ||
+      !isResolvedSpeakLanguage(sourceLanguage) ||
       appliedSpeakLanguageRef.current === sourceLanguage
     )
       return;
@@ -683,36 +721,38 @@ export function PersistentMeetingSession({
   }, [participants]);
   const targetLanguageNormalized = normalizeLanguageCode(targetLanguage);
 
-  function handleChangeListenLanguage(language: string) {
-    const normalizedLanguage = normalizeLanguageCode(language);
-    setListenLanguageState(normalizedLanguage);
+  /**
+   * Persist an in-meeting language pick so it survives a reload.
+   *
+   * `roomId` is stamped in deliberately: readMeetingJoinState discards the whole blob unless
+   * its roomId matches this room, so a pick written into an empty/foreign config — the case
+   * whenever someone reached the room without going through the join screen — used to be
+   * dropped on the next read, and the participant fell back a tier.
+   */
+  function rememberJoinPreference(patch: Record<string, string>) {
     try {
       const config = JSON.parse(
-        window.sessionStorage.getItem("warptalk.join.preview") || "{}",
+        window.sessionStorage.getItem(JOIN_PREVIEW_KEY) || "{}",
       );
       window.sessionStorage.setItem(
-        "warptalk.join.preview",
-        JSON.stringify({ ...config, listenLanguage: normalizedLanguage }),
+        JOIN_PREVIEW_KEY,
+        JSON.stringify({ ...config, ...patch, roomId }),
       );
     } catch {
       // Non-critical — worst case the picked language doesn't survive a page refresh.
     }
   }
 
+  function handleChangeListenLanguage(language: string) {
+    const normalizedLanguage = normalizeLanguageCode(language);
+    setListenLanguageState(normalizedLanguage);
+    rememberJoinPreference({ listenLanguage: normalizedLanguage });
+  }
+
   function handleChangeSpeakLanguage(language: string) {
     const normalizedLanguage = normalizeLanguageCode(language);
-    setSourceLanguageState(normalizedLanguage);
-    try {
-      const config = JSON.parse(
-        window.sessionStorage.getItem("warptalk.join.preview") || "{}",
-      );
-      window.sessionStorage.setItem(
-        "warptalk.join.preview",
-        JSON.stringify({ ...config, speakLanguage: normalizedLanguage }),
-      );
-    } catch {
-      // Non-critical — worst case the picked language doesn't survive a page refresh.
-    }
+    setSpeakLanguageState(normalizedLanguage);
+    rememberJoinPreference({ speakLanguage: normalizedLanguage });
   }
 
   /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
@@ -1060,7 +1100,18 @@ export function PersistentMeetingSession({
           "JoinTranslationRoom",
           roomId,
           displayName,
-          sourceLanguageRef.current,
+          // Never the "auto" sentinel. The hub writes this straight into
+          // translationRoom:{id}:speak_languages, where a literal "auto" makes
+          // _language_hint_for_stt return None and lets STT free-run — which is how a
+          // Vietnamese speaker's transcript came back tagged "en". "auto" is not a choice
+          // anyone can make (neither the picker modal nor the media bar offers it), so
+          // sending it asserted a decision the user never took. When nothing is known yet
+          // we send "" — the same "no hint" STT already understands, but without the fake
+          // decision — and the SetSpeakLanguage effect above reconciles the instant a real
+          // language resolves.
+          isResolvedSpeakLanguage(sourceLanguageRef.current)
+            ? sourceLanguageRef.current
+            : "",
           targetLanguageRef.current,
         )
         .catch(() => undefined);
@@ -1840,7 +1891,7 @@ export function PersistentMeetingSession({
         onOpenChange={setShowLanguagePicker}
         availableLanguages={availableListenLanguages}
         defaultSpeakLanguage={
-          sourceLanguage !== "auto" ? sourceLanguage : undefined
+          isResolvedSpeakLanguage(sourceLanguage) ? sourceLanguage : undefined
         }
         defaultListenLanguage={listenLanguage ?? undefined}
         onConfirm={handleConfirmLanguagePicker}
