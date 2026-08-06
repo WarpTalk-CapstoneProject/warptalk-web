@@ -620,7 +620,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   Account
                 </div>
                 <DropdownMenuItem
-                  onClick={() => router.push("/workspace/create")}
+                  onClick={() => router.push("/workspace")}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
                 >
                   <span>Create or join a workspace...</span>
