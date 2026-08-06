@@ -42,7 +42,6 @@ export interface TranslationRoomDto {
   participantCount?: number;
   isHost?: boolean;
 }
-
 /** One Start→Pause (or Start→End) window — "Translation N" in the transcript is this
  * list's chronological position (oldest first). */
 export interface TranslationRoomSessionDto {

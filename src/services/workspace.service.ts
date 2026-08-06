@@ -18,7 +18,8 @@ import type {
   ExtractedTextDto,
   WorkspaceRoleChangePreview,
   ApplyWorkspaceRoleChangeRequest,
-  WorkspaceRoleChangeResult
+  WorkspaceRoleChangeResult,
+  ApproveJoinRequestResponse
 } from "@/types/workspace";
 
 export const WorkspaceService = {
@@ -122,7 +123,7 @@ export const WorkspaceService = {
 
   async listInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string): Promise<PagedResult<WorkspaceInvitationDto>> {
     const { data } = await apiClient.get<PagedResult<WorkspaceInvitationDto>>(API.workspaces.invitations(workspaceId), {
-      params: { page, pageSize, search, category },
+      params: { page, pageSize, search, kind: category },
     });
     return data;
   },
@@ -141,15 +142,20 @@ export const WorkspaceService = {
     return data;
   },
 
+  async getMyJoinRequests(): Promise<WorkspaceInvitationDto[]> {
+    const { data } = await apiClient.get<WorkspaceInvitationDto[]>(API.workspaces.myJoinRequests);
+    return data;
+  },
+
   async approveJoinRequest(
     workspaceId: string,
     payload: { inviteId: string; membershipType?: string }
-  ): Promise<{ approvalEmailStatus?: string }> {
-    const { data } = await apiClient.post<{ approvalEmailStatus?: string }>(
+  ): Promise<ApproveJoinRequestResponse> {
+    const { data } = await apiClient.post<ApproveJoinRequestResponse>(
       API.workspaces.approveJoinRequest(workspaceId, payload.inviteId),
       { membershipType: payload.membershipType }
     );
-    return data || {};
+    return data;
   },
 
   async rejectJoinRequest(workspaceId: string, inviteId: string): Promise<void> {

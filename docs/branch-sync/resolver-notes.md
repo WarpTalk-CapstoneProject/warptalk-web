@@ -1,8 +1,8 @@
 # Branch Sync Resolver Notes
 
-## Current Sync Snapshot
+## 2026-08-04 - web PR #76
 
-- Branch: `chore/update-auto-save-settings-pages`
-- Target branch: `origin/development`
-- Resolved conflicts: `package-lock.json`, `package.json`, `src/app/(app)/[workspaceSlug]/settings/page.tsx`, `src/types/workspace.ts`, `src/services/workspace.service.ts`, `src/hooks/use-workspace.ts`, `src/app/(app)/[workspaceSlug]/settings/access-management/page.tsx`, `src/lib/settings-pages-contract.test.ts`
-
+- Repository: `WarpTalk-CapstoneProject/warptalk-web`
+- Branch: `feat/workspace-join-request-eligibility`
+- Merged base branch: `chore/update-auto-save-settings-pages` (PR #74)
+- Status: Merged cleanly and verified.

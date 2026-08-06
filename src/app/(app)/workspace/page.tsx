@@ -24,6 +24,10 @@ import {
   useMyJoinRequests,
 } from "@/hooks/use-workspace";
 import type { WorkspaceInvitationDto } from "@/types/workspace";
+import {
+  getJoinRequestPolicyMessage,
+  isJoinRequestApprovalBlocked
+} from "@/lib/join-request-eligibility";
 
 export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
@@ -209,6 +213,8 @@ export default function WorkspaceOnboardingGatePage() {
                   const status = request.status.toUpperCase();
                   const isApproved = status === "ACCEPTED";
                   const isRejected = status === "REJECTED";
+                  const approvalBlocked = isJoinRequestApprovalBlocked(request);
+                  const policyMessage = getJoinRequestPolicyMessage(request);
                   return (
                     <div key={request.id} className="flex items-center justify-between gap-4 px-5 py-4">
                       <div className="flex min-w-0 items-start gap-3">
@@ -216,7 +222,13 @@ export default function WorkspaceOnboardingGatePage() {
                         <div className="min-w-0">
                           <div className="truncate text-[14px] font-medium text-foreground">{request.workspaceName || request.workspaceSlug || "Workspace"}</div>
                           <div className="mt-1 text-[12px] text-ink-muted">
-                            {isApproved ? "Approved" : isRejected ? "Rejected" : "Waiting for Owner/Admin approval"} · {request.membershipType} provisional
+                            {isApproved
+                              ? `Approved as ${request.membershipType}`
+                              : isRejected
+                                ? "Rejected"
+                                : approvalBlocked
+                                  ? (policyMessage || "Workspace policy action required")
+                                  : `Waiting for Owner/Admin approval - ${request.membershipType} provisional`}
                           </div>
                         </div>
                       </div>

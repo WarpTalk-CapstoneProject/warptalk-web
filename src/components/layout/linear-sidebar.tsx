@@ -1,5 +1,37 @@
 "use client";
 
+
+import type { IconProps } from "@phosphor-icons/react";
+import {
+  CaretDown,
+  CaretLeft,
+  CreditCard,
+  EnvelopeSimple,
+  FileText,
+  Gauge,
+  GearSix,
+  Globe,
+  House,
+  Keyboard,
+  MagnifyingGlass,
+  PaperPlaneTilt,
+  Plus,
+  Scroll,
+  SignOut,
+  Sliders,
+  SquaresFour,
+  User,
+  Users,
+  Warning,
+  Waveform,
+} from "@phosphor-icons/react/dist/ssr";
+import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,35 +61,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { IconProps } from "@phosphor-icons/react";
-import {
-  CaretDown,
-  CaretLeft,
-  CreditCard,
-  EnvelopeSimple,
-  FileText,
-  GearSix,
-  Gauge,
-  Globe,
-  House,
-  Keyboard,
-  MagnifyingGlass,
-  PaperPlaneTilt,
-  Plus,
-  Scroll,
-  SignOut,
-  Sliders,
-  SquaresFour,
-  User,
-  Users,
-  Warning,
-  Waveform,
-} from "@phosphor-icons/react/dist/ssr";
-import { AvatarPresenceDot } from "@/components/presence/presence-dot";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
+
 type IconType = React.ElementType<IconProps>;
 
 interface NavItem {
@@ -847,9 +851,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </div>
             </div>
           </div>
-          <form onSubmit={handleInviteMember} className="space-y-4 p-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="invite-email" className="text-xs font-medium">
+          <form onSubmit={handleInviteMember} className="grid gap-4 p-5 pt-4">
+            <DialogHeader>
+              <DialogTitle>Invite team members</DialogTitle>
+              <DialogDescription>
+                Send an invitation to join {activeWorkspaceName || "this workspace"} and collaborate on rooms, documents, and summaries.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <Label htmlFor="invite-email" className="text-[13px] font-medium text-foreground">
                 Email address
               </Label>
               <Input
@@ -862,19 +873,44 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 className="bg-surface-1"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="invite-role" className="text-xs font-medium">
-                Role
-              </Label>
-              <select
-                id="invite-role"
-                value={inviteRoleName}
-                onChange={(e) => setInviteRoleName(e.target.value)}
-                className="w-full h-9 rounded-md border border-border bg-surface-1 px-3 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="Member">Member</option>
-                <option value="Admin">Admin</option>
-              </select>
+
+            <div className="grid gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="invite-role" className="text-[13px] font-medium text-foreground">
+                  Role
+                </Label>
+                <select
+                  id="invite-role"
+                  value={inviteRoleName}
+                  onChange={(e) => setInviteRoleName(e.target.value)}
+                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="Member">Member</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+
+            </div>
+
+            <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-[12px] leading-5 text-ink-muted">
+              Internal or External access is assigned automatically from verified email domains.
+            </p>
+
+            <div className="grid gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="invite-role" className="text-[13px] font-medium text-foreground">
+                  Role
+                </Label>
+                <select
+                  id="invite-role"
+                  value={inviteRoleName}
+                  onChange={(e) => setInviteRoleName(e.target.value)}
+                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="Member">Member</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
             </div>
             <DialogFooter className="pt-2">
               <Button
