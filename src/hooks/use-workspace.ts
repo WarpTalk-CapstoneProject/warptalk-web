@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
+import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
 // Query Keys
@@ -145,6 +145,31 @@ export function useRevokeVerifiedDomain(workspaceId: string) {
   });
 }
 
+
+
+export function usePreviewWorkspaceMemberRoleChange(workspaceId: string) {
+  return useMutation({
+    mutationFn: (payload: { memberId?: string; userId?: string; targetRole?: string; toRole?: string }) => {
+      const targetId = payload.memberId || payload.userId || "";
+      const role = payload.targetRole || payload.toRole || "";
+      return WorkspaceService.previewMemberRoleChange(workspaceId, targetId, role);
+    },
+  });
+}
+
+export function useApplyWorkspaceMemberRoleChange(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { memberId?: string; userId?: string; request: ApplyWorkspaceRoleChangeRequest }) => {
+      const targetId = payload.memberId || payload.userId || "";
+      return WorkspaceService.applyMemberRoleChange(workspaceId, targetId, payload.request);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.members(workspaceId, 1, 10, "") });
+    },
+  });
+}
+
 // ─── Members ───
 
 export function useWorkspaceMembers(workspaceId: string | undefined, page = 1, pageSize = 10, search = "") {
@@ -178,33 +203,7 @@ export function useChangeWorkspaceMemberRole(workspaceId: string) {
   });
 }
 
-export function usePreviewWorkspaceMemberRoleChange(workspaceId: string) {
-  return useMutation({
-    mutationFn: ({ userId, toRole }: { userId: string; toRole: string }) =>
-      WorkspaceService.previewMemberRoleChange(workspaceId, userId, toRole),
-  });
-}
 
-export function useApplyWorkspaceMemberRoleChange(workspaceId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      userId,
-      request,
-    }: {
-      userId: string;
-      request: {
-        targetRole: string;
-        idempotencyKey?: string;
-        previewToken?: string;
-        correlationId?: string;
-      };
-    }) => WorkspaceService.applyMemberRoleChange(workspaceId, userId, request),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
-    },
-  });
-}
 
 export function useTransferWorkspaceOwnership(workspaceId: string) {
   const queryClient = useQueryClient();

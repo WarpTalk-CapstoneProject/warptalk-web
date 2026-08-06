@@ -96,14 +96,21 @@ export interface WorkspaceRoleChangePreview {
 }
 
 export interface WorkspaceRoleChangeResult {
-  targetUserId: string;
+  targetUserId?: string;
   oldRole: string;
   newRole: string;
   effectiveAt: string;
-  effectiveBehavior: string;
+  effectiveBehavior?: string;
   auditId: string;
   member?: WorkspaceMemberDto | null;
   idempotencyKey?: string | null;
+}
+
+export interface ApplyWorkspaceRoleChangeRequest {
+  targetRole: string;
+  idempotencyKey: string;
+  previewToken: string;
+  correlationId?: string | null;
 }
 
 export interface WorkspaceInvitationDto {
