@@ -33,6 +33,7 @@ import {
   Keyboard,
   Plus,
   SlidersHorizontal,
+  Users,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -153,20 +154,26 @@ function LinearRow({
         )}
       </div>
 
+      {/* WT-321(4): every cell in this trailing group is a fixed-width column. It used to be a
+          row of shrink-wrapped pills, so each one started wherever the pill before it happened
+          to end — a longer host name or a third target language shifted the occupancy and date
+          columns sideways, and no two rows lined up. Widths here, not content-derived widths. */}
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
-        <StatusPanel status={room.status} />
+        <div className="flex w-[104px] shrink-0 items-center">
+          <StatusPanel status={room.status} />
+        </div>
 
-        <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <Avatar className="size-5 rounded-full">
+        <div className="flex h-[26px] w-[164px] shrink-0 items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+          <Avatar className="size-5 shrink-0 rounded-full">
             <AvatarImage src={hostAvatar} alt={hostName} />
             <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
               {hostName.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <span className="text-ink-muted pr-1.5">{hostName}</span>
+          <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="flex h-[26px] w-[176px] shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <LanguageLabel value={room.sourceLanguage || "en-US"} />
           {room.targetLanguages.length > 1 ? (
             <>
@@ -202,11 +209,22 @@ function LinearRow({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        {/* WT-321(3): the bare "0/100" was read as an error code, a progress bar, anything but
+            what it is. It is unchanged in meaning — `useRoomOccupancy` still returns
+            seats-taken over the meeting type's seat cap (WT-274) — it just says so now. A
+            people icon and a title are the whole fix; the number itself was never wrong. */}
+        <div
+          className="flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+          title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
+        >
+          <Users size={13} weight="regular" aria-hidden />
           <span className="tabular-nums">{occupancy.label}</span>
+          <span className="sr-only">
+            participants in the room, out of {occupancy.capacity} seats
+          </span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] min-w-[80px] justify-center">
+        <div className="flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums">
             {formatTimeShort(room.scheduledAt ?? room.createdAt)}

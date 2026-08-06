@@ -27,6 +27,23 @@ import { NetworkQualityIcon } from "./network-quality-icon";
 const TILE_CLASSNAME =
   "!h-full !w-full !border-0 overflow-hidden rounded-xl !bg-surface-3 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
 
+/**
+ * A grid or featured tile fills the cell it is given.
+ *
+ * WT-321(1): thumbnails must NOT inherit this. A filmstrip thumbnail declared `h-32 w-64`, but
+ * this floor (`min-h-[180px]`) still applied to it and won, inside a strip capped at
+ * `max-h-[clamp(84px,12vw,132px)]` with `overflow-y-hidden` — a 180px box in a 132px window,
+ * bottom-aligned, so every thumbnail was clipped along its top edge. The thumbnail's own rule
+ * was self-contradictory too: a fixed 16rem x 8rem box is 2:1, not the 16:9 it also asked for,
+ * and the `max-w-[min(18rem,34vw)]` beside it squeezed the width further on a narrow viewport
+ * while the height stayed put. Thumbnails now take their size from THUMBNAIL_SIZING alone.
+ */
+const GRID_TILE_SIZING = "relative h-full min-h-[180px] w-full";
+
+/** One height for a filmstrip thumbnail; `aspect-video` derives the width from it. */
+const THUMBNAIL_SIZING =
+  "relative aspect-video h-[clamp(84px,12vw,132px)] w-auto shrink-0";
+
 const STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1 p-3";
 const SINGLE_PARTICIPANT_STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1";
 const FULLSCREEN_FEATURED_STAGE_CLASSNAME =
@@ -159,7 +176,7 @@ export function LiveKitMeetingStage({
   function renderThumbnail(trackRef: TrackReferenceOrPlaceholder) {
     return renderTile(trackRef, {
       className:
-        "aspect-video h-32 w-64 max-w-[min(18rem,34vw)] shrink-0 rounded-2xl border border-white/80 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.18)]",
+        "rounded-2xl border border-white/80 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.18)]",
       tileClassName: "!rounded-2xl",
       variant: "thumbnail",
     });
@@ -187,7 +204,7 @@ export function LiveKitMeetingStage({
           trackRef.participant.sid +
           (trackRef.publication?.trackSid ?? "placeholder")
         }
-        className={`group relative h-full min-h-[180px] w-full overflow-hidden rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
+        className={`group ${isThumbnail ? THUMBNAIL_SIZING : GRID_TILE_SIZING} overflow-hidden rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
         onClick={() => onPinParticipant?.(identity)}
       >
         <ParticipantTile
@@ -318,7 +335,10 @@ export function LiveKitMeetingStage({
             })}
           </div>
           {thumbnailTracks.length > 0 ? (
-            <div className="absolute bottom-28 left-5 right-5 z-20 flex max-h-[clamp(84px,12vw,132px)] items-end gap-3 overflow-x-auto overflow-y-hidden pb-1">
+            // WT-321(1): no height cap here. The strip is sized by the thumbnails, which now
+            // carry one definite height; capping the strip below the tile height is what
+            // clipped them.
+            <div className="absolute bottom-28 left-5 right-5 z-20 flex items-end gap-3 overflow-x-auto overflow-y-hidden pb-1">
               {thumbnailTracks.map((trackRef) => renderThumbnail(trackRef))}
             </div>
           ) : null}

@@ -62,19 +62,26 @@ export function meetingTypeByLabel(label: string): MeetingType {
 /**
  * A short, human summary of what this type turns on — shown next to the picker so the choice
  * is not silent. Returns [] for a type that changes nothing beyond the seat count.
+ *
+ * WT-310(A1): these were written in Vietnamese inside an otherwise entirely English dialog,
+ * so the Create Room header read "WarpTalk Demo › Event · Tối đa 100 người" beside "Add
+ * description...", "People" and "Create Room". The app has no i18n layer to route them
+ * through — English is the one language this UI speaks — so they are simply written in it.
+ * The number is formatted with an explicit "en-US" rather than the ambient locale, so a
+ * Vietnamese-locale browser cannot reintroduce a Vietnamese-grouped number here.
  */
 export function meetingTypeHighlights(label: string): string[] {
   const { defaults } = meetingTypeByLabel(label);
   const highlights: string[] = [];
 
-  if (defaults.requiresApproval) highlights.push("Duyệt trước khi vào");
-  if (defaults.muteOnEntry) highlights.push("Vào là tắt mic");
-  if (defaults.autoRecord) highlights.push("Tự ghi hình");
-  if (!defaults.breakoutsEnabled) highlights.push("Không breakout");
+  if (defaults.requiresApproval) highlights.push("Approval to join");
+  if (defaults.muteOnEntry) highlights.push("Muted on entry");
+  if (defaults.autoRecord) highlights.push("Records automatically");
+  if (!defaults.breakoutsEnabled) highlights.push("No breakout rooms");
   highlights.push(
     defaults.maxParticipants === 2
-      ? "Tối đa 2 người"
-      : `Tối đa ${defaults.maxParticipants.toLocaleString("vi-VN")} người`,
+      ? "Max 2 participants"
+      : `Max ${defaults.maxParticipants.toLocaleString("en-US")} participants`,
   );
 
   return highlights;
