@@ -13,7 +13,7 @@ export const presenceService = {
     if (userIds.length === 0) return {};
 
     const { data } = await apiClient.post<PresenceQueryResponse>(
-      "/api/v1/presence/query",
+      "/presence/query",
       { userIds },
     );
     return data.states ?? {};

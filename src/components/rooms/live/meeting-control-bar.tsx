@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
@@ -23,6 +23,41 @@ export { ALLOWED_REACTION_EMOJIS };
 export type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
 
 import { motion, AnimatePresence } from "motion/react";
+
+/**
+ * WT-272: close a control-bar flyout on Escape or a click outside it.
+ *
+ * Every flyout in this bar was open-only: the sole way to dismiss one was to hit the same
+ * trigger again. That is what the "Host controls" report describes — the panel was clicked
+ * twice, which opened it and then immediately closed it again, leaving nothing on screen and
+ * nothing in the DOM to find. It also means two flyouts could sit open at once.
+ */
+function useFlyoutDismiss(open: boolean, close: () => void) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      const container = containerRef.current;
+      if (container && !container.contains(event.target as Node)) close();
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") close();
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, close]);
+
+  return containerRef;
+}
 
 export function MeetingControlBar({
   meetingEnabled,
@@ -168,6 +203,9 @@ export function MeetingControlBar({
   >("root");
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
   const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
+  const hostControlsRef = useFlyoutDismiss(isHostControlsMenuOpen, () =>
+    setIsHostControlsMenuOpen(false),
+  );
 
   function closeSettingsMenu() {
     setIsSettingsMenuOpen(false);
@@ -195,16 +233,26 @@ export function MeetingControlBar({
       ) : null}
 
       {isHost && onToggleLock ? (
-        <div className="relative">
+        <div className="relative" ref={hostControlsRef}>
           <MeetControl
             label="Host controls"
             active={Boolean(isLocked) || isHostControlsMenuOpen}
             icon={<ShieldCheck className="h-[18px] w-[18px]" weight={isLocked ? "fill" : "regular"} />}
+            hasPopup
+            expanded={isHostControlsMenuOpen}
+            controls="meeting-host-controls-menu"
             onClick={() => setIsHostControlsMenuOpen((current) => !current)}
           />
           <AnimatePresence>
             {isHostControlsMenuOpen ? (
               <motion.div
+                id="meeting-host-controls-menu"
+                // WT-272: the panel is announced as a menu. It previously rendered as a bare
+                // div, so it was invisible to assistive tech and to the DOM probe that reported
+                // this ticket ("0 [role=menu] nodes" could not have matched even while the
+                // panel was on screen).
+                role="menu"
+                aria-label="Host controls"
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -216,6 +264,7 @@ export function MeetingControlBar({
                   description="Blocks new joiners while active."
                   icon={isLocked ? <Lock className="h-4 w-4" weight="fill" /> : <LockOpen className="h-4 w-4" />}
                   active={Boolean(isLocked)}
+                  toggle
                   onClick={() => onToggleLock(!isLocked)}
                 />
                 {onToggleMuteOnEntry ? (
@@ -224,6 +273,7 @@ export function MeetingControlBar({
                     description="New joiners start with mic muted."
                     icon={<MicrophoneSlash className="h-4 w-4" />}
                     active={Boolean(muteOnEntry)}
+                    toggle
                     onClick={() => onToggleMuteOnEntry(!muteOnEntry)}
                   />
                 ) : null}
@@ -597,17 +647,22 @@ function HostControlRow({
   description,
   icon,
   active,
+  toggle,
   onClick,
 }: {
   label: string;
   description: string;
   icon: ReactNode;
   active?: boolean;
+  /** WT-272: rows that flip a persistent room setting announce their on/off state. */
+  toggle?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      role={toggle ? "menuitemcheckbox" : "menuitem"}
+      aria-checked={toggle ? Boolean(active) : undefined}
       onClick={onClick}
       className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors ${
         active ? "bg-primary/10 text-primary" : "text-ink hover:bg-canvas"
@@ -835,12 +890,21 @@ function MeetControl({
   label,
   active,
   disabled,
+  hasPopup,
+  expanded,
+  controls,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   active?: boolean;
   disabled?: boolean;
+  /** WT-272: this control opens a menu, so say so. */
+  hasPopup?: boolean;
+  /** Whether that menu is currently open. */
+  expanded?: boolean;
+  /** id of the menu element, for aria-controls. */
+  controls?: string;
   onClick: () => void;
 }) {
   return (
@@ -848,6 +912,9 @@ function MeetControl({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-haspopup={hasPopup ? "menu" : undefined}
+      aria-expanded={hasPopup ? Boolean(expanded) : undefined}
+      aria-controls={hasPopup && expanded ? controls : undefined}
       className={`grid h-8 w-8 place-items-center rounded-md transition-colors ${
         disabled
           ? "cursor-not-allowed bg-canvas text-ink-tertiary"

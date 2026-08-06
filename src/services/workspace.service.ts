@@ -15,7 +15,10 @@ import type {
   SelectWorkspaceResponse,
   InviteMemberResponse,
   PreviewInvitationResponse,
-  ExtractedTextDto
+  ExtractedTextDto,
+  WorkspaceRoleChangePreview,
+  ApplyWorkspaceRoleChangeRequest,
+  WorkspaceRoleChangeResult
 } from "@/types/workspace";
 
 export const WorkspaceService = {
@@ -47,7 +50,7 @@ export const WorkspaceService = {
     return data;
   },
 
-  async updateSettings(id: string, settings: WorkspaceSettingsDto): Promise<void> {
+  async updateSettings(id: string, settings: Partial<WorkspaceSettingsDto>): Promise<void> {
     await apiClient.put(API.workspaces.settings(id), settings);
   },
 
@@ -69,6 +72,30 @@ export const WorkspaceService = {
 
   async changeMemberRole(workspaceId: string, userId: string, roleName: string): Promise<void> {
     await apiClient.put(API.workspaces.memberRole(workspaceId, userId), { roleName });
+  },
+
+  async previewMemberRoleChange(
+    workspaceId: string,
+    userId: string,
+    targetRole: string
+  ): Promise<WorkspaceRoleChangePreview> {
+    const { data } = await apiClient.get<WorkspaceRoleChangePreview>(
+      API.workspaces.memberRoleChangePreview(workspaceId, userId),
+      { params: { toRole: targetRole } }
+    );
+    return data;
+  },
+
+  async applyMemberRoleChange(
+    workspaceId: string,
+    userId: string,
+    request: ApplyWorkspaceRoleChangeRequest
+  ): Promise<WorkspaceRoleChangeResult> {
+    const { data } = await apiClient.post<WorkspaceRoleChangeResult>(
+      API.workspaces.memberRoleChange(workspaceId, userId),
+      request
+    );
+    return data;
   },
 
   async transferOwnership(workspaceId: string, newOwnerId: string): Promise<void> {
@@ -114,10 +141,14 @@ export const WorkspaceService = {
     return data;
   },
 
-  async approveJoinRequest(workspaceId: string, inviteId: string | { invitationId: string; membershipType?: string }, membershipType?: string): Promise<{ approvalEmailStatus?: string }> {
-    const id = typeof inviteId === "string" ? inviteId : inviteId.invitationId;
-    const type = typeof inviteId === "string" ? membershipType : inviteId.membershipType;
-    const { data } = await apiClient.post<{ approvalEmailStatus?: string }>(API.workspaces.approveJoinRequest(workspaceId, id), { membershipType: type });
+  async approveJoinRequest(
+    workspaceId: string,
+    payload: { inviteId: string; membershipType?: string }
+  ): Promise<{ approvalEmailStatus?: string }> {
+    const { data } = await apiClient.post<{ approvalEmailStatus?: string }>(
+      API.workspaces.approveJoinRequest(workspaceId, payload.inviteId),
+      { membershipType: payload.membershipType }
+    );
     return data || {};
   },
 

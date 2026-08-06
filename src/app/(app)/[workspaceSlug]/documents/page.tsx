@@ -54,6 +54,7 @@ import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  useApproveWorkspaceDocument,
   useArchiveWorkspaceDocument,
   useDeleteWorkspaceDocument,
   useRestoreWorkspaceDocument,
@@ -64,6 +65,8 @@ import {
 } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { DocumentActor } from "@/components/documents/document-actor";
+import { DocumentDeleteDialog } from "@/components/documents/document-delete-dialog";
 
 const uploadSchema = z.object({
   name: z.string().min(2, "Document name must be at least 2 characters"),
@@ -107,11 +110,8 @@ export default function WorkspaceDocumentsPage() {
     query,
   );
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
-  const workspaceMembersQuery = useWorkspaceMembers(
-    activeWorkspaceId || "",
-    1,
-    100,
-  );
+  const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
+  const workspaceMembers = membersQuery.data?.items ?? [];
 
   // Mutations
   const uploadMutation = useUploadWorkspaceDocument(activeWorkspaceId || "");
@@ -529,6 +529,8 @@ export default function WorkspaceDocumentsPage() {
             <thead>
               <tr className="border-b border-hairline/20 bg-surface-2/50 text-ink-muted font-semibold">
                 <th className="py-3 px-4 font-semibold">Name</th>
+                <th className="py-3 px-4 font-semibold">Uploaded By</th>
+                <th className="py-3 px-4 font-semibold">Approved By</th>
                 <th className="py-3 px-4 font-semibold">Classification / AI</th>
                 <th className="py-3 px-4 font-semibold">People</th>
                 <th className="py-3 px-4 font-semibold">Last Modified</th>
@@ -542,6 +544,8 @@ export default function WorkspaceDocumentsPage() {
                   doc.uploadedBy === currentUser?.id ||
                   doc.ownerId === currentUser?.id;
                 const canManageDoc = canApproveDocuments || isDocOwner;
+                const uploader = workspaceMembers.find((m) => m.userId === doc.uploadedBy || m.id === doc.uploadedBy);
+                const approver = workspaceMembers.find((m) => m.userId === doc.approvedBy || m.id === doc.approvedBy);
 
                 return (
                   <tr
@@ -564,6 +568,44 @@ export default function WorkspaceDocumentsPage() {
                           </span>
                         </div>
                       </div>
+                    </td>
+
+                    {/* Uploaded By */}
+                    <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                      {uploader ? (
+                        <div className="flex items-center gap-2" title={`Uploaded by ${uploader.fullName}`}>
+                          <Avatar className="h-6 w-6 rounded-full border border-border/50">
+                            <AvatarImage src={uploader.avatarUrl ?? undefined} alt={uploader.fullName} />
+                            <AvatarFallback className="rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
+                              {uploader.fullName ? uploader.fullName.charAt(0).toUpperCase() : "U"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-[11px] font-medium text-ink truncate max-w-[110px]">
+                            {uploader.fullName}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-ink-muted text-[11px]">—</span>
+                      )}
+                    </td>
+
+                    {/* Approved By */}
+                    <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                      {approver ? (
+                        <div className="flex items-center gap-2" title={`Approved by ${approver.fullName}`}>
+                          <Avatar className="h-6 w-6 rounded-full border border-emerald-500/30">
+                            <AvatarImage src={approver.avatarUrl ?? undefined} alt={approver.fullName} />
+                            <AvatarFallback className="rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-semibold">
+                              {approver.fullName ? approver.fullName.charAt(0).toUpperCase() : "A"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-[11px] font-medium text-emerald-600 truncate max-w-[110px]">
+                            {approver.fullName}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-ink-muted text-[11px]">—</span>
+                      )}
                     </td>
 
                     {/* Classification / Status Badge */}
@@ -614,14 +656,14 @@ export default function WorkspaceDocumentsPage() {
                       <div className="flex items-center gap-3">
                         <DocumentActor
                           label="Uploader"
-                          member={workspaceMembersQuery.data?.items.find(
-                            (member) => member.userId === doc.uploadedBy,
+                          member={workspaceMembers.find(
+                            (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
                           )}
                         />
                         <DocumentActor
                           label="Approver"
-                          member={workspaceMembersQuery.data?.items.find(
-                            (member) => member.userId === doc.approvedBy,
+                          member={workspaceMembers.find(
+                            (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
                           )}
                         />
                       </div>
@@ -766,14 +808,14 @@ export default function WorkspaceDocumentsPage() {
                 <div className="flex items-center gap-3 pt-1">
                   <DocumentActor
                     label="Uploader"
-                    member={workspaceMembersQuery.data?.items.find(
-                      (member) => member.userId === doc.uploadedBy,
+                    member={workspaceMembers.find(
+                      (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
                     )}
                   />
                   <DocumentActor
                     label="Approver"
-                    member={workspaceMembersQuery.data?.items.find(
-                      (member) => member.userId === doc.approvedBy,
+                    member={workspaceMembers.find(
+                      (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
                     )}
                   />
                 </div>
@@ -1001,77 +1043,11 @@ export default function WorkspaceDocumentsPage() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={!!docToDelete}
-        onOpenChange={(open) => !open && setDocToDelete(null)}
-      >
-        <DialogContent className="border-hairline bg-surface-1 max-w-sm rounded-2xl">
-          <DialogHeader className="flex flex-col gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive mx-auto">
-              <Warning className="h-5 w-5" />
-            </div>
-            <DialogTitle className="text-center font-bold text-base">
-              Delete Document?
-            </DialogTitle>
-            <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Are you sure you want to delete{" "}
-              <span className="font-semibold text-ink">
-                {docToDelete?.name}
-              </span>
-              ? This will remove file content, AI context, and access policies
-              from workspace.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
-            <button
-              onClick={() => setDocToDelete(null)}
-              className="flex-1 h-9 rounded-xl border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleDeleteConfirm}
-              className="flex-1 h-9 rounded-xl bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition"
-            >
-              Delete
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function DocumentActor({
-  label,
-  member,
-}: {
-  label: "Uploader" | "Approver";
-  member?: {
-    fullName: string;
-    email: string;
-    avatarUrl?: string | null;
-  };
-}) {
-  if (!member) {
-    return (
-      <span className="text-[10px] text-ink-muted" title={`${label} unavailable`}>
-        {label}: —
-      </span>
-    );
-  }
-
-  const name = member.fullName || member.email;
-  return (
-    <div className="flex min-w-0 items-center gap-1.5" title={`${label}: ${name}`}>
-      <Avatar size="sm">
-        {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt={name} /> : null}
-        <AvatarFallback>{name.slice(0, 1).toUpperCase()}</AvatarFallback>
-      </Avatar>
-      <div className="hidden min-w-0 flex-col xl:flex">
-        <span className="text-[9px] uppercase tracking-wide text-ink-muted">{label}</span>
-        <span className="max-w-24 truncate text-[10px] font-medium text-ink">{name}</span>
-      </div>
+      <DocumentDeleteDialog
+        docToDelete={docToDelete}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }
