@@ -22,6 +22,22 @@ const checks = [
     "participant tile wrappers fill their grid cell",
     meetingStage.includes("relative h-full min-h-[180px]"),
   ],
+  // WT-321(1): the grid floor above is exactly what clipped the filmstrip. A thumbnail is not
+  // a grid cell — it must be sized by its own rule and must never inherit min-h-[180px].
+  [
+    "filmstrip thumbnails are sized independently of the grid-cell floor",
+    /isThumbnail \? THUMBNAIL_SIZING : GRID_TILE_SIZING/.test(meetingStage),
+  ],
+  [
+    "a thumbnail derives its width from one height, not from conflicting w/h/max-w rules",
+    /const THUMBNAIL_SIZING =\s*\n?\s*"relative aspect-video h-\[clamp\([^\]]*\)\] w-auto shrink-0"/.test(
+      meetingStage,
+    ) && !meetingStage.includes("aspect-video h-32 w-64"),
+  ],
+  [
+    "the thumbnail strip is not capped shorter than the thumbnails it holds",
+    !/flex max-h-\[clamp\([^\]]*\)\] items-end/.test(meetingStage),
+  ],
   [
     "published LiveKit tracks still render through ParticipantTile",
     meetingStage.includes("<ParticipantTile") &&

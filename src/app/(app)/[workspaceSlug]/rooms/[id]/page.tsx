@@ -28,8 +28,6 @@ import {
   List,
   ListOrdered,
   Loader2,
-  MapPin,
-  MoreHorizontal,
   Play,
   Quote,
   Star,
@@ -270,17 +268,13 @@ export default function RoomInformationPage() {
             <div className="mb-8 flex flex-col gap-5 border-b border-border/60 pb-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-muted">
-                    <button
-                      type="button"
-                      onClick={() => router.back()}
-                      className="rounded-md px-1.5 py-1 hover:bg-surface-2"
-                    >
-                      Meetings
-                    </button>
-                    <span>/</span>
-                    <span className="truncate text-ink">{room.title}</span>
-                  </div>
+                  {/* WT-310(8): no breadcrumb here. The app shell's Topbar already renders
+                      "Meetings / {room title}" for this exact route (see topbar.tsx's
+                      Breadcrumbs, isRoomInformationPage), so this second copy printed the
+                      identical trail one line below the first. The shell's is the one that
+                      stays — it is present on every route, and it links to the list rather
+                      than calling router.back(), which sent the user wherever they came
+                      from instead of to Meetings. */}
                   <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground">
                     {room.title}
                   </h1>
@@ -289,10 +283,17 @@ export default function RoomInformationPage() {
                     apiParticipants={apiParticipants}
                     occupancyLabel={occupancy.label}
                     user={user}
+                    onCopy={handleCopy}
                   />
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
-                  <StatusChip status={room.status} />
+                  {/* WT-310(10): the status is rendered once, by MeetingPropertiesPills under
+                      the title. A second StatusChip stood here, so the same room announced
+                      "Waiting" twice on one screen in two different visual languages — a grey
+                      chip up here and an amber pill down there — and a reader had no way to
+                      know which was authoritative. The pills row keeps it: it is the same
+                      StatusPanel the meetings list row uses, so the state a room shows in the
+                      list is the state it shows when opened. */}
                   {/* WT-197: the primary action lives here, at the top of the page, next to the
                       title. It used to exist only in "Meeting access" — the last panel of a
                       sticky, independently scrolling right column — so it sat below the fold
@@ -346,7 +347,9 @@ export default function RoomInformationPage() {
                     </span>
                   ) : null}
                 </MetadataRow>
-                <MetadataRow icon={<MapPin className="size-4" />} label="Where">
+                {/* WT-310(6): a location pin promised a place. There is no place — every
+                    WarpTalk meeting happens on the audio bridge. */}
+                <MetadataRow icon={<Video className="size-4" />} label="Where">
                   <InlineChip icon={<Video className="size-3.5" />}>
                     Virtual Audio Bridge
                   </InlineChip>
@@ -1270,12 +1273,15 @@ function PropertyPanel({
 }) {
   return (
     <div className="rounded-[10px] border border-border bg-surface-1 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      {/* WT-310(7): the caret and the overflow dots are gone. Neither was a button — they were
+          bare icons with no handler, no menu and no state — but they are the exact glyphs the
+          rest of the app uses for "opens a menu", so "Tracking ⌄" and "Actions ⌄ ⋯" read as
+          three controls per panel that did nothing when clicked. A panel heading that is only
+          a heading is written as only a heading. */}
       <div className="mb-3 flex items-center justify-between">
         <span className="flex items-center gap-1 px-0.5 text-[12px] font-medium text-muted-foreground">
           {title}
-          <ChevronDown className="size-3" />
         </span>
-        <MoreHorizontal className="size-4 text-muted-foreground" />
       </div>
       <div className="space-y-3">{children}</div>
     </div>
@@ -1387,26 +1393,6 @@ function AddToCalendarMenu({ room }: { room: TranslationRoomDto }) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function StatusChip({ status }: { status: TranslationRoomStatus }) {
-  return (
-    <InlineChip icon={<StatusDot status={status} />}>
-      {statusLabels[status]}
-    </InlineChip>
-  );
-}
-
-function StatusDot({ status }: { status: string }) {
-  const isLive = status === "in_progress";
-  return (
-    <span
-      className={cn(
-        "size-2 rounded-full",
-        isLive ? "bg-blue-500" : "bg-muted-foreground/50",
-      )}
-    />
   );
 }
 

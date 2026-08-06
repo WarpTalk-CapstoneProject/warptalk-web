@@ -2,7 +2,7 @@ import { LanguageSelector } from "@/components/rooms/create/language-selector";
 import { useUpdateTranslationRoomSettings } from "@/hooks/use-translationRooms";
 import { StatusPanel } from "../StatusPanel";
 import { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
-import { Calendar as CalendarIcon } from "@phosphor-icons/react/dist/ssr";
+import { Calendar as CalendarIcon, Copy, Users } from "@phosphor-icons/react/dist/ssr";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 
@@ -10,7 +10,8 @@ export function MeetingPropertiesPills({
   room,
   apiParticipants,
   occupancyLabel,
-  user
+  user,
+  onCopy
 }: {
   room: TranslationRoomDto;
   apiParticipants: TranslationRoomParticipantDto[];
@@ -22,6 +23,8 @@ export function MeetingPropertiesPills({
    */
   occupancyLabel: string;
   user: { id: string; fullName?: string } | null;
+  /** WT-310(12) — the page's copy handler, so the room-code pill reuses its confirmation. */
+  onCopy: (text: string, label: string) => void;
 }) {
   const updateSettings = useUpdateTranslationRoomSettings();
 
@@ -53,8 +56,31 @@ export function MeetingPropertiesPills({
         onLanguagesChange={handleLanguagesChange}
       />
 
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      {/* WT-310(12): the room code is what a host actually came here for, and it lived only in
+          an "Actions" button and as 11px muted mono text at the bottom of the right column.
+          It sits beside the title now, in the row a visitor reads first, and copies on click.
+          Both older copies stay — the button and the "Meeting access" line are still correct. */}
+      <button
+        type="button"
+        onClick={() => onCopy(room.translationRoomCode, "Room code")}
+        title="Copy room code"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] hover:bg-surface-2 transition-colors cursor-pointer"
+      >
+        <Copy size={12} weight="bold" className="text-ink-muted" />
+        <span className="font-mono text-[12px] font-semibold tracking-wide text-ink">
+          {room.translationRoomCode}
+        </span>
+      </button>
+
+      {/* WT-321(3): same legibility fix as the meetings list row — the pair is
+          seats-taken / seat cap, and now says so instead of reading as a bare code. */}
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+        title="Participants in the room, out of the meeting type's seat capacity"
+      >
+        <Users size={12} weight="regular" className="text-ink-muted" aria-hidden />
         <span className="tabular-nums text-[12px] font-medium">{occupancyLabel}</span>
+        <span className="sr-only">participants in the room, out of the seat capacity</span>
       </div>
 
       <Popover>
