@@ -32,6 +32,7 @@ import {
   groupSegmentsByTranslationSession,
 } from "@/lib/transcript-display";
 import { loadSavedTranscript } from "@/lib/transcript-history";
+import { formatLanguageRoute as formatRoute } from "@/lib/languages";
 import { cn } from "@/lib/utils";
 import { translationRoomService } from "@/services/translationRoom.service";
 import { openArtifactDownload, saveBlobDownload } from "@/lib/download-artifact";
@@ -1172,8 +1173,5 @@ function formatTimestamp(ms: number) {
 }
 
 function formatLanguageRoute(room: EndedRoomHistoryItem) {
-  const targets = room.targetLanguages.length
-    ? room.targetLanguages.join(", ")
-    : "—";
-  return `${room.sourceLanguage.toUpperCase()} → ${targets.toUpperCase()}`;
+  return formatRoute(room.sourceLanguage, room.targetLanguages);
 }

@@ -69,6 +69,12 @@ const MEMBER_FILTER_WIDTH_CLASS: Record<string, string> = {
 
 const MEMBER_GRID_CLASS =
   "grid-cols-[28px_minmax(280px,1.85fr)_100px_116px_92px_112px_108px_64px]";
+/**
+ * The same rail without the host-meetings and remove columns. A plain member can do neither, so
+ * showing the controls greyed out only advertises an action they will never be granted.
+ */
+const MEMBER_GRID_CLASS_READONLY =
+  "grid-cols-[28px_minmax(280px,1.85fr)_100px_116px_92px_112px]";
 
 export default function WorkspaceMembersPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -143,6 +149,9 @@ export default function WorkspaceMembersPage() {
   const isOwner = currentRole === "owner";
   const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
+  const memberGridClass = isOwnerOrAdmin
+    ? MEMBER_GRID_CLASS
+    : MEMBER_GRID_CLASS_READONLY;
 
   const memberFilterPills = [
     { key: "all", label: "All", role: "all", status: "all" },
@@ -409,15 +418,19 @@ export default function WorkspaceMembersPage() {
         ) : (
           <div className="min-w-[920px]">
             {/* Header row */}
-            <div className={`grid ${MEMBER_GRID_CLASS} items-center gap-3 px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
+            <div className={`grid ${memberGridClass} items-center gap-3 px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
               <span />
               <span className="w-fit rounded-full bg-surface-2 px-2 py-1 font-semibold text-foreground">Name</span>
               <span>Role</span>
               <span>Type</span>
               <span>Status</span>
               <span>Joined</span>
-              <span className="justify-self-center text-center">Host meetings</span>
-              <span className="justify-self-end pr-2 text-right">Actions</span>
+              {isOwnerOrAdmin && (
+                <>
+                  <span className="justify-self-center text-center">Host meetings</span>
+                  <span className="justify-self-end pr-2 text-right">Actions</span>
+                </>
+              )}
             </div>
 
             {/* Data rows */}
@@ -429,7 +442,7 @@ export default function WorkspaceMembersPage() {
               return (
                 <div
                   key={member.id}
-                  className={`group grid min-h-[36px] ${MEMBER_GRID_CLASS} items-center gap-3 rounded-[7px] px-2 py-1 text-[11px] transition-none hover:bg-surface-2 hover:shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`}
+                  className={`group grid min-h-[36px] ${memberGridClass} items-center gap-3 rounded-[7px] px-2 py-1 text-[11px] transition-none hover:bg-surface-2 hover:shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`}
                 >
                   <div aria-hidden="true" />
 
@@ -466,7 +479,9 @@ export default function WorkspaceMembersPage() {
                       variant="outline"
                       className="rounded-full border-hairline bg-surface-1/70 px-1.5 py-0 text-[9px] font-semibold capitalize text-ink"
                     >
-                      {member.roleName}
+                      {member.membershipType.toLowerCase() === "external"
+                        ? "Member · External · Fixed"
+                        : member.roleName}
                     </Badge>
                   </div>
 
@@ -507,44 +522,47 @@ export default function WorkspaceMembersPage() {
                     })}
                   </span>
 
-                  {/* Meeting host toggle */}
-                  <div className="flex justify-center">
-                    <Switch
-                      checked={member.canCreateMeetings}
-                      disabled={
-                        !isOwnerOrAdmin || isSelf || memberRole === "owner"
-                      }
-                      onCheckedChange={() =>
-                        handleToggleCanCreateMeetings(
-                          member.userId,
-                          member.canCreateMeetings,
-                        )
-                      }
-                    />
-                  </div>
+                  {/* Owner/admin-only columns. Kept in step with `memberGridClass`: dropping the
+                      cells without dropping the tracks would shift every row against its header. */}
+                  {isOwnerOrAdmin && (
+                    <>
+                      {/* Meeting host toggle */}
+                      <div className="flex justify-center">
+                        <Switch
+                          checked={member.canCreateMeetings}
+                          disabled={isSelf || memberRole === "owner"}
+                          onCheckedChange={() =>
+                            handleToggleCanCreateMeetings(
+                              member.userId,
+                              member.canCreateMeetings,
+                            )
+                          }
+                        />
+                      </div>
 
-                  {/* Remove button */}
-                  <div className="flex justify-end pr-2">
-                    <button
-                      onClick={() =>
-                        setMemberToRemove({
-                          id: member.userId,
-                          name: member.fullName,
-                        })
-                      }
-                      disabled={
-                        !isOwnerOrAdmin ||
-                        isSelf ||
-                        memberRole === "owner" ||
-                        (isAdmin && memberRole === "admin")
-                      }
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
-                      title="Remove from workspace"
-                      aria-label={`Remove ${member.fullName} from workspace`}
-                    >
-                      <UserMinus className="h-4 w-4" />
-                    </button>
-                  </div>
+                      {/* Remove button */}
+                      <div className="flex justify-end pr-2">
+                        <button
+                          onClick={() =>
+                            setMemberToRemove({
+                              id: member.userId,
+                              name: member.fullName,
+                            })
+                          }
+                          disabled={
+                            isSelf ||
+                            memberRole === "owner" ||
+                            (isAdmin && memberRole === "admin")
+                          }
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
+                          title="Remove from workspace"
+                          aria-label={`Remove ${member.fullName} from workspace`}
+                        >
+                          <UserMinus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -623,9 +641,11 @@ export default function WorkspaceMembersPage() {
                   <SelectItem value="Member" className="text-xs">
                     Member (Standard)
                   </SelectItem>
-                  <SelectItem value="Admin" className="text-xs">
-                    Admin (Operational Manager)
-                  </SelectItem>
+                  {isOwner && (
+                    <SelectItem value="Admin" className="text-xs">
+                      Admin (Operational Manager)
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               {inviteErrors.roleName && (

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { resolveRoomHost } from "@/lib/room-host";
@@ -108,6 +109,11 @@ function LinearRow({
   const workspaceSlug = params?.workspaceSlug as string;
   const user = useAuthStore((state) => state.user);
   const isCurrentUserHost = room.hostId === user?.id || Boolean(room.isHost);
+  // WT-274: same hook the room detail page reads, so a row and the page it links to cannot
+  // report different occupancy. The list has no per-room roster, so for every room except the
+  // one the viewer is currently in this resolves to the server's aggregate — see the PR's
+  // BACKEND note: that aggregate is `TranslationRoomParticipants.Count`, not the seat rule.
+  const occupancy = useRoomOccupancy(room);
   const { name: hostName, avatarUrl: hostAvatar } = resolveRoomHost(
     room,
     members,
@@ -204,9 +210,7 @@ function LinearRow({
         </div>
 
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <span className="tabular-nums">
-            {room.participantCount}/{room.maxParticipants}
-          </span>
+          <span className="tabular-nums">{occupancy.label}</span>
         </div>
 
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] min-w-[80px] justify-center">

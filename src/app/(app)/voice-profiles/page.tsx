@@ -1,6 +1,7 @@
 "use client";
 
 import { languageLabelText } from "@/components/language/language-label";
+import { languagesInScope } from "@/lib/languages";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import {
@@ -58,11 +59,13 @@ import type { WorkspaceMemberDto } from "@/types/workspace";
 
 // Values are the locale tags the backend stores and must not change; the label is what a
 // person reads, and a raw tag in parentheses is not that.
-const LANGUAGE_OPTIONS = [
-  { value: "vi-VN", label: languageLabelText("vi-VN"), short: "VI" },
-  { value: "en-US", label: languageLabelText("en-US"), short: "EN" },
-  { value: "ja-JP", label: languageLabelText("ja-JP"), short: "JA" },
-];
+// `short` is the two-letter badge shown in the dense table rows, where the full name would not
+// fit. It is the bare ISO code the registry already carries, not a fourth thing to maintain.
+const LANGUAGE_OPTIONS = languagesInScope("voiceProfile").map((language) => ({
+  value: language.locale,
+  label: languageLabelText(language.locale),
+  short: language.code.toUpperCase(),
+}));
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_PROFILE_NAME_LENGTH = 100;

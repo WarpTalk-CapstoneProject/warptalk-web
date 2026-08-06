@@ -18,6 +18,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { getLanguageName, languagesInScope } from "@/lib/languages";
 import {
   useGlossariesByWorkspace,
   useCreateGlossary,
@@ -51,11 +52,10 @@ const termSchema = z.object({
 type GlossaryFormData = z.infer<typeof glossarySchema>;
 type TermFormData = z.infer<typeof termSchema>;
 
-const langPairs = [
-  { code: "en", label: "English" },
-  { code: "vi", label: "Vietnamese" },
-  { code: "ja", label: "Japanese" },
-];
+const langPairs = languagesInScope("glossary").map((language) => ({
+  code: language.code,
+  label: language.name,
+}));
 
 export default function WorkspaceTerminologyPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -389,7 +389,7 @@ export default function WorkspaceTerminologyPage() {
               <div>
                 <CardTitle className="text-base font-semibold">{selectedGlossary.name}</CardTitle>
                 <CardDescription className="text-xs">
-                  {selectedGlossary.description ? `${selectedGlossary.description} • ` : ""}Pair: {selectedGlossary.sourceLanguage.toUpperCase()} → {selectedGlossary.targetLanguage.toUpperCase()}
+                  {selectedGlossary.description ? `${selectedGlossary.description} • ` : ""}Pair: {getLanguageName(selectedGlossary.sourceLanguage)} → {getLanguageName(selectedGlossary.targetLanguage)}
                 </CardDescription>
               </div>
 

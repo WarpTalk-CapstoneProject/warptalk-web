@@ -3,14 +3,14 @@
 import { FormEvent, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isAxiosError } from "axios";
-import { 
-  ArrowLeft, 
-  EnvelopeSimple, 
-  Lock, 
-  Spinner, 
-  CheckCircle, 
-  WarningCircle, 
-  Globe 
+import {
+  ArrowLeft,
+  EnvelopeSimple,
+  Lock,
+  Spinner,
+  CheckCircle,
+  WarningCircle,
+  Globe,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -71,7 +71,7 @@ function JoinWorkspaceContent() {
   // States
   const [slugOrUrl, setSlugOrUrl] = useState("");
   const mounted = useSyncExternalStore(subscribeMounted, getMountedSnapshot, getServerMountedSnapshot);
-  
+
   // Auth Form states (minimalist login/register tab)
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -85,11 +85,11 @@ function JoinWorkspaceContent() {
   const code = useMemo(() => roomCodeParam.trim(), [roomCodeParam]);
 
   // Preflight checking for code
-  const { 
-    data: preflight, 
-    isLoading: preflightLoading, 
+  const {
+    data: preflight,
+    isLoading: preflightLoading,
     error: preflightError,
-    refetch: refetchPreflight 
+    refetch: refetchPreflight,
   } = useRoomPreflight(code, !!code);
 
   const createJoinRequestMutation = useCreateJoinRequest();
@@ -256,7 +256,7 @@ function JoinWorkspaceContent() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-start bg-canvas px-4 pt-[10vh] pb-12 text-ink font-sans select-none antialiased">
       <div className="w-full max-w-[420px] flex flex-col gap-6">
-        
+
         {/* Back Button */}
         <div className="flex items-center justify-between text-[12px] text-ink-muted font-medium">
           <button
@@ -418,7 +418,7 @@ function JoinWorkspaceContent() {
                     <Button
                       onClick={() => handleSendJoinRequest({ roomCode: code })}
                       disabled={
-                        createJoinRequestMutation.isPending || 
+                        createJoinRequestMutation.isPending ||
                         (!preflight.isDomainMatched && !preflight.allowExternalCollaboration)
                       }
                       className="w-full bg-foreground text-white text-[13px] font-medium h-[36px] rounded-[6px] hover:opacity-95 transition-opacity"

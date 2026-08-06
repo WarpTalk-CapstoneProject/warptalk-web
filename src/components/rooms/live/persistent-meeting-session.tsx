@@ -41,6 +41,7 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { mergeParticipants } from "@/lib/merge-participants";
+import { roomOccupancy } from "@/lib/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { buildTranscriptReviewPath } from "@/lib/meeting-navigation";
@@ -296,8 +297,22 @@ export function PersistentMeetingSession({
   // WT-04/WT-06: host controls + recording state, synced live via TranslationRoomHub's
   // RoomLockChanged/RecordingStateChanged broadcasts (see the SignalR effect below).
   const [isRoomLocked, setIsRoomLocked] = useState(false);
-  const [muteOnEntryEnabled, setMuteOnEntryEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  // WT-272: mute-on-entry is READ from the room's persisted setting, which the join response
+  // already carries, and only overridden once this host actually toggles it (null = untouched).
+  // It used to be plain `useState(false)`, so the flyout always opened claiming "off" no matter
+  // how the room was configured; the host's first tap then re-sent the value the room already
+  // had and visibly did nothing. Derived rather than synced in an effect so there is no
+  // cascading render.
+  //
+  // There is no equivalent field for the lock — see the PR's BACKEND note: JoinMeetingResponse
+  // does not report it, so `isRoomLocked` can still only be learned from a RoomLockChanged
+  // broadcast that fires after somebody toggles it.
+  const [muteOnEntryOverride, setMuteOnEntryOverride] = useState<boolean | null>(
+    null,
+  );
+  const muteOnEntryEnabled =
+    muteOnEntryOverride ?? Boolean(meetingSession?.muteOnEntry);
   const setLockMutation = useSetRoomLock(roomId);
   const setMuteOnEntryMutation = useSetMuteOnEntry(roomId);
   const setRecordingMutation = useSetRecording(roomId);
@@ -344,10 +359,13 @@ export function PersistentMeetingSession({
   useEffect(() => {
     participantsRef.current = participants;
   }, [participants]);
-  const activeCount = participants.filter(
-    (participant) =>
-      !["left", "removed", "kicked"].includes(participant.status),
-  ).length;
+  // WT-274: the same seat rule the room detail page and the meetings list read. This used to
+  // count "everyone not left/removed/kicked", which includes the lobby and people who merely
+  // disconnected — a fourth, private definition of presence in a codebase that now has one.
+  const activeCount = roomOccupancy({
+    capacity: room?.maxParticipants,
+    participants,
+  }).seatCount;
   const joinLink = room?.translationRoomCode
     ? getJoinLink(room.translationRoomCode)
     : "";
@@ -648,9 +666,10 @@ export function PersistentMeetingSession({
   // from that speaker's, so the listener hears ONLY the AI interpreter dub instead of the
   // original layered underneath it. speakLanguage/targetLanguage can each independently be
   // a bare code ("vi") or locale-tagged ("vi-VN") depending on where the value came from —
-  // normalizeLanguageCode (this file's, not @/lib/languages' — that one doesn't strip
-  // locale tags) is what makes the comparison correct regardless of which form either side
-  // happens to be in.
+  // normalizeLanguageCode is what makes the comparison correct regardless of which form
+  // either side happens to be in. This file keeps its own copy (below) rather than using
+  // @/lib/languages': audio routing must not start depending on the language registry, so
+  // that an unlisted language degrades to "no dub" rather than to an unmuted raw mic.
   const speakerLanguageByUserId = useMemo(() => {
     const map: Record<string, string> = {};
     for (const participant of participants) {
@@ -1418,11 +1437,11 @@ export function PersistentMeetingSession({
   }
 
   function handleToggleMuteOnEntry(enabled: boolean) {
-    const previous = muteOnEntryEnabled;
-    setMuteOnEntryEnabled(enabled); // optimistic — not broadcast live, see MeetingRoomService.SetMuteOnEntryAsync
+    const previous = muteOnEntryOverride;
+    setMuteOnEntryOverride(enabled); // optimistic — not broadcast live, see MeetingRoomService.SetMuteOnEntryAsync
     setMuteOnEntryMutation.mutate(enabled, {
       onError: () => {
-        setMuteOnEntryEnabled(previous);
+        setMuteOnEntryOverride(previous);
         toast.error("Could not update mute-on-entry.");
       },
     });

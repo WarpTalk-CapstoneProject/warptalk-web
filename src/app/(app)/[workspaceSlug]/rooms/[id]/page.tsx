@@ -30,6 +30,7 @@ import {
   Loader2,
   MapPin,
   MoreHorizontal,
+  Play,
   Quote,
   Star,
   StopCircle,
@@ -46,6 +47,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
@@ -61,12 +63,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import {
   useTranscriptByRoom,
   useTranscriptSegments,
 } from "@/hooks/use-transcripts";
 import {
   useEndTranslationRoom,
+  useStartTranslationRoom,
   useTranslationRoom,
   useTranslationRoomInvitations,
   useTranslationRoomParticipants,
@@ -74,11 +78,12 @@ import {
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { getErrorMessage } from "@/lib/errors";
 import { getLanguageName } from "@/lib/languages";
 import { saveBlobDownload } from "@/lib/download-artifact";
 import {
-  canJoinTranslationRoom,
-  shouldEnterWaitingRoom,
+  resolveRoomEntryIntent,
+  type RoomEntryIntent,
 } from "@/lib/translation-room-access";
 import {
   groupSavedTranscriptSegments,
@@ -91,7 +96,6 @@ import {
   translationRoomService,
 } from "@/services/translationRoom.service";
 import { useAuthStore } from "@/stores/auth-store";
-import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { UserDto } from "@/types/auth";
 import type { TranscriptSegmentDto } from "@/types/transcript";
@@ -139,13 +143,8 @@ export default function RoomInformationPage() {
   const participantsQuery = useTranslationRoomParticipants(roomId);
   const invitationsQuery = useTranslationRoomInvitations(roomId);
   const endRoomMutation = useEndTranslationRoom();
+  const startRoomMutation = useStartTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
-  const liveParticipants = useTranslationRoomStore(
-    (state) => state.participants,
-  );
-  const liveRoomState = useTranslationRoomStore(
-    (state) => state.translationRoomState,
-  );
   const user = useAuthStore((state) => state.user);
 
   const transcriptQuery = useTranscriptByRoom(roomId);
@@ -164,22 +163,10 @@ export default function RoomInformationPage() {
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
-  const activeApiParticipants = apiParticipants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status.toLowerCase()),
-  );
-  const activeLiveParticipants = liveParticipants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status?.toLowerCase() ?? ""),
-  );
-  const liveStateMatchesRoom =
-    !liveRoomState || liveRoomState.translationRoomId === roomId;
-  const activeParticipantCount =
-    liveStateMatchesRoom && activeLiveParticipants.length > 0
-      ? activeLiveParticipants.length
-      : activeApiParticipants.length > 0
-        ? activeApiParticipants.length
-        : room?.status === "in_progress"
-          ? (room.participantCount ?? 0)
-          : 0;
+  // WT-274: the ONE read of "who is in this room" on this page. The header chip and the
+  // Tracking panel both render off this object; neither one filters a status itself, which is
+  // what let them show 1/100 and "Attendees: 0" at the same moment.
+  const occupancy = useRoomOccupancy(room, participantsQuery.data ?? null);
 
   useRegisterAssistantContext(
     room
@@ -190,7 +177,7 @@ export default function RoomInformationPage() {
           snapshot: {
             title: room.title,
             status: room.status,
-            participantCount: String(activeParticipantCount),
+            participantCount: String(occupancy.seatCount),
           },
         }
       : null,
@@ -213,9 +200,44 @@ export default function RoomInformationPage() {
   }
 
   const isEnded = room.status === "ended";
-  const canJoinRoom = canJoinTranslationRoom(room.status);
-  const entersWaitingRoom = shouldEnterWaitingRoom(room.status);
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
+  // WT-273: the CTA is one decision, taken with the viewer's host identity in hand. It used to
+  // be derived from room.status alone, three lines above where `isHost` was computed, so the
+  // host was offered the lobby CTA and told to wait for himself.
+  const entryIntent = resolveRoomEntryIntent({
+    status: room.status,
+    isHost,
+    statusLabel: statusLabels[room.status],
+    scheduledAtLabel: room.scheduledAt ? formatDateTime(room.scheduledAt) : null,
+  });
+
+  async function handleRoomEntry() {
+    if (!room) return;
+    switch (entryIntent.mode) {
+      case "unavailable":
+        return;
+      case "host_start":
+        // The host opens the room rather than queueing for it. Mirrors the lobby console's
+        // own start action (rooms/[id]/waiting/page.tsx).
+        try {
+          await startRoomMutation.mutateAsync(room.id);
+          router.push(`/room/${room.id}`);
+        } catch (error) {
+          toast.error(getErrorMessage(error, "Could not start the meeting."));
+        }
+        return;
+      case "lobby":
+        // WT-232: a room nobody has started yet has no call to join. Sending people through
+        // device setup into an empty session was the confusing part of that report — the lobby
+        // is where they actually wait, and it says so.
+        router.push(`/${workspaceSlug}/rooms/${roomId}/waiting`);
+        return;
+      case "join":
+        useUIStore.getState().setSetupRoomId(roomId);
+        useUIStore.getState().setSetupRoomModalOpen(true);
+    }
+  }
+
   const participants = buildUserList(
     room,
     apiParticipants,
@@ -224,6 +246,16 @@ export default function RoomInformationPage() {
     user,
   );
   const hostUser = getHostUser(room, participants, membersArray, user);
+  // WT-274: the Tracking panel's rows are the seat holders `occupancy` already resolved,
+  // mapped through the same identity resolver the rest of the page uses. It does not re-decide
+  // who counts.
+  const seatedIdentities = occupancy.seated.map((participant) =>
+    toUserIdentity(participant, membersArray, user),
+  );
+  const seatedIds = new Set(seatedIdentities.map((identity) => identity.id));
+  const notInRoom = participants.filter(
+    (participant) => !seatedIds.has(participant.id),
+  );
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
       {copiedText ? (
@@ -255,12 +287,26 @@ export default function RoomInformationPage() {
                   <MeetingPropertiesPills
                     room={room}
                     apiParticipants={apiParticipants}
-                    activeParticipantCount={activeParticipantCount}
+                    occupancyLabel={occupancy.label}
                     user={user}
                   />
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <StatusChip status={room.status} />
+                  {/* WT-197: the primary action lives here, at the top of the page, next to the
+                      title. It used to exist only in "Meeting access" — the last panel of a
+                      sticky, independently scrolling right column — so it sat below the fold
+                      with nothing on screen hinting that more content existed. A mentor lost
+                      ~40 minutes hunting for it during a live demo. The panel keeps its copy of
+                      the control; both render the same `entryIntent`. */}
+                  {entryIntent.isActionable ? (
+                    <RoomEntryButton
+                      intent={entryIntent}
+                      pending={startRoomMutation.isPending}
+                      onActivate={handleRoomEntry}
+                      className="h-9 px-4"
+                    />
+                  ) : null}
                   {room.hostId === user?.id &&
                   (room.status === "scheduled" || room.status === "waiting") ? (
                     <Button
@@ -345,29 +391,33 @@ export default function RoomInformationPage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
                   <ChevronDown className="size-3" />
-                  Attendees:{" "}
-                  {
-                    participants.filter(
-                      (participant) => participant.id !== hostUser.id,
-                    ).length
-                  }
+                  Attendees: {occupancy.label}
                 </div>
                 <div className="space-y-1.5">
-                  {participants.filter(
-                    (participant) => participant.id !== hostUser.id,
-                  ).length > 0 ? (
-                    participants
-                      .filter((participant) => participant.id !== hostUser.id)
-                      .map((participant) => (
-                        <UserRow key={participant.id} user={participant} />
-                      ))
+                  {seatedIdentities.length > 0 ? (
+                    seatedIdentities.map((participant) => (
+                      <UserRow key={participant.id} user={participant} />
+                    ))
                   ) : (
                     <p className="text-[12px] text-muted-foreground">
-                      No attendees yet.
+                      Nobody is in the room right now.
                     </p>
                   )}
                 </div>
               </div>
+              {notInRoom.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+                    <ChevronDown className="size-3" />
+                    Invited: {notInRoom.length}
+                  </div>
+                  <div className="space-y-1.5">
+                    {notInRoom.map((participant) => (
+                      <UserRow key={participant.id} user={participant} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </PropertyPanel>
 
             <PropertyPanel title="Actions">
@@ -428,33 +478,15 @@ export default function RoomInformationPage() {
                   </p>
                 </div>
               </div>
-              <Button
-                className="h-9 justify-between rounded-md text-[13px] !text-white [&_svg]:!text-white"
-                disabled={!canJoinRoom}
-                onClick={() => {
-                  // WT-232: a room nobody has started yet has no call to join. Sending people
-                  // through device setup into an empty session was the confusing part of the
-                  // report — the lobby is where they actually wait, and it says so.
-                  if (entersWaitingRoom) {
-                    router.push(`/${workspaceSlug}/rooms/${roomId}/waiting`);
-                    return;
-                  }
-                  useUIStore.getState().setSetupRoomId(roomId);
-                  useUIStore.getState().setSetupRoomModalOpen(true);
-                }}
-              >
-                {!canJoinRoom
-                  ? statusLabels[room.status]
-                  : entersWaitingRoom
-                    ? "Enter waiting room"
-                    : "Join meeting"}
-                <ArrowRight className="size-4" />
-              </Button>
-              {entersWaitingRoom ? (
+              <RoomEntryButton
+                intent={entryIntent}
+                pending={startRoomMutation.isPending}
+                onActivate={handleRoomEntry}
+                className="h-9 w-full justify-between"
+              />
+              {entryIntent.helpText ? (
                 <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-                  {room.scheduledAt
-                    ? `This meeting starts ${formatDateTime(room.scheduledAt)}. You'll wait in the lobby until the host opens it.`
-                    : "You'll wait in the lobby until the host opens this meeting."}
+                  {entryIntent.helpText}
                 </p>
               ) : null}
             </PropertyPanel>
@@ -462,6 +494,43 @@ export default function RoomInformationPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * WT-197 / WT-273: the room's primary action, rendered identically wherever it appears.
+ *
+ * It exists as a component because WT-197 puts a second copy of it in the page header — the
+ * one place a visitor is guaranteed to be looking — while the "Meeting access" panel keeps
+ * its own. Both are driven by the same `RoomEntryIntent`, so the label, the disabled state and
+ * the action cannot drift between them.
+ */
+function RoomEntryButton({
+  intent,
+  pending,
+  onActivate,
+  className,
+}: {
+  intent: RoomEntryIntent;
+  pending: boolean;
+  onActivate: () => void;
+  className?: string;
+}) {
+  const isStart = intent.mode === "host_start";
+
+  return (
+    <Button
+      className={cn(
+        "rounded-md text-[13px] !text-white [&_svg]:!text-white",
+        className,
+      )}
+      disabled={!intent.isActionable || pending}
+      onClick={onActivate}
+    >
+      {isStart ? <Play className="size-4" /> : null}
+      {pending ? "Starting..." : intent.label}
+      {isStart ? null : <ArrowRight className="size-4" />}
+    </Button>
   );
 }
 

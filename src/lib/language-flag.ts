@@ -1,28 +1,20 @@
+// Explicit .ts extension so the node --test runner resolves this the same way the bundler
+// does; tsconfig sets allowImportingTsExtensions for exactly this.
+import { SUPPORTED_LANGUAGES } from "./languages.ts";
+
 /**
- * Flag emoji for a language tag, so the in-meeting language menu and the create-meeting
- * language picker render the same way. Extracted from the create picker, which owned the
- * only copy — the control bar had no flags at all.
+ * Flag emoji for a language tag, so every language picker renders the same way.
  *
  * Accepts both a locale ("vi-VN") and a bare code ("vi"): rooms carry locale tags while the
  * AI side keys everything by the bare ISO-639-1 code.
+ *
+ * The region for a bare code comes from the language registry rather than a second table
+ * kept by hand here — that copy had drifted from the registry, which is how a language could
+ * end up rendering a correct flag beside a raw, un-named code.
  */
-const REGION_BY_LANGUAGE: Record<string, string> = {
-  en: "US",
-  vi: "VN",
-  ja: "JP",
-  ko: "KR",
-  fr: "FR",
-  es: "ES",
-  de: "DE",
-  zh: "CN",
-  pt: "PT",
-  it: "IT",
-  ru: "RU",
-  ar: "SA",
-  hi: "IN",
-  th: "TH",
-  id: "ID",
-};
+const REGION_BY_LANGUAGE: Record<string, string> = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map((language) => [language.code, language.region]),
+);
 
 export function getFlagEmoji(locale: string): string {
   if (!locale) return "";

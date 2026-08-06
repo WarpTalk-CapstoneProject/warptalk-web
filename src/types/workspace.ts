@@ -17,6 +17,15 @@ export interface CreateWorkspaceRequest {
   requireVerifiedDomainForInternal?: boolean;
 }
 
+export interface VerifiedDomainDto {
+  id: string;
+  domain: string;
+  status: string;
+  verificationToken?: string | null;
+  createdAt: string;
+  verifiedAt?: string | null;
+}
+
 export interface WorkspaceSettingsDto {
   defaultLanguage: string;
   timezone: string;
@@ -24,6 +33,7 @@ export interface WorkspaceSettingsDto {
   voiceCloningEnabled: boolean;
   maxActiveRooms: number;
   artifactRetentionDays: number;
+  invitationExpiryDays: number;
   enforceHostApprovalDefault: boolean;
   verifiedDomains: string[];
   allowExternalCollaboration: boolean;
@@ -37,6 +47,7 @@ export interface AiUsagePolicyDto {
   redactPii?: PiiRedactionDto | null;
   dlp?: DlpDto | null;
   translationProfile?: TranslationProfileDto | null;
+  useGlobalGlossary?: boolean | null;
 }
 
 export interface PiiRedactionDto {
@@ -72,6 +83,36 @@ export interface WorkspaceMemberDto {
   canCreateMeetings: boolean;
 }
 
+export interface WorkspaceRoleChangePreview {
+  targetUserId: string;
+  currentRole: string;
+  targetRole: string;
+  membershipType: string;
+  canCreateMeetings: boolean;
+  impact: string[];
+  expiresAt: string;
+  previewToken?: string | null;
+  coolingOffUntil?: string | null;
+}
+
+export interface WorkspaceRoleChangeResult {
+  targetUserId?: string;
+  oldRole: string;
+  newRole: string;
+  effectiveAt: string;
+  effectiveBehavior?: string;
+  auditId: string;
+  member?: WorkspaceMemberDto | null;
+  idempotencyKey?: string | null;
+}
+
+export interface ApplyWorkspaceRoleChangeRequest {
+  targetRole: string;
+  idempotencyKey: string;
+  previewToken: string;
+  correlationId?: string | null;
+}
+
 export interface WorkspaceInvitationDto {
   id: string;
   workspaceId: string;
@@ -86,6 +127,17 @@ export interface WorkspaceInvitationDto {
   expiresAt: string;
   createdAt: string;
   acceptedAt?: string | null;
+  requestedBy?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  workspaceName?: string | null;
+  workspaceSlug?: string | null;
+}
+
+export interface ApproveJoinRequestResponse {
+  invitation: WorkspaceInvitationDto;
+  approvalEmailStatus: "Sent" | "Failed" | string;
+  approvalEmailError?: string | null;
 }
 
 export interface InviteMemberResponse {
