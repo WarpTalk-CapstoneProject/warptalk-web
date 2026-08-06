@@ -1,5 +1,6 @@
 "use client";
 
+
 import type { IconProps } from "@phosphor-icons/react";
 import {
   CaretDown,
@@ -24,10 +25,12 @@ import {
   Warning,
   Waveform,
 } from "@phosphor-icons/react/dist/ssr";
+import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -744,12 +747,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               collapsed ? "justify-center p-1" : "gap-2.5 p-2",
             )}
           >
-            <Avatar className="size-8 rounded-lg border border-border/50">
-              <AvatarImage src={user.avatarUrl} alt={user.fullName} />
-              <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
-                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
-              </AvatarFallback>
-            </Avatar>
+            {/* Your own dot, so the state everyone else sees for you is not a mystery. */}
+            <div className="relative size-8 shrink-0">
+              <Avatar className="size-8 rounded-lg border border-border/50">
+                <AvatarImage src={user.avatarUrl} alt={user.fullName} />
+                <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
+                  {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+                </AvatarFallback>
+              </Avatar>
+              <AvatarPresenceDot userId={user.id} />
+            </div>
             {!collapsed && (
               <div className="flex flex-col min-w-0 flex-1">
                 <span className="text-[13px] font-medium text-ink truncate leading-tight">
@@ -889,7 +896,23 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               Internal or External access is assigned automatically from verified email domains.
             </p>
 
-            <DialogFooter className="-mx-5 -mb-5 mt-1">
+            <div className="grid gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="invite-role" className="text-[13px] font-medium text-foreground">
+                  Role
+                </Label>
+                <select
+                  id="invite-role"
+                  value={inviteRoleName}
+                  onChange={(e) => setInviteRoleName(e.target.value)}
+                  className="h-9 rounded-[8px] border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="Member">Member</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <DialogFooter className="pt-2">
               <Button
                 type="button"
                 variant="outline"

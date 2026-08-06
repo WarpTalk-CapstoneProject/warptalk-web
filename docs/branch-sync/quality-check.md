@@ -1,9 +1,14 @@
-# Branch Sync Quality Check
+# PR #76 Join Request Eligibility Quality Check
 
-## 2026-08-04 - web PR #76
+## Scope
 
-- `npm audit --omit=dev --audit-level=high`: passed, `found 0 vulnerabilities`.
-- `npm run typecheck`: passed.
-- `npm run test:join-request-eligibility`: passed, 3 tests.
-- `npm run build`: passed.
-- Remote checks after push: pending before push.
+- PR branch: `feat/workspace-join-request-eligibility`
+- Merged base branch: `chore/update-auto-save-settings-pages` (PR #74)
+
+## Results
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Type check | `npm run typecheck` | Pass |
+| Lint | `npm run lint` | Pass |
+| Production build | `npm run build` | Pass |

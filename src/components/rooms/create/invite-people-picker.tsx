@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   Popover,
@@ -10,6 +10,9 @@ import { PillButton } from "./pill-button";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { matchesSearchText } from "@/lib/search-text";
+import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { usePresence } from "@/hooks/use-presence";
 
 export function isValidInviteEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
@@ -30,12 +33,36 @@ export function InvitePeoplePicker({
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
+
+  // The server holds the authoritative member list and only returns one page, so the typed
+  // term has to reach it — a workspace with more members than the page size would otherwise
+  // never surface anyone past the first page. Debounced so each keystroke is not a request.
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(input.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [input]);
+
   const { data: membersData } = useWorkspaceMembers(
     activeWorkspaceId || "",
     1,
     100,
+    search,
   );
-  const members = membersData?.items ?? [];
+  // Memoised so the effect below is not re-run by a fresh array on every render.
+  const members = useMemo(() => membersData?.items ?? [], [membersData?.items]);
+
+  // Resolves the dots for everyone in the fetched page in one request rather than one per row.
+  usePresence(members.map((member) => member.userId));
+
+  // Names for the invited chips have to survive the list narrowing: once a search term is in
+  // flight the fetched page no longer contains the members already added, so a chip looked up
+  // in the current page would fall back to the raw email.
+  //
+  // Captured when the member is picked rather than synced from the list in an effect — the
+  // click already knows the name, which makes this a plain event-handler write instead of a
+  // render-time cache that has to be kept in step.
+  const [pickedNames, setPickedNames] = useState<Record<string, string>>({});
 
   const suggestedMembers = members.filter(
     (m) =>
@@ -45,7 +72,10 @@ export function InvitePeoplePicker({
       isValidInviteEmail(m.email ?? "") &&
       m.userId !== user?.id &&
       m.email?.toLowerCase() !== user?.email.toLowerCase() &&
-      !emails.includes((m.email ?? "").toLowerCase()),
+      !emails.includes((m.email ?? "").toLowerCase()) &&
+      // Narrow locally too: the debounced request lags the keystroke, and without this the
+      // list keeps showing everyone until it lands (WT-231).
+      matchesSearchText(input, m.fullName, m.email),
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -70,7 +100,7 @@ export function InvitePeoplePicker({
     onChange(emails.filter((e) => e !== email));
   };
 
-  const addEmail = (email: string) => {
+  const addEmail = (email: string, fullName?: string) => {
     const normalizedEmail = email.trim().toLowerCase();
     if (!isValidInviteEmail(normalizedEmail)) {
       setInputError("This workspace member does not have a valid email.");
@@ -78,6 +108,9 @@ export function InvitePeoplePicker({
     }
     if (!emails.includes(normalizedEmail)) {
       onChange([...emails, normalizedEmail]);
+    }
+    if (fullName && fullName !== "Unknown") {
+      setPickedNames((current) => ({ ...current, [normalizedEmail]: fullName }));
     }
     setInputError("");
   };
@@ -125,10 +158,11 @@ export function InvitePeoplePicker({
           {emails.length > 0 && (
             <div className="mt-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
               {emails.map((email) => {
-                const member = members.find(
-                  (m) => m.email?.toLowerCase() === email,
-                );
-                const displayText = member?.fullName || email;
+                const displayText =
+                  pickedNames[email] ||
+                  members.find((m) => m.email?.toLowerCase() === email)
+                    ?.fullName ||
+                  email;
                 return (
                   <div
                     key={email}
@@ -157,23 +191,26 @@ export function InvitePeoplePicker({
                 {suggestedMembers.map((member) => (
                   <button
                     key={member.id}
-                    onClick={() => addEmail(member.email ?? "")}
+                    onClick={() => addEmail(member.email ?? "", member.fullName)}
                     className="flex items-center gap-2 text-[12px] hover:bg-surface-2 px-2 py-1.5 rounded transition-colors text-left"
                   >
-                    <div className="relative h-6 w-6 rounded-full bg-surface-3 flex items-center justify-center shrink-0 overflow-hidden text-ink-muted font-medium text-[10px]">
-                      {member.avatarUrl ? (
-                        <Image
-                          src={member.avatarUrl}
-                          alt={member.fullName || "User"}
-                          fill
-                          sizes="24px"
-                          className="object-cover"
-                        />
-                      ) : (
-                        (member.fullName || member.email || "U")
-                          .charAt(0)
-                          .toUpperCase()
-                      )}
+                    <div className="relative h-6 w-6 shrink-0">
+                      <div className="h-full w-full rounded-full bg-surface-3 flex items-center justify-center overflow-hidden text-ink-muted font-medium text-[10px] relative">
+                        {member.avatarUrl ? (
+                          <Image
+                            src={member.avatarUrl}
+                            alt={member.fullName || "User"}
+                            fill
+                            sizes="24px"
+                            className="object-cover"
+                          />
+                        ) : (
+                          (member.fullName || member.email || "U")
+                            .charAt(0)
+                            .toUpperCase()
+                        )}
+                      </div>
+                      <AvatarPresenceDot userId={member.userId} />
                     </div>
                     <div className="flex flex-col overflow-hidden">
                       <span className="truncate font-medium text-ink leading-tight">

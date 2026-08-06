@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Clock, Copy, ShieldCheck, Spinner, UserCheck, Users } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackToSetupButton } from "@/components/rooms/setup/back-to-setup-button";
+import { LanguageLabel } from "@/components/language/language-label";
 import { getErrorMessage } from "@/lib/errors";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -22,10 +23,20 @@ export default function WaitingRoomPage() {
   const { id: roomId } = useParams<{ workspaceSlug: string; id: string }>();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const roomQuery = useTranslationRoom(roomId);
+  // Polled so the lobby notices the host starting without anyone having to reload (WT-232).
+  const roomQuery = useTranslationRoom(roomId, 3000);
   const participantsQuery = useTranslationRoomParticipants(roomId);
   const startRoom = useStartTranslationRoom();
   const admitParticipant = useAdmitParticipant(roomId);
+
+  const roomStatus = roomQuery.data?.status;
+  useEffect(() => {
+    // The host is routed by startMeeting() itself; this carries everyone else in once the
+    // meeting actually opens, which is the whole point of sitting in a lobby.
+    if (roomStatus === "in_progress" || roomStatus === "paused") {
+      router.push(`/room/${roomId}`);
+    }
+  }, [roomStatus, roomId, router]);
 
   async function startMeeting() {
     try {
@@ -110,8 +121,10 @@ export default function WaitingRoomPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-medium">{participant.displayName || "Participant"}</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {participant.speakLanguage} → {participant.listenLanguage}
+                  <p className="flex items-center gap-1 truncate text-sm text-muted-foreground">
+                    <LanguageLabel value={participant.speakLanguage} />
+                    <span aria-hidden>→</span>
+                    <LanguageLabel value={participant.listenLanguage} />
                   </p>
                 </div>
               </div>
@@ -137,8 +150,12 @@ export default function WaitingRoomPage() {
       <div className="grid gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Host actions</CardTitle>
-            <CardDescription>Move from waiting room into the live surface.</CardDescription>
+            <CardTitle>{isHost ? "Host actions" : "Waiting for the host"}</CardTitle>
+            <CardDescription>
+              {isHost
+                ? "Move from waiting room into the live surface."
+                : "You'll be taken in automatically as soon as the host starts the meeting."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
             {isHost && (

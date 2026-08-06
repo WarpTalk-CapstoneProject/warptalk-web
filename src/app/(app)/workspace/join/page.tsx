@@ -10,7 +10,7 @@ import {
   Spinner,
   CheckCircle,
   WarningCircle,
-  Globe
+  Globe,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -89,7 +89,7 @@ function JoinWorkspaceContent() {
     data: preflight,
     isLoading: preflightLoading,
     error: preflightError,
-    refetch: refetchPreflight
+    refetch: refetchPreflight,
   } = useRoomPreflight(code, !!code);
 
   const createJoinRequestMutation = useCreateJoinRequest();

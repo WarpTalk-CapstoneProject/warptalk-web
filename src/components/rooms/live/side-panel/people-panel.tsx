@@ -10,6 +10,8 @@ import {
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { HandRaiseBadge } from "@/components/rooms/live/hand-raise-badge";
+import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { usePresence } from "@/hooks/use-presence";
 import {
   Dialog,
   DialogContent,
@@ -70,6 +72,9 @@ export function PeoplePanel({
     (participant) =>
       !["left", "removed", "kicked", "rejected"].includes(participant.status),
   );
+
+  // One request for the whole roster instead of one per row.
+  usePresence(visibleParticipants.map((participant) => participant.userId));
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -200,8 +205,14 @@ function ParticipantRow({
     <>
       <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-canvas">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-sm bg-primary/10 text-[10px] font-bold text-primary">
-            {initials(participant.displayName)}
+          {/* The badges to the right say where someone is relative to THIS room; the dot says
+              whether they are reachable in the app at all — which is the difference between an
+              invitee who has not clicked in yet and one who is not around. */}
+          <div className="relative h-7 w-7 shrink-0">
+            <div className="grid h-full w-full place-items-center rounded-sm bg-primary/10 text-[10px] font-bold text-primary">
+              {initials(participant.displayName)}
+            </div>
+            <AvatarPresenceDot userId={participant.userId} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">

@@ -17,6 +17,7 @@ import type {
   PreviewInvitationResponse,
   ExtractedTextDto,
   WorkspaceRoleChangePreview,
+  ApplyWorkspaceRoleChangeRequest,
   WorkspaceRoleChangeResult,
   ApproveJoinRequestResponse
 } from "@/types/workspace";
@@ -54,35 +55,6 @@ export const WorkspaceService = {
     await apiClient.put(API.workspaces.settings(id), settings);
   },
 
-  async previewMemberRoleChange(
-    workspaceId: string,
-    userId: string,
-    toRole: string
-  ): Promise<WorkspaceRoleChangePreview> {
-    const { data } = await apiClient.post<WorkspaceRoleChangePreview>(
-      `/workspaces/${workspaceId}/members/${userId}/role/preview`,
-      { toRole }
-    );
-    return data;
-  },
-
-  async applyMemberRoleChange(
-    workspaceId: string,
-    userId: string,
-    request: {
-      targetRole: string;
-      idempotencyKey?: string;
-      previewToken?: string;
-      correlationId?: string;
-    }
-  ): Promise<WorkspaceRoleChangeResult> {
-    const { data } = await apiClient.put<WorkspaceRoleChangeResult>(
-      `/workspaces/${workspaceId}/members/${userId}/role`,
-      request
-    );
-    return data;
-  },
-
   async deleteWorkspace(id: string): Promise<void> {
     await apiClient.delete(API.workspaces.get(id));
   },
@@ -101,6 +73,30 @@ export const WorkspaceService = {
 
   async changeMemberRole(workspaceId: string, userId: string, roleName: string): Promise<void> {
     await apiClient.put(API.workspaces.memberRole(workspaceId, userId), { roleName });
+  },
+
+  async previewMemberRoleChange(
+    workspaceId: string,
+    userId: string,
+    targetRole: string
+  ): Promise<WorkspaceRoleChangePreview> {
+    const { data } = await apiClient.get<WorkspaceRoleChangePreview>(
+      API.workspaces.memberRoleChangePreview(workspaceId, userId),
+      { params: { toRole: targetRole } }
+    );
+    return data;
+  },
+
+  async applyMemberRoleChange(
+    workspaceId: string,
+    userId: string,
+    request: ApplyWorkspaceRoleChangeRequest
+  ): Promise<WorkspaceRoleChangeResult> {
+    const { data } = await apiClient.post<WorkspaceRoleChangeResult>(
+      API.workspaces.memberRoleChange(workspaceId, userId),
+      request
+    );
+    return data;
   },
 
   async transferOwnership(workspaceId: string, newOwnerId: string): Promise<void> {
