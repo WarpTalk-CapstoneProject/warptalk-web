@@ -12,12 +12,14 @@ async function source(relativePath) {
   });
 }
 
-const [appLayout, roomRoute, meetingSession, meetingStore] = await Promise.all([
-  source("src/app/(app)/layout.tsx"),
-  source("src/app/(app)/room/[id]/page.tsx"),
-  source("src/components/rooms/live/persistent-meeting-session.tsx"),
-  source("src/stores/active-meeting-store.ts"),
-]);
+const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle] =
+  await Promise.all([
+    source("src/app/(app)/layout.tsx"),
+    source("src/app/(app)/room/[id]/page.tsx"),
+    source("src/components/rooms/live/persistent-meeting-session.tsx"),
+    source("src/stores/active-meeting-store.ts"),
+    source("src/lib/meeting-session-lifecycle.ts"),
+  ]);
 
 assert.match(
   meetingStore,
@@ -68,6 +70,106 @@ assert.match(
   meetingSession,
   /handleExit[\s\S]*onMeetingClosed\(\)[\s\S]*router\.push/,
   "only an explicit leave or end action should close the persistent meeting",
+);
+
+// --- Billing: a minimised tab must not hold LiveKit open forever -------------------------
+// A LiveKit token is never withdrawn, so `connect={Boolean(token)}` was true for the life of
+// the tab: wall-clock connection minutes kept billing, and the AI ingress bot kept counting a
+// human and so never idle-released either.
+assert.doesNotMatch(
+  meetingSession,
+  /connect=\{Boolean\(meetingSession\?\.token\)\}/,
+  "LiveKit presence must not be decided by the mere existence of a token",
+);
+assert.match(
+  meetingSession,
+  /const shouldConnectLiveKit = shouldConnectMeeting\(\{\s*\n?\s*hasToken: Boolean\(meetingSession\?\.token\),\s*\n?\s*canConnectRoom: canConnectMeeting,\s*\n?\s*idleReaped: meetingIsIdleReaped,/,
+  "connecting must also require a joinable room and a session that has not been idle-reaped",
+);
+assert.match(
+  lifecycle,
+  /return hasToken && canConnectRoom && !idleReaped;/,
+  "the connect rule itself must stay all three conditions",
+);
+// The LiveKit disconnect alone is not the finish line: an abandoned tab that keeps polling
+// still burns the gateway's 100-req/min/IP budget, whose rejections are bodyless 503s that
+// read as an outage.
+assert.match(
+  meetingSession,
+  /useTranslationRoomParticipants\(\s*\n?\s*roomId,\s*\n?\s*meetingSession !== null &&\s*\n?\s*!meetingSession\.isWaitingRoom &&\s*\n?\s*!meetingIsIdleReaped,/,
+  "an idle-reaped session must stop polling, not just stop publishing",
+);
+assert.match(
+  lifecycle,
+  /MINI_MEETING_IDLE_TIMEOUT_MS = 15 \* 60 \* 1000/,
+  "the minimised idle timeout must stay long enough to survive stepping away from a meeting",
+);
+assert.match(
+  lifecycle,
+  /export function isIdleReaped\([\s\S]*?return compact && idleDisconnected;/,
+  "only a minimised session is ever reaped",
+);
+assert.match(
+  meetingSession,
+  /if \(!compact \|\| idleDisconnected\) return;/,
+  "the idle reaper must never run against the full-size meeting view",
+);
+
+// --- WT-303: localParticipant is the only source of truth for mic/camera ------------------
+// @livekit/components-react@2.9.21 reads <LiveKitRoom audio/video> only inside its
+// RoomEvent.SignalConnected handler, so a post-connect prop change publishes nothing. Buttons
+// that wrote React state therefore muted an icon and nothing else.
+assert.doesNotMatch(
+  meetingSession,
+  /onClick=\{\(\) => setMicrophoneEnabled\(\(current\) => !current\)\}/,
+  "a media button must change the published track, not a React mirror of it",
+);
+assert.doesNotMatch(
+  meetingSession,
+  /onClick=\{\(\) => setCameraEnabled\(\(current\) => !current\)\}/,
+  "a media button must change the published track, not a React mirror of it",
+);
+assert.match(
+  meetingSession,
+  /const \{ enabled, pending, toggle \} = useTrackToggle\(\{ source \}\)/,
+  "the mini window's media buttons must read and write localParticipant, like <TrackToggle>",
+);
+assert.match(
+  meetingSession,
+  /if \(room\.state !== ConnectionState\.Connected\) return;/,
+  "React state may only mirror LiveKit while connected, or a disconnect rewrites the intent",
+);
+assert.match(
+  meetingSession,
+  /localMediaControlRef\.current\?\.setMicrophoneEnabled\(false\)/,
+  "a host's ForceMuted must reach the published track",
+);
+
+// --- WT-306: the meeting survives a reload on a non-room route ---------------------------
+assert.match(
+  meetingStore,
+  /createJSONStorage\(\(\) => sessionStorage\)/,
+  "the active meeting is per-tab: two tabs must not rehydrate one LiveKit identity",
+);
+assert.doesNotMatch(
+  meetingStore,
+  /createJSONStorage\(\(\) => localStorage\)|storage: localStorage/,
+  "the active meeting id must never be shared across tabs",
+);
+assert.match(
+  meetingStore,
+  /partialize: \(state\) => \(\{ activeRoomId: state\.activeRoomId \}\)/,
+  "only the room id may be persisted",
+);
+assert.match(
+  meetingSession,
+  /const meetingRoomIsGone = isRestoredMeetingStale\(\{[\s\S]*?roomLoadFailed: roomQuery\.isError,[\s\S]*?canConnectRoom: canConnectMeeting,/,
+  "a restored room id that no longer resolves must retire the session, not mount a dead panel",
+);
+assert.doesNotMatch(
+  appLayout,
+  /sessionStorage/,
+  "the layout must not read browser storage during render — the store owns rehydration",
 );
 
 console.log("Persistent meeting contract passed.");
