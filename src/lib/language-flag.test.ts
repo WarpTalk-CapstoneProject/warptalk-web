@@ -10,8 +10,10 @@ test("locale tags resolve from their region", () => {
 
 test("bare language codes resolve too", () => {
   // Rooms carry locale tags, the AI side keys everything by the bare code — both reach here.
+  // The region comes from the language registry, so every language a picker offers has one.
   assert.equal(getFlagEmoji("vi"), "🇻🇳");
   assert.equal(getFlagEmoji("en"), "🇺🇸");
+  assert.equal(getFlagEmoji("ko"), "🇰🇷");
 });
 
 test("underscore-separated tags are accepted", () => {

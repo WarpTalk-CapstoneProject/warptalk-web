@@ -15,6 +15,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -33,7 +37,9 @@ import type { IconProps } from "@phosphor-icons/react";
 import {
   CaretDown,
   CaretLeft,
+  Check,
   CreditCard,
+  Desktop,
   EnvelopeSimple,
   FileText,
   GearSix,
@@ -49,6 +55,7 @@ import {
   Sliders,
   SquaresFour,
   User,
+  UserPlus,
   Users,
   Warning,
   Waveform,
@@ -535,50 +542,107 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </>
             )}
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[220px] bg-popover border border-border shadow-md rounded-lg p-1">
-            <div className="px-2 py-1.5 text-xs text-ink-muted font-medium">
-              Workspaces ({workspaces.length})
-            </div>
-            <DropdownMenuSeparator className="bg-border" />
-            <div className="max-h-[160px] overflow-y-auto">
-              {workspaces.map((ws) => {
-                const membershipType =
-                  "membershipType" in ws && typeof ws.membershipType === "string"
-                    ? ws.membershipType
-                    : "Internal";
-
-                return (
-                  <DropdownMenuItem
-                    key={ws.id}
-                    onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", membershipType, ws.defaultLanguage || "en")}
-                    className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2",
-                      ws.id === activeWorkspaceId ? "bg-surface-2 text-primary font-medium" : "text-ink"
-                    )}
-                  >
-                    <div className="w-[16px] h-[16px] rounded bg-gradient-to-br from-pink-500/80 to-rose-500/80 flex items-center justify-center shrink-0 text-[8px] text-white font-bold">
-                      {ws.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <span className="truncate flex-1">{ws.name}</span>
-                  </DropdownMenuItem>
-                );
-              })}
-            </div>
-            <DropdownMenuSeparator className="bg-border" />
+          <DropdownMenuContent align="start" className="w-[230px] bg-popover border border-border shadow-md rounded-xl p-1 text-ink text-[13px]">
+            {/* 1. Settings */}
             <DropdownMenuItem
-              onClick={() => router.push("/workspace/create")}
-              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2 text-ink"
+              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : "/workspace")}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <Plus size={14} className="text-ink-muted" />
-              <span>Create Workspace</span>
+              <span>Settings</span>
+              <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">G then S</DropdownMenuShortcut>
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border" />
+
+            {/* 2. Invite and manage members */}
+            <DropdownMenuItem
+              onClick={() => setIsInviteModalOpen(true)}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+            >
+              <span>Invite and manage members</span>
+            </DropdownMenuItem>
+
+            {/* 3. Download desktop app */}
+            <DropdownMenuItem
+              onClick={() => {
+                window.location.href = `${window.location.origin}/download`;
+              }}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+            >
+              <span>Download desktop app</span>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator className="bg-border/60 my-1" />
+
+            {/* 4. Switch workspace (Submenu) */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]">
+                <span>Switch workspace</span>
+                <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono mr-1">O then W</DropdownMenuShortcut>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-[250px] bg-popover border border-border shadow-lg rounded-xl p-1 text-ink text-[13px]">
+                {/* User email */}
+                {user?.email && (
+                  <div className="px-2.5 py-1.5 text-[12px] text-ink-muted font-normal truncate border-b border-border/40 mb-1">
+                    {user.email}
+                  </div>
+                )}
+                
+                {/* Workspace list */}
+                <div className="max-h-[200px] overflow-y-auto flex flex-col gap-0.5">
+                  {workspaces.map((ws, idx) => {
+                    const membershipType =
+                      "membershipType" in ws && typeof ws.membershipType === "string"
+                        ? ws.membershipType
+                        : "Internal";
+                    const isSelected = ws.id === activeWorkspaceId;
+
+                    return (
+                      <DropdownMenuItem
+                        key={ws.id}
+                        onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", membershipType, ws.defaultLanguage || "en")}
+                        className={cn(
+                          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-[13px]",
+                          isSelected ? "bg-surface-2 font-medium text-ink" : "hover:bg-surface-2 text-ink"
+                        )}
+                      >
+                        <div className="size-4 rounded bg-gradient-to-br from-pink-500/80 to-rose-500/80 flex items-center justify-center shrink-0 text-[8px] text-white font-bold">
+                          {ws.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="truncate flex-1">{ws.name}</span>
+                        {isSelected && <Check size={14} className="text-ink ml-auto shrink-0" weight="bold" />}
+                        <span className="text-[11px] text-ink-subtle ml-1 font-mono">{idx + 1}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </div>
+
+                <DropdownMenuSeparator className="bg-border/60 my-1" />
+                <div className="px-2.5 py-1 text-[11px] font-medium text-ink-subtle">
+                  Account
+                </div>
+                <DropdownMenuItem
+                  onClick={() => router.push("/workspace/create")}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+                >
+                  <span>Create or join a workspace...</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => router.push("/login")}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+                >
+                  <span>Add an account...</span>
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            <DropdownMenuSeparator className="bg-border/60 my-1" />
+
+            {/* 5. Log out */}
             <DropdownMenuItem
               onClick={() => logout()}
-              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2 text-destructive"
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <SignOut size={14} />
-              <span>Sign out</span>
+              <span>Log out</span>
+              <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">Alt ⇧ Q</DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

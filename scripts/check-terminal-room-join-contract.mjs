@@ -33,14 +33,24 @@ for (const status of ["ended", "cancelled", "expired", "failed", "timeout"]) {
   );
 }
 
+// WT-273/WT-197: the room detail page no longer calls canJoinTranslationRoom itself. It asks
+// resolveRoomEntryIntent, which consults canJoinTranslationRoom first and reports a terminal
+// room as mode "unavailable" with isActionable false. The guarantee below is unchanged — a
+// terminal room cannot open the join flow — only the place it is decided moved, so that the
+// promoted header CTA and the "Meeting access" CTA cannot disagree about it.
+assert.match(
+  accessPolicy,
+  /if \(!canJoinTranslationRoom\(input\.status\)\) \{[\s\S]{0,200}?mode: "unavailable"[\s\S]{0,120}?isActionable: false/,
+  "The access policy must report a terminal room as unavailable and not actionable.",
+);
 assert.match(
   roomDetail,
-  /canJoinTranslationRoom\(room\.status\)/,
+  /resolveRoomEntryIntent\(\{/,
   "Room detail must derive whether the current room can be joined.",
 );
 assert.match(
   roomDetail,
-  /disabled=\{!canJoinRoom\}/,
+  /disabled=\{!intent\.isActionable \|\| pending\}/,
   "Room detail must disable the Join meeting CTA for terminal rooms.",
 );
 assert.match(

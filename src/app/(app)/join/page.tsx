@@ -23,6 +23,8 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
+import { getFlagEmoji } from "@/lib/language-flag";
+import { getLanguageName, languagesInScope } from "@/lib/languages";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 import { completeMeetingJoin } from "@/lib/meeting-join-state";
 import { cn } from "@/lib/utils";
@@ -30,21 +32,13 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toast } from "sonner";
 
-const languages = [
-  { value: "en-US", label: "English" },
-  { value: "vi-VN", label: "Vietnamese" },
-  { value: "ja-JP", label: "Japanese" },
-];
-
-const getFlagEmoji = (countryCode: string) => {
-  if (!countryCode) return "";
-  const code = countryCode.split("-")[1] || countryCode.toUpperCase();
-  const codePoints = code
-    .toUpperCase()
-    .split("")
-    .map((char) => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
-};
+// Was a hardcoded three — English, Vietnamese, Japanese — while a meeting can be created in
+// six. A room declaring Korean, French or Spanish could not be joined in the language it was
+// created for, because this screen simply never offered it.
+const languages = languagesInScope("meeting").map((language) => ({
+  value: language.locale,
+  label: language.name,
+}));
 
 type SinkVideoElement = HTMLVideoElement & {
   setSinkId?: (sinkId: string) => Promise<void>;
@@ -485,7 +479,7 @@ function JoinMeetingContent() {
                       {getFlagEmoji(speakLanguage)}
                     </span>
                     <span className="font-medium text-ink">
-                      {speakLanguage.split("-")[0].toUpperCase()}
+                      {getLanguageName(speakLanguage)}
                     </span>
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-border/50 shadow-xl">
@@ -519,7 +513,7 @@ function JoinMeetingContent() {
                       {getFlagEmoji(listenLanguage)}
                     </span>
                     <span className="font-medium text-ink">
-                      {listenLanguage.split("-")[0].toUpperCase()}
+                      {getLanguageName(listenLanguage)}
                     </span>
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-border/50 shadow-xl">

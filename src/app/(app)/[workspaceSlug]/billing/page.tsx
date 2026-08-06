@@ -13,7 +13,10 @@ import {
   Lock,
   Funnel,
   SlidersHorizontal,
+  WarningCircle,
+  ArrowClockwise,
 } from "@phosphor-icons/react";
+import { isAxiosError } from "axios";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -74,6 +77,43 @@ import AdminBillingPage from "@/app/(internal)/billing/page";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
+
+/**
+ * The billing API answers "this workspace has no plan" with an explicit error code rather than an
+ * empty payload, on every endpoint that needs a subscription to compute anything (balance,
+ * subscription, monthly report). That is a legitimate account state, not a broken request, and the
+ * two must not collapse into the same UI.
+ */
+const NO_SUBSCRIPTION_CODE = "BILLING_SUBSCRIPTION_NOT_FOUND";
+
+interface BillingErrorBody {
+  error?: string;
+  message?: string;
+  Message?: string;
+  code?: string;
+}
+
+function isNoSubscriptionError(error: unknown): boolean {
+  return (
+    isAxiosError<BillingErrorBody>(error) &&
+    error.response?.data?.code === NO_SUBSCRIPTION_CODE
+  );
+}
+
+function getBillingErrorMessage(error: unknown): string {
+  if (isAxiosError<BillingErrorBody>(error)) {
+    const body = error.response?.data;
+    const detail = body?.message ?? body?.Message ?? body?.error;
+    if (detail) return detail;
+    if (error.response?.status) {
+      return `The billing service responded with HTTP ${error.response.status}.`;
+    }
+    return error.message;
+  }
+  return error instanceof Error
+    ? error.message
+    : "An unexpected error occurred.";
+}
 
 function getIconForUsage(usageType: string) {
   if (usageType.toLowerCase().includes("translation")) return Translate;
@@ -167,21 +207,33 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     };
   }, [queryClient, accessToken, isAuthenticated, workspaceId]);
 
-  const { data: balance, isLoading: isBalanceLoading } = useQuery({
+  const {
+    data: balance,
+    isLoading: isBalanceLoading,
+    error: balanceError,
+  } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId),
     enabled: !!workspaceId,
     retry: 1,
   });
 
-  const { data: subscription, isLoading: isSubscriptionLoading } = useQuery({
+  const {
+    data: subscription,
+    isLoading: isSubscriptionLoading,
+    error: subscriptionError,
+  } = useQuery({
     queryKey: ["billing", "subscription", workspaceId],
     queryFn: () => billingService.getActiveSubscription(workspaceId),
     enabled: !!workspaceId,
     retry: 1,
   });
 
-  const { data: report, isLoading: isReportLoading } = useQuery({
+  const {
+    data: report,
+    isLoading: isReportLoading,
+    error: reportError,
+  } = useQuery({
     queryKey: ["billing", "report", workspaceId, CURRENT_YEAR, CURRENT_MONTH],
     queryFn: () =>
       billingService.getBillingReport(workspaceId, CURRENT_MONTH, CURRENT_YEAR),
@@ -486,6 +538,23 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     ? `${subscription.price.toLocaleString("vi-VN")}đ`
     : "--";
 
+  // The three queries below own every number on this surface. If any of them failed we must not
+  // fall through to the normal layout, because `?? 0` would paint a fabricated balance of 0 next to
+  // spinners that never resolve.
+  const coreErrors = [balanceError, subscriptionError, reportError];
+  const isCoreLoading =
+    isBalanceLoading || isSubscriptionLoading || isReportLoading;
+  const hasNoSubscription = coreErrors.some(isNoSubscriptionError);
+  const hardError = coreErrors.find(
+    (error) => error && !isNoSubscriptionError(error),
+  );
+
+  const retryBillingQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["billing"] });
+    queryClient.invalidateQueries({ queryKey: ["workspace-usage-chart"] });
+    queryClient.invalidateQueries({ queryKey: ["workspace-feature-breakdown"] });
+  };
+
   if (!role) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-canvas">
@@ -510,6 +579,19 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           </CardHeader>
         </Card>
       </div>
+    );
+  }
+
+  if (!isCoreLoading && hasNoSubscription) {
+    return <BillingNoSubscriptionState workspaceSlug={workspaceSlug} />;
+  }
+
+  if (!isCoreLoading && hardError) {
+    return (
+      <BillingErrorState
+        message={getBillingErrorMessage(hardError)}
+        onRetry={retryBillingQueries}
+      />
     );
   }
 
@@ -1771,6 +1853,84 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * Legitimate account state: the workspace simply has no plan yet. Deliberately not styled as a
+ * failure, and it carries the one action that resolves it.
+ */
+function BillingNoSubscriptionState({
+  workspaceSlug,
+}: {
+  workspaceSlug: string;
+}) {
+  return (
+    <div className="flex h-[80vh] items-center justify-center w-full">
+      <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">
+        <CardHeader className="flex flex-col items-center gap-2">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <CreditCard className="h-6 w-6" />
+          </div>
+          <CardTitle className="text-lg font-bold">
+            No active subscription
+          </CardTitle>
+          <CardDescription className="text-xs">
+            This workspace does not have a billing plan yet, so there is no
+            balance or usage to report. Choose a plan to start tracking credits
+            and AI usage.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center pt-2">
+          <Link href={`/${workspaceSlug}/payment/plans`}>
+            <button className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-4 text-xs font-semibold text-white transition duration-150 cursor-pointer">
+              <Wallet className="h-3.5 w-3.5" />
+              <span>Choose a plan</span>
+            </button>
+          </Link>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Anything that is not "no plan": the numbers are unknown, so none are shown.
+ */
+function BillingErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex h-[80vh] items-center justify-center w-full">
+      <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">
+        <CardHeader className="flex flex-col items-center gap-2">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <WarningCircle className="h-6 w-6" />
+          </div>
+          <CardTitle className="text-lg font-bold">
+            Could not load billing data
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Your balance and usage are unavailable right now, so nothing is
+            shown rather than a figure that could be wrong. {message}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-4 text-xs font-semibold text-white transition duration-150 cursor-pointer"
+          >
+            <ArrowClockwise className="h-3.5 w-3.5" />
+            <span>Retry</span>
+          </button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

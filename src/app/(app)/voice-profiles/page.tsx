@@ -1,6 +1,7 @@
 "use client";
 
 import { LanguageLabel, languageLabelText } from "@/components/language/language-label";
+import { languagesInScope } from "@/lib/languages";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle,
@@ -41,11 +42,10 @@ import type { VoiceProfileDto } from "@/types/voice-profile";
 
 // Values are the locale tags the backend stores and must not change; the label is what a
 // person reads, and a raw tag in parentheses is not that.
-const LANGUAGE_OPTIONS = [
-  { value: "vi-VN", label: languageLabelText("vi-VN") },
-  { value: "en-US", label: languageLabelText("en-US") },
-  { value: "ja-JP", label: languageLabelText("ja-JP") },
-];
+const LANGUAGE_OPTIONS = languagesInScope("voiceProfile").map((language) => ({
+  value: language.locale,
+  label: languageLabelText(language.locale),
+}));
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
 
