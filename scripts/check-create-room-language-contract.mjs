@@ -9,6 +9,10 @@ const selectorSource = readFileSync(
   new URL("../src/components/rooms/create/language-selector.tsx", import.meta.url),
   "utf8",
 );
+const registrySource = readFileSync(
+  new URL("../src/lib/languages.ts", import.meta.url),
+  "utf8",
+);
 
 const supportedLocales = [
   "en-US",
@@ -19,13 +23,41 @@ const supportedLocales = [
   "es-ES",
 ];
 
+// The locales used to be spelled out in the picker itself. They now live once, in the
+// language registry, and the picker asks it for everything in the "meeting" scope — so the
+// contract is checked where the values actually are.
+assert.match(
+  selectorSource,
+  /languagesInScope\("meeting"\)/,
+  "Create-room language picker must take its options from the language registry.",
+);
+assert.match(
+  selectorSource,
+  /code:\s*language\.locale/,
+  "Create-room language picker must send locale tags, not bare codes.",
+);
+
 for (const locale of supportedLocales) {
+  const [, region] = locale.split("-");
   assert.match(
-    selectorSource,
-    new RegExp(`code:\\s*"${locale}"`),
-    `Create-room language picker must send the backend-supported locale ${locale}.`,
+    registrySource,
+    new RegExp(`locale:\\s*"${locale}"[\\s\\S]{0,240}?scopes:\\s*\\[[^\\]]*"meeting"`),
+    `Language registry must offer the backend-supported locale ${locale} as a meeting language.`,
+  );
+  assert.match(
+    registrySource,
+    new RegExp(`region:\\s*"${region}"`),
+    `Language registry must carry the region for ${locale} so its flag resolves.`,
   );
 }
+
+// Every meeting language must have a full name to print; a language offered without one is
+// exactly how "ko-KR" ended up rendered at users.
+assert.doesNotMatch(
+  registrySource,
+  /name:\s*"[a-z]{2}(-[A-Z]{2})?"/,
+  "Language registry must not use a code as a display name.",
+);
 
 assert.match(
   dialogSource,

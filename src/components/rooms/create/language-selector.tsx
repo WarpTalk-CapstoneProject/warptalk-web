@@ -3,16 +3,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
 import { getFlagEmoji } from "@/lib/language-flag";
+import { languagesInScope } from "@/lib/languages";
 import { LanguageLabel } from "@/components/language/language-label";
 
-const languageOptions = [
-  { code: "vi-VN", label: "Vietnamese" },
-  { code: "en-US", label: "English" },
-  { code: "ja-JP", label: "Japanese" },
-  { code: "ko-KR", label: "Korean" },
-  { code: "fr-FR", label: "French" },
-  { code: "es-ES", label: "Spanish" },
-];
+// Rooms store locale tags, so the option value is the tag; the name comes from the registry
+// rather than being spelled out again here.
+const languageOptions = languagesInScope("meeting").map((language) => ({
+  code: language.locale,
+  label: language.name,
+}));
 
 /**
  * Meeting-language picker. A meeting is defined by the SET of languages that will be

@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { cn } from "@/lib/utils";
+import { formatLanguageRoute as formatRoute } from "@/lib/languages";
 import { translationRoomService } from "@/services/translationRoom.service";
 import { openArtifactDownload } from "@/lib/download-artifact";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -205,4 +206,4 @@ function artifactLabel(type: RoomHistoryArtifact["type"]) { return ({ transcript
 function artifactStatusLabel(artifact: RoomHistoryArtifact) { return artifact.consentRequired ? "Consent required" : artifact.status.charAt(0).toUpperCase() + artifact.status.slice(1); }
 function formatDuration(seconds: number) { if (!seconds) return "—"; const minutes = Math.floor(seconds / 60); return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }
-function formatLanguageRoute(room: EndedRoomHistoryItem) { const targets = room.targetLanguages.length ? room.targetLanguages.join(", ") : "—"; return `${room.sourceLanguage.toUpperCase()} → ${targets.toUpperCase()}`; }
+function formatLanguageRoute(room: EndedRoomHistoryItem) { return formatRoute(room.sourceLanguage, room.targetLanguages); }

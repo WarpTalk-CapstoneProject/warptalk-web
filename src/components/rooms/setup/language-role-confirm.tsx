@@ -1,15 +1,12 @@
 import React from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Translate, MicrophoneStage } from "@phosphor-icons/react/dist/ssr";
+import { getLanguageName, languagesInScope, normalizeLanguageCode } from "@/lib/languages";
 
-const languageOptions = [
-  { code: "en", label: "English" },
-  { code: "vi", label: "Vietnamese" },
-  { code: "ja", label: "Japanese" },
-  { code: "ko", label: "Korean" },
-  { code: "fr", label: "French" },
-  { code: "es", label: "Spanish" },
-];
+const languageOptions = languagesInScope("meeting").map((language) => ({
+  code: language.code,
+  label: language.name,
+}));
 
 export function LanguageRoleConfirm({
   isHost,
@@ -28,9 +25,13 @@ export function LanguageRoleConfirm({
   speakLanguage: string;
   setSpeakLanguage: (val: string) => void;
 }) {
-  const availableLanguages = languageOptions.filter(l => 
-    l.code === roomSourceLanguage || roomTargetLanguages.includes(l.code)
+  // Both sides go through normalizeLanguageCode: these options are bare codes ("vi") while a
+  // room stores locale tags ("vi-VN"), so comparing them directly matched nothing and left
+  // both dropdowns empty.
+  const roomLanguageCodes = new Set(
+    [roomSourceLanguage, ...roomTargetLanguages].map(normalizeLanguageCode).filter(Boolean),
   );
+  const availableLanguages = languageOptions.filter((l) => roomLanguageCodes.has(l.code));
 
   return (
     <div className="space-y-4 pt-4 border-t border-border">
@@ -38,7 +39,7 @@ export function LanguageRoleConfirm({
       
       {isHost ? (
         <div className="bg-surface-2/50 rounded-[8px] p-3 text-[13px] text-ink-muted leading-relaxed">
-          You are the host of this meeting. The source language is set to <strong className="text-ink font-medium">{languageOptions.find(l => l.code === roomSourceLanguage)?.label || roomSourceLanguage}</strong>.
+          You are the host of this meeting. The source language is set to <strong className="text-ink font-medium">{getLanguageName(roomSourceLanguage)}</strong>.
         </div>
       ) : (
         <div className="space-y-4">
