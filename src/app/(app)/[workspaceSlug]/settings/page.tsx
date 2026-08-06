@@ -45,7 +45,7 @@ const settingsSchema = z.object({
   maxActiveRooms: z.number().min(1, "Must be at least 1 room"),
   artifactRetentionDays: z
     .number()
-    .min(0, "Retention must be 0 (indefinite) or positive"),
+    .min(1, "Retention must be at least 1 day"),
   enforceHostApprovalDefault: z.boolean(),
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
@@ -308,6 +308,8 @@ export default function WorkspaceSettingsPage() {
   };
 
   const domains = watchAll.verifiedDomains || [];
+  const isVerifiedDomainEditingDisabled =
+    isSubmitting || !watchAll.requireVerifiedDomainForInternal;
   const handleAddDomain = () => {
     const trimmed = newDomain.trim().toLowerCase();
     if (!trimmed) return;
@@ -561,11 +563,12 @@ export default function WorkspaceSettingsPage() {
                 </span>
                 <span className="text-[11px] text-ink-muted">
                   Specify how long translation transcripts and audios are kept.
-                  Set to 0 for indefinite retention.
+                  Use 1 - 3650 days.
                 </span>
               </div>
               <Input
                 type="number"
+                min={1}
                 className="h-8 border-hairline focus:ring-1 focus:ring-primary text-xs bg-surface-2/40 w-[80px] text-right"
                 {...register("artifactRetentionDays", { valueAsNumber: true })}
                 disabled={isSubmitting}
@@ -741,7 +744,7 @@ export default function WorkspaceSettingsPage() {
                   placeholder="Enter a domain (e.g., company.com)"
                   value={newDomain}
                   onChange={(e) => setNewDomain(e.target.value)}
-                  disabled={isSubmitting}
+                  disabled={isVerifiedDomainEditingDisabled}
                   className="h-8 text-xs bg-surface-2 border-hairline flex-1"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -753,7 +756,7 @@ export default function WorkspaceSettingsPage() {
                 <button
                   type="button"
                   onClick={handleAddDomain}
-                  disabled={isSubmitting || !newDomain.trim()}
+                  disabled={isVerifiedDomainEditingDisabled || !newDomain.trim()}
                   className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink"
                 >
                   <Plus size={12} /> Add Domain
@@ -777,7 +780,7 @@ export default function WorkspaceSettingsPage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveDomain(d)}
-                        disabled={isSubmitting}
+                        disabled={isVerifiedDomainEditingDisabled}
                         className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer"
                       >
                         <Trash size={11} />

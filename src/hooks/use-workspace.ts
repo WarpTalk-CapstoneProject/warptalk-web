@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { WorkspaceSettingsDto } from "@/types/workspace";
+import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
 // Query Keys
@@ -79,6 +79,81 @@ export function useUpdateWorkspaceSettings(workspaceId: string) {
     mutationFn: (settings: WorkspaceSettingsDto) => WorkspaceService.updateSettings(workspaceId, settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
+    },
+  });
+}
+
+export function usePatchWorkspaceSettings(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<WorkspaceSettingsDto>) => WorkspaceService.updateSettings(workspaceId, patch as WorkspaceSettingsDto),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(WORKSPACE_KEYS.settings(workspaceId), settings);
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
+    },
+  });
+}
+
+export function useVerifiedDomains(workspaceId: string) {
+  return useQuery({
+    queryKey: ["workspaces", "verified-domains", workspaceId] as const,
+    queryFn: async () => {
+      const settings = await WorkspaceService.getSettings(workspaceId);
+      return (settings.verifiedDomains || []).map((d, i) => ({ id: `${i}`, domain: d }));
+    },
+    enabled: !!workspaceId,
+  });
+}
+
+export function useAddVerifiedDomain(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (domain: string) => {
+      const settings = await WorkspaceService.getSettings(workspaceId);
+      const updatedDomains = Array.from(new Set([...(settings.verifiedDomains || []), domain]));
+      return WorkspaceService.updateSettings(workspaceId, { ...settings, verifiedDomains: updatedDomains });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "verified-domains", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
+    },
+  });
+}
+
+export function useRevokeVerifiedDomain(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (domain: string) => {
+      const settings = await WorkspaceService.getSettings(workspaceId);
+      const updatedDomains = (settings.verifiedDomains || []).filter((d) => d.toLowerCase() !== domain.toLowerCase());
+      return WorkspaceService.updateSettings(workspaceId, { ...settings, verifiedDomains: updatedDomains });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "verified-domains", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
+    },
+  });
+}
+
+export function usePreviewWorkspaceMemberRoleChange(workspaceId: string) {
+  return useMutation({
+    mutationFn: (payload: { memberId?: string; userId?: string; targetRole?: string; toRole?: string }) => {
+      const targetId = payload.memberId || payload.userId || "";
+      const role = payload.targetRole || payload.toRole || "";
+      return WorkspaceService.previewMemberRoleChange(workspaceId, targetId, role);
+    },
+  });
+}
+
+export function useApplyWorkspaceMemberRoleChange(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { memberId?: string; userId?: string; request: ApplyWorkspaceRoleChangeRequest }) => {
+      const targetId = payload.memberId || payload.userId || "";
+      return WorkspaceService.applyMemberRoleChange(workspaceId, targetId, payload.request);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.members(workspaceId, 1, 10, "") });
     },
   });
 }

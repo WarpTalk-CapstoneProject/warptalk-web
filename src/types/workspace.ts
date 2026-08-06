@@ -72,6 +72,30 @@ export interface WorkspaceMemberDto {
   canCreateMeetings: boolean;
 }
 
+export interface WorkspaceRoleChangePreview {
+  targetUserId: string;
+  currentRole: string;
+  targetRole: string;
+  impact: string[];
+  coolingOffUntil?: string | null;
+  expiresAt: string;
+  previewToken: string;
+}
+
+export interface ApplyWorkspaceRoleChangeRequest {
+  targetRole: string;
+  idempotencyKey: string;
+  previewToken: string;
+  correlationId?: string | null;
+}
+
+export interface WorkspaceRoleChangeResult {
+  auditId: string;
+  oldRole: string;
+  newRole: string;
+  effectiveAt: string;
+}
+
 export interface WorkspaceInvitationDto {
   id: string;
   workspaceId: string;
