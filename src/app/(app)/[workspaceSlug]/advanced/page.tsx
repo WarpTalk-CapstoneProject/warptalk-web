@@ -22,6 +22,7 @@ export default function AdvancedSettingsPage() {
 
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [newOwnerId, setNewOwnerId] = useState("");
+  const [transferConfirmation, setTransferConfirmation] = useState("");
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -32,6 +33,7 @@ export default function AdvancedSettingsPage() {
 
   const isOwner = role === "owner";
   const membersList = membersQuery.data?.items || [];
+  const selectedNewOwner = membersList.find((member) => member.userId === newOwnerId);
 
   if (!activeWorkspaceId) return null;
   if (!isOwner) {
@@ -52,6 +54,7 @@ export default function AdvancedSettingsPage() {
       toast.success("Workspace ownership transferred successfully.");
       setIsTransferModalOpen(false);
       setNewOwnerId("");
+      setTransferConfirmation("");
       router.push("/workspace"); // They are no longer owner, redirect to workspace selection
     } catch {
       toast.error("Failed to transfer ownership.");
@@ -138,7 +141,10 @@ export default function AdvancedSettingsPage() {
 
           <div className="flex flex-col gap-2 my-4">
             <label className="text-xs font-semibold text-ink">Select New Owner</label>
-            <Select value={newOwnerId} onValueChange={(val) => setNewOwnerId(val || "")}>
+            <Select value={newOwnerId} onValueChange={(val) => {
+              setNewOwnerId(val || "");
+              setTransferConfirmation("");
+            }}>
               <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
                 <SelectValue placeholder="Choose a member..." />
               </SelectTrigger>
@@ -155,6 +161,19 @@ export default function AdvancedSettingsPage() {
                   ))}
               </SelectContent>
             </Select>
+            {selectedNewOwner && (
+              <>
+                <p className="text-xs text-destructive/80">
+                  This person becomes Owner immediately; you become Admin. Type their full name to confirm.
+                </p>
+                <Input
+                  value={transferConfirmation}
+                  onChange={(event) => setTransferConfirmation(event.target.value)}
+                  placeholder={selectedNewOwner.fullName}
+                  className="h-9 border-destructive/30 bg-surface-2/40 text-xs"
+                />
+              </>
+            )}
           </div>
 
           <DialogFooter className="flex gap-2">
@@ -162,6 +181,7 @@ export default function AdvancedSettingsPage() {
               onClick={() => {
                 setIsTransferModalOpen(false);
                 setNewOwnerId("");
+                setTransferConfirmation("");
               }}
               className="h-9 px-4 rounded-md border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition cursor-pointer"
             >
@@ -169,7 +189,7 @@ export default function AdvancedSettingsPage() {
             </button>
             <button
               onClick={handleTransferConfirm}
-              disabled={!newOwnerId || transferOwnershipMutation.isPending}
+              disabled={!newOwnerId || !selectedNewOwner || transferConfirmation !== selectedNewOwner.fullName || transferOwnershipMutation.isPending}
               className="h-9 px-4 rounded-md bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition disabled:opacity-50 cursor-pointer"
             >
               {transferOwnershipMutation.isPending ? (

@@ -8,10 +8,17 @@ import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import type { MotionValue, Variants } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
 import { getPlanDescription, buildFeatureList } from "@/lib/utils";
 import { createHubConnection } from "@/lib/signalr";
+import {
+  getLandingGetStartedHref,
+  getRememberedWorkspaceSlug,
+  hasRememberedAccessToken,
+} from "@/lib/landing-redirect";
+import type { PlanDto } from "@/types/billing";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
@@ -937,6 +944,7 @@ function PricingSection() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
 
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["landing-plans"],
@@ -944,11 +952,14 @@ function PricingSection() {
   });
 
   const handleChoosePlan = () => {
-    if (!isAuthenticated || !user) {
-      router.push("/login?redirect=/workspace");
-    } else {
-      router.push("/workspace");
-    }
+    router.push(
+      getLandingGetStartedHref({
+        isAuthenticated,
+        user,
+        hasRememberedSession: hasRememberedAccessToken(),
+        activeWorkspaceSlug: getRememberedWorkspaceSlug(activeWorkspaceSlug),
+      }),
+    );
   };
 
   return (
@@ -986,9 +997,9 @@ function PricingSection() {
           </div>
         ) : (
           plans
-            .filter((p) => p.isActive !== false)
-            .sort((a, b) => a.sortOrder - b.sortOrder)
-            .map((plan) => {
+            .filter((plan: PlanDto) => plan.isActive !== false)
+            .sort((a: PlanDto, b: PlanDto) => a.sortOrder - b.sortOrder)
+            .map((plan: PlanDto) => {
               const featureList = buildFeatureList(plan);
 
               return (
@@ -1268,14 +1279,18 @@ export default function HomePage() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const accessToken = useAuthStore((state) => state.accessToken);
 
   const handleGetStarted = () => {
-    if (!isAuthenticated || !user) {
-      router.push("/login?redirect=/workspace");
-    } else {
-      router.push("/workspace");
-    }
+    router.push(
+      getLandingGetStartedHref({
+        isAuthenticated,
+        user,
+        hasRememberedSession: hasRememberedAccessToken(),
+        activeWorkspaceSlug: getRememberedWorkspaceSlug(activeWorkspaceSlug),
+      }),
+    );
   };
 
   // SignalR connection for real-time landing page pricing updates

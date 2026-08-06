@@ -21,7 +21,7 @@
     "test:production-billing": "node scripts/check-production-billing-surface.mjs",
     "test:production-surface": "node scripts/check-production-surface.mjs",
     "test:code-review-ux": "node scripts/check-code-review-ux-contract.mjs",
-    "test:settings-validation": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/settings-pages-contract.test.ts",
+    "test:settings-validation": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/settings-validation.test.ts src/lib/auto-save-queue.test.ts src/lib/profile-localization.test.ts src/lib/settings-pages-contract.test.ts",
     "email:dev": "email dev --dir src/emails --port 3001",
     "email:render": "npx tsx scripts/render-email-templates.ts",
     "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript-display.test.ts src/lib/transcript-history.test.ts src/lib/voice-sample-quality.test.ts",

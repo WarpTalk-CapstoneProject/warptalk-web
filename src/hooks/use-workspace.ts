@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto } from "@/types/workspace";
+import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
 // Query Keys
@@ -15,6 +15,7 @@ export const WORKSPACE_KEYS = {
   invitations: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "invitations", workspaceId, { page, pageSize, search }] as const,
   pendingInvitations: () => ["workspaces", "invitations", "pending"] as const,
+  myJoinRequests: () => ["workspaces", "join-requests", "mine"] as const,
   invitationPreview: (token: string) => ["workspaces", "invitation-preview", token] as const,
   documentLists: (workspaceId: string) => ["workspaces", "documents", workspaceId] as const,
   documents: (workspaceId: string, page: number, pageSize: number, search: string) =>
@@ -76,45 +77,45 @@ export function useWorkspaceSettings(id: string) {
 export function useUpdateWorkspaceSettings(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (settings: WorkspaceSettingsDto) => WorkspaceService.updateSettings(workspaceId, settings),
+    mutationFn: (settings: Partial<WorkspaceSettingsDto>) => WorkspaceService.updateSettings(workspaceId, settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
 }
 
-export function usePatchWorkspaceSettings(workspaceId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (patch: Partial<WorkspaceSettingsDto>) => WorkspaceService.updateSettings(workspaceId, patch as WorkspaceSettingsDto),
-    onSuccess: (settings) => {
-      queryClient.setQueryData(WORKSPACE_KEYS.settings(workspaceId), settings);
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
-    },
-  });
-}
+export const usePatchWorkspaceSettings = useUpdateWorkspaceSettings;
 
 export function useVerifiedDomains(workspaceId: string) {
-  return useQuery({
-    queryKey: ["workspaces", "verified-domains", workspaceId] as const,
-    queryFn: async () => {
-      const settings = await WorkspaceService.getSettings(workspaceId);
-      return (settings.verifiedDomains || []).map((d, i) => ({ id: `${i}`, domain: d }));
-    },
-    enabled: !!workspaceId,
-  });
+  const settings = useWorkspaceSettings(workspaceId);
+  return {
+    ...settings,
+    data: (settings.data?.verifiedDomains || []).map((domain) => ({
+      id: domain,
+      domain,
+      status: "Verified",
+      createdAt: new Date().toISOString(),
+    })) as VerifiedDomainDto[],
+  };
 }
 
 export function useAddVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
+  const settingsQuery = useWorkspaceSettings(workspaceId);
+  const updateSettings = useUpdateWorkspaceSettings(workspaceId);
+
   return useMutation({
     mutationFn: async (domain: string) => {
-      const settings = await WorkspaceService.getSettings(workspaceId);
-      const updatedDomains = Array.from(new Set([...(settings.verifiedDomains || []), domain]));
-      return WorkspaceService.updateSettings(workspaceId, { ...settings, verifiedDomains: updatedDomains });
+      if (!settingsQuery.data) throw new Error("Settings not loaded");
+      const currentDomains = settingsQuery.data.verifiedDomains || [];
+      if (currentDomains.includes(domain)) return;
+      const updated = {
+        ...settingsQuery.data,
+        verifiedDomains: [...currentDomains, domain],
+      };
+      await updateSettings.mutateAsync(updated);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "verified-domains", workspaceId] });
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
@@ -122,18 +123,29 @@ export function useAddVerifiedDomain(workspaceId: string) {
 
 export function useRevokeVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
+  const settingsQuery = useWorkspaceSettings(workspaceId);
+  const updateSettings = useUpdateWorkspaceSettings(workspaceId);
+
   return useMutation({
-    mutationFn: async (domain: string) => {
-      const settings = await WorkspaceService.getSettings(workspaceId);
-      const updatedDomains = (settings.verifiedDomains || []).filter((d) => d.toLowerCase() !== domain.toLowerCase());
-      return WorkspaceService.updateSettings(workspaceId, { ...settings, verifiedDomains: updatedDomains });
+    mutationFn: async (domainIdOrName: string) => {
+      if (!settingsQuery.data) throw new Error("Settings not loaded");
+      const currentDomains = settingsQuery.data.verifiedDomains || [];
+      const updatedDomains = currentDomains.filter(
+        (d) => d.toLowerCase() !== domainIdOrName.toLowerCase()
+      );
+      const updated = {
+        ...settingsQuery.data,
+        verifiedDomains: updatedDomains,
+      };
+      await updateSettings.mutateAsync(updated);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", "verified-domains", workspaceId] });
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
 }
+
+
 
 export function usePreviewWorkspaceMemberRoleChange(workspaceId: string) {
   return useMutation({
@@ -190,6 +202,8 @@ export function useChangeWorkspaceMemberRole(workspaceId: string) {
     },
   });
 }
+
+
 
 export function useTransferWorkspaceOwnership(workspaceId: string) {
   const queryClient = useQueryClient();
@@ -300,7 +314,7 @@ export function useCreateJoinRequest() {
 export function useApproveWorkspaceJoinRequest(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: string | { invitationId: string; membershipType?: string }) =>
+    mutationFn: (payload: { inviteId: string; membershipType?: string }) =>
       WorkspaceService.approveJoinRequest(workspaceId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations"] });
@@ -321,6 +335,14 @@ export function useRejectWorkspaceJoinRequest(workspaceId: string) {
 
 export const useApproveJoinRequest = useApproveWorkspaceJoinRequest;
 export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
+
+export function useMyJoinRequests() {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.myJoinRequests(),
+    queryFn: WorkspaceService.getPendingInvitations, // Pending requests query fallback
+    staleTime: 30000,
+  });
+}
 
 // ─── Documents ───
 

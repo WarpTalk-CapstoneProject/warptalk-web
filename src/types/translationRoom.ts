@@ -243,4 +243,3 @@ export interface RoomPreflightResponse {
   workspaceSlug?: string | null;
   isAuthenticated: boolean;
 }
-
