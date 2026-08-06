@@ -135,6 +135,70 @@ export function languagesInScope(scope: LanguageScope): SupportedLanguage[] {
   return SUPPORTED_LANGUAGES.filter((language) => language.scopes.includes(scope));
 }
 
+/**
+ * A workspace's `allowedTargetLanguages` reduced to the bare codes this registry is keyed by.
+ *
+ * An empty result means UNRESTRICTED, never "no language permitted". The server disables the
+ * whitelist check outright when the stored list is empty
+ * (warptalk-backend `WorkspaceGrpcService.cs:151`), so a picker that read empty as "nothing
+ * allowed" would lock every workspace that never set a policy out of creating a room at all.
+ * Callers must branch on `length === 0` before filtering — which is what
+ * `isLanguageAllowedByPolicy` below does for them.
+ */
+export function normalizeLanguagePolicy(allowedTargetLanguages?: string[] | null): string[] {
+  if (!allowedTargetLanguages) return [];
+  const codes = allowedTargetLanguages.map(normalizeLanguageCode).filter(Boolean);
+  return Array.from(new Set(codes));
+}
+
+/**
+ * Whether a workspace policy permits a language.
+ *
+ * `value` may arrive as a bare code or as a locale tag: the create-room picker's option
+ * values are tags ("vi-VN") while the workspace setting stores bare codes ("vi"). Comparing
+ * the two shapes directly is how a whitelist silently matches nothing, so both sides fold
+ * through `normalizeLanguageCode` first.
+ */
+export function isLanguageAllowedByPolicy(
+  value: string,
+  allowedTargetLanguages?: string[] | null,
+): boolean {
+  const policy = normalizeLanguagePolicy(allowedTargetLanguages);
+  if (policy.length === 0) return true;
+  return policy.includes(normalizeLanguageCode(value));
+}
+
+/** The meeting-scope languages a workspace policy permits. Empty policy ⇒ the whole scope. */
+export function meetingLanguagesForPolicy(allowedTargetLanguages?: string[] | null) {
+  return languagesInScope("meeting").filter((language) =>
+    isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  );
+}
+
+/**
+ * Trim a picked meeting-language set down to what the workspace permits, in the same value
+ * shape it was given (rooms store locale tags).
+ *
+ * The create-room defaults are a fixed en/vi pair, so a workspace whose policy excludes
+ * either one starts the dialog already invalid — the server rejects it and the host has no
+ * idea why. If the trim empties the set, the first permitted meeting language stands in,
+ * because the picker requires at least one selection. A policy naming only languages that
+ * are not meeting-scope leaves nothing to fall back to and returns `[]`; the dialog's own
+ * validation then blocks submit rather than sending a set the server would refuse.
+ */
+export function reconcileMeetingLanguages(
+  selected: string[],
+  allowedTargetLanguages?: string[] | null,
+): string[] {
+  const kept = selected.filter((value) =>
+    isLanguageAllowedByPolicy(value, allowedTargetLanguages),
+  );
+  if (kept.length > 0) return kept;
+
+  const fallback = meetingLanguagesForPolicy(allowedTargetLanguages)[0];
+  return fallback ? [fallback.locale] : [];
+}
+
 export function getLanguageByCode(code?: string) {
   if (!code) return undefined;
   return SUPPORTED_LANGUAGES.find((language) => language.code === normalizeLanguageCode(code));
