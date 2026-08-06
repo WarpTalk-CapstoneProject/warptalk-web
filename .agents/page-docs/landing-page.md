@@ -8,6 +8,15 @@
 
 ## Latest Changes
 
+### 2026-07-30 Get Started Redirect Fix
+
+- Landing CTA routing now uses `src/lib/landing-redirect.ts` and shared workspace slug validation in `src/lib/workspace-slug.ts` instead of inline branching in `src/app/page.tsx`.
+- Guests are routed to `/login?callbackUrl=%2Fworkspace` so login returns them to the workspace onboarding gateway after authentication.
+- Signed-in users with a valid remembered workspace slug are routed directly to `/<workspaceSlug>/home`.
+- If the Zustand auth/workspace state is not available yet but `access_token` and `active_workspace_slug` cookies are still present, the CTA also treats that as a remembered session and routes to `/<workspaceSlug>/home`.
+- Missing, reserved, route-like, or URL-like workspace slugs such as `workspace`, `localhost`, and `localhost:3000` fall back to `/workspace` instead of creating broken dynamic routes like `/localhost`.
+- Added regression coverage in `src/lib/landing-redirect.test.ts`.
+
 The landing page was rebuilt from the previous local-video liquid-glass hero into a dark SaaS hero design, then localized back to WarpTalk copy and branding.
 
 ### What Changed
@@ -92,6 +101,10 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 ### Files Affected
 
 - `src/app/page.tsx`
+- `src/lib/landing-redirect.ts`
+- `src/lib/landing-redirect.test.ts`
+- `src/lib/workspace-slug.ts`
+- `src/lib/workspace-slug.test.ts`
 - `src/app/globals.css`
 - `package.json`
 - `package-lock.json`
@@ -131,7 +144,10 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - While the loader is active, the document/body scrolling surfaces are locked so refresh and wheel gestures cannot skip into the landing page early.
 - The HLS stream requires browser/network access to `stream.mux.com`.
 - Badges, headline, subtext, and buttons animate in with a staggered fade-up sequence.
-- Any landing CTA related to getting started routes to `/login`.
+- Landing CTAs route guests to `/login?callbackUrl=%2Fworkspace`.
+- Landing CTAs route signed-in users with a valid remembered workspace slug directly to `/<workspaceSlug>/home`.
+- Landing CTAs can recover the remembered workspace slug from the `active_workspace_slug` cookie when the persisted workspace store is not hydrated.
+- Landing CTAs fall back to `/workspace` when no trusted workspace slug is available.
 - Navbar links are hidden below the `md` breakpoint.
 - Landing anchors use an 80px scroll margin so the fixed navbar does not cover section starts while pricing/footer still fit in the viewport.
 - Nav items are not active on initial hero view. Clicking `About`, `Feature`, `Pricing`, or `Contact` sets the active item and moves a shared layout pill between links.
@@ -177,7 +193,10 @@ The landing page was rebuilt from the previous local-video liquid-glass hero int
 - [x] Verify footer layout, video card, WarpTalk logo treatment, and watermark on desktop.
 - [x] Verify loader appears before the page and exits after the progress reaches 100.
 - [x] Verify loader locks page scrolling while visible and waits for the landing readiness gate.
-- [x] Verify all landing `Get Started` CTAs navigate to `/login`.
+- [x] Verify all landing `Get Started` CTAs send guests to `/login?callbackUrl=%2Fworkspace`.
+- [x] Verify remembered workspace users land on `/<workspaceSlug>/home`.
+- [x] Verify remembered `access_token` plus `active_workspace_slug` cookies land on `/<workspaceSlug>/home`.
+- [x] Verify invalid remembered slugs such as `localhost` fall back to `/workspace`.
 - [x] Verify pricing cards render and yearly toggle updates prices.
 - [x] Verify hero video fills the full viewport.
 - [x] Verify pricing watermark/cards fit within the viewport after clicking `Pricing`.

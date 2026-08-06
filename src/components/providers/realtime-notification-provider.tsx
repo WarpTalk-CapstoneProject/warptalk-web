@@ -9,7 +9,8 @@ import {
   SIGNALR_HUBS,
 } from "@/constants/realtime";
 import { WORKSPACE_KEYS } from "@/hooks/use-workspace";
-import { createHubConnection } from "@/lib/signalr";
+import { endDeadSession, isSessionEnded } from "@/lib/api/client";
+import { createHubConnection, isUnauthorizedHubError } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePresenceStore } from "@/stores/presence-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -111,7 +112,8 @@ export function RealtimeNotificationProvider({
   };
 
   useEffect(() => {
-    if (!accessToken) {
+    // No token, or a session already known to be dead, means negotiation can only 401.
+    if (!accessToken || isSessionEnded()) {
       return;
     }
 
@@ -405,6 +407,11 @@ export function RealtimeNotificationProvider({
       })
       .catch((err) => {
         console.warn("RealtimeNotificationProvider connection failed:", err);
+        // A 401 on negotiation is the same dead session the REST calls are seeing. Ending it
+        // here means the tab stops retrying rather than waiting for a query to notice.
+        if (isUnauthorizedHubError(err)) {
+          endDeadSession();
+        }
       });
 
     let disposed = false;

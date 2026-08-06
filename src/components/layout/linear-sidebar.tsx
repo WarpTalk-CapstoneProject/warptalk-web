@@ -15,6 +15,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -33,7 +37,10 @@ import type { IconProps } from "@phosphor-icons/react";
 import {
   CaretDown,
   CaretLeft,
+  Check,
   CreditCard,
+  Desktop,
+  EnvelopeSimple,
   FileText,
   GearSix,
   Gauge,
@@ -48,6 +55,7 @@ import {
   Sliders,
   SquaresFour,
   User,
+  UserPlus,
   Users,
   Warning,
   Waveform,
@@ -121,7 +129,7 @@ function NavLink({
       </Link>
       {!collapsed && item.actions && (
         <div className="flex items-center">
-          {item.actions.map((action, i) =>
+          {item.actions.map((action, i) => (
             action.onClick ? (
               <button
                 key={i}
@@ -146,8 +154,8 @@ function NavLink({
               >
                 <action.icon size={14} weight="bold" />
               </Link>
-            ),
-          )}
+            )
+          ))}
         </div>
       )}
     </div>
@@ -156,12 +164,8 @@ function NavLink({
 
 export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
-  const setCreateRoomModalOpen = useUIStore(
-    (state) => state.setCreateRoomModalOpen,
-  );
-  const setSearchMeetingModalOpen = useUIStore(
-    (state) => state.setSearchMeetingModalOpen,
-  );
+  const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isSystemAdmin = useIsSystemAdmin();
@@ -180,15 +184,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     router.push(`/join?code=${encodeURIComponent(trimmed)}`);
   }
 
-  function handleSignOut() {
-    logout();
-    router.replace("/login");
-    router.refresh();
-  }
-
-  const activeWorkspaceSlug = useWorkspaceStore(
-    (state) => state.activeWorkspaceSlug,
-  );
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const slug = activeWorkspaceSlug || "workspace";
 
   const mainNav: NavItem[] = [
@@ -198,17 +194,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       label: "Meetings",
       href: `/${slug}/rooms`,
       actions: [
-        {
-          icon: Keyboard,
-          onClick: () => setIsJoinModalOpen(true),
-          title: "Join by code",
-        },
-        {
-          icon: Plus,
-          onClick: () => setCreateRoomModalOpen(true),
-          title: "Create Meeting",
-        },
-      ],
+        { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: "Join by code" },
+        { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
+      ]
     },
     { icon: Scroll, label: "Transcripts", href: `/${slug}/ai-summaries` },
     { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
@@ -216,43 +204,20 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
   const role = useWorkspaceStore((state) => state.role);
   const membershipType = useWorkspaceStore((state) => state.membershipType);
-  const activeWorkspaceName = useWorkspaceStore(
-    (state) => state.activeWorkspaceName,
-  );
-  const activeWorkspaceId = useWorkspaceStore(
-    (state) => state.activeWorkspaceId,
-  );
-  const setActiveWorkspace = useWorkspaceStore(
-    (state) => state.setActiveWorkspace,
-  );
-  const isOwnerOrAdmin =
-    role?.toLowerCase() === "owner" || role?.toLowerCase() === "admin";
+  const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const isOwnerOrAdmin = role?.toLowerCase() === "owner" || role?.toLowerCase() === "admin";
 
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
   const selectWorkspaceMutation = useSelectWorkspace();
-  const inviteMemberMutation = useInviteWorkspaceMember(
-    activeWorkspaceId || "",
-  );
+  const inviteMemberMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
 
-  const handleSelectWorkspace = async (
-    workspaceId: string,
-    name: string,
-    slug: string,
-    roleName: string,
-    membershipType: string,
-    defaultLanguage: string,
-  ) => {
+  const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
     try {
       const res = await selectWorkspaceMutation.mutateAsync(workspaceId);
-      setActiveWorkspace(
-        workspaceId,
-        name,
-        slug,
-        roleName,
-        membershipType,
-        res.defaultLanguage || defaultLanguage,
-      );
+      setActiveWorkspace(workspaceId, name, slug, roleName, membershipType, res.defaultLanguage || defaultLanguage);
       toast.success(`Switched to workspace "${name}"`);
       router.push(`/${slug}/home`);
     } catch {
@@ -275,8 +240,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       setInviteRoleName("Member");
       setIsInviteModalOpen(false);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to send invitation";
+      const message = err instanceof Error ? err.message : "Failed to send invitation";
       toast.error(message);
     }
   };
@@ -293,29 +257,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const workspaceNav: NavItem[] = [];
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members` },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents` },
+    { icon: FileText, label: "Documents", href: `/${slug}/documents` }
   );
 
   if (isOwnerOrAdmin) {
-    workspaceNav.push({
-      icon: CreditCard,
-      label: "Billing",
-      href: `/${slug}/billing`,
-    });
-    workspaceNav.push({
-      icon: GearSix,
-      label: "Settings",
-      href: `/${slug}/settings`,
-    });
-    workspaceNav.push({
-      icon: SquaresFour,
-      label: "Dashboard",
-      href: `/${slug}/dashboard`,
-    });
+    workspaceNav.push({ icon: EnvelopeSimple, label: "Invitations", href: `/${slug}/invitations` });
+    workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
+    workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
+    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
   }
 
-  const isSettingsPage =
-    pathname.includes("/settings") || pathname.includes("/advanced");
+  const isSettingsPage = pathname.includes("/settings") || pathname.includes("/advanced");
 
   if (isSettingsPage && collapsed) {
     const appHref = activeWorkspaceSlug
@@ -406,11 +358,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         {/* Back to App Button */}
         <div className="flex items-center px-3 h-[48px] shrink-0 border-b border-border/30">
           <Link
-            href={
-              activeWorkspaceSlug
-                ? `/${activeWorkspaceSlug}/rooms`
-                : "/workspace"
-            }
+            href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/rooms` : "/workspace"}
             className="flex items-center gap-2 px-1.5 py-1 -ml-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer w-full"
           >
             <CaretLeft size={14} weight="bold" />
@@ -421,61 +369,28 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         {/* Settings Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <div className="px-2 mb-2 flex items-center h-[24px]">
-            <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">
-              Personal
-            </span>
+            <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">Personal</span>
           </div>
 
           <div className="flex flex-col gap-px">
-            <div
-              className={cn(
-                "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                pathname ===
-                  `/${activeWorkspaceSlug}/settings/account/preferences`
-                  ? "bg-surface-2"
-                  : "hover:bg-surface-2",
-              )}
-            >
-              <Link
-                href={
-                  activeWorkspaceSlug
-                    ? `/${activeWorkspaceSlug}/settings/account/preferences`
-                    : "/workspace"
-                }
-                className="flex items-center gap-2.5 flex-1 min-w-0 h-full"
-              >
-                <Sliders
-                  size={16}
-                  className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors"
-                  weight="duotone"
-                />
+            <div className={cn(
+              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+              pathname === `/${activeWorkspaceSlug}/settings/account/preferences` ? "bg-surface-2" : "hover:bg-surface-2"
+            )}>
+              <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/preferences` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                <Sliders size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                   Settings
                 </span>
               </Link>
             </div>
 
-            <div
-              className={cn(
-                "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                pathname === `/${activeWorkspaceSlug}/settings/account/profile`
-                  ? "bg-surface-2"
-                  : "hover:bg-surface-2",
-              )}
-            >
-              <Link
-                href={
-                  activeWorkspaceSlug
-                    ? `/${activeWorkspaceSlug}/settings/account/profile`
-                    : "/workspace"
-                }
-                className="flex items-center gap-2.5 flex-1 min-w-0 h-full"
-              >
-                <User
-                  size={16}
-                  className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors"
-                  weight="duotone"
-                />
+            <div className={cn(
+              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+              pathname === `/${activeWorkspaceSlug}/settings/account/profile` ? "bg-surface-2" : "hover:bg-surface-2"
+            )}>
+              <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                   Profile
                 </span>
@@ -486,50 +401,37 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {isOwnerOrAdmin && activeWorkspaceSlug && (
               <>
                 <div className="px-2 mt-6 mb-2 flex items-center h-[24px]">
-                  <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">
-                    Workspace
-                  </span>
+                  <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">Workspace</span>
                 </div>
-                <div
-                  className={cn(
-                    "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                    pathname === `/${activeWorkspaceSlug}/settings`
-                      ? "bg-surface-2"
-                      : "hover:bg-surface-2",
-                  )}
-                >
-                  <Link
-                    href={`/${activeWorkspaceSlug}/settings`}
-                    className="flex items-center gap-2.5 flex-1 min-w-0 h-full"
-                  >
-                    <GearSix
-                      size={16}
-                      className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors"
-                      weight="duotone"
-                    />
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       Workspace Settings
                     </span>
                   </Link>
                 </div>
                 {role?.toLowerCase() === "owner" && (
-                  <div
-                    className={cn(
-                      "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                      pathname === `/${activeWorkspaceSlug}/advanced`
-                        ? "bg-surface-2 text-destructive"
-                        : "hover:bg-surface-2 hover:text-destructive",
-                    )}
-                  >
-                    <Link
-                      href={`/${activeWorkspaceSlug}/advanced`}
-                      className="flex items-center gap-2.5 flex-1 min-w-0 h-full"
-                    >
-                      <Warning
-                        size={16}
-                        className="shrink-0 text-destructive/80 group-hover:text-destructive transition-colors"
-                        weight="duotone"
-                      />
+                  <div className={cn(
+                    "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                    pathname === `/${activeWorkspaceSlug}/settings/access-management` ? "bg-surface-2" : "hover:bg-surface-2"
+                  )}>
+                    <Link href={`/${activeWorkspaceSlug}/settings/access-management`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                      <Users size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Manage access</span>
+                    </Link>
+                  </div>
+                )}
+                {role?.toLowerCase() === "owner" && (
+                  <div className={cn(
+                    "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                    pathname === `/${activeWorkspaceSlug}/advanced` ? "bg-surface-2 text-destructive" : "hover:bg-surface-2 hover:text-destructive"
+                  )}>
+                    <Link href={`/${activeWorkspaceSlug}/advanced`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                      <Warning size={16} className="shrink-0 text-destructive/80 group-hover:text-destructive transition-colors" weight="duotone" />
                       <span className="font-medium tracking-tight text-ink/90 group-hover:text-destructive transition-colors truncate">
                         Advanced
                       </span>
@@ -545,13 +447,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         {user && (
           <div className="p-3 mt-auto shrink-0">
             <div
-              onClick={() =>
-                router.push(
-                  activeWorkspaceSlug
-                    ? `/${activeWorkspaceSlug}/settings/account/profile`
-                    : "/workspace",
-                )
-              }
+              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
               className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
             >
               <Avatar className="size-8 rounded-lg border border-border/50">
@@ -568,9 +464,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   {user.email}
                 </span>
                 <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
-                  {role
-                    ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}`
-                    : "Member"}
+                  {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
                   {" · "}
                   {membershipType
                     ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
@@ -581,20 +475,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleSignOut();
+                  logout();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
                 title="Sign out"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  fill="currentColor"
-                  viewBox="0 0 256 256"
-                >
-                  <path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path>
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path></svg>
               </button>
             </div>
           </div>
@@ -656,65 +542,107 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </>
             )}
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="w-[220px] bg-popover border border-border shadow-md rounded-lg p-1"
-          >
-            <div className="px-2 py-1.5 text-xs text-ink-muted font-medium">
-              Workspaces ({workspaces.length})
-            </div>
-            <DropdownMenuSeparator className="bg-border" />
-            <div className="max-h-[160px] overflow-y-auto">
-              {workspaces.map((ws) => {
-                const membershipType =
-                  "membershipType" in ws &&
-                  typeof ws.membershipType === "string"
-                    ? ws.membershipType
-                    : "Internal";
-
-                return (
-                  <DropdownMenuItem
-                    key={ws.id}
-                    onClick={() =>
-                      handleSelectWorkspace(
-                        ws.id,
-                        ws.name,
-                        ws.slug,
-                        ws.role || "Member",
-                        membershipType,
-                        ws.defaultLanguage || "en",
-                      )
-                    }
-                    className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2",
-                      ws.id === activeWorkspaceId
-                        ? "bg-surface-2 text-primary font-medium"
-                        : "text-ink",
-                    )}
-                  >
-                    <div className="w-[16px] h-[16px] rounded bg-gradient-to-br from-pink-500/80 to-rose-500/80 flex items-center justify-center shrink-0 text-[8px] text-white font-bold">
-                      {ws.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <span className="truncate flex-1">{ws.name}</span>
-                  </DropdownMenuItem>
-                );
-              })}
-            </div>
-            <DropdownMenuSeparator className="bg-border" />
+          <DropdownMenuContent align="start" className="w-[230px] bg-popover border border-border shadow-md rounded-xl p-1 text-ink text-[13px]">
+            {/* 1. Settings */}
             <DropdownMenuItem
-              onClick={() => router.push("/workspace/create")}
-              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2 text-ink"
+              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : "/workspace")}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <Plus size={14} className="text-ink-muted" />
-              <span>Create Workspace</span>
+              <span>Settings</span>
+              <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">G then S</DropdownMenuShortcut>
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border" />
+
+            {/* 2. Invite and manage members */}
             <DropdownMenuItem
-              onClick={handleSignOut}
-              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-surface-2 text-destructive"
+              onClick={() => setIsInviteModalOpen(true)}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <SignOut size={14} />
-              <span>Sign out</span>
+              <span>Invite and manage members</span>
+            </DropdownMenuItem>
+
+            {/* 3. Download desktop app */}
+            <DropdownMenuItem
+              onClick={() => {
+                window.location.href = `${window.location.origin}/download`;
+              }}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+            >
+              <span>Download desktop app</span>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator className="bg-border/60 my-1" />
+
+            {/* 4. Switch workspace (Submenu) */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]">
+                <span>Switch workspace</span>
+                <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono mr-1">O then W</DropdownMenuShortcut>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-[250px] bg-popover border border-border shadow-lg rounded-xl p-1 text-ink text-[13px]">
+                {/* User email */}
+                {user?.email && (
+                  <div className="px-2.5 py-1.5 text-[12px] text-ink-muted font-normal truncate border-b border-border/40 mb-1">
+                    {user.email}
+                  </div>
+                )}
+                
+                {/* Workspace list */}
+                <div className="max-h-[200px] overflow-y-auto flex flex-col gap-0.5">
+                  {workspaces.map((ws, idx) => {
+                    const membershipType =
+                      "membershipType" in ws && typeof ws.membershipType === "string"
+                        ? ws.membershipType
+                        : "Internal";
+                    const isSelected = ws.id === activeWorkspaceId;
+
+                    return (
+                      <DropdownMenuItem
+                        key={ws.id}
+                        onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", membershipType, ws.defaultLanguage || "en")}
+                        className={cn(
+                          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-[13px]",
+                          isSelected ? "bg-surface-2 font-medium text-ink" : "hover:bg-surface-2 text-ink"
+                        )}
+                      >
+                        <div className="size-4 rounded bg-gradient-to-br from-pink-500/80 to-rose-500/80 flex items-center justify-center shrink-0 text-[8px] text-white font-bold">
+                          {ws.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="truncate flex-1">{ws.name}</span>
+                        {isSelected && <Check size={14} className="text-ink ml-auto shrink-0" weight="bold" />}
+                        <span className="text-[11px] text-ink-subtle ml-1 font-mono">{idx + 1}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </div>
+
+                <DropdownMenuSeparator className="bg-border/60 my-1" />
+                <div className="px-2.5 py-1 text-[11px] font-medium text-ink-subtle">
+                  Account
+                </div>
+                <DropdownMenuItem
+                  onClick={() => router.push("/workspace/create")}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+                >
+                  <span>Create or join a workspace...</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => router.push("/login")}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+                >
+                  <span>Add an account...</span>
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            <DropdownMenuSeparator className="bg-border/60 my-1" />
+
+            {/* 5. Log out */}
+            <DropdownMenuItem
+              onClick={() => logout()}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+            >
+              <span>Log out</span>
+              <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">Alt ⇧ Q</DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -839,9 +767,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
               <PaperPlaneTilt size={17} weight="duotone" />
             </span>
-            <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">
-              Invite team members
-            </span>
+            <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
             <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
               Bring your team in to collaborate and share workspace rooms.
             </span>
@@ -915,7 +841,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleSignOut();
+                  logout();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
                 title="Sign out"
@@ -933,7 +859,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             )}
           </div>
         </div>
-      )}
+        )}
 
       {/* Join Room Dialog */}
       <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
@@ -946,12 +872,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           </DialogHeader>
           <form onSubmit={handleJoin} className="grid gap-4 pt-2">
             <div className="grid gap-2">
-              <Label
-                htmlFor="code"
-                className="text-foreground font-medium text-[13px]"
-              >
-                Meeting code
-              </Label>
+              <Label htmlFor="code" className="text-foreground font-medium text-[13px]">Meeting code</Label>
               <Input
                 id="code"
                 placeholder="e.g. ROOM-abc-123"

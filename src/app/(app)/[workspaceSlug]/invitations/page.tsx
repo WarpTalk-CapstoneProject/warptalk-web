@@ -153,10 +153,10 @@ export default function WorkspaceInvitationsPage() {
   const joinRequestsList = activeTab === "join-requests" ? allRecords : [];
   const invitesList = activeTab === "invitations" ? allRecords : [];
 
-  const handleApprove = async (invitationId: string, provisionalType: string) => {
-    const membershipType = approvalType[invitationId] || (provisionalType.toLowerCase() === "internal" ? "Internal" : "External");
+  const handleApprove = async (inviteId: string, provisionalType: string) => {
+    const membershipType = approvalType[inviteId] || (provisionalType.toLowerCase() === "internal" ? "Internal" : "External");
     try {
-      const result = await approveJoinRequest.mutateAsync({ invitationId, membershipType });
+      const result = await approveJoinRequest.mutateAsync({ inviteId, membershipType });
       toast.success(result.approvalEmailStatus === "Failed" ? "Member approved; approval email delivery failed." : "Join request approved and email sent.");
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };

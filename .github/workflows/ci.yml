@@ -63,6 +63,48 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:contracts
+      # WT-322. A `connection.on("SomethingHappened", …)` handler for an event no
+      # server ever sends looks exactly like working code and does nothing — that is
+      # how a participant already in the room ended up with no audio and no captions
+      # for a whole meeting. Catching it needs both sides of the contract, so this is
+      # the one check here that reaches outside this repository: the script lives in
+      # warptalk-infrastructure (which owns the cross-repo contracts) and reads the
+      # backend's SendAsync calls. Prefer the sibling branch matching this PR's ref so
+      # a coordinated change sees its own counterpart; fall back to development.
+      - name: Resolve sibling refs for the realtime event contract
+        id: sibling-refs
+        env:
+          WEB_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          set -eu
+          for repo in backend infrastructure; do
+            url="https://github.com/WarpTalk-CapstoneProject/warptalk-$repo.git"
+            ref=development
+            if [ -n "${WEB_REF:-}" ] &&
+              git ls-remote --exit-code --heads "$url" "$WEB_REF" >/dev/null 2>&1; then
+              ref="$WEB_REF"
+            fi
+            echo "$repo=$ref" >> "$GITHUB_OUTPUT"
+            echo "Validating against warptalk-$repo@$ref"
+          done
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: WarpTalk-CapstoneProject/warptalk-backend
+          ref: ${{ steps.sibling-refs.outputs.backend }}
+          path: .realtime-contract/warptalk-backend
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: WarpTalk-CapstoneProject/warptalk-infrastructure
+          ref: ${{ steps.sibling-refs.outputs.infrastructure }}
+          path: .realtime-contract/warptalk-infrastructure
+      - name: Realtime event contract
+        env:
+          WARPTALK_WEB_ROOT: ${{ github.workspace }}
+          WARPTALK_BACKEND_ROOT: ${{ github.workspace }}/.realtime-contract/warptalk-backend
+        run: |
+          node .realtime-contract/warptalk-infrastructure/scripts/check-realtime-event-contract.mjs
+      - name: Drop the sibling checkouts before the build
+        run: rm -rf .realtime-contract
       - run: npm run build
       - name: Production route contracts
         run: |

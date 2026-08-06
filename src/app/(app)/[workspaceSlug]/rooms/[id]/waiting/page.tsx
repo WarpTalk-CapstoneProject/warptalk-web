@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { BackToSetupButton } from "@/components/rooms/setup/back-to-setup-button";
 import { LanguageLabel } from "@/components/language/language-label";
 import { getErrorMessage } from "@/lib/errors";
+import { roomOccupancy } from "@/lib/room-occupancy";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useAdmitParticipant,
@@ -91,10 +92,19 @@ export default function WaitingRoomPage() {
   const room = roomQuery.data;
   const isHost = room.hostId === user?.id || room.isHost === true;
   const participants = participantsQuery.data ?? [];
-  const waiting = participants.filter((participant) => participant.status === "waiting");
-  const ready = participants.filter((participant) =>
-    ["joined", "connected"].includes(participant.status)
-  );
+  // WT-274: the lobby uses the same seat rule as every other surface — "Ready" is the people
+  // holding a seat, "Waiting approval" is the lobby. It used to accept a "joined" status the
+  // backend's participant_status enum does not have.
+  const { seated: ready, lobby: waiting } = roomOccupancy({
+    capacity: room.maxParticipants,
+    participants,
+  });
+  // The row below each name is that person's OWN speak → listen pair, which is not the room's
+  // language coverage: a host auto-added as en → en in a room targeting ["en","vi"] made it
+  // look like `vi` had been dropped. The room's declared languages are stated once, here.
+  const roomLanguages = room.targetLanguages?.length
+    ? room.targetLanguages
+    : [room.sourceLanguage].filter(Boolean) as string[];
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -104,6 +114,16 @@ export default function WaitingRoomPage() {
             <div>
               <CardTitle>{room.title}</CardTitle>
               <CardDescription>Approve participants and confirm readiness before starting.</CardDescription>
+              {roomLanguages.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+                  <span className="text-xs uppercase tracking-wide">Room languages</span>
+                  {roomLanguages.map((language) => (
+                    <Badge key={language} variant="secondary" className="font-normal">
+                      <LanguageLabel value={language} />
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <Badge variant="outline">{room.translationRoomCode}</Badge>
           </div>
@@ -122,8 +142,10 @@ export default function WaitingRoomPage() {
                 <div className="min-w-0">
                   <p className="truncate font-medium">{participant.displayName || "Participant"}</p>
                   <p className="flex items-center gap-1 truncate text-sm text-muted-foreground">
+                    <span className="shrink-0 text-xs">Speaks</span>
                     <LanguageLabel value={participant.speakLanguage} />
                     <span aria-hidden>→</span>
+                    <span className="shrink-0 text-xs">hears</span>
                     <LanguageLabel value={participant.listenLanguage} />
                   </p>
                 </div>
