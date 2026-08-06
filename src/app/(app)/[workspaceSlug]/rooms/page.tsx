@@ -32,6 +32,7 @@ import {
   Funnel,
   Keyboard,
   Plus,
+  Repeat,
   SlidersHorizontal,
   Users,
 } from "@phosphor-icons/react/dist/ssr";
@@ -64,6 +65,34 @@ function startOfDay(date: Date) {
 function isScheduledOn(room: TranslationRoomDto, day: Date) {
   if (!room.scheduledAt) return false;
   return new Date(room.scheduledAt).toDateString() === day.toDateString();
+}
+
+/**
+ * WT-327: marks a room that is one occurrence of a recurring booking.
+ *
+ * A series is NOT grouped or collapsed in this list, deliberately. Every occurrence is a real,
+ * separate meeting — its own code, its own transcript, its own artifacts, its own billing — and
+ * a collapsed "1 series" row would hide exactly the thing the host came here to check: whether
+ * tomorrow's 8am actually exists. The day timeline could not collapse it at all, since each
+ * occurrence belongs to a different day. So they look like N meetings, because they ARE N
+ * meetings; this badge is the only thing that says they share a rule.
+ */
+function RepeatBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      data-testid="recurring-room-badge"
+      title="Part of a daily repeating schedule"
+      className={
+        compact
+          ? "shrink-0 inline-flex items-center gap-0.5 rounded bg-primary/10 px-1 py-0.5 text-[8px] font-medium text-primary border border-primary/20"
+          : "shrink-0 inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary border border-primary/20"
+      }
+    >
+      <Repeat weight="bold" size={compact ? 8 : 10} aria-hidden />
+      Daily
+      <span className="sr-only">This meeting repeats daily</span>
+    </span>
+  );
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -147,6 +176,7 @@ function LinearRow({
         <span className="text-foreground font-medium truncate block">
           {room.title}
         </span>
+        {room.seriesId && <RepeatBadge />}
         {user?.id && room.hostId !== user.id && (
           <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-500/20">
             Invited
@@ -402,6 +432,7 @@ function DailyTimeline({
                         <span className="font-semibold text-primary text-[12px] leading-tight truncate">
                           {room.title}
                         </span>
+                        {room.seriesId && <RepeatBadge compact />}
                         {user?.id && room.hostId !== user.id && (
                           <span className="shrink-0 rounded bg-amber-500/10 px-1 py-0.5 text-[8px] font-medium text-amber-600 border border-amber-500/20">
                             Invited

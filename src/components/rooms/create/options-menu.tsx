@@ -7,11 +7,19 @@ export function OptionsMenu({
   hasScheduledAt,
   onAddScheduledAt,
   isDaily,
+  dailyTime,
   onToggleDaily,
 }: {
   hasScheduledAt?: boolean;
   onAddScheduledAt?: () => void;
   isDaily?: boolean;
+  /**
+   * WT-327: the hour actually in force, "HH:mm". Shown beside the row so the menu reports what
+   * the schedule IS, not merely that something is on — the old toggle's check mark was
+   * indistinguishable whether the setting reached the server or not, and it did not.
+   */
+  dailyTime?: string;
+  /** Opens the Daily modal. Named "toggle" for continuity; selecting it never silently commits. */
   onToggleDaily?: () => void;
 }) {
   return (
@@ -38,6 +46,9 @@ export function OptionsMenu({
                 <div className="flex items-center gap-2">
                   <Repeat weight="duotone" size={16} />
                   <span className="font-medium text-ink whitespace-nowrap">Daily</span>
+                  {isDaily && dailyTime && (
+                    <span className="text-[11px] text-ink-muted tabular-nums">{dailyTime}</span>
+                  )}
                 </div>
                 <div data-slot="command-shortcut" className="flex shrink-0 ml-auto items-center">
                   {isDaily ? (
