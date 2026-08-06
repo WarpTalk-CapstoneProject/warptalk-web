@@ -22,7 +22,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { useJoinTranslationRoomByCode, useRoomPreflight } from "@/hooks/use-translationRooms";
+import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 import { completeMeetingJoin } from "@/lib/meeting-join-state";
 import { cn } from "@/lib/utils";
@@ -105,17 +105,6 @@ function JoinMeetingContent() {
   const [micLevel, setMicLevel] = useState(0);
 
   const normalizedCode = useMemo(() => roomCode.trim(), [roomCode]);
-
-  const { data: preflight, isLoading: preflightLoading, error: preflightError } = useRoomPreflight(
-    normalizedCode,
-    !!normalizedCode
-  );
-
-  useEffect(() => {
-    if (preflight && preflight.requiresJoinRequest) {
-      router.replace(`/workspace/join?code=${normalizedCode}`);
-    }
-  }, [preflight, normalizedCode, router]);
 
   const joinMutation = useJoinTranslationRoomByCode();
   const canJoin = displayName.trim().length > 1 && normalizedCode.length >= 4;
@@ -331,32 +320,6 @@ function JoinMeetingContent() {
         error instanceof Error ? error.message : "Could not join room.",
       );
     }
-  }
-
-  if (normalizedCode && preflightLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas">
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-ink-muted">Checking meeting access...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (normalizedCode && preflightError) {
-    return (
-      <div className="flex min-h-[80vh] items-center justify-center p-8 bg-canvas">
-        <div className="w-full max-w-md bg-surface-1 border border-border p-6 rounded-[8px] shadow-linear text-center space-y-4">
-          <div className="text-red-500 font-medium">
-            Phòng họp hoặc Workspace không hoạt động hoặc không tồn tại.
-          </div>
-          <Button onClick={() => router.push("/")} className="bg-foreground text-white">
-            Quay lại trang chủ
-          </Button>
-        </div>
-      </div>
-    );
   }
 
   return (
