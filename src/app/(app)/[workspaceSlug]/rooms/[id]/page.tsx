@@ -76,7 +76,10 @@ import {
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { getLanguageName } from "@/lib/languages";
 import { saveBlobDownload } from "@/lib/download-artifact";
-import { canJoinTranslationRoom } from "@/lib/translation-room-access";
+import {
+  canJoinTranslationRoom,
+  shouldEnterWaitingRoom,
+} from "@/lib/translation-room-access";
 import {
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
@@ -126,7 +129,8 @@ const statusLabels: Record<TranslationRoomStatus, string> = {
 };
 
 export default function RoomInformationPage() {
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ workspaceSlug: string; id: string }>();
+  const workspaceSlug = params.workspaceSlug;
   const router = useRouter();
   const roomId = params.id;
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -210,6 +214,7 @@ export default function RoomInformationPage() {
 
   const isEnded = room.status === "ended";
   const canJoinRoom = canJoinTranslationRoom(room.status);
+  const entersWaitingRoom = shouldEnterWaitingRoom(room.status);
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
   const participants = buildUserList(
     room,
@@ -427,13 +432,31 @@ export default function RoomInformationPage() {
                 className="h-9 justify-between rounded-md text-[13px] !text-white [&_svg]:!text-white"
                 disabled={!canJoinRoom}
                 onClick={() => {
+                  // WT-232: a room nobody has started yet has no call to join. Sending people
+                  // through device setup into an empty session was the confusing part of the
+                  // report — the lobby is where they actually wait, and it says so.
+                  if (entersWaitingRoom) {
+                    router.push(`/${workspaceSlug}/rooms/${roomId}/waiting`);
+                    return;
+                  }
                   useUIStore.getState().setSetupRoomId(roomId);
                   useUIStore.getState().setSetupRoomModalOpen(true);
                 }}
               >
-                {canJoinRoom ? "Join meeting" : statusLabels[room.status]}
+                {!canJoinRoom
+                  ? statusLabels[room.status]
+                  : entersWaitingRoom
+                    ? "Enter waiting room"
+                    : "Join meeting"}
                 <ArrowRight className="size-4" />
               </Button>
+              {entersWaitingRoom ? (
+                <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+                  {room.scheduledAt
+                    ? `This meeting starts ${formatDateTime(room.scheduledAt)}. You'll wait in the lobby until the host opens it.`
+                    : "You'll wait in the lobby until the host opens this meeting."}
+                </p>
+              ) : null}
             </PropertyPanel>
           </aside>
         </div>

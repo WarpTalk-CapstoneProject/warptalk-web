@@ -15,9 +15,14 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
+import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { suggestion } from "./mentions";
+import {
+  CHAT_MESSAGE_COUNTER_THRESHOLD,
+  MAX_CHAT_MESSAGE_LENGTH,
+} from "@/constants/chat";
 import {
   LoaderCircle,
   Send,
@@ -82,6 +87,9 @@ export function ChatPanel({
     useSendMeetingChatFile();
   const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
   const [sendError, setSendError] = useState<string | null>(null);
+  // Tracked in state rather than read from editor.storage during render: useEditor does not
+  // re-render on every transaction, so the counter would otherwise lag the typing.
+  const [characterCount, setCharacterCount] = useState(0);
   const [fileError, setFileError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [translations, setTranslations] = useState<
@@ -195,6 +203,9 @@ export function ChatPanel({
       Placeholder.configure({
         placeholder: "Type a message or @agent for AI help...",
       }),
+      // Stops the typing at the cap rather than letting the message be composed and then
+      // rejected by the API (WT-237).
+      CharacterCount.configure({ limit: MAX_CHAT_MESSAGE_LENGTH }),
       Mention.configure({
         HTMLAttributes: {
           class:
@@ -218,6 +229,9 @@ export function ChatPanel({
       },
     },
     content: "",
+    onUpdate: ({ editor: updatedEditor }) => {
+      setCharacterCount(updatedEditor.storage.characterCount.characters());
+    },
   });
 
   function sendMessage() {
@@ -259,6 +273,15 @@ export function ChatPanel({
 
     const trimmedText = textContent.trim();
     if (!trimmedText) return;
+
+    // The editor caps its own document, but mentions expand to "@label" on the way out, so
+    // the text actually sent can be longer than what was typed.
+    if (trimmedText.length > MAX_CHAT_MESSAGE_LENGTH) {
+      setSendError(
+        `Message is too long (${trimmedText.length}/${MAX_CHAT_MESSAGE_LENGTH} characters).`,
+      );
+      return;
+    }
 
     setSendError(null);
     sendMessageAPI(
@@ -476,7 +499,7 @@ export function ChatPanel({
                     </button>
                   ) : (
                     <p
-                      className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap ${isAssistant ? "text-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}
+                      className={`mt-0.5 max-w-full text-[13px] leading-relaxed whitespace-pre-wrap break-words ${isAssistant ? "text-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}
                     >
                       {message.originalText}
                     </p>
@@ -484,7 +507,7 @@ export function ChatPanel({
                   {translations[message.id]?.visible &&
                   translations[message.id]?.text ? (
                     <p
-                      className={`mt-1 rounded-md bg-surface-2 px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap text-ink ${isMine ? "text-right" : "text-left"}`}
+                      className={`mt-1 max-w-full rounded-md bg-surface-2 px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-ink ${isMine ? "text-right" : "text-left"}`}
                     >
                       {translations[message.id]!.text}
                       <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
@@ -553,6 +576,13 @@ export function ChatPanel({
             )}
           </button>
         </div>
+        {characterCount >= CHAT_MESSAGE_COUNTER_THRESHOLD ? (
+          <p
+            className={`mt-1 text-right text-[11px] ${characterCount >= MAX_CHAT_MESSAGE_LENGTH ? "text-red-600" : "text-ink-subtle"}`}
+          >
+            {characterCount}/{MAX_CHAT_MESSAGE_LENGTH}
+          </p>
+        ) : null}
       </div>
     </div>
   );

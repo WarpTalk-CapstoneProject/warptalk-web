@@ -52,6 +52,7 @@ import {
   Warning,
   Waveform,
 } from "@phosphor-icons/react/dist/ssr";
+import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -880,12 +881,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               collapsed ? "justify-center p-1" : "gap-2.5 p-2",
             )}
           >
-            <Avatar className="size-8 rounded-lg border border-border/50">
-              <AvatarImage src={user.avatarUrl} alt={user.fullName} />
-              <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
-                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
-              </AvatarFallback>
-            </Avatar>
+            {/* Your own dot, so the state everyone else sees for you is not a mystery. */}
+            <div className="relative size-8 shrink-0">
+              <Avatar className="size-8 rounded-lg border border-border/50">
+                <AvatarImage src={user.avatarUrl} alt={user.fullName} />
+                <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-[13px] font-semibold">
+                  {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+                </AvatarFallback>
+              </Avatar>
+              <AvatarPresenceDot userId={user.id} />
+            </div>
             {!collapsed && (
               <div className="flex flex-col min-w-0 flex-1">
                 <span className="text-[13px] font-medium text-ink truncate leading-tight">
