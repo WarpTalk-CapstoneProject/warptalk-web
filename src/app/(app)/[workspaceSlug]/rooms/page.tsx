@@ -64,6 +64,13 @@ function isScheduledOn(room: TranslationRoomDto, day: Date) {
   return new Date(room.scheduledAt).toDateString() === day.toDateString();
 }
 
+const ROOM_FILTER_WIDTH_CLASS = {
+  active: "w-[90px]",
+  scheduled: "w-[120px]",
+  history: "w-[96px]",
+  all: "w-[58px]",
+} as const;
+
 function StatusIcon({ status }: { status: string }) {
   if (status === "in_progress")
     return (
@@ -546,20 +553,24 @@ export default function MeetingsPageLinear() {
   return (
     <div className="flex flex-col h-full bg-surface-1">
       {/* View Tabs & Actions */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+      <div className="flex shrink-0 items-center justify-between gap-4 px-2 pb-1.5 pt-2">
         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
           {(["active", "scheduled", "history", "all"] as const).map((tab) => (
             <div
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex items-center justify-center px-4 py-1.5 rounded-full cursor-pointer transition-all capitalize text-[13px] select-none border ${activeTab === tab ? "bg-surface-2 border-transparent text-foreground font-medium shadow-none" : "bg-transparent border-border/40 text-muted-foreground hover:bg-surface-2 hover:border-border/60 hover:text-foreground"}`}
+              className={`flex h-[26px] ${ROOM_FILTER_WIDTH_CLASS[tab]} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium capitalize transition-colors select-none cursor-pointer ${
+                activeTab === tab
+                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
+              }`}
             >
               {tab}
             </div>
           ))}
         </div>
 
-        <div className="flex items-center gap-2 pl-4 shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           <ExpandingSearchDock
             value={searchQuery}
             onValueChange={setSearchQuery}

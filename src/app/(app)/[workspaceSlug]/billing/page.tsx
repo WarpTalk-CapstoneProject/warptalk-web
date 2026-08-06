@@ -75,6 +75,12 @@ import AdminBillingPage from "@/app/(internal)/billing/page";
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
 
+const BILLING_FILTER_WIDTH_CLASS: Record<string, string> = {
+  overview: "w-[154px]",
+  history: "w-[168px]",
+  invoices: "w-[134px]",
+};
+
 function getIconForUsage(usageType: string) {
   if (usageType.toLowerCase().includes("translation")) return Translate;
   if (usageType.toLowerCase().includes("summary")) return Robot;
@@ -153,7 +159,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
       .start()
       .then(() => {
         if (isMounted && workspaceId) {
-          connection.invoke("JoinWorkspace", workspaceId).catch(console.error);
+          connection
+            .invoke("SubscribeWorkspace", workspaceId)
+            .catch(console.error);
         }
       })
       .catch((err) => {
@@ -516,7 +524,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   return (
     <div className="flex h-full flex-col bg-surface-1 px-4 pb-6 text-ink">
       {/* Header section with styling consistent with members and documents */}
-      <div className="flex shrink-0 flex-col gap-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex shrink-0 flex-col gap-2 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
           {[
             { value: "overview", label: "Overview & Usage" },
@@ -527,10 +535,10 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               key={item.value}
               type="button"
               onClick={() => setBillingTab(item.value)}
-              className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+              className={`flex h-[26px] ${BILLING_FILTER_WIDTH_CLASS[item.value]} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
                 billingTab === item.value
-                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
               }`}
             >
               {item.label}

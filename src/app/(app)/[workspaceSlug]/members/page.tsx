@@ -59,6 +59,17 @@ const inviteSchema = z.object({
 
 type InviteFormData = z.infer<typeof inviteSchema>;
 
+const MEMBER_FILTER_WIDTH_CLASS: Record<string, string> = {
+  all: "w-[58px]",
+  owner: "w-[78px]",
+  admin: "w-[78px]",
+  member: "w-[88px]",
+  active: "w-[78px]",
+};
+
+const MEMBER_GRID_CLASS =
+  "grid-cols-[28px_minmax(280px,1.85fr)_100px_116px_92px_112px_108px_64px]";
+
 export default function WorkspaceMembersPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
@@ -297,7 +308,7 @@ export default function WorkspaceMembersPage() {
   return (
     <div className="flex h-full flex-col bg-surface-1 text-ink">
       {/* Filter, Search, and Action triggers - Unified horizontal design */}
-      <div className="flex shrink-0 flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex shrink-0 flex-col gap-2 px-2 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
           {memberFilterPills.map((item) => (
             <button
@@ -307,10 +318,10 @@ export default function WorkspaceMembersPage() {
                 setRoleFilter(item.role);
                 setStatusFilter(item.status);
               }}
-              className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+              className={`flex h-[26px] ${MEMBER_FILTER_WIDTH_CLASS[item.key]} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
                 activeMemberFilter === item.key
-                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
               }`}
             >
               {item.label}
@@ -353,36 +364,36 @@ export default function WorkspaceMembersPage() {
           {isOwnerOrAdmin && (
             <>
               <div className="mx-1 h-4 w-[1px] bg-border" />
-            <button
-              onClick={handleExportXlsx}
-              disabled={isExporting}
-              className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50"
-            >
-              {isExporting ? (
-                <Spinner className="h-3.5 w-3.5 animate-spin text-primary" />
-              ) : (
-                <Download className="h-3.5 w-3.5 text-primary" />
-              )}
-              <span>{isExporting ? "Exporting..." : "Export (.xlsx)"}</span>
-            </button>
+              <button
+                onClick={handleExportXlsx}
+                disabled={isExporting}
+                className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50"
+              >
+                {isExporting ? (
+                  <Spinner className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Download className="h-3.5 w-3.5 text-primary" />
+                )}
+                <span>{isExporting ? "Exporting..." : "Export (.xlsx)"}</span>
+              </button>
 
-            <button
-              onClick={() => {
-                resetInvite();
-                setIsInviteOpen(true);
-              }}
-              className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Invite</span>
-            </button>
+              <button
+                onClick={() => {
+                  resetInvite();
+                  setIsInviteOpen(true);
+                }}
+                className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Invite</span>
+              </button>
             </>
           )}
         </div>
       </div>
 
       {/* Members Table */}
-      <div className="overflow-x-auto px-4 pb-6">
+      <div className="overflow-x-auto px-2 pb-6">
         {membersQuery.isLoading ? (
           <div className="flex h-48 items-center justify-center">
             <Spinner className="h-6 w-6 animate-spin text-primary" />
@@ -396,16 +407,17 @@ export default function WorkspaceMembersPage() {
             </p>
           </div>
         ) : (
-          <div className="min-w-[750px] divide-y divide-hairline/40">
+          <div className="min-w-[920px]">
             {/* Header row */}
-            <div className="grid grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px] items-center gap-4 px-2 py-2 text-[11px] font-semibold uppercase text-ink-muted">
-              <span>Name</span>
+            <div className={`grid ${MEMBER_GRID_CLASS} items-center gap-3 px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
+              <span />
+              <span className="w-fit rounded-full bg-surface-2 px-2 py-1 font-semibold text-foreground">Name</span>
               <span>Role</span>
-              <span>Membership Type</span>
+              <span>Type</span>
               <span>Status</span>
               <span>Joined</span>
-              <span className="text-center">Host meetings</span>
-              <span className="text-right">Actions</span>
+              <span className="justify-self-center text-center">Host meetings</span>
+              <span className="justify-self-end pr-2 text-right">Actions</span>
             </div>
 
             {/* Data rows */}
@@ -417,20 +429,22 @@ export default function WorkspaceMembersPage() {
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px] items-center gap-4 rounded-md px-2 py-3 transition-colors hover:bg-surface-2/40"
+                  className={`group grid min-h-[36px] ${MEMBER_GRID_CLASS} items-center gap-3 rounded-[7px] px-2 py-1 text-[11px] transition-none hover:bg-surface-2 hover:shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`}
                 >
+                  <div aria-hidden="true" />
+
                   {/* User name, email & avatar */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative h-8 w-8 shrink-0">
-                      <Avatar className="h-8 w-8 border border-hairline/80">
-                        <AvatarFallback className="bg-surface-3/80 text-xs font-semibold text-ink">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="relative h-5 w-5 shrink-0">
+                      <Avatar className="h-5 w-5 border border-hairline/80">
+                        <AvatarFallback className="bg-primary/10 text-[9px] font-semibold text-primary">
                           {initials(member.fullName)}
                         </AvatarFallback>
                       </Avatar>
-                      <AvatarPresenceDot userId={member.userId} size="md" />
+                      <AvatarPresenceDot userId={member.userId} size="sm" />
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-semibold text-ink truncate flex items-center gap-1.5">
+                      <span className="truncate font-medium text-ink flex items-center gap-1.5">
                         {member.fullName}
                         {isSelf && (
                           <span className="text-[10px] px-1 py-0.2 bg-primary/10 text-primary border border-primary/20 rounded font-normal">
@@ -450,7 +464,7 @@ export default function WorkspaceMembersPage() {
                   <div>
                     <Badge
                       variant="outline"
-                      className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
+                      className="rounded-full border-hairline bg-surface-1/70 px-1.5 py-0 text-[9px] font-semibold capitalize text-ink"
                     >
                       {member.roleName}
                     </Badge>
@@ -463,7 +477,7 @@ export default function WorkspaceMembersPage() {
                       className={
                         member.membershipType.toLowerCase() === "external"
                           ? "rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                          : "rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
+                          : "rounded-full border-sky-500/25 bg-sky-500/10 px-1.5 py-0 text-[9px] font-semibold text-sky-700"
                       }
                     >
                       {member.membershipType}
@@ -474,7 +488,7 @@ export default function WorkspaceMembersPage() {
                   <div>
                     <Badge
                       variant="outline"
-                      className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${
+                      className={`rounded-full px-1.5 py-0 text-[9px] capitalize font-medium ${
                         memberStatus === "active"
                           ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20"
                           : "bg-surface-3/50 border-hairline text-ink-muted"
@@ -485,7 +499,7 @@ export default function WorkspaceMembersPage() {
                   </div>
 
                   {/* Joined Date */}
-                  <span className="text-xs text-ink-muted font-medium">
+                  <span className="text-[11px] text-ink-muted font-medium">
                     {new Date(member.joinedAt).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
@@ -510,7 +524,7 @@ export default function WorkspaceMembersPage() {
                   </div>
 
                   {/* Remove button */}
-                  <div className="flex justify-end">
+                  <div className="flex justify-end pr-2">
                     <button
                       onClick={() =>
                         setMemberToRemove({
@@ -524,7 +538,7 @@ export default function WorkspaceMembersPage() {
                         memberRole === "owner" ||
                         (isAdmin && memberRole === "admin")
                       }
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
                       title="Remove from workspace"
                       aria-label={`Remove ${member.fullName} from workspace`}
                     >

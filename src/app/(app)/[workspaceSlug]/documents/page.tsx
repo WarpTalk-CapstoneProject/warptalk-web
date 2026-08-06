@@ -79,6 +79,18 @@ type FilterCategory =
   "all" | "pending" | "ai" | "admin" | "sensitive" | "archived";
 type ViewMode = "list" | "grid";
 
+const DOCUMENT_FILTER_WIDTH_CLASS: Record<FilterCategory, string> = {
+  all: "w-[58px]",
+  pending: "w-[142px]",
+  ai: "w-[104px]",
+  admin: "w-[122px]",
+  sensitive: "w-[104px]",
+  archived: "w-[104px]",
+};
+
+const DOCUMENT_GRID_CLASS =
+  "grid-cols-[28px_minmax(320px,1.8fr)_170px_190px_116px_92px_96px]";
+
 export default function WorkspaceDocumentsPage() {
   const router = useRouter();
   const params = useParams<{ workspaceSlug: string }>();
@@ -350,18 +362,18 @@ export default function WorkspaceDocumentsPage() {
   });
 
   return (
-    <div className="flex h-full flex-col bg-surface-1 px-4 pb-12 text-ink">
+    <div className="flex h-full flex-col bg-surface-1 pb-12 text-ink">
       {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
       {/* ─── Pill Category Filters & View Toggle Bar ─── */}
-      <div className="flex shrink-0 items-center justify-between gap-4 py-3">
+      <div className="flex shrink-0 items-center justify-between gap-4 px-2 pb-1.5 pt-2">
         {/* Left Side: Category Pills */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveCategory("all")}
-            className={`rounded-full border px-4 py-1.5 text-[13px] transition-all ${
+            className={`flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.all} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
               activeCategory === "all"
-                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
             }`}
           >
             All
@@ -369,13 +381,12 @@ export default function WorkspaceDocumentsPage() {
           {canApproveDocuments && (
             <button
               onClick={() => setActiveCategory("pending")}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
+              className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.pending} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
                 activeCategory === "pending"
-                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
               }`}
             >
-              <Info className="h-3.5 w-3.5 text-amber-500" />
               <span>Pending Approval</span>
               {pendingCount > 0 && (
                 <span className="ml-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white px-1">
@@ -386,47 +397,43 @@ export default function WorkspaceDocumentsPage() {
           )}
           <button
             onClick={() => setActiveCategory("ai")}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
+            className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.ai} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
               activeCategory === "ai"
-                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
             }`}
           >
-            <Sparkle className="h-3.5 w-3.5 text-emerald-500" />
             <span>AI Context</span>
           </button>
           <button
             onClick={() => setActiveCategory("admin")}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
+            className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.admin} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
               activeCategory === "admin"
-                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
             }`}
           >
-            <FileText className="h-3.5 w-3.5 text-ink-muted" />
             <span>Administrative</span>
           </button>
           <button
             onClick={() => setActiveCategory("sensitive")}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
+            className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.sensitive} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
               activeCategory === "sensitive"
-                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
             }`}
           >
-            <Lock className="h-3.5 w-3.5 text-destructive" />
             <span>Restricted</span>
           </button>
           {archivedCount > 0 && (
             <button
               onClick={() => setActiveCategory("archived")}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
+              className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.archived} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
                 activeCategory === "archived"
-                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
               }`}
             >
-              <Archive className="h-3.5 w-3.5 text-amber-500" />
               <span>Archived</span>
               <span className="ml-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-600 px-1">
                 {archivedCount}
@@ -505,38 +512,25 @@ export default function WorkspaceDocumentsPage() {
       </div>
 
       {/* ─── Document Content: List View vs Grid View ─── */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2">
       {documentsQuery.isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <Spinner className="h-7 w-7 animate-spin text-primary" />
         </div>
-      ) : filteredDocs.length === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center gap-3 text-center border border-dashed border-hairline rounded-2xl bg-surface-1/30 p-8">
-          <FileText className="h-10 w-10 text-ink-muted/60" />
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold text-ink">No documents found</p>
-            <p className="text-xs text-ink-muted">
-              {canApproveDocuments
-                ? "Click the 'New' button above to upload reference documents."
-                : "No reference documents have been uploaded to this workspace yet."}
-            </p>
-          </div>
-        </div>
       ) : viewMode === "list" ? (
-        /* List Table View */
-        <div className="w-full overflow-x-auto rounded-xl border border-hairline/30 bg-surface-1/40 shadow-sm">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-hairline/20 bg-surface-2/50 text-ink-muted font-semibold">
-                <th className="py-3 px-4 font-semibold">Name</th>
-                <th className="py-3 px-4 font-semibold">Classification / AI</th>
-                <th className="py-3 px-4 font-semibold">People</th>
-                <th className="py-3 px-4 font-semibold">Last Modified</th>
-                <th className="py-3 px-4 font-semibold">Size</th>
-                <th className="py-3 px-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline/20">
+        /* List View */
+        <div className="overflow-x-auto">
+          <div className="min-w-[1040px]">
+            <div className={`grid ${DOCUMENT_GRID_CLASS} items-center gap-4 px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
+              <span />
+              <span className="w-fit rounded-full bg-surface-2 px-2 py-1 font-semibold text-foreground">Name</span>
+              <span>Classification</span>
+              <span>People</span>
+              <span>Modified</span>
+              <span>Size</span>
+              <span className="text-right">Actions</span>
+            </div>
+            <div className="space-y-0">
               {filteredDocs.map((doc) => {
                 const isDocOwner =
                   doc.uploadedBy === currentUser?.id ||
@@ -544,54 +538,57 @@ export default function WorkspaceDocumentsPage() {
                 const canManageDoc = canApproveDocuments || isDocOwner;
 
                 return (
-                  <tr
+                  <div
                     key={doc.id}
-                    className="hover:bg-surface-2/40 transition-colors group cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    className={`group grid min-h-[36px] ${DOCUMENT_GRID_CLASS} cursor-pointer items-center gap-4 rounded-[7px] px-2 py-1 text-[11px] transition-none hover:bg-surface-2 hover:shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`}
                     onClick={() =>
                       router.push(`/${workspaceSlug}/documents/${doc.id}`)
                     }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(`/${workspaceSlug}/documents/${doc.id}`);
+                      }
+                    }}
                   >
-                    {/* Name column with thumbnail icon */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        {getFileIcon(doc.fileExtension)}
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-semibold text-ink group-hover:text-primary transition-colors line-clamp-1">
-                            {doc.name}
-                          </span>
-                          <span className="text-[10px] text-ink-muted font-mono truncate">
-                            {doc.fileName}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
+                    <div aria-hidden="true" />
 
-                    {/* Classification / Status Badge */}
-                    <td
-                      className="py-3.5 px-4"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="flex min-w-0 items-center gap-2">
+                      {getFileIcon(doc.fileExtension)}
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate font-medium text-ink transition-colors group-hover:text-primary">
+                          {doc.name}
+                        </span>
+                        <span className="truncate font-mono text-[10px] text-ink-muted">
+                          {doc.fileName}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div onClick={(event) => event.stopPropagation()}>
                       {doc.status?.toLowerCase() ===
                         WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
                       doc.status?.toLowerCase().includes("pending") ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-1.5 py-0 text-[9px] font-semibold text-amber-600">
                           <Info className="h-3 w-3 text-amber-500" />
                           <span>Pending Approval</span>
                         </span>
                       ) : !doc.isAiAllowed ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-muted bg-surface-3 border border-hairline px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-1/70 px-1.5 py-0 text-[9px] font-semibold text-ink-muted">
                           <FileText className="h-3 w-3" />
                           <span>Administrative</span>
                         </span>
                       ) : doc.ingestionStatus?.toLowerCase() ===
                         WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0 text-[9px] font-semibold text-emerald-600">
                           <Sparkle className="h-3 w-3 text-emerald-500" />
                           <span>AI Ready</span>
                         </span>
                       ) : doc.ingestionStatus?.toLowerCase() ===
                         WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-destructive/20 bg-destructive/10 px-1.5 py-0 text-[9px] font-semibold text-destructive">
                           <ShieldWarning className="h-3 w-3" />
                           <span>AI Failed</span>
                         </span>
@@ -599,97 +596,90 @@ export default function WorkspaceDocumentsPage() {
                           WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING ||
                         doc.ingestionStatus?.toLowerCase() ===
                           WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full animate-pulse">
-                          <span>Processing AI...</span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-1.5 py-0 text-[9px] font-semibold text-amber-500">
+                          <span>Processing AI</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[9px] font-semibold text-primary">
                           <Brain className="h-3 w-3" />
                           <span>AI Context</span>
                         </span>
                       )}
-                    </td>
+                    </div>
 
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <DocumentActor
-                          label="Uploader"
-                          member={workspaceMembersQuery.data?.items.find(
-                            (member) => member.userId === doc.uploadedBy,
-                          )}
-                        />
-                        <DocumentActor
-                          label="Approver"
-                          member={workspaceMembersQuery.data?.items.find(
-                            (member) => member.userId === doc.approvedBy,
-                          )}
-                        />
-                      </div>
-                    </td>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <DocumentActor
+                        label="Uploader"
+                        member={workspaceMembersQuery.data?.items.find(
+                          (member) => member.userId === doc.uploadedBy,
+                        )}
+                      />
+                      <DocumentActor
+                        label="Approver"
+                        member={workspaceMembersQuery.data?.items.find(
+                          (member) => member.userId === doc.approvedBy,
+                        )}
+                      />
+                    </div>
 
-                    {/* Last Modified Date */}
-                    <td className="py-3.5 px-4 text-ink-muted text-xs">
+                    <span className="text-[11px] font-medium text-ink-muted">
                       {formatDate(doc.updatedAt || doc.createdAt)}
-                    </td>
+                    </span>
 
-                    {/* File Size */}
-                    <td className="py-3.5 px-4 text-ink-muted text-xs font-mono">
+                    <span className="font-mono text-[11px] text-ink-muted">
                       {formatBytes(doc.sizeBytes)}
-                    </td>
+                    </span>
 
-                    {/* Actions */}
-                    <td
-                      className="py-3.5 px-4 text-right"
-                      onClick={(e) => e.stopPropagation()}
+                    <div
+                      className="flex items-center justify-end gap-1"
+                      onClick={(event) => event.stopPropagation()}
                     >
-                      <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() =>
+                          router.push(`/${workspaceSlug}/documents/${doc.id}`)
+                        }
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+                        title="View Details"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+
+                      {canManageDoc &&
+                        (doc.status?.toLowerCase() === "archived" ? (
+                          <button
+                            onClick={() => handleRestore(doc.id)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-primary/10 hover:text-primary"
+                            title="Restore Document"
+                          >
+                            <ArrowCounterClockwise className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleArchive(doc.id)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-amber-500/10 hover:text-amber-500"
+                            title="Archive Document"
+                          >
+                            <Archive className="h-3.5 w-3.5" />
+                          </button>
+                        ))}
+
+                      {canManageDoc && (
                         <button
                           onClick={() =>
-                            router.push(`/${workspaceSlug}/documents/${doc.id}`)
+                            setDocToDelete({ id: doc.id, name: doc.name })
                           }
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-3 hover:text-ink transition-colors cursor-pointer"
-                          title="View Details"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
+                          title="Delete Permanently"
                         >
-                          <Eye className="h-4 w-4" />
+                          <Trash className="h-3.5 w-3.5" />
                         </button>
-
-                        {canManageDoc &&
-                          (doc.status?.toLowerCase() === "archived" ? (
-                            <button
-                              onClick={() => handleRestore(doc.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
-                              title="Restore Document"
-                            >
-                              <ArrowCounterClockwise className="h-4 w-4" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleArchive(doc.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-amber-500/10 hover:text-amber-500 transition-colors cursor-pointer"
-                              title="Archive Document"
-                            >
-                              <Archive className="h-4 w-4" />
-                            </button>
-                          ))}
-
-                        {canManageDoc && (
-                          <button
-                            onClick={() =>
-                              setDocToDelete({ id: doc.id, name: doc.name })
-                            }
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
-                            title="Delete Permanently"
-                          >
-                            <Trash className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
       ) : (
         /* Grid Card View */

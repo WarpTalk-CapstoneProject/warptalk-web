@@ -224,7 +224,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Top bar */}
         <header
           className={cn(
-            "h-[44px] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 shrink-0",
+            "h-[46px] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 shrink-0",
             !isLiveMeetingRoute && "border-b border-border",
           )}
         >

@@ -66,6 +66,13 @@ const transcriptFilters: Array<{ value: TranscriptFilter; label: string }> = [
   { value: "attention", label: "Needs attention" },
 ];
 
+const TRANSCRIPT_FILTER_WIDTH_CLASS: Record<TranscriptFilter, string> = {
+  all: "w-[136px]",
+  ready: "w-[132px]",
+  processing: "w-[122px]",
+  attention: "w-[154px]",
+};
+
 export default function TranscriptsPage() {
   const searchParams = useSearchParams();
   const requestedRoomId = searchParams.get("room");
@@ -158,7 +165,7 @@ export default function TranscriptsPage() {
     <main className="flex h-full flex-col bg-surface-1 text-ink">
       <div className="flex min-h-0 flex-1 flex-col">
         <div
-          className="flex shrink-0 items-center justify-between gap-4 px-4 py-3"
+          className="flex shrink-0 items-center justify-between gap-4 px-2 pb-1.5 pt-2"
           role="tablist"
           aria-label="Transcript filters"
         >
@@ -171,10 +178,10 @@ export default function TranscriptsPage() {
                 aria-selected={filter === item.value}
                 onClick={() => setFilter(item.value)}
                 className={cn(
-                  "flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] capitalize transition-all select-none",
+                  `flex h-[26px] ${TRANSCRIPT_FILTER_WIDTH_CLASS[item.value]} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium capitalize transition-colors select-none`,
                   filter === item.value
-                    ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                    : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground",
+                    ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                    : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white",
                 )}
               >
                 {item.label}
@@ -182,7 +189,7 @@ export default function TranscriptsPage() {
             ))}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 pl-4">
+          <div className="flex shrink-0 items-center gap-2">
             <ExpandingSearchDock
               value={query}
               onValueChange={setQuery}

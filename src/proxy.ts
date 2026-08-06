@@ -5,6 +5,8 @@ const PUBLIC_ROUTES = [
   "/",
   "/login",
   "/desktop-login",
+  // Someone who cannot sign in yet still needs the installer, so /download stays open.
+  "/download",
   "/register",
   "/forgot-password",
   "/verify-email",

@@ -416,7 +416,7 @@ export default function VoiceProfilesPage() {
   return (
     <div className="flex h-full flex-col bg-surface-1 text-ink">
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <section className="flex shrink-0 flex-col gap-2 px-4 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        <section className="flex shrink-0 flex-col gap-2 px-2 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
             {VOICE_PROFILE_FILTERS.map((filter) => (
               <button
@@ -433,7 +433,7 @@ export default function VoiceProfilesPage() {
             ))}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 pl-4">
+          <div className="flex shrink-0 items-center gap-2">
             <ExpandingSearchDock
               value={searchQuery}
               onValueChange={setSearchQuery}
@@ -475,7 +475,7 @@ export default function VoiceProfilesPage() {
           </div>
         </section>
 
-        <section className="mt-0.2 min-h-full overflow-x-auto px-4">
+        <section className="mt-0.2 min-h-full overflow-x-auto px-2">
           <div className="min-w-[1040px]">
             <div className={`grid ${VOICE_PROFILE_GRID_CLASS} px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
               <div />
