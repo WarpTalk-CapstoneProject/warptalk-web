@@ -8,10 +8,10 @@ export const meetingHistoryService = {
       pageSize: pageSize.toString(),
     });
     if (search) params.append("search", search);
-    return apiClient.get<MeetingHistoryListResponseDto>(`/api/v1/meetings/history?${params.toString()}`);
+    return apiClient.get<MeetingHistoryListResponseDto>(`/meetings/history?${params.toString()}`);
   },
 
   getMeetingRoomDetail: async (roomId: string) => {
-    return apiClient.get<MeetingRoomDetailDto>(`/api/v1/meetings/history/${roomId}`);
+    return apiClient.get<MeetingRoomDetailDto>(`/meetings/history/${roomId}`);
   },
 };
