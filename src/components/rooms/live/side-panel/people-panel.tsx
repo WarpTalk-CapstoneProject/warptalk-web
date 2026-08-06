@@ -38,6 +38,11 @@ import type {
 import { useParticipants } from "@livekit/components-react";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
+import {
+  PRESENCE_LABELS,
+  participantPresence,
+  type ParticipantPresence,
+} from "@/lib/room-occupancy";
 
 export function PeoplePanel({
   roomId,
@@ -68,9 +73,13 @@ export function PeoplePanel({
   const lkParticipantIds = new Set(lkParticipants.map((p) => p.identity));
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
+  // WT-308: "who is gone" is the same question the badge answers, so it is asked the same
+  // way. This used to be a second, private status list; keeping two meant they could
+  // disagree, and a roster that hides a status the badge still renders is exactly how the
+  // "Left" arm went unnoticed. Status only — a stale row must not be resurrected into the
+  // list by a LiveKit identity that happens to still be around.
   const visibleParticipants = participants.filter(
-    (participant) =>
-      !["left", "removed", "kicked", "rejected"].includes(participant.status),
+    (participant) => participantPresence(participant.status) !== "left",
   );
 
   // One request for the whole roster instead of one per row.
@@ -227,27 +236,13 @@ function ParticipantRow({
                   External
                 </span>
               )}
-              {isInRoom ? (
-                <span className="rounded bg-green-50 px-1 py-0.5 text-[10px] font-medium text-green-600 border border-green-200">
-                  In Room
-                </span>
-              ) : participant.status === "invited" ? (
-                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">
-                  Not in room
-                </span>
-              ) : participant.status === "waiting" ? (
-                <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-200">
-                  Waiting in Lobby
-                </span>
-              ) : participant.status === "disconnected" ? (
-                <span className="rounded bg-red-50 px-1 py-0.5 text-[10px] font-medium text-red-600 border border-red-200">
-                  Disconnected
-                </span>
-              ) : (
-                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">
-                  Left
-                </span>
-              )}
+              {/* WT-308: presence comes from the shared resolver, not an inline if/else
+                  chain. The chain this replaced had no CONNECTED arm, so the host's own
+                  row — seeded CONNECTED the moment the room is created — fell through to
+                  the `else` and read "Left" while the host was sitting in the meeting. */}
+              <PresenceBadge
+                presence={participantPresence(participant.status, { isInRoom })}
+              />
             </div>
             <p className="truncate text-[11px] text-ink-subtle capitalize">
               {participant.role.toString().toLowerCase()}
@@ -432,6 +427,30 @@ function ParticipantRow({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * WT-308: one badge, driven by `ParticipantPresence`. A `Record` rather than a chain of
+ * ternaries, so adding a presence without giving it a style is a type error instead of a
+ * participant silently rendering as somebody who left.
+ */
+const PRESENCE_STYLES: Record<ParticipantPresence, string> = {
+  "in-room": "bg-green-50 text-green-600 border-green-200",
+  connected: "bg-green-50 text-green-600 border-green-200",
+  lobby: "bg-amber-50 text-amber-600 border-amber-200",
+  "not-in-room": "bg-surface-2 text-ink-subtle border-border",
+  disconnected: "bg-red-50 text-red-600 border-red-200",
+  left: "bg-surface-2 text-ink-subtle border-border",
+};
+
+function PresenceBadge({ presence }: { presence: ParticipantPresence }) {
+  return (
+    <span
+      className={`rounded px-1 py-0.5 text-[10px] font-medium border ${PRESENCE_STYLES[presence]}`}
+    >
+      {PRESENCE_LABELS[presence]}
+    </span>
   );
 }
 
