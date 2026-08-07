@@ -19,6 +19,7 @@ import {
   hasRememberedAccessToken,
 } from "@/lib/landing-redirect";
 import type { PlanDto } from "@/types/billing";
+import { formatMoney } from "@/lib/currency";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
@@ -1013,7 +1014,7 @@ function PricingSection() {
                   <h3 className="c3-tier-large">
                     {plan.price === 0
                       ? "Free"
-                      : `${plan.price.toLocaleString()} ${plan.currency}/mo`}
+                      : `${formatMoney(plan.price, plan.currency)}/mo`}
                   </h3>
                   <p className="c3-desc">{getPlanDescription(plan.name)}</p>
                   <ul className="c3-list">

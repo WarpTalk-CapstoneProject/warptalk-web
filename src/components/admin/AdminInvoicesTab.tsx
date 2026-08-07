@@ -328,7 +328,7 @@ export function AdminInvoicesTab() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {inv.amount.toLocaleString()} {inv.currency.toUpperCase()}
+                    {formatMoney(inv.amount, inv.currency)}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button
