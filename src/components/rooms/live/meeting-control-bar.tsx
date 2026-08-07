@@ -705,11 +705,11 @@ function VoiceCloneRow({
       <Dialog open={showConsentDialog} onOpenChange={setShowConsentDialog}>
         <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Dùng giọng thật của bạn?</DialogTitle>
+            <DialogTitle>Use your own voice?</DialogTitle>
             <DialogDescription className="text-ink-subtle pt-2">
-              WarpTalk sẽ ghi lại khoảng 10 giây giọng nói của bạn trong cuộc họp này để tạo bản sao giọng nói
-              (voice clone) qua Cartesia, dùng để đọc bản dịch thay cho giọng AI mặc định. Dữ liệu giọng nói này
-              chỉ dùng cho phiên họp hiện tại — bạn có thể tắt bất cứ lúc nào.
+              WarpTalk will record about 10 seconds of your voice in this meeting to build a voice
+              clone through Cartesia, then use it to read your translations instead of the default
+              AI voice. The sample is used for this session only — you can turn it off at any time.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -718,7 +718,7 @@ function VoiceCloneRow({
               onClick={() => setShowConsentDialog(false)}
               className="bg-surface-2 hover:bg-surface-3 text-ink border-border"
             >
-              Hủy
+              Cancel
             </Button>
             <Button
               onClick={() => {
@@ -726,7 +726,7 @@ function VoiceCloneRow({
                 setShowConsentDialog(false);
               }}
             >
-              Đồng ý, dùng giọng của tôi
+              Use my voice
             </Button>
           </DialogFooter>
         </DialogContent>

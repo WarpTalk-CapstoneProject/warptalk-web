@@ -346,10 +346,10 @@ function JoinMeetingContent() {
       <div className="flex min-h-[80vh] items-center justify-center p-8 bg-canvas">
         <div className="w-full max-w-md bg-surface-1 border border-border p-6 rounded-[8px] shadow-linear text-center space-y-4">
           <div className="text-red-500 font-medium">
-            Phòng họp hoặc Workspace không hoạt động hoặc không tồn tại.
+            This meeting or workspace is inactive or no longer exists.
           </div>
           <Button onClick={() => router.push("/")} className="bg-foreground text-white">
-            Quay lại trang chủ
+            Back to home
           </Button>
         </div>
       </div>

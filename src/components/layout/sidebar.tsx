@@ -18,14 +18,14 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 const navigation = [
-  { name: "Cuộc họp", href: "/rooms", icon: VideoCamera },
-  { name: "Bản ghi", href: "/history", icon: FileText },
-  { name: "Gói dịch vụ", href: "/subscription", icon: CreditCard },
+  { name: "Meetings", href: "/rooms", icon: VideoCamera },
+  { name: "Recordings", href: "/history", icon: FileText },
+  { name: "Plans", href: "/subscription", icon: CreditCard },
 ];
 
 const secondaryNav = [
-  { name: "Thông báo", href: "/notifications", icon: Bell },
-  { name: "Cài đặt", href: "/settings", icon: GearSix },
+  { name: "Notifications", href: "/notifications", icon: Bell },
+  { name: "Settings", href: "/settings", icon: GearSix },
 ];
 
 const adminNav = [

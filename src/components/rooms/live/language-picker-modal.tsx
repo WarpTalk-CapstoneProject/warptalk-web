@@ -58,17 +58,17 @@ export function LanguagePickerModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>Chọn ngôn ngữ cho cuộc họp</DialogTitle>
+          <DialogTitle>Choose your meeting languages</DialogTitle>
           <DialogDescription className="text-ink-subtle pt-2">
-            Chọn ngôn ngữ bạn sẽ nói và ngôn ngữ bạn muốn nghe — bạn có thể đổi lại bất cứ
-            lúc nào từ thanh điều khiển trong cuộc họp. Bỏ qua để dùng chế độ tự động
-            (hệ thống tự nhận diện giọng nói).
+            Pick the language you&apos;ll speak and the one you want to hear — you can change
+            either at any time from the meeting control bar. Skip to stay on automatic
+            (we detect your spoken language for you).
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           <div className="grid gap-1.5">
-            <label className="text-[13px] font-medium text-ink">Bạn sẽ nói bằng ngôn ngữ nào?</label>
+            <label className="text-[13px] font-medium text-ink">Which language will you speak?</label>
             <Select value={speakLanguage} onValueChange={(value) => setSpeakLanguage(String(value))}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -84,7 +84,7 @@ export function LanguagePickerModal({
           </div>
 
           <div className="grid gap-1.5">
-            <label className="text-[13px] font-medium text-ink">Bạn muốn nghe bằng ngôn ngữ nào?</label>
+            <label className="text-[13px] font-medium text-ink">Which language do you want to hear?</label>
             <Select value={listenLanguage} onValueChange={(value) => setListenLanguage(String(value))}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -109,7 +109,7 @@ export function LanguagePickerModal({
             }}
             className="bg-surface-2 hover:bg-surface-3 text-ink border-border"
           >
-            Bỏ qua, dùng tự động
+            Skip, use automatic
           </Button>
           <Button
             onClick={() => {
@@ -117,7 +117,7 @@ export function LanguagePickerModal({
               onOpenChange(false);
             }}
           >
-            Xác nhận
+            Confirm
           </Button>
         </DialogFooter>
       </DialogContent>
