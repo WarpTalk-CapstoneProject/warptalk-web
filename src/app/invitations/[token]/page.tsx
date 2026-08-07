@@ -16,6 +16,7 @@ import {
   useAcceptWorkspaceInvitation,
   usePreviewWorkspaceInvitation,
 } from "@/hooks/use-workspace";
+import { apiStatusEquals } from "@/lib/api-status";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
@@ -114,7 +115,12 @@ export default function InvitationAcceptPage({ params }: PageProps) {
   }
 
   const isExpired = new Date(previewData.expiresAt) < new Date();
-  const isAccepted = previewData.status === "Accepted";
+  // InvitationStatus.cs declares ACCEPTED under [JsonStringEnumConverter] and
+  // it arrives as "ACCEPTED", so `=== "Accepted"` was never true. The banner
+  // below was unreachable dead UI, the Accept button stayed enabled on a spent
+  // invitation, and pressing it failed with "Make sure your account email
+  // matches the invitation" — a diagnosis of a problem the user did not have.
+  const isAccepted = apiStatusEquals(previewData.status, "ACCEPTED");
   const canAccept = !isExpired && !isAccepted;
 
   return (
