@@ -5,6 +5,7 @@ import {
   chooseNewestAccessToken,
   isAccessTokenExpiring,
 } from "@/lib/api/token-lifecycle";
+import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 
 /**
  * Client-side Axios instance with token interceptors.
@@ -69,19 +70,42 @@ function getRefreshToken(): string | null {
     ?? useAuthStore.getState().refreshToken;
 }
 
-function persistTokens(accessToken: string, refreshToken: string) {
+function persistTokens(accessToken: string, refreshToken: string, expiresAt?: string) {
   useAuthStore.getState().setTokens(accessToken, refreshToken);
-
-  if (typeof document !== "undefined") {
-    document.cookie = `access_token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-  }
+  // A refresh issues a brand new 30-minute token. Re-stamping the cookie with a hardcoded
+  // seven days here is how a session that had been refreshed once still ended up holding a
+  // week-long cookie around a half-hour token.
+  setAccessTokenCookie(accessToken, expiresAt);
 }
 
+/**
+ * Endpoints that must never have an Authorization header attached, and must never be
+ * blocked by the dead-session latch — they are how a user gets *out* of a dead session.
+ *
+ * Matched against whole path segments rather than by substring. The previous
+ * `url.includes("/auth/login")` check silently failed to match "/auth/google-login"
+ * (the substring is "-login", not "/login"), and never mentioned forgot-password,
+ * reset-password or verify-email at all. The consequence was not cosmetic: once
+ * `endDeadSession()` had latched, the request interceptor threw `SessionEndedError` for
+ * every one of these, so a user with an expired session could not sign in with Google
+ * and could not reset their password.
+ */
+const UNAUTHENTICATED_AUTH_ENDPOINTS = [
+  "/auth/login",
+  "/auth/google-login",
+  "/auth/register",
+  "/auth/register-invited",
+  "/auth/refresh",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/verify-email",
+];
+
 function isAuthEndpoint(url?: string) {
-  return Boolean(
-    url?.includes("/auth/login")
-    || url?.includes("/auth/refresh")
-    || url?.includes("/auth/register"),
+  if (!url) return false;
+  const path = url.split("?")[0].replace(/\/+$/, "");
+  return UNAUTHENTICATED_AUTH_ENDPOINTS.some(
+    (endpoint) => path === endpoint || path.endsWith(endpoint),
   );
 }
 
@@ -165,7 +189,7 @@ async function requestNewAccessToken(failedAccessToken?: string | null): Promise
       { refreshToken },
     );
 
-    persistTokens(data.accessToken, data.refreshToken);
+    persistTokens(data.accessToken, data.refreshToken, data.expiresAt);
     return data.accessToken;
   };
 

@@ -1,6 +1,7 @@
 import * as signalR from "@microsoft/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { endDeadSession, isSessionEnded } from "@/lib/api/client";
+import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
@@ -41,9 +42,13 @@ async function refreshAccessToken() {
         }
         return accessToken;
       }
-      const data = (await response.json()) as { accessToken: string; refreshToken: string };
+      const data = (await response.json()) as {
+        accessToken: string;
+        refreshToken: string;
+        expiresAt?: string;
+      };
       useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
-      document.cookie = `access_token=${data.accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+      setAccessTokenCookie(data.accessToken, data.expiresAt);
       return data.accessToken;
     })
     .catch(() => accessToken)

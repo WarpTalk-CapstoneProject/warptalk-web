@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
+import {
+  ACCESS_TOKEN_COOKIE,
+  SESSION_MARKER_COOKIE,
+  isLiveAccessToken,
+} from "@/lib/auth/session-cookie";
 
 const PUBLIC_ROUTES = [
   "/",
@@ -28,7 +33,22 @@ const DEVELOPMENT_ONLY_PREFIXES = [
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get("access_token")?.value;
+  const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
+
+  // Presence is not validity. This cookie used to be honoured for seven days while the
+  // token inside it lived thirty minutes, so a dead token read as a live session — which
+  // both let the user into an app that could only 401 and, worse, bounced them off /login,
+  // leaving no route back to a working state.
+  const hasLiveAccessToken = isLiveAccessToken(accessToken);
+  const hasStaleAccessToken = Boolean(accessToken) && !hasLiveAccessToken;
+
+  // An expired access token does not mean the session is over: the refresh token outlives
+  // it by days, and the client refreshes silently. The marker is what says a refresh is
+  // still worth attempting. Gating route access on the access token alone would have
+  // turned every 7-day session into a 30-minute one.
+  const hasSession =
+    hasLiveAccessToken || Boolean(request.cookies.get(SESSION_MARKER_COOKIE)?.value);
+
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
@@ -41,7 +61,20 @@ export function proxy(request: NextRequest) {
     return new NextResponse(null, { status: 404 });
   }
 
-  if (token && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
+  // A dead cookie must not survive the response that noticed it was dead, or the next page
+  // load starts from the same misleading state. Applied to whatever response we return
+  // below.
+  const withCleanup = (response: NextResponse) => {
+    if (hasStaleAccessToken) {
+      response.cookies.delete(ACCESS_TOKEN_COOKIE);
+    }
+    return response;
+  };
+
+  // Bouncing a signed-in user off the login page requires a *live* token. With a dead one
+  // the user gets the login page they asked for — the one place that can repair the
+  // session. This is the difference between a redirect and a trap.
+  if (hasLiveAccessToken && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
     const activeWorkspaceSlug = normalizeWorkspaceSlug(request.cookies.get("active_workspace_slug")?.value);
     if (activeWorkspaceSlug) {
       return NextResponse.redirect(new URL(`/${activeWorkspaceSlug}/dashboard`, request.url));
@@ -50,17 +83,17 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  if (!token && !isPublicRoute) {
+  if (!hasSession && !isPublicRoute) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
+    return withCleanup(NextResponse.redirect(loginUrl));
   }
 
-  if (pathname.startsWith(ADMIN_PREFIX) && token) {
-    return NextResponse.next();
+  if (pathname.startsWith(ADMIN_PREFIX) && hasSession) {
+    return withCleanup(NextResponse.next());
   }
 
-  return NextResponse.next();
+  return withCleanup(NextResponse.next());
 }
 
 export const config = {
