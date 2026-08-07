@@ -51,6 +51,12 @@ export const API = {
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
+  // WT-327: the recurring BOOKING, not its meetings. Creating one goes through
+  // translationRooms.create with a `recurrence` block; these two are about the series itself.
+  translationRoomSeries: {
+    get: (id: string) => `/translation-room-series/${id}`,
+    cancel: (id: string) => `/translation-room-series/${id}/cancel`,
+  },
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
     consent: (id: string) => `/room-artifacts/${id}/consent`,

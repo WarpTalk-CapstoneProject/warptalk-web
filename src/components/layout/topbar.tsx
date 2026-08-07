@@ -42,12 +42,25 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+/**
+ * WT-321(5): the surface at `/[slug]/rooms` is called **Meetings**, everywhere a person can
+ * read it. It was called both: this map titled the list page "Rooms" while the breadcrumb
+ * below (and the sidebar, and DEMO-FLOWS.md, and every button on the page — "New Meeting",
+ * "Search meetings...", "Active Meetings") said "Meetings".
+ *
+ * "Meetings" wins because it is the name the product already uses in the places that are
+ * hardest to change: the sidebar entry, the demo script the defence follows, and the page's
+ * own copy. The URL stays `/rooms` — it is what every shared link, every `router.push`, and
+ * the backend's TranslationRoom naming are built on, and renaming a route to match a heading
+ * is not a cosmetic change. "Room" survives as the noun for a single room (`Room Code`,
+ * `Create Room`), which is also how the backend uses it.
+ */
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
   host: "Host",
   participant: "Participant",
   profile: "Profile",
-  rooms: "Rooms",
+  rooms: "Meetings",
   create: "Create Room",
   history: "History",
   "ai-summaries": "Transcripts",
@@ -72,7 +85,7 @@ const searchItems: Array<{
   shortcut?: string;
 }> = [
   {
-    title: "Rooms",
+    title: "Meetings",
     url: "/rooms",
     group: "Workspace",
     icon: SquaresFour,

@@ -23,6 +23,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { useJoinTranslationRoomByCode, useRoomPreflight } from "@/hooks/use-translationRooms";
+import { getErrorMessage } from "@/lib/errors";
 import { getFlagEmoji } from "@/lib/language-flag";
 import { getLanguageName, languagesInScope } from "@/lib/languages";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
@@ -321,9 +322,11 @@ function JoinMeetingContent() {
         toast.error(result.message || "Failed to join room.");
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not join room.",
-      );
+      // WT-201: an AxiosError IS an Error, and its `.message` is only ever the generic
+      // "Request failed with status code 400" — the reason the API actually gave
+      // ("This room has already ended or has been cancelled.") lives in the response body.
+      // getErrorMessage reads the body first, exactly as create-room-dialog already does.
+      toast.error(getErrorMessage(error, "Could not join room."));
     }
   }
 
@@ -343,10 +346,10 @@ function JoinMeetingContent() {
       <div className="flex min-h-[80vh] items-center justify-center p-8 bg-canvas">
         <div className="w-full max-w-md bg-surface-1 border border-border p-6 rounded-[8px] shadow-linear text-center space-y-4">
           <div className="text-red-500 font-medium">
-            Phòng họp hoặc Workspace không hoạt động hoặc không tồn tại.
+            This meeting or workspace is inactive or no longer exists.
           </div>
           <Button onClick={() => router.push("/")} className="bg-foreground text-white">
-            Quay lại trang chủ
+            Back to home
           </Button>
         </div>
       </div>

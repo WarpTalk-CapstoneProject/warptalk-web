@@ -1,8 +1,43 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserDto } from "@/types/auth";
-import { useWorkspaceStore } from "./workspace-store";
-import { usePresenceStore } from "./presence-store";
+import { clearSessionCookies, isLiveAccessToken } from "@/lib/auth/session-cookie";
+import {
+  resetSessionScopedStateOnLogin,
+  resetSessionScopedStateOnLogout,
+} from "@/lib/session-scoped-state";
+
+const AUTH_STORAGE_KEY = "warptalk-auth";
+
+/**
+ * Tell the server the refresh token is spent.
+ *
+ * Nothing in the app did this. `authService.logout()` had exactly one caller,
+ * `useLogout()` in hooks/use-auth.ts, and that hook had no callers at all —
+ * every sign-out in the product went through this store's client-only
+ * `logout()`, so `POST /auth/logout` was never sent. A refresh token lives
+ * seven days: signing out cleared the browser and left the credential fully
+ * redeemable by anyone who had a copy of it.
+ *
+ * Best effort, and deliberately so. A failed revoke must never keep the user
+ * signed in — the local teardown runs regardless, and the request is dispatched
+ * before it. The import is dynamic to keep the axios client out of this
+ * module's import cycle (lib/api/client.ts imports this store).
+ */
+function revokeRefreshTokenOnServer(
+  refreshToken: string | null,
+  accessToken: string | null,
+) {
+  if (typeof window === "undefined" || !refreshToken) return;
+
+  void import("@/services/auth.service")
+    .then(({ authService }) => authService.logout({ refreshToken }, accessToken))
+    .catch(() => {
+      // Swallowed on purpose. The server may be unreachable, the access token
+      // may already have expired, or the token may already be revoked. None of
+      // those are reasons to leave the user looking signed in.
+    });
+}
 
 interface AuthState {
   user: UserDto | null;
@@ -17,9 +52,16 @@ interface AuthState {
   updateUser: (updates: Partial<UserDto>) => void;
 }
  
+/**
+ * Set while a sibling tab's sign-out is being replayed into this one. The other
+ * tab already revoked the refresh token; re-posting the same spent credential
+ * from every open tab would achieve nothing but noise.
+ */
+let replayingRemoteSignOut = false;
+
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       accessToken: null,
       refreshToken: null,
@@ -28,26 +70,44 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
-      login: (user, accessToken, refreshToken) =>
-        set((state) => {
-          if (state.user?.id && state.user.id !== user.id) {
-            useWorkspaceStore.getState().clearActiveWorkspace();
-          }
-          return { user, accessToken, refreshToken, isAuthenticated: true };
-        }),
+      login: (user, accessToken, refreshToken) => {
+        // Before the new identity is installed, not after. Anything still cached at this
+        // point was fetched as somebody else, and this is the last instant at which nothing
+        // is subscribed to it yet.
+        //
+        // This used to clear only the active workspace, and only when the persisted previous
+        // user id happened to differ. Both conditions were too weak: the query cache was
+        // never touched at all, and the paths that end a session without a clean logout —
+        // an unredeemable refresh token, a sign-out in another tab, a hard refresh — are
+        // exactly the paths that leave no previous user id to compare against.
+        resetSessionScopedStateOnLogin();
+        set({ user, accessToken, refreshToken, isAuthenticated: true });
+      },
       logout: () => {
-        if (typeof document !== "undefined") {
-          document.cookie = "access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        // Before anything is cleared, while both credentials still exist: tell
+        // the server the refresh token is spent. Fire-and-forget — the teardown
+        // below runs whether or not this succeeds, because a sign-out that can
+        // fail is not a sign-out.
+        if (!replayingRemoteSignOut) {
+          const { accessToken, refreshToken } = get();
+          revokeRefreshTokenOnServer(refreshToken, accessToken);
         }
-        useWorkspaceStore.getState().clearActiveWorkspace();
-        // Whose colleagues were online is not the next account holder's business.
-        usePresenceStore.getState().clear();
+
+        clearSessionCookies();
+        // The identity goes first, and the order is load-bearing. Emptying the query cache
+        // notifies every mounted observer, and an observer whose query has just been removed
+        // refetches — so with the token still installed, the departing account's credentials
+        // would be used to refill the cache we are in the middle of emptying.
         set({
           user: null,
           accessToken: null,
           refreshToken: null,
           isAuthenticated: false,
         });
+        // The auth state is only the smallest part of what identifies the departing account.
+        // The query cache holds their rooms, workspaces, members and notifications, and seven
+        // module-level stores outlive the sign-out with them. See session-scoped-state.ts.
+        resetSessionScopedStateOnLogout();
       },
       updateUser: (updates) =>
         set((state) => ({
@@ -55,13 +115,87 @@ export const useAuthStore = create<AuthState>()(
         })),
     }),
     {
-      name: "warptalk-auth",
+      name: AUTH_STORAGE_KEY,
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      // localStorage outlives the tokens in it. A persisted `isAuthenticated: true` around a
+      // long-dead access token makes the app paint a signed-in shell before any request has
+      // had the chance to disagree, which is what a stranded user actually sees.
+      //
+      // An expired access token on its own is not a dead session — the refresh token
+      // outlives it by days and the client redeems it silently — so this only discards state
+      // when there is nothing left to refresh with.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (isLiveAccessToken(state.accessToken) || state.refreshToken) return;
+        if (!state.user && !state.accessToken && !state.isAuthenticated) return;
+
+        clearSessionCookies();
+        state.user = null;
+        state.accessToken = null;
+        state.refreshToken = null;
+        state.isAuthenticated = false;
+        resetSessionScopedStateOnLogout();
+      },
     }
   )
 );
+
+/**
+ * Whether a persisted auth snapshot describes a session that is over.
+ *
+ * `null` means the key was removed outright — localStorage.clear(), or a
+ * devtools wipe. That is a sign-out too.
+ */
+function isSignedOutSnapshot(rawValue: string | null) {
+  if (rawValue === null) return true;
+
+  try {
+    const parsed = JSON.parse(rawValue) as {
+      state?: { accessToken?: unknown; refreshToken?: unknown };
+    };
+    return !parsed.state?.accessToken && !parsed.state?.refreshToken;
+  } catch {
+    // Unparseable persisted state is not evidence of a sign-out, and guessing
+    // wrong here would sign a working tab out for no reason.
+    return false;
+  }
+}
+
+/**
+ * Sign-out has to reach the other tabs.
+ *
+ * zustand's `persist` writes to localStorage but never reads it again after
+ * hydration, so a sign-out in tab A left tab B holding both tokens in memory.
+ * `chooseNewestAccessToken()` kept preferring the store's copy, and tab B went
+ * on working — and went on refreshing, renewing a session the user believed
+ * they had ended. On a shared machine the signed-out state was decoration.
+ *
+ * The `storage` event fires only in the *other* tabs, which is exactly the
+ * audience. The teardown is the store's own logout() rather than a hand-rolled
+ * copy, so the sibling tabs clear cookies, identity, query cache and the seven
+ * session-scoped stores by the same path as the tab that started it — minus the
+ * server revoke, which tab A has already done.
+ */
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.storageArea !== window.localStorage) return;
+    // A null key means the whole store was cleared.
+    if (event.key !== null && event.key !== AUTH_STORAGE_KEY) return;
+    if (!isSignedOutSnapshot(event.newValue)) return;
+
+    const { accessToken, refreshToken, isAuthenticated } = useAuthStore.getState();
+    if (!accessToken && !refreshToken && !isAuthenticated) return;
+
+    replayingRemoteSignOut = true;
+    try {
+      useAuthStore.getState().logout();
+    } finally {
+      replayingRemoteSignOut = false;
+    }
+  });
+}

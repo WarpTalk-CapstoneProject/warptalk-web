@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { formatMoney } from "@/lib/currency";
 
 interface InvoiceDto {
   id: string;
@@ -327,7 +328,7 @@ export function AdminInvoicesTab() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {inv.amount.toLocaleString()} {inv.currency.toUpperCase()}
+                    {formatMoney(inv.amount, inv.currency)}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button
@@ -499,10 +500,7 @@ export function AdminInvoicesTab() {
                     </span>
                   </div>
                   <span className="text-lg font-extrabold text-ink tracking-tight">
-                    {selectedInvoice.amount.toLocaleString("vi-VN")}
-                    {selectedInvoice.currency === "vnd"
-                      ? "đ"
-                      : ` ${selectedInvoice.currency.toUpperCase()}`}
+                    {formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
                   </span>
                 </div>
               </div>
@@ -647,16 +645,10 @@ export function AdminInvoicesTab() {
                 </td>
                 <td className="py-4 px-3 text-center text-gray-700">1</td>
                 <td className="py-4 px-3 text-right text-gray-700 font-mono">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}
-                  {selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
                 </td>
                 <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}
-                  {selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
                 </td>
               </tr>
             )}
@@ -669,27 +661,19 @@ export function AdminInvoicesTab() {
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Subtotal:</span>
               <span className="font-semibold text-gray-900 font-mono">
-                {selectedInvoice &&
-                  selectedInvoice.amount.toLocaleString("vi-VN")}
-                {selectedInvoice &&
-                  (selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
               </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Tax (0%):</span>
-              <span className="text-gray-900 font-mono">0đ</span>
+              <span className="text-gray-900 font-mono">
+                {formatMoney(0, selectedInvoice?.currency)}
+              </span>
             </div>
             <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
               <span className="text-gray-900">Total Paid:</span>
               <span className="text-gray-950 font-mono text-base">
-                {selectedInvoice &&
-                  selectedInvoice.amount.toLocaleString("vi-VN")}
-                {selectedInvoice &&
-                  (selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
               </span>
             </div>
           </div>

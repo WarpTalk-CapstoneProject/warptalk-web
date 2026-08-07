@@ -18,10 +18,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getErrorMessage } from "@/lib/errors";
 import { createHubConnection } from "@/lib/signalr";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  useWorkspaceRole,
+  useWorkspaceRoleLoaded,
+} from "@/hooks/use-workspace-role";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import {
   ArrowRight,
@@ -35,6 +40,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { formatMoney } from "@/lib/currency";
 
 // We fetch plans dynamically now.
 
@@ -54,7 +60,8 @@ export default function WorkspacePlansPage() {
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
-  const role = useWorkspaceStore((state) => state.role);
+  const role = useWorkspaceRole();
+  const isRoleLoaded = useWorkspaceRoleLoaded();
 
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(
     "monthly",
@@ -163,8 +170,18 @@ export default function WorkspacePlansPage() {
         // Invalidate billing query cache so billing page shows updated plan
         queryClient.invalidateQueries({ queryKey: ["billing"] });
       }
-    } catch {
-      toast.error("Failed to update plan. Please contact support.");
+    } catch (error) {
+      // PUT /subscriptions/workspace/{id}/change-plan does not exist: there is no `change-plan`
+      // route anywhere in the billing service, so this always 404s for a workspace that already
+      // has a subscription — which is every workspace that reaches this button. Until the endpoint
+      // is built, say what is true. "Please contact support" reads as a transient fault and sends
+      // the user to ask about a feature that was never wired up.
+      toast.error(
+        getErrorMessage(
+          error,
+          "Changing an existing plan is not available yet. Contact sales to move between plans.",
+        ),
+      );
     } finally {
       setIsProcessing(false);
       setPendingPlanSlug("");
@@ -259,7 +276,7 @@ export default function WorkspacePlansPage() {
   const { rate, discount } = getTopUpRate(topUpCredits);
   const topUpTotal = topUpCredits * rate;
 
-  if (!role) {
+  if (!isRoleLoaded) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-canvas">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -267,7 +284,7 @@ export default function WorkspacePlansPage() {
     );
   }
 
-  if (role !== "Owner" && role !== "Admin") {
+  if (role !== "owner" && role !== "admin") {
     return (
       <div className="flex h-[80vh] items-center justify-center w-full">
         <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">
@@ -427,7 +444,7 @@ export default function WorkspacePlansPage() {
                     <div className="flex items-baseline whitespace-nowrap">
                       <span className="text-4xl font-extrabold tracking-tight text-gray-900">
                         {displayPrice > 0
-                          ? `${displayPrice.toLocaleString("vi-VN")}đ`
+                          ? formatMoney(displayPrice, "VND")
                           : "Free"}
                       </span>
                       <span className="text-sm font-medium text-gray-500 ml-1">
@@ -555,7 +572,7 @@ export default function WorkspacePlansPage() {
                   )}
                   {billingInterval === "yearly" && (
                     <p className="text-[11px] text-[#7F1DFF] font-semibold text-center w-full">
-                      Billed yearly: {displayTotal.toLocaleString("vi-VN")}đ
+                      Billed yearly: {formatMoney(displayTotal, "VND")}
                     </p>
                   )}
                 </CardFooter>
@@ -643,7 +660,7 @@ export default function WorkspacePlansPage() {
                       &lt; 10k
                     </span>
                     <span className="text-xs font-medium text-ink mt-0.5">
-                      10đ/cr
+                      10 VND/cr
                     </span>
                   </div>
                   <div
@@ -655,7 +672,7 @@ export default function WorkspacePlansPage() {
                       10k+
                     </span>
                     <span className="text-xs font-medium text-ink mt-0.5">
-                      9đ/cr{" "}
+                      9 VND/cr{" "}
                       <span className="text-semantic-success text-[10px] ml-0.5">
                         (10%)
                       </span>
@@ -670,7 +687,7 @@ export default function WorkspacePlansPage() {
                       25k+
                     </span>
                     <span className="text-xs font-medium text-ink mt-0.5">
-                      8.5đ/cr{" "}
+                      8.5 VND/cr{" "}
                       <span className="text-semantic-success text-[10px] ml-0.5">
                         (15%)
                       </span>
@@ -685,7 +702,7 @@ export default function WorkspacePlansPage() {
                       50k+
                     </span>
                     <span className="text-xs font-medium text-ink mt-0.5">
-                      8đ/cr{" "}
+                      8 VND/cr{" "}
                       <span className="text-semantic-success text-[10px] ml-0.5">
                         (20%)
                       </span>
@@ -722,7 +739,7 @@ export default function WorkspacePlansPage() {
                   <div className="border-t border-hairline pt-3 mt-1 flex items-center justify-between">
                     <span className="text-base font-bold text-ink">Total</span>
                     <span className="text-2xl font-bold text-ink tracking-tight">
-                      {topUpTotal.toLocaleString("vi-VN")}đ
+                      {formatMoney(topUpTotal, "VND")}
                     </span>
                   </div>
                 </div>

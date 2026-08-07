@@ -1,6 +1,8 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type {
+  CancelSeriesResult,
+  CreateRecurringRoomResponse,
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
   JoinTranslationRoomResultDto,
@@ -18,6 +20,8 @@ import type {
   TranslationRoomStatus,
   UpdateRoomSettingsRequest,
   RoomPreflightResponse,
+  RecurrenceRequest,
+  RecurrenceSummaryResponse,
 } from "@/types/translationRoom";
 
 type BackendRoom = Omit<TranslationRoomDto, "status" | "translationRoomType" | "targetLanguages"> & {
@@ -29,6 +33,14 @@ type BackendRoom = Omit<TranslationRoomDto, "status" | "translationRoomType" | "
 type BackendParticipant = Omit<TranslationRoomParticipantDto, "role" | "status"> & {
   role: string;
   status: string;
+};
+
+/** WT-327: the recurring shape of the same POST, before status/language normalisation. */
+type BackendRecurringCreate = {
+  series: RecurrenceSummaryResponse;
+  firstOccurrence: BackendRoom;
+  materializedOccurrenceCount: number;
+  totalOccurrenceCount: number;
 };
 
 type BackendJoinResponse = {
@@ -126,6 +138,45 @@ export const translationRoomService = {
     return { ...response, data: normalizeRoom(response.data) };
   },
 
+  /**
+   * WT-327: create a repeating booking.
+   *
+   * A separate method rather than a union return from `create`, so no caller has to type-guard
+   * a response shape at runtime — the dialog already knows which one it asked for. The server
+   * hands back the first materialised occurrence, which is an ordinary room, so the success
+   * screen that follows is exactly the one a single meeting produces.
+   */
+  async createRecurring(data: CreateTranslationRoomRequest & { recurrence: RecurrenceRequest }) {
+    const response = await apiClient.post<BackendRecurringCreate>(
+      API.translationRooms.create,
+      toBackendCreateRequest(data),
+    );
+    const normalized: CreateRecurringRoomResponse = {
+      ...response.data,
+      firstOccurrence: normalizeRoom(response.data.firstOccurrence),
+    };
+    return { ...response, data: normalized };
+  },
+
+  async getSeries(seriesId: string) {
+    const response = await apiClient.get<RecurrenceSummaryResponse>(
+      API.translationRoomSeries.get(seriesId),
+    );
+    return response.data;
+  },
+
+  /**
+   * WT-327: stop the whole series. Future occurrences are cancelled with it; meetings that
+   * already ran are left alone. Cancelling a SINGLE occurrence is the ordinary
+   * `translationRoomService.cancel(roomId)` and does not touch the series.
+   */
+  async cancelSeries(seriesId: string) {
+    const response = await apiClient.post<CancelSeriesResult>(
+      API.translationRoomSeries.cancel(seriesId),
+    );
+    return response.data;
+  },
+
   async list(params?: {
     status?: string;
     search?: string;
@@ -133,6 +184,14 @@ export const translationRoomService = {
     to?: string;
     page?: number;
     pageSize?: number;
+    /**
+     * Scopes the list to one workspace. Send it from any workspace-scoped screen: the server can
+     * only widen the list to a workspace Owner/Admin when it knows which workspace is being asked
+     * about, so omitting it is what left an Admin looking at "No active meetings found." for a
+     * workspace full of rooms. It also keeps a workspace-scoped page from listing another
+     * workspace's meetings.
+     */
+    workspaceId?: string;
   }) {
     const response = await apiClient.get<TranslationRoomListResponse>(API.translationRooms.list, { params });
     return {

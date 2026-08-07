@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAskQuestion, useAnswerQuestion, useQuestions, useUpvoteQuestion } from "@/hooks/use-qa";
 import { useAuthStore } from "@/stores/auth-store";
 import type { QuestionDto } from "@/types/question";
+import { getErrorMessage } from "@/lib/errors";
 
 export function QaPanel({ roomId, isHost }: { roomId: string; isHost: boolean }) {
   const user = useAuthStore((state) => state.user);
@@ -27,7 +28,7 @@ export function QaPanel({ roomId, isHost }: { roomId: string; isHost: boolean })
       await askQuestion.mutateAsync({ body: trimmed, displayName: user?.fullName });
       setBody("");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not submit your question.");
+      toast.error(getErrorMessage(error, "Could not submit your question."));
     }
   }
 
@@ -89,7 +90,7 @@ function QuestionRow({
     try {
       await upvote.mutateAsync(question.id);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update your upvote.");
+      toast.error(getErrorMessage(error, "Could not update your upvote."));
     }
   }
 
@@ -97,7 +98,7 @@ function QuestionRow({
     try {
       await answer.mutateAsync(question.id);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not mark this question answered.");
+      toast.error(getErrorMessage(error, "Could not mark this question answered."));
     }
   }
 

@@ -26,11 +26,11 @@ function bareLanguage(language: string) {
   return language.split(/[-_]/)[0]?.toLowerCase() ?? language;
 }
 
-// Native names rather than English ones, because the surrounding copy in this section is
-// Vietnamese. Both come from the registry, so neither can drift into a bare code.
+// English names, like the rest of the UI. From the registry, so a label can never drift into
+// a bare code.
 const LANGUAGES = languagesInScope("voiceCatalog").map((language) => ({
   value: language.code,
-  label: language.nativeName,
+  label: language.name,
 }));
 
 /**
@@ -62,10 +62,12 @@ export function LibraryVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }
     try {
       await setPreferred.mutateAsync({ language, voiceId });
       toast.success(
-        voiceId ? "Đã đặt làm giọng mặc định." : "Đã bỏ giọng mặc định, quay lại giọng tự động.",
+        voiceId
+          ? "Set as your default voice."
+          : "Default voice cleared — back to the automatic voice.",
       );
     } catch (error) {
-      toast.error(getErrorMessage(error, "Không lưu được giọng mặc định."));
+      toast.error(getErrorMessage(error, "Could not save your default voice."));
     }
   }
 
@@ -73,10 +75,10 @@ export function LibraryVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }
     <section className="mx-4 space-y-4 border-b border-border py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-[18px] font-semibold text-ink">Giọng có sẵn</h2>
+          <h2 className="text-[18px] font-semibold text-ink">Available voices</h2>
           <p className="text-[13px] leading-5 text-ink-muted">
-            Chọn một giọng làm mặc định cho ngôn ngữ này. Vào phòng họp sẽ tự áp dụng — bạn vẫn
-            đổi được trong phòng bất cứ lúc nào.
+            Pick a default voice for this language. It applies automatically when you join a
+            meeting — you can still change it in the room at any time.
           </p>
         </div>
 
@@ -88,7 +90,7 @@ export function LibraryVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }
               disabled={setPreferred.isPending}
               onClick={() => void choose(null)}
             >
-              Bỏ chọn
+              Clear
             </Button>
           )}
           <Select
@@ -110,13 +112,13 @@ export function LibraryVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }
       </div>
 
       {catalogQuery.isLoading ? (
-        <p className="text-[13px] text-ink-subtle">Đang tải danh sách giọng…</p>
+        <p className="text-[13px] text-ink-subtle">Loading voices…</p>
       ) : voices.length === 0 ? (
         // A cold catalog is the normal state before the AI worker's first synthesis for this
         // language — say so plainly instead of showing it as a failure.
         <p className="rounded-md border border-dashed border-border px-3 py-4 text-[13px] text-ink-subtle">
-          Chưa có giọng nào cho ngôn ngữ này. Danh sách sẽ xuất hiện sau lần dịch đầu tiên
-          trong một cuộc họp.
+          No voices yet for this language. They appear after the first translation in a
+          meeting.
         </p>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

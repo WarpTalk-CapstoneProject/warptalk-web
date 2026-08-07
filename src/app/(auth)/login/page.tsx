@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
+import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
@@ -46,41 +47,29 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
-  let expiresString = "";
-  if (expiresAt) {
-    const expiresDate = new Date(expiresAt);
-    if (!isNaN(expiresDate.getTime())) {
-      expiresString = `; expires=${expiresDate.toUTCString()}`;
-    }
-  }
-
-  // Fallback to 7 days if expiresAt is not provided or invalid
-  const maxAgeString = expiresString ? "" : `; max-age=${7 * 24 * 60 * 60}`;
-
-  document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
-}
-
 function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
+  // Nothing on this path may be written to the console. The Google access
+  // token, and the AuthResponse the backend returns for it, both carry live
+  // credentials — the response body holds the access token and the 7-day
+  // refresh token in plaintext. Anything printed here survives in the
+  // browser's console history and in any screen recording of a demo, and a
+  // refresh token read from it stays redeemable for a week even after the
+  // user signs out. The toasts below are the user-facing signal; the console
+  // is not a place to put credentials.
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      console.log("[Google OAuth] Token Response:", tokenResponse);
       try {
         const idToken = tokenResponse.access_token;
-        console.log(
-          "[Google OAuth] Sending token to backend /auth/google-login...",
-        );
         const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, {
           idToken,
         });
-        console.log("[Google OAuth] Backend Response:", res.data);
-        const { user, accessToken, refreshToken } = res.data;
+        const { user, accessToken, refreshToken, expiresAt } = res.data;
 
         login(user, accessToken, refreshToken);
-        setAccessTokenCookie(accessToken);
+        setAccessTokenCookie(accessToken, expiresAt);
 
         toast.success("Google login successful!");
 
@@ -94,15 +83,13 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         }
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
-        console.error("[Google OAuth] Backend verification error:", error);
         toast.error(
           error?.response?.data?.error ||
             "Google login failed. Please try again.",
         );
       }
     },
-    onError: (errorResponse) => {
-      console.error("[Google OAuth] Popup / Client Error:", errorResponse);
+    onError: () => {
       toast.error("Google authentication failed or popup was closed.");
     },
   });
@@ -110,10 +97,7 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   return (
     <button
       type="button"
-      onClick={() => {
-        console.log("[Google OAuth] Continue with Google button clicked");
-        handleGoogleLogin();
-      }}
+      onClick={() => handleGoogleLogin()}
       className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
     >
       <GoogleAuthIcon className="size-5" />
@@ -192,10 +176,10 @@ function LoginForm() {
         email: data.email,
         password: data.password,
       });
-      const { user, accessToken, refreshToken } = res.data;
+      const { user, accessToken, refreshToken, expiresAt } = res.data;
 
       login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken);
+      setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Login successful!");
 
@@ -391,6 +375,26 @@ function LoginForm() {
             )}
           </AnimatePresence>
         </form>
+
+        {/*
+          The heading says "Log in or sign up" but this page had no sign-up
+          control of any kind, and /register was reachable only by typing the
+          URL. The landing CTA lands a guest here, so this link is the only
+          thing between a stranger and a dead end. callbackUrl is carried
+          across so the visitor still ends up where they were headed; this
+          mirrors the /login link the register page already renders.
+        */}
+        <p className="mt-6 text-center text-[13px] font-medium text-neutral-700 relative z-20">
+          <span className="bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg">
+            New to WarpTalk?{" "}
+            <Link
+              href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+              className="text-black hover:underline"
+            >
+              Create account
+            </Link>
+          </span>
+        </p>
 
         {/* Footer */}
         <div className="mt-auto pb-6 pt-12 flex justify-center relative z-20">

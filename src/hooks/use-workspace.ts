@@ -74,17 +74,37 @@ export function useWorkspaceSettings(id: string) {
   });
 }
 
+/** Full-document replace. Callers must supply every field — the server binds the whole DTO. */
 export function useUpdateWorkspaceSettings(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (settings: Partial<WorkspaceSettingsDto>) => WorkspaceService.updateSettings(workspaceId, settings),
+    mutationFn: (settings: WorkspaceSettingsDto) => WorkspaceService.updateSettings(workspaceId, settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
 }
 
-export const usePatchWorkspaceSettings = useUpdateWorkspaceSettings;
+/**
+ * Partial update. This used to be an alias for the PUT hook, so every single-control save on
+ * the workspace settings page posted a one-key body to an endpoint that binds the whole DTO
+ * and got a 400 back — while the control kept the value the user picked until a reload.
+ * It now targets the read-merge-write PATCH, which is what a one-key body needs.
+ *
+ * The merged document comes back in the response, so we seed the cache with it rather than
+ * only invalidating: that closes the window where the UI would briefly show the pre-save
+ * value while the refetch is in flight.
+ */
+export function usePatchWorkspaceSettings(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<WorkspaceSettingsDto>) => WorkspaceService.patchSettings(workspaceId, patch),
+    onSuccess: (merged) => {
+      queryClient.setQueryData(WORKSPACE_KEYS.settings(workspaceId), merged);
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
+    },
+  });
+}
 
 export function useVerifiedDomains(workspaceId: string) {
   const settings = useWorkspaceSettings(workspaceId);
@@ -102,18 +122,16 @@ export function useVerifiedDomains(workspaceId: string) {
 export function useAddVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
   const settingsQuery = useWorkspaceSettings(workspaceId);
-  const updateSettings = useUpdateWorkspaceSettings(workspaceId);
+  const patchSettings = usePatchWorkspaceSettings(workspaceId);
 
   return useMutation({
     mutationFn: async (domain: string) => {
       if (!settingsQuery.data) throw new Error("Settings not loaded");
       const currentDomains = settingsQuery.data.verifiedDomains || [];
       if (currentDomains.includes(domain)) return;
-      const updated = {
-        ...settingsQuery.data,
-        verifiedDomains: [...currentDomains, domain],
-      };
-      await updateSettings.mutateAsync(updated);
+      // Only the domain list travels. Spreading the whole cached document used to make this
+      // a blind full-document overwrite of everything else in the settings JSON.
+      await patchSettings.mutateAsync({ verifiedDomains: [...currentDomains, domain] });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
@@ -124,20 +142,17 @@ export function useAddVerifiedDomain(workspaceId: string) {
 export function useRevokeVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
   const settingsQuery = useWorkspaceSettings(workspaceId);
-  const updateSettings = useUpdateWorkspaceSettings(workspaceId);
+  const patchSettings = usePatchWorkspaceSettings(workspaceId);
 
   return useMutation({
     mutationFn: async (domainIdOrName: string) => {
       if (!settingsQuery.data) throw new Error("Settings not loaded");
       const currentDomains = settingsQuery.data.verifiedDomains || [];
-      const updatedDomains = currentDomains.filter(
-        (d) => d.toLowerCase() !== domainIdOrName.toLowerCase()
-      );
-      const updated = {
-        ...settingsQuery.data,
-        verifiedDomains: updatedDomains,
-      };
-      await updateSettings.mutateAsync(updated);
+      await patchSettings.mutateAsync({
+        verifiedDomains: currentDomains.filter(
+          (d) => d.toLowerCase() !== domainIdOrName.toLowerCase()
+        ),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });

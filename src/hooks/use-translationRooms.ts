@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translationRoom.service";
 import type {
   CreateTranslationRoomRequest,
+  RecurrenceRequest,
   JoinTranslationRoomByCodeRequest,
   SubmitTranslationRoomFeedbackRequest,
   TranslationRoomFeedbackDto,
@@ -24,6 +25,8 @@ export function useTranslationRooms(params?: {
   to?: string;
   page?: number;
   pageSize?: number;
+  /** Pass the active workspace on any workspace-scoped screen. See `translationRoomService.list`. */
+  workspaceId?: string;
 }) {
   return useQuery({
     queryKey: [...MEETING_KEY, params],
@@ -60,6 +63,45 @@ export function useCreateTranslationRoom() {
       const { data: translationRoom } = await translationRoomService.create(data);
       return translationRoom;
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    },
+  });
+}
+
+/**
+ * WT-327: create a repeating booking.
+ *
+ * Separate from useCreateTranslationRoom rather than a flag on it, because the two return
+ * different shapes and a caller that has to narrow a union at runtime is a caller that can
+ * forget to. Invalidates the same key, so the meetings list and the day timeline pick up all
+ * N occurrences at once — they are ordinary rooms and the list endpoint never learned about
+ * series at all.
+ */
+export function useCreateRecurringTranslationRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      data: CreateTranslationRoomRequest & { recurrence: RecurrenceRequest },
+    ) => {
+      const { data: result } = await translationRoomService.createRecurring(data);
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+    },
+  });
+}
+
+/**
+ * WT-327: stop a whole series. Future occurrences are cancelled with it; meetings that already
+ * ran are untouched. Cancelling ONE occurrence is useCancelTranslationRoom and leaves the
+ * series running.
+ */
+export function useCancelTranslationRoomSeries() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (seriesId: string) => translationRoomService.cancelSeries(seriesId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
