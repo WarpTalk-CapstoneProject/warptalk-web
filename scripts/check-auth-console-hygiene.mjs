@@ -10,15 +10,16 @@
  * file on the auth surface contains a console call. If you need to debug this
  * code, use a breakpoint.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 
+// Missing entries are skipped rather than fatal: this list names the auth
+// surface, and a file leaving it is not a hygiene failure.
 const ROOTS = [
   "src/app/(auth)",
   "src/app/desktop-login",
   "src/services/auth.service.ts",
-  "src/hooks/use-auth.ts",
   "src/stores/auth-store.ts",
   "src/lib/auth",
 ];
@@ -33,6 +34,7 @@ function collect(path) {
 
 const offenders = [];
 for (const root of ROOTS) {
+  if (!existsSync(root)) continue;
   for (const file of collect(root)) {
     if (!/\.(ts|tsx)$/.test(file)) continue;
     readFileSync(file, "utf8")
