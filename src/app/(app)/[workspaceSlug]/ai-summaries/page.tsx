@@ -879,6 +879,25 @@ function TranscriptPanel({
             })}
           </div>
         ))}
+        {canEdit && transcript?.status !== "finalized" ? (
+          <div className="flex justify-end pt-2 pb-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isFinalizing}
+              onClick={() => void finalizeTranscript()}
+              className="h-7 text-[11px] gap-1.5 shadow-none"
+            >
+              {isFinalizing ? (
+                <SpinnerGap size={13} className="animate-spin" />
+              ) : (
+                <CheckCircle size={13} />
+              )}
+              Finalize transcript
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }

@@ -1,2 +1,2 @@
 // Canonical workspace transcript route for TranscriptsPage.
-export { default } from "../ai-summaries/page";
+export { default, default as TranscriptsPage } from "../ai-summaries/page";
