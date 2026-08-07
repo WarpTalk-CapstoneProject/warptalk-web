@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserDto } from "@/types/auth";
+import { clearSessionCookies, isLiveAccessToken } from "@/lib/auth/session-cookie";
 import { useWorkspaceStore } from "./workspace-store";
 import { usePresenceStore } from "./presence-store";
 
@@ -36,9 +37,7 @@ export const useAuthStore = create<AuthState>()(
           return { user, accessToken, refreshToken, isAuthenticated: true };
         }),
       logout: () => {
-        if (typeof document !== "undefined") {
-          document.cookie = "access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        }
+        clearSessionCookies();
         useWorkspaceStore.getState().clearActiveWorkspace();
         // Whose colleagues were online is not the next account holder's business.
         usePresenceStore.getState().clear();
@@ -62,6 +61,24 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      // localStorage outlives the tokens in it. A persisted `isAuthenticated: true` around a
+      // long-dead access token makes the app paint a signed-in shell before any request has
+      // had the chance to disagree, which is what a stranded user actually sees.
+      //
+      // An expired access token on its own is not a dead session — the refresh token
+      // outlives it by days and the client redeems it silently — so this only discards state
+      // when there is nothing left to refresh with.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (isLiveAccessToken(state.accessToken) || state.refreshToken) return;
+        if (!state.user && !state.accessToken && !state.isAuthenticated) return;
+
+        clearSessionCookies();
+        state.user = null;
+        state.accessToken = null;
+        state.refreshToken = null;
+        state.isAuthenticated = false;
+      },
     }
   )
 );

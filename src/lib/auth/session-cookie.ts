@@ -1,0 +1,156 @@
+import { getAccessTokenExpiryMs } from "../api/token-lifecycle.ts";
+
+/**
+ * The single owner of the session cookies.
+ *
+ * Before this module, `setAccessTokenCookie` existed in four separate files with two
+ * different implementations, and every caller passed only the access token — so the
+ * `expiresAt` the server had just sent was destructured out of the response and thrown
+ * away, and the cookie was written with a hardcoded seven-day lifetime.
+ *
+ * Seven days is not an arbitrary wrong number: it is the *refresh* token's lifetime
+ * (backend `Jwt:RefreshTokenExpiryDays`). The access token lives 30 minutes
+ * (`Jwt:AccessTokenExpiryMinutes`). The cookie was therefore given the refresh token's
+ * lifetime while holding the access token's value, and stayed "present" for a week after
+ * the thing inside it died.
+ *
+ * The fix is to stop making one cookie answer two different questions:
+ *
+ *   `access_token`     — the access token itself. Expires exactly when the token does, so
+ *                        its presence means the value inside it is still usable.
+ *   `warptalk_session` — a value-less marker meaning "this browser has a refresh token
+ *                        that may still be redeemable". Lives for the refresh token's
+ *                        horizon. Carries no credential, so it is useless to an attacker.
+ *
+ * Middleware gates the redirect *away from* /login on the first and route access on the
+ * second. That is what lets an expired access token stop being treated as proof of a live
+ * session without cutting every session down to 30 minutes.
+ */
+
+export const ACCESS_TOKEN_COOKIE = "access_token";
+export const SESSION_MARKER_COOKIE = "warptalk_session";
+
+/**
+ * Mirrors the backend's `Jwt:RefreshTokenExpiryDays` (7). The refresh token's real expiry
+ * is not in `AuthResponse`, so this is a mirrored constant rather than a derived value — if
+ * the backend ever starts sending `refreshTokenExpiresAt`, this should read that instead.
+ *
+ * Being a marker and not a credential, erring long here leaks nothing: the worst case is a
+ * redirect to a page whose first API call 401s and ends the session.
+ */
+export const SESSION_MARKER_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+
+/**
+ * When the access token in `token` stops being valid, in epoch ms.
+ *
+ * Two independent sources agree on this in the normal case: the server's `expiresAt` and
+ * the token's own `exp` claim. We take the *earlier* of the two. `expiresAt` is a string
+ * the server formats and the browser parses, so it is the one that can go wrong — a
+ * timestamp serialised without a timezone parses as local time, which on a negative UTC
+ * offset would land in the future. `exp` is inside the token the API itself will validate,
+ * so it is the authority; taking the minimum means a bad `expiresAt` can only ever shorten
+ * the cookie, never let it outlive the token.
+ *
+ * Returns null when neither source is readable.
+ */
+export function resolveAccessTokenExpiryMs(
+  accessToken: string | null | undefined,
+  expiresAt?: string | null,
+): number | null {
+  const fromClaim = getAccessTokenExpiryMs(accessToken);
+
+  const parsed = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  const fromResponse = Number.isFinite(parsed) ? parsed : null;
+
+  if (fromClaim === null) return fromResponse;
+  if (fromResponse === null) return fromClaim;
+  return Math.min(fromClaim, fromResponse);
+}
+
+/**
+ * True when the token is a decodable JWT whose `exp` is still in the future.
+ *
+ * The signature is deliberately not verified — the browser has no key, and the API still
+ * enforces real authentication on every call. This only answers the question the browser
+ * *can* answer on its own: "is this thing already dead?" A token that cannot be decoded is
+ * answered the same way as one that has expired, because a caller that cannot tell when a
+ * token dies must not be the thing deciding that it is alive.
+ */
+export function isLiveAccessToken(
+  accessToken: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  const expiryMs = getAccessTokenExpiryMs(accessToken);
+  return expiryMs !== null && expiryMs > nowMs;
+}
+
+function cookieSuffix(): string {
+  const secure =
+    typeof location !== "undefined" && location.protocol === "https:" ? "; Secure" : "";
+  return `; SameSite=Lax${secure}`;
+}
+
+/**
+ * Build the `document.cookie` assignment for the access token, or null when we refuse to
+ * write one.
+ *
+ * The `expiresAt` argument is required rather than optional on purpose. Every historical
+ * copy of this function that accepted it optionally had a fallback that outlived the token,
+ * and every call site silently took the fallback. Making it required means the compiler,
+ * not a reviewer, is what stops the next call site from omitting it.
+ */
+export function buildAccessTokenCookie(
+  accessToken: string,
+  expiresAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): string | null {
+  const expiryMs = resolveAccessTokenExpiryMs(accessToken, expiresAt);
+
+  // Already dead on arrival. Writing it would recreate exactly the state this change
+  // exists to remove, so write nothing and let the caller clear instead.
+  if (expiryMs !== null && expiryMs <= nowMs) return null;
+
+  // Neither the response nor the token says when this dies. We refuse to invent a
+  // lifetime: no `expires` and no `max-age` makes it a session cookie, which is the
+  // shortest lifetime that still leaves the user logged in to the tab they just signed
+  // in to. It cannot survive a browser restart, so it can never become the multi-day
+  // wreckage that a 7-day guess produced.
+  const lifetime =
+    expiryMs === null ? "" : `; expires=${new Date(expiryMs).toUTCString()}`;
+
+  return `${ACCESS_TOKEN_COOKIE}=${accessToken}; path=/${lifetime}${cookieSuffix()}`;
+}
+
+function writeCookie(value: string) {
+  if (typeof document === "undefined") return;
+  document.cookie = value;
+}
+
+/**
+ * Record a freshly issued session. Called on login, register, Google sign-in and on every
+ * token refresh — anywhere an `AuthResponse` arrives.
+ */
+export function setAccessTokenCookie(accessToken: string, expiresAt: string | null | undefined) {
+  const cookie = buildAccessTokenCookie(accessToken, expiresAt);
+
+  if (cookie === null) {
+    clearSessionCookies();
+    return;
+  }
+
+  writeCookie(cookie);
+  writeCookie(
+    `${SESSION_MARKER_COOKIE}=1; path=/; max-age=${SESSION_MARKER_MAX_AGE_SECONDS}${cookieSuffix()}`,
+  );
+}
+
+/** Remove the access token cookie only, leaving the session marker alone. */
+export function clearAccessTokenCookie() {
+  writeCookie(`${ACCESS_TOKEN_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`);
+}
+
+/** Remove every trace of the session from cookies. */
+export function clearSessionCookies() {
+  clearAccessTokenCookie();
+  writeCookie(`${SESSION_MARKER_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`);
+}

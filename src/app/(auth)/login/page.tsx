@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
+import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
@@ -46,21 +47,6 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
-  let expiresString = "";
-  if (expiresAt) {
-    const expiresDate = new Date(expiresAt);
-    if (!isNaN(expiresDate.getTime())) {
-      expiresString = `; expires=${expiresDate.toUTCString()}`;
-    }
-  }
-
-  // Fallback to 7 days if expiresAt is not provided or invalid
-  const maxAgeString = expiresString ? "" : `; max-age=${7 * 24 * 60 * 60}`;
-
-  document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
-}
-
 function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
@@ -77,10 +63,10 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
           idToken,
         });
         console.log("[Google OAuth] Backend Response:", res.data);
-        const { user, accessToken, refreshToken } = res.data;
+        const { user, accessToken, refreshToken, expiresAt } = res.data;
 
         login(user, accessToken, refreshToken);
-        setAccessTokenCookie(accessToken);
+        setAccessTokenCookie(accessToken, expiresAt);
 
         toast.success("Google login successful!");
 
@@ -192,10 +178,10 @@ function LoginForm() {
         email: data.email,
         password: data.password,
       });
-      const { user, accessToken, refreshToken } = res.data;
+      const { user, accessToken, refreshToken, expiresAt } = res.data;
 
       login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken);
+      setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Login successful!");
 
