@@ -5,6 +5,7 @@ import {
   ArrowsOutSimple,
   CheckCircle,
   Copy,
+  Repeat,
   SignIn,
   SlidersHorizontal,
 } from "@phosphor-icons/react/dist/ssr";
@@ -22,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  useCreateRecurringTranslationRoom,
   useCreateTranslationRoom,
   useTranslationRoom,
   useTranslationRoomInvitations,
@@ -36,8 +38,15 @@ import {
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  type DailyRecurrenceDraft,
+  describeDailySchedule,
+  detectTimeZone,
+} from "@/lib/daily-recurrence";
+import { DailyScheduleDialog } from "./create/daily-schedule-dialog";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
 import { LanguageSelector } from "./create/language-selector";
+import { PillButton } from "./create/pill-button";
 import { OptionsMenu } from "./create/options-menu";
 import { StartTimePicker } from "./create/start-time-picker";
 import { TemplatePicker } from "./create/template-picker";
@@ -73,7 +82,12 @@ export function CreateRoomDialog() {
     "en-US",
     "vi-VN",
   ]);
-  const [isDaily, setIsDaily] = useState(false);
+  // WT-327: the Daily rule actually in force, or null when this is a one-off meeting. This
+  // replaces the old boolean `isDaily`, which was declared, rendered as a check mark, and then
+  // never read by handleSubmit — the switch was dead, and a boolean could not have carried the
+  // hour anyway.
+  const [dailyRecurrence, setDailyRecurrence] = useState<DailyRecurrenceDraft | null>(null);
+  const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -94,6 +108,7 @@ export function CreateRoomDialog() {
   // was not enough — it expires, and the dialog it refers to stays open behind it.
   const [submitError, setSubmitError] = useState<string | null>(null);
   const createRoomMutation = useCreateTranslationRoom();
+  const createRecurringRoomMutation = useCreateRecurringTranslationRoom();
   const updateRoomMutation = useUpdateTranslationRoomSettings();
 
   // WT-271: the workspace's language policy, so the picker offers only what the server will
@@ -188,6 +203,10 @@ export function CreateRoomDialog() {
         // it on the next open — otherwise a forbidden default returns unchecked.
         setAppliedLanguagePolicyKey(null);
         setScheduledAt(null);
+        // WT-327: reset with everything else. The old `isDaily` was left out of this block, so
+        // its check mark survived into the next dialog the user opened.
+        setDailyRecurrence(null);
+        setDailyDialogOpen(false);
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
@@ -256,8 +275,11 @@ export function CreateRoomDialog() {
           failSubmit("Please select a workspace before creating a room.");
           return;
         }
-        const room = await createRoomMutation.mutateAsync({
-          workspaceId: activeWorkspaceId,
+        // Everything both paths send. `workspaceId` is deliberately NOT hoisted in here: it is
+        // spelled out at each mutateAsync below so the workspace-scoping contract
+        // (scripts/check-create-room-language-contract.mjs) still reads it where it is sent,
+        // rather than trusting a spread to carry it.
+        const common = {
           title: title.trim(),
           description: description.trim() || undefined,
           // The picked type is what the room actually becomes now — it decides the lobby,
@@ -267,8 +289,37 @@ export function CreateRoomDialog() {
           translationRoomType: meetingTypeByLabel(meetingTemplate).value,
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
-          scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+        };
+
+        if (dailyRecurrence) {
+          // WT-327: THIS is the line the Daily switch never had. The rule owns every
+          // occurrence's time, so `scheduledAt` is deliberately not sent alongside it — the
+          // server refuses a request carrying both rather than silently discarding one, which
+          // is the failure mode this whole change exists to remove.
+          const result = await createRecurringRoomMutation.mutateAsync({
+            ...common,
+            workspaceId: activeWorkspaceId,
+            recurrence: {
+              type: "DAILY",
+              startTimeLocal: dailyRecurrence.time,
+              // The browser's zone, not a hardcoded one: "8am" means 8am where the host is.
+              timeZone: detectTimeZone(),
+              endDateLocal: dailyRecurrence.endDate,
+            },
+          });
+          setCreatedRoomId(result.firstOccurrence.id);
+          setCreatedRoomCode(result.firstOccurrence.translationRoomCode);
+          toast.success(
+            `Daily meeting scheduled at ${dailyRecurrence.time} — ${result.totalOccurrenceCount} meetings.`,
+          );
+          return;
+        }
+
+        const room = await createRoomMutation.mutateAsync({
+          ...common,
+          workspaceId: activeWorkspaceId,
+          scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
         });
         setCreatedRoomId(room.id);
         setCreatedRoomCode(room.translationRoomCode);
@@ -393,20 +444,47 @@ export function CreateRoomDialog() {
                   onLanguagesChange={setMeetingLanguages}
                   allowedTargetLanguages={allowedTargetLanguages}
                 />
-                {scheduledAt && (
+                {/* WT-327: a one-off time and a daily rule are mutually exclusive — the rule
+                    owns every occurrence's time — so only one of the two pills is ever offered. */}
+                {scheduledAt && !dailyRecurrence && (
                   <StartTimePicker
                     scheduledAt={scheduledAt}
                     onChange={setScheduledAt}
                     onRemove={() => setScheduledAt(null)}
                   />
                 )}
+                {dailyRecurrence && (
+                  <PillButton
+                    icon={Repeat}
+                    active
+                    onClick={() => setDailyDialogOpen(true)}
+                    label={
+                      <span data-testid="daily-pill">
+                        Daily {dailyRecurrence.time}
+                      </span>
+                    }
+                  />
+                )}
                 <OptionsMenu
-                  hasScheduledAt={!!scheduledAt}
+                  hasScheduledAt={!!scheduledAt || !!dailyRecurrence}
                   onAddScheduledAt={() => setScheduledAt(getDefaultStartTime())}
-                  isDaily={isDaily}
-                  onToggleDaily={() => setIsDaily(!isDaily)}
+                  isDaily={!!dailyRecurrence}
+                  dailyTime={dailyRecurrence?.time}
+                  onToggleDaily={() => setDailyDialogOpen(true)}
                 />
               </div>
+
+              {/* WT-327: what the host is about to create, spelled out before they press the
+                  button. The control it replaces looked identical whether it worked or not. */}
+              {dailyRecurrence && (
+                <p
+                  data-testid="daily-schedule-summary"
+                  className="px-5 pb-1 text-[11px] text-ink-muted"
+                >
+                  {describeDailySchedule(dailyRecurrence, new Date())} ·{" "}
+                  {detectTimeZone()}
+                </p>
+              )}
 
               {/* Footer */}
               <div className="flex items-center justify-between gap-4 px-5 py-3 bg-surface-1/50 shrink-0">
@@ -429,11 +507,13 @@ export function CreateRoomDialog() {
                     disabled={
                       !canSubmit ||
                       createRoomMutation.isPending ||
+                      createRecurringRoomMutation.isPending ||
                       updateRoomMutation.isPending
                     }
                     className="h-[30px] px-3.5 rounded-md bg-ink text-canvas hover:opacity-90 disabled:opacity-40 transition-all font-medium text-[13px] shadow-sm"
                   >
                     {createRoomMutation.isPending ||
+                    createRecurringRoomMutation.isPending ||
                     updateRoomMutation.isPending
                       ? "Saving..."
                       : editRoomId
@@ -516,6 +596,24 @@ export function CreateRoomDialog() {
               </div>
             </div>
           )}
+
+          {/* WT-327: "khi chọn mode daily thì mở modal để user chọn giờ daily".
+              Rendered INSIDE the create dialog's popup on purpose. base-ui only recognises a
+              dialog as NESTED when its root sits within the parent popup's context; anywhere
+              else — a sibling of <Dialog>, or a child of <Dialog> outside <DialogContent> —
+              the parent treats the new dialog taking focus as an outside interaction and
+              closes itself, throwing away the half-filled meeting the host was writing. */}
+          <DailyScheduleDialog
+            open={dailyDialogOpen}
+            onOpenChange={setDailyDialogOpen}
+            value={dailyRecurrence}
+            onConfirm={(draft) => {
+              setDailyRecurrence(draft);
+              // A one-off time cannot coexist with a rule that decides every occurrence's time.
+              setScheduledAt(null);
+            }}
+            onDisable={() => setDailyRecurrence(null)}
+          />
         </div>
       </DialogContent>
     </Dialog>
