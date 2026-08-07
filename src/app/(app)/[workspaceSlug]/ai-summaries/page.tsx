@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import gsap from "gsap";
 import {
   Archive,
   ArrowRight,
@@ -20,6 +21,14 @@ import {
   Translate,
   Users,
   WarningCircle,
+  Sparkle,
+  Check,
+  BookOpenText,
+  ListChecks,
+  User,
+  Hash,
+  CalendarBlank,
+  SidebarSimple,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -225,17 +234,9 @@ export default function TranscriptsPage() {
           ) : items.length === 0 ? (
             <EmptyState hasQuery={Boolean(query)} />
           ) : (
-            <div className="grid h-full min-h-0 lg:grid-cols-[360px_minmax(0,1fr)]">
-              <div className="min-h-0 overflow-y-auto border-b border-border lg:border-b-0 lg:border-r">
-                <div className="flex h-10 items-center justify-between border-b border-border bg-surface-2/45 px-4">
-                  <span className="text-[10px] font-medium text-ink-subtle">
-                    TRANSCRIPT QUEUE
-                  </span>
-                  <span className="text-[10px] tabular-nums text-ink-subtle">
-                    {items.length}
-                  </span>
-                </div>
-                <div className="divide-y divide-border">
+            <div className="grid h-full min-h-0 lg:grid-cols-[250px_minmax(0,1fr)]">
+              <div className="min-h-0 overflow-y-auto border-b border-border lg:border-b-0 lg:border-r bg-surface-1/30">
+                <div className="divide-y divide-border/40">
                   {items.map((item) => (
                     <QueueRow
                       key={item.room.id}
@@ -278,45 +279,110 @@ function QueueRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        "group relative flex w-full gap-3 px-4 py-4 text-left outline-none transition-colors hover:bg-surface-2/55 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30",
-        selected && "bg-surface-2",
+        "group relative flex w-full items-center gap-2.5 px-3 py-2.5 text-left outline-none transition-all hover:bg-surface-2/60 focus-visible:ring-1 focus-visible:ring-ring",
+        selected ? "bg-surface-2/80 font-medium" : "hover:bg-surface-2/40",
       )}
     >
+      {/* Active Indicator Strip */}
       <span
         className={cn(
-          "absolute inset-y-0 left-0 w-0.5",
-          selected ? "bg-ink" : "bg-transparent",
+          "absolute inset-y-0 left-0 w-0.5 transition-colors",
+          selected ? "bg-primary" : "bg-transparent group-hover:bg-border/60",
         )}
       />
+
+      {/* Icon Indicator */}
       <span
         className={cn(
-          "grid size-9 shrink-0 place-items-center rounded-md border",
+          "grid size-7 shrink-0 place-items-center rounded-md border text-[11px] transition-colors",
           selected
-            ? "border-ink bg-ink text-surface-1"
-            : "border-border bg-canvas text-ink-muted",
+            ? "border-primary/40 bg-primary/10 text-primary"
+            : "border-border/60 bg-surface-1 text-ink-muted group-hover:border-border",
         )}
       >
-        <Scroll size={16} />
+        <Scroll size={14} />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-start justify-between gap-3">
-          <span className="truncate text-[12px] font-medium text-ink">
+
+      {/* Item Info */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-1.5">
+          <span
+            className={cn(
+              "truncate text-[12px] leading-tight transition-colors",
+              selected ? "font-semibold text-ink" : "text-ink/90 group-hover:text-ink",
+            )}
+          >
             {item.room.title}
           </span>
           <StatusMark item={item} />
-        </span>
-        <span className="mt-1 block truncate text-[10px] text-ink-subtle">
-          {item.room.translationRoomCode} · {formatDate(item.room.endedAt)}
-        </span>
-        <span className="mt-2 flex items-center justify-between text-[10px] text-ink-muted">
-          <span className="truncate">{formatLanguageRoute(item.room)}</span>
-          <ArrowRight
-            size={12}
-            className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-          />
-        </span>
-      </span>
+        </div>
+
+        <div className="mt-1 flex items-center justify-between gap-2 text-[10.5px] text-ink-subtle">
+          <span className="truncate text-[10.5px] font-medium text-ink-subtle">
+            {formatDate(item.room.endedAt)}
+          </span>
+          <span className="shrink-0 rounded border border-border/50 bg-surface-2/80 px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-primary/90">
+            {formatCompactLanguageRoute(item.room)}
+          </span>
+        </div>
+      </div>
     </button>
+  );
+}
+
+function MeetingContextSidebarPanel({
+  open,
+  children,
+}: {
+  open: boolean;
+  children: React.ReactNode;
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const hasMounted = useRef(false);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    const content = contentRef.current;
+    if (!panel || !content) return;
+
+    if (!hasMounted.current) {
+      gsap.set(panel, { width: open ? 280 : 0 });
+      gsap.set(content, {
+        autoAlpha: open ? 1 : 0,
+        x: open ? 0 : 14,
+      });
+      hasMounted.current = true;
+      return;
+    }
+
+    gsap.killTweensOf([panel, content]);
+    gsap.to(panel, {
+      width: open ? 280 : 0,
+      duration: 0.38,
+      ease: "power3.inOut",
+    });
+    gsap.to(content, {
+      autoAlpha: open ? 1 : 0,
+      x: open ? 0 : 14,
+      duration: 0.38,
+      ease: "power3.inOut",
+    });
+  }, [open]);
+
+  return (
+    <div
+      ref={panelRef}
+      aria-hidden={!open}
+      className={cn(
+        "h-full shrink-0 overflow-hidden border-l border-border self-stretch flex flex-col",
+        !open && "pointer-events-none",
+      )}
+    >
+      <div ref={contentRef} className="h-full w-[280px] p-5 overflow-y-auto">
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -340,6 +406,12 @@ function TranscriptWorkspace({
   const summaryArtifact = room.artifacts.find(
     (artifact) => artifact.type === "summary_export",
   );
+  const mainArtifact = summaryArtifact || room.artifacts[0];
+  const summary = room.summary;
+
+  const [copiedTranscript, setCopiedTranscript] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
+  const [showContextSidebar, setShowContextSidebar] = useState(true);
 
   async function copyTranscriptAsText() {
     if (!segments.length) return;
@@ -348,71 +420,144 @@ function TranscriptWorkspace({
       .join("\n");
     try {
       await navigator.clipboard.writeText(text);
+      setCopiedTranscript(true);
       toast.success("Transcript copied to clipboard.");
+      setTimeout(() => setCopiedTranscript(false), 2000);
     } catch {
       toast.error("Could not copy the transcript.");
     }
   }
 
-  return (
-    <article className="min-w-0">
-      <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusMark item={item} showLabel />
-            <span className="text-[10px] text-ink-subtle">
-              {room.translationRoomCode}
-            </span>
-          </div>
-          <h2 className="mt-3 text-[20px] font-semibold leading-7">
-            {room.title}
-          </h2>
-          <p className="mt-1 text-[11px] text-ink-muted">
-            Hosted by {room.hostName} · ended {formatDate(room.endedAt)}
-          </p>
-        </div>
-        {tab === "transcript" ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!segments.length}
-            onClick={copyTranscriptAsText}
-            className="h-8 shrink-0 rounded-md text-[11px] shadow-none"
-          >
-            <Copy size={14} /> Copy transcript
-          </Button>
-        ) : null}
-      </div>
+  async function copySummaryAsText() {
+    if (!summary) return;
+    const lines = [
+      `# ${room.title} — AI Meeting Summary`,
+      "",
+      "## Executive Overview",
+      summary.summary || "(no overview)",
+      "",
+      "## Key Decisions",
+      ...(summary.decisions.length
+        ? summary.decisions.map((decision) => `- ${decision}`)
+        : ["(none recorded)"]),
+      "",
+      "## Action Items",
+      ...(summary.actionItems.length
+        ? summary.actionItems.map(
+            (action) =>
+              `- [ ] ${action.owner ? `@${action.owner}: ` : ""}${action.task}`,
+          )
+        : ["(none recorded)"]),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopiedSummary(true);
+      toast.success("Summary markdown copied to clipboard.");
+      setTimeout(() => setCopiedSummary(false), 2000);
+    } catch {
+      toast.error("Could not copy the summary.");
+    }
+  }
 
+  return (
+    <article className="flex min-w-0 flex-col h-full">
       <div
-        className="flex items-center gap-1 border-b border-border px-5"
+        className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-1/40 px-5 py-0.5 shrink-0"
         role="tablist"
         aria-label="Meeting record sections"
       >
-        <DetailTabButton
-          active={tab === "transcript"}
-          onClick={() => onTabChange("transcript")}
-          icon={Scroll}
-          label="Transcript"
-          count={segments.length || undefined}
-        />
-        <DetailTabButton
-          active={tab === "summary"}
-          onClick={() => onTabChange("summary")}
-          icon={ChatCircleText}
-          label="Summary"
-        />
-        <DetailTabButton
-          active={tab === "artifacts"}
-          onClick={() => onTabChange("artifacts")}
-          icon={Archive}
-          label="Artifacts"
-          count={room.artifacts.length}
-        />
+        <div className="flex items-center gap-1">
+          <DetailTabButton
+            active={tab === "transcript"}
+            onClick={() => onTabChange("transcript")}
+            icon={Scroll}
+            label="Transcript"
+            count={segments.length || undefined}
+          />
+          <DetailTabButton
+            active={tab === "summary"}
+            onClick={() => onTabChange("summary")}
+            icon={ChatCircleText}
+            label="Summary"
+          />
+          <DetailTabButton
+            active={tab === "artifacts"}
+            onClick={() => onTabChange("artifacts")}
+            icon={Archive}
+            label="Artifacts"
+            count={room.artifacts.length}
+          />
+        </div>
+
+        {/* Header Right Actions: Copy Transcript, Copy Summary, Download Document, Sidebar Toggle */}
+        <div className="flex items-center gap-2 py-1">
+          {tab === "transcript" && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!segments.length}
+              onClick={copyTranscriptAsText}
+              className="h-7 rounded-md border-border/60 px-2.5 text-[11px] font-medium shadow-none transition-colors hover:bg-surface-2"
+            >
+              {copiedTranscript ? (
+                <Check size={13} className="text-emerald-500" />
+              ) : (
+                <Copy size={13} className="text-ink-muted" />
+              )}
+              <span>{copiedTranscript ? "Copied!" : "Copy Transcript"}</span>
+            </Button>
+          )}
+
+          {tab === "summary" && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!summary || summary.insufficientData}
+              onClick={copySummaryAsText}
+              className="h-7 rounded-md border-border/60 px-2.5 text-[11px] font-medium shadow-none transition-colors hover:bg-surface-2"
+            >
+              {copiedSummary ? (
+                <Check size={13} className="text-emerald-500" />
+              ) : (
+                <Copy size={13} className="text-ink-muted" />
+              )}
+              <span>{copiedSummary ? "Copied!" : "Copy Summary"}</span>
+            </Button>
+          )}
+
+          {mainArtifact && (
+            <Button
+              size="sm"
+              variant="default"
+              disabled={mainArtifact.status !== "ready" || busyArtifactId === mainArtifact.id}
+              onClick={() => onDownload(mainArtifact)}
+              className="h-7 rounded-md px-2.5 text-[11px] font-medium shadow-xs"
+            >
+              {busyArtifactId === mainArtifact.id ? (
+                <SpinnerGap size={13} className="animate-spin" />
+              ) : (
+                <DownloadSimple size={13} />
+              )}
+              <span>Download Document</span>
+            </Button>
+          )}
+
+          <div className="mx-0.5 h-4 w-px bg-border/60" />
+
+          <button
+            type="button"
+            onClick={() => setShowContextSidebar((prev) => !prev)}
+            className="flex size-6 items-center justify-center rounded-[6px] border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
+            title={showContextSidebar ? "Collapse Properties" : "Expand Properties"}
+            aria-label={showContextSidebar ? "Collapse Properties" : "Expand Properties"}
+          >
+            <SidebarSimple size={13} weight="bold" />
+          </button>
+        </div>
       </div>
 
-      <div className="grid xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="p-5 lg:p-7">
+      <div className="flex flex-1 min-h-0 w-full overflow-hidden items-stretch">
+        <div className="min-w-0 flex-1 p-5 lg:p-7 transition-all duration-300">
           {tab === "transcript" ? (
             <TranscriptPanel
               state={transcriptState}
@@ -438,36 +583,53 @@ function TranscriptWorkspace({
           ) : null}
         </div>
 
-        <aside className="border-t border-border p-5 xl:border-l xl:border-t-0">
-          <h3 className="text-[11px] font-semibold">Meeting context</h3>
-          {room.description ? (
-            <p className="mt-2 text-[11px] leading-5 text-ink-muted">
-              {room.description}
-            </p>
-          ) : null}
-          <dl className="mt-4 divide-y divide-border border-y border-border">
-            <ContextRow
-              icon={Users}
-              label="Participants"
-              value={String(room.participantCount)}
-            />
-            <ContextRow
-              icon={Clock}
-              label="Duration"
-              value={formatDuration(room.durationSeconds)}
-            />
-            <ContextRow
-              icon={Translate}
-              label="Language route"
-              value={formatLanguageRoute(room)}
-            />
-            <ContextRow
-              icon={Archive}
-              label="Artifacts"
-              value={String(room.artifacts.length)}
-            />
-          </dl>
-        </aside>
+        <MeetingContextSidebarPanel open={showContextSidebar}>
+          <aside className="h-full">
+            <h3 className="text-[11px] font-semibold text-ink">Meeting context</h3>
+            {room.description ? (
+              <p className="mt-2 text-[11px] leading-5 text-ink-muted">
+                {room.description}
+              </p>
+            ) : null}
+            <dl className="mt-4 divide-y divide-border border-y border-border">
+              <ContextRow
+                icon={Hash}
+                label="Room code"
+                value={room.translationRoomCode}
+              />
+              <ContextRow
+                icon={User}
+                label="Host"
+                value={room.hostName}
+              />
+              <ContextRow
+                icon={CalendarBlank}
+                label="Started at"
+                value={formatDate(room.startedAt)}
+              />
+              <ContextRow
+                icon={Users}
+                label="Participants"
+                value={String(room.participantCount)}
+              />
+              <ContextRow
+                icon={Clock}
+                label="Duration"
+                value={formatDuration(room.durationSeconds)}
+              />
+              <ContextRow
+                icon={Translate}
+                label="Language route"
+                value={formatLanguageRoute(room)}
+              />
+              <ContextRow
+                icon={Archive}
+                label="Artifacts"
+                value={String(room.artifacts.length)}
+              />
+            </dl>
+          </aside>
+        </MeetingContextSidebarPanel>
       </div>
     </article>
   );
@@ -528,7 +690,7 @@ function TranscriptPanel({
 
   if (state.isLoading) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center border border-border bg-canvas">
+      <div className="flex min-h-[380px] items-center justify-center p-8 text-center">
         <div className="flex items-center gap-2 text-[11px] text-ink-muted">
           <SpinnerGap size={15} className="animate-spin" />
           Loading transcript
@@ -539,7 +701,7 @@ function TranscriptPanel({
 
   if (state.isError) {
     return (
-      <div className="flex min-h-[360px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
+      <div className="flex min-h-[380px] flex-col items-center justify-center p-8 text-center">
         <WarningCircle size={28} className="text-danger" />
         <h3 className="mt-4 text-[15px] font-semibold">
           Couldn&apos;t load transcript
@@ -614,39 +776,25 @@ function TranscriptPanel({
 
   if (!segments.length) {
     return (
-      <div className="flex min-h-[360px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
-        <Scroll size={28} className="text-ink-muted" />
-        <h3 className="mt-4 text-[15px] font-semibold">
-          No transcript recorded
-        </h3>
-        <p className="mt-2 max-w-[360px] text-[11px] leading-5 text-ink-muted">
-          This meeting ended without any captured speech, or the transcript
-          hasn&apos;t synced yet.
-        </p>
+      <div className="flex min-h-[380px] flex-col items-center justify-center p-8 text-center">
+        <div className="max-w-[380px] space-y-3">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full border border-border/60 bg-surface-2 shadow-xs">
+            <Scroll size={26} className="text-ink-subtle" />
+          </div>
+          <h3 className="text-[15px] font-semibold text-ink">
+            No transcript recorded
+          </h3>
+          <p className="text-[12px] leading-5 text-ink-muted">
+            This meeting ended without any captured speech, or the transcript
+            hasn&apos;t synced yet.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-[360px] flex-col border border-border bg-canvas">
-      <div className="flex h-10 items-center justify-between border-b border-border px-4">
-        <span className="text-[10px] font-medium text-ink-subtle">
-          DIALOGUE
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-ink-subtle">{segments.length} lines</span>
-          <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={downloadTranscript}>
-            <DownloadSimple size={12} /> Download
-          </Button>
-          {canEdit && transcript?.status !== "finalized" ? (
-            <Button type="button" size="sm" className="h-7 px-2 text-[10px] text-white" disabled={isFinalizing} onClick={finalizeTranscript}>
-              {isFinalizing ? <SpinnerGap size={12} className="animate-spin" /> : <CheckCircle size={12} />}
-              Finalize transcript
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      <div className="max-h-[560px] flex-1 space-y-2 overflow-y-auto p-5">
+    <div className="max-h-[600px] min-h-[380px] space-y-2 overflow-y-auto pr-1">
         {blocks.map((block) => (
           <div key={block.sessionNumber} className="space-y-3">
             {showSessionLabels ? (
@@ -725,9 +873,8 @@ function TranscriptPanel({
           </div>
         ))}
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 function SummaryPanel({
   room,
@@ -749,165 +896,163 @@ function SummaryPanel({
   );
   const recentlyEnded = useRecentlyEnded(room.endedAt);
   const isGenerating = !artifact && recentlyEnded;
+  const [copied, setCopied] = useState(false);
 
   async function copyAsText() {
     if (!summary) return;
     const lines = [
-      `${room.title} — AI meeting summary`,
+      `# ${room.title} — AI Meeting Summary`,
       "",
-      "Overview",
+      "## Executive Overview",
       summary.summary || "(no overview)",
       "",
-      "Decisions",
+      "## Key Decisions",
       ...(summary.decisions.length
         ? summary.decisions.map((decision) => `- ${decision}`)
         : ["(none recorded)"]),
       "",
-      "Action items",
+      "## Action Items",
       ...(summary.actionItems.length
         ? summary.actionItems.map(
             (action) =>
-              `- [ ] ${action.owner ? `${action.owner}: ` : ""}${action.task}`,
+              `- [ ] ${action.owner ? `@${action.owner}: ` : ""}${action.task}`,
           )
         : ["(none recorded)"]),
     ];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
-      toast.success("Summary copied to clipboard.");
+      setCopied(true);
+      toast.success("Summary markdown copied to clipboard.");
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Could not copy the summary.");
     }
   }
 
   return (
-    <div className="flex min-h-[360px] flex-col border border-border bg-canvas">
-      <div className="flex h-10 items-center justify-between border-b border-border px-4">
-        <span className="text-[10px] font-medium text-ink-subtle">
-          SUMMARY OUTPUT
-        </span>
-        <span className="flex items-center gap-3">
-          <span className="text-[10px] text-ink-subtle">
-            {artifact?.format || "No file"}
-          </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!hasStructuredContent}
-            onClick={copyAsText}
-            className="h-6 rounded px-2 text-[10px] shadow-none"
-          >
-            <Copy size={12} /> Copy
-          </Button>
-        </span>
-      </div>
-
+    <>
       {hasStructuredContent && summary ? (
-        <div className="flex-1 space-y-6 p-6">
-          <section>
-            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
-              Overview
-            </h3>
-            <p className="mt-2 text-[12px] leading-6 text-ink">
+        <div className="max-h-[600px] min-h-[380px] space-y-5 overflow-y-auto pr-1">
+          {/* Overview Section */}
+          <section className="rounded-lg border border-border/60 bg-surface-1/40 p-4.5 transition-all hover:border-border/80">
+            <div className="mb-3 flex items-center gap-2 border-b border-border/40 pb-2.5">
+              <BookOpenText size={16} className="text-primary" />
+              <h3 className="text-[12px] font-bold uppercase tracking-wide text-ink">
+                Executive Overview
+              </h3>
+            </div>
+            <p className="text-[13px] font-normal leading-6 text-ink/90">
               {summary.summary}
             </p>
           </section>
-          <section>
-            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
-              Decisions
-            </h3>
+
+          {/* Decisions Section */}
+          <section className="rounded-lg border border-border/60 bg-surface-1/40 p-4.5 transition-all hover:border-border/80">
+            <div className="mb-3 flex items-center justify-between border-b border-border/40 pb-2.5">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={16} className="text-emerald-500" />
+                <h3 className="text-[12px] font-bold uppercase tracking-wide text-ink">
+                  Key Decisions
+                </h3>
+              </div>
+              <span className="rounded-full border border-border/40 bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-subtle">
+                {summary.decisions.length} recorded
+              </span>
+            </div>
+
             {summary.decisions.length ? (
-              <ul className="mt-2 space-y-1.5">
+              <ul className="space-y-2.5">
                 {summary.decisions.map((decision, index) => (
                   <li
                     key={index}
-                    className="flex gap-2 text-[12px] leading-5 text-ink"
+                    className="group flex items-start gap-2.5 text-[12.5px] leading-5 text-ink/90"
                   >
-                    <span className="mt-1.5 size-1 shrink-0 rounded-full bg-ink-subtle" />
-                    {decision}
+                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-emerald-500/80 transition-transform group-hover:scale-125" />
+                    <span className="flex-1 font-normal">{decision}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-[11px] text-ink-muted">
-                No decisions recorded.
+              <p className="text-[11px] italic text-ink-muted">
+                No major decisions recorded for this meeting.
               </p>
             )}
           </section>
-          <section>
-            <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
-              Action items
-            </h3>
+
+          {/* Action Items Section */}
+          <section className="rounded-lg border border-border/60 bg-surface-1/40 p-4.5 transition-all hover:border-border/80">
+            <div className="mb-3 flex items-center justify-between border-b border-border/40 pb-2.5">
+              <div className="flex items-center gap-2">
+                <ListChecks size={16} className="text-amber-500" />
+                <h3 className="text-[12px] font-bold uppercase tracking-wide text-ink">
+                  Action Items & Follow-ups
+                </h3>
+              </div>
+              <span className="rounded-full border border-border/40 bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-subtle">
+                {summary.actionItems.length} items
+              </span>
+            </div>
+
             {summary.actionItems.length ? (
-              <ul className="mt-2 space-y-2">
+              <div className="space-y-2">
                 {summary.actionItems.map((action, index) => (
-                  <li
+                  <div
                     key={index}
-                    className="flex items-start gap-2 text-[12px] leading-5 text-ink"
+                    className="flex items-start gap-3 rounded-md border border-border/40 bg-surface-2/40 p-2.5 transition-colors hover:bg-surface-2/70"
                   >
                     <CheckSquare
-                      size={14}
-                      className="mt-0.5 shrink-0 text-ink-subtle"
+                      size={16}
+                      className="mt-0.5 shrink-0 text-amber-500"
                     />
-                    <span>
+                    <div className="flex flex-1 flex-wrap items-center justify-between gap-2 text-[12.5px]">
+                      <span className="font-normal leading-relaxed text-ink">
+                        {action.task}
+                      </span>
                       {action.owner ? (
-                        <span className="font-medium">{action.owner}: </span>
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10.5px] font-medium text-primary">
+                          <User size={11} />
+                          @{action.owner}
+                        </span>
                       ) : null}
-                      {action.task}
-                    </span>
-                  </li>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p className="mt-2 text-[11px] text-ink-muted">
-                No action items recorded.
+              <p className="text-[11px] italic text-ink-muted">
+                No action items extracted from this meeting.
               </p>
             )}
           </section>
         </div>
       ) : (
-        <div className="flex flex-1 items-center justify-center p-8 text-center">
-          <div className="max-w-[360px]">
-            {isGenerating ? (
-              <SpinnerGap
-                size={28}
-                className="mx-auto animate-spin text-ink-muted"
-              />
-            ) : (
-              <ChatCircleText size={28} className="mx-auto text-ink-muted" />
-            )}
-            <h3 className="mt-4 text-[15px] font-semibold">
-              {isGenerating ? "Generating summary…" : "No summary output"}
+        /* Empty / Generating State directly on main surface */
+        <div className="flex min-h-[380px] flex-col items-center justify-center p-8 text-center">
+          <div className="max-w-[380px] space-y-3">
+            <div className="relative mx-auto flex size-14 items-center justify-center rounded-full border border-border/60 bg-surface-2 shadow-xs">
+              {isGenerating ? (
+                <>
+                  <SpinnerGap size={26} className="animate-spin text-primary" />
+                  <Sparkle size={14} className="absolute right-2 top-2 animate-pulse text-amber-500" />
+                </>
+              ) : (
+                <ChatCircleText size={26} className="text-ink-subtle" />
+              )}
+            </div>
+            <h3 className="text-[15px] font-semibold text-ink">
+              {isGenerating ? "Analyzing meeting & generating summary…" : "No Summary Available"}
             </h3>
-            <p className="mt-2 text-[11px] leading-5 text-ink-muted">
+            <p className="text-[12px] leading-5 text-ink-muted">
               {isGenerating
-                ? "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute."
+                ? "WarpTalk AI Assistant is analyzing transcript segments to extract key decisions and action items."
                 : summary?.insufficientData
-                  ? "There wasn't enough transcript content in this meeting to generate a summary."
-                  : "This meeting ended without a summary artifact."}
+                  ? "There was insufficient transcript content recorded in this meeting to generate an AI summary."
+                  : "This meeting finished without a summary artifact."}
             </p>
           </div>
         </div>
       )}
-
-      {artifact ? (
-        <div className="border-t border-border p-4">
-          <Button
-            size="sm"
-            variant={ready ? "default" : "outline"}
-            disabled={!ready || busy}
-            onClick={() => onDownload(artifact)}
-            className="h-8 rounded-md text-[11px] shadow-none"
-          >
-            {busy ? (
-              <SpinnerGap size={14} className="animate-spin" />
-            ) : (
-              <DownloadSimple size={14} />
-            )}{" "}
-            Download summary file
-          </Button>
-        </div>
-      ) : null}
-    </div>
+    </>
   );
 }
 
@@ -922,27 +1067,24 @@ function ArtifactsPanel({
 }) {
   if (!artifacts.length) {
     return (
-      <div className="flex min-h-[360px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
-        <Archive size={28} className="text-ink-muted" />
-        <h3 className="mt-4 text-[15px] font-semibold">
-          No retained artifacts
-        </h3>
-        <p className="mt-2 max-w-[360px] text-[11px] leading-5 text-ink-muted">
-          Nothing has been generated or retained for this meeting yet.
-        </p>
+      <div className="flex min-h-[380px] flex-col items-center justify-center p-8 text-center">
+        <div className="max-w-[380px] space-y-3">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full border border-border/60 bg-surface-2 shadow-xs">
+            <Archive size={26} className="text-ink-subtle" />
+          </div>
+          <h3 className="text-[15px] font-semibold text-ink">
+            No retained artifacts
+          </h3>
+          <p className="text-[12px] leading-5 text-ink-muted">
+            Nothing has been generated or retained for this meeting yet.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[360px] border border-border bg-canvas">
-      <div className="flex h-10 items-center justify-between border-b border-border px-4">
-        <span className="text-[10px] font-medium text-ink-subtle">
-          RETAINED ARTIFACTS
-        </span>
-        <span className="text-[10px] text-ink-subtle">{artifacts.length}</span>
-      </div>
-      <div className="divide-y divide-border">
+    <div className="max-h-[600px] min-h-[380px] divide-y divide-border/60 overflow-y-auto pr-1">
         {artifacts.map((artifact) => (
           <button
             key={artifact.id}
@@ -974,9 +1116,8 @@ function ArtifactsPanel({
           </button>
         ))}
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
   if (artifact.status === "processing")
@@ -1163,6 +1304,31 @@ function formatTimestamp(ms: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getShortLangCode(lang?: string): string {
+  if (!lang) return "";
+  const l = lang.toLowerCase();
+  if (l.includes("vi")) return "VI";
+  if (l.includes("en")) return "EN";
+  if (l.includes("ja")) return "JA";
+  if (l.includes("ko")) return "KO";
+  if (l.includes("fr")) return "FR";
+  if (l.includes("es")) return "ES";
+  if (l.includes("de")) return "DE";
+  if (l.includes("zh")) return "ZH";
+  return lang.slice(0, 2).toUpperCase();
+}
+
+function formatCompactLanguageRoute(room: EndedRoomHistoryItem): string {
+  const source = getShortLangCode(room.sourceLanguage);
+  const targets = (room.targetLanguages || [])
+    .map(getShortLangCode)
+    .filter((code) => code && code !== source);
+
+  if (!source && !targets.length) return "VI";
+  if (!targets.length) return source || "VI";
+  return `${source} → ${targets.join(", ")}`;
 }
 
 function formatLanguageRoute(room: EndedRoomHistoryItem) {
