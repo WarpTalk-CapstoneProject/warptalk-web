@@ -54,3 +54,22 @@ test("a non-finite amount degrades to 0 rather than printing NaN at a user", () 
   assert.equal(formatAmount(Number.NaN), "0");
   assert.equal(formatMoney(Number.POSITIVE_INFINITY, "VND"), "0 VND");
 });
+
+test("the exact rendered string, for a large whole amount and a small fractional one", () => {
+  // Standing in for a browser: these two assert the literal output, because the risk in
+  // this change is the separators moving, not the arithmetic. A large whole amount must
+  // group with commas and grow no decimals; a small fractional amount must use a dot and
+  // keep every digit.
+  assert.equal(formatMoney(1_900_000, "VND"), "1,900,000 VND"); // the real Enterprise price
+  assert.equal(formatMoney(0.006575, "VND"), "0.006575 VND"); // the rate that once became 6575
+
+  // And the separators are genuinely swapped versus the old vi-VN rendering, rather than
+  // coincidentally equal because the host happens to be in a en-US locale.
+  assert.equal((1_900_000).toLocaleString("vi-VN"), "1.900.000");
+  assert.notEqual(formatAmount(1_900_000), (1_900_000).toLocaleString("vi-VN"));
+
+  // The old path also *rounded a sub-unit rate away* — this is the regression that would
+  // have shipped silently.
+  assert.equal((0.006575).toLocaleString("vi-VN"), "0,007");
+  assert.equal(formatAmount(0.006575), "0.006575");
+});
