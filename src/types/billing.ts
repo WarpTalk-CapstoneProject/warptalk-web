@@ -78,7 +78,12 @@ export interface CreditTransactionDto {
   userId: string;
   userName?: string | null;
   amount: number; // negative = consumption, positive = top-up
-  type: "consumption" | "top_up" | "reserve" | "refund" | "adjustment";
+  /**
+   * Server-side values, verbatim from `TransactionConstants.TransactionTypes`. The consume
+   * case was spelled "consumption" here and never matched anything the API sends, which is
+   * why Total Consumed read 0 and the Consumption filter came back empty.
+   */
+  type: "consume" | "top_up" | "adjustment";
   description?: string;
   referenceType?: string;
   referenceId?: string;
@@ -86,9 +91,31 @@ export interface CreditTransactionDto {
   createdAt: string; // ISO datetime
 }
 
+/**
+ * Mirrors the billing service's `UsageSummaryDto` — the shape returned by the *global*
+ * usage-breakdown endpoint.
+ */
 export interface UsageSummaryDto {
   usageType: string;
   totalCreditsConsumed: number;
+}
+
+/** Mirrors `FeatureAdoptionDto` — the per-workspace usage-breakdown endpoint. */
+export interface FeatureAdoptionDto extends UsageSummaryDto {
+  usageCount: number;
+}
+
+/**
+ * Mirrors `UsageBreakdownDto` — the rows nested inside a `BillingReportDto`. Deliberately
+ * NOT `UsageSummaryDto`: the report nests a different record whose credit field is
+ * `creditsConsumed`, not `totalCreditsConsumed`. Typing both as one interface is what let
+ * `usage.totalCreditsConsumed.toLocaleString()` compile and then throw on the first
+ * workspace with any usage at all.
+ */
+export interface UsageBreakdownDto {
+  usageType: string;
+  creditsConsumed: number;
+  quantity: number;
 }
 
 export interface BillingReportDto {
@@ -99,9 +126,11 @@ export interface BillingReportDto {
   endingBalance: number;
   totalTopUpCredits: number;
   totalConsumedCredits: number;
-  usageBreakdown: UsageSummaryDto[];
-  averageTranslationCostPerMinute: number;
-  averageCostPerMeeting: number;
+  usageBreakdown: UsageBreakdownDto[];
+  // Both are nullable on the wire (`decimal?` / `int?`) when the month has nothing to
+  // average over. The per-100-chars name is the server's; "PerMinute" never existed there.
+  averageTranslationCostPer100Chars: number | null;
+  averageCostPerMeeting: number | null;
 }
 
 export interface PagedResult<T> {
