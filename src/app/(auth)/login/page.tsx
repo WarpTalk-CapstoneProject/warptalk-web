@@ -378,6 +378,26 @@ function LoginForm() {
           </AnimatePresence>
         </form>
 
+        {/*
+          The heading says "Log in or sign up" but this page had no sign-up
+          control of any kind, and /register was reachable only by typing the
+          URL. The landing CTA lands a guest here, so this link is the only
+          thing between a stranger and a dead end. callbackUrl is carried
+          across so the visitor still ends up where they were headed; this
+          mirrors the /login link the register page already renders.
+        */}
+        <p className="mt-6 text-center text-[13px] font-medium text-neutral-700 relative z-20">
+          <span className="bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg">
+            New to WarpTalk?{" "}
+            <Link
+              href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+              className="text-black hover:underline"
+            >
+              Create account
+            </Link>
+          </span>
+        </p>
+
         {/* Footer */}
         <div className="mt-auto pb-6 pt-12 flex justify-center relative z-20">
           <div className="flex items-center gap-4 bg-white/70 backdrop-blur-md px-4 py-1.5 rounded-full text-[13px] font-medium text-neutral-700 shadow-sm border border-white/50">

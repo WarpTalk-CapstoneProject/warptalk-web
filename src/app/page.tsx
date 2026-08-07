@@ -1514,11 +1514,17 @@ export default function HomePage() {
                 >
                   Get Started for Free
                 </button>
+                {/*
+                  Both hero CTAs used to lead to /login, and the login screen
+                  had no sign-up control — so a visitor without an account had
+                  no route to /register except typing the URL. This one now
+                  says what it does and goes where it says.
+                */}
                 <Link
-                  href="/login"
+                  href="/register"
                   className="rounded-xl border border-white/10 bg-white/[0.06] px-7 py-3 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white hover:text-black"
                 >
-                  Let&apos;s Get Connected
+                  Create an Account
                 </Link>
               </motion.div>
             </motion.div>
