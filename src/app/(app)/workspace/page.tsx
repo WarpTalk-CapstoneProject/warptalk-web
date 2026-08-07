@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -39,6 +39,37 @@ export default function WorkspaceOnboardingGatePage() {
   const joinRequests = useMemo(() => joinRequestsData ?? [], [joinRequestsData]);
   const selectWorkspace = useSelectWorkspace();
   const acceptInvitation = useAcceptWorkspaceInvitationById();
+
+  // Every sign-in lands here first, and for an account that already has a workspace this
+  // page is a waypoint it passes through, not a destination. The redirect that moves it on
+  // lives in an effect, and effects run after the browser has painted — so the frame between
+  // "the workspace list arrived" and "the navigation committed" used to paint "Set up your
+  // workspace" and a Create workspace button at every single sign-in.
+  //
+  // Answering it during render is the fix. The condition below is the same one the effect
+  // acts on, evaluated one phase earlier, so the interstitial is never handed over to the
+  // onboarding surface for an account that is on its way somewhere else.
+  //
+  // Note this is not a blanket "wait a bit". An account with no workspaces and no pending
+  // invitations fails this test on the first render after the list resolves, and reaches the
+  // create page exactly as promptly as before.
+  // Read once, at mount, and not on every render. `activeWorkspaceId` is what the redirect
+  // below sets, so a live read would flip this condition false the instant the redirect
+  // starts — while router.replace() is still in flight — and simply move the flash from
+  // before the navigation to during it. Sampling it at mount answers the question this
+  // actually asks, which is why the account came to this page: with nothing selected it is
+  // passing through; with a workspace already active it came here to choose another, and
+  // then the chooser is the correct thing to show.
+  //
+  // The (app) layout gates its children behind a mounted flag, so this component's first
+  // render is a client render with the persisted workspace store already rehydrated.
+  const [arrivedWithoutActiveWorkspace] = useState(() => !activeWorkspaceId);
+
+  const willAutoOpenWorkspace =
+    isAuthenticated &&
+    arrivedWithoutActiveWorkspace &&
+    pendingInvitations.length === 0 &&
+    (workspacesData?.items?.length ?? 0) > 0;
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
@@ -90,7 +121,13 @@ export default function WorkspaceOnboardingGatePage() {
     router.push(`/${workspaceSlug}/home`);
   }
 
-  if (!isAuthenticated || workspacesLoading || pendingInvitationsLoading || joinRequestsLoading) {
+  if (
+    !isAuthenticated ||
+    workspacesLoading ||
+    pendingInvitationsLoading ||
+    joinRequestsLoading ||
+    willAutoOpenWorkspace
+  ) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />

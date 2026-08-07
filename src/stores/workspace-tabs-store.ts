@@ -13,6 +13,12 @@ interface WorkspaceTabsState {
   addTab: (scope: string, tab: WorkspaceTab) => void;
   closeTab: (scope: string, id: string) => void;
   reorderTabs: (scope: string, tabs: WorkspaceTab[]) => void;
+  /**
+   * Forget every scope's tabs. Tab titles are room and page names, and this store is
+   * persisted, so without this the previous account's open tabs survive a sign-out, a
+   * sign-in and a browser restart.
+   */
+  clearAllTabs: () => void;
 }
 
 const MAX_TABS = 8;
@@ -57,6 +63,7 @@ export const useWorkspaceTabsStore = create<WorkspaceTabsState>()(
             [scope]: tabs,
           },
         })),
+      clearAllTabs: () => set({ tabsByScope: {} }),
     }),
     {
       name: "warptalk-workspace-tabs-v2",

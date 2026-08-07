@@ -2,8 +2,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserDto } from "@/types/auth";
 import { clearSessionCookies, isLiveAccessToken } from "@/lib/auth/session-cookie";
-import { useWorkspaceStore } from "./workspace-store";
-import { usePresenceStore } from "./presence-store";
+import {
+  resetSessionScopedStateOnLogin,
+  resetSessionScopedStateOnLogout,
+} from "@/lib/session-scoped-state";
 
 interface AuthState {
   user: UserDto | null;
@@ -29,18 +31,25 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
-      login: (user, accessToken, refreshToken) =>
-        set((state) => {
-          if (state.user?.id && state.user.id !== user.id) {
-            useWorkspaceStore.getState().clearActiveWorkspace();
-          }
-          return { user, accessToken, refreshToken, isAuthenticated: true };
-        }),
+      login: (user, accessToken, refreshToken) => {
+        // Before the new identity is installed, not after. Anything still cached at this
+        // point was fetched as somebody else, and this is the last instant at which nothing
+        // is subscribed to it yet.
+        //
+        // This used to clear only the active workspace, and only when the persisted previous
+        // user id happened to differ. Both conditions were too weak: the query cache was
+        // never touched at all, and the paths that end a session without a clean logout —
+        // an unredeemable refresh token, a sign-out in another tab, a hard refresh — are
+        // exactly the paths that leave no previous user id to compare against.
+        resetSessionScopedStateOnLogin();
+        set({ user, accessToken, refreshToken, isAuthenticated: true });
+      },
       logout: () => {
         clearSessionCookies();
-        useWorkspaceStore.getState().clearActiveWorkspace();
-        // Whose colleagues were online is not the next account holder's business.
-        usePresenceStore.getState().clear();
+        // The auth state is only the smallest part of what identifies the departing account.
+        // The query cache holds their rooms, workspaces, members and notifications, and six
+        // module-level stores outlive the sign-out with them. See session-scoped-state.ts.
+        resetSessionScopedStateOnLogout();
         set({
           user: null,
           accessToken: null,
@@ -74,6 +83,7 @@ export const useAuthStore = create<AuthState>()(
         if (!state.user && !state.accessToken && !state.isAuthenticated) return;
 
         clearSessionCookies();
+        resetSessionScopedStateOnLogout();
         state.user = null;
         state.accessToken = null;
         state.refreshToken = null;
