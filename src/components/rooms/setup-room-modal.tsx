@@ -13,7 +13,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
 import { DeviceSelect } from "@/components/rooms/setup/device-select";
-import { LanguageRoleConfirm } from "@/components/rooms/setup/language-role-confirm";
+import {
+  normalizeLanguageCode,
+  resolveRoomDefaultListenLanguage,
+} from "@/lib/participant-language-preference";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   useJoinTranslationRoomByCode,
@@ -58,17 +61,15 @@ export function SetupRoomModal() {
   const animationRef = useRef<number | null>(null);
   const mediaGenerationRef = useRef(0);
 
-  const [speakLanguage, setSpeakLanguage] = useState("vi");
-  const [listenLanguage, setListenLanguage] = useState("vi");
-  const [languageRoomId, setLanguageRoomId] = useState<string | null>(null);
-  if (room && room.id !== languageRoomId) {
-    const initialLanguage =
-      room.targetLanguages?.[0] ?? room.sourceLanguage ?? "en";
-    setLanguageRoomId(room.id);
-    setListenLanguage(initialLanguage);
-    setSpeakLanguage(initialLanguage);
-  }
-
+  // Language is no longer chosen here. The setup step is about devices; participants pick
+  // their speak/listen languages inside the meeting, where the picker can react to who is
+  // actually in the room. Joining therefore carries the room's own configuration, which is
+  // the lowest-precedence source in participant-language-preference.ts — so the first
+  // in-meeting pick (and only that) counts as a real user choice.
+  //
+  // Deriving these from the room also keeps them inside the room's policy. The previous
+  // default was a hardcoded "vi", which a room without Vietnamese rejects outright at
+  // LanguagePolicy.IsAllowedToSpeak.
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [noiseSuppression] = useState(true);
@@ -287,6 +288,11 @@ export function SetupRoomModal() {
     }
     const displayName = (user?.fullName || user?.email || "Participant").trim();
 
+    // Room configuration, not a user choice — see the note where the language state used
+    // to live. `resolveRoomDefaultListenLanguage` prefers a target that is not the source.
+    const speakLanguage = normalizeLanguageCode(room.sourceLanguage) || "en";
+    const listenLanguage = resolveRoomDefaultListenLanguage(room);
+
     setIsJoining(true);
     try {
       // Register the user as a participant (translation_room_participants) BEFORE entering.
@@ -495,17 +501,6 @@ export function SetupRoomModal() {
                 </div>
               </div>
 
-              {room && (
-                <LanguageRoleConfirm
-                  isHost={isHost}
-                  roomSourceLanguage={room.sourceLanguage || "en"}
-                  roomTargetLanguages={room.targetLanguages || []}
-                  listenLanguage={listenLanguage}
-                  setListenLanguage={setListenLanguage}
-                  speakLanguage={speakLanguage}
-                  setSpeakLanguage={setSpeakLanguage}
-                />
-              )}
             </div>
 
             <div className="p-4 border-t border-border bg-surface-1 shrink-0">
