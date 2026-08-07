@@ -66,6 +66,17 @@ test("a live room is joined directly, by host and guest alike", () => {
   }
 });
 
+test("a participant active in the meeting sees Return to meeting", () => {
+  const intent = resolveRoomEntryIntent({
+    status: "in_progress",
+    isHost: false,
+    statusLabel: "In Progress",
+    isActiveInMeeting: true,
+  });
+  assert.equal(intent.mode, "join");
+  assert.equal(intent.label, "Return to meeting");
+});
+
 test("a terminal room offers nothing, and says which terminal state it is in", () => {
   for (const status of [
     "ended",

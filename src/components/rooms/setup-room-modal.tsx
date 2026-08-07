@@ -19,7 +19,10 @@ import {
   useJoinTranslationRoomByCode,
   useTranslationRoom,
 } from "@/hooks/use-translationRooms";
-import { canJoinTranslationRoom } from "@/lib/translation-room-access";
+import {
+  canJoinTranslationRoom,
+  shouldEnterWaitingRoom,
+} from "@/lib/translation-room-access";
 import { completeMeetingJoin } from "@/lib/meeting-join-state";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 import { cn } from "@/lib/utils";
@@ -446,27 +449,15 @@ export function SetupRoomModal() {
                   setBackgroundBlurEnabled((current) => !current)
                 }
               />
-
-              {/* Mic Meter */}
-              {microphoneEnabled && (
-                <div className="w-1.5 h-8 bg-surface-2 rounded-full overflow-hidden flex items-end ml-1 mr-2">
-                  <div
-                    className="w-full bg-semantic-success transition-all duration-75 ease-out rounded-full"
-                    style={{ height: `${micLevel}%` }}
-                  />
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Right Side: Settings Panel (Surface 1) */}
-          <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden flex flex-col">
-            <div className="flex-1 p-5 space-y-6 overflow-y-auto custom-scrollbar">
-              {/* Devices Section */}
-              <div className="space-y-3">
-                <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">
-                  Devices
-                </h4>
+          <div className="flex flex-col justify-between gap-4">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Device Settings
+                </h3>
                 <div className="space-y-3">
                   <DeviceSelect
                     label="Camera"
@@ -525,9 +516,11 @@ export function SetupRoomModal() {
                   ? isHost
                     ? "Starting..."
                     : "Joining..."
-                  : isHost
-                    ? "Start Meeting"
-                    : "Join Meeting"}
+                  : shouldEnterWaitingRoom(room.status, { isHost })
+                  ? "Enter Waiting Room"
+                  : isHost && (room.status === "scheduled" || room.status === "waiting")
+                  ? "Start Meeting"
+                  : "Join Meeting"}
               </button>
             </div>
           </div>

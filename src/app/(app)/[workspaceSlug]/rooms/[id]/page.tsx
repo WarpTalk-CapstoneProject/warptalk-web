@@ -93,6 +93,7 @@ import {
   buildGoogleCalendarUrl,
   translationRoomService,
 } from "@/services/translationRoom.service";
+import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { UserDto } from "@/types/auth";
@@ -199,6 +200,8 @@ export default function RoomInformationPage() {
 
   const isEnded = room.status === "ended";
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
+  const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
+  const isActiveInMeeting = activeRoomId === room.id;
   // WT-273: the CTA is one decision, taken with the viewer's host identity in hand. It used to
   // be derived from room.status alone, three lines above where `isHost` was computed, so the
   // host was offered the lobby CTA and told to wait for himself.
@@ -207,6 +210,7 @@ export default function RoomInformationPage() {
     isHost,
     statusLabel: statusLabels[room.status],
     scheduledAtLabel: room.scheduledAt ? formatDateTime(room.scheduledAt) : null,
+    isActiveInMeeting,
   });
 
   async function handleRoomEntry() {
@@ -481,12 +485,6 @@ export default function RoomInformationPage() {
                   </p>
                 </div>
               </div>
-              <RoomEntryButton
-                intent={entryIntent}
-                pending={startRoomMutation.isPending}
-                onActivate={handleRoomEntry}
-                className="h-9 w-full justify-between"
-              />
               {entryIntent.helpText ? (
                 <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
                   {entryIntent.helpText}
