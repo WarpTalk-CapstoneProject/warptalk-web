@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
   SignIn,
@@ -25,11 +25,22 @@ import {
 } from "@/hooks/use-workspace";
 import type { WorkspaceInvitationDto } from "@/types/workspace";
 
+function cleanWorkspaceName(name?: string | null) {
+  if (!name) return "";
+  return name.replace(/\?\?\?/g, "—");
+}
+
 export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isExplicitSwitch =
+    searchParams.get("switch") === "true" ||
+    searchParams.get("from") === "switch";
+
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
   const { data: workspacesData, isLoading: workspacesLoading, refetch: refetchWorkspaces } = useWorkspaces(1, 100);
@@ -40,48 +51,35 @@ export default function WorkspaceOnboardingGatePage() {
   const selectWorkspace = useSelectWorkspace();
   const acceptInvitation = useAcceptWorkspaceInvitationById();
 
-  // Every sign-in lands here first, and for an account that already has a workspace this
-  // page is a waypoint it passes through, not a destination. The redirect that moves it on
-  // lives in an effect, and effects run after the browser has painted — so the frame between
-  // "the workspace list arrived" and "the navigation committed" used to paint "Set up your
-  // workspace" and a Create workspace button at every single sign-in.
-  //
-  // Answering it during render is the fix. The condition below is the same one the effect
-  // acts on, evaluated one phase earlier, so the interstitial is never handed over to the
-  // onboarding surface for an account that is on its way somewhere else.
-  //
-  // Note this is not a blanket "wait a bit". An account with no workspaces and no pending
-  // invitations fails this test on the first render after the list resolves, and reaches the
-  // create page exactly as promptly as before.
-  // Read once, at mount, and not on every render. `activeWorkspaceId` is what the redirect
-  // below sets, so a live read would flip this condition false the instant the redirect
-  // starts — while router.replace() is still in flight — and simply move the flash from
-  // before the navigation to during it. Sampling it at mount answers the question this
-  // actually asks, which is why the account came to this page: with nothing selected it is
-  // passing through; with a workspace already active it came here to choose another, and
-  // then the chooser is the correct thing to show.
-  //
-  // The (app) layout gates its children behind a mounted flag, so this component's first
-  // render is a client render with the persisted workspace store already rehydrated.
   const [arrivedWithoutActiveWorkspace] = useState(() => !activeWorkspaceId);
 
   const willAutoOpenWorkspace =
     isAuthenticated &&
-    arrivedWithoutActiveWorkspace &&
+    !isExplicitSwitch &&
     pendingInvitations.length === 0 &&
-    (workspacesData?.items?.length ?? 0) > 0;
+    (Boolean(activeWorkspaceSlug) || (arrivedWithoutActiveWorkspace && (workspacesData?.items?.length ?? 0) > 0));
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
   }, [isAuthenticated, router]);
 
   useEffect(() => {
-    if (isAuthenticated && !activeWorkspaceId && !workspacesLoading && !pendingInvitationsLoading) {
+    if (
+      isAuthenticated &&
+      !isExplicitSwitch &&
+      !workspacesLoading &&
+      !pendingInvitationsLoading
+    ) {
       if (pendingInvitations.length > 0) {
         return;
       }
 
-      if (workspacesData?.items && workspacesData.items.length > 0) {
+      if (activeWorkspaceSlug) {
+        router.replace(`/${activeWorkspaceSlug}/home`);
+        return;
+      }
+
+      if (!activeWorkspaceId && workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
         const defaultLanguage =
           "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
@@ -99,7 +97,19 @@ export default function WorkspaceOnboardingGatePage() {
         router.replace(`/${firstWs.slug}/home`);
       }
     }
-  }, [isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, pendingInvitations, pendingInvitationsLoading, selectWorkspace, setActiveWorkspace, router]);
+  }, [
+    isAuthenticated,
+    isExplicitSwitch,
+    activeWorkspaceId,
+    activeWorkspaceSlug,
+    workspacesData,
+    workspacesLoading,
+    pendingInvitations,
+    pendingInvitationsLoading,
+    selectWorkspace,
+    setActiveWorkspace,
+    router,
+  ]);
 
   async function handleAcceptInvitation(invitationId: string) {
     await acceptInvitation.mutateAsync(invitationId);
@@ -215,7 +225,7 @@ export default function WorkspaceOnboardingGatePage() {
                     className="flex w-full items-center justify-between px-5 py-3 text-left transition hover:bg-surface-2/60"
                   >
                     <span>
-                      <span className="block text-[13px] font-medium text-foreground">{workspace.name}</span>
+                      <span className="block text-[13px] font-medium text-foreground">{cleanWorkspaceName(workspace.name)}</span>
                       <span className="mt-0.5 block text-[11px] text-ink-muted">{workspace.role} · {workspace.membershipType}</span>
                     </span>
                     <ArrowRight size={15} className="text-ink-muted" />

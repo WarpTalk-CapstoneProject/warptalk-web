@@ -171,34 +171,87 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [mounted, isAuthenticated, router]);
 
+  const urlWorkspaceSlug = (() => {
+    const segments = pathname.split('/').filter(Boolean);
+    if (segments.length > 0) {
+      const first = segments[0];
+      const reservedRoutes = ['workspace', 'admin', 'login', 'register', 'voice-profiles', 'notifications', 'account', 'room'];
+      if (!reservedRoutes.includes(first)) {
+        return first;
+      }
+    }
+    return undefined;
+  })();
+
   useEffect(() => {
     if (!mounted || !isAuthenticated || isOnboardingRoute || isAdminRoute || workspacesLoading) return;
 
-    if (!activeWorkspaceId) {
-      if (workspacesData?.items && workspacesData.items.length > 0) {
-        const firstWs = workspacesData.items[0];
-        const membershipType =
-          "membershipType" in firstWs && typeof firstWs.membershipType === "string"
-            ? firstWs.membershipType
-            : "Internal";
-        const defaultLanguage =
-          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
-            ? firstWs.defaultLanguage
-            : "en";
-        selectWorkspace.mutate(firstWs.id);
-        setActiveWorkspace(
-          firstWs.id,
-          firstWs.name,
-          firstWs.slug,
-          firstWs.role || "Member",
-          membershipType,
-          defaultLanguage
-        );
-      } else {
-        router.replace("/workspace");
+    const items = workspacesData?.items ?? [];
+    if (items.length === 0) {
+      router.replace("/workspace");
+      return;
+    }
+
+    if (urlWorkspaceSlug) {
+      const matchingWs = items.find((w) => w.slug === urlWorkspaceSlug);
+      if (matchingWs) {
+        if (matchingWs.id !== activeWorkspaceId || matchingWs.slug !== activeWorkspaceSlug) {
+          const membershipType =
+            "membershipType" in matchingWs && typeof matchingWs.membershipType === "string"
+              ? matchingWs.membershipType
+              : "Internal";
+          const defaultLanguage =
+            "defaultLanguage" in matchingWs && typeof matchingWs.defaultLanguage === "string"
+              ? matchingWs.defaultLanguage
+              : "en";
+          selectWorkspace.mutate(matchingWs.id);
+          setActiveWorkspace(
+            matchingWs.id,
+            matchingWs.name,
+            matchingWs.slug,
+            matchingWs.role || "Member",
+            membershipType,
+            defaultLanguage
+          );
+        }
+        return;
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+
+    if (!activeWorkspaceId) {
+      const firstWs = items[0];
+      const membershipType =
+        "membershipType" in firstWs && typeof firstWs.membershipType === "string"
+          ? firstWs.membershipType
+          : "Internal";
+      const defaultLanguage =
+        "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
+          ? firstWs.defaultLanguage
+          : "en";
+      selectWorkspace.mutate(firstWs.id);
+      setActiveWorkspace(
+        firstWs.id,
+        firstWs.name,
+        firstWs.slug,
+        firstWs.role || "Member",
+        membershipType,
+        defaultLanguage
+      );
+    }
+  }, [
+    activeWorkspaceId,
+    activeWorkspaceSlug,
+    workspacesData,
+    workspacesLoading,
+    isOnboardingRoute,
+    isAdminRoute,
+    selectWorkspace,
+    setActiveWorkspace,
+    router,
+    mounted,
+    isAuthenticated,
+    urlWorkspaceSlug,
+  ]);
 
   if (!mounted || !isAuthenticated) {
     return (

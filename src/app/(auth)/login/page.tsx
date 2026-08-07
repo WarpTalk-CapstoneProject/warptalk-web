@@ -36,14 +36,20 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
+import { getRememberedWorkspaceSlug } from "@/lib/landing-redirect";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+
 function getSafeCallbackUrl(value: string | null) {
   if (
     !value ||
     !value.startsWith("/") ||
     value.startsWith("//") ||
     value === "/rooms"
-  )
-    return "/workspace";
+  ) {
+    const activeSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
+    const rememberedSlug = getRememberedWorkspaceSlug(activeSlug);
+    return rememberedSlug ? `/${rememberedSlug}/home` : "/workspace";
+  }
   return value;
 }
 

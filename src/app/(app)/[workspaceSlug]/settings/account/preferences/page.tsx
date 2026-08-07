@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { UpdateUserSettingsRequest } from "@/types/auth";
+import { cn } from "@/lib/utils";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/settings-validation";
@@ -98,7 +99,7 @@ export default function PersonalPreferencesPage() {
         micNoiseSuppression: settingsData.micNoiseSuppression ?? true,
         defaultTranslationRoomType: settingsData.defaultTranslationRoomType || "instant",
         autoRecordTranslationRooms: settingsData.autoRecordTranslationRooms ?? false,
-        autoGenerateSummary: settingsData.autoGenerateSummary ?? false,
+        autoGenerateSummary: settingsData.autoGenerateSummary ?? true,
         defaultMaxParticipants: settingsData.defaultMaxParticipants ?? 10,
         theme: settingsData.theme || "system",
         transcriptFontSize: settingsData.transcriptFontSize ?? 14,
@@ -239,11 +240,25 @@ export default function PersonalPreferencesPage() {
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             
-            {/* Voice Clone */}
+            {/* Voice Clone & Biometric Consent */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enable Voice Cloning</span>
-                <span className="text-[11px] text-ink-muted">Synthesize translations using your approved voice profiles.</span>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-ink">Voice Profile & Cloning Consent</span>
+                  <span
+                    className={cn(
+                      "text-[10px] font-medium px-2 py-0.5 rounded-full border",
+                      watchAll.voiceCloneEnabled
+                        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                        : "bg-surface-2 text-ink-muted border-hairline",
+                    )}
+                  >
+                    {watchAll.voiceCloneEnabled ? "Consent Granted" : "Consent Revoked"}
+                  </span>
+                </div>
+                <span className="text-[11px] text-ink-muted max-w-md">
+                  Grant permission for WarpTalk to process your biometric voice profile and synthesize real-time translated audio matching your voice characteristics.
+                </span>
               </div>
               <Switch
                 checked={watchAll.voiceCloneEnabled}
@@ -358,27 +373,6 @@ export default function PersonalPreferencesPage() {
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             
-            {/* Theme */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Interface Theme</span>
-                <span className="text-[11px] text-ink-muted">Select your personal default display style.</span>
-              </div>
-              <Select
-                value={watchAll.theme}
-                onValueChange={(val) => queuePreference("theme", val || "")}
-              >
-                <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select theme..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light" className="text-xs cursor-pointer">Light Mode</SelectItem>
-                  <SelectItem value="dark" className="text-xs cursor-pointer">Dark Mode</SelectItem>
-                  <SelectItem value="system" className="text-xs cursor-pointer">System Default</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Font Size */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
@@ -428,32 +422,6 @@ export default function PersonalPreferencesPage() {
               <Switch
                 checked={watchAll.showTranslatedTranscript}
                 onCheckedChange={(val) => queuePreference("showTranslatedTranscript", val)}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* High Contrast */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">High Contrast Accessibility</span>
-                <span className="text-[11px] text-ink-muted">Boost readability with deep contrast foreground ratios.</span>
-              </div>
-              <Switch
-                checked={watchAll.highContrast}
-                onCheckedChange={(val) => queuePreference("highContrast", val)}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Screen Reader */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Screen Reader Compatibility</span>
-                <span className="text-[11px] text-ink-muted">Enable optimized ARIA tag streams for assistive technology.</span>
-              </div>
-              <Switch
-                checked={watchAll.screenReaderMode}
-                onCheckedChange={(val) => queuePreference("screenReaderMode", val)}
                 disabled={isSubmitting}
               />
             </div>

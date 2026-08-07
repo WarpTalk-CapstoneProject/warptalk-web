@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useInviteWorkspaceMember,
   useSelectWorkspace,
@@ -34,6 +35,11 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { IconProps } from "@phosphor-icons/react";
+
+function cleanWorkspaceName(name?: string | null) {
+  if (!name) return "";
+  return name.replace(/\?\?\?/g, "—");
+}
 import {
   CaretDown,
   CaretLeft,
@@ -213,11 +219,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const workspaces = workspacesData?.items ?? [];
   const selectWorkspaceMutation = useSelectWorkspace();
   const inviteMemberMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
+  const queryClient = useQueryClient();
 
   const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
     try {
       const res = await selectWorkspaceMutation.mutateAsync(workspaceId);
       setActiveWorkspace(workspaceId, name, slug, roleName, membershipType, res.defaultLanguage || defaultLanguage);
+      await queryClient.invalidateQueries();
       toast.success(`Switched to workspace "${name}"`);
       router.push(`/${slug}/home`);
     } catch {
@@ -532,7 +540,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {!collapsed && (
               <>
                 <span className="text-[14px] font-semibold text-ink truncate tracking-tight">
-                  {activeWorkspaceName || "Workspace"}
+                  {cleanWorkspaceName(activeWorkspaceName) || "Workspace"}
                 </span>
                 <CaretDown
                   size={12}
@@ -607,7 +615,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                         <div className="size-4 rounded bg-gradient-to-br from-pink-500/80 to-rose-500/80 flex items-center justify-center shrink-0 text-[8px] text-white font-bold">
                           {ws.name.slice(0, 2).toUpperCase()}
                         </div>
-                        <span className="truncate flex-1">{ws.name}</span>
+                        <span className="truncate flex-1">{cleanWorkspaceName(ws.name)}</span>
                         {isSelected && <Check size={14} className="text-ink ml-auto shrink-0" weight="bold" />}
                         <span className="text-[11px] text-ink-subtle ml-1 font-mono">{idx + 1}</span>
                       </DropdownMenuItem>
@@ -620,7 +628,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   Account
                 </div>
                 <DropdownMenuItem
-                  onClick={() => router.push("/workspace/create")}
+                  onClick={() => router.push("/workspace?switch=true")}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
                 >
                   <span>Create or join a workspace...</span>
