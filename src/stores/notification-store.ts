@@ -10,6 +10,13 @@ interface NotificationState {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   removeNotification: (id: string) => void;
+  /**
+   * Drop every notification without pretending they were read.
+   *
+   * `markAllAsRead` happens to leave the same empty state behind, but it means something
+   * different, and a sign-out must not read as the departing account having seen anything.
+   */
+  clear: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>()((set) => ({
@@ -49,4 +56,6 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
       ),
       unreadCount: Math.max(0, state.unreadCount - 1),
     })),
+
+  clear: () => set({ notifications: [], unreadCount: 0 }),
 }));

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
+import { normalizeWorkspaceSlug } from "../lib/workspace-slug.ts";
 
 interface WorkspaceState {
   activeWorkspaceId: string | null;
