@@ -1151,19 +1151,22 @@ function IdBadge({
   type,
   name,
 }: {
-  id: string;
+  // Nullable because of what is fed in here: a credit transaction's workspaceId and userId are
+  // both `Guid?` on the wire, so a user-scoped or system transaction supplies null.
+  id: string | null;
   type: "workspace" | "user" | "system" | "admin";
   name?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
+    if (!id) return;
     navigator.clipboard.writeText(id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const shortId = id.substring(0, 8);
+  const shortId = id ? id.substring(0, 8) : "";
   const displayName = name && name.trim() !== "" ? name : shortId;
 
   return (

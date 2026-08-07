@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getErrorMessage } from "@/lib/errors";
 import { createHubConnection } from "@/lib/signalr";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
@@ -168,8 +169,18 @@ export default function WorkspacePlansPage() {
         // Invalidate billing query cache so billing page shows updated plan
         queryClient.invalidateQueries({ queryKey: ["billing"] });
       }
-    } catch {
-      toast.error("Failed to update plan. Please contact support.");
+    } catch (error) {
+      // PUT /subscriptions/workspace/{id}/change-plan does not exist: there is no `change-plan`
+      // route anywhere in the billing service, so this always 404s for a workspace that already
+      // has a subscription — which is every workspace that reaches this button. Until the endpoint
+      // is built, say what is true. "Please contact support" reads as a transient fault and sends
+      // the user to ask about a feature that was never wired up.
+      toast.error(
+        getErrorMessage(
+          error,
+          "Changing an existing plan is not available yet. Contact sales to move between plans.",
+        ),
+      );
     } finally {
       setIsProcessing(false);
       setPendingPlanSlug("");

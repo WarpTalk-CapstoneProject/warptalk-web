@@ -27,6 +27,7 @@ import { translationRoomService } from "@/services/translationRoom.service";
 import { openArtifactDownload } from "@/lib/download-artifact";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
+import { getErrorMessage } from "@/lib/errors";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
 
@@ -97,7 +98,7 @@ export default function HistoryPage() {
       openArtifactDownload(data);
       if (artifact.consentRequired) await history.refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not download this output.");
+      toast.error(getErrorMessage(error, "Could not download this output."));
     } finally {
       setBusyArtifactId(null);
     }

@@ -13,6 +13,7 @@
     "test:expired-session-lockout": "node scripts/check-expired-session-lockout-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/auth/session-cookie.test.ts src/lib/landing-redirect.test.ts",
     "test:session-cache-isolation": "node scripts/check-session-cache-isolation-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/session-scoped-state.test.ts",
     "test:retry-policy": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/api/retry-policy.test.ts src/lib/api/token-lifecycle.test.ts",
+    "test:api-errors": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/errors.test.ts",
     "test:2807-hotfix": "node scripts/check-2807-hotfix-contract.mjs",
     "test:routes": "node scripts/check-dashboard-routes.mjs",
     "test:meeting-chat": "node scripts/check-meeting-chat-contract.mjs",
