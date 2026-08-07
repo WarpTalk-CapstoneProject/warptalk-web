@@ -34,7 +34,6 @@ import {
   StopCircle,
   Strikethrough,
   Underline as UnderlineIcon,
-  Users,
   Video,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -49,6 +48,11 @@ import { toast } from "sonner";
 import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -286,7 +290,7 @@ export default function RoomInformationPage() {
                     onCopy={handleCopy}
                   />
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
+                <div className="flex w-full max-w-[280px] shrink-0 flex-col items-end gap-2">
                   {/* WT-310(10): the status is rendered once, by MeetingPropertiesPills under
                       the title. A second StatusChip stood here, so the same room announced
                       "Waiting" twice on one screen in two different visual languages — a grey
@@ -298,15 +302,30 @@ export default function RoomInformationPage() {
                       title. It used to exist only in "Meeting access" — the last panel of a
                       sticky, independently scrolling right column — so it sat below the fold
                       with nothing on screen hinting that more content existed. A mentor lost
-                      ~40 minutes hunting for it during a live demo. The panel keeps its copy of
-                      the control; both render the same `entryIntent`. */}
+                      ~40 minutes hunting for it during a live demo.
+
+                      WT-330: and now it lives here ONLY. WT-197 promoted a second copy rather
+                      than moving the control, so the page offered the same lobby action twice —
+                      once here and once at the bottom of the right column, where the original
+                      still sat below the fold behind that column's own scrollbar. Two buttons
+                      firing the same handler is not redundancy a reader can benefit from; it
+                      reads as two different actions. The panel copy is gone, and `helpText`
+                      came up here with it so the explanation stays attached to the control it
+                      explains. */}
                   {entryIntent.isActionable ? (
-                    <RoomEntryButton
-                      intent={entryIntent}
-                      pending={startRoomMutation.isPending}
-                      onActivate={handleRoomEntry}
-                      className="h-9 px-4"
-                    />
+                    <>
+                      <RoomEntryButton
+                        intent={entryIntent}
+                        pending={startRoomMutation.isPending}
+                        onActivate={handleRoomEntry}
+                        className="h-9 px-4"
+                      />
+                      {entryIntent.helpText ? (
+                        <p className="text-right text-[12px] leading-relaxed text-muted-foreground">
+                          {entryIntent.helpText}
+                        </p>
+                      ) : null}
+                    </>
                   ) : null}
                   {room.hostId === user?.id &&
                   (room.status === "scheduled" || room.status === "waiting") ? (
@@ -325,18 +344,18 @@ export default function RoomInformationPage() {
                 </div>
               </div>
 
+              {/* WT-330: "When" is the only metadata row left, and that is the point.
+                  - "People" listed `participants` capped at 8. The right column's Tracking
+                    panel renders the same identities through UserRow — which wraps the very
+                    same UserChip popover — split into who holds a seat and who does not, and
+                    with no cap. Every chip this row could show appears there, so deleting it
+                    removes a duplicate, not a source.
+                  - The location row answered with a hardcoded product string for a bridge that
+                    does not exist. WT-310(6) had already caught that its location pin promised
+                    a place and swapped the icon for a video glyph — which left a row asking
+                    "where" and answering with a video chip, contradicting itself. The honest
+                    fix is not a better icon; it is not claiming a location at all. */}
               <div className="grid gap-2 border-y border-border/60 py-2 text-[13px]">
-                <MetadataRow icon={<Users className="size-4" />} label="People">
-                  <div className="flex flex-wrap gap-1.5">
-                    {participants.length > 0
-                      ? participants
-                          .slice(0, 8)
-                          .map((participant) => (
-                            <UserChip key={participant.id} user={participant} />
-                          ))
-                      : "No participants added"}
-                  </div>
-                </MetadataRow>
                 <MetadataRow icon={<Clock className="size-4" />} label="When">
                   <span>
                     {formatDateTime(room.scheduledAt ?? room.createdAt)}
@@ -346,13 +365,6 @@ export default function RoomInformationPage() {
                       - {formatDateTime(room.endedAt)}
                     </span>
                   ) : null}
-                </MetadataRow>
-                {/* WT-310(6): a location pin promised a place. There is no place — every
-                    WarpTalk meeting happens on the audio bridge. */}
-                <MetadataRow icon={<Video className="size-4" />} label="Where">
-                  <InlineChip icon={<Video className="size-3.5" />}>
-                    Virtual Audio Bridge
-                  </InlineChip>
                 </MetadataRow>
               </div>
             </div>
@@ -391,35 +403,25 @@ export default function RoomInformationPage() {
               <PropertyLine label="Organizer">
                 <UserChip user={hostUser} compact />
               </PropertyLine>
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-                  <ChevronDown className="size-3" />
-                  Attendees: {occupancy.label}
-                </div>
-                <div className="space-y-1.5">
-                  {seatedIdentities.length > 0 ? (
-                    seatedIdentities.map((participant) => (
-                      <UserRow key={participant.id} user={participant} />
-                    ))
-                  ) : (
-                    <p className="text-[12px] text-muted-foreground">
-                      Nobody is in the room right now.
-                    </p>
-                  )}
-                </div>
-              </div>
+              {/* WT-330(5): "Attendees" here was the page's only use of that word — every other
+                  surface, and the seat rule itself, says "participants". One word, everywhere. */}
+              <CollapsibleSection label={`Participants: ${occupancy.label}`}>
+                {seatedIdentities.length > 0 ? (
+                  seatedIdentities.map((participant) => (
+                    <UserRow key={participant.id} user={participant} />
+                  ))
+                ) : (
+                  <p className="text-[12px] text-muted-foreground">
+                    Nobody is in the room right now.
+                  </p>
+                )}
+              </CollapsibleSection>
               {notInRoom.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-                    <ChevronDown className="size-3" />
-                    Invited: {notInRoom.length}
-                  </div>
-                  <div className="space-y-1.5">
-                    {notInRoom.map((participant) => (
-                      <UserRow key={participant.id} user={participant} />
-                    ))}
-                  </div>
-                </div>
+                <CollapsibleSection label={`Invited: ${notInRoom.length}`}>
+                  {notInRoom.map((participant) => (
+                    <UserRow key={participant.id} user={participant} />
+                  ))}
+                </CollapsibleSection>
               ) : null}
             </PropertyPanel>
 
@@ -481,17 +483,9 @@ export default function RoomInformationPage() {
                   </p>
                 </div>
               </div>
-              <RoomEntryButton
-                intent={entryIntent}
-                pending={startRoomMutation.isPending}
-                onActivate={handleRoomEntry}
-                className="h-9 w-full justify-between"
-              />
-              {entryIntent.helpText ? (
-                <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-                  {entryIntent.helpText}
-                </p>
-              ) : null}
+              {/* WT-330: the second RoomEntryButton stood here. See the header CTA above — the
+                  control and its help text now live there, once. This panel keeps what is
+                  actually specific to it: the session identity and the room code. */}
             </PropertyPanel>
           </aside>
         </div>
@@ -1300,6 +1294,37 @@ function PropertyLine({
       <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
       {children}
     </div>
+  );
+}
+
+/**
+ * WT-330(6): a Tracking-panel section that actually opens and closes.
+ *
+ * The two headings this replaces drew a static `ChevronDown` and wired nothing to it. The
+ * chevron is the app's own "this opens" glyph, so a reader who clicked it and got nothing had
+ * been told the panel was broken. Now the whole heading is the trigger, the chevron rotates
+ * with `data-panel-open`, and `aria-expanded` is handled by the primitive.
+ *
+ * Open by default: the roster is the reason the panel exists, so collapsing is the deliberate
+ * act, not the resting state.
+ */
+function CollapsibleSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Collapsible defaultOpen className="space-y-2">
+      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md py-0.5 text-left text-[12px] font-medium text-muted-foreground transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
+        <ChevronDown className="size-3 shrink-0 transition-transform duration-200 group-data-[panel-open]:rotate-0 -rotate-90" />
+        {label}
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        <div className="space-y-1.5">{children}</div>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 }
 
