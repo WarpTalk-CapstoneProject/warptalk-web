@@ -39,6 +39,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { formatMoney } from "@/lib/currency";
 
 // We fetch plans dynamically now.
 
@@ -432,7 +433,7 @@ export default function WorkspacePlansPage() {
                     <div className="flex items-baseline whitespace-nowrap">
                       <span className="text-4xl font-extrabold tracking-tight text-gray-900">
                         {displayPrice > 0
-                          ? `${displayPrice.toLocaleString("vi-VN")}đ`
+                          ? formatMoney(displayPrice, "VND")
                           : "Free"}
                       </span>
                       <span className="text-sm font-medium text-gray-500 ml-1">
@@ -560,7 +561,7 @@ export default function WorkspacePlansPage() {
                   )}
                   {billingInterval === "yearly" && (
                     <p className="text-[11px] text-[#7F1DFF] font-semibold text-center w-full">
-                      Billed yearly: {displayTotal.toLocaleString("vi-VN")}đ
+                      Billed yearly: {formatMoney(displayTotal, "VND")}
                     </p>
                   )}
                 </CardFooter>
@@ -648,7 +649,7 @@ export default function WorkspacePlansPage() {
                       &lt; 10k
                     </span>
                     <span className="text-xs font-medium text-ink mt-0.5">
-                      10đ/cr
+                      10 VND/cr
                     </span>
                   </div>
                   <div
@@ -660,7 +661,7 @@ export default function WorkspacePlansPage() {
                       10k+
                     </span>
                     <span className="text-xs font-medium text-ink mt-0.5">
-                      9đ/cr{" "}
+                      9 VND/cr{" "}
                       <span className="text-semantic-success text-[10px] ml-0.5">
                         (10%)
                       </span>
@@ -675,7 +676,7 @@ export default function WorkspacePlansPage() {
                       25k+
                     </span>
                     <span className="text-xs font-medium text-ink mt-0.5">
-                      8.5đ/cr{" "}
+                      8.5 VND/cr{" "}
                       <span className="text-semantic-success text-[10px] ml-0.5">
                         (15%)
                       </span>
@@ -690,7 +691,7 @@ export default function WorkspacePlansPage() {
                       50k+
                     </span>
                     <span className="text-xs font-medium text-ink mt-0.5">
-                      8đ/cr{" "}
+                      8 VND/cr{" "}
                       <span className="text-semantic-success text-[10px] ml-0.5">
                         (20%)
                       </span>
@@ -727,7 +728,7 @@ export default function WorkspacePlansPage() {
                   <div className="border-t border-hairline pt-3 mt-1 flex items-center justify-between">
                     <span className="text-base font-bold text-ink">Total</span>
                     <span className="text-2xl font-bold text-ink tracking-tight">
-                      {topUpTotal.toLocaleString("vi-VN")}đ
+                      {formatMoney(topUpTotal, "VND")}
                     </span>
                   </div>
                 </div>

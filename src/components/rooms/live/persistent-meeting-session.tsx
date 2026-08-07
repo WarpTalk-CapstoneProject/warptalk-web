@@ -1686,7 +1686,7 @@ export function PersistentMeetingSession({
     return (
       <StatePanel
         title="Loading room..."
-        description="Fetching room details from the TranslationRoom service."
+        description="Fetching room details."
       />
     );
   }

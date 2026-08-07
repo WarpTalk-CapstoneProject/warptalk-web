@@ -37,6 +37,7 @@ import { buildFeatureList, getPlanDescription } from "@/lib/utils";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
+import { formatMoney } from "@/lib/currency";
 
 export default function PaymentPlansPage() {
   const router = useRouter();
@@ -293,7 +294,7 @@ export default function PaymentPlansPage() {
                     <span className="text-4xl font-semibold tracking-tight">
                       {plan.price === 0
                         ? "Free"
-                        : `${plan.price.toLocaleString()}${plan.currency === "VND" ? "đ" : ` ${plan.currency}`}`}
+                        : formatMoney(plan.price, plan.currency)}
                     </span>
                     <span className="text-sm text-muted-foreground mb-1">
                       /month
@@ -427,7 +428,7 @@ export default function PaymentPlansPage() {
             {
               credits: "10,000",
               creditsNum: 10000,
-              price: "90.000đ",
+              price: "90,000 VND",
               priceNum: 90000,
               perCredit: "9 VND/credit",
               discount: "Save 10%",
@@ -436,7 +437,7 @@ export default function PaymentPlansPage() {
             {
               credits: "25,000",
               creditsNum: 25000,
-              price: "212.500đ",
+              price: "212,500 VND",
               priceNum: 212500,
               perCredit: "8.5 VND/credit",
               discount: "Save 15%",
@@ -445,7 +446,7 @@ export default function PaymentPlansPage() {
             {
               credits: "50,000",
               creditsNum: 50000,
-              price: "400.000đ",
+              price: "400,000 VND",
               priceNum: 400000,
               perCredit: "8 VND/credit",
               discount: "Save 20%",

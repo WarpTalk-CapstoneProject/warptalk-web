@@ -682,7 +682,7 @@ function FeatureStoryBoard() {
             y={652}
             tickTop={646}
             tickBottom={696}
-            label="xin chao"
+            label="Vietnamese"
             progress={crossingForkProgress}
             revealAt={0.24}
           />
@@ -691,7 +691,7 @@ function FeatureStoryBoard() {
             y={686}
             tickTop={668}
             tickBottom={730}
-            label="hello"
+            label="English"
             progress={crossingForkProgress}
             revealAt={0.46}
           />
@@ -700,7 +700,7 @@ function FeatureStoryBoard() {
             y={628}
             tickTop={626}
             tickBottom={682}
-            label="bonjour"
+            label="French"
             progress={crossingForkProgress}
             revealAt={0.66}
           />
@@ -709,7 +709,7 @@ function FeatureStoryBoard() {
             y={808}
             tickTop={742}
             tickBottom={800}
-            label="konnichiwa"
+            label="Japanese"
             progress={crossingForkProgress}
             revealAt={0.84}
           />
@@ -928,9 +928,9 @@ function FeatureTraceSection() {
             </p>
           </div>
           <div className="feature-language-line">
-            <span>hello</span>
-            <span>xin chao</span>
-            <span>bonjour</span>
+            <span>English</span>
+            <span>Vietnamese</span>
+            <span>French</span>
             <span>meaning preserved</span>
             <span>voice returned</span>
           </div>

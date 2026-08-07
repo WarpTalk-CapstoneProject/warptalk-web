@@ -9,9 +9,9 @@ import {
 test("profile language options come from the shared supported-language catalog", () => {
   assert.deepEqual(
     getProfileLanguageOptions(),
-    SUPPORTED_LANGUAGES.map(({ code, name, nativeName }) => ({
+    SUPPORTED_LANGUAGES.map(({ code, name }) => ({
       value: code,
-      label: nativeName === name ? name : `${name} (${nativeName})`,
+      label: name,
     })),
   );
 });

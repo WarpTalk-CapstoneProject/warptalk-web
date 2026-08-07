@@ -26,11 +26,11 @@ function bareLanguage(language: string) {
   return language.split(/[-_]/)[0]?.toLowerCase() ?? language;
 }
 
-// Native names rather than English ones: a language picker reads better in the language it
-// offers. Both come from the registry, so neither can drift into a bare code.
+// English names, like the rest of the UI. From the registry, so a label can never drift into
+// a bare code.
 const LANGUAGES = languagesInScope("voiceCatalog").map((language) => ({
   value: language.code,
-  label: language.nativeName,
+  label: language.name,
 }));
 
 /**

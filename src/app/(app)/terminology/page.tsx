@@ -673,9 +673,7 @@ export default function WorkspaceTerminologyPage() {
               <label className="text-xs font-semibold">Preferred Translation</label>
               <Input
                 type="text"
-                // i18n-allow: a sample term in the *target* language, so it shows what a
-                // glossary entry translates "ARR" into rather than restating the source.
-                placeholder="e.g. Doanh thu định kỳ năm"
+                placeholder="e.g. your preferred term"
                 className="h-8 border-hairline text-xs"
                 {...registerTerm("targetTerm")}
               />

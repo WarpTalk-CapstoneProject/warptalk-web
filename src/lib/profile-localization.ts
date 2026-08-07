@@ -9,9 +9,9 @@ export type ProfileLanguageOption = {
 };
 
 export function getProfileLanguageOptions(): ProfileLanguageOption[] {
-  return SUPPORTED_LANGUAGES.map(({ code, name, nativeName }) => ({
+  return SUPPORTED_LANGUAGES.map(({ code, name }) => ({
     value: code,
-    label: nativeName === name ? name : `${name} (${nativeName})`,
+    label: name,
   }));
 }
 
