@@ -398,8 +398,26 @@ export default function RoomInformationPage() {
 
           </main>
 
-          <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
-            <PropertyPanel title="Tracking">
+          {/* WT-330(8): the column no longer scrolls as one block. It used to be a single
+              `xl:overflow-y-auto`, so the ONE thing that grows with the data — the invitee
+              list — drove the scroll of everything: six invitees already pushed `Actions`
+              215px below the fold, and thirty buried it entirely. The controls a host came
+              here for cannot be a function of how many people were invited.
+
+              Now the column is a flex stack that fits the viewport: `Actions` and `Meeting
+              access` are fixed-size and pinned (`shrink-0`), and `Tracking` takes whatever
+              height is left and scrolls its own body. That gives the roster a bounded area
+              that GROWS on a tall screen instead of a hardcoded max-height that is wrong on
+              every screen but one. Below `xl` the column is a normal stacked block and the
+              page scrolls, so none of this applies — hence every class here is `xl:`. */}
+          <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-hidden">
+            <PropertyPanel
+              title="Tracking"
+              className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden"
+              /* The one bounded scroll region. `overscroll-auto` is the default, restated:
+                 chaining is what keeps this from trapping the page's scroll at its end. */
+              bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-auto xl:pr-1"
+            >
               <PropertyLine label="Organizer">
                 <UserChip user={hostUser} compact />
               </PropertyLine>
@@ -425,7 +443,7 @@ export default function RoomInformationPage() {
               ) : null}
             </PropertyPanel>
 
-            <PropertyPanel title="Actions">
+            <PropertyPanel title="Actions" className="xl:shrink-0">
               <ActionButton
                 icon={<Copy className="size-3.5" />}
                 onClick={() =>
@@ -471,7 +489,7 @@ export default function RoomInformationPage() {
               ) : null}
             </PropertyPanel>
 
-            <PropertyPanel title="Meeting access">
+            <PropertyPanel title="Meeting access" className="xl:shrink-0">
               <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
                 <div className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-1 text-ink">
                   <Video className="size-4" />
@@ -1261,23 +1279,34 @@ function MetadataRow({
 function PropertyPanel({
   title,
   children,
+  className,
+  bodyClassName,
 }: {
   title: string;
   children: ReactNode;
+  /** WT-330(8): lets the Tracking panel flex while Actions / Meeting access stay fixed. */
+  className?: string;
+  /** WT-330(8): lets the Tracking panel's body become the one bounded scroll region. */
+  bodyClassName?: string;
 }) {
   return (
-    <div className="rounded-[10px] border border-border bg-surface-1 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+    <div
+      className={cn(
+        "rounded-[10px] border border-border bg-surface-1 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+        className,
+      )}
+    >
       {/* WT-310(7): the caret and the overflow dots are gone. Neither was a button — they were
           bare icons with no handler, no menu and no state — but they are the exact glyphs the
           rest of the app uses for "opens a menu", so "Tracking ⌄" and "Actions ⌄ ⋯" read as
           three controls per panel that did nothing when clicked. A panel heading that is only
           a heading is written as only a heading. */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex shrink-0 items-center justify-between">
         <span className="flex items-center gap-1 px-0.5 text-[12px] font-medium text-muted-foreground">
           {title}
         </span>
       </div>
-      <div className="space-y-3">{children}</div>
+      <div className={cn("space-y-3", bodyClassName)}>{children}</div>
     </div>
   );
 }
@@ -1307,6 +1336,20 @@ function PropertyLine({
  *
  * Open by default: the roster is the reason the panel exists, so collapsing is the deliberate
  * act, not the resting state.
+ *
+ * WT-330(8): note what is deliberately NOT here — a `max-h` on the list.
+ *
+ * The growing list does need a bounded scroll area, but bounding it HERE was the wrong place.
+ * A hardcoded height (210px, say) is wrong on every screen but the one it was measured on, and
+ * with two of these sections plus ~500px of fixed panel chrome it still could not fit a 720px
+ * viewport — `Actions` stayed below the fold. Worse, a scroll box inside the panel's own
+ * scroll box is two nested scrollbars, which is the trap this was supposed to avoid.
+ *
+ * So the bound lives one level up: the Tracking panel's body is the single scroll region, and
+ * it FLEXES — it takes whatever height the viewport leaves after the pinned Actions and
+ * Meeting access panels, so it grows on a tall screen instead of being frozen at one guess.
+ * Collapsing one section hands its space to the other, which is a real reason for item 6's
+ * collapsing to exist rather than being decoration.
  */
 function CollapsibleSection({
   label,

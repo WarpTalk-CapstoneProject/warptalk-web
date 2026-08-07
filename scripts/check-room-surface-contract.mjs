@@ -271,6 +271,49 @@ assert.match(
   "The occupancy pill must name what its number counts (WT-330(7)).",
 );
 
+// (8) The roster is the only thing in the right column that grows with the data, and it must
+// scroll inside its own box. When it drove the whole aside's scroll, six invitees already
+// pushed Actions 206px below the fold; thirty buried it. Bounding the list is what keeps
+// Tracking, the occupancy summary, Actions and Meeting access reachable at any invitee count.
+// The aside must NOT be one scroll block any more — that is what let the invitee list drive
+// the whole column's scroll and bury Actions.
+assert.doesNotMatch(
+  roomDetail,
+  /<aside[^>]*xl:overflow-y-auto/,
+  "The right column must not scroll as one block; only the roster region may scroll (WT-330(8)).",
+);
+// Tracking flexes and owns the single scroll region; Actions and Meeting access are pinned.
+assert.match(
+  roomDetail,
+  /title="Tracking"[\s\S]{0,400}?bodyClassName="[^"]*xl:flex-1[^"]*xl:overflow-y-auto/,
+  "The Tracking panel's body must be the one bounded, flexing scroll region (WT-330(8)).",
+);
+for (const panel of ["Actions", "Meeting access"]) {
+  assert.match(
+    roomDetail,
+    new RegExp(`title="${panel}" className="xl:shrink-0"`),
+    `The ${panel} panel must stay pinned so no invitee count can push it off screen.`,
+  );
+}
+// A max-height on the list itself would nest a second scrollbar inside the first.
+assert.doesNotMatch(
+  roomDetail,
+  /<CollapsiblePanel>[\s\S]{0,200}?max-h-\[/,
+  "The roster list must not carry its own max-height — that nests scrollbars (WT-330(8)).",
+);
+// Chaining is the default; restating it is how we stop a future edit turning the inner list
+// into a scroll trap that silently swallows the page's scroll at its boundary.
+assert.match(
+  roomDetail,
+  /overscroll-auto/,
+  "The inner roster scroll must chain to the page, never trap (WT-330(8)).",
+);
+assert.doesNotMatch(
+  roomDetail,
+  /overscroll-contain|overscroll-none/,
+  "overscroll containment would make the roster a scroll trap.",
+);
+
 console.log(
   "Room surface contract (WT-272, WT-273, WT-274, WT-197, WT-330): PASS",
 );
