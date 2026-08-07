@@ -1,18 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Spinner } from "@phosphor-icons/react";
+import { Spinner, Fingerprint, CheckCircle, XCircle, ShieldCheck } from "@phosphor-icons/react";
 
 import { languagesInScope } from "@/lib/languages";
 import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import type { UpdateUserSettingsRequest } from "@/types/auth";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
@@ -47,6 +56,7 @@ export default function PersonalPreferencesPage() {
   const queryClient = useQueryClient();
   const initializedRef = useRef(false);
   const lastQueuedValuesRef = useRef<Record<string, string>>({});
+  const [showConsentModal, setShowConsentModal] = useState(false);
 
   // Load preferences from Auth Service API
   const { data: settingsData, isLoading, error, refetch } = useQuery({
@@ -94,7 +104,7 @@ export default function PersonalPreferencesPage() {
       const initialValues: PreferencesFormData = {
         defaultSpeakLanguage: settingsData.defaultSpeakLanguage || "en",
         defaultListenLanguage: settingsData.defaultListenLanguage || "en",
-        voiceCloneEnabled: settingsData.voiceCloneEnabled ?? true,
+        voiceCloneEnabled: settingsData.voiceCloneEnabled ?? false,
         micNoiseSuppression: settingsData.micNoiseSuppression ?? true,
         defaultTranslationRoomType: settingsData.defaultTranslationRoomType || "instant",
         autoRecordTranslationRooms: settingsData.autoRecordTranslationRooms ?? false,
@@ -147,6 +157,20 @@ export default function PersonalPreferencesPage() {
     if (lastQueuedValuesRef.current[String(field)] === serializedValue) return;
     lastQueuedValuesRef.current[String(field)] = serializedValue;
     autoSave.enqueue({ [field]: value } as Partial<UpdateUserSettingsRequest>);
+  };
+
+  const handleVoiceCloneToggle = (checked: boolean) => {
+    if (checked) {
+      setShowConsentModal(true);
+    } else {
+      queuePreference("voiceCloneEnabled", false);
+    }
+  };
+
+  const confirmEnableConsent = () => {
+    setShowConsentModal(false);
+    queuePreference("voiceCloneEnabled", true);
+    toast.success("Voice cloning consent granted.");
   };
 
   const commitNumericField = (field: "defaultMaxParticipants" | "transcriptFontSize", rawValue: string) => {
@@ -232,27 +256,43 @@ export default function PersonalPreferencesPage() {
           </div>
         </div>
 
-        {/* Section 2: Audio Preferences */}
+        {/* Section 2: Voice Cloning & Consent Preferences */}
         <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
-            Audio & Suppression
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle flex items-center gap-1.5">
+              <Fingerprint className="w-3.5 h-3.5 text-primary" weight="bold" />
+              Voice Cloning & Consent Preferences
+            </div>
+            {watchAll.voiceCloneEnabled ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <CheckCircle className="w-3.5 h-3.5" weight="fill" /> Consent Granted
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 border border-zinc-500/20">
+                <XCircle className="w-3.5 h-3.5" weight="fill" /> Consent Withdrawn
+              </span>
+            )}
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             
-            {/* Voice Clone */}
+            {/* Voice Clone Consent Authorization */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enable Voice Cloning</span>
-                <span className="text-[11px] text-ink-muted">Synthesize translations using your approved voice profiles.</span>
+              <div className="flex flex-col gap-1 max-w-md">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-ink">Enable Voice Cloning Consent</span>
+                </div>
+                <span className="text-[11px] text-ink-muted leading-relaxed">
+                  Authorize WarpTalk to sample and synthesize your voice during live translated calls using your approved voice profiles.
+                </span>
               </div>
               <Switch
                 checked={watchAll.voiceCloneEnabled}
-                onCheckedChange={(val) => queuePreference("voiceCloneEnabled", val)}
+                onCheckedChange={handleVoiceCloneToggle}
                 disabled={isSubmitting}
               />
             </div>
 
-            {/* Noise Suppression */}
+            {/* Microphone Noise Suppression */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Microphone Noise Suppression</span>
@@ -265,6 +305,14 @@ export default function PersonalPreferencesPage() {
               />
             </div>
 
+          </div>
+
+          {/* Compliance & Privacy Note */}
+          <div className="p-3 border border-hairline/60 bg-surface-2/40 rounded-lg flex items-start gap-2.5 text-ink-muted">
+            <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" weight="duotone" />
+            <p className="text-[11px] leading-normal">
+              <strong className="font-semibold text-ink">Biometric Voice Privacy Notice:</strong> Your consent preference controls whether AI dubbing synthesized streams use your personalized voice. You can grant or withdraw your authorization at any time.
+            </p>
           </div>
         </div>
 
@@ -462,6 +510,47 @@ export default function PersonalPreferencesPage() {
         </div>
 
       </div>
+
+      {/* Voice Cloning Consent Confirmation Dialog */}
+      <Dialog open={showConsentModal} onOpenChange={setShowConsentModal}>
+        <DialogContent className="bg-surface-1 border-hairline text-ink rounded-xl sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-ink">
+              <Fingerprint className="w-5 h-5 text-primary" weight="bold" />
+              Grant Voice Cloning Authorization?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-ink-muted pt-2 leading-relaxed">
+              By enabling voice cloning consent, you authorize WarpTalk to sample and synthesize your audio stream during translated calls using Cartesia voice synthesis. Your voice data will be processed strictly for generating real-time dubbing for meeting participants.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-3 bg-surface-2/60 border border-hairline rounded-lg text-[11px] text-ink-muted space-y-1">
+            <p className="font-semibold text-ink">Key Privacy Points:</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Consent applies across all translation sessions.</li>
+              <li>You can withdraw consent at any time from this page.</li>
+              <li>Withdrawing consent immediately falls back to standard AI voices.</li>
+            </ul>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setShowConsentModal(false)}
+              className="h-8 text-xs border-hairline hover:bg-surface-2"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmEnableConsent}
+              className="h-8 text-xs bg-primary hover:bg-primary/90 text-white font-medium"
+            >
+              I Agree & Enable
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
