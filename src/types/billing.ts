@@ -10,7 +10,8 @@ export interface CreditBalanceDto {
 
 export interface SubscriptionDto {
   id: string;
-  userId: string;
+  /** Nullable on the wire (`Guid? UserId`): a workspace contract subscription has no user. */
+  userId: string | null;
   workspaceId: string | null;
   planId: string;
   planName: string;
@@ -73,9 +74,11 @@ export type PlanMutationDto = Omit<PlanDto, "id">;
 
 export interface CreditTransactionDto {
   id: string;
-  workspaceId: string;
+  /** Nullable on the wire (`Guid? WorkspaceId`), and null for user-scoped transactions. */
+  workspaceId: string | null;
   workspaceName?: string | null;
-  userId: string;
+  /** Nullable on the wire (`Guid? UserId`), and null for system/workspace-scoped transactions. */
+  userId: string | null;
   userName?: string | null;
   amount: number; // negative = consumption, positive = top-up
   /**
@@ -188,19 +191,36 @@ export interface TopWorkspaceDto {
   totalCreditsConsumed: number;
 }
 
+/**
+ * Mirrors `WarpTalk.BillingService.Application.DTOs.InvoiceDto` field for field.
+ *
+ * It previously did not. It declared `amount`, `subscriptionId`, `paymentId`, `stripeInvoiceId`,
+ * `invoicePdfUrl` and `hostedInvoiceUrl` — none of which the API has ever sent — and omitted the
+ * eight fields it does send. TypeScript could not catch it: the type is applied by
+ * `apiClient.get<PagedResult<InvoiceDto>>(...)`, an assertion rather than a validation, so the
+ * compiler believed the fiction. Opening Billing History then called `.toLocaleString()` on
+ * `undefined` and the route was replaced by the error boundary.
+ *
+ * Keep this aligned with `InvoiceDtos.cs` when either side changes.
+ */
 export interface InvoiceDto {
   id: string;
-  workspaceId: string;
-  subscriptionId: string;
-  paymentId: string;
-  stripeInvoiceId: string;
-  amount: number;
+  invoiceNumber: string;
+  subtotal: number;
+  tax: number;
+  /** What the customer owes. This is the field the UI means by "amount". */
+  total: number;
   currency: string;
   status: string;
-  invoicePdfUrl: string;
-  hostedInvoiceUrl: string;
+  pdfUrl: string | null;
+  /** A JSON-encoded array, serialised as a string by the API. */
+  lineItems: string;
+  issuedAt: string;
+  dueAt: string | null;
+  paidAt: string | null;
   createdAt: string;
-  workspaceName?: string | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
 }
 
 export interface UsageAlertDto {

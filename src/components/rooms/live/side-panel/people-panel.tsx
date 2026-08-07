@@ -196,7 +196,7 @@ function ParticipantRow({
         setShowTransferDialog(false);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Action failed.");
+      toast.error(getErrorMessage(error, "Action failed."));
     }
   }
 

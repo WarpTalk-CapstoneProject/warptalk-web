@@ -511,9 +511,14 @@ export default function MeetingsPageLinear() {
     "active" | "scheduled" | "history" | "all"
   >("active");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // workspaceId is what lets the server answer this question for a workspace Owner/Admin at all:
+  // without it the list falls back to host-or-participant-or-invitee and an Admin sees an empty
+  // page for a workspace that has meetings in it. It also stops this workspace-scoped screen from
+  // listing another workspace's rooms.
   const roomList = useTranslationRooms({
     pageSize: 100,
     status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
+    workspaceId: activeWorkspaceId ?? undefined,
   });
   const setCreateRoomModalOpen = useUIStore(
     (state) => state.setCreateRoomModalOpen,
