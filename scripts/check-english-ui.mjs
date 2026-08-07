@@ -27,8 +27,12 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+// fileURLToPath, not .pathname: a URL percent-encodes every space, so a checkout under a
+// directory like "WarpTalk - Capstone Project" yielded ".../WarpTalk%20-%20Capstone%20Project"
+// and every readdirSync threw ENOENT. CI never saw it — its workspace path has no spaces.
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SRC = join(ROOT, "src");
 
 /**
