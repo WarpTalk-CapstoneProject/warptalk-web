@@ -50,8 +50,27 @@ export const WorkspaceService = {
     return data;
   },
 
-  async updateSettings(id: string, settings: Partial<WorkspaceSettingsDto>): Promise<void> {
+  /**
+   * Replaces the whole settings document. The PUT binds the complete `WorkspaceSettingsDto`
+   * server-side, so every field must be present — use `patchSettings` for single-field edits.
+   */
+  async updateSettings(id: string, settings: WorkspaceSettingsDto): Promise<void> {
     await apiClient.put(API.workspaces.settings(id), settings);
+  },
+
+  /**
+   * Sends only the changed keys. The server reads the current document, merges the supplied
+   * keys over it and writes the result back, returning the merged document.
+   */
+  async patchSettings(
+    id: string,
+    patch: Partial<WorkspaceSettingsDto>,
+  ): Promise<WorkspaceSettingsDto> {
+    const { data } = await apiClient.patch<WorkspaceSettingsDto>(
+      API.workspaces.settings(id),
+      patch,
+    );
+    return data;
   },
 
   async deleteWorkspace(id: string): Promise<void> {

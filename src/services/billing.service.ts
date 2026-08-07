@@ -144,7 +144,7 @@ export const billingService = {
     days = 30,
   ): Promise<import("@/types/billing").UsageSummaryDto[]> => {
     const { data } = await apiClient.get<
-      import("@/types/billing").UsageSummaryDto[]
+      import("@/types/billing").FeatureAdoptionDto[]
     >(`/usages/workspace/${workspaceId}/breakdown`, { params: { days } });
     return data;
   },
