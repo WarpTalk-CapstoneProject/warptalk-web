@@ -46,16 +46,20 @@ export const useAuthStore = create<AuthState>()(
       },
       logout: () => {
         clearSessionCookies();
-        // The auth state is only the smallest part of what identifies the departing account.
-        // The query cache holds their rooms, workspaces, members and notifications, and six
-        // module-level stores outlive the sign-out with them. See session-scoped-state.ts.
-        resetSessionScopedStateOnLogout();
+        // The identity goes first, and the order is load-bearing. Emptying the query cache
+        // notifies every mounted observer, and an observer whose query has just been removed
+        // refetches — so with the token still installed, the departing account's credentials
+        // would be used to refill the cache we are in the middle of emptying.
         set({
           user: null,
           accessToken: null,
           refreshToken: null,
           isAuthenticated: false,
         });
+        // The auth state is only the smallest part of what identifies the departing account.
+        // The query cache holds their rooms, workspaces, members and notifications, and seven
+        // module-level stores outlive the sign-out with them. See session-scoped-state.ts.
+        resetSessionScopedStateOnLogout();
       },
       updateUser: (updates) =>
         set((state) => ({
@@ -83,11 +87,11 @@ export const useAuthStore = create<AuthState>()(
         if (!state.user && !state.accessToken && !state.isAuthenticated) return;
 
         clearSessionCookies();
-        resetSessionScopedStateOnLogout();
         state.user = null;
         state.accessToken = null;
         state.refreshToken = null;
         state.isAuthenticated = false;
+        resetSessionScopedStateOnLogout();
       },
     }
   )

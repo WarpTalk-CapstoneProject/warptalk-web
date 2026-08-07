@@ -83,6 +83,14 @@ checks.push([
   "signing out resets the session-scoped state",
   /logout: \(\) => \{[\s\S]*?resetSessionScopedStateOnLogout\(\)/.test(authStore),
 ]);
+// Scoped to the logout body so it cannot be satisfied by the initial state above it.
+const logoutBody = authStore.match(/logout: \(\) => \{([\s\S]*?)\n      \},/)?.[1] ?? "";
+checks.push([
+  "on sign-out the identity is cleared BEFORE the cache, so a refetch triggered by the removal cannot use the departing account's token",
+  logoutBody.includes("isAuthenticated: false,") &&
+    logoutBody.indexOf("isAuthenticated: false,") <
+      logoutBody.indexOf("resetSessionScopedStateOnLogout()"),
+]);
 checks.push([
   "signing in resets it too — a session can end without anyone calling logout()",
   /login: \([\s\S]*?resetSessionScopedStateOnLogin\(\)/.test(authStore),
