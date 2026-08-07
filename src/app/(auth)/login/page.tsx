@@ -51,18 +51,21 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
+  // Nothing on this path may be written to the console. The Google access
+  // token, and the AuthResponse the backend returns for it, both carry live
+  // credentials — the response body holds the access token and the 7-day
+  // refresh token in plaintext. Anything printed here survives in the
+  // browser's console history and in any screen recording of a demo, and a
+  // refresh token read from it stays redeemable for a week even after the
+  // user signs out. The toasts below are the user-facing signal; the console
+  // is not a place to put credentials.
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      console.log("[Google OAuth] Token Response:", tokenResponse);
       try {
         const idToken = tokenResponse.access_token;
-        console.log(
-          "[Google OAuth] Sending token to backend /auth/google-login...",
-        );
         const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, {
           idToken,
         });
-        console.log("[Google OAuth] Backend Response:", res.data);
         const { user, accessToken, refreshToken, expiresAt } = res.data;
 
         login(user, accessToken, refreshToken);
@@ -80,15 +83,13 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         }
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
-        console.error("[Google OAuth] Backend verification error:", error);
         toast.error(
           error?.response?.data?.error ||
             "Google login failed. Please try again.",
         );
       }
     },
-    onError: (errorResponse) => {
-      console.error("[Google OAuth] Popup / Client Error:", errorResponse);
+    onError: () => {
       toast.error("Google authentication failed or popup was closed.");
     },
   });
@@ -96,10 +97,7 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   return (
     <button
       type="button"
-      onClick={() => {
-        console.log("[Google OAuth] Continue with Google button clicked");
-        handleGoogleLogin();
-      }}
+      onClick={() => handleGoogleLogin()}
       className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
     >
       <GoogleAuthIcon className="size-5" />
