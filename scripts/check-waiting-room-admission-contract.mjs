@@ -22,9 +22,13 @@ assert.match(
   /enabled: Boolean\(roomId\) && enabled/,
   "Participant polling must honor the caller's authorization-ready state.",
 );
+// Deliberately anchored on the admission clause only, not on the whole argument list: the
+// minimised-session idle reaper adds a further `&& !meetingIsIdleReaped` conjunct (an abandoned
+// tab must stop polling too), and that must not read as a regression here. What still has to
+// hold is that admission gates the request.
 assert.match(
   liveRoom,
-  /useTranslationRoomParticipants\(\s*roomId,\s*meetingSession !== null && !meetingSession\.isWaitingRoom,\s*\)/,
+  /useTranslationRoomParticipants\(\s*roomId,\s*meetingSession !== null &&\s*!meetingSession\.isWaitingRoom/,
   "Waiting-room clients must not request the protected participant roster before admission.",
 );
 

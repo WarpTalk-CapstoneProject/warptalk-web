@@ -53,8 +53,6 @@ export function LiveKitMeetingStage({
   fallbackName,
   isJoining,
   error,
-  localStream,
-  localMediaError,
   screenStream,
   layoutMode,
   pinnedUserId,
@@ -66,8 +64,6 @@ export function LiveKitMeetingStage({
   fallbackName: string;
   isJoining: boolean;
   error: string | null;
-  localStream: MediaStream | null;
-  localMediaError: string | null;
   screenStream: MediaStream | null;
   layoutMode: MeetingLayoutMode;
   /** Locally-pinned participant (this viewer only) — clicking a tile toggles it. */
@@ -80,7 +76,6 @@ export function LiveKitMeetingStage({
 }) {
   const connectionState = useConnectionState();
   const room = useMaybeRoomContext();
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
   const [activeSpeakerIdentities, setActiveSpeakerIdentities] = useState<
     Set<string>
@@ -101,11 +96,6 @@ export function LiveKitMeetingStage({
   );
   const hasParticipants =
     connectionState === ConnectionState.Connected && visibleTracks.length > 0;
-
-  useEffect(() => {
-    if (!localVideoRef.current) return;
-    localVideoRef.current.srcObject = localStream;
-  }, [localStream]);
 
   useEffect(() => {
     if (!screenVideoRef.current) return;
@@ -393,7 +383,7 @@ export function LiveKitMeetingStage({
       </p>
       <p className="mt-1 flex items-center gap-2 text-[13px] text-ink-subtle">
         {isJoining && <SpinnerGap className="h-3.5 w-3.5 animate-spin" />}
-        {localMediaError || error || liveKitStateLabel(connectionState)}
+        {error || liveKitStateLabel(connectionState)}
       </p>
       {error && (
         <button

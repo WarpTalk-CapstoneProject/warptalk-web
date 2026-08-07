@@ -23,6 +23,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { useJoinTranslationRoomByCode, useRoomPreflight } from "@/hooks/use-translationRooms";
+import { getErrorMessage } from "@/lib/errors";
 import { getFlagEmoji } from "@/lib/language-flag";
 import { getLanguageName, languagesInScope } from "@/lib/languages";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
@@ -321,9 +322,11 @@ function JoinMeetingContent() {
         toast.error(result.message || "Failed to join room.");
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not join room.",
-      );
+      // WT-201: an AxiosError IS an Error, and its `.message` is only ever the generic
+      // "Request failed with status code 400" — the reason the API actually gave
+      // ("This room has already ended or has been cancelled.") lives in the response body.
+      // getErrorMessage reads the body first, exactly as create-room-dialog already does.
+      toast.error(getErrorMessage(error, "Could not join room."));
     }
   }
 
