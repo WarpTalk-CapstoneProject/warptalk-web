@@ -101,12 +101,29 @@ const UNAUTHENTICATED_AUTH_ENDPOINTS = [
   "/auth/verify-email",
 ];
 
+/**
+ * Endpoints the interceptors must keep their hands off, even though they are
+ * authenticated.
+ *
+ * /auth/logout is `[Authorize]` on the server, so it needs a bearer token — but
+ * it is sent by the store's logout() at the exact moment the session is being
+ * torn down. If the request interceptor managed this one, it would look up a
+ * token from a store that is already empty, decide the session is dead, and
+ * fire endDeadSession() — turning every sign-out into a hard redirect and, far
+ * worse, stripping the credential the revoke needs to work at all. The caller
+ * passes the departing access token explicitly instead; this exemption is what
+ * stops the interceptor from clobbering it. A 401 here is likewise terminal by
+ * design: the caller treats the revoke as best effort.
+ */
+const INTERCEPTOR_MANAGED_EXEMPT_ENDPOINTS = ["/auth/logout"];
+
 function isAuthEndpoint(url?: string) {
   if (!url) return false;
   const path = url.split("?")[0].replace(/\/+$/, "");
-  return UNAUTHENTICATED_AUTH_ENDPOINTS.some(
-    (endpoint) => path === endpoint || path.endsWith(endpoint),
-  );
+  return [
+    ...UNAUTHENTICATED_AUTH_ENDPOINTS,
+    ...INTERCEPTOR_MANAGED_EXEMPT_ENDPOINTS,
+  ].some((endpoint) => path === endpoint || path.endsWith(endpoint));
 }
 
 function isFormDataLike(value: unknown): value is Record<string | symbol, unknown> {

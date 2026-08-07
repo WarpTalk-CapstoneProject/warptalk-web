@@ -184,6 +184,14 @@ export const translationRoomService = {
     to?: string;
     page?: number;
     pageSize?: number;
+    /**
+     * Scopes the list to one workspace. Send it from any workspace-scoped screen: the server can
+     * only widen the list to a workspace Owner/Admin when it knows which workspace is being asked
+     * about, so omitting it is what left an Admin looking at "No active meetings found." for a
+     * workspace full of rooms. It also keeps a workspace-scoped page from listing another
+     * workspace's meetings.
+     */
+    workspaceId?: string;
   }) {
     const response = await apiClient.get<TranslationRoomListResponse>(API.translationRooms.list, { params });
     return {

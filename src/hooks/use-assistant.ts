@@ -32,6 +32,20 @@ export function useAssistantConversation(conversationId: string | null) {
   });
 }
 
+/**
+ * Imperative counterpart to useAssistantConversation, for "open this one from chat history":
+ * the widget only knows which conversation to load at click time, and re-keying a query on
+ * the live conversationId would re-fetch (and clobber) a conversation that is mid-stream.
+ */
+export function useLoadAssistantConversation() {
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { data } = await assistantService.getConversation(conversationId);
+      return data;
+    },
+  });
+}
+
 export function useCreateAssistantConversation() {
   return useMutation({
     mutationFn: async (workspaceId: string) => {
