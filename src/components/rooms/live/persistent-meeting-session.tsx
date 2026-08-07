@@ -48,7 +48,7 @@ import { mergeParticipants } from "@/lib/merge-participants";
 import { roomOccupancy } from "@/lib/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
-import { buildTranscriptReviewPath } from "@/lib/meeting-navigation";
+import { buildMeetingEndedPath } from "@/lib/meeting-navigation";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   AiSuggestionDto,
@@ -188,6 +188,11 @@ export function PersistentMeetingSession({
     useJoinMeeting();
 
   const meetingJoinedRef = useRef(false);
+  // Set by handleExit("end") so this client ignores its own TranslationRoomEnded broadcast and
+  // keeps the navigation it chose (the room's ended page) instead of being replaced onto the
+  // rooms list. A ref, not state: the broadcast handler is installed once per connection and
+  // must read the current value, not the one closed over at subscribe time.
+  const endedByMeRef = useRef(false);
   const screenStreamRef = useRef<MediaStream | null>(null);
   // Imperative handle onto the LiveKit local participant, published by <LocalMediaController>
   // (a child of <LiveKitRoom>, because this component RENDERS the provider and so cannot read
@@ -1113,9 +1118,34 @@ export function PersistentMeetingSession({
     });
     connection.on("TranslationRoomEnded", () => {
       void refetchRoom();
+      // The client that pressed "End meeting" is inside handleExit, on its way to the room's
+      // ended page. This broadcast goes to the whole group INCLUDING that client, so without
+      // this guard the replace() below raced handleExit's push() and could land the host back
+      // on the rooms list — exactly the last screen of the demo, decided by whichever
+      // navigation happened to resolve second.
+      if (endedByMeRef.current) return;
       toast.info("This meeting has ended.");
       onMeetingClosed();
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+    });
+
+    // The host's Approve in the People panel is a REST call (PATCH .../participants/{id}/admit)
+    // that flipped the row and invalidated the HOST's participants query — nothing reached the
+    // admitted user at all. Their own participantsQuery is deliberately disabled while
+    // isWaitingRoom, and their roomQuery has no refetchInterval, so they sat on the "Waiting for
+    // Host" spinner until they happened to press Refresh Status. It only looked like it worked
+    // because a subsequent Start Translation fires TranslationRoomStarted, which re-joins them;
+    // admit-without-a-later-start left them stuck.
+    //
+    // TranslationRoomParticipantService now publishes ParticipantAdmitted on the same Redis
+    // channel RoomEnded/RoomStarted use, and the Gateway relays it to the room group. Every
+    // waiting client is already in that group (JoinTranslationRoom runs regardless of waiting
+    // state), so the admitted one re-runs its join here without touching anything.
+    connection.on("ParticipantAdmitted", (admittedUserId: string) => {
+      if (!user?.id || admittedUserId !== user.id) return;
+      void refetchRoom().then(() => {
+        retryMeetingConnectionRef.current();
+      });
     });
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
@@ -1449,6 +1479,11 @@ export function PersistentMeetingSession({
   async function handleExit(action: "leave" | "end") {
     try {
       if (action === "end") {
+        // Claim the end BEFORE the mutation: TranslationRoomService publishes RoomEnded to
+        // Redis inside EndTranslationRoomAsync, so the TranslationRoomEnded broadcast can reach
+        // this same client before `await endRoom.mutateAsync` even resolves. Setting the flag
+        // afterwards would lose the race the flag exists to settle.
+        endedByMeRef.current = true;
         if (room?.status !== "ended" && room?.status !== "cancelled") {
           await endRoom.mutateAsync(roomId);
         }
@@ -1462,10 +1497,13 @@ export function PersistentMeetingSession({
       onMeetingClosed();
       router.push(
         action === "end"
-          ? buildTranscriptReviewPath(activeWorkspaceSlug, roomId)
+          ? buildMeetingEndedPath(activeWorkspaceSlug, roomId)
           : `/${activeWorkspaceSlug || "workspace"}/rooms`,
       );
     } catch (error) {
+      // The end never landed, so this client is not the one that ended the room after all —
+      // let a later TranslationRoomEnded broadcast redirect it like any other participant.
+      endedByMeRef.current = false;
       toast.error(
         error instanceof Error ? error.message : "Could not leave the room.",
       );

@@ -73,13 +73,25 @@ export function MeetingPropertiesPills({
       </button>
 
       {/* WT-321(3): same legibility fix as the meetings list row — the pair is
-          seats-taken / seat cap, and now says so instead of reading as a bare code. */}
+          seats-taken / seat cap, and now says so instead of reading as a bare code.
+
+          WT-330(7): both halves of that pair are real, so the pill stays — but it now says
+          "in room" out loud. The product owner read "0/100" on a scheduled room as a hardcoded
+          placeholder, and a bare fraction sitting between a room code and a date genuinely does
+          look like one. It is not: `0` is the CONNECTED seat count (room-occupancy.ts, matching
+          the backend's ratified SeatHolding rule) and `100` is the room's own persisted
+          `maxParticipants`, stamped at creation from TranslationRoomTypePolicy — EVENT caps at
+          100, VIRTUAL_APPOINTMENT at 2 — and enforced on every join
+          (TranslationRoomService.CreateParticipant, WT-262). It reads 0 because nobody has
+          joined yet, which is the correct answer, so the fix is to stop the number looking like
+          a placeholder rather than to delete a true one. */}
       <div
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
         title="Participants in the room, out of the meeting type's seat capacity"
       >
         <Users size={12} weight="regular" className="text-ink-muted" aria-hidden />
         <span className="tabular-nums text-[12px] font-medium">{occupancyLabel}</span>
+        <span className="text-[12px] text-ink-muted">in room</span>
         <span className="sr-only">participants in the room, out of the seat capacity</span>
       </div>
 

@@ -18,6 +18,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { getLanguageName, languagesInScope } from "@/lib/languages";
 import {
   useGlossariesByWorkspace,
@@ -59,7 +60,7 @@ const langPairs = languagesInScope("glossary").map((language) => ({
 
 export default function WorkspaceTerminologyPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const role = useWorkspaceStore((s) => s.role);
+  const role = useWorkspaceRole();
 
   const [selectedGlossaryId, setSelectedGlossaryId] = useState<string | null>(null);
   
@@ -114,7 +115,10 @@ export default function WorkspaceTerminologyPage() {
 
   if (!activeWorkspaceId) return null;
 
-  const isOwnerOrAdmin = role === "Owner" || role === "Admin";
+  const isOwnerOrAdmin = role === "owner" || role === "admin";
+  const readOnlyReason = isOwnerOrAdmin
+    ? undefined
+    : "Only workspace Owners and Administrators can change terminology.";
   const selectedGlossary = glossaries.find((g) => g.id === effectiveGlossaryId);
 
   // Global terms applicable to the selected glossary's language pair — language-agnostic
@@ -371,7 +375,7 @@ export default function WorkspaceTerminologyPage() {
                       }}
                       disabled={!isOwnerOrAdmin}
                       className="opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity h-7 w-7 flex items-center justify-center rounded text-ink-muted hover:bg-destructive/10"
-                      title="Delete Glossary"
+                      title={readOnlyReason ?? "Delete Glossary"}
                     >
                       <Trash className="h-4 w-4" />
                     </button>
@@ -469,7 +473,7 @@ export default function WorkspaceTerminologyPage() {
                           onClick={() => setTermToDelete({ id: term.id, term: term.sourceTerm })}
                           disabled={!isOwnerOrAdmin}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-30"
-                          title="Delete Term"
+                          title={readOnlyReason ?? "Delete Term"}
                         >
                           <Trash className="h-4 w-4" />
                         </button>

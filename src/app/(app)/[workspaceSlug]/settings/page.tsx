@@ -13,6 +13,7 @@ import {
   Trash,
   Globe,
   Checks,
+  Warning,
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -256,6 +257,38 @@ export default function WorkspaceSettingsPage() {
               Only workspace Owners and Administrators can view or modify workspace configurations.
             </CardDescription>
           </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // A failed load is not a configuration. Rendering the form here would show
+  // DEFAULT_SETTINGS_FORM_DATA — "Max Active Rooms: 5" for a workspace configured to 20 —
+  // as if it were the workspace's own settings, and the first control the user touched would
+  // then save that fiction over the real document.
+  if (settingsQuery.isError || !settingsQuery.data) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Card className="max-w-md border-hairline bg-surface-1 p-6 text-center shadow-sm">
+          <CardHeader className="flex flex-col items-center gap-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <Warning className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-lg font-bold">Couldn&apos;t load workspace settings</CardTitle>
+            <CardDescription className="text-xs">
+              The current configuration could not be read, so nothing is shown here rather
+              than showing defaults that are not this workspace&apos;s. Retry, and if it keeps
+              failing check that the workspace service is reachable.
+            </CardDescription>
+          </CardHeader>
+          <button
+            type="button"
+            onClick={() => settingsQuery.refetch()}
+            disabled={settingsQuery.isFetching}
+            className="mx-auto mt-2 inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 px-4 text-xs font-semibold transition hover:bg-surface-3 disabled:opacity-60"
+          >
+            {settingsQuery.isFetching ? "Retrying…" : "Retry"}
+          </button>
         </Card>
       </div>
     );

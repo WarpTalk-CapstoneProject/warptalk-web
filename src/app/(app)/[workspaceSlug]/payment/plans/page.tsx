@@ -22,6 +22,10 @@ import { createHubConnection } from "@/lib/signalr";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  useWorkspaceRole,
+  useWorkspaceRoleLoaded,
+} from "@/hooks/use-workspace-role";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import {
   ArrowRight,
@@ -54,7 +58,8 @@ export default function WorkspacePlansPage() {
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
-  const role = useWorkspaceStore((state) => state.role);
+  const role = useWorkspaceRole();
+  const isRoleLoaded = useWorkspaceRoleLoaded();
 
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(
     "monthly",
@@ -259,7 +264,7 @@ export default function WorkspacePlansPage() {
   const { rate, discount } = getTopUpRate(topUpCredits);
   const topUpTotal = topUpCredits * rate;
 
-  if (!role) {
+  if (!isRoleLoaded) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-canvas">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -267,7 +272,7 @@ export default function WorkspacePlansPage() {
     );
   }
 
-  if (role !== "Owner" && role !== "Admin") {
+  if (role !== "owner" && role !== "admin") {
     return (
       <div className="flex h-[80vh] items-center justify-center w-full">
         <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">

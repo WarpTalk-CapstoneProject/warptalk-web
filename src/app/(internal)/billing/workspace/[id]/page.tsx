@@ -39,7 +39,7 @@ import type {
   GroupedCreditTransaction,
   InvoiceDto,
   UsageGroupSummary,
-  UsageSummaryDto,
+  UsageBreakdownDto,
 } from "@/types/billing";
 import {
   ArrowDownRight,
@@ -588,12 +588,12 @@ export default function AdminWorkspaceBillingPage({
                     No usage data for this month.
                   </p>
                 ) : (
-                  usageBreakdown.map((usage: UsageSummaryDto) => {
+                  usageBreakdown.map((usage: UsageBreakdownDto) => {
                     const Icon = getIconForUsage(usage.usageType);
                     const name = getLabelForUsage(usage.usageType);
                     const percent = report?.totalConsumedCredits
                       ? Math.round(
-                          (usage.totalCreditsConsumed /
+                          (usage.creditsConsumed /
                             report.totalConsumedCredits) *
                             100,
                         )
@@ -617,7 +617,7 @@ export default function AdminWorkspaceBillingPage({
                             </div>
                           </div>
                           <p className="text-lg font-medium">
-                            {usage.totalCreditsConsumed.toLocaleString()} cr
+                            {usage.creditsConsumed.toLocaleString()} cr
                           </p>
                         </div>
                         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3">
@@ -637,9 +637,9 @@ export default function AdminWorkspaceBillingPage({
                       Average translation cost
                     </p>
                     <p className="text-lg font-medium mt-1">
-                      {report?.averageTranslationCostPerMinute !== undefined &&
-                      report?.averageTranslationCostPerMinute !== null
-                        ? `${report.averageTranslationCostPerMinute} cr / minute`
+                      {report?.averageTranslationCostPer100Chars !== undefined &&
+                      report?.averageTranslationCostPer100Chars !== null
+                        ? `${report.averageTranslationCostPer100Chars} cr / 100 chars`
                         : "--"}
                     </p>
                   </div>
@@ -731,15 +731,14 @@ export default function AdminWorkspaceBillingPage({
                         <SelectValue placeholder="All types">
                           {historyTypeFilter === "ALL" && "All types"}
                           {historyTypeFilter === "top_up" && "Top-Up"}
-                          {historyTypeFilter === "consumption" && "Consumption"}
-                          {historyTypeFilter === "reserve" && "Reserve"}
-                        </SelectValue>
+                          {historyTypeFilter === "consume" && "Consumption"}
+                                                  </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ALL">All types</SelectItem>
                         <SelectItem value="top_up">Top-Up</SelectItem>
-                        <SelectItem value="consumption">Consumption</SelectItem>
-                        <SelectItem value="reserve">Reserve</SelectItem>
+                        <SelectItem value="consume">Consumption</SelectItem>
+                        <SelectItem value="adjustment">Adjustment</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -881,9 +880,7 @@ export default function AdminWorkspaceBillingPage({
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                {tx.type === "reserve" ? (
-                                  <Spinner className="h-4 w-4 text-amber-500 animate-spin" />
-                                ) : tx.amount > 0 ? (
+                                {tx.amount > 0 ? (
                                   <ArrowUpRight className="h-4 w-4 text-emerald-500" />
                                 ) : (
                                   <ArrowDownRight className="h-4 w-4 text-rose-500" />
