@@ -55,6 +55,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { formatMoney } from "@/lib/currency";
 
 interface PlanFormState {
   name: string;
@@ -429,7 +430,7 @@ export default function AdminPlansPage() {
                       <span className="font-semibold text-sm">
                         {plan.price === 0
                           ? "Free"
-                          : `${plan.price.toLocaleString()} ${plan.currency}`}
+                          : formatMoney(plan.price, plan.currency)}
                       </span>
                       <div className="text-xs text-muted-foreground capitalize">
                         {plan.billingCycle}

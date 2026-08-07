@@ -42,7 +42,6 @@ export type SupportedLanguage = {
   locale: string;
   /** The full English name — the only one of these fields a person should ever see. */
   name: string;
-  nativeName: string;
   /** ISO-3166 alpha-2. The flag emoji is derived from this, see ./language-flag. */
   region: string;
   scopes: LanguageScope[];
@@ -53,7 +52,6 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     code: "vi",
     locale: "vi-VN",
     name: "Vietnamese",
-    nativeName: "Tiếng Việt",
     region: "VN",
     scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
@@ -61,7 +59,6 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     code: "en",
     locale: "en-US",
     name: "English",
-    nativeName: "English",
     region: "US",
     scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
@@ -69,7 +66,6 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     code: "ja",
     locale: "ja-JP",
     name: "Japanese",
-    nativeName: "日本語",
     region: "JP",
     scopes: ["meeting", "voiceProfile", "glossary", "chatTarget"],
   },
@@ -77,7 +73,6 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     code: "ko",
     locale: "ko-KR",
     name: "Korean",
-    nativeName: "한국어",
     region: "KR",
     scopes: ["meeting", "chatTarget"],
   },
@@ -85,7 +80,6 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     code: "fr",
     locale: "fr-FR",
     name: "French",
-    nativeName: "Français",
     region: "FR",
     scopes: ["meeting", "chatTarget"],
   },
@@ -93,7 +87,6 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     code: "es",
     locale: "es-ES",
     name: "Spanish",
-    nativeName: "Español",
     region: "ES",
     scopes: ["meeting", "chatTarget"],
   },
@@ -103,7 +96,6 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     code: "zh",
     locale: "zh-CN",
     name: "Chinese",
-    nativeName: "中文",
     region: "CN",
     scopes: ["chatTarget"],
   },
@@ -114,6 +106,21 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
  * structurally by `normalizeLanguageCode`, so this only carries shapes that cannot be
  * derived — chiefly ASCII-folded names, which arrive from the AI side and from older rows.
  */
+/**
+ * Endonyms — what each language calls itself. i18n-allow: this table is INPUT ONLY. It exists
+ * so a name arriving from the AI side or an older row folds to the right code, and nothing
+ * here is ever rendered. The registry above deliberately no longer carries a native display
+ * name, so no component can reach one by accident; the UI is English throughout.
+ */
+const LANGUAGE_ENDONYMS: Record<string, string> = {
+  "tiếng việt": "vi",
+  日本語: "ja",
+  한국어: "ko",
+  français: "fr",
+  español: "es",
+  中文: "zh",
+};
+
 const LANGUAGE_ALIASES: Record<string, string> = {
   "english (united states)": "en",
   "tieng viet": "vi",
@@ -121,10 +128,10 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   zhongwen: "zh",
   espanol: "es",
   francais: "fr",
+  ...LANGUAGE_ENDONYMS,
   ...Object.fromEntries(
     SUPPORTED_LANGUAGES.flatMap((language) => [
       [language.name.toLowerCase(), language.code],
-      [language.nativeName.toLowerCase(), language.code],
       [language.locale.toLowerCase(), language.code],
     ]),
   ),
@@ -233,11 +240,6 @@ export function normalizeLanguageCode(value?: string) {
 export function getLanguageName(value?: string) {
   const language = getLanguageByCode(value);
   return language?.name ?? (value || "Auto");
-}
-
-export function getLanguageNativeName(value?: string) {
-  const language = getLanguageByCode(value);
-  return language?.nativeName ?? getLanguageName(value);
 }
 
 export function getLanguageRegion(value?: string) {

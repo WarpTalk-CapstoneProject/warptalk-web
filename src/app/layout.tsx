@@ -4,13 +4,13 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "WarpTalk — AI-Powered TranslationRoom Translation",
+    default: "WarpTalk — AI-Powered Meeting Translation",
     template: "%s | WarpTalk",
   },
   description:
-    "Real-time multilingual translationRoom translation and transcription platform for global teams.",
+    "Real-time multilingual meeting translation and transcription platform for global teams.",
   keywords: [
-    "translationRoom translation",
+    "meeting translation",
     "real-time transcription",
     "multilingual",
     "AI",

@@ -58,6 +58,7 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
+import { formatMoney } from "@/lib/currency";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -281,9 +282,8 @@ export default function AdminWorkspaceBillingPage({
 
   const displayPlanName = subscription?.planName || "Free Plan";
   const displayPlanPrice = subscription
-    ? subscription.price.toLocaleString("vi-VN") +
-      (subscription.price > 1000 ? "đ" : " VND")
-    : "0đ";
+    ? formatMoney(subscription.price, "VND")
+    : formatMoney(0, "VND");
 
   const usageBreakdown = report?.usageBreakdown || [];
 
@@ -1087,10 +1087,7 @@ export default function AdminWorkspaceBillingPage({
                               )}
                             </TableCell>
                             <TableCell className="text-right text-xs font-semibold text-ink py-3">
-                              {invoice.total.toLocaleString("vi-VN")}
-                              {invoice.currency === "vnd"
-                                ? "đ"
-                                : ` ${invoice.currency.toUpperCase()}`}
+                              {formatMoney(invoice.total, invoice.currency)}
                             </TableCell>
                             <TableCell className="text-right text-xs pr-5 py-3 space-x-3">
                               <button
@@ -1188,10 +1185,7 @@ export default function AdminWorkspaceBillingPage({
                     </span>
                   </div>
                   <span className="text-lg font-extrabold text-ink tracking-tight">
-                    {selectedInvoice.total.toLocaleString("vi-VN")}
-                    {selectedInvoice.currency === "vnd"
-                      ? "đ"
-                      : ` ${selectedInvoice.currency.toUpperCase()}`}
+                    {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                   </span>
                 </div>
               </div>
@@ -1334,16 +1328,10 @@ export default function AdminWorkspaceBillingPage({
                 </td>
                 <td className="py-4 px-3 text-center text-gray-700">1</td>
                 <td className="py-4 px-3 text-right text-gray-700 font-mono">
-                  {selectedInvoice.total.toLocaleString("vi-VN")}
-                  {selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                 </td>
                 <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
-                  {selectedInvoice.total.toLocaleString("vi-VN")}
-                  {selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                 </td>
               </tr>
             )}
@@ -1356,27 +1344,19 @@ export default function AdminWorkspaceBillingPage({
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Subtotal:</span>
               <span className="font-semibold text-gray-900 font-mono">
-                {selectedInvoice &&
-                  selectedInvoice.total.toLocaleString("vi-VN")}
-                {selectedInvoice &&
-                  (selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatMoney(selectedInvoice.total, selectedInvoice.currency)}
               </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Tax (0%):</span>
-              <span className="text-gray-900 font-mono">0đ</span>
+              <span className="text-gray-900 font-mono">
+                {formatMoney(0, selectedInvoice?.currency)}
+              </span>
             </div>
             <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
               <span className="text-gray-900">Total Paid:</span>
               <span className="text-gray-950 font-mono text-base">
-                {selectedInvoice &&
-                  selectedInvoice.total.toLocaleString("vi-VN")}
-                {selectedInvoice &&
-                  (selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatMoney(selectedInvoice.total, selectedInvoice.currency)}
               </span>
             </div>
           </div>
