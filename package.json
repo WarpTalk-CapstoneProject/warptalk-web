@@ -10,6 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test:contracts": "node scripts/run-contracts.mjs",
     "test:dead-session": "node scripts/check-dead-session-recovery-contract.mjs",
+    "test:expired-session-lockout": "node scripts/check-expired-session-lockout-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/auth/session-cookie.test.ts src/lib/landing-redirect.test.ts",
+    "test:session-cache-isolation": "node scripts/check-session-cache-isolation-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/session-scoped-state.test.ts",
+    "test:retry-policy": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/api/retry-policy.test.ts src/lib/api/token-lifecycle.test.ts",
     "test:2807-hotfix": "node scripts/check-2807-hotfix-contract.mjs",
     "test:routes": "node scripts/check-dashboard-routes.mjs",
     "test:meeting-chat": "node scripts/check-meeting-chat-contract.mjs",
@@ -49,7 +52,11 @@
     "test:translation-room-access": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/translation-room-access.test.ts",
     "test:room-surface": "node scripts/check-room-surface-contract.mjs",
     "test:desktop-releases": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/desktop-releases.test.ts",
-    "test:participant-language": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/participant-language-preference.test.ts && node scripts/check-participant-language-precedence-contract.mjs"
+    "test:participant-language": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/participant-language-preference.test.ts && node scripts/check-participant-language-precedence-contract.mjs",
+    "test:persistent-meeting": "node scripts/check-persistent-meeting-contract.mjs",
+    "test:meeting-stage-layout": "node scripts/check-meeting-stage-layout.mjs",
+    "test:meeting-session-lifecycle": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting-session-lifecycle.test.ts",
+    "test:daily-recurrence": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/daily-recurrence.test.ts && node scripts/check-daily-recurrence-contract.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

@@ -63,7 +63,7 @@ import { billingService } from "@/services/billing.service";
 import type {
   GroupedCreditTransaction,
   UsageGroupSummary,
-  UsageSummaryDto,
+  UsageBreakdownDto,
   InvoiceDto,
 } from "@/types/billing";
 import { useAuthStore } from "@/stores/auth-store";
@@ -338,7 +338,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         currentGroup.referenceId !== "00000000-0000-0000-0000-000000000000";
 
       const shouldGroup =
-        isSameType && tx.type === "consumption" && exactReferenceMatch;
+        isSameType && tx.type === "consume" && exactReferenceMatch;
 
       if (shouldGroup) {
         currentGroup.amount += tx.amount;
@@ -385,7 +385,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const totalConsumed = useMemo(() => {
     if (!historyPage?.items) return 0;
     return historyPage.items
-      .filter((tx) => tx.type === "consumption")
+      .filter((tx) => tx.type === "consume")
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   }, [historyPage]);
 
@@ -811,12 +811,12 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   </p>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
-                    {usageBreakdown.map((usage: UsageSummaryDto) => {
+                    {usageBreakdown.map((usage: UsageBreakdownDto) => {
                       const Icon = getIconForUsage(usage.usageType);
                       const name = getLabelForUsage(usage.usageType);
                       const percent = report?.totalConsumedCredits
                         ? Math.round(
-                            (usage.totalCreditsConsumed /
+                            (usage.creditsConsumed /
                               report.totalConsumedCredits) *
                               100,
                           )
@@ -842,7 +842,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                               </div>
                             </div>
                             <p className="text-sm font-semibold text-ink">
-                              {usage.totalCreditsConsumed.toLocaleString()} cr
+                              {usage.creditsConsumed.toLocaleString()} cr
                             </p>
                           </div>
                           <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-3/60">
@@ -863,9 +863,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                       Average translation cost
                     </p>
                     <p className="text-base font-bold mt-1 text-ink">
-                      {report?.averageTranslationCostPerMinute !== undefined &&
-                      report?.averageTranslationCostPerMinute !== null
-                        ? `${report.averageTranslationCostPerMinute} cr / minute`
+                      {report?.averageTranslationCostPer100Chars !== undefined &&
+                      report?.averageTranslationCostPer100Chars !== null
+                        ? `${report.averageTranslationCostPer100Chars} cr / 100 chars`
                         : "--"}
                     </p>
                   </div>
@@ -918,11 +918,11 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                         <SelectItem value="top_up" className="text-xs">
                           Top-Up
                         </SelectItem>
-                        <SelectItem value="consumption" className="text-xs">
+                        <SelectItem value="consume" className="text-xs">
                           Consumption
                         </SelectItem>
-                        <SelectItem value="reserve" className="text-xs">
-                          Reserve
+                        <SelectItem value="adjustment" className="text-xs">
+                          Adjustment
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -1078,9 +1078,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                             </TableCell>
                             <TableCell className="py-3">
                               <div className="flex items-center gap-2 text-xs">
-                                {tx.type === "reserve" ? (
-                                  <Spinner className="h-3.5 w-3.5 text-amber-500 animate-spin" />
-                                ) : tx.amount > 0 ? (
+                                {/* There is no "reserve" transaction type on the billing
+                                    service; the spinner branch could never be reached. */}
+                                {tx.amount > 0 ? (
                                   <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
                                 ) : (
                                   <ArrowDownRight className="h-3.5 w-3.5 text-rose-500" />
@@ -1114,7 +1114,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                               {tx.balanceAfter.toLocaleString()} cr
                             </TableCell>
                             <TableCell className="text-right text-xs pr-5 py-3">
-                              {(isGrouped || tx.type === "consumption") && (
+                              {(isGrouped || tx.type === "consume") && (
                                 <button
                                   onClick={() =>
                                     setSelectedTxGroup(

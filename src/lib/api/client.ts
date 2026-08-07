@@ -5,6 +5,7 @@ import {
   chooseNewestAccessToken,
   isAccessTokenExpiring,
 } from "@/lib/api/token-lifecycle";
+import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 
 /**
  * Client-side Axios instance with token interceptors.
@@ -69,19 +70,42 @@ function getRefreshToken(): string | null {
     ?? useAuthStore.getState().refreshToken;
 }
 
-function persistTokens(accessToken: string, refreshToken: string) {
+function persistTokens(accessToken: string, refreshToken: string, expiresAt?: string) {
   useAuthStore.getState().setTokens(accessToken, refreshToken);
-
-  if (typeof document !== "undefined") {
-    document.cookie = `access_token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-  }
+  // A refresh issues a brand new 30-minute token. Re-stamping the cookie with a hardcoded
+  // seven days here is how a session that had been refreshed once still ended up holding a
+  // week-long cookie around a half-hour token.
+  setAccessTokenCookie(accessToken, expiresAt);
 }
 
+/**
+ * Endpoints that must never have an Authorization header attached, and must never be
+ * blocked by the dead-session latch — they are how a user gets *out* of a dead session.
+ *
+ * Matched against whole path segments rather than by substring. The previous
+ * `url.includes("/auth/login")` check silently failed to match "/auth/google-login"
+ * (the substring is "-login", not "/login"), and never mentioned forgot-password,
+ * reset-password or verify-email at all. The consequence was not cosmetic: once
+ * `endDeadSession()` had latched, the request interceptor threw `SessionEndedError` for
+ * every one of these, so a user with an expired session could not sign in with Google
+ * and could not reset their password.
+ */
+const UNAUTHENTICATED_AUTH_ENDPOINTS = [
+  "/auth/login",
+  "/auth/google-login",
+  "/auth/register",
+  "/auth/register-invited",
+  "/auth/refresh",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/verify-email",
+];
+
 function isAuthEndpoint(url?: string) {
-  return Boolean(
-    url?.includes("/auth/login")
-    || url?.includes("/auth/refresh")
-    || url?.includes("/auth/register"),
+  if (!url) return false;
+  const path = url.split("?")[0].replace(/\/+$/, "");
+  return UNAUTHENTICATED_AUTH_ENDPOINTS.some(
+    (endpoint) => path === endpoint || path.endsWith(endpoint),
   );
 }
 
@@ -113,6 +137,29 @@ function isFormDataLike(value: unknown): value is Record<string | symbol, unknow
 // ─── Request interceptor: attach access token ───
 let refreshPromise: Promise<string> | null = null;
 
+/**
+ * Thrown when there is nothing left to refresh with. It is a dead session just as much as a
+ * server-rejected refresh token is — the difference is that no request ever leaves the
+ * browser, so no response interceptor sees a 4xx to react to.
+ */
+class MissingRefreshTokenError extends Error {
+  constructor() {
+    super("No refresh token");
+    this.name = "MissingRefreshTokenError";
+  }
+}
+
+/**
+ * Thrown instead of sending a request that is already known to be pointless because the
+ * session has been declared dead and the redirect to /login is in flight.
+ */
+export class SessionEndedError extends Error {
+  constructor() {
+    super("Session ended");
+    this.name = "SessionEndedError";
+  }
+}
+
 async function requestNewAccessToken(failedAccessToken?: string | null): Promise<string> {
   const refreshInsideLock = async () => {
     const latestAccessToken = getAccessToken();
@@ -134,7 +181,7 @@ async function requestNewAccessToken(failedAccessToken?: string | null): Promise
 
     const refreshToken = getRefreshToken();
     if (!refreshToken) {
-      throw new Error("No refresh token");
+      throw new MissingRefreshTokenError();
     }
 
     const { data } = await axios.post<AuthResponse>(
@@ -142,7 +189,7 @@ async function requestNewAccessToken(failedAccessToken?: string | null): Promise
       { refreshToken },
     );
 
-    persistTokens(data.accessToken, data.refreshToken);
+    persistTokens(data.accessToken, data.refreshToken, data.expiresAt);
     return data.accessToken;
   };
 
@@ -189,12 +236,52 @@ function isRefreshRejectedByServer(error: unknown): boolean {
 }
 
 /**
+ * True when the refresh could not even be attempted because no refresh token is left.
+ * Nothing will ever make that request succeed, so it must not be retried.
+ */
+function isMissingRefreshToken(error: unknown): boolean {
+  return error instanceof MissingRefreshTokenError;
+}
+
+let sessionEnded = false;
+
+/**
+ * Whether the session has already been declared dead. Callers use this to stop issuing work
+ * that can only 401 — a dashboard mounts dozens of queries, several of them on a 3s poll, and
+ * every one of them would otherwise keep hitting the gateway until the navigation commits.
+ */
+export function isSessionEnded(): boolean {
+  return sessionEnded;
+}
+
+// A new access token means the session is alive again, so the latch has to lift.
+//
+// Signing in does not reload the page — the login page navigates with router.replace() — and
+// endDeadSession() deliberately skips the redirect when the user is already on /login. Without
+// this, a 401 noticed while sitting on the login screen would latch the client shut and the
+// next successful login would be unable to send a single request.
+useAuthStore.subscribe((state, previousState) => {
+  if (state.accessToken && state.accessToken !== previousState.accessToken) {
+    sessionEnded = false;
+  }
+});
+
+/**
  * Drop the dead session and send the user to sign in again.
  *
  * The pathname guard matters: without it, a failing request on /login itself would
  * reassign window.location to /login over and over.
+ *
+ * The `sessionEnded` latch matters just as much: a dashboard fails N requests concurrently,
+ * and each one used to reassign window.location independently. One dead session is one
+ * logout and one redirect, however many requests noticed it.
  */
-function endDeadSession() {
+export function endDeadSession() {
+  if (sessionEnded) {
+    return;
+  }
+  sessionEnded = true;
+
   useAuthStore.getState().logout();
   if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
     window.location.href = "/login";
@@ -203,6 +290,13 @@ function endDeadSession() {
 
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   if (!isAuthEndpoint(config.url)) {
+    // Once the session is dead the redirect is already under way, but a full-page navigation
+    // is not instant and nothing unmounts the React tree in the meantime. Failing here keeps
+    // the pollers and refetches off the wire instead of letting them 401 in a loop.
+    if (isSessionEnded()) {
+      throw new SessionEndedError();
+    }
+
     let token: string | null = null;
     try {
       token = await getUsableAccessToken();
@@ -211,7 +305,10 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
       // interceptor below — which is why a rejected refresh token used to leave the app
       // running with isAuthenticated: true in localStorage, retrying forever and never
       // reaching a login screen. Whoever notices the session is dead has to end it.
-      if (isRefreshRejectedByServer(error)) {
+      //
+      // A missing refresh token counts too: it produces a plain Error rather than an
+      // AxiosError, so it used to slip past the 4xx check and leave the session alive.
+      if (isRefreshRejectedByServer(error) || isMissingRefreshToken(error)) {
         endDeadSession();
       }
       throw error;
@@ -282,6 +379,14 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // A 401 with nothing to refresh from is terminal. Going through refreshAccessToken() here
+    // would throw a non-Axios error that the 4xx check below cannot recognise, which is how an
+    // expired session ended up spinning forever instead of landing on /login.
+    if (!getRefreshToken()) {
+      endDeadSession();
+      return Promise.reject(error);
+    }
+
     originalRequest._retry = true;
 
     try {
@@ -293,9 +398,10 @@ apiClient.interceptors.response.use(
       originalRequest.headers.Authorization = `Bearer ${accessToken}`;
       return apiClient(originalRequest);
     } catch (refreshError) {
-      // Only log out if the server explicitly rejected the refresh token.
+      // Only log out if the server explicitly rejected the refresh token, or if the refresh
+      // token vanished between the check above and the refresh itself.
       // Do not log out on network errors or 5xx server errors.
-      if (isRefreshRejectedByServer(refreshError)) {
+      if (isRefreshRejectedByServer(refreshError) || isMissingRefreshToken(refreshError)) {
         endDeadSession();
       }
       return Promise.reject(refreshError);

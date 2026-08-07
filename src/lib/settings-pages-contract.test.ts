@@ -18,7 +18,7 @@ test("workspace settings use queued auto-save and commit numeric values on blur 
   assert.doesNotMatch(source, /Save Settings/);
 });
 
-test("personal preferences match the backend room-type contract and auto-save controls", () => {
+test("personal preferences match the backend room-type contract, auto-save controls, and error retry state", () => {
   const source = page(
     "../app/(app)/[workspaceSlug]/settings/account/preferences/page.tsx",
   );
@@ -28,6 +28,8 @@ test("personal preferences match the backend room-type contract and auto-save co
   assert.match(source, /value=\"instant\"/);
   assert.match(source, /value=\"scheduled\"/);
   assert.match(source, /commitNumericField/);
+  assert.match(source, /refetch/);
+  assert.match(source, /Retry/);
   assert.match(source, /if \(!parsedInput\.ok\) return;/);
   assert.match(source, /if \(lastQueuedValuesRef\.current\[String\(field\)\] === serializedValue\) return;/);
   assert.doesNotMatch(source, /value=\"webrtc\"/);

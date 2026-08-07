@@ -49,10 +49,25 @@ const checks = [
       chatPanel.includes("API.meetings.chatDownload(roomId, file.id)"),
   ],
   [
-    "WT-228 ending for everyone opens the ended room transcript",
-    meetingSession.includes("buildTranscriptReviewPath(") &&
+    // Was pinned to buildTranscriptReviewPath, i.e. /{slug}/transcript?room={id} — the
+    // workspace-wide transcript archive filtered by room. This check therefore pinned the bug:
+    // rooms/[id]/ended (artifact cards with a 5s refresh while they generate, plus the
+    // artifacts/feedback/history links) was fully built and had no route into it from anywhere in
+    // the app. buildTranscriptReviewPath had exactly one caller, this one, and is replaced.
+    // What WT-228 actually cares about — that ending for everyone lands the host on the ended
+    // room's own wrap-up rather than back on the rooms list — is what is pinned now.
+    "WT-228 ending for everyone opens the ended room's wrap-up page",
+    meetingSession.includes("buildMeetingEndedPath(") &&
       meetingSession.includes('action === "end"') &&
-      meetingSession.includes("? buildTranscriptReviewPath(activeWorkspaceSlug, roomId)"),
+      meetingSession.includes("? buildMeetingEndedPath(activeWorkspaceSlug, roomId)"),
+  ],
+  [
+    // The other half of the same navigation: TranslationRoomEnded router.replace'd EVERY client
+    // in the group to the rooms list, the host who had just pressed End included, so the
+    // broadcast raced handleExit's push and could win.
+    "WT-228 the client that ended the room is not redirected by its own broadcast",
+    meetingSession.includes("endedByMeRef.current = true") &&
+      meetingSession.includes("if (endedByMeRef.current) return;"),
   ],
   [
     "WT-228 transcript review exposes editing and finalization actions",

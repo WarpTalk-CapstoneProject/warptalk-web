@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LiveKitRoom, useRoomContext } from "@livekit/components-react";
+import {
+  LiveKitRoom,
+  useRoomContext,
+  useTrackToggle,
+} from "@livekit/components-react";
 import "@livekit/components-styles";
-import { RoomEvent } from "livekit-client";
+import { ConnectionState, RoomEvent, Track } from "livekit-client";
 import { HubConnectionState } from "@microsoft/signalr";
 import {
   ArrowsOut,
@@ -44,7 +48,7 @@ import { mergeParticipants } from "@/lib/merge-participants";
 import { roomOccupancy } from "@/lib/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
-import { buildTranscriptReviewPath } from "@/lib/meeting-navigation";
+import { buildMeetingEndedPath } from "@/lib/meeting-navigation";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   AiSuggestionDto,
@@ -83,6 +87,13 @@ import {
   resolveListenLanguage,
   resolveSpeakLanguage,
 } from "@/lib/participant-language-preference";
+import {
+  MINI_MEETING_IDLE_WARNING_MS,
+  evaluateIdleMeeting,
+  isIdleReaped,
+  isRestoredMeetingStale,
+  shouldConnectMeeting,
+} from "@/lib/meeting-session-lifecycle";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import {
   MeetingSidePanel,
@@ -110,6 +121,18 @@ function getJoinLink(code: string) {
   return `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
 }
 
+/** Coarse on purpose — this only has to be finer than the warning window. */
+const MINI_MEETING_IDLE_POLL_MS = 5 * 1000;
+
+/**
+ * The only way anything outside <LiveKitRoom> may change what this participant publishes.
+ * Published by <LocalMediaController>; null whenever the provider tree is not mounted.
+ */
+type LocalMediaControl = {
+  setMicrophoneEnabled: (enabled: boolean) => void;
+  setCameraEnabled: (enabled: boolean) => void;
+};
+
 export function PersistentMeetingSession({
   roomId,
   compact,
@@ -129,10 +152,30 @@ export function PersistentMeetingSession({
   const user = useAuthStore((state) => state.user);
   const [meetingSession, setMeetingSession] =
     useState<JoinMeetingResponseDto | null>(null);
+  // Declared up here only because the participants poll below has to see it. The reaper that
+  // sets it, and the reasoning behind its 15-minute budget, live next to `canConnectMeeting`.
+  const [idleDisconnected, setIdleDisconnected] = useState(false);
+  // Seeded to 0 rather than Date.now(): a clock read during render is impure, and the reaper
+  // effect stamps it the moment it starts watching anyway.
+  const lastInteractionRef = useRef(0);
+  const idleWarningShownRef = useRef(false);
+  const markMeetingInteraction = useCallback(() => {
+    lastInteractionRef.current = Date.now();
+    idleWarningShownRef.current = false;
+  }, []);
+  const meetingIsIdleReaped = isIdleReaped({ compact, idleDisconnected });
+
   const roomQuery = useTranslationRoom(roomId);
+  // The LiveKit disconnect is only half of what an abandoned tab costs. This query polls every
+  // 3s — 20 requests a minute against a gateway that rate-limits an IP at 100/min and answers
+  // rejections with a bodyless 503 that reads exactly like an outage. An idle-reaped session
+  // therefore stops asking too; letting it keep polling would swap a billing leak for a
+  // request leak.
   const participantsQuery = useTranslationRoomParticipants(
     roomId,
-    meetingSession !== null && !meetingSession.isWaitingRoom,
+    meetingSession !== null &&
+      !meetingSession.isWaitingRoom &&
+      !meetingIsIdleReaped,
   );
   const refetchParticipants = participantsQuery.refetch;
   const startRoom = useStartTranslationRoom();
@@ -145,14 +188,21 @@ export function PersistentMeetingSession({
     useJoinMeeting();
 
   const meetingJoinedRef = useRef(false);
-  const localStreamRef = useRef<MediaStream | null>(null);
+  // Set by handleExit("end") so this client ignores its own TranslationRoomEnded broadcast and
+  // keeps the navigation it chose (the room's ended page) instead of being replaced onto the
+  // rooms list. A ref, not state: the broadcast handler is installed once per connection and
+  // must read the current value, not the one closed over at subscribe time.
+  const endedByMeRef = useRef(false);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  // Imperative handle onto the LiveKit local participant, published by <LocalMediaController>
+  // (a child of <LiveKitRoom>, because this component RENDERS the provider and so cannot read
+  // it). Anything that must actually change what is being published — the host's ForceMuted
+  // broadcast, for instance — goes through here rather than through React state.
+  const localMediaControlRef = useRef<LocalMediaControl | null>(null);
 
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [localMediaError, setLocalMediaError] = useState<string | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [meetingLayout, setMeetingLayout] = useState<MeetingLayoutMode>("auto");
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
@@ -182,6 +232,18 @@ export function PersistentMeetingSession({
   // Fail closed until the browser has loaded preferences for this exact room. This
   // prevents LiveKit from briefly publishing tracks with SSR/default `true` values.
   const [mediaPreferencesHydrated, setMediaPreferencesHydrated] = useState(false);
+  // WT-303: these are NOT a second switch for the camera and microphone. Before LiveKit is
+  // connected they are the connect-time INTENT that feeds <LiveKitRoom video/audio> (seeded
+  // from readMeetingMediaPreferences, still fail-closed). From SignalConnected onwards they
+  // are a MIRROR of localParticipant.isCameraEnabled/isMicrophoneEnabled, written only by
+  // <LocalMediaController> below.
+  //
+  // They used to be the thing the mini window's buttons wrote, which is why those buttons
+  // changed an icon and nothing else: @livekit/components-react@2.9.21 reads the audio/video
+  // props exclusively inside its RoomEvent.SignalConnected handler (see useLiveKitRoom.ts in
+  // the shipped sourcemap), so a prop change after connect publishes nothing. Every user-facing
+  // toggle now goes through localParticipant — <TrackToggle> in the full bar, useTrackToggle in
+  // the mini bar — and these values follow it.
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] =
@@ -404,6 +466,105 @@ export function PersistentMeetingSession({
     room?.status !== "cancelled" &&
     room?.status !== "expired" &&
     room?.status !== "failed";
+
+  // WT-306 + billing: the mini window's idle reaper.
+  //
+  // A minimised session used to hold LiveKit open for as long as the tab existed, because
+  // `connect` was `Boolean(token)` and a token, once issued, never goes away. LiveKit Cloud
+  // bills connection-minutes by wall-clock presence, and the AI ingress bot counts a connected
+  // human before it will idle-release itself, so one forgotten tab kept billing two or more
+  // participants overnight and defeated the bot's own idle release.
+  //
+  // The budget itself lives in @/lib/meeting-session-lifecycle, next to the reasoning for it.
+  // A warning toast a minute out offers a one-click reprieve, so the disconnect is never silent
+  // to a person who is actually present.
+  //
+  // It only ever runs while `compact` is true. The full-size view is untouched — see the reset
+  // effect on `compact` below.
+  //
+  // Reaping releases the LiveKit connection AND the 3s participants poll (see the query near
+  // the top). It deliberately leaves the two SignalR hubs up: they are one long-lived socket
+  // each rather than a poll, tearing them down would wipe the live transcript store via
+  // resetLiveRoom(), and the translation hub is what delivers TranslationRoomEnded — the signal
+  // that retires this session altogether.
+
+  // Returning to the full meeting surface is itself an unambiguous "I am here": clear the idle
+  // disconnect so <LiveKitRoom> reconnects, and never reap while the meeting owns the screen.
+  useEffect(() => {
+    if (compact) return;
+    markMeetingInteraction();
+    queueMicrotask(() => setIdleDisconnected(false));
+  }, [compact, markMeetingInteraction]);
+
+  useEffect(() => {
+    if (!compact || idleDisconnected) return;
+
+    markMeetingInteraction();
+
+    const events: Array<keyof WindowEventMap> = [
+      "pointerdown",
+      "pointermove",
+      "keydown",
+      "wheel",
+      "focus",
+    ];
+    for (const event of events) {
+      window.addEventListener(event, markMeetingInteraction, { passive: true });
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") markMeetingInteraction();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const tick = window.setInterval(() => {
+      const action = evaluateIdleMeeting({
+        now: Date.now(),
+        lastInteractionAt: lastInteractionRef.current,
+        alreadyWarned: idleWarningShownRef.current,
+      });
+      if (action === "disconnect") {
+        setIdleDisconnected(true);
+        toast.info("Meeting disconnected after 15 minutes minimised.", {
+          description: "Reopen the meeting to rejoin.",
+        });
+        return;
+      }
+      if (action === "warn") {
+        idleWarningShownRef.current = true;
+        toast.warning("Still in the meeting?", {
+          description:
+            "The minimised meeting will disconnect in a minute to stop using your minutes.",
+          duration: MINI_MEETING_IDLE_WARNING_MS,
+          action: {
+            label: "Stay connected",
+            onClick: markMeetingInteraction,
+          },
+        });
+      }
+    }, MINI_MEETING_IDLE_POLL_MS);
+
+    return () => {
+      window.clearInterval(tick);
+      for (const event of events) {
+        window.removeEventListener(event, markMeetingInteraction);
+      }
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [compact, idleDisconnected, markMeetingInteraction]);
+
+  // WT-306: `activeRoomId` now survives a reload, so it can name a room that has since ended,
+  // been cancelled, or that this account can no longer read. A restored id must not mount a
+  // mini window onto a dead room — retire the session instead.
+  const meetingRoomIsGone = isRestoredMeetingStale({
+    compact,
+    roomLoadFailed: roomQuery.isError,
+    hasRoom: Boolean(roomQuery.data),
+    canConnectRoom: canConnectMeeting,
+  });
+  useEffect(() => {
+    if (!meetingRoomIsGone) return;
+    onMeetingClosed();
+  }, [meetingRoomIsGone, onMeetingClosed]);
 
   const displayName =
     savedJoinConfig.displayName ||
@@ -957,9 +1118,34 @@ export function PersistentMeetingSession({
     });
     connection.on("TranslationRoomEnded", () => {
       void refetchRoom();
+      // The client that pressed "End meeting" is inside handleExit, on its way to the room's
+      // ended page. This broadcast goes to the whole group INCLUDING that client, so without
+      // this guard the replace() below raced handleExit's push() and could land the host back
+      // on the rooms list — exactly the last screen of the demo, decided by whichever
+      // navigation happened to resolve second.
+      if (endedByMeRef.current) return;
       toast.info("This meeting has ended.");
       onMeetingClosed();
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+    });
+
+    // The host's Approve in the People panel is a REST call (PATCH .../participants/{id}/admit)
+    // that flipped the row and invalidated the HOST's participants query — nothing reached the
+    // admitted user at all. Their own participantsQuery is deliberately disabled while
+    // isWaitingRoom, and their roomQuery has no refetchInterval, so they sat on the "Waiting for
+    // Host" spinner until they happened to press Refresh Status. It only looked like it worked
+    // because a subsequent Start Translation fires TranslationRoomStarted, which re-joins them;
+    // admit-without-a-later-start left them stuck.
+    //
+    // TranslationRoomParticipantService now publishes ParticipantAdmitted on the same Redis
+    // channel RoomEnded/RoomStarted use, and the Gateway relays it to the room group. Every
+    // waiting client is already in that group (JoinTranslationRoom runs regardless of waiting
+    // state), so the admitted one re-runs its join here without touching anything.
+    connection.on("ParticipantAdmitted", (admittedUserId: string) => {
+      if (!user?.id || admittedUserId !== user.id) return;
+      void refetchRoom().then(() => {
+        retryMeetingConnectionRef.current();
+      });
     });
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
@@ -990,6 +1176,9 @@ export function PersistentMeetingSession({
       setIsRoomLocked(locked);
     });
     connection.on("ForceMuted", () => {
+      // Must reach the published track, not just React state — state is a mirror now, and a
+      // "host muted you" that only repainted an icon was the same lie WT-303 reports.
+      localMediaControlRef.current?.setMicrophoneEnabled(false);
       setMicrophoneEnabled(false);
       toast.error("You were muted by the host.");
     });
@@ -1275,61 +1464,11 @@ export function PersistentMeetingSession({
     };
   }, [roomId, addChatMessage]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function startLocalMedia() {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setLocalMediaError(
-          "This browser does not support camera and microphone access.",
-        );
-        return;
-      }
-
-      localStreamRef.current?.getTracks().forEach((track) => track.stop());
-      localStreamRef.current = null;
-      setLocalStream(null);
-
-      if (!cameraEnabled && !microphoneEnabled) {
-        setLocalMediaError(null);
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: cameraEnabled ? true : false,
-          // LiveKitRoom owns the only microphone capture. This stream is used only
-          // for the fallback camera preview; opening the mic here as well made two
-          // browser DSP pipelines compete for the same physical input.
-          audio: false,
-        });
-
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        localStreamRef.current = stream;
-        setLocalStream(stream);
-        setLocalMediaError(null);
-      } catch (error) {
-        if (cancelled) return;
-        setLocalMediaError(
-          error instanceof Error
-            ? error.message
-            : "Unable to access camera or microphone.",
-        );
-      }
-    }
-
-    void startLocalMedia();
-
-    return () => {
-      cancelled = true;
-      localStreamRef.current?.getTracks().forEach((track) => track.stop());
-      localStreamRef.current = null;
-    };
-  }, [cameraEnabled, microphoneEnabled]);
+  // A second camera capture lived here, opened straight off navigator.mediaDevices in parallel
+  // with LiveKit's own. It fed `localStream`, which fed a <video ref={localVideoRef}> in
+  // meeting-stage that had already been deleted — so it lit the camera LED, held a second
+  // capture of the same device, and rendered nothing. Removed rather than reconnected:
+  // LiveKit's camera publication is the picture, and it is the only capture that should exist.
 
   async function copyText(value: string, label: string) {
     if (!value) return;
@@ -1340,6 +1479,11 @@ export function PersistentMeetingSession({
   async function handleExit(action: "leave" | "end") {
     try {
       if (action === "end") {
+        // Claim the end BEFORE the mutation: TranslationRoomService publishes RoomEnded to
+        // Redis inside EndTranslationRoomAsync, so the TranslationRoomEnded broadcast can reach
+        // this same client before `await endRoom.mutateAsync` even resolves. Setting the flag
+        // afterwards would lose the race the flag exists to settle.
+        endedByMeRef.current = true;
         if (room?.status !== "ended" && room?.status !== "cancelled") {
           await endRoom.mutateAsync(roomId);
         }
@@ -1353,10 +1497,13 @@ export function PersistentMeetingSession({
       onMeetingClosed();
       router.push(
         action === "end"
-          ? buildTranscriptReviewPath(activeWorkspaceSlug, roomId)
+          ? buildMeetingEndedPath(activeWorkspaceSlug, roomId)
           : `/${activeWorkspaceSlug || "workspace"}/rooms`,
       );
     } catch (error) {
+      // The end never landed, so this client is not the one that ended the room after all —
+      // let a later TranslationRoomEnded broadcast redirect it like any other participant.
+      endedByMeRef.current = false;
       toast.error(
         error instanceof Error ? error.message : "Could not leave the room.",
       );
@@ -1567,6 +1714,20 @@ export function PersistentMeetingSession({
     );
   }
 
+  // A token, once issued, is never withdrawn, so `Boolean(token)` alone made `connect` true
+  // forever — that is what kept a minimised tab publishing to LiveKit (and kept the AI ingress
+  // bot counting a human) until the browser was closed. Presence is now conditional on the room
+  // still being joinable — canConnectMeeting, the same gate the initial join uses, so a
+  // persisted-but-ended room can never reconnect — and on the minimised session not having been
+  // idle-reaped. Flipping this to false makes useLiveKitRoom run room.disconnect()
+  // ("disconnecting because connect is false"); flipping it back reconnects and re-applies the
+  // audio/video props via SignalConnected.
+  const shouldConnectLiveKit = shouldConnectMeeting({
+    hasToken: Boolean(meetingSession?.token),
+    canConnectRoom: canConnectMeeting,
+    idleReaped: meetingIsIdleReaped,
+  });
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-ink font-sans selection:bg-surface-3">
       <LiveKitRoom
@@ -1589,13 +1750,19 @@ export function PersistentMeetingSession({
             ? window.location.hostname
             : "localhost",
         )}
-        connect={Boolean(meetingSession?.token)}
+        connect={shouldConnectLiveKit}
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
         <LiveKitReconnectWatcher
           onReconnecting={() => setIsLiveKitReconnecting(true)}
           onReconnected={() => setIsLiveKitReconnecting(false)}
+        />
+
+        <LocalMediaController
+          controlRef={localMediaControlRef}
+          onCameraEnabledChange={setCameraEnabled}
+          onMicrophoneEnabledChange={setMicrophoneEnabled}
         />
 
         <FilteredRoomAudio
@@ -1634,8 +1801,6 @@ export function PersistentMeetingSession({
               fallbackName={user?.fullName || user?.email || room.title}
               isJoining={isMeetingJoining}
               error={meetingError}
-              localStream={localStream}
-              localMediaError={localMediaError}
               screenStream={screenStream}
               // WT-246 asks to still see everyone while minimised. "auto" gives one large tile
               // with the rest as thumbnails, which at this size leaves the others unreadable —
@@ -1686,31 +1851,55 @@ export function PersistentMeetingSession({
               </div>
             ) : null}
 
+            {idleDisconnected ? (
+              <div
+                data-mini-meeting-idle
+                className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-black/80 px-5 text-center text-white"
+              >
+                <p className="text-[13px] font-semibold">Meeting disconnected</p>
+                <p className="max-w-60 text-[11px] leading-relaxed text-white/70">
+                  This minimised meeting was idle for 15 minutes, so it stopped
+                  using your meeting minutes.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    markMeetingInteraction();
+                    setIdleDisconnected(false);
+                  }}
+                  className="mt-1 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-900 transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                >
+                  Rejoin meeting
+                </button>
+              </div>
+            ) : null}
+
+            {/*
+              WT-303: these used to be plain setState buttons feeding <LiveKitRoom audio/video>,
+              props that v2.9.21 only ever reads inside its SignalConnected handler — so the
+              icon flipped and the track kept publishing. They now drive localParticipant
+              through useTrackToggle, the identical mechanism <TrackToggle> gives the full-size
+              bar, which is also why the two no longer disagree when the mini window is expanded.
+            */}
             <div className="absolute inset-x-0 bottom-0 z-40 flex items-end justify-center gap-2 bg-gradient-to-t from-black/75 to-transparent px-3 pb-3 pt-8">
-              <button
-                type="button"
-                aria-label={microphoneEnabled ? "Turn off microphone" : "Turn on microphone"}
-                onClick={() => setMicrophoneEnabled((current) => !current)}
-                className={`grid size-9 place-items-center rounded-full text-white shadow-sm backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${microphoneEnabled ? "bg-black/55 hover:bg-black/75" : "bg-red-600 hover:bg-red-700"}`}
-              >
-                {microphoneEnabled ? (
-                  <Microphone className="size-[18px]" weight="fill" />
-                ) : (
+              <MiniTrackToggle
+                source={Track.Source.Microphone}
+                enabledLabel="Turn off microphone"
+                disabledLabel="Turn on microphone"
+                enabledIcon={<Microphone className="size-[18px]" weight="fill" />}
+                disabledIcon={
                   <MicrophoneSlash className="size-[18px]" weight="bold" />
-                )}
-              </button>
-              <button
-                type="button"
-                aria-label={cameraEnabled ? "Turn off camera" : "Turn on camera"}
-                onClick={() => setCameraEnabled((current) => !current)}
-                className={`grid size-9 place-items-center rounded-full text-white shadow-sm backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${cameraEnabled ? "bg-black/55 hover:bg-black/75" : "bg-red-600 hover:bg-red-700"}`}
-              >
-                {cameraEnabled ? (
-                  <VideoCamera className="size-[18px]" weight="fill" />
-                ) : (
+                }
+              />
+              <MiniTrackToggle
+                source={Track.Source.Camera}
+                enabledLabel="Turn off camera"
+                disabledLabel="Turn on camera"
+                enabledIcon={<VideoCamera className="size-[18px]" weight="fill" />}
+                disabledIcon={
                   <VideoCameraSlash className="size-[18px]" weight="bold" />
-                )}
-              </button>
+                }
+              />
             </div>
           </div>
         ) : (
@@ -1741,8 +1930,6 @@ export function PersistentMeetingSession({
                   fallbackName={user?.fullName || user?.email || room.title}
                   isJoining={isMeetingJoining}
                   error={meetingError}
-                  localStream={localStream}
-                  localMediaError={localMediaError}
                   screenStream={screenStream}
                   layoutMode={meetingLayout}
                   pinnedUserId={pinnedUserId}
@@ -1930,6 +2117,114 @@ function LiveKitReconnectWatcher({
   }, [room, onReconnecting, onReconnected]);
 
   return null;
+}
+
+/**
+ * WT-303: the single place where "am I publishing my camera/microphone?" is answered.
+ *
+ * `localParticipant` is the truth. This component (a) hands the parent an imperative handle so
+ * non-UI events like the host's ForceMuted can change what is actually published, and (b)
+ * mirrors LiveKit's own state back into the parent's React state, so nothing downstream has to
+ * keep a competing copy.
+ *
+ * Same reason LiveKitReconnectWatcher exists: PersistentMeetingSession RENDERS <LiveKitRoom>,
+ * so it cannot call useRoomContext() itself.
+ *
+ * The mirror runs only while CONNECTED. On disconnect livekit reports the local participant as
+ * having nothing enabled, and copying that back would rewrite the parent's state to
+ * camera/mic-off — which is also the connect-time intent fed to <LiveKitRoom audio/video>, so
+ * an idle disconnect would silently come back muted. Ignoring the disconnected window keeps the
+ * last known live state as the intent for the next connect.
+ */
+function LocalMediaController({
+  controlRef,
+  onCameraEnabledChange,
+  onMicrophoneEnabledChange,
+}: {
+  controlRef: React.RefObject<LocalMediaControl | null>;
+  onCameraEnabledChange: (enabled: boolean) => void;
+  onMicrophoneEnabledChange: (enabled: boolean) => void;
+}) {
+  const room = useRoomContext();
+
+  useEffect(() => {
+    const localParticipant = room.localParticipant;
+
+    controlRef.current = {
+      setMicrophoneEnabled: (enabled) => {
+        void localParticipant.setMicrophoneEnabled(enabled).catch(() => {
+          toast.error("Could not change your microphone.");
+        });
+      },
+      setCameraEnabled: (enabled) => {
+        void localParticipant.setCameraEnabled(enabled).catch(() => {
+          toast.error("Could not change your camera.");
+        });
+      },
+    };
+
+    const mirror = () => {
+      if (room.state !== ConnectionState.Connected) return;
+      onMicrophoneEnabledChange(localParticipant.isMicrophoneEnabled);
+      onCameraEnabledChange(localParticipant.isCameraEnabled);
+    };
+
+    mirror();
+    room
+      .on(RoomEvent.Connected, mirror)
+      .on(RoomEvent.LocalTrackPublished, mirror)
+      .on(RoomEvent.LocalTrackUnpublished, mirror)
+      .on(RoomEvent.TrackMuted, mirror)
+      .on(RoomEvent.TrackUnmuted, mirror);
+
+    return () => {
+      room
+        .off(RoomEvent.Connected, mirror)
+        .off(RoomEvent.LocalTrackPublished, mirror)
+        .off(RoomEvent.LocalTrackUnpublished, mirror)
+        .off(RoomEvent.TrackMuted, mirror)
+        .off(RoomEvent.TrackUnmuted, mirror);
+      controlRef.current = null;
+    };
+  }, [room, controlRef, onCameraEnabledChange, onMicrophoneEnabledChange]);
+
+  return null;
+}
+
+/**
+ * The mini window's mic/camera button. Reads and writes the LiveKit publication via
+ * useTrackToggle — the same hook that backs <TrackToggle> in the full-size control bar — so
+ * `enabled` is the published state and never a React guess about it.
+ */
+function MiniTrackToggle({
+  source,
+  enabledLabel,
+  disabledLabel,
+  enabledIcon,
+  disabledIcon,
+}: {
+  source: Track.Source.Microphone | Track.Source.Camera;
+  enabledLabel: string;
+  disabledLabel: string;
+  enabledIcon: React.ReactNode;
+  disabledIcon: React.ReactNode;
+}) {
+  const { enabled, pending, toggle } = useTrackToggle({ source });
+
+  return (
+    <button
+      type="button"
+      data-mini-media-toggle={source}
+      data-lk-enabled={enabled}
+      aria-pressed={enabled}
+      aria-label={enabled ? enabledLabel : disabledLabel}
+      disabled={pending}
+      onClick={() => void toggle()}
+      className={`grid size-9 place-items-center rounded-full text-white shadow-sm backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-60 ${enabled ? "bg-black/55 hover:bg-black/75" : "bg-red-600 hover:bg-red-700"}`}
+    >
+      {enabled ? enabledIcon : disabledIcon}
+    </button>
+  );
 }
 
 function normalizeLanguageCode(language: string) {

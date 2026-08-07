@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  PRESENCE_LABELS,
   SEAT_HOLDING_STATUSES,
   holdsSeat,
   isInLobby,
+  participantPresence,
   roomOccupancy,
 } from "./room-occupancy.ts";
 
@@ -96,4 +99,95 @@ test("capacity and fullness degrade safely on missing numbers", () => {
     participants: [{ status: "connected" }, { status: "connected" }],
   });
   assert.equal(full.isFull, true);
+});
+
+// ── WT-308: a participant's row label ─────────────────────────────────────────
+
+test("WT-308: a CONNECTED host reads as present, never as Left", () => {
+  // The exact production report: host creates a meeting, opens it, opens the People tab.
+  // The backend seeds that host row CONNECTED at room creation, so this is the status the
+  // panel is handed the first time it ever renders the host.
+  assert.equal(participantPresence("connected"), "connected");
+  assert.equal(PRESENCE_LABELS[participantPresence("connected")], "Connected");
+  assert.notEqual(PRESENCE_LABELS[participantPresence("connected")], "Left");
+
+  // Uppercase is what the backend actually stores; the client lowercases on normalize, but
+  // presence must not depend on that having happened.
+  assert.equal(participantPresence("CONNECTED"), "connected");
+
+  // Once LiveKit sees them, the live signal wins.
+  assert.equal(participantPresence("connected", { isInRoom: true }), "in-room");
+});
+
+test("WT-308: only the genuinely terminal statuses read as Left", () => {
+  for (const status of ["left", "kicked", "removed", "rejected"]) {
+    assert.equal(participantPresence(status), "left", `${status} is terminal`);
+  }
+
+  // Everything else must not claim the person departed — including statuses this module
+  // has never heard of. The bug was a bare `else` arm that did exactly that.
+  for (const status of [
+    "connected",
+    "joined",
+    "waiting",
+    "invited",
+    "disconnected",
+    "some_status_added_later",
+    "",
+    undefined,
+    null,
+  ]) {
+    assert.notEqual(
+      participantPresence(status),
+      "left",
+      `${status} must not read as Left`,
+    );
+  }
+
+  assert.equal(participantPresence("some_status_added_later"), "not-in-room");
+});
+
+test("WT-308: presence covers the participant_status enum exhaustively", () => {
+  // The Postgres enum, verbatim. `joined` is not in it but still arrives on older payloads.
+  assert.deepEqual(
+    ["invited", "waiting", "connected", "disconnected", "left", "kicked", "rejected"].map(
+      (status) => participantPresence(status),
+    ),
+    ["not-in-room", "lobby", "connected", "disconnected", "left", "left", "left"],
+  );
+
+  assert.equal(participantPresence("joined"), "connected");
+  assert.equal(participantPresence("waiting"), "lobby");
+  assert.equal(PRESENCE_LABELS[participantPresence("waiting")], "Waiting in Lobby");
+});
+
+test("WT-308: the People panel derives presence from this module, not its own chain", () => {
+  const panel = readFileSync(
+    new URL(
+      "../components/rooms/live/side-panel/people-panel.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(panel, /participantPresence\(/);
+  assert.match(panel, /from "@\/lib\/room-occupancy"/);
+
+  // The regression guard. The old chain ended in a bare `else` that rendered the literal
+  // string "Left", which is what a CONNECTED host hit. No surface may spell that label
+  // itself again — it comes from PRESENCE_LABELS or it does not appear.
+  assert.doesNotMatch(
+    panel,
+    />\s*Left\s*</,
+    'people-panel must not hard-code a "Left" badge; route it through PRESENCE_LABELS',
+  );
+  // `disconnected` and `invited` are presence, and nothing but the badge ever asked about
+  // them — so their absence is a precise signal that the inline chain is gone. (A remaining
+  // `status === "waiting"` is deliberate and NOT presence: it gates the host's Approve /
+  // Reject controls, which is an action, not a label.)
+  assert.doesNotMatch(
+    panel,
+    /participant\.status === "(invited|disconnected)"/,
+    "people-panel must not re-derive presence with an inline status chain",
+  );
 });

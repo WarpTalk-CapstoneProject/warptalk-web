@@ -60,10 +60,15 @@ assert.equal(
   1,
   "published LiveKit microphone must request voice isolation",
 );
-assert.match(
+// Was: assert that the room page's own getUserMedia() preview passed `audio: false`, so it
+// could not fight LiveKit for the microphone. That preview is gone — it fed a <video> element
+// meeting-stage had already dropped, so it opened a second capture of the camera (LED on) and
+// rendered nothing. The rule it encoded is now absolute rather than conditional: <LiveKitRoom>
+// owns the only capture of either device on this surface.
+assert.doesNotMatch(
   roomPage,
-  /getUserMedia\(\{[\s\S]*?video:\s*cameraEnabled\s*\?\s*true\s*:\s*false,[\s\S]*?audio:\s*false,/,
-  "the camera preview must not open a second competing microphone capture",
+  /getUserMedia\(/,
+  "the live meeting surface must not open a capture that competes with LiveKit's own",
 );
 assert.match(
   hook,

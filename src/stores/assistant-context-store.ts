@@ -5,6 +5,13 @@ interface AssistantContextState {
   pageContext: AssistantPageContextDto | null;
   setPageContext: (context: AssistantPageContextDto | null) => void;
   clearPageContext: (pageType: string) => void;
+  /**
+   * Unconditional counterpart to `clearPageContext`, for the one caller that is not a page
+   * unmounting: a change of signed-in account. Whatever page the previous account was on,
+   * its context must not be what the assistant answers the next account's first question
+   * from.
+   */
+  clearAllContext: () => void;
 }
 
 export const useAssistantContextStore = create<AssistantContextState>((set, get) => ({
@@ -15,4 +22,5 @@ export const useAssistantContextStore = create<AssistantContextState>((set, get)
   clearPageContext: (pageType) => {
     if (get().pageContext?.pageType === pageType) set({ pageContext: null });
   },
+  clearAllContext: () => set({ pageContext: null }),
 }));

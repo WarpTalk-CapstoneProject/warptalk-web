@@ -1,5 +1,7 @@
 import * as signalR from "@microsoft/signalr";
 import { useAuthStore } from "@/stores/auth-store";
+import { endDeadSession, isSessionEnded } from "@/lib/api/client";
+import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
@@ -31,10 +33,22 @@ async function refreshAccessToken() {
     body: JSON.stringify({ refreshToken }),
   })
     .then(async (response) => {
-      if (!response.ok) return accessToken;
-      const data = (await response.json()) as { accessToken: string; refreshToken: string };
+      if (!response.ok) {
+        // A 4xx means the refresh token itself was rejected. Handing the stale token back
+        // would let the hub keep re-negotiating against a session that is already gone.
+        if (response.status >= 400 && response.status < 500) {
+          endDeadSession();
+          return null;
+        }
+        return accessToken;
+      }
+      const data = (await response.json()) as {
+        accessToken: string;
+        refreshToken: string;
+        expiresAt?: string;
+      };
       useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
-      document.cookie = `access_token=${data.accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+      setAccessTokenCookie(data.accessToken, data.expiresAt);
       return data.accessToken;
     })
     .catch(() => accessToken)
@@ -44,6 +58,35 @@ async function refreshAccessToken() {
 
   return refreshPromise;
 }
+
+const RECONNECT_DELAYS_MS = [0, 2000, 5000, 10000, 30000];
+
+/** True when a hub failure was the gateway refusing the token rather than a transport blip. */
+export function isUnauthorizedHubError(error: unknown): boolean {
+  if (!error) return false;
+
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  if (statusCode === 401 || statusCode === 403) return true;
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /Status code '(401|403)'/.test(message);
+}
+
+/**
+ * Reconnect through transport blips, but never through a rejected token.
+ *
+ * `withAutomaticReconnect` treats every failure as transient, so a 401 negotiation used to be
+ * re-attempted on a fixed schedule for as long as the tab stayed open — one dead session per
+ * tab, hammering the gateway's rate limiter alongside the REST retries.
+ */
+const reconnectPolicy: signalR.IRetryPolicy = {
+  nextRetryDelayInMilliseconds(retryContext) {
+    if (isSessionEnded() || isUnauthorizedHubError(retryContext.retryReason)) {
+      return null;
+    }
+    return RECONNECT_DELAYS_MS[retryContext.previousRetryCount] ?? null;
+  },
+};
 
 /**
  * Create a SignalR hub connection with JWT auth via query string.
@@ -67,7 +110,7 @@ export function createHubConnection(
       transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.LongPolling,
       accessTokenFactory: async () => (await refreshAccessToken()) ?? "",
     })
-    .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+    .withAutomaticReconnect(reconnectPolicy)
     .configureLogging(signalR.LogLevel.None)
     .build();
 

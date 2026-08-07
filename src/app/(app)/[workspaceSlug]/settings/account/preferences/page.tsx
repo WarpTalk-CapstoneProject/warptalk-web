@@ -49,7 +49,7 @@ export default function PersonalPreferencesPage() {
   const lastQueuedValuesRef = useRef<Record<string, string>>({});
 
   // Load preferences from Auth Service API
-  const { data: settingsData, isLoading, error } = useQuery({
+  const { data: settingsData, isLoading, error, refetch } = useQuery({
     queryKey: ["personal-settings"],
     queryFn: async () => {
       const res = await authService.getSettings();
@@ -126,9 +126,16 @@ export default function PersonalPreferencesPage() {
   if (error) {
     return (
       <div className="flex h-[80vh] items-center justify-center text-center bg-canvas text-ink">
-        <div className="max-w-md border border-hairline bg-surface-1 p-6 rounded-lg shadow-sm">
+        <div className="max-w-md border border-hairline bg-surface-1 p-6 rounded-lg shadow-sm flex flex-col items-center gap-3">
           <p className="text-sm font-semibold text-destructive">Failed to load personal settings.</p>
-          <p className="text-xs text-ink-muted mt-1">Please make sure the backend services are running.</p>
+          <p className="text-xs text-ink-muted">Please make sure the backend services are running.</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-2 px-4 py-1.5 text-xs font-medium text-white bg-primary hover:bg-primary/90 rounded-md transition-colors cursor-pointer"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );

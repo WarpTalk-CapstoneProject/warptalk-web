@@ -28,6 +28,76 @@ export const LOBBY_STATUSES = ["waiting"] as const;
 /** The least a record has to carry for the seat rule to apply to it. */
 export type ParticipantLike = { status?: string | null };
 
+/**
+ * WT-308 — how one participant's row reads on a roster, derived once.
+ *
+ * The People panel used to decide this inline as an if/else chain over
+ * `invited → waiting → disconnected`, with a bare `else` that rendered "Left". CONNECTED —
+ * the status the backend seeds the HOST's own row with at room creation
+ * (TranslationRoomService.CreateTranslationRoomAsync) and the status every admitted
+ * participant holds — had no branch of its own, so it fell into that `else`. A host who had
+ * just opened their own meeting read as "Left" on the People tab.
+ *
+ * The lesson from WT-274 applies to the label as much as it did to the count: an if/else
+ * chain whose final arm names a specific terminal state is a chain that mislabels every
+ * status nobody thought to add. So this is exhaustive over the participant_status enum
+ * (INVITED · WAITING · CONNECTED · DISCONNECTED · LEFT · KICKED · REJECTED), and its fallback
+ * is the neutral "not in room" — never "left". Claiming somebody departed is a claim; when
+ * the status is unrecognised we do not have the standing to make it.
+ */
+export type ParticipantPresence =
+  /** Live in the media session right now — the strongest signal, and it outranks status. */
+  | "in-room"
+  /** Holds a seat per the ratified rule, but no live media track has been seen yet. */
+  | "connected"
+  /** Present, awaiting the host's admission. */
+  | "lobby"
+  /** Has a row but has never arrived — invited, or an unrecognised status. */
+  | "not-in-room"
+  /** Was admitted and lost the connection. Recoverable; distinct from leaving. */
+  | "disconnected"
+  /** Terminal: LEFT / KICKED / REJECTED (the client renders KICKED as `removed`). */
+  | "left";
+
+const PRESENCE_BY_STATUS: Record<string, ParticipantPresence> = {
+  connected: "connected",
+  // Not in the Postgres enum, but older payloads and `TranslationRoomParticipantDto` still
+  // carry it. Treated as CONNECTED rather than falling through — the whole point of this bug.
+  joined: "connected",
+  waiting: "lobby",
+  invited: "not-in-room",
+  disconnected: "disconnected",
+  left: "left",
+  kicked: "left",
+  removed: "left",
+  rejected: "left",
+};
+
+/**
+ * Resolve how a participant's row should read.
+ *
+ * `isInRoom` is live media presence (a LiveKit identity match) and deliberately outranks the
+ * stored status: the database row is written on join/leave transitions, while media presence
+ * is observed continuously, so when they disagree the live signal is the fresher one.
+ */
+export function participantPresence(
+  status?: string | null,
+  options?: { isInRoom?: boolean },
+): ParticipantPresence {
+  if (options?.isInRoom) return "in-room";
+  return PRESENCE_BY_STATUS[normalizeStatus(status)] ?? "not-in-room";
+}
+
+/** The one wording of each presence. Surfaces render this, they do not invent their own. */
+export const PRESENCE_LABELS: Record<ParticipantPresence, string> = {
+  "in-room": "In Room",
+  connected: "Connected",
+  lobby: "Waiting in Lobby",
+  "not-in-room": "Not in room",
+  disconnected: "Disconnected",
+  left: "Left",
+};
+
 function normalizeStatus(status?: string | null): string {
   return typeof status === "string" ? status.trim().toLowerCase() : "";
 }
