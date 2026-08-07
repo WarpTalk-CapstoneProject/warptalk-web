@@ -1,21 +1,16 @@
 import { translationRoomService } from "@/services/translationRoom.service";
-import { calculateMeetingDurationSeconds } from "@/lib/meeting-duration";
+import {
+  resolveArtifactStatus,
+  resolveHistoryStatus,
+  resolveMeetingDurationSeconds,
+  resolveRetention,
+} from "@/lib/room-history-mapping";
 import type { EndedRoomHistoryItem, RoomArtifactStatus, RoomHistoryResponse, TranslationRoomSummaryArtifact } from "@/types/roomHistory";
 import type { TranslationRoomArtifactDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
 import { parseMeetingSummaryContent } from "@/types/meetingSummary";
 
-function normalizeArtifactStatus(status: string): RoomArtifactStatus {
-  const normalized = status.toLowerCase();
-  if (["ready", "processing", "expired", "missing", "failed", "deleted"].includes(normalized)) {
-    return normalized as RoomArtifactStatus;
-  }
-  // Backend TranslationRoomArtifact.Status is set from ArtifactStatus/"COMPLETED" (see
-  // ArtifactMapper.ToEntity), never "active" or "ready" directly — without this mapping
-  // every finished artifact fell into the `processing` fallback below and never showed as
-  // ready, leaving downloads (and the AI summary) stuck looking like they never finished.
-  if (normalized === "active" || normalized === "completed") return "ready";
-  return "processing";
-}
+/** Server clamps `pageSize` to 1..100 (TranslationRoomService.GetTranslationRoomHistoryAsync). */
+export const ROOM_HISTORY_PAGE_SIZE = 20;
 
 function normalizeArtifactType(type: string): EndedRoomHistoryItem["artifacts"][number]["type"] {
   const normalized = type.toLowerCase();
@@ -39,7 +34,7 @@ function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHistoryItem
     type,
     title: artifact.title,
     description: artifact.fileUrl ? "Generated room artifact." : "Artifact metadata is available, but no file is linked yet.",
-    status: normalizeArtifactStatus(artifact.status),
+    status: resolveArtifactStatus(artifact.status),
     format: artifact.fileFormat?.toUpperCase(),
     fileUrl: artifact.fileUrl,
     fileSizeBytes: artifact.fileSizeBytes,
@@ -78,7 +73,6 @@ function buildSummaryArtifact(
 function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryItem {
   const room = item.room;
   const artifacts = item.artifacts.map(mapArtifact);
-  const firstExpiry = artifacts.find((artifact) => artifact.expiresAt)?.expiresAt;
   const summaryArtifact = artifacts.find((artifact) => artifact.type === "summary_export");
   const summary = buildSummaryArtifact(room.id, summaryArtifact);
 
@@ -90,13 +84,18 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
     title: room.title,
     description: room.description,
     translationRoomCode: room.translationRoomCode,
-    status: room.status === "cancelled" ? "cancelled" : "ended",
+    // `room.status` is already lower-cased by translationRoom.service's `normalizeStatus`,
+    // but this surface must not depend on that invisibly: the wire value is UPPERCASE and
+    // a bare `=== "cancelled"` here is one refactor away from silently filing every
+    // cancelled meeting under Completed. Fold explicitly.
+    status: resolveHistoryStatus(room.status),
     startedAt: room.startedAt ?? room.createdAt,
     endedAt: room.endedAt ?? room.startedAt ?? room.createdAt,
-    durationSeconds: calculateMeetingDurationSeconds(
-      room.createdAt,
-      room.endedAt ?? room.createdAt,
-    ),
+    durationSeconds: resolveMeetingDurationSeconds({
+      durationSeconds: room.durationSeconds,
+      startedAt: room.startedAt,
+      endedAt: room.endedAt,
+    }),
     sourceLanguage: room.sourceLanguage ?? "en",
     targetLanguages: room.targetLanguages,
     participants: item.participants.map((participant) => ({
@@ -111,13 +110,7 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
     participantCount: room.participantCount ?? item.participants.length,
     summary,
     artifacts,
-    retention: {
-      policyName: "Workspace retention",
-      expiresAt: firstExpiry ?? room.endedAt ?? room.createdAt,
-      transcriptRetentionDays: 30,
-      recordingRetentionDays: 7,
-      deleteAfterExpiry: true,
-    },
+    retention: resolveRetention(artifacts),
     consent: {
       recording: artifacts.some((artifact) => artifact.consentRequired) ? "granted" : "not_required",
       transcript: "not_required",
@@ -127,26 +120,51 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
 }
 
 export const roomHistoryService = {
+  /**
+   * One PAGE of finished rooms, plus the server's own `total`.
+   *
+   * This used to ask for `pageSize: 100` (the server clamps there anyway) and throw away
+   * `total`/`page`/`pageSize`, so a workspace with 300 meetings rendered "100 results" and
+   * the other 200 meetings were unreachable — including by `?room=<id>` deep link.
+   */
   async listEndedRooms(options: {
     workspaceId: string;
     state?: "ready" | "empty" | "permission_denied" | "error";
     artifactStatus?: RoomArtifactStatus;
+    /** 1-based. */
+    page?: number;
+    pageSize?: number;
+    /** Server-side status filter; omit for both ENDED and CANCELLED. */
+    status?: "ended" | "cancelled";
+    /** Server-side search over the whole archive, not just the loaded page. */
+    search?: string;
   }): Promise<RoomHistoryResponse> {
+    const page = options.page && options.page > 0 ? Math.floor(options.page) : 1;
+    const pageSize = options.pageSize ?? ROOM_HISTORY_PAGE_SIZE;
+
     if (options?.state && options.state !== "ready") {
-      return { rooms: [] };
+      return { rooms: [], total: 0, page, pageSize };
     }
 
     const { data } = await translationRoomService.history({
       workspaceId: options.workspaceId,
-      status: "ENDED,CANCELLED",
-      pageSize: 100,
+      status: options.status ? options.status.toUpperCase() : "ENDED,CANCELLED",
+      search: options.search?.trim() || undefined,
+      page,
+      pageSize,
     });
     const rooms = data.rooms.map(mapHistoryItem);
 
+    // `artifactStatus` is a client-side refinement of the page the server returned, so it
+    // cannot be reflected in `total` — the pager reports the server's count, which is the
+    // honest number for the current server-side filters.
     return {
       rooms: options?.artifactStatus
         ? rooms.filter((room) => room.artifacts.some((artifact) => artifact.status === options.artifactStatus))
         : rooms,
+      total: data.total ?? rooms.length,
+      page: data.page ?? page,
+      pageSize: data.pageSize ?? pageSize,
     };
   },
 };

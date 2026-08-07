@@ -16,6 +16,7 @@ import {
   useAcceptWorkspaceInvitation,
   usePreviewWorkspaceInvitation,
 } from "@/hooks/use-workspace";
+import { wireStatusIs } from "@/lib/wire-status";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
@@ -114,7 +115,11 @@ export default function InvitationAcceptPage({ params }: PageProps) {
   }
 
   const isExpired = new Date(previewData.expiresAt) < new Date();
-  const isAccepted = previewData.status === "Accepted";
+  // The wire value is `InvitationStatus.ACCEPTED.ToString()` — i.e. "ACCEPTED", because the
+  // backend enum is serialised by JsonStringEnumConverter with no naming policy. The old
+  // `=== "Accepted"` could never match, so an invitation that had already been accepted
+  // still rendered an enabled Accept button. Same bug class as the room/artifact statuses.
+  const isAccepted = wireStatusIs(previewData.status, "ACCEPTED");
   const canAccept = !isExpired && !isAccepted;
 
   return (

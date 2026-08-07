@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   Archive,
   ArrowRight,
+  CaretLeft,
+  CaretRight,
   CheckCircle,
   CheckSquare,
   ChatCircleText,
@@ -33,7 +35,15 @@ import {
 } from "@/lib/transcript-display";
 import { loadSavedTranscript } from "@/lib/transcript-history";
 import { formatLanguageRoute as formatRoute } from "@/lib/languages";
+import {
+  formatMeetingDuration,
+  parsePageParam,
+  resolveSummaryState,
+  totalPages as computeTotalPages,
+  type SummaryState,
+} from "@/lib/room-history-mapping";
 import { cn } from "@/lib/utils";
+import { ROOM_HISTORY_PAGE_SIZE } from "@/services/roomHistory.service";
 import { translationRoomService } from "@/services/translationRoom.service";
 import { openArtifactDownload, saveBlobDownload } from "@/lib/download-artifact";
 import { transcriptService } from "@/services/transcript.service";
@@ -67,7 +77,8 @@ const transcriptFilters: Array<{ value: TranscriptFilter; label: string }> = [
   { value: "attention", label: "Needs attention" },
 ];
 
-export default function TranscriptsPage() {
+function TranscriptsWorkspaceView() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedRoomId = searchParams.get("room");
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
@@ -76,12 +87,31 @@ export default function TranscriptsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("transcript");
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
-  const history = useRoomHistory(activeWorkspaceId);
 
-  const items = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return (history.data?.rooms ?? [])
-      .map((room): QueueItem => {
+  // Paging lives in the URL so a deep link keeps working, and the query is served from the
+  // server page rather than a fixed 100-row window that put older meetings out of reach.
+  const page = parsePageParam(searchParams.get("page"));
+  const history = useRoomHistory(activeWorkspaceId, {
+    page,
+    pageSize: ROOM_HISTORY_PAGE_SIZE,
+  });
+
+  const updateParams = (next: Record<string, string | undefined>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(next)) {
+      if (value === undefined || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const queryString = params.toString();
+    router.replace(queryString ? `?${queryString}` : "?");
+  };
+
+  const total = history.data?.total ?? 0;
+  const totalPages = computeTotalPages(total, history.data?.pageSize ?? ROOM_HISTORY_PAGE_SIZE);
+
+  const pageItems = useMemo(
+    () =>
+      (history.data?.rooms ?? []).map((room): QueueItem => {
         const transcriptArtifact = room.artifacts.find(
           (artifact) => artifact.type === "transcript_export",
         );
@@ -90,30 +120,47 @@ export default function TranscriptsPage() {
           transcriptArtifact,
           status: transcriptArtifact?.status ?? "missing",
         };
-      })
-      .filter((item) => {
-        const needsAttention =
-          ["failed", "expired"].includes(item.status) ||
-          item.room.artifacts.some((artifact) => artifact.consentRequired);
-        const matchesFilter =
-          filter === "all" ||
-          item.status === filter ||
-          (filter === "attention" && needsAttention);
-        const matchesQuery =
-          !normalized ||
-          [
-            item.room.title,
-            item.room.translationRoomCode,
-            item.room.hostName,
-          ].some((value) => value.toLowerCase().includes(normalized));
-        return matchesFilter && matchesQuery;
-      });
-  }, [filter, history.data?.rooms, query]);
+      }),
+    [history.data?.rooms],
+  );
+
+  const items = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return pageItems.filter((item) => {
+      const needsAttention =
+        ["failed", "expired"].includes(item.status) ||
+        item.room.artifacts.some((artifact) => artifact.consentRequired);
+      const matchesFilter =
+        filter === "all" ||
+        item.status === filter ||
+        (filter === "attention" && needsAttention);
+      const matchesQuery =
+        !normalized ||
+        [
+          item.room.title,
+          item.room.translationRoomCode,
+          item.room.hostName,
+        ].some((value) => value.toLowerCase().includes(normalized));
+      return matchesFilter && matchesQuery;
+    });
+  }, [filter, pageItems, query]);
+
+  /**
+   * A `?room=<id>` deep link used to fall through to `items[0]` when the meeting was not in
+   * the loaded window — so the link silently showed you a DIFFERENT meeting's transcript.
+   * Now an unreachable link is reported as unreachable.
+   */
+  const deepLinkTarget = requestedRoomId
+    ? items.find((item) => item.room.id === requestedRoomId)
+    : undefined;
+  const deepLinkUnreachable = Boolean(
+    requestedRoomId && !deepLinkTarget && !history.isPending && !history.isError,
+  );
 
   const selected =
     items.find((item) => item.room.id === selectedId) ??
-    items.find((item) => item.room.id === requestedRoomId) ??
-    items[0];
+    deepLinkTarget ??
+    (deepLinkUnreachable ? undefined : items[0]);
 
   const transcriptQuery = useQuery({
     queryKey: ["room-transcript", selected?.room.id],
@@ -207,18 +254,40 @@ export default function TranscriptsPage() {
             </button>
             <button
               className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-              title={`${items.length} results`}
+              title={`${total} meetings in the archive`}
             >
               <SlidersHorizontal weight="bold" size={13} />
             </button>
           </div>
         </div>
 
+        {deepLinkUnreachable ? (
+          <div
+            className="flex shrink-0 items-start gap-2 border-t border-border bg-surface-2/50 px-4 py-2.5 text-[11px] text-ink-muted"
+            data-testid="deep-link-unreachable"
+            role="status"
+          >
+            <WarningCircle size={14} className="mt-0.5 shrink-0 text-amber-500" />
+            <span className="flex-1">
+              The meeting this link points to is not on page {page} of the archive. It may be
+              on another page, or you may no longer have access to it.
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 rounded px-2 text-[10px] shadow-none"
+              onClick={() => updateParams({ room: undefined })}
+            >
+              Show this page instead
+            </Button>
+          </div>
+        ) : null}
+
         <section
           className="min-h-0 flex-1 overflow-hidden border-t border-border bg-surface-1"
           aria-label="Transcript review queue"
         >
-          {history.isLoading ? (
+          {history.isPending ? (
             <LoadingState />
           ) : history.isError ? (
             <ErrorState onRetry={() => history.refetch()} />
@@ -226,16 +295,19 @@ export default function TranscriptsPage() {
             <EmptyState hasQuery={Boolean(query)} />
           ) : (
             <div className="grid h-full min-h-0 lg:grid-cols-[360px_minmax(0,1fr)]">
-              <div className="min-h-0 overflow-y-auto border-b border-border lg:border-b-0 lg:border-r">
-                <div className="flex h-10 items-center justify-between border-b border-border bg-surface-2/45 px-4">
+              <div className="flex min-h-0 flex-col overflow-hidden border-b border-border lg:border-b-0 lg:border-r">
+                <div className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-surface-2/45 px-4">
                   <span className="text-[10px] font-medium text-ink-subtle">
                     TRANSCRIPT QUEUE
                   </span>
-                  <span className="text-[10px] tabular-nums text-ink-subtle">
-                    {items.length}
+                  <span
+                    className="text-[10px] tabular-nums text-ink-subtle"
+                    data-testid="transcripts-total"
+                  >
+                    {items.length} of {total}
                   </span>
                 </div>
-                <div className="divide-y divide-border">
+                <div className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
                   {items.map((item) => (
                     <QueueRow
                       key={item.room.id}
@@ -245,6 +317,36 @@ export default function TranscriptsPage() {
                     />
                   ))}
                 </div>
+                {totalPages > 1 ? (
+                  <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-2">
+                    <span
+                      className="text-[10px] text-ink-subtle"
+                      data-testid="transcripts-pager-label"
+                    >
+                      Page {page} of {totalPages}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 rounded px-2 text-[10px] shadow-none"
+                        disabled={page <= 1}
+                        onClick={() => updateParams({ page: String(page - 1) })}
+                      >
+                        <CaretLeft size={11} /> Prev
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 rounded px-2 text-[10px] shadow-none"
+                        disabled={page >= totalPages}
+                        onClick={() => updateParams({ page: String(page + 1) })}
+                      >
+                        Next <CaretRight size={11} />
+                      </Button>
+                    </span>
+                  </div>
+                ) : null}
               </div>
               {selected ? (
                 <TranscriptWorkspace
@@ -261,6 +363,14 @@ export default function TranscriptsPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function TranscriptsPage() {
+  return (
+    <Suspense fallback={<main className="flex h-full flex-col bg-surface-1" />}>
+      <TranscriptsWorkspaceView />
+    </Suspense>
   );
 }
 
@@ -454,7 +564,7 @@ function TranscriptWorkspace({
             <ContextRow
               icon={Clock}
               label="Duration"
-              value={formatDuration(room.durationSeconds)}
+              value={formatMeetingDuration(room.durationSeconds)}
             />
             <ContextRow
               icon={Translate}
@@ -748,7 +858,24 @@ function SummaryPanel({
     (summary.summary || summary.decisions.length || summary.actionItems.length),
   );
   const recentlyEnded = useRecentlyEnded(room.endedAt);
-  const isGenerating = !artifact && recentlyEnded;
+
+  /**
+   * Four states, kept distinct.
+   *
+   * The old flag was `isGenerating = !artifact && recentlyEnded`: purely a 10-minute clock
+   * off `endedAt`, and false the instant an artifact existed REGARDLESS of its status. That
+   * produced two contradictions on this exact panel — a still-`processing` summary rendered
+   * "This meeting ended without a summary artifact" directly above its own Download button,
+   * and once the clock ran out the same sentence appeared for a summary that had landed.
+   * The clock is now only a tiebreaker for a genuinely ABSENT artifact.
+   */
+  const state: SummaryState = resolveSummaryState({
+    artifactStatus: artifact?.status,
+    hasStructuredContent,
+    insufficientData: summary?.insufficientData,
+    recentlyEnded,
+  });
+  const emptyStateCopy = SUMMARY_EMPTY_COPY[state === "ready" ? "empty" : state];
 
   async function copyAsText() {
     if (!summary) return;
@@ -802,7 +929,11 @@ function SummaryPanel({
       </div>
 
       {hasStructuredContent && summary ? (
-        <div className="flex-1 space-y-6 p-6">
+        <div
+          className="flex-1 space-y-6 p-6"
+          data-testid="summary-state"
+          data-summary-state={state}
+        >
           <section>
             <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
               Overview
@@ -865,32 +996,36 @@ function SummaryPanel({
           </section>
         </div>
       ) : (
-        <div className="flex flex-1 items-center justify-center p-8 text-center">
+        <div
+          className="flex flex-1 items-center justify-center p-8 text-center"
+          data-testid="summary-state"
+          data-summary-state={state}
+        >
           <div className="max-w-[360px]">
-            {isGenerating ? (
+            {state === "generating" ? (
               <SpinnerGap
                 size={28}
                 className="mx-auto animate-spin text-ink-muted"
               />
+            ) : state === "failed" ? (
+              <WarningCircle size={28} className="mx-auto text-amber-500" />
             ) : (
               <ChatCircleText size={28} className="mx-auto text-ink-muted" />
             )}
             <h3 className="mt-4 text-[15px] font-semibold">
-              {isGenerating ? "Generating summary…" : "No summary output"}
+              {emptyStateCopy.title}
             </h3>
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
-              {isGenerating
-                ? "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute."
-                : summary?.insufficientData
-                  ? "There wasn't enough transcript content in this meeting to generate a summary."
-                  : "This meeting ended without a summary artifact."}
+              {state === "empty" && summary?.insufficientData
+                ? "There wasn't enough transcript content in this meeting to generate a summary."
+                : emptyStateCopy.body}
             </p>
           </div>
         </div>
       )}
 
       {artifact ? (
-        <div className="border-t border-border p-4">
+        <div className="flex items-center gap-3 border-t border-border p-4">
           <Button
             size="sm"
             variant={ready ? "default" : "outline"}
@@ -905,11 +1040,40 @@ function SummaryPanel({
             )}{" "}
             Download summary file
           </Button>
+          {/* The button used to sit under "ended without a summary artifact" with no
+              explanation of why it was greyed out. Say which state the file is in. */}
+          {!ready ? (
+            <span className="text-[10px] text-ink-subtle">
+              {state === "generating"
+                ? "The file appears here once generation finishes."
+                : `Summary file is ${artifact.status}.`}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
+
+/**
+ * One sentence per state. These were previously one sentence for THREE states, which is how
+ * a processing summary and a resolved-but-empty one both ended up claiming the meeting
+ * "ended without a summary artifact".
+ */
+const SUMMARY_EMPTY_COPY: Record<Exclude<SummaryState, "ready">, { title: string; body: string }> = {
+  generating: {
+    title: "Generating summary…",
+    body: "WarpTalk's AI assistant is analyzing the transcript. This page refreshes itself when the summary lands — no need to reload.",
+  },
+  failed: {
+    title: "Summary could not be produced",
+    body: "The summary job for this meeting did not complete. The transcript, if one was captured, is still available on the Transcript tab.",
+  },
+  empty: {
+    title: "No summary output",
+    body: "This meeting ended without a summary artifact.",
+  },
+};
 
 function ArtifactsPanel({
   artifacts,
@@ -1136,14 +1300,6 @@ function artifactStatusLabel(artifact: RoomHistoryArtifact) {
   return artifact.consentRequired
     ? "Consent required"
     : artifact.status.charAt(0).toUpperCase() + artifact.status.slice(1);
-}
-
-function formatDuration(seconds: number) {
-  if (!seconds) return "—";
-  const minutes = Math.floor(seconds / 60);
-  return minutes >= 60
-    ? `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-    : `${minutes}m`;
 }
 
 function formatDate(value: string) {
