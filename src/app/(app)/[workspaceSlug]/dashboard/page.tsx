@@ -45,8 +45,11 @@ export default function WorkspaceAdminDashboardPage() {
     1,
     100
   );
+  // Same reason as the Meetings list: without workspaceId the server cannot widen this to a
+  // workspace Owner/Admin, and the Meetings tile read 0 for an Admin while the Owner saw 3.
   const { data: roomsData, isLoading: isLoadingRooms } = useTranslationRooms({
     pageSize: 100,
+    workspaceId: activeWorkspaceId ?? undefined,
   });
 
   // Query workspace credit balance
