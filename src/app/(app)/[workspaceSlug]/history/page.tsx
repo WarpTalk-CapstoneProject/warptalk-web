@@ -64,18 +64,23 @@ export default function HistoryPage() {
 
   const selected = rooms.find((room) => room.id === selectedId) ?? rooms[0];
 
-  useRegisterAssistantContext({
-    pageType: "history",
-    entityId: selected?.id,
-    workspaceId: selected?.workspaceId,
-    snapshot: selected
+  // Null until a meeting is actually selected — the other four call sites already guard this
+  // way. Registering "history" with no entityId made the widget offer /summarize (autoSend)
+  // for a meeting that does not exist, and rendered the chip as "History History".
+  useRegisterAssistantContext(
+    selected
       ? {
-          title: selected.title,
-          status: selected.status,
-          participantCount: String(selected.participantCount),
+          pageType: "history",
+          entityId: selected.id,
+          workspaceId: selected.workspaceId,
+          snapshot: {
+            title: selected.title,
+            status: selected.status,
+            participantCount: String(selected.participantCount),
+          },
         }
-      : undefined,
-  });
+      : null,
+  );
 
   async function downloadArtifact(artifact: RoomHistoryArtifact) {
     if (artifact.status !== "ready") {
