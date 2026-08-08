@@ -22,6 +22,7 @@ export function MeetingSidePanel({
   participantsError,
   activeCount,
   segments,
+  missedCount,
   onCopyText,
   joinLink,
   chatTargetLanguage,
@@ -39,6 +40,8 @@ export function MeetingSidePanel({
   participantsError: boolean;
   activeCount: number;
   segments: TranscriptSegmentDto[];
+  /** Lines already spoken when this person joined; passed through to the transcript. */
+  missedCount?: number;
   onCopyText: (value: string, label: string) => void;
   joinLink: string;
   /** Viewer's own listen language — passed to ChatPanel for on-click translation. */
@@ -90,7 +93,7 @@ export function MeetingSidePanel({
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
           {mode === "transcript" ? (
-            <TranscriptPanel segments={segments} roomId={roomId} baseTime={room.startedAt} />
+            <TranscriptPanel segments={segments} roomId={roomId} baseTime={room.startedAt} missedCount={missedCount} />
           ) : null}
           {mode === "chat" ? (
             <ChatPanel roomId={roomId} targetLanguage={chatTargetLanguage} />

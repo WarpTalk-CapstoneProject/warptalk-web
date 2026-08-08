@@ -115,6 +115,8 @@ import {
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/livekit-error";
+import { buildCatchUpTranscript } from "@/lib/transcript-catch-up";
+import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 
 function getJoinLink(code: string) {
   if (typeof window === "undefined") return code;
@@ -458,7 +460,21 @@ export function PersistentMeetingSession({
   // "Stop Translation" only halts new live captions (LiveSubtitleOverlay below); it must
   // NOT wipe what was already transcribed. Segments stay in the store until the room is
   // left.
-  const panelSegments = liveSegments;
+  // What someone who joined late missed, in front of what they can hear for themselves.
+  //
+  // `transcriptSegments` only ever holds what arrived over SignalR since THIS browser
+  // connected, so joining twenty minutes in showed an empty panel with nothing to indicate
+  // that twenty minutes had happened. The segments were never lost — TranscriptService has
+  // them and the room detail page already reads them — they were simply never handed to the
+  // live panel. Merged on segment id, since the two sources key the same utterance
+  // differently and merging on the wrong one duplicates every overlapping line.
+  const savedTranscriptQuery = useTranscriptByRoom(roomId);
+  const savedSegmentsQuery = useTranscriptSegments(savedTranscriptQuery.data?.id);
+  const catchUp = useMemo(
+    () => buildCatchUpTranscript(savedSegmentsQuery.data?.items ?? [], liveSegments),
+    [savedSegmentsQuery.data, liveSegments],
+  );
+  const panelSegments = catchUp.segments;
 
   const canConnectMeeting =
     Boolean(room) &&
@@ -2063,6 +2079,7 @@ export function PersistentMeetingSession({
               participantsError={participantsQuery.isError}
               activeCount={activeCount}
               segments={panelSegments}
+              missedCount={catchUp.missedCount}
               onCopyText={copyText}
               joinLink={joinLink}
               chatTargetLanguage={targetLanguage}
