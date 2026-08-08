@@ -542,7 +542,11 @@ function RoomEntryButton({
       disabled={!intent.isActionable || pending}
       onClick={onActivate}
     >
-      {isStart ? <Play className="size-4" /> : null}
+      {/* Filled. This is a lucide icon, which strokes an outline and leaves the interior
+          transparent — a hollow triangle on a solid primary button reads as disabled, and at
+          16px the outline is most of what is left of the shape. `fill="currentColor"` rather
+          than a literal white, so it keeps following the `!text-white` above it. */}
+      {isStart ? <Play fill="currentColor" className="size-4" /> : null}
       {pending ? "Starting..." : intent.label}
       {isStart ? null : <ArrowRight className="size-4" />}
     </Button>

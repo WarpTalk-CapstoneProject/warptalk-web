@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { getErrorStatus } from "@/lib/api/retry-policy";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
@@ -120,13 +121,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const addWorkspaceTab = useWorkspaceTabsStore((state) => state.addTab);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const logout = useAuthStore((state) => state.logout);
   const activeMeetingRoomId = useActiveMeetingStore(
     (state) => state.activeRoomId,
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
   const [mounted, setMounted] = useState(false);
   
-  const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
+  // `isError` and `refetch` were not read. The gate below spun on `!activeWorkspaceId`, and a
+  // failed workspaces query leaves that null forever — so any failure here painted a spinner
+  // with no message, no retry and no way out, indistinguishable from a slow network. It is the
+  // first request the shell makes, so it is also the one most likely to meet a cold gateway.
+  const {
+    data: workspacesData,
+    isLoading: workspacesLoading,
+    isError: workspacesFailed,
+    error: workspacesError,
+    refetch: refetchWorkspaces,
+  } = useWorkspaces(1, 100);
   const selectWorkspace = useSelectWorkspace();
 
   const roomId = (() => {
@@ -211,6 +223,42 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (isOnboardingRoute) {
     return <>{children}</>;
+  }
+
+  // Checked before the spinner, because a failure and a slow load are the same picture and
+  // only one of them ends. Retry rather than reload: the session is fine, one request was not.
+  if (!isAdminRoute && workspacesFailed) {
+    return (
+      <div className="flex h-dvh w-screen items-center justify-center bg-canvas p-6">
+        <div className="max-w-sm space-y-4 text-center">
+          <h1 className="text-base font-semibold text-ink">Could not load your workspaces</h1>
+          <p className="text-sm leading-relaxed text-ink-muted">
+            {getErrorStatus(workspacesError) === null
+              ? "The server could not be reached. Check your connection and try again."
+              : "The server refused that request. Trying again may work; if it does not, sign out and back in."}
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => void refetchWorkspaces()}
+              className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas transition-opacity hover:opacity-90"
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                router.replace("/login");
+              }}
+              className="rounded-md border border-border px-3 py-1.5 text-[13px] text-ink-muted transition-colors hover:text-ink"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!isAdminRoute && (!activeWorkspaceId || workspacesLoading)) {
