@@ -5,6 +5,8 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useWorkspaceMembers, useWorkspaceDocuments } from "@/hooks/use-workspace";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
+import { useRealtime } from "@/components/providers/realtime-notification-provider";
+import { useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
@@ -25,6 +27,7 @@ import {
   Spinner
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { useEffect } from "react";
 
 export default function WorkspaceAdminDashboardPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -58,6 +61,29 @@ export default function WorkspaceAdminDashboardPage() {
     queryFn: () => billingService.getWorkspaceCredits(activeWorkspaceId!),
     enabled: Boolean(activeWorkspaceId && isOwnerOrAdmin),
   });
+
+  const { connection } = useRealtime();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!connection || !activeWorkspaceId) return;
+
+    const handleTokenUpdate = (tokensDeducted: number) => {
+      queryClient.setQueryData(["workspace-credits", activeWorkspaceId], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          currentCredits: Math.max(0, oldData.currentCredits - tokensDeducted)
+        };
+      });
+    };
+
+    connection.on("WorkspaceTokenUsageUpdated", handleTokenUpdate);
+
+    return () => {
+      connection.off("WorkspaceTokenUsageUpdated", handleTokenUpdate);
+    };
+  }, [connection, activeWorkspaceId, queryClient]);
 
   if (!isOwnerOrAdmin) {
     return (

@@ -19,6 +19,7 @@ import {
 import { useCreateWorkspace, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { billingService } from "@/services/billing.service";
 
 const createWorkspaceSchema = z.object({
   name: z
@@ -144,9 +145,35 @@ export default function CreateWorkspaceDemoPage() {
         "en",
       );
       toast.success(`Workspace "${workspace.name}" created.`);
+      
       const pendingPlanId = localStorage.getItem("pending_plan_id");
       if (pendingPlanId) {
         localStorage.removeItem("pending_plan_id");
+        try {
+          const plans = await billingService.getPlans();
+          const targetPlan = plans.find((p) => p.id === pendingPlanId);
+          if (targetPlan) {
+            const url = await billingService.createCheckoutSession({
+              userId: user!.id,
+              workspaceId: workspace.id,
+              amount: targetPlan.price,
+              currency: "vnd",
+              paymentType: "Subscription",
+              planSlug: targetPlan.slug,
+              billingCycle: targetPlan.billingCycle || "monthly",
+            });
+            if (url) {
+              window.location.assign(url);
+              return;
+            }
+          }
+        } catch (err: any) {
+          console.error("Failed to auto-checkout", err);
+          if (err.response) {
+            console.error("Error data:", err.response.data);
+          }
+        }
+        // Fallback if checkout fails
         router.push(`/${workspace.slug}/payment/plans?checkout_plan=${pendingPlanId}`);
       } else {
         router.push(`/${workspace.slug}/home`);

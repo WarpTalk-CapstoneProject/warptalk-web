@@ -11,8 +11,11 @@ import {
   CheckCircle,
   Clock,
   XCircle,
+  Lightning,
+  ArrowLeft,
 } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
+import { useQuery } from "@tanstack/react-query";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -28,6 +31,9 @@ import {
   useMyJoinRequests,
 } from "@/hooks/use-workspace";
 import type { WorkspaceInvitationDto } from "@/types/workspace";
+import { billingService } from "@/services/billing.service";
+import type { PlanDto } from "@/types/billing";
+import { formatMoney } from "@/lib/currency";
 
 export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
@@ -40,6 +46,36 @@ export default function WorkspaceOnboardingGatePage() {
   const cannotCreateWorkspace = isPublicEmailDomain(publicDomainLabel);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+
+  // Plan selection step: shown when user wants to create a workspace but has not yet
+  // selected a plan (pending_plan_id not in localStorage).
+  const [showPlanSelection, setShowPlanSelection] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<PlanDto | null>(null);
+
+  const { data: plans = [], isLoading: plansLoading } = useQuery<PlanDto[]>({
+    queryKey: ["plans"],
+    queryFn: () => billingService.getPlans(),
+    enabled: showPlanSelection,
+  });
+
+  // Confirm selected plan: save to localStorage and proceed to workspace creation.
+  function handleConfirmPlan() {
+    if (!selectedPlan) return;
+    localStorage.setItem("pending_plan_id", selectedPlan.id);
+    router.push("/workspace/create");
+  }
+
+  // Entry point for "Create workspace" card — gate on plan selection first.
+  function handleCreateWorkspaceClick() {
+    const hasPendingPlan = typeof window !== "undefined"
+      ? !!localStorage.getItem("pending_plan_id")
+      : false;
+    if (hasPendingPlan) {
+      router.push("/workspace/create");
+    } else {
+      setShowPlanSelection(true);
+    }
+  }
 
   const { data: workspacesData, isLoading: workspacesLoading, refetch: refetchWorkspaces } = useWorkspaces(1, 100);
   const { data: pendingInvitationsData, isLoading: pendingInvitationsLoading } = usePendingWorkspaceInvitations();
@@ -141,6 +177,96 @@ export default function WorkspaceOnboardingGatePage() {
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
       </div>
+    );
+  }
+
+  // --- Plan selection screen ---
+  if (showPlanSelection) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-start bg-canvas px-4 pt-[10vh] pb-12 text-ink font-sans select-none antialiased">
+        <div className="w-full max-w-[680px] flex flex-col gap-6">
+          {/* Back */}
+          <button
+            type="button"
+            onClick={() => { setShowPlanSelection(false); setSelectedPlan(null); }}
+            className="flex items-center gap-1.5 text-[12px] text-ink-muted font-medium hover:text-ink transition-colors cursor-pointer w-fit"
+          >
+            <ArrowLeft size={13} />
+            Back
+          </button>
+
+          <div className="text-center">
+            <h1 className="text-[26px] font-semibold tracking-tight text-ink">Choose your plan</h1>
+            <p className="mt-1 text-[13px] text-ink-muted">Select a plan to activate when your workspace is created.</p>
+          </div>
+
+          {plansLoading ? (
+            <div className="flex justify-center py-12">
+              <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {plans
+                .filter((p) => p.isActive !== false)
+                .sort((a, b) => a.sortOrder - b.sortOrder)
+                .map((plan) => {
+                  const isSelected = selectedPlan?.id === plan.id;
+                  return (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      onClick={() => setSelectedPlan(plan)}
+                      className={`flex flex-col gap-3 rounded-xl border p-5 text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? "border-primary bg-primary/5 shadow-[0_0_0_2px] shadow-primary/30"
+                          : "border-border bg-surface-1 hover:bg-surface-2 hover:border-hairline-strong"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted">{plan.tier}</p>
+                          <p className="text-[17px] font-semibold text-ink mt-0.5">{plan.name}</p>
+                        </div>
+                        {isSelected && (
+                          <CheckCircle size={18} className="shrink-0 text-primary mt-0.5" weight="fill" />
+                        )}
+                      </div>
+                      <p className="text-[22px] font-semibold tracking-tight text-ink">
+                        {formatMoney(plan.price, plan.currency)}
+                        <span className="text-[13px] font-normal text-ink-muted">/mo</span>
+                      </p>
+                      <ul className="space-y-1.5 text-[12px] text-ink-muted">
+                        <li className="flex items-center gap-1.5">
+                          <Lightning size={11} className="text-primary shrink-0" weight="fill" />
+                          {plan.creditsPerCycle.toLocaleString()} credits/cycle
+                        </li>
+                        <li className="flex items-center gap-1.5">
+                          <Lightning size={11} className="text-primary shrink-0" weight="fill" />
+                          Up to {plan.maxParticipants} participants
+                        </li>
+                        <li className="flex items-center gap-1.5">
+                          <Lightning size={11} className="text-primary shrink-0" weight="fill" />
+                          Up to {plan.maxLanguages} languages
+                        </li>
+                      </ul>
+                    </button>
+                  );
+                })}
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={!selectedPlan}
+            onClick={handleConfirmPlan}
+            className="h-11 w-full rounded-lg bg-primary text-white text-[14px] font-semibold transition hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {selectedPlan
+              ? `Continue with ${selectedPlan.name} — ${formatMoney(selectedPlan.price, selectedPlan.currency)}/mo`
+              : "Select a plan to continue"}
+          </button>
+        </div>
+      </main>
     );
   }
 
@@ -316,7 +442,7 @@ export default function WorkspaceOnboardingGatePage() {
             */}
             <button
               type="button"
-              onClick={() => router.push("/workspace/create")}
+              onClick={handleCreateWorkspaceClick}
               disabled={cannotCreateWorkspace}
               aria-describedby={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
               className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all shadow-sm h-[160px] enabled:hover:bg-surface-2 enabled:hover:border-hairline-strong enabled:hover:shadow-md enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
