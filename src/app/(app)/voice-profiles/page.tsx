@@ -384,7 +384,11 @@ export default function VoiceProfilesPage() {
               <Label>Language</Label>
               <Select value={language} onValueChange={(val) => setLanguage(val || "vi-VN")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select language..." />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language..."
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {LANGUAGE_OPTIONS.map((opt) => (

@@ -8,12 +8,13 @@ import {
   Repeat,
   SignIn,
   SlidersHorizontal,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import gsap from "gsap";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { meetingTypeByLabel, meetingTypeHighlights } from "@/lib/meeting-types";
+import { meetingTypeByLabel } from "@/lib/meeting-types";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -40,10 +41,8 @@ import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   type DailyRecurrenceDraft,
-  describeDailySchedule,
   detectTimeZone,
 } from "@/lib/daily-recurrence";
-import { DailyScheduleDialog } from "./create/daily-schedule-dialog";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
 import { LanguageSelector } from "./create/language-selector";
 import { PillButton } from "./create/pill-button";
@@ -86,8 +85,9 @@ export function CreateRoomDialog() {
   // replaces the old boolean `isDaily`, which was declared, rendered as a check mark, and then
   // never read by handleSubmit — the switch was dead, and a boolean could not have carried the
   // hour anyway.
+  // The rule itself is the only state left. There is no "is the editor open" flag any more:
+  // the editor is the menu row, so being open and being on are the same thing.
   const [dailyRecurrence, setDailyRecurrence] = useState<DailyRecurrenceDraft | null>(null);
-  const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -206,7 +206,6 @@ export function CreateRoomDialog() {
         // WT-327: reset with everything else. The old `isDaily` was left out of this block, so
         // its check mark survived into the next dialog the user opened.
         setDailyRecurrence(null);
-        setDailyDialogOpen(false);
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
@@ -380,17 +379,13 @@ export function CreateRoomDialog() {
                     value={meetingTemplate}
                     onChange={setMeetingTemplate}
                   />
-                  {/* The type is no longer cosmetic — say out loud what it will configure,
-                      rather than letting the host discover it after the room exists. */}
-                  {!editRoomId &&
-                    meetingTypeHighlights(meetingTemplate).map((highlight) => (
-                      <span
-                        key={highlight}
-                        className="hidden sm:inline rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-ink-muted"
-                      >
-                        {highlight}
-                      </span>
-                    ))}
+                  {/* The type's consequences were spelled out here as a row of chips —
+                      "Approval to join", "Muted on entry", "Records automatically", "No
+                      breakout rooms", "Max 500 participants". Five read-only labels across
+                      the top of a five-field dialog, none of them actionable, and picking a
+                      different type reflowed the whole header. The type name is the control;
+                      what it configures belongs in the picker that changes it, not stacked
+                      beside the workspace name. */}
                 </div>
 
                 <button
@@ -453,38 +448,45 @@ export function CreateRoomDialog() {
                     onRemove={() => setScheduledAt(null)}
                   />
                 )}
+                {/* The rule at a glance, without opening the menu. Clicking it turns Daily
+                    off, which is what the same X on the one-off time pill beside it does —
+                    editing the hour happens where the hour is shown, in the menu row. */}
                 {dailyRecurrence && (
                   <PillButton
                     icon={Repeat}
                     active
-                    onClick={() => setDailyDialogOpen(true)}
+                    onClick={() => setDailyRecurrence(null)}
                     label={
                       <span data-testid="daily-pill">
                         Daily {dailyRecurrence.time}
+                        <X weight="bold" className="ml-1 inline h-3 w-3 align-[-1px]" />
                       </span>
                     }
                   />
                 )}
+                {/* WT-327: the hour is asked for, never assumed — but the asking happens in
+                    the menu row itself now. A modal, and then a panel in this dialog, both
+                    answered "ask for the hour" by opening a second surface over the first. */}
                 <OptionsMenu
                   hasScheduledAt={!!scheduledAt || !!dailyRecurrence}
                   onAddScheduledAt={() => setScheduledAt(getDefaultStartTime())}
-                  isDaily={!!dailyRecurrence}
-                  dailyTime={dailyRecurrence?.time}
-                  onToggleDaily={() => setDailyDialogOpen(true)}
+                  daily={dailyRecurrence}
+                  onDailyChange={(draft) => {
+                    setDailyRecurrence(draft);
+                    // A one-off time cannot coexist with a rule that decides every
+                    // occurrence's time.
+                    if (draft) setScheduledAt(null);
+                  }}
                 />
               </div>
 
-              {/* WT-327: what the host is about to create, spelled out before they press the
-                  button. The control it replaces looked identical whether it worked or not. */}
-              {dailyRecurrence && (
-                <p
-                  data-testid="daily-schedule-summary"
-                  className="px-5 pb-1 text-[11px] text-ink-muted"
-                >
-                  {describeDailySchedule(dailyRecurrence, new Date())} ·{" "}
-                  {detectTimeZone()}
-                </p>
-              )}
+              {/* WT-327 put a summary here — "Every day at 09:00 · 31 meetings · Asia/Saigon"
+                  — as the guard against the dead switch it replaced. The owner has removed it:
+                  it restated the two fields that set it, and named a zone nobody asked to see.
+                  What stands in its place is that both of those fields are visible and
+                  editable in the Daily row itself, and "Repeat until" bounds the series where
+                  the sentence merely counted it. The `Daily 09:00` pill still reports the rule
+                  in force, so the state cannot be silent — which was the actual WT-327 bug. */}
 
               {/* Footer */}
               <div className="flex items-center justify-between gap-4 px-5 py-3 bg-surface-1/50 shrink-0">
@@ -597,23 +599,6 @@ export function CreateRoomDialog() {
             </div>
           )}
 
-          {/* WT-327: "khi chọn mode daily thì mở modal để user chọn giờ daily".
-              Rendered INSIDE the create dialog's popup on purpose. base-ui only recognises a
-              dialog as NESTED when its root sits within the parent popup's context; anywhere
-              else — a sibling of <Dialog>, or a child of <Dialog> outside <DialogContent> —
-              the parent treats the new dialog taking focus as an outside interaction and
-              closes itself, throwing away the half-filled meeting the host was writing. */}
-          <DailyScheduleDialog
-            open={dailyDialogOpen}
-            onOpenChange={setDailyDialogOpen}
-            value={dailyRecurrence}
-            onConfirm={(draft) => {
-              setDailyRecurrence(draft);
-              // A one-off time cannot coexist with a rule that decides every occurrence's time.
-              setScheduledAt(null);
-            }}
-            onDisable={() => setDailyRecurrence(null)}
-          />
         </div>
       </DialogContent>
     </Dialog>

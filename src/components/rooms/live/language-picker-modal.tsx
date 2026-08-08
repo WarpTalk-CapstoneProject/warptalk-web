@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getLanguageName } from "@/lib/languages";
+import { LanguageLabel } from "@/components/language/language-label";
 
 /**
  * Shown once, right after joining the live room (host and participant alike) —
@@ -71,12 +71,16 @@ export function LanguagePickerModal({
             <label className="text-[13px] font-medium text-ink">Which language will you speak?</label>
             <Select value={speakLanguage} onValueChange={(value) => setSpeakLanguage(String(value))}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>
+                  {(value) =>
+                    value ? <LanguageLabel value={String(value)} /> : "Select language"
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {availableLanguages.map((language) => (
                   <SelectItem key={language} value={language}>
-                    {getLanguageName(language)}
+                    <LanguageLabel value={language} />
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -87,12 +91,16 @@ export function LanguagePickerModal({
             <label className="text-[13px] font-medium text-ink">Which language do you want to hear?</label>
             <Select value={listenLanguage} onValueChange={(value) => setListenLanguage(String(value))}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>
+                  {(value) =>
+                    value ? <LanguageLabel value={String(value)} /> : "Select language"
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {availableLanguages.map((language) => (
                   <SelectItem key={language} value={language}>
-                    {getLanguageName(language)}
+                    <LanguageLabel value={language} />
                   </SelectItem>
                 ))}
               </SelectContent>

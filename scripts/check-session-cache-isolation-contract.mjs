@@ -115,8 +115,11 @@ checks.push([
 // hooks/use-auth.ts is the only caller that ever cleared the query cache, and nothing in the
 // app calls it — which is exactly how the leak survived having a fix already written for it.
 // So the reset has to live in the store, and no call site may hand-roll its own teardown.
+// topbar.tsx was on this list and has been deleted. It was never rendered by any layout —
+// no file imported it — so its sign-out was unreachable and this entry was asserting about
+// a screen no user could ever see. Its search, the part that was worth keeping, now lives in
+// components/layout/header-search.tsx, which has no sign-out of its own.
 const LOGOUT_CALL_SITES = [
-  "src/components/layout/topbar.tsx",
   "src/components/layout/linear-sidebar.tsx",
   "src/app/invitations/[token]/page.tsx",
 ];

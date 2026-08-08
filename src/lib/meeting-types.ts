@@ -59,30 +59,9 @@ export function meetingTypeByLabel(label: string): MeetingType {
   return BY_LABEL.get(label) ?? MEETING_TYPES[0];
 }
 
-/**
- * A short, human summary of what this type turns on — shown next to the picker so the choice
- * is not silent. Returns [] for a type that changes nothing beyond the seat count.
- *
- * WT-310(A1): these were written in Vietnamese inside an otherwise entirely English dialog,
- * so the Create Room header read "WarpTalk Demo › Event · Tối đa 100 người" beside "Add
- * description...", "People" and "Create Room". The app has no i18n layer to route them
- * through — English is the one language this UI speaks — so they are simply written in it.
- * The number is formatted with an explicit "en-US" rather than the ambient locale, so a
- * Vietnamese-locale browser cannot reintroduce a Vietnamese-grouped number here.
- */
-export function meetingTypeHighlights(label: string): string[] {
-  const { defaults } = meetingTypeByLabel(label);
-  const highlights: string[] = [];
-
-  if (defaults.requiresApproval) highlights.push("Approval to join");
-  if (defaults.muteOnEntry) highlights.push("Muted on entry");
-  if (defaults.autoRecord) highlights.push("Records automatically");
-  if (!defaults.breakoutsEnabled) highlights.push("No breakout rooms");
-  highlights.push(
-    defaults.maxParticipants === 2
-      ? "Max 2 participants"
-      : `Max ${defaults.maxParticipants.toLocaleString("en-US")} participants`,
-  );
-
-  return highlights;
-}
+// `meetingTypeHighlights` lived here: a summary of what each type turns on, rendered as chips
+// beside the workspace name in the Create Room header. The chips are gone — five read-only
+// labels across the top of a five-field dialog, reflowing the header on every type change —
+// and with the only caller removed the function was dead, so it went with them. The defaults
+// it described are still on the type itself and still applied server-side; nothing about what
+// a Webinar or an Event configures has changed, only that the dialog no longer recites it.

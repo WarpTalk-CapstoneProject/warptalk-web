@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowsInSimple, SignOut } from "@phosphor-icons/react/dist/ssr";
+import { SignOut } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -34,27 +34,11 @@ export function MeetingStageTimer({
   );
 }
 
-/**
- * Shrinks the meeting into the floating panel so the rest of the app is usable during a call
- * (WT-246).
- *
- * The panel itself already existed — it appeared whenever you happened to navigate away from
- * the room, and offered an expand button to come back. There was no way to ask for it, so the
- * only route into it was leaving the page by some other means.
- */
-export function MeetingMinimizeControl({ onMinimize }: { onMinimize: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onMinimize}
-      title="Minimize meeting"
-      aria-label="Minimize meeting"
-      className="grid h-9 w-9 place-items-center rounded-full border border-border/70 bg-surface-1/90 text-ink shadow-sm outline-none backdrop-blur transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring/40"
-    >
-      <ArrowsInSimple className="h-4 w-4" weight="bold" />
-    </button>
-  );
-}
+// `MeetingMinimizeControl` lived here — the round button over the video that shrank the call
+// into the floating panel (WT-246). Removed at the owner's request. Its entire implementation
+// was `router.push` back to the rooms list, because the session lives in the app layout and
+// the panel appears on its own for any route that is not the live one; so leaving the room by
+// any means still minimises the call, exactly as it did before the button was added.
 
 export function MeetingExitControl({
   room,
