@@ -70,7 +70,10 @@ export function LiveKitMeetingStage({
   fallbackName: string;
   isJoining: boolean;
   error: string | null;
-  screenStream: MediaStream | null;
+  /** A presenter's own local preview. Optional since the share became a real published
+   * LiveKit track, which reaches the presenter through useTracks like everyone else — the
+   * session no longer captures a second copy with getDisplayMedia. */
+  screenStream?: MediaStream | null;
   layoutMode: MeetingLayoutMode;
   /** Locally-pinned participant (this viewer only) — clicking a tile toggles it. */
   pinnedUserId?: string | null;
@@ -105,7 +108,7 @@ export function LiveKitMeetingStage({
 
   useEffect(() => {
     if (!screenVideoRef.current) return;
-    screenVideoRef.current.srcObject = screenStream;
+    screenVideoRef.current.srcObject = screenStream ?? null;
   }, [screenStream]);
 
   // Highlight whoever LiveKit currently reports as speaking. The SDK already applies a
