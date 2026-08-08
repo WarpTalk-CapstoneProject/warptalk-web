@@ -12,6 +12,7 @@ import {
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import {
+  Archive,
   ArrowRight,
   Bold,
   CalendarPlus,
@@ -32,6 +33,7 @@ import {
   Loader2,
   Play,
   Quote,
+  Sparkles,
   Star,
   StopCircle,
   Strikethrough,
@@ -67,6 +69,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { useEndedRoomRecord } from "@/hooks/use-room-history";
+import {
+  ArtifactsPanel,
+  MeetingRecordTabButton,
+  SummaryPanel,
+  useArtifactDownload,
+} from "@/components/rooms/meeting-record-panels";
+import type { EndedRoomHistoryItem } from "@/types/roomHistory";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import {
   useTranscriptByRoom,
@@ -165,6 +175,9 @@ export default function RoomInformationPage() {
     room.workspaceId !== "00000000-0000-0000-0000-000000000000"
       ? room.workspaceId
       : workspaces?.items?.[0]?.id;
+  // The AI summary and retained files for this meeting. Keyed on the room's own
+  // workspace, and sharing the workspace history query — the only endpoint carrying them.
+  const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
@@ -385,21 +398,28 @@ export default function RoomInformationPage() {
             />
 
             {isEnded || transcriptSegments.length > 0 ? (
-              <MeetingTranscriptArtifact
-                segments={transcriptSegments}
-                baseTime={
-                  transcriptQuery.data?.createdAt ||
-                  room.startedAt ||
-                  room.createdAt
+              <MeetingRecordSection
+                endedRecord={endedRecordQuery.data ?? null}
+                onRecordChanged={() => void endedRecordQuery.refetch()}
+                transcript={
+                  <MeetingTranscriptArtifact
+                    segments={transcriptSegments}
+                    baseTime={
+                      transcriptQuery.data?.createdAt ||
+                      room.startedAt ||
+                      room.createdAt
+                    }
+                    roomId={room.id}
+                    currentUserId={user?.id}
+                    isEnded={isEnded}
+                    onCopy={handleCopy}
+                    transcriptId={transcriptQuery.data?.id}
+                    transcriptStatus={transcriptQuery.data?.status}
+                    canEdit={isHost}
+                    onSegmentsChanged={() => void segmentsQuery.refetch()}
+                  />
                 }
-                roomId={room.id}
-                currentUserId={user?.id}
-                isEnded={isEnded}
-                onCopy={handleCopy}
-                transcriptId={transcriptQuery.data?.id}
-                transcriptStatus={transcriptQuery.data?.status}
-                canEdit={isHost}
-                onSegmentsChanged={() => void segmentsQuery.refetch()}
+                transcriptCount={transcriptSegments.length}
               />
             ) : null}
 
@@ -561,6 +581,93 @@ function RoomEntryButton({
 }
 
 /**
+ * Everything a meeting left behind, on the meeting's own page.
+ *
+ * The transcript, the AI summary and the retained files used to be a separate Transcripts
+ * page: to read what a meeting decided you left the meeting, found it again in a
+ * workspace-wide queue, and picked a tab. They are three views of one meeting, so they are
+ * three tabs here instead, directly below the description.
+ *
+ * The transcript is passed in rather than rendered here because it is the one tab that is
+ * live during a meeting — it has its own data, its own corrections, and its own actions.
+ */
+function MeetingRecordSection({
+  transcript,
+  transcriptCount,
+  endedRecord,
+  onRecordChanged,
+}: {
+  transcript: React.ReactNode;
+  transcriptCount: number;
+  endedRecord: EndedRoomHistoryItem | null;
+  onRecordChanged: () => void;
+}) {
+  const [tab, setTab] = useState<"transcript" | "summary" | "artifacts">(
+    "transcript",
+  );
+  const { busyArtifactId, downloadArtifact } =
+    useArtifactDownload(onRecordChanged);
+
+  // No ended record means the meeting has not finished, so there is nothing to summarise and
+  // no files to retain. Showing two permanently empty tabs would only invite clicking them.
+  const hasRecord = Boolean(endedRecord);
+  const activeTab = hasRecord ? tab : "transcript";
+
+  return (
+    <section className="mt-8 border-b border-border/60 pb-7">
+      <h2 className="text-[15px] font-semibold text-ink">Meeting record</h2>
+
+      {hasRecord ? (
+        <div
+          className="mt-2 mb-4 flex items-center gap-1 border-b border-border"
+          role="tablist"
+          aria-label="Meeting record sections"
+        >
+          <MeetingRecordTabButton
+            active={activeTab === "transcript"}
+            onClick={() => setTab("transcript")}
+            icon={FileText}
+            label="Transcript"
+            count={transcriptCount || undefined}
+          />
+          <MeetingRecordTabButton
+            active={activeTab === "summary"}
+            onClick={() => setTab("summary")}
+            icon={Sparkles}
+            label="Summary"
+          />
+          <MeetingRecordTabButton
+            active={activeTab === "artifacts"}
+            onClick={() => setTab("artifacts")}
+            icon={Archive}
+            label="Artifacts"
+            count={endedRecord?.artifacts.length}
+          />
+        </div>
+      ) : (
+        <div className="mt-3" />
+      )}
+
+      {activeTab === "transcript" ? transcript : null}
+      {activeTab === "summary" && endedRecord ? (
+        <SummaryPanel
+          room={endedRecord}
+          busyArtifactId={busyArtifactId}
+          onDownload={downloadArtifact}
+        />
+      ) : null}
+      {activeTab === "artifacts" && endedRecord ? (
+        <ArtifactsPanel
+          artifacts={endedRecord.artifacts}
+          busyArtifactId={busyArtifactId}
+          onDownload={downloadArtifact}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+/**
  * The saved meeting transcript, rendered as a distinct artifact participants can read
  * and copy after the meeting ends. Data is the persisted TranscriptService segments for
  * this room (already fetched on the page), so it does not depend on any exported file
@@ -671,12 +778,12 @@ function MeetingTranscriptArtifact({
   }
 
   return (
-    <section className="mt-8 border-b border-border/60 pb-7">
+    /* The heading and the section frame belong to MeetingRecordSection now — this is the
+       Transcript tab, not a section of its own. The action row stays: copy, download and
+       finalize act on the transcript specifically, not on the record as a whole. */
+    <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-[15px] font-semibold text-ink">
-            Meeting transcript
-          </h2>
           <InlineChip icon={<FileText className="size-3.5" />}>
             {isEnded ? "Saved" : "Live"} · {totalCount}{" "}
             {totalCount === 1 ? "entry" : "entries"}
@@ -811,7 +918,7 @@ function MeetingTranscriptArtifact({
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 

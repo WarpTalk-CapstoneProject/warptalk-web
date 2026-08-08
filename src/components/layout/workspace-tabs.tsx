@@ -13,7 +13,6 @@ import {
   House,
   List,
   Plus,
-  Scroll,
   SquaresFour,
   Users,
   Waveform,
@@ -59,13 +58,6 @@ export function buildTabOptions(slug: string): TabOption[] {
       href: buildWorkspacePath(slug, "rooms"),
       description: "Live and scheduled rooms",
       icon: SquaresFour,
-    },
-    {
-      id: "transcripts",
-      title: "Transcripts",
-      href: buildWorkspacePath(slug, "ai-summaries"),
-      description: "Summaries and retained artifacts",
-      icon: Scroll,
     },
     {
       id: "voice-profiles",

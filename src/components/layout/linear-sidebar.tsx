@@ -44,7 +44,6 @@ import {
   MagnifyingGlass,
   PaperPlaneTilt,
   Plus,
-  Scroll,
   SignOut,
   Sliders,
   SquaresFour,
@@ -191,7 +190,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
       ]
     },
-    { icon: Scroll, label: "Transcripts", href: `/${slug}/ai-summaries` },
+    // No Transcripts entry: a meeting's transcript, summary and files live on that
+    // meeting's own page, below its description.
     { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
   ];
 
