@@ -45,6 +45,14 @@ const notesAt = roomDetail.indexOf("<RoomNotesEditor");
 const recordAt = roomDetail.indexOf("<MeetingRecordSection");
 assert.ok(notesAt > 0 && recordAt > notesAt, "The record must sit below the description.");
 
+// An hour of talking is hundreds of entries. Uncapped, the transcript set the page height
+// and pushed the sections below it — and the page's own scrollbar — out of reach.
+assert.match(
+  roomDetail,
+  /max-h-\[min\(60vh,560px\)\][^"]*overflow-y-auto/,
+  "The transcript must scroll inside a bounded frame, not stretch the page.",
+);
+
 // The summary arrives asynchronously after the meeting ends. If its SignalR event does not
 // invalidate the query the tabs read, a generated summary stays invisible until a reload.
 const realtime = read("src/components/providers/realtime-notification-provider.tsx");

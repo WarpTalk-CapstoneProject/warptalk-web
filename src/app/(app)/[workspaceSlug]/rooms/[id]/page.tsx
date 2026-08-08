@@ -834,7 +834,18 @@ function MeetingTranscriptArtifact({
             : "The transcript is saved here as the meeting is transcribed."}
         </div>
       ) : (
-        <div className="space-y-1 rounded-xl border border-border bg-surface-1 p-4">
+        /* The transcript is the one thing on this page with no upper bound — an hour of
+           talking is hundreds of entries, and letting it set the page height pushed every
+           section below it, and the page's own scrollbar, out of reach. It scrolls inside
+           its own frame instead. Capped against the viewport rather than a fixed pixel
+           height so it does not swallow a short laptop screen whole.
+
+           Scroll chaining is left at its default, as WT-330(8) requires of every inner
+           scroller here — and requires by name, so do not write the containment utility
+           into this comment either: check-room-surface-contract matches the file's text,
+           not its markup, and the word alone fails it. Containing the scroll would stop
+           the page at the end of the transcript, which is the trap that ticket removed. */
+        <div className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4">
           {blocks.map((block) => (
             <div key={block.sessionNumber} className="space-y-2">
               {showSessionLabels ? (
