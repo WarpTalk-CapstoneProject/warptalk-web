@@ -34,6 +34,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/settings-validation";
+import { describeTimeZone, supportedTimeZones } from "@/lib/time-zones";
 
 const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),
@@ -550,11 +551,25 @@ export default function WorkspaceSettingsPage() {
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
                   <SelectValue placeholder="Select timezone" />
                 </SelectTrigger>
+                {/* Every zone the platform knows, not four guesses about where customers are.
+                    A workspace in Singapore, Sydney or Berlin previously had no way to say so,
+                    and the nearest wrong answer shifts every meeting it books.
+
+                    The stored value is passed in because it may be spelled differently from
+                    the generated list: this platform canonicalises to Asia/Saigon and omits
+                    Asia/Ho_Chi_Minh entirely, which is precisely the value the accounts
+                    database defaults every account to. Without it the control would look
+                    empty for almost everyone and drop the setting on the next save.
+
+                    Offsets are computed from the zone and today's date rather than written
+                    beside the label — the old list said "(-5)" for New York, which is an hour
+                    wrong from March to November. */}
                 <SelectContent>
-                  <SelectItem value="UTC" className="text-xs">UTC</SelectItem>
-                  <SelectItem value="Asia/Ho_Chi_Minh" className="text-xs">Asia/Ho_Chi_Minh (+7)</SelectItem>
-                  <SelectItem value="Asia/Tokyo" className="text-xs">Asia/Tokyo (+9)</SelectItem>
-                  <SelectItem value="America/New_York" className="text-xs">America/New_York (-5)</SelectItem>
+                  {supportedTimeZones(watchAll.timezone).map((zone) => (
+                    <SelectItem key={zone} value={zone} className="text-xs">
+                      {describeTimeZone(zone)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

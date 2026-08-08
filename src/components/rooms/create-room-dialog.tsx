@@ -41,7 +41,6 @@ import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   type DailyRecurrenceDraft,
-  describeDailySchedule,
   detectTimeZone,
 } from "@/lib/daily-recurrence";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
@@ -481,17 +480,13 @@ export function CreateRoomDialog() {
                 />
               </div>
 
-              {/* WT-327: what the host is about to create, spelled out before they press the
-                  button. The control it replaces looked identical whether it worked or not. */}
-              {dailyRecurrence && (
-                <p
-                  data-testid="daily-schedule-summary"
-                  className="px-5 pb-1 text-[11px] text-ink-muted"
-                >
-                  {describeDailySchedule(dailyRecurrence, new Date())} ·{" "}
-                  {detectTimeZone()}
-                </p>
-              )}
+              {/* WT-327 put a summary here — "Every day at 09:00 · 31 meetings · Asia/Saigon"
+                  — as the guard against the dead switch it replaced. The owner has removed it:
+                  it restated the two fields that set it, and named a zone nobody asked to see.
+                  What stands in its place is that both of those fields are visible and
+                  editable in the Daily row itself, and "Repeat until" bounds the series where
+                  the sentence merely counted it. The `Daily 09:00` pill still reports the rule
+                  in force, so the state cannot be silent — which was the actual WT-327 bug. */}
 
               {/* Footer */}
               <div className="flex items-center justify-between gap-4 px-5 py-3 bg-surface-1/50 shrink-0">

@@ -86,10 +86,23 @@ assert.match(
   /type="date"/,
   "Daily must offer an end date. A series with no end generates rooms forever, including for abandoned demo workspaces.",
 );
+// WT-327 originally required an occurrence-count preview here — "Every day at 09:00 · 31
+// meetings · Asia/Saigon" — as the guard against the dead switch. The owner removed it: it
+// restated the two fields that set it, and named a zone nobody had asked to see. This is a
+// decision, not a regression, so nothing asserts the sentence back into existence.
+//
+// What replaces it is asserted instead: an end date the host can see and change bounds the
+// series where the sentence merely counted it, and the pill keeps reporting the rule in force,
+// so the state cannot be silent — which was the actual bug.
 assert.match(
+  dialogSource,
+  /data-testid="daily-pill"[\s\S]{0,200}?dailyRecurrence\.time/,
+  "The pill must report the hour in force. A control whose state is invisible is the dead switch, whatever it is called.",
+);
+assert.doesNotMatch(
   modalSource,
-  /data-testid="daily-summary"/,
-  "The row must print how many meetings the rule creates before the room is created — that preview is what distinguishes this control from the dead switch it replaced.",
+  /describeDailySchedule/,
+  "The prose summary was removed deliberately; restoring it puts the zone name and a restatement of the two fields back into a 262px menu.",
 );
 // Turning Daily on with no way to see or change the hour would be the dead switch again, just
 // with a value attached. The hour is rendered only when the rule exists, so it must be gated on

@@ -13,8 +13,6 @@ import {
   type DailyRecurrenceDraft,
   defaultEndDate,
   describeDailyDraftProblem,
-  describeDailySchedule,
-  detectTimeZone,
   toLocalDateString,
   validateDailyDraft,
 } from "@/lib/daily-recurrence";
@@ -155,20 +153,15 @@ export function OptionsMenu({
                   />
                 </label>
 
-                {/* The count, before the room is created. This preview is what distinguishes
-                    the control from the dead switch it replaced. */}
+                {/* Only when the rule cannot be built. The prose summary that used to sit here
+                    — "Every day at 09:00 · 31 meetings · Asia/Saigon" — restated the two fields
+                    directly above it and named a zone nobody had chosen to see. The dialog's
+                    own summary line still spells the rule out; this row is for setting it. */}
                 {problem ? (
                   <p role="alert" className="text-[11px] leading-snug text-destructive">
                     {describeDailyDraftProblem(problem)}
                   </p>
-                ) : (
-                  <p
-                    data-testid="daily-summary"
-                    className="text-[11px] leading-snug text-ink-muted"
-                  >
-                    {describeDailySchedule(daily, now)} · {detectTimeZone()}
-                  </p>
-                )}
+                ) : null}
               </div>
             )}
           </div>
