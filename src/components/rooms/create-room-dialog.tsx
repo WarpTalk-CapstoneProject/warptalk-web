@@ -8,6 +8,7 @@ import {
   Repeat,
   SignIn,
   SlidersHorizontal,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import gsap from "gsap";
 import Link from "next/link";
@@ -43,7 +44,6 @@ import {
   describeDailySchedule,
   detectTimeZone,
 } from "@/lib/daily-recurrence";
-import { DailyScheduleInline } from "./create/daily-schedule-inline";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
 import { LanguageSelector } from "./create/language-selector";
 import { PillButton } from "./create/pill-button";
@@ -86,8 +86,9 @@ export function CreateRoomDialog() {
   // replaces the old boolean `isDaily`, which was declared, rendered as a check mark, and then
   // never read by handleSubmit — the switch was dead, and a boolean could not have carried the
   // hour anyway.
+  // The rule itself is the only state left. There is no "is the editor open" flag any more:
+  // the editor is the menu row, so being open and being on are the same thing.
   const [dailyRecurrence, setDailyRecurrence] = useState<DailyRecurrenceDraft | null>(null);
-  const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -206,7 +207,6 @@ export function CreateRoomDialog() {
         // WT-327: reset with everything else. The old `isDaily` was left out of this block, so
         // its check mark survived into the next dialog the user opened.
         setDailyRecurrence(null);
-        setDailyDialogOpen(false);
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
@@ -449,49 +449,37 @@ export function CreateRoomDialog() {
                     onRemove={() => setScheduledAt(null)}
                   />
                 )}
+                {/* The rule at a glance, without opening the menu. Clicking it turns Daily
+                    off, which is what the same X on the one-off time pill beside it does —
+                    editing the hour happens where the hour is shown, in the menu row. */}
                 {dailyRecurrence && (
                   <PillButton
                     icon={Repeat}
                     active
-                    onClick={() => setDailyDialogOpen(true)}
+                    onClick={() => setDailyRecurrence(null)}
                     label={
                       <span data-testid="daily-pill">
                         Daily {dailyRecurrence.time}
+                        <X weight="bold" className="ml-1 inline h-3 w-3 align-[-1px]" />
                       </span>
                     }
                   />
                 )}
+                {/* WT-327: the hour is asked for, never assumed — but the asking happens in
+                    the menu row itself now. A modal, and then a panel in this dialog, both
+                    answered "ask for the hour" by opening a second surface over the first. */}
                 <OptionsMenu
                   hasScheduledAt={!!scheduledAt || !!dailyRecurrence}
                   onAddScheduledAt={() => setScheduledAt(getDefaultStartTime())}
-                  isDaily={!!dailyRecurrence}
-                  dailyTime={dailyRecurrence?.time}
-                  onToggleDaily={() => setDailyDialogOpen(true)}
-                />
-              </div>
-
-              {/* WT-327: "khi chọn mode daily thì mở modal để user chọn giờ daily" — the hour
-                  is asked for, never assumed. It sits in the dialog rather than over it; a
-                  second modal to collect two fields put the half-written meeting behind a
-                  dimmed overlay. Keyed on open so each visit starts from what is in force. */}
-              {dailyDialogOpen && (
-                <DailyScheduleInline
-                  key={dailyRecurrence ? `${dailyRecurrence.time}-${dailyRecurrence.endDate}` : "new"}
-                  value={dailyRecurrence}
-                  onConfirm={(draft) => {
+                  daily={dailyRecurrence}
+                  onDailyChange={(draft) => {
                     setDailyRecurrence(draft);
                     // A one-off time cannot coexist with a rule that decides every
                     // occurrence's time.
-                    setScheduledAt(null);
-                    setDailyDialogOpen(false);
-                  }}
-                  onCancel={() => setDailyDialogOpen(false)}
-                  onDisable={() => {
-                    setDailyRecurrence(null);
-                    setDailyDialogOpen(false);
+                    if (draft) setScheduledAt(null);
                   }}
                 />
-              )}
+              </div>
 
               {/* WT-327: what the host is about to create, spelled out before they press the
                   button. The control it replaces looked identical whether it worked or not. */}

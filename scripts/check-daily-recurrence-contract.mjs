@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 const dialogSource = read("../src/components/rooms/create-room-dialog.tsx");
-const modalSource = read("../src/components/rooms/create/daily-schedule-inline.tsx");
+const modalSource = read("../src/components/rooms/create/options-menu.tsx");
 const optionsSource = read("../src/components/rooms/create/options-menu.tsx");
 const typesSource = read("../src/types/translationRoom.ts");
 const serviceSource = read("../src/services/translationRoom.service.ts");
@@ -53,43 +53,51 @@ assert.match(
   "The Daily schedule must be cleared by handleOpenChange — the old toggle was not, so its check mark persisted across dialogs.",
 );
 
-// ── Choosing Daily asks for the hour ─────────────────────────────────────────
+// ── Choosing Daily asks for the hour, in the row itself ──────────────────────
 //
 // The owner's request was "mở modal để user chọn giờ daily", and what these assertions protect
-// is the second half of it: choosing Daily must present a control that ASKS, never one that
-// commits a schedule the host did not pick. The editor has since moved from a modal stacked on
-// the create dialog to a panel inside it — a second overlay to collect two fields left the
-// half-written meeting behind a dim — so what is pinned here is the asking, not the overlay.
+// is the second half of it: choosing Daily must present the hour, never commit one the host
+// cannot see. The editor has moved twice — a modal over the create dialog, then a panel inside
+// it, now the menu row itself — because both earlier answers met "ask for the hour" by opening
+// a second surface over the first. So what is pinned here is the asking, not the surface.
 
 assert.match(
   dialogSource,
-  /<DailyScheduleInline/,
-  "Choosing Daily must open the schedule editor rather than silently committing an hour.",
+  /<OptionsMenu[\s\S]{0,400}?daily=\{dailyRecurrence\}/,
+  "The options menu must be handed the rule in force, so the row can show the hour rather than a bare check mark.",
 );
 assert.match(
   dialogSource,
-  /onToggleDaily=\{\(\)\s*=>\s*setDailyDialogOpen\(true\)\}/,
-  "The Daily row in the options menu must open the editor rather than silently committing a schedule.",
+  /onDailyChange=\{/,
+  "The Daily row must report changes back to the dialog that submits them; a control whose state never reaches the request is the WT-327 bug.",
 );
 assert.doesNotMatch(
   modalSource,
   /<Dialog[\s>]/,
-  "The Daily editor belongs inside the create dialog, not in a second one over it.",
+  "The Daily editor belongs in the menu row, not in a dialog over the dialog.",
 );
 assert.match(
   modalSource,
   /type="time"/,
-  "The Daily editor must offer a time-of-day control; picking the hour is the entire feature.",
+  "The Daily row must offer a time-of-day control; picking the hour is the entire feature.",
 );
 assert.match(
   modalSource,
   /type="date"/,
-  "The Daily editor must offer an end date. A series with no end generates rooms forever, including for abandoned demo workspaces.",
+  "Daily must offer an end date. A series with no end generates rooms forever, including for abandoned demo workspaces.",
 );
 assert.match(
   modalSource,
   /data-testid="daily-summary"/,
-  "The editor must print how many meetings the rule creates before it is saved — that preview is what distinguishes this control from the dead switch it replaced.",
+  "The row must print how many meetings the rule creates before the room is created — that preview is what distinguishes this control from the dead switch it replaced.",
+);
+// Turning Daily on with no way to see or change the hour would be the dead switch again, just
+// with a value attached. The hour is rendered only when the rule exists, so it must be gated on
+// the rule rather than hidden behind a further click.
+assert.match(
+  modalSource,
+  /isDaily &&[\s\S]{0,200}?type="time"/,
+  "The hour must appear as soon as Daily is on, beside its own label — not behind another control.",
 );
 
 // ── The rule is unambiguous about time ───────────────────────────────────────
@@ -146,10 +154,14 @@ assert.match(
 
 // ── The options menu reports the schedule, not merely that one exists ────────
 
+// The hour was once passed in as a read-only `dailyTime` prop just to be printed beside the
+// check mark. The row now holds the editable value itself, so what is asserted is that it
+// renders the hour in force — a bare check mark looks identical whether the setting reached
+// the server or not, which is how the dead switch survived.
 assert.match(
   optionsSource,
-  /dailyTime/,
-  "The options menu must show the hour in force. A bare check mark looks identical whether the setting reached the server or not — which is how the dead switch survived.",
+  /value=\{daily\.time\}/,
+  "The options menu must show the hour in force, bound to the rule rather than to a local copy that can drift from it.",
 );
 
 console.log("Daily recurrence contract OK");
