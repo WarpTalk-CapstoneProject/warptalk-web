@@ -64,7 +64,6 @@ import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context"
 // Import Refactored Components
 import {
   MeetingExitControl,
-  MeetingMinimizeControl,
   MeetingStageTimer,
 } from "@/components/rooms/live/meeting-top-bar";
 import {
@@ -1608,13 +1607,11 @@ export function PersistentMeetingSession({
     setPinnedUserId((current) => (current === userId ? null : userId));
   }
 
-  // WT-246: minimising is leaving the room route, not tearing the call down. The session lives
-  // in the app layout and keeps its LiveKit connection across navigation — the layout already
-  // renders it as the floating panel whenever the route is not the live one, which is why this
-  // navigates rather than setting a flag.
-  function handleMinimize() {
-    router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
-  }
+  // WT-246 added a minimise button, whose whole implementation was to navigate away — the
+  // session lives in the app layout and keeps its LiveKit connection across routes, so the
+  // floating panel appears by itself the moment the route is not the live one. The button is
+  // gone at the owner's request; leaving the room route still produces the panel, which is
+  // what happened before the button existed.
 
   function handleToggleSpotlight(userId: string) {
     const connection = translationConnectionRef.current;
@@ -1820,7 +1817,14 @@ export function PersistentMeetingSession({
               onRetry={retryMeetingConnection}
             />
 
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between bg-gradient-to-b from-black/70 to-transparent p-3 pb-8 text-white">
+            {/* The header is the drag handle, and it is a solid strip rather than the gradient
+                that used to wash out the top of the picture. The same went for a second
+                gradient over the buttons at the bottom: two soft-edged bands on a 388px window
+                left the video visible only through the middle of itself. */}
+            <div
+              data-mini-drag-handle
+              className="absolute inset-x-0 top-0 z-30 flex cursor-grab items-start justify-between bg-black/65 px-3 py-2 text-white active:cursor-grabbing"
+            >
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold">
                   <span
@@ -1888,7 +1892,7 @@ export function PersistentMeetingSession({
               through useTrackToggle, the identical mechanism <TrackToggle> gives the full-size
               bar, which is also why the two no longer disagree when the mini window is expanded.
             */}
-            <div className="absolute inset-x-0 bottom-0 z-40 flex items-end justify-center gap-2 bg-gradient-to-t from-black/75 to-transparent px-3 pb-3 pt-8">
+            <div className="absolute inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 bg-black/65 px-3 py-2">
               <MiniTrackToggle
                 source={Track.Source.Microphone}
                 enabledLabel="Turn off microphone"
@@ -1923,9 +1927,9 @@ export function PersistentMeetingSession({
                 createdAt={room.createdAt}
                 endedAt={room.endedAt}
               />
-              <div className="absolute right-4 top-4 z-30">
-                <MeetingMinimizeControl onMinimize={handleMinimize} />
-              </div>
+              {/* The minimise button sat here. Removed on the owner's call — the floating
+                  window still appears on its own when you navigate away from the room, which
+                  is how it worked before WT-246 added a button for it. */}
               <div className="relative min-h-0 w-full flex-1">
                 {isRecording ? (
                   <div className="absolute right-16 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">

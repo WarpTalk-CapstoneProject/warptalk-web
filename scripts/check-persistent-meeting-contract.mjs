@@ -12,13 +12,14 @@ async function source(relativePath) {
   });
 }
 
-const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle] =
+const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle, miniDock] =
   await Promise.all([
     source("src/app/(app)/layout.tsx"),
     source("src/app/(app)/room/[id]/page.tsx"),
     source("src/components/rooms/live/persistent-meeting-session.tsx"),
     source("src/stores/active-meeting-store.ts"),
     source("src/lib/meeting-session-lifecycle.ts"),
+    source("src/components/rooms/live/mini-meeting-dock.tsx"),
   ]);
 
 assert.match(
@@ -41,10 +42,31 @@ assert.match(
   /<PersistentMeetingSession[\s\S]*key=\{activeMeetingRoomId\}[\s\S]*compact=\{!isLiveMeetingRoute\}/,
   "the persistent session must stay mounted while its presentation changes",
 );
+// The floating window used to be pinned to bottom-right in this file, and that literal was
+// asserted here. It is draggable now, so the position lives in MiniMeetingDock and the thing
+// worth pinning is what the pinning was FOR: the window must not end up somewhere it covers
+// the page permanently or cannot be grabbed again.
 assert.match(
   appLayout,
-  /!isLiveMeetingRoute[\s\S]*fixed[\s\S]*bottom-\[72px\][\s\S]*right-5/,
-  "the mini meeting must float above the global assistant without covering the page",
+  /<MiniMeetingDock floating=\{!isLiveMeetingRoute\}/,
+  "the floating presentation must be owned by the dock, which keeps it inside the viewport",
+);
+assert.match(
+  miniDock,
+  /clampToViewport/,
+  "every dock position must be clamped — a window dragged off the edge can never be grabbed again",
+);
+assert.match(
+  miniDock,
+  /addEventListener\("resize"/,
+  "a shrinking viewport must pull the window back into view, not strand it outside",
+);
+// The single-wrapper rule, stated where it can be broken. Two branches rendering their own
+// <PersistentMeetingSession> read as equivalent and are not: React unmounts on the switch.
+assert.doesNotMatch(
+  appLayout,
+  /isLiveMeetingRoute \?[\s\S]{0,600}?<PersistentMeetingSession[\s\S]{0,600}?<PersistentMeetingSession/,
+  "the session must be rendered once, not once per presentation — a ternary between two of them remounts it and drops the call",
 );
 assert.match(
   meetingSession,

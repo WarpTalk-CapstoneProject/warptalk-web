@@ -21,6 +21,7 @@ import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
+import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
 import { cn } from "@/lib/utils";
@@ -446,20 +447,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}
             {activeMeetingRoomId ? (
-              <div
-                className={cn(
-                  isLiveMeetingRoute && "absolute inset-0 z-30",
-                  !isLiveMeetingRoute &&
-                    "fixed bottom-[72px] right-5 z-[70] h-[220px] w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[20px] border border-white/70 bg-surface-1 shadow-[0_24px_70px_rgba(15,23,42,0.28)] ring-1 ring-black/5",
-                )}
-              >
+              // One wrapper for both presentations, never a ternary between two of them: the
+              // session must stay MOUNTED as the route changes, or navigating out of the room
+              // tears down the LiveKit connection this whole arrangement exists to preserve.
+              // The dock owns the floating position now — it used to be pinned to the
+              // bottom-right, which is exactly where the chat launcher and the toasts live.
+              <MiniMeetingDock floating={!isLiveMeetingRoute}>
                 <PersistentMeetingSession
                   key={activeMeetingRoomId}
                   roomId={activeMeetingRoomId}
                   compact={!isLiveMeetingRoute}
                   onMeetingClosed={closeMeeting}
                 />
-              </div>
+              </MiniMeetingDock>
             ) : null}
           </main>
 

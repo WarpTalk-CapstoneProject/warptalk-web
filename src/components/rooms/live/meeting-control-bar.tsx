@@ -203,9 +203,20 @@ export function MeetingControlBar({
   >("root");
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
   const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
+  // WT-272 wrote this hook and then attached it to one flyout of three. The reaction picker
+  // and the settings panel stayed open-only — the sole way to dismiss either was to hit its
+  // own trigger again, which is the exact complaint the ticket was raised about.
   const hostControlsRef = useFlyoutDismiss(isHostControlsMenuOpen, () =>
     setIsHostControlsMenuOpen(false),
   );
+  const reactionRef = useFlyoutDismiss(isReactionMenuOpen, () =>
+    setIsReactionMenuOpen(false),
+  );
+  const settingsRef = useFlyoutDismiss(isSettingsMenuOpen, () => {
+    setIsSettingsMenuOpen(false);
+    // Back to the top level, so reopening does not resume a submenu nobody asked for.
+    setSettingsSection("root");
+  });
 
   function closeSettingsMenu() {
     setIsSettingsMenuOpen(false);
@@ -375,7 +386,7 @@ export function MeetingControlBar({
       ) : null}
 
       {onSendReaction ? (
-        <div className="relative">
+        <div className="relative" ref={reactionRef}>
           <MeetControl
             label="Send a reaction"
             icon={<SmileyWink className="h-[18px] w-[18px]" />}
@@ -411,7 +422,7 @@ export function MeetingControlBar({
 
       <div className="h-6 w-[1px] bg-surface-3 mx-1" />
       
-      <div className="relative">
+      <div className="relative" ref={settingsRef}>
         <MeetControl
           label="Settings"
           active={isSettingsMenuOpen}
@@ -875,11 +886,19 @@ function LiveKitTrackControls({
     <>
       <TrackToggle
         source={Track.Source.Microphone}
-        className="grid h-8 w-8 place-items-center rounded-md text-ink-muted hover:bg-surface-2 data-[lk-enabled=false]:bg-red-50 data-[lk-enabled=false]:text-red-600"
+        // `!` throughout, because `@livekit/components-styles` is imported by
+        // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
+        // own padding. Our classes named no base background at all, so LiveKit's won: two
+        // black squares sitting in a light, rounded bar next to buttons we do style.
+        className="grid h-8 w-8 place-items-center rounded-md !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
       />
       <TrackToggle
         source={Track.Source.Camera}
-        className="grid h-8 w-8 place-items-center rounded-md text-ink-muted hover:bg-surface-2 data-[lk-enabled=false]:bg-red-50 data-[lk-enabled=false]:text-red-600"
+        // `!` throughout, because `@livekit/components-styles` is imported by
+        // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
+        // own padding. Our classes named no base background at all, so LiveKit's won: two
+        // black squares sitting in a light, rounded bar next to buttons we do style.
+        className="grid h-8 w-8 place-items-center rounded-md !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
       />
     </>
   );
