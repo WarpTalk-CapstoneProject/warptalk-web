@@ -8,7 +8,7 @@ import {
 } from "@/hooks/use-meeting";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
-import { getLanguageName, languagesInScope } from "@/lib/languages";
+import { getLanguageName } from "@/lib/languages";
 import { downloadAuthenticatedFile } from "@/lib/download-artifact";
 import { API } from "@/lib/api/endpoints";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -96,25 +96,19 @@ export function ChatPanel({
     Record<string, MessageTranslationState>
   >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // User-facing "translate messages into" choice — defaults to the viewer's own listen
-  // language but can be overridden per session via the dropdown, since the viewer may
-  // not know (or want) the language it was inferred to.
-  const [selectedTargetLanguage, setSelectedTargetLanguage] = useState(
-    targetLanguage || "en",
-  );
+  // The language a translation is offered IN, taken from the viewer's own listen language.
+  //
+  // This used to be a dropdown in the panel header — "Translate to [Vietnamese]" — sitting
+  // above a thread most people never translate, asking a question before there was anything
+  // to ask it about. The per-message button already existed and already knew which language
+  // to use; the header was a second way to say the same thing, and the only way to discover
+  // the first was to hover a bubble.
+  const suggestedTargetLanguage = targetLanguage || "en";
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const previousTargetLanguageRef = useRef(targetLanguage);
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
-
-  function handleTargetLanguageChange(nextLanguage: string) {
-    setSelectedTargetLanguage(nextLanguage);
-    // Previously fetched translations are for the old target language — drop them so
-    // re-opening a message re-fetches under the newly selected language instead of
-    // silently showing stale text.
-    setTranslations({});
-  }
 
   function toggleTranslation(messageId: string) {
     const current = translations[messageId];
@@ -131,7 +125,7 @@ export function ChatPanel({
       [messageId]: { loading: true, visible: true },
     }));
     translateMessageAPI(
-      { messageId, targetLanguage: selectedTargetLanguage },
+      { messageId, targetLanguage: suggestedTargetLanguage },
       {
         onSuccess: (dto) => {
           setTranslations((prev) => ({
@@ -165,7 +159,9 @@ export function ChatPanel({
       return;
     }
     previousTargetLanguageRef.current = targetLanguage;
-    setSelectedTargetLanguage(targetLanguage);
+    // Translations already fetched are in the previous language — drop them so a message
+    // re-opened after the viewer changes what they listen in re-fetches rather than showing
+    // stale text under a new label.
     setTranslations({});
   }, [targetLanguage]);
 
@@ -351,26 +347,6 @@ export function ChatPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <label
-          htmlFor="chat-translate-target"
-          className="text-[11px] font-medium text-ink-subtle"
-        >
-          Translate to
-        </label>
-        <select
-          id="chat-translate-target"
-          value={selectedTargetLanguage}
-          onChange={(event) => handleTargetLanguageChange(event.target.value)}
-          className="rounded-md border border-border bg-surface-1 px-2 py-1 text-[12px] text-ink outline-none focus:border-primary"
-        >
-          {languagesInScope("chatTarget").map((language) => (
-            <option key={language.code} value={language.code}>
-              {language.name}
-            </option>
-          ))}
-        </select>
-      </div>
       <div
         ref={containerRef}
         onScroll={handleMessagesScroll}
@@ -451,14 +427,24 @@ export function ChatPanel({
                       })}
                     </span>
                     {message.messageType !== "file" &&
-                    selectedTargetLanguage.toLowerCase() !==
+                    suggestedTargetLanguage.toLowerCase() !==
                       message.originalLanguage.toLowerCase() ? (
                       <button
                         type="button"
                         onClick={() => toggleTranslation(message.id)}
-                        aria-label="Translate message"
-                        title="Translate message"
-                        className="flex h-5 w-5 items-center justify-center rounded text-ink-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink group-hover:opacity-100"
+                        aria-label={`Translate into ${getLanguageName(suggestedTargetLanguage)}`}
+                        title={`Translate into ${getLanguageName(suggestedTargetLanguage)}`}
+                        aria-pressed={Boolean(translations[message.id]?.visible)}
+                        // Always visible, not revealed on hover. The header dropdown is gone,
+                        // so this is now the only way to translate anything — and a control
+                        // that appears only once the pointer is already on it cannot be found
+                        // by someone who does not know it is there. It says which language it
+                        // will use, which is what the dropdown was really for.
+                        className={`flex h-5 w-5 items-center justify-center rounded transition-colors hover:bg-surface-2 hover:text-ink ${
+                          translations[message.id]?.visible
+                            ? "bg-surface-2 text-ink"
+                            : "text-ink-subtle"
+                        }`}
                       >
                         {translations[message.id]?.loading ? (
                           <LoaderCircle className="h-3 w-3 animate-spin" />
@@ -511,7 +497,7 @@ export function ChatPanel({
                     >
                       {translations[message.id]!.text}
                       <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
-                        {getLanguageName(selectedTargetLanguage)}
+                        {getLanguageName(suggestedTargetLanguage)}
                       </span>
                     </p>
                   ) : null}

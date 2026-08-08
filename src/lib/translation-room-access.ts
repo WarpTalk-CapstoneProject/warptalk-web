@@ -96,8 +96,10 @@ export function resolveRoomEntryIntent(input: {
     return {
       mode: "host_start",
       label: "Start meeting",
-      helpText:
-        "You are the host — starting opens the room and admits everyone in the lobby.",
+      // No help text. "You are the host — starting opens the room and admits everyone in the
+      // lobby" explained a button labelled "Start meeting" to the one person who cannot be
+      // confused about what it does. The lobby count sits beside it and says the rest.
+      helpText: null,
       isActionable: true,
     };
   }

@@ -23,9 +23,12 @@ export function TranscriptPanel({
   segments,
   roomId,
   baseTime,
+  missedCount = 0,
 }: {
   segments: TranscriptSegmentDto[];
   roomId: string;
+  /** Lines that were already spoken when this person joined. 0 for anyone who was here. */
+  missedCount?: number;
   /** Room start time — segments' startTimeMs is elapsed ms from here, used to bucket
    * them into "Translation N" sessions. Omit to skip session labeling. */
   baseTime?: string;
@@ -56,6 +59,18 @@ export function TranscriptPanel({
 
   return (
     <div ref={containerRef} className="flex-1 space-y-1 overflow-y-auto p-3 custom-scrollbar scroll-smooth">
+      {/* Said once, at the top, rather than as a divider inside the list: consecutive lines
+          from one speaker are merged into a single utterance, so there is no reliable seam to
+          put a marker on. Someone who was here from the start sees nothing. */}
+      {missedCount > 0 ? (
+        <div className="mb-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] leading-relaxed text-ink-muted">
+          You joined after{" "}
+          <span className="font-medium text-ink">
+            {missedCount} {missedCount === 1 ? "line" : "lines"}
+          </span>{" "}
+          had already been said. They are shown above the live transcript.
+        </div>
+      ) : null}
       <AnimatePresence initial={false}>
         {blocks.map((block) => (
           <div key={block.sessionNumber} className="space-y-2">

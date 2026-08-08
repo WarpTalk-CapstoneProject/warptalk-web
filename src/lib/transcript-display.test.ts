@@ -7,7 +7,9 @@ import {
   formatTranscriptTimestamp,
   getAnimatedWordTokens,
   getLiveCaptionText,
+  groupSavedTranscriptSegments,
   groupTranscriptSegments,
+  isTranscriptControlMarker,
   resolveTranscriptSpeakerName,
 } from "./transcript-display.ts";
 import type { ParticipantInfoDto, TranscriptSegmentDto } from "../types/realtime.ts";
@@ -189,4 +191,56 @@ test("returns the earliest suggestion when a merged utterance has more than one"
     findSuggestionForUtterance(utterance, { "segment-1": "first", "segment-2": "second" }),
     "first",
   );
+});
+
+// ── Control markers are not dialogue ────────────────────────────────────────
+//
+// `__MEETING_END__` is published onto the STT stream by the meeting service so the AI
+// assistant worker knows to write the summary. It was rendering in the transcript as a line
+// spoken by "System" at 00:00, with a pencil beside it inviting the host to correct it.
+
+function savedSegment(text: string, sequenceOrder: number, speakerName = "Demo Host") {
+  return {
+    id: `seg-${sequenceOrder}`,
+    speakerName,
+    originalText: text,
+    originalLanguage: "en",
+    startTimeMs: sequenceOrder * 1000,
+    endTimeMs: sequenceOrder * 1000 + 500,
+    sequenceOrder,
+  };
+}
+
+test("recognises a control marker, whatever the marker is called", () => {
+  for (const marker of ["__MEETING_END__", "  __MEETING_END__  ", "__TRANSLATION_STARTED__"]) {
+    assert.equal(isTranscriptControlMarker(marker), true, marker);
+  }
+});
+
+test("does not mistake real speech for a control marker", () => {
+  for (const speech of ["Meeting end", "__meeting_end__", "the __MEETING_END__ marker", "", "Hello"]) {
+    assert.equal(isTranscriptControlMarker(speech), false, JSON.stringify(speech));
+  }
+});
+
+test("a control marker never reaches the rendered transcript", () => {
+  const grouped = groupSavedTranscriptSegments([
+    savedSegment("Hello everyone", 1),
+    savedSegment("__MEETING_END__", 2, "System"),
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].originalText, "Hello everyone");
+});
+
+test("a control marker is not swallowed into the line before it", () => {
+  // Dropping it during grouping rather than after is what stops it being appended to a
+  // neighbouring utterance and becoming part of a real line's text.
+  const grouped = groupSavedTranscriptSegments([
+    savedSegment("Thanks all", 1),
+    savedSegment("__MEETING_END__", 2),
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.ok(!grouped[0].originalText.includes("MEETING_END"), grouped[0].originalText);
 });

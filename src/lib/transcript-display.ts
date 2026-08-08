@@ -79,9 +79,29 @@ export function findSuggestionForUtterance<T>(
 }
 
 /**
+ * Whether a segment is a control marker rather than something somebody said.
+ *
+ * The meeting service publishes `__MEETING_END__` onto the STT stream so the AI assistant
+ * worker knows to generate the summary (MeetingRoomService.EndMeeting →
+ * AIAssistantWorker.process). It is a signal between two services, and it was landing in the
+ * transcript as a line of dialogue — attributed to "System", timestamped 00:00, and offered to
+ * the host with a pencil icon to correct it.
+ *
+ * Matched on the shape rather than that one literal: any `__ALL_CAPS__` token is a sentinel by
+ * construction, and nobody speaks one. A later marker will be filtered without needing to be
+ * discovered on screen first.
+ */
+export function isTranscriptControlMarker(text: string | null | undefined): boolean {
+  return /^__[A-Z0-9_]+__$/.test((text ?? "").trim());
+}
+
+/**
  * Groups a saved/paginated transcript (from the REST API, not the live SignalR
  * stream) so consecutive segments from the same speaker render as one continuous
  * block instead of a new line per finalized STT chunk.
+ *
+ * Control markers are dropped first, so they can never be merged into a neighbouring
+ * utterance and become part of a real line's text.
  */
 export function groupSavedTranscriptSegments(
   segments: SavedTranscriptSegmentDto[],
@@ -89,6 +109,8 @@ export function groupSavedTranscriptSegments(
   const utterances: SavedTranscriptSegmentDto[] = [];
 
   for (const segment of segments) {
+    if (isTranscriptControlMarker(segment.originalText)) continue;
+
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
       utterances.push({ ...segment });

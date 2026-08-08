@@ -12,6 +12,7 @@ import { languagesInScope } from "@/lib/languages";
 import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LanguageLabel } from "@/components/language/language-label";
 import { Switch } from "@/components/ui/switch";
 import type { UpdateUserSettingsRequest } from "@/types/auth";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
@@ -194,12 +195,16 @@ export default function PersonalPreferencesPage() {
                 onValueChange={(val) => queuePreference("defaultSpeakLanguage", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select language..." />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language..."
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {languages.map((l) => (
                     <SelectItem key={l.code} value={l.code} className="text-xs cursor-pointer">
-                      {l.label}
+                      <LanguageLabel value={l.code} />
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -217,12 +222,16 @@ export default function PersonalPreferencesPage() {
                 onValueChange={(val) => queuePreference("defaultListenLanguage", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select language..." />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language..."
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {languages.map((l) => (
                     <SelectItem key={l.code} value={l.code} className="text-xs cursor-pointer">
-                      {l.label}
+                      <LanguageLabel value={l.code} />
                     </SelectItem>
                   ))}
                 </SelectContent>

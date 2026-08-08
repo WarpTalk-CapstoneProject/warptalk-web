@@ -28,10 +28,14 @@ export interface DailyRecurrenceDraft {
 }
 
 /**
- * The browser's own IANA zone. Read rather than hardcoded to Asia/Ho_Chi_Minh: a host in another
- * zone booking "8am daily" means 8am where they are, and the server stores whichever zone it is
- * told. Falls back to the team's zone only if the platform cannot answer, which no supported
- * browser fails to do.
+ * The browser's own IANA zone. Read rather than hardcoded: a host in another zone booking
+ * "8am daily" means 8am where they are, and the server stores whichever zone it is told.
+ *
+ * The fallback is UTC, not this team's own zone. Returning "Asia/Ho_Chi_Minh" when the
+ * platform cannot answer is indistinguishable, downstream, from having detected it — so a
+ * host in Berlin would have every occurrence booked seven hours off with nothing to indicate
+ * a guess had been made. UTC is wrong for everyone equally, which is at least legible in the
+ * stored series. No supported browser reaches this line.
  */
 export function detectTimeZone(): string {
   try {
@@ -40,7 +44,7 @@ export function detectTimeZone(): string {
   } catch {
     // fall through
   }
-  return "Asia/Ho_Chi_Minh";
+  return "UTC";
 }
 
 /** "yyyy-MM-dd" for a Date, read in local time — never toISOString(), which is UTC. */
