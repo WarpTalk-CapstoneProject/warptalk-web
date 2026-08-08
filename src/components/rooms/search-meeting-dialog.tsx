@@ -11,7 +11,6 @@ import {
   Keyboard,
   MagnifyingGlass,
   Plus,
-  Sparkle,
   SquaresFour,
   Users,
   VideoCamera,
@@ -111,12 +110,6 @@ export function SearchMeetingDialog() {
       description: "Browse scheduled and live rooms",
       icon: VideoCamera,
       onSelect: () => closeAndRun(() => router.push(`/${slug}/rooms`)),
-    },
-    {
-      title: "Transcripts",
-      description: "Review transcript, summary, and artifacts",
-      icon: Sparkle,
-      onSelect: () => closeAndRun(() => router.push(`/${slug}/ai-summaries`)),
     },
     {
       title: "Documents",

@@ -55,6 +55,15 @@ export const meetingService = {
     return apiClient.post<{ message: string }>(API.meetings.transferHost(roomId, newHostId));
   },
 
+  /**
+   * Silences a participant's microphone at the SFU. There is no unmute counterpart on
+   * purpose: turning somebody's microphone back on without them touching it is not a host
+   * power any conferencing product grants, and LiveKit does not pretend otherwise.
+   */
+  muteParticipant(roomId: string, participantId: string) {
+    return apiClient.post<{ message: string }>(API.meetings.muteParticipant(roomId, participantId));
+  },
+
   kickParticipant(roomId: string, participantId: string) {
     return apiClient.post<{ message: string }>(API.meetings.kickParticipant(roomId, participantId));
   },

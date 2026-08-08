@@ -347,6 +347,11 @@ export function RealtimeNotificationProvider({
     );
 
     hubConn.on(SIGNALR_EVENTS.AI_SUMMARY_PROGRESS, () => {
+      // The summary and its file arrive on the room-history payload, which is what the
+      // meeting's Summary and Artifacts tabs read. Invalidating only the old AI_SUMMARIES
+      // key would leave a freshly generated summary invisible until a reload — that key
+      // belonged to the Transcripts page, and nothing reads it now.
+      queryClient.invalidateQueries({ queryKey: ["room-history"] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.AI_SUMMARIES] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SUMMARY] });
     });

@@ -74,6 +74,7 @@ export function ChatPanel({
 }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
   const participants = useTranslationRoomStore((state) => state.participants);
+  const assistantState = useTranslationRoomStore((state) => state.assistantState);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
   );
@@ -512,6 +513,28 @@ export function ChatPanel({
             );
           })}
         </AnimatePresence>
+
+        {/* The answer arrives as a WarpBot message in this same shared chat, which everyone
+            sees — but a tool-calling loop takes seconds, and with nothing here the wait was
+            indistinguishable from having been ignored. */}
+        {assistantState !== "idle" ? (
+          <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
+            {assistantState === "thinking" ? (
+              <>
+                <span className="flex gap-0.5" aria-hidden>
+                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]" />
+                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]" />
+                  <span className="size-1 animate-bounce rounded-full bg-ink-muted" />
+                </span>
+                <span>WarpBot is thinking…</span>
+              </>
+            ) : (
+              <span className="text-amber-600">
+                WarpBot didn&apos;t answer. Try mentioning it again.
+              </span>
+            )}
+          </div>
+        ) : null}
       </div>
       <div className="p-3 bg-transparent">
         {sendError ? (

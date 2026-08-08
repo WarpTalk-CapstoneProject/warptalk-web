@@ -93,6 +93,8 @@ export const API = {
     chatModerate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/moderate`,
     rejectParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/reject`,
     transferHost: (roomId: string, newHostId: string) => `/meetings/rooms/${roomId}/transfer-host/${newHostId}`,
+    muteParticipant: (roomId: string, participantId: string) =>
+      `/meetings/rooms/${roomId}/participants/${participantId}/mute`,
     kickParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/kick`,
     endMeeting: (roomId: string) => `/meetings/rooms/${roomId}/end`,
     setLock: (roomId: string) => `/meetings/rooms/${roomId}/lock`,

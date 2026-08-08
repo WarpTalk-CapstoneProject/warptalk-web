@@ -32,6 +32,7 @@ import type { WorkspaceInvitationDto } from "@/types/workspace";
 export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   // Same helper the create form uses, so the two screens cannot drift on what counts as a
@@ -158,8 +159,23 @@ export default function WorkspaceOnboardingGatePage() {
             priority
           />
         </div>
-        <div className="text-[12px] text-ink-muted font-medium">
-          {user?.email}
+        {/* Signed in as, and a way back out.
+            This screen showed the email as plain text. Someone who signed in with the wrong
+            account — or whose domain already belongs to a workspace they cannot create over —
+            had no exit from it: no sign-out, no navigation, and every action on the page
+            refused them. The only escape was clearing site data. */}
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] font-medium text-ink-muted">{user?.email}</span>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              router.replace("/login");
+            }}
+            className="rounded-md border border-border px-2 py-1 text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            Sign out
+          </button>
         </div>
       </header>
 

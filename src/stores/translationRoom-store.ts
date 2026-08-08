@@ -19,6 +19,15 @@ interface TranslationRoomStoreState {
   // different id — see findSuggestionForUtterance.
   suggestions: Record<string, AiSuggestionDto>;
   chatMessages: ChatMessageDto[];
+  /**
+   * Where a WarpBot answer is between being asked for and arriving.
+   *
+   * The backend broadcasts ChatAssistantResponsePending for exactly this and nothing bound
+   * it, so between "@WarpBot ..." and the answer — an OpenAI tool-calling loop, which is
+   * seconds, not milliseconds — the chat showed no sign anything was happening. Asking and
+   * being ignored look identical when there is nothing in between.
+   */
+  assistantState: "idle" | "thinking" | "timed_out";
   isMuted: boolean;
   // userIds of OTHER participants with a raised hand — TranslationRoomHub.RaiseHand
   // broadcasts via OthersInGroup, so this never includes the caller's own userId; the
@@ -38,6 +47,7 @@ interface TranslationRoomStoreState {
   dismissSuggestion: (segmentId: string) => void;
   setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
+  setAssistantState: (state: "idle" | "thinking" | "timed_out") => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
   setHandRaised: (userId: string, isRaised: boolean) => void;
@@ -50,6 +60,7 @@ const initialState = {
   transcriptSegments: [],
   suggestions: {},
   chatMessages: [],
+  assistantState: "idle" as const,
   isMuted: false,
   raisedHands: [],
 };
@@ -182,8 +193,15 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       chatMessages: mergeChatMessages(s.chatMessages, messages),
     })),
 
+  setAssistantState: (assistantState) => set({ assistantState }),
+
   addChatMessage: (message) =>
     set((s) => ({
+      // A WarpBot message IS the answer arriving, so it ends the waiting state wherever it
+      // came from — including the "temporarily unavailable" one the server writes when the
+      // request could not even be queued.
+      assistantState:
+        message.senderType === "assistant" ? "idle" : s.assistantState,
       chatMessages: s.chatMessages.some((existing) => existing.id === message.id)
         ? s.chatMessages.map((existing) => (existing.id === message.id ? message : existing))
         : [...s.chatMessages, message],
