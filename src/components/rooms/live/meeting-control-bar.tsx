@@ -224,13 +224,13 @@ export function MeetingControlBar({
   }
 
   return (
-    <div className="flex h-12 items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2 shadow-sm backdrop-blur-xl">
+    <div className="flex h-[60px] items-center gap-2 rounded-full border border-border/50 bg-surface-1/80 px-3 shadow-sm backdrop-blur-xl">
       {isHost && onStartWarptalk && onStopWarptalk ? (
         <>
           <button
             type="button"
             onClick={warptalkStarted ? onStopWarptalk : onStartWarptalk}
-            className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors ${
+            className={`flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-4 text-[14px] font-medium transition-colors ${
               warptalkStarted
                 ? "bg-surface-2 text-ink hover:bg-surface-3"
                 : "bg-primary text-primary-foreground hover:bg-primary/80"
@@ -239,7 +239,7 @@ export function MeetingControlBar({
             {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
             {warptalkStarted ? "Stop Translation" : "Start Translation"}
           </button>
-          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
+          <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
         </>
       ) : null}
 
@@ -248,7 +248,7 @@ export function MeetingControlBar({
           <MeetControl
             label="Host controls"
             active={Boolean(isLocked) || isHostControlsMenuOpen}
-            icon={<ShieldCheck className="h-[18px] w-[18px]" weight={isLocked ? "fill" : "regular"} />}
+            icon={<ShieldCheck className="h-5 w-5" weight={isLocked ? "fill" : "regular"} />}
             hasPopup
             expanded={isHostControlsMenuOpen}
             controls="meeting-host-controls-menu"
@@ -268,7 +268,7 @@ export function MeetingControlBar({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute bottom-14 left-0 z-50 w-64 overflow-hidden rounded-lg border border-border bg-surface-1 p-1 shadow-lg origin-bottom-left"
+                className="absolute bottom-[68px] left-0 z-50 w-64 overflow-hidden rounded-lg border border-border bg-surface-1 p-1 shadow-lg origin-bottom-left"
               >
                 <HostControlRow
                   label={isLocked ? "Room locked" : "Lock room"}
@@ -362,7 +362,7 @@ export function MeetingControlBar({
         active={subtitlesEnabled}
         icon={
           <ClosedCaptioning
-            className="h-[18px] w-[18px]"
+            className="h-5 w-5"
             weight={subtitlesEnabled ? "fill" : "regular"}
           />
         }
@@ -372,7 +372,7 @@ export function MeetingControlBar({
       <MeetControl
         label={isScreenSharing ? "Stop presenting" : "Present now"}
         active={isScreenSharing}
-        icon={<Screencast className="h-[18px] w-[18px]" />}
+        icon={<Screencast className="h-5 w-5" />}
         onClick={onToggleScreenShare}
       />
 
@@ -380,7 +380,7 @@ export function MeetingControlBar({
         <MeetControl
           label={handRaised ? "Lower hand" : "Raise hand"}
           active={handRaised}
-          icon={<HandPalm className="h-[18px] w-[18px]" weight={handRaised ? "fill" : "regular"} />}
+          icon={<HandPalm className="h-5 w-5" weight={handRaised ? "fill" : "regular"} />}
           onClick={onToggleRaiseHand}
         />
       ) : null}
@@ -389,7 +389,7 @@ export function MeetingControlBar({
         <div className="relative" ref={reactionRef}>
           <MeetControl
             label="Send a reaction"
-            icon={<SmileyWink className="h-[18px] w-[18px]" />}
+            icon={<SmileyWink className="h-5 w-5" />}
             onClick={() => setIsReactionMenuOpen((current) => !current)}
           />
           <AnimatePresence>
@@ -399,7 +399,7 @@ export function MeetingControlBar({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute bottom-14 right-0 z-50 flex w-52 items-center gap-1 rounded-lg border border-border bg-surface-1 p-2 shadow-lg origin-bottom-right"
+                className="absolute bottom-[68px] right-0 z-50 flex w-52 items-center gap-1 rounded-lg border border-border bg-surface-1 p-2 shadow-lg origin-bottom-right"
               >
                 {ALLOWED_REACTION_EMOJIS.map((emoji) => (
                   <button
@@ -420,13 +420,13 @@ export function MeetingControlBar({
         </div>
       ) : null}
 
-      <div className="h-6 w-[1px] bg-surface-3 mx-1" />
+      <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
       
       <div className="relative" ref={settingsRef}>
         <MeetControl
           label="Settings"
           active={isSettingsMenuOpen}
-          icon={<GearSix className="h-[18px] w-[18px]" />}
+          icon={<GearSix className="h-5 w-5" />}
           onClick={() =>
             setIsSettingsMenuOpen((current) => {
               if (current) setSettingsSection("root");
@@ -441,7 +441,7 @@ export function MeetingControlBar({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
-              className="absolute bottom-14 right-0 z-50 max-h-[70vh] w-64 overflow-y-auto rounded-lg border border-border bg-surface-1 p-1 shadow-lg origin-bottom-right"
+              className="absolute bottom-[68px] right-0 z-50 max-h-[70vh] w-64 overflow-y-auto rounded-lg border border-border bg-surface-1 p-1 shadow-lg origin-bottom-right"
             >
               {settingsSection === "root" ? (
                 <>
@@ -869,13 +869,13 @@ function LiveKitTrackControls({
         <MeetControl
           label={microphoneEnabled ? "Mute microphone" : "Unmute microphone"}
           active={!microphoneEnabled}
-          icon={microphoneEnabled ? <Microphone className="h-[18px] w-[18px]" /> : <MicrophoneSlash className="h-[18px] w-[18px]" />}
+          icon={microphoneEnabled ? <Microphone className="h-5 w-5" /> : <MicrophoneSlash className="h-5 w-5" />}
           onClick={onToggleMicrophone}
         />
         <MeetControl
           label={cameraEnabled ? "Turn camera off" : "Turn camera on"}
           active={!cameraEnabled}
-          icon={cameraEnabled ? <VideoCamera className="h-[18px] w-[18px]" /> : <VideoCameraSlash className="h-[18px] w-[18px]" />}
+          icon={cameraEnabled ? <VideoCamera className="h-5 w-5" /> : <VideoCameraSlash className="h-5 w-5" />}
           onClick={onToggleCamera}
         />
       </>
@@ -890,7 +890,7 @@ function LiveKitTrackControls({
         // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
         // own padding. Our classes named no base background at all, so LiveKit's won: two
         // black squares sitting in a light, rounded bar next to buttons we do style.
-        className="grid h-8 w-8 place-items-center rounded-md !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+        className="grid h-11 w-11 place-items-center rounded-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
       />
       <TrackToggle
         source={Track.Source.Camera}
@@ -898,7 +898,7 @@ function LiveKitTrackControls({
         // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
         // own padding. Our classes named no base background at all, so LiveKit's won: two
         // black squares sitting in a light, rounded bar next to buttons we do style.
-        className="grid h-8 w-8 place-items-center rounded-md !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+        className="grid h-11 w-11 place-items-center rounded-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
       />
     </>
   );
@@ -934,7 +934,7 @@ function MeetControl({
       aria-haspopup={hasPopup ? "menu" : undefined}
       aria-expanded={hasPopup ? Boolean(expanded) : undefined}
       aria-controls={hasPopup && expanded ? controls : undefined}
-      className={`grid h-8 w-8 place-items-center rounded-md transition-colors ${
+      className={`grid h-11 w-11 place-items-center rounded-xl transition-colors ${
         disabled
           ? "cursor-not-allowed bg-canvas text-ink-tertiary"
           : active
