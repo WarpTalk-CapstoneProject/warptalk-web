@@ -333,8 +333,14 @@ export default function WorkspaceMembersPage() {
   return (
     <div className="flex h-full flex-col bg-surface-1 text-ink">
       {/* Filter, Search, and Action triggers - Unified horizontal design */}
-      <div className="flex shrink-0 flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+      {/* flex-wrap, because this row has to survive a narrow main. With both side
+          panels open the content area is under 500px, and the action group alone needs
+          most of that — unwrapped, the pills were allotted 14px and vanished. */}
+      <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        {/* A real minimum width, not min-w-0. Its sibling is shrink-0, so with a floor of
+            zero flexbox shrinks the pills away instead of wrapping — they were allotted
+            14px and vanished. With a floor they cannot fit, so the row wraps instead. */}
+        <div className="flex min-w-[260px] flex-1 items-center gap-2 overflow-x-auto hide-scrollbar">
           {memberFilterPills.map((item) => (
             <button
               key={item.key}
@@ -453,7 +459,7 @@ export default function WorkspaceMembersPage() {
             </p>
           </div>
         ) : (
-          <div className="min-w-[750px] divide-y divide-hairline/40">
+          <div className="min-w-[1000px] divide-y divide-hairline/40">
             {/* Header row */}
             <div className={`grid ${memberGridClass} items-center gap-4 px-2 py-2 text-[11px] font-semibold uppercase text-ink-muted`}>
               <span>Name</span>
