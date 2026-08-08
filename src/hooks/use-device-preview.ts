@@ -25,6 +25,34 @@ type UseDevicePreviewOptions = {
 
 export type DevicePreview = ReturnType<typeof useDevicePreview>;
 
+/**
+ * What a failed getUserMedia should say to the person in front of it.
+ *
+ * Keyed on `name` rather than `message`, because the name is the part the spec fixes —
+ * messages are the browser's own prose and differ across Chrome, Safari and Firefox for the
+ * same cause. The two lines that matter are the first two: refusing the prompt and another
+ * app already holding the camera look identical in the UI and need opposite remedies.
+ */
+export function describeMediaError(error: unknown): string {
+  const name = error instanceof DOMException ? error.name : "";
+
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "Camera and microphone are blocked. Allow them for this site in your browser's address bar, then reload.";
+    case "NotReadableError":
+    case "AbortError":
+      return "Another app is using your camera or microphone. Close it, then reload.";
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+      return "No camera or microphone found. Connect one, then reload.";
+    case "OverconstrainedError":
+      return "The selected device is unavailable. Pick a different one below.";
+    default:
+      return "Could not start your camera or microphone. You can still join without them.";
+  }
+}
+
 export function useDevicePreview({
   active,
   noiseSuppression = true,
@@ -184,11 +212,15 @@ export function useDevicePreview({
       return stream;
     } catch (error) {
       if (generation !== generationRef.current) return null;
-      // Denying the permission prompt lands here. It is a normal outcome, not a fault —
-      // the surface stays usable and the message explains why there is no picture.
-      setMediaError(
-        error instanceof Error ? error.message : "Unable to access camera or microphone.",
-      );
+      // Denying the permission prompt lands here. It is a normal outcome, not a fault — so
+      // the surface stays usable and says what to do next.
+      //
+      // This used to surface `error.message`, which is the browser's own wording: the whole
+      // banner read "Permission denied" and nothing else. True, and useless — it names the
+      // outcome, never the cause or the remedy, and the two cases people actually hit
+      // (refused the prompt vs. another app already holding the camera) produce different
+      // strings on every browser while needing completely different actions.
+      setMediaError(describeMediaError(error));
       if (videoRef.current) videoRef.current.srcObject = null;
       return null;
     }

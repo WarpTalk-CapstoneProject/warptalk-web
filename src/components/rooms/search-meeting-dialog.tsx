@@ -25,6 +25,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Lumidot } from "lumidot";
+import { looksLikeRoomCode } from "@/lib/room-code-guess";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useTheme } from "next-themes";
@@ -59,6 +60,21 @@ export function SearchMeetingDialog() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [setSearchMeetingModalOpen]);
+
+  // Reopening must not resume the last search. Left as-is, a code typed earlier is still in
+  // the box on the next ⌘K with "Join meeting <that code>" selected, so Enter — the one key
+  // someone reaches for — sends them into a room they did not ask for.
+  //
+  // Keyed off the open flag rather than cleared inside onOpenChange, because selecting a
+  // result closes the dialog by calling the store setter directly; that path never reaches
+  // onOpenChange, and it is the path most likely to leave a code behind. Adjusting during
+  // render rather than in an effect is React's own answer to "reset state when a value
+  // changes" — an effect would paint the stale query for a frame first.
+  const [wasOpen, setWasOpen] = useState(searchMeetingModalOpen);
+  if (wasOpen !== searchMeetingModalOpen) {
+    setWasOpen(searchMeetingModalOpen);
+    if (!searchMeetingModalOpen) setSearchQuery("");
+  }
 
   const { data, isLoading } = useTranslationRooms({
     search: searchQuery,
@@ -118,6 +134,12 @@ export function SearchMeetingDialog() {
 
   const hasQuery = searchQuery.trim().length > 0;
 
+  // Someone who has just pasted a code wants one thing, so it goes above the quick actions
+  // rather than below the meeting results — the room may not be in this workspace's list at
+  // all, and waiting for that search to come back empty is not a useful answer.
+  const pastedCode = searchQuery.trim();
+  const showQuickJoin = looksLikeRoomCode(pastedCode);
+
   return (
     <CommandDialog
       open={searchMeetingModalOpen}
@@ -152,6 +174,30 @@ export function SearchMeetingDialog() {
           </div>
 
           <CommandList className="max-h-[460px] border-t border-border/70 px-2 pb-2 pt-1">
+            {showQuickJoin && (
+              <CommandGroup heading="Join a meeting">
+                <CommandItem
+                  value={`join-${pastedCode}`}
+                  onSelect={() =>
+                    closeAndRun(() => router.push(`/join?code=${encodeURIComponent(pastedCode)}`))
+                  }
+                  className="gap-3 rounded-[10px] px-3 py-2.5"
+                >
+                  <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-surface-2 text-ink-muted group-data-selected/command-item:bg-primary/10 group-data-selected/command-item:text-primary">
+                    <VideoCamera size={19} weight="duotone" />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[13px] font-semibold text-foreground">
+                      Join meeting <span className="font-mono">{pastedCode}</span>
+                    </span>
+                    <span className="mt-0.5 truncate text-[12px] text-muted-foreground">
+                      Go straight to the room with this code
+                    </span>
+                  </span>
+                </CommandItem>
+              </CommandGroup>
+            )}
+
             <CommandGroup heading="Quick actions">
             {quickActions.map((action) => {
               const Icon = action.icon;

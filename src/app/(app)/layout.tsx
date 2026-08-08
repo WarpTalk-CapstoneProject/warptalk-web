@@ -20,7 +20,7 @@ import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
-import { CommandPalette } from "@/components/layout/command-palette";
+import { HeaderSearch } from "@/components/layout/header-search";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
 import { cn } from "@/lib/utils";
@@ -243,7 +243,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Top bar */}
         <header
           className={cn(
-            "h-[44px] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 shrink-0",
+            // Three columns since the search sits between the breadcrumb and the icons.
+            // This was two, and adding a third child silently wrapped the icon cluster onto a
+            // second grid row inside a 44px-tall header — the notification bell, theme toggle,
+            // help and the right-panel toggle all vanished. Nothing failed: not typecheck, not
+            // lint, not the build. Only looking at it showed anything was wrong.
+            //
+            // The middle column is capped rather than 1fr so the search does not stretch across
+            // a wide window, and minmax(0,…) on the outer two lets a long breadcrumb truncate
+            // instead of pushing the icons off the edge.
+            "h-[44px] grid grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] items-center gap-3 px-4 shrink-0",
             !isLiveMeetingRoute && "border-b border-border",
           )}
         >
@@ -366,7 +375,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             what gives up space on a narrow window.
           */}
           <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
-            <CommandPalette />
+            <HeaderSearch />
           </div>
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">

@@ -164,7 +164,7 @@ export default function WaitingRoomPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
         <section aria-label="Check your camera and microphone">
-          <DevicePreview preview={preview} />
+          <DevicePreview preview={preview} displayName={user?.fullName} />
         </section>
 
         <aside className="space-y-6">
@@ -271,10 +271,18 @@ export default function WaitingRoomPage() {
                             </span>
                           ) : null}
                         </p>
+                        {/* An arrow between two identical languages — "English → English" —
+                            describes no translation at all, and it is the common case: until
+                            someone picks a listen language it defaults to the one they speak.
+                            One label is the truthful rendering of that state. */}
                         <p className="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
                           <LanguageLabel value={participant.speakLanguage} />
-                          <span aria-hidden>→</span>
-                          <LanguageLabel value={participant.listenLanguage} />
+                          {participant.listenLanguage !== participant.speakLanguage ? (
+                            <>
+                              <span aria-hidden>→</span>
+                              <LanguageLabel value={participant.listenLanguage} />
+                            </>
+                          ) : null}
                         </p>
                       </div>
                     </li>

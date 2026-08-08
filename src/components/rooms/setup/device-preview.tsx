@@ -22,11 +22,14 @@ import type { DevicePreview as DevicePreviewState } from "@/hooks/use-device-pre
 export function DevicePreview({
   preview,
   showDevicePickers = true,
+  displayName,
   className,
 }: {
   preview: DevicePreviewState;
   /** Hidden on narrow layouts where the pickers would crowd the picture. */
   showDevicePickers?: boolean;
+  /** Shown as an initial when there is no picture, so the frame is a person, not a void. */
+  displayName?: string;
   className?: string;
 }) {
   const {
@@ -51,7 +54,11 @@ export function DevicePreview({
   return (
     <div className={cn("space-y-4", className)}>
       <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-canvas">
-        {cameraEnabled ? (
+        {/* A failed getUserMedia leaves the camera *enabled* — nothing turned it off, it never
+            started. Rendering the <video> on `cameraEnabled` alone therefore painted an empty
+            grey rectangle under the error, which is the picture of a broken app rather than of
+            a person who has not granted a permission yet. */}
+        {cameraEnabled && !mediaError ? (
           // Mirrored, like every other video app: an un-mirrored self-view reads as broken.
           <video
             ref={videoRef}
@@ -61,22 +68,26 @@ export function DevicePreview({
             playsInline
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-ink-muted">
-              <VideoCameraSlash className="h-12 w-12" weight="light" />
-              <span className="text-sm font-medium">Camera is off</span>
+          <div className="absolute inset-0 flex items-center justify-center px-6">
+            <div className="flex flex-col items-center gap-3 text-center text-ink-muted">
+              {displayName ? (
+                <span className="grid size-20 place-items-center rounded-full bg-surface-2 text-2xl font-semibold text-ink">
+                  {displayName.trim().charAt(0).toUpperCase()}
+                </span>
+              ) : (
+                <VideoCameraSlash className="h-12 w-12" weight="light" />
+              )}
+              <span className="text-sm font-medium">
+                {mediaError ? "No camera preview" : "Camera is off"}
+              </span>
+              {mediaError ? (
+                <span role="status" className="max-w-sm text-xs leading-relaxed text-ink-muted">
+                  {mediaError}
+                </span>
+              ) : null}
             </div>
           </div>
         )}
-
-        {mediaError ? (
-          <div
-            role="status"
-            className="absolute inset-x-4 top-4 rounded-lg bg-red-500/90 px-3 py-2 text-xs text-white"
-          >
-            {mediaError}
-          </div>
-        ) : null}
 
         <div className="absolute inset-x-0 bottom-0 flex justify-center p-4">
           <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface-1/85 p-2 backdrop-blur-xl">
@@ -118,7 +129,10 @@ export function DevicePreview({
               )}
             </button>
 
-            {microphoneEnabled ? (
+            {/* Gated on the stream, not just the toggle. With the microphone "on" but no
+                permission there is nothing to meter, and an empty track next to the buttons
+                reads as a stray sliver of UI rather than as a level that happens to be zero. */}
+            {microphoneEnabled && !mediaError ? (
               <>
                 <div className="mx-1 h-6 w-px bg-border/60" />
                 {/* Proof the microphone is actually picking something up — the one thing a
