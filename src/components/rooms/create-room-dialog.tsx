@@ -13,7 +13,7 @@ import gsap from "gsap";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { meetingTypeByLabel, meetingTypeHighlights } from "@/lib/meeting-types";
+import { meetingTypeByLabel } from "@/lib/meeting-types";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -43,7 +43,7 @@ import {
   describeDailySchedule,
   detectTimeZone,
 } from "@/lib/daily-recurrence";
-import { DailyScheduleDialog } from "./create/daily-schedule-dialog";
+import { DailyScheduleInline } from "./create/daily-schedule-inline";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
 import { LanguageSelector } from "./create/language-selector";
 import { PillButton } from "./create/pill-button";
@@ -380,17 +380,13 @@ export function CreateRoomDialog() {
                     value={meetingTemplate}
                     onChange={setMeetingTemplate}
                   />
-                  {/* The type is no longer cosmetic — say out loud what it will configure,
-                      rather than letting the host discover it after the room exists. */}
-                  {!editRoomId &&
-                    meetingTypeHighlights(meetingTemplate).map((highlight) => (
-                      <span
-                        key={highlight}
-                        className="hidden sm:inline rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-ink-muted"
-                      >
-                        {highlight}
-                      </span>
-                    ))}
+                  {/* The type's consequences were spelled out here as a row of chips —
+                      "Approval to join", "Muted on entry", "Records automatically", "No
+                      breakout rooms", "Max 500 participants". Five read-only labels across
+                      the top of a five-field dialog, none of them actionable, and picking a
+                      different type reflowed the whole header. The type name is the control;
+                      what it configures belongs in the picker that changes it, not stacked
+                      beside the workspace name. */}
                 </div>
 
                 <button
@@ -473,6 +469,29 @@ export function CreateRoomDialog() {
                   onToggleDaily={() => setDailyDialogOpen(true)}
                 />
               </div>
+
+              {/* WT-327: "khi chọn mode daily thì mở modal để user chọn giờ daily" — the hour
+                  is asked for, never assumed. It sits in the dialog rather than over it; a
+                  second modal to collect two fields put the half-written meeting behind a
+                  dimmed overlay. Keyed on open so each visit starts from what is in force. */}
+              {dailyDialogOpen && (
+                <DailyScheduleInline
+                  key={dailyRecurrence ? `${dailyRecurrence.time}-${dailyRecurrence.endDate}` : "new"}
+                  value={dailyRecurrence}
+                  onConfirm={(draft) => {
+                    setDailyRecurrence(draft);
+                    // A one-off time cannot coexist with a rule that decides every
+                    // occurrence's time.
+                    setScheduledAt(null);
+                    setDailyDialogOpen(false);
+                  }}
+                  onCancel={() => setDailyDialogOpen(false)}
+                  onDisable={() => {
+                    setDailyRecurrence(null);
+                    setDailyDialogOpen(false);
+                  }}
+                />
+              )}
 
               {/* WT-327: what the host is about to create, spelled out before they press the
                   button. The control it replaces looked identical whether it worked or not. */}
@@ -597,23 +616,6 @@ export function CreateRoomDialog() {
             </div>
           )}
 
-          {/* WT-327: "khi chọn mode daily thì mở modal để user chọn giờ daily".
-              Rendered INSIDE the create dialog's popup on purpose. base-ui only recognises a
-              dialog as NESTED when its root sits within the parent popup's context; anywhere
-              else — a sibling of <Dialog>, or a child of <Dialog> outside <DialogContent> —
-              the parent treats the new dialog taking focus as an outside interaction and
-              closes itself, throwing away the half-filled meeting the host was writing. */}
-          <DailyScheduleDialog
-            open={dailyDialogOpen}
-            onOpenChange={setDailyDialogOpen}
-            value={dailyRecurrence}
-            onConfirm={(draft) => {
-              setDailyRecurrence(draft);
-              // A one-off time cannot coexist with a rule that decides every occurrence's time.
-              setScheduledAt(null);
-            }}
-            onDisable={() => setDailyRecurrence(null)}
-          />
         </div>
       </DialogContent>
     </Dialog>

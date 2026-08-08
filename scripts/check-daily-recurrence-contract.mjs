@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 const dialogSource = read("../src/components/rooms/create-room-dialog.tsx");
-const modalSource = read("../src/components/rooms/create/daily-schedule-dialog.tsx");
+const modalSource = read("../src/components/rooms/create/daily-schedule-inline.tsx");
 const optionsSource = read("../src/components/rooms/create/options-menu.tsx");
 const typesSource = read("../src/types/translationRoom.ts");
 const serviceSource = read("../src/services/translationRoom.service.ts");
@@ -53,27 +53,43 @@ assert.match(
   "The Daily schedule must be cleared by handleOpenChange — the old toggle was not, so its check mark persisted across dialogs.",
 );
 
-// ── Choosing Daily opens a modal, and the modal asks for the hour ────────────
+// ── Choosing Daily asks for the hour ─────────────────────────────────────────
+//
+// The owner's request was "mở modal để user chọn giờ daily", and what these assertions protect
+// is the second half of it: choosing Daily must present a control that ASKS, never one that
+// commits a schedule the host did not pick. The editor has since moved from a modal stacked on
+// the create dialog to a panel inside it — a second overlay to collect two fields left the
+// half-written meeting behind a dim — so what is pinned here is the asking, not the overlay.
 
 assert.match(
   dialogSource,
-  /<DailyScheduleDialog/,
-  "Choosing Daily must open the schedule modal — the owner's request was literally 'mở modal để user chọn giờ daily'.",
+  /<DailyScheduleInline/,
+  "Choosing Daily must open the schedule editor rather than silently committing an hour.",
 );
 assert.match(
   dialogSource,
   /onToggleDaily=\{\(\)\s*=>\s*setDailyDialogOpen\(true\)\}/,
-  "The Daily row in the options menu must open the modal rather than silently committing a schedule.",
+  "The Daily row in the options menu must open the editor rather than silently committing a schedule.",
+);
+assert.doesNotMatch(
+  modalSource,
+  /<Dialog[\s>]/,
+  "The Daily editor belongs inside the create dialog, not in a second one over it.",
 );
 assert.match(
   modalSource,
   /type="time"/,
-  "The Daily modal must offer a time-of-day control; picking the hour is the entire feature.",
+  "The Daily editor must offer a time-of-day control; picking the hour is the entire feature.",
 );
 assert.match(
   modalSource,
   /type="date"/,
-  "The Daily modal must offer an end date. A series with no end generates rooms forever, including for abandoned demo workspaces.",
+  "The Daily editor must offer an end date. A series with no end generates rooms forever, including for abandoned demo workspaces.",
+);
+assert.match(
+  modalSource,
+  /data-testid="daily-summary"/,
+  "The editor must print how many meetings the rule creates before it is saved — that preview is what distinguishes this control from the dead switch it replaced.",
 );
 
 // ── The rule is unambiguous about time ───────────────────────────────────────

@@ -91,7 +91,14 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   enforceHostApprovalDefault: true,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
-  allowedTargetLanguages: ["en", "vi", "ja"],
+  // Empty means unrestricted — every meeting-scope language is offered. It used to read
+  // ["en","vi","ja"], which is not a default so much as a policy nobody chose: a workspace
+  // that had never set one got a three-language allowlist, and Korean, French and Spanish
+  // showed as BLOCKED in the create-room picker with the reason pointing at "this
+  // workspace's language policy" and at an admin who had never touched it. Worse, the value
+  // is what this form posts, so the first save of any unrelated setting wrote the invented
+  // allowlist to the server for real.
+  allowedTargetLanguages: [],
   verifiedDomains: [],
   allowExternalCollaboration: true,
   requireVerifiedDomainForInternal: false,
@@ -126,7 +133,9 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
-    allowedTargetLanguages: settings.allowedTargetLanguages || ["en", "vi", "ja"],
+    // `|| []` and not `|| [...three languages]`: an absent policy means the server is not
+    // restricting anything, and substituting a list here turns "no policy" into a real one.
+    allowedTargetLanguages: settings.allowedTargetLanguages || [],
     verifiedDomains: settings.verifiedDomains || [],
     allowExternalCollaboration: settings.allowExternalCollaboration ?? DEFAULT_SETTINGS_FORM_DATA.allowExternalCollaboration,
     requireVerifiedDomainForInternal: settings.requireVerifiedDomainForInternal ?? DEFAULT_SETTINGS_FORM_DATA.requireVerifiedDomainForInternal,
