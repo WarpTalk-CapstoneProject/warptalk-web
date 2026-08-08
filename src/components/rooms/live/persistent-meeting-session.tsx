@@ -133,6 +133,8 @@ const MINI_MEETING_IDLE_POLL_MS = 5 * 1000;
 type LocalMediaControl = {
   setMicrophoneEnabled: (enabled: boolean) => void;
   setCameraEnabled: (enabled: boolean) => void;
+  /** Resolves to what the share ended up as, so the caller can reflect a cancelled prompt. */
+  setScreenShareEnabled: (enabled: boolean) => Promise<boolean>;
 };
 
 export function PersistentMeetingSession({
@@ -195,7 +197,6 @@ export function PersistentMeetingSession({
   // rooms list. A ref, not state: the broadcast handler is installed once per connection and
   // must read the current value, not the one closed over at subscribe time.
   const endedByMeRef = useRef(false);
-  const screenStreamRef = useRef<MediaStream | null>(null);
   // Imperative handle onto the LiveKit local participant, published by <LocalMediaController>
   // (a child of <LiveKitRoom>, because this component RENDERS the provider and so cannot read
   // it). Anything that must actually change what is being published — the host's ForceMuted
@@ -205,7 +206,11 @@ export function PersistentMeetingSession({
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  // Whether THIS participant is publishing a screen share. Previously a MediaStream held
+  // in state, which was only ever a local preview: the stage renders everyone's share —
+  // including our own — from the subscribed LiveKit track, so a second local copy served no
+  // purpose beyond making an unpublished share look like a working one.
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [meetingLayout, setMeetingLayout] = useState<MeetingLayoutMode>("auto");
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   // Local-only tile pin (WT-03) — clicking a tile toggles it; overridden by spotlight below.
@@ -1526,39 +1531,25 @@ export function PersistentMeetingSession({
     }
   }
 
+  // Published through LiveKit, not captured locally.
+  //
+  // This used to call getDisplayMedia() itself, keep the MediaStream in React state and
+  // announce "Screen sharing started" — while never publishing anything. The sharer saw
+  // their own screen; everyone else saw them as a participant with the camera off, which
+  // is exactly what was reported. The stage already subscribes to Track.Source.ScreenShare,
+  // so only the publish half was missing.
   async function handleToggleScreenShare() {
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
-      setScreenStream(null);
-      toast.success("Screen sharing stopped.");
+    const control = localMediaControlRef.current;
+    if (!control) {
+      toast.error("The meeting is not connected yet.");
       return;
     }
 
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      toast.error("This browser does not support screen sharing.");
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false,
-      });
-      screenStreamRef.current = stream;
-      setScreenStream(stream);
-      stream.getVideoTracks()[0]?.addEventListener("ended", () => {
-        screenStreamRef.current = null;
-        setScreenStream(null);
-      });
-      toast.success("Screen sharing started.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not start screen sharing.",
-      );
-    }
+    const next = !isScreenSharing;
+    const applied = await control.setScreenShareEnabled(next);
+    setIsScreenSharing(applied);
+    if (applied) toast.success("Screen sharing started.");
+    else if (!next) toast.success("Screen sharing stopped.");
   }
 
   function handleStartWarptalk() {
@@ -1821,7 +1812,6 @@ export function PersistentMeetingSession({
               fallbackName={user?.fullName || user?.email || room.title}
               isJoining={isMeetingJoining}
               error={meetingError}
-              screenStream={screenStream}
               // WT-246 asks to still see everyone while minimised. "auto" gives one large tile
               // with the rest as thumbnails, which at this size leaves the others unreadable —
               // a grid fits more faces into the same 360x220.
@@ -1957,7 +1947,6 @@ export function PersistentMeetingSession({
                   fallbackName={user?.fullName || user?.email || room.title}
                   isJoining={isMeetingJoining}
                   error={meetingError}
-                  screenStream={screenStream}
                   layoutMode={meetingLayout}
                   pinnedUserId={pinnedUserId}
                   onPinParticipant={handlePinParticipant}
@@ -1996,7 +1985,7 @@ export function PersistentMeetingSession({
                     microphoneEnabled={microphoneEnabled}
                     noiseSuppressionEnabled={noiseSuppressionEnabled}
                     backgroundBlurEnabled={backgroundBlurEnabled}
-                    isScreenSharing={Boolean(screenStream)}
+                    isScreenSharing={isScreenSharing}
                     layoutMode={meetingLayout}
                     roomCode={room.translationRoomCode}
                     joinLink={joinLink}
@@ -2183,6 +2172,23 @@ function LocalMediaController({
         void localParticipant.setMicrophoneEnabled(enabled).catch(() => {
           toast.error("Could not change your microphone.");
         });
+      },
+      setScreenShareEnabled: async (enabled) => {
+        // LiveKit owns the whole flow: it prompts, creates the track AND publishes it.
+        // The previous implementation called getDisplayMedia() directly and kept the
+        // stream in React state, so the sharer saw their own screen and nobody else
+        // received anything — the track was never on the wire.
+        try {
+          await localParticipant.setScreenShareEnabled(enabled);
+          return enabled;
+        } catch (error) {
+          // Dismissing the browser's picker throws; that is a choice, not a failure.
+          const aborted =
+            error instanceof DOMException &&
+            (error.name === "NotAllowedError" || error.name === "AbortError");
+          if (!aborted) toast.error("Could not share your screen.");
+          return false;
+        }
       },
       setCameraEnabled: (enabled) => {
         void localParticipant.setCameraEnabled(enabled).catch(() => {
