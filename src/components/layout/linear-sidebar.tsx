@@ -175,6 +175,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRoleName, setInviteRoleName] = useState("Member");
+  // Set once an invitation is created and the server returns its token. The plaintext is
+  // never retrievable again — the row keeps only a hash — so the dialog stays on it until
+  // the inviter dismisses it.
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteLinkEmail, setInviteLinkEmail] = useState("");
+  const [inviteLinkDelivered, setInviteLinkDelivered] = useState(true);
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -231,18 +237,46 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     if (!activeWorkspaceId || !email) return;
 
     try {
-      await inviteMemberMutation.mutateAsync({
+      const response = await inviteMemberMutation.mutateAsync({
         email,
         roleName: inviteRoleName,
       });
-      toast.success(`Invitation sent to ${email}`);
-      setInviteEmail("");
-      setInviteRoleName("Member");
-      setIsInviteModalOpen(false);
+
+      // Delivery can fail while the invitation itself is perfectly valid — the server says
+      // so in `warning`. Reporting "Invitation sent" in that case is a lie the recipient
+      // pays for, so the two outcomes are told apart.
+      const delivered = !response?.warning;
+      const token = response?.rawToken;
+
+      if (token) {
+        // Keep the dialog open on the link. Closing it would throw away the one moment the
+        // plaintext token exists — it is never returned again, and the row stores only a hash.
+        setInviteLink(`${window.location.origin}/invitations/${token}`);
+        setInviteLinkEmail(email);
+        setInviteLinkDelivered(delivered);
+      } else {
+        // Server without the token change: behave exactly as before.
+        toast[delivered ? "success" : "warning"](
+          delivered
+            ? `Invitation sent to ${email}`
+            : `Invitation created for ${email}, but the email could not be delivered.`,
+        );
+        setInviteEmail("");
+        setInviteRoleName("Member");
+        setIsInviteModalOpen(false);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to send invitation";
       toast.error(message);
     }
+  };
+
+  const resetInviteDialog = () => {
+    setInviteEmail("");
+    setInviteRoleName("Member");
+    setInviteLink(null);
+    setInviteLinkEmail("");
+    setInviteLinkDelivered(true);
   };
 
   const workspaceInitials = useMemo(() => {
@@ -896,7 +930,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
+      {/*
+        Reset on close, not just on the Done button. Dismissing with Escape or the X would
+        otherwise leave the previous invitee's link in state, and the next person to open
+        this dialog would be shown a link addressed to someone else.
+      */}
+      <Dialog
+        open={isInviteModalOpen}
+        onOpenChange={(open) => {
+          if (!open) resetInviteDialog();
+          setIsInviteModalOpen(open);
+        }}
+      >
         <DialogContent className="overflow-hidden p-0 sm:max-w-[520px]">
           <div className="h-36 border-b border-border bg-[radial-gradient(circle_at_28%_18%,rgba(94,106,210,0.30),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(16,185,129,0.18),transparent_30%),linear-gradient(135deg,var(--surface-2),var(--surface-1))]">
             <div className="flex h-full items-end p-5">
@@ -911,6 +956,78 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </div>
             </div>
           </div>
+          {inviteLink ? (
+            <div className="space-y-4 p-5">
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium text-foreground">
+                  Invitation created for {inviteLinkEmail}
+                </p>
+                <p className="text-xs text-ink-muted">
+                  {inviteLinkDelivered
+                    ? "We emailed them a link. You can also share it directly."
+                    : "The email could not be delivered — share this link instead."}
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-link" className="text-xs font-medium">
+                  Invitation link
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="invite-link"
+                    readOnly
+                    value={inviteLink}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="bg-surface-1 font-mono text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(inviteLink);
+                        toast.success("Invitation link copied");
+                      } catch {
+                        // Clipboard access is refused outside a secure context and in some
+                        // embedded browsers. The field is selectable, so say that rather
+                        // than leaving a button that silently does nothing.
+                        toast.error("Could not copy — select the link and copy it manually");
+                      }
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Single use, and only {inviteLinkEmail} can accept it. This link is shown
+                  once — it cannot be retrieved again after you close this dialog.
+                </p>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    resetInviteDialog();
+                  }}
+                >
+                  Invite someone else
+                </Button>
+                <Button
+                  type="button"
+                  className="text-white"
+                  onClick={() => {
+                    resetInviteDialog();
+                    setIsInviteModalOpen(false);
+                  }}
+                >
+                  Done
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
           <form onSubmit={handleInviteMember} className="space-y-4 p-5">
             <div className="space-y-1.5">
               <Label htmlFor="invite-email" className="text-xs font-medium">
@@ -957,6 +1074,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </Button>
             </DialogFooter>
           </form>
+          )}
         </DialogContent>
       </Dialog>
     </aside>

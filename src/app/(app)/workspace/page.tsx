@@ -17,6 +17,10 @@ import Image from "next/image";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
+  extractEmailDomain,
+  isPublicEmailDomain,
+} from "@/features/workspace/lib/email-domain";
+import {
   useAcceptWorkspaceInvitationById,
   usePendingWorkspaceInvitations,
   useWorkspaces,
@@ -29,6 +33,11 @@ export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  // Same helper the create form uses, so the two screens cannot drift on what counts as a
+  // public domain. Only affects what this screen says; the server does the refusing.
+  const publicDomainLabel = extractEmailDomain(user?.email);
+  const cannotCreateWorkspace = isPublicEmailDomain(publicDomainLabel);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
@@ -293,21 +302,45 @@ export default function WorkspaceOnboardingGatePage() {
               </div>
             </button>
 
-            {/* Create Workspace */}
+            {/*
+              Create Workspace — unavailable on a public email domain.
+
+              The server refuses this unconditionally (WorkspaceService.CreateWorkspaceAsync):
+              founding a workspace claims a domain, and a public domain cannot be claimed by
+              anyone. Presenting the two cards as equals meant a Gmail user picked Create,
+              filled in a form, and only then learned it was never going to work — while the
+              path that IS open to them sat beside it looking no more relevant.
+
+              Stated here rather than enforced here: this is the reason shown to the user, not
+              the check. The server remains the authority.
+            */}
             <button
               type="button"
               onClick={() => router.push("/workspace/create")}
-              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all hover:bg-surface-2 hover:border-hairline-strong shadow-sm hover:shadow-md cursor-pointer h-[160px]"
+              disabled={cannotCreateWorkspace}
+              aria-describedby={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
+              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all shadow-sm h-[160px] enabled:hover:bg-surface-2 enabled:hover:border-hairline-strong enabled:hover:shadow-md enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <div className="flex size-9 items-center justify-center rounded-[6px] bg-primary text-white">
+              <div
+                className={
+                  cannotCreateWorkspace
+                    ? "flex size-9 items-center justify-center rounded-[6px] border border-border bg-surface-2 text-ink-muted"
+                    : "flex size-9 items-center justify-center rounded-[6px] bg-primary text-white"
+                }
+              >
                 <Plus weight="bold" size={18} />
               </div>
               <div>
                 <span className="block text-[15px] font-semibold text-foreground">
                   Create workspace
                 </span>
-                <span className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty">
-                  Create a new workspace for your organization.
+                <span
+                  id={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
+                  className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty"
+                >
+                  {cannotCreateWorkspace
+                    ? `Needs a work email — ${publicDomainLabel} addresses can join an existing workspace by invitation.`
+                    : "Create a new workspace for your organization."}
                 </span>
               </div>
             </button>
