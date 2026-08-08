@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getLanguageName } from "@/lib/languages";
+import { LanguageLabel } from "@/components/language/language-label";
 
 /**
  * Shown once, right after joining the live room (host and participant alike) —
@@ -76,7 +76,7 @@ export function LanguagePickerModal({
               <SelectContent>
                 {availableLanguages.map((language) => (
                   <SelectItem key={language} value={language}>
-                    {getLanguageName(language)}
+                    <LanguageLabel value={language} />
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -92,7 +92,7 @@ export function LanguagePickerModal({
               <SelectContent>
                 {availableLanguages.map((language) => (
                   <SelectItem key={language} value={language}>
-                    {getLanguageName(language)}
+                    <LanguageLabel value={language} />
                   </SelectItem>
                 ))}
               </SelectContent>

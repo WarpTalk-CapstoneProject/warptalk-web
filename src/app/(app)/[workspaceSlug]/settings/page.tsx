@@ -18,6 +18,7 @@ import {
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { languagesInScope } from "@/lib/languages";
+import { LanguageLabel } from "@/components/language/language-label";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
 import {
   useWorkspace,
@@ -528,9 +529,13 @@ export default function WorkspaceSettingsPage() {
                   <SelectValue placeholder="Select language" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Through LanguageLabel like every other picker, rather than a bare name.
+                      It is the single place that turns a language value into display text,
+                      and it takes the bare codes this form holds as readily as the locale
+                      tags rooms carry. */}
                   {languages.map((l) => (
                     <SelectItem key={l.code} value={l.code} className="text-xs">
-                      {l.label}
+                      <LanguageLabel value={l.code} />
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -677,7 +682,9 @@ export default function WorkspaceSettingsPage() {
                       }`}
                     >
                       {selected && <Checks size={12} className="text-primary" />}
-                      {l.label} ({l.code.toUpperCase()})
+                      {/* Was "Vietnamese (VI)" — the code repeated the name it sat beside and
+                          told the reader nothing the flag does not. */}
+                      <LanguageLabel value={l.code} />
                     </button>
                   );
                 })}

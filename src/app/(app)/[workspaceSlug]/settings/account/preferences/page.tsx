@@ -12,6 +12,7 @@ import { languagesInScope } from "@/lib/languages";
 import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LanguageLabel } from "@/components/language/language-label";
 import { Switch } from "@/components/ui/switch";
 import type { UpdateUserSettingsRequest } from "@/types/auth";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
@@ -199,7 +200,7 @@ export default function PersonalPreferencesPage() {
                 <SelectContent>
                   {languages.map((l) => (
                     <SelectItem key={l.code} value={l.code} className="text-xs cursor-pointer">
-                      {l.label}
+                      <LanguageLabel value={l.code} />
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -222,7 +223,7 @@ export default function PersonalPreferencesPage() {
                 <SelectContent>
                   {languages.map((l) => (
                     <SelectItem key={l.code} value={l.code} className="text-xs cursor-pointer">
-                      {l.label}
+                      <LanguageLabel value={l.code} />
                     </SelectItem>
                   ))}
                 </SelectContent>
