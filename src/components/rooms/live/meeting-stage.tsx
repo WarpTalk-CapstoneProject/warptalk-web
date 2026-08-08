@@ -19,6 +19,12 @@ import {
   type Participant,
 } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
+
+import {
+  INITIAL_STICKY_SPEAKER,
+  SPEAKER_HOLD_MS,
+  nextStickySpeaker,
+} from "@/lib/sticky-speaker";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { HandRaiseBadge } from "./hand-raise-badge";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
@@ -64,7 +70,10 @@ export function LiveKitMeetingStage({
   fallbackName: string;
   isJoining: boolean;
   error: string | null;
-  screenStream: MediaStream | null;
+  /** A presenter's own local preview. Optional since the share became a real published
+   * LiveKit track, which reaches the presenter through useTracks like everyone else — the
+   * session no longer captures a second copy with getDisplayMedia. */
+  screenStream?: MediaStream | null;
   layoutMode: MeetingLayoutMode;
   /** Locally-pinned participant (this viewer only) — clicking a tile toggles it. */
   pinnedUserId?: string | null;
@@ -99,7 +108,7 @@ export function LiveKitMeetingStage({
 
   useEffect(() => {
     if (!screenVideoRef.current) return;
-    screenVideoRef.current.srcObject = screenStream;
+    screenVideoRef.current.srcObject = screenStream ?? null;
   }, [screenStream]);
 
   // Highlight whoever LiveKit currently reports as speaking. The SDK already applies a
@@ -118,9 +127,35 @@ export function LiveKitMeetingStage({
     };
   }, [room]);
 
-  const activeSpeakerIdentity = visibleTracks.find((trackRef) =>
-    activeSpeakerIdentities.has(trackRef.participant.identity),
-  )?.participant.identity;
+  // The RING follows the voice directly — that is a light, and it should track speech.
+  // The LAYOUT does not: the large tile used to swap on every "mm", then swap back, so a
+  // two-person conversation flickered between two faces for its whole duration. Focus is
+  // sticky, and only moves once someone else has held the floor for SPEAKER_HOLD_MS.
+  const speakingNow = visibleTracks
+    .filter((trackRef) => activeSpeakerIdentities.has(trackRef.participant.identity))
+    .map((trackRef) => trackRef.participant.identity);
+
+  const [stickySpeaker, setStickySpeaker] = useState(INITIAL_STICKY_SPEAKER);
+  const speakingKey = speakingNow.join("|");
+
+  useEffect(() => {
+    const speaking = speakingKey ? speakingKey.split("|") : [];
+    setStickySpeaker((current) => nextStickySpeaker(current, speaking, Date.now()));
+
+    // A contender who holds the floor produces no further events while they keep talking,
+    // so the handover has to be re-evaluated once the hold has elapsed rather than only on
+    // the next change.
+    const timer = setTimeout(() => {
+      setStickySpeaker((current) => nextStickySpeaker(current, speaking, Date.now()));
+    }, SPEAKER_HOLD_MS + 50);
+    return () => clearTimeout(timer);
+  }, [speakingKey]);
+
+  const activeSpeakerIdentity =
+    stickySpeaker.focused &&
+    visibleTracks.some((trackRef) => trackRef.participant.identity === stickySpeaker.focused)
+      ? stickySpeaker.focused
+      : undefined;
   const localIdentity = room?.localParticipant.identity ?? null;
   const firstVisibleIdentity = visibleTracks[0]?.participant.identity;
   const firstRemoteIdentity = visibleTracks.find(
