@@ -142,6 +142,16 @@ export interface ApproveJoinRequestResponse {
 
 export interface InviteMemberResponse {
   invitation: WorkspaceInvitationDto;
+  /**
+   * The invitation's plaintext token, returned once to whoever created it so the UI can
+   * offer a shareable link. The server has always carried this field and always sent null,
+   * which made the invitation email the only way to reach an invitation — and left a valid
+   * invitation unreachable whenever delivery failed.
+   *
+   * Optional on purpose: a client deployed ahead of the server still works, it just falls
+   * back to the old email-only behaviour rather than rendering an empty link.
+   */
+  rawToken?: string | null;
   emailLanguage: string;
   warning?: string | null;
 }
