@@ -462,11 +462,11 @@ export default function AdminPlansPage() {
                     <TableCell>
                       <Badge
                         variant={
-                          plan.isActive !== false ? "default" : "destructive"
+                          plan.isActive !== false ? "default" : "secondary"
                         }
                         className="rounded-full"
                       >
-                        {plan.isActive !== false ? "Active" : "Inactive"}
+                        {plan.isActive !== false ? "Active" : "Draft / Archived"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -763,7 +763,7 @@ export default function AdminPlansPage() {
                 <div className="space-y-0.5">
                   <Label htmlFor="isActive">Active Status</Label>
                   <p className="text-xs text-muted-foreground">
-                    Keep this enabled for users to view and purchase
+                    Keep enabled for users to purchase. Turn off to Draft/Archive. (Cannot edit properties if plan has active users)
                   </p>
                 </div>
                 <Switch

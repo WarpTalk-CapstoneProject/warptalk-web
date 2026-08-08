@@ -952,7 +952,8 @@ function PricingSection() {
     queryFn: () => billingService.getPlans(),
   });
 
-  const handleChoosePlan = () => {
+  const handleChoosePlan = (planId: string) => {
+    localStorage.setItem("pending_plan_id", planId);
     router.push(
       getLandingGetStartedHref({
         isAuthenticated,
@@ -1039,7 +1040,7 @@ function PricingSection() {
                   <button
                     type="button"
                     className="c3-btn cursor-pointer"
-                    onClick={handleChoosePlan}
+                    onClick={() => handleChoosePlan(plan.id)}
                   >
                     Choose Plan
                   </button>

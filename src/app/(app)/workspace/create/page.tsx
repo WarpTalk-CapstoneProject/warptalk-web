@@ -144,7 +144,13 @@ export default function CreateWorkspaceDemoPage() {
         "en",
       );
       toast.success(`Workspace "${workspace.name}" created.`);
-      router.push(`/${workspace.slug}/home`);
+      const pendingPlanId = localStorage.getItem("pending_plan_id");
+      if (pendingPlanId) {
+        localStorage.removeItem("pending_plan_id");
+        router.push(`/${workspace.slug}/payment/plans?checkout_plan=${pendingPlanId}`);
+      } else {
+        router.push(`/${workspace.slug}/home`);
+      }
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);

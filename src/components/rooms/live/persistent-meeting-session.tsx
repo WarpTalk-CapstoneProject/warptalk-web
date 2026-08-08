@@ -115,6 +115,7 @@ import {
 } from "@/hooks/use-breakouts";
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
+import { MeetingTokenTracker } from "@/components/rooms/live/meeting-token-tracker";
 
 function getJoinLink(code: string) {
   if (typeof window === "undefined") return code;
@@ -201,6 +202,7 @@ export function PersistentMeetingSession({
   const localMediaControlRef = useRef<LocalMediaControl | null>(null);
 
   const [meetingError, setMeetingError] = useState<string | null>(null);
+  const [tokensUsed, setTokensUsed] = useState<number>(0);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
@@ -1191,6 +1193,19 @@ export function PersistentMeetingSession({
       setLiveHostUserId(newHostUserId);
     });
 
+    // Billing/Tokens
+    connection.on("TokenUsageUpdated", (deducted: number) => {
+      if (typeof deducted === "number") {
+        setTokensUsed((current) => current + deducted);
+      }
+    });
+    connection.on("MeetingCreditExhausted", () => {
+      toast.error("Meeting credits exhausted!", {
+        description: "Translations have been paused. Please top up your workspace credits.",
+        duration: 10000,
+      });
+    });
+
     // BR-159: Backend initiated disconnections
     connection.on("ForceDisconnected", (reason?: string) => {
       toast.error(
@@ -1730,6 +1745,7 @@ export function PersistentMeetingSession({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-ink font-sans selection:bg-surface-3">
+        <MeetingTokenTracker tokensUsed={tokensUsed} />
       <LiveKitRoom
         video={cameraEnabled}
         audio={

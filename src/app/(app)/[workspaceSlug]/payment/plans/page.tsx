@@ -37,7 +37,7 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/currency";
@@ -53,6 +53,7 @@ function getTopUpRate(credits: number) {
 
 export default function WorkspacePlansPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams();
   const slug = params?.workspaceSlug as string;
   const queryClient = useQueryClient();
@@ -149,6 +150,7 @@ export default function WorkspacePlansPage() {
     activePlanTierIndex !== -1 &&
     pendingPlanTierIndex > -1 &&
     pendingPlanTierIndex < activePlanTierIndex;
+
 
   const confirmChangePlan = async () => {
     if (!pendingPlanSlug || !activeWorkspaceId) return;
@@ -275,6 +277,24 @@ export default function WorkspacePlansPage() {
 
   const { rate, discount } = getTopUpRate(topUpCredits);
   const topUpTotal = topUpCredits * rate;
+
+  useEffect(() => {
+    const checkoutPlanId = searchParams.get("checkout_plan");
+    if (checkoutPlanId && plansData.length > 0 && !loadingSub) {
+      const targetPlan = plansData.find((p) => p.id === checkoutPlanId);
+      if (targetPlan) {
+        // Clear param from URL so it doesn't loop
+        router.replace(`/${slug}/payment/plans`);
+        
+        handleCheckout(
+          targetPlan.price,
+          targetPlan.tier === "addon" ? "CreditTopUp" : "Subscription",
+          targetPlan.slug,
+          targetPlan.billingCycle
+        );
+      }
+    }
+  }, [searchParams, plansData, loadingSub, slug, router]);
 
   if (!isRoleLoaded) {
     return (
