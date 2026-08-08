@@ -86,6 +86,15 @@ export function useTransferMeetingHost(roomId: string) {
   });
 }
 
+export function useMuteMeetingParticipant(roomId: string) {
+  return useMutation({
+    mutationFn: async (participantId: string) => {
+      const { data } = await meetingService.muteParticipant(roomId, participantId);
+      return data;
+    },
+  });
+}
+
 export function useKickMeetingParticipant(roomId: string) {
   return useMutation({
     mutationFn: async (participantId: string) => {
