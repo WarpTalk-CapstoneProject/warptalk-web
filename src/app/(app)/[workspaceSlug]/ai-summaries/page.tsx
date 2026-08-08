@@ -646,9 +646,9 @@ function TranscriptPanel({
           ) : null}
         </div>
       </div>
-      <div className="max-h-[560px] flex-1 space-y-2 overflow-y-auto p-5">
+      <div className="max-h-[560px] flex-1 space-y-6 overflow-y-auto p-5">
         {blocks.map((block) => (
-          <div key={block.sessionNumber} className="space-y-3">
+          <div key={block.sessionNumber} className="space-y-4">
             {showSessionLabels ? (
               <div className="flex items-center gap-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
                 <div className="h-px flex-1 bg-border" />
@@ -669,19 +669,19 @@ function TranscriptPanel({
               const isSelf = Boolean(currentUserId) && segment.speakerParticipantId === currentUserId;
               return (
                 <div key={segment.id} className={`flex ${isSelf ? "justify-end" : "justify-start"}`}>
-                  <div className={`flex max-w-[75%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
-                    <span className={`flex items-baseline gap-2 text-[10px] text-ink-subtle ${isSelf ? "flex-row-reverse" : ""}`}>
+                  <div className={`flex min-w-0 max-w-[75%] flex-col gap-1.5 ${isSelf ? "items-end" : "items-start"}`}>
+                    <span className={`flex items-baseline gap-2 text-[11px] text-ink-subtle ${isSelf ? "flex-row-reverse" : ""}`}>
                       <span className="font-medium text-ink">
                         {isSelf ? "You" : segment.speakerName}
                       </span>
                       <span>{formatTimestamp(segment.startTimeMs)}</span>
                     </span>
                     {editingSegmentId === segment.id ? (
-                      <div className="w-full min-w-[280px] space-y-2 rounded-xl border border-primary/40 bg-surface-1 p-2">
+                      <div className="w-full min-w-0 space-y-2 rounded-xl border border-primary/40 bg-surface-1 p-2.5">
                         <textarea
                           value={draftText}
                           onChange={(event) => setDraftText(event.target.value)}
-                          className="min-h-20 w-full resize-y rounded-md border border-border bg-canvas px-2 py-1.5 text-[12px] text-ink outline-none focus:border-primary"
+                          className="min-h-24 w-full resize-y rounded-md border border-border bg-canvas px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
                           aria-label={`Edit transcript line by ${segment.speakerName}`}
                         />
                         <div className="flex justify-end gap-2">
@@ -696,7 +696,7 @@ function TranscriptPanel({
                       </div>
                     ) : (
                     <div
-                      className={`group/line relative rounded-2xl px-3 py-2 pr-8 text-[12px] leading-6 ${
+                      className={`group/line relative rounded-2xl px-3.5 py-2.5 pr-9 text-[13px] leading-6 ${
                         isSelf
                           ? "rounded-tr-sm bg-primary text-white"
                           : "rounded-tl-sm border border-border bg-surface-1 text-ink-muted"
@@ -707,13 +707,22 @@ function TranscriptPanel({
                         <button
                           type="button"
                           aria-label="Edit transcript line"
-                          className="absolute right-2 top-2 opacity-0 transition-opacity group-hover/line:opacity-100 focus:opacity-100"
+                          title="Edit this line"
+                          // A bare 13px glyph with no padding was a 13px hit target, and it
+                          // was invisible until the pointer was already on the bubble — so the
+                          // only way to find the edit affordance was to hover every line in
+                          // turn. It has a real target now and fades in on hover rather than
+                          // appearing from nothing, while staying legible on both the primary
+                          // bubble and the bordered one.
+                          className={`absolute right-1 top-1 grid size-7 place-items-center rounded-md opacity-60 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 ${
+                            isSelf ? "hover:bg-white/20" : "hover:bg-surface-2"
+                          }`}
                           onClick={() => {
                             setEditingSegmentId(segment.id);
                             setDraftText(segment.originalText);
                           }}
                         >
-                          <PencilSimple size={13} />
+                          <PencilSimple size={14} />
                         </button>
                       ) : null}
                     </div>
