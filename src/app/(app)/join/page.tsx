@@ -22,7 +22,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { useJoinTranslationRoomByCode, useRoomPreflight } from "@/hooks/use-translationRooms";
+import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/errors";
 import { getFlagEmoji } from "@/lib/language-flag";
 import { getLanguageName, languagesInScope } from "@/lib/languages";
@@ -101,17 +101,16 @@ function JoinMeetingContent() {
 
   const normalizedCode = useMemo(() => roomCode.trim(), [roomCode]);
 
-  const { data: preflight, isLoading: preflightLoading, error: preflightError } = useRoomPreflight(
-    normalizedCode,
-    !!normalizedCode
-  );
-
-  useEffect(() => {
-    if (preflight && preflight.requiresJoinRequest) {
-      router.replace(`/workspace/join?code=${normalizedCode}`);
-    }
-  }, [preflight, normalizedCode, router]);
-
+  // The preflight call this screen used to make has no endpoint behind it — there is no
+  // `preflight` route anywhere in translation-room. Every request 404'd, which tripped the
+  // error branch below, which returned a dead end reading "This meeting or workspace is
+  // inactive or no longer exists." So /join?code=<anything> was unreachable, and it blamed
+  // the room for it.
+  //
+  // Joining does not need it: useJoinTranslationRoomByCode validates the code server-side
+  // and returns the real reason when it refuses. The redirect this used to drive
+  // (requiresJoinRequest -> /workspace/join) only ever fired when preflight SUCCEEDED, which
+  // never happened, so nothing that worked is being removed here.
   const joinMutation = useJoinTranslationRoomByCode();
   const canJoin = displayName.trim().length > 1 && normalizedCode.length >= 4;
 
@@ -330,31 +329,11 @@ function JoinMeetingContent() {
     }
   }
 
-  if (normalizedCode && preflightLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas">
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-ink-muted">Checking meeting access...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (normalizedCode && preflightError) {
-    return (
-      <div className="flex min-h-[80vh] items-center justify-center p-8 bg-canvas">
-        <div className="w-full max-w-md bg-surface-1 border border-border p-6 rounded-[8px] shadow-linear text-center space-y-4">
-          <div className="text-red-500 font-medium">
-            This meeting or workspace is inactive or no longer exists.
-          </div>
-          <Button onClick={() => router.push("/")} className="bg-foreground text-white">
-            Back to home
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // The "Checking meeting access…" spinner and the "inactive or no longer exists" dead end
+  // that used to sit here were both driven by the preflight call removed above. With no
+  // endpoint behind it the error branch caught every single visit, so this screen only ever
+  // rendered its own failure. Whether the code is good is now answered by the join attempt,
+  // which reports the actual reason.
 
   return (
     <div className="flex flex-col items-center p-4 sm:p-8 h-full overflow-y-auto">

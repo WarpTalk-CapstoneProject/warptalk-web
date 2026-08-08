@@ -20,6 +20,7 @@ import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
+import { CommandPalette } from "@/components/layout/command-palette";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
 import { cn } from "@/lib/utils";
@@ -356,6 +357,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <Plus size={11} weight="bold" />
               </button>
             ) : null}
+          </div>
+
+          {/*
+            Search sits between the breadcrumb and the icon cluster, which is where it was
+            designed to go — the Topbar that owned it was simply never mounted, so the header
+            has been running without it. min-w-0 so the breadcrumb, not the search box, is
+            what gives up space on a narrow window.
+          */}
+          <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
+            <CommandPalette />
           </div>
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
