@@ -20,9 +20,11 @@ import {
   Clock,
   Code,
   Code2,
+  CheckCircle,
   Copy,
   Download,
   FileText,
+  Pencil,
   Italic,
   Link as LinkIcon,
   List,
@@ -83,6 +85,7 @@ import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { getErrorMessage } from "@/lib/errors";
 import { getLanguageName } from "@/lib/languages";
 import { saveBlobDownload } from "@/lib/download-artifact";
+import { transcriptService } from "@/services/transcript.service";
 import {
   resolveRoomEntryIntent,
   type RoomEntryIntent,
@@ -393,6 +396,10 @@ export default function RoomInformationPage() {
                 currentUserId={user?.id}
                 isEnded={isEnded}
                 onCopy={handleCopy}
+                transcriptId={transcriptQuery.data?.id}
+                transcriptStatus={transcriptQuery.data?.status}
+                canEdit={isHost}
+                onSegmentsChanged={() => void segmentsQuery.refetch()}
               />
             ) : null}
 
@@ -566,6 +573,10 @@ function MeetingTranscriptArtifact({
   currentUserId,
   isEnded,
   onCopy,
+  transcriptId,
+  transcriptStatus,
+  canEdit,
+  onSegmentsChanged,
 }: {
   segments: TranscriptSegmentDto[];
   baseTime?: string;
@@ -573,6 +584,13 @@ function MeetingTranscriptArtifact({
   currentUserId?: string;
   isEnded: boolean;
   onCopy: (text: string, label: string) => void;
+  /** Needed to correct or finalize; omit and the section stays read-only. */
+  transcriptId?: string;
+  transcriptStatus?: string;
+  /** Only the host may rewrite what the room recorded. */
+  canEdit?: boolean;
+  /** Refetch after a correction lands, so the line shows what was actually saved. */
+  onSegmentsChanged?: () => void;
 }) {
   const ordered = [...segments].sort(
     (left, right) => left.sequenceOrder - right.sequenceOrder,
@@ -583,6 +601,67 @@ function MeetingTranscriptArtifact({
   const showSessionLabels = blocks.length > 1;
   const totalCount = grouped.length;
   const base = baseTime ? new Date(baseTime) : null;
+
+  // Correcting the transcript used to live on a separate Transcripts page, which showed the
+  // same segments for the same room under its own queue and its own tabs. The room already
+  // owns everything that page needed — the meeting, the host, the segments — so the editing
+  // moved to where the transcript is read rather than the reading moving to where it was
+  // edited.
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
+  const [draftText, setDraftText] = useState("");
+  const [isSavingCorrection, setIsSavingCorrection] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+
+  const isFinalized = transcriptStatus === "finalized";
+  const canCorrect = Boolean(canEdit && transcriptId) && !isFinalized;
+
+  async function saveCorrection(segment: TranscriptSegmentDto) {
+    const correctedText = draftText.trim();
+    // Closing without a change is not a correction — posting one would record an edit that
+    // changed nothing and count against the transcript's revision history.
+    if (!transcriptId || !correctedText || correctedText === segment.originalText.trim()) {
+      setEditingSegmentId(null);
+      return;
+    }
+
+    setIsSavingCorrection(true);
+    try {
+      await transcriptService.correctSegment(transcriptId, segment.id, {
+        originalText: segment.originalText,
+        correctedText,
+        correctionType: "stt",
+        triggeredRetranslation: false,
+      });
+      onSegmentsChanged?.();
+      setEditingSegmentId(null);
+      toast.success("Transcript correction saved.");
+    } catch {
+      toast.error("Could not save the transcript correction.");
+    } finally {
+      setIsSavingCorrection(false);
+    }
+  }
+
+  async function finalizeTranscript() {
+    if (!transcriptId) return;
+    setIsFinalizing(true);
+    try {
+      await transcriptService.finalize(transcriptId);
+      onSegmentsChanged?.();
+      toast.success("Transcript finalized.");
+    } catch {
+      toast.error("Could not finalize the transcript.");
+    } finally {
+      setIsFinalizing(false);
+    }
+  }
+
+  function downloadTranscript() {
+    saveBlobDownload(
+      new Blob([assembleTranscriptText(blocks)], { type: "text/plain;charset=utf-8" }),
+      `transcript-${roomId}.txt`,
+    );
+  }
 
   function segmentTime(startMs: number) {
     if (!base) return "";
@@ -604,14 +683,40 @@ function MeetingTranscriptArtifact({
           </InlineChip>
         </div>
         {totalCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => onCopy(assembleTranscriptText(blocks), "Transcript")}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <Copy className="size-3.5" />
-            Copy
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onCopy(assembleTranscriptText(blocks), "Transcript")}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <Copy className="size-3.5" />
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={downloadTranscript}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <Download className="size-3.5" />
+              Download
+            </button>
+            {canCorrect ? (
+              <button
+                type="button"
+                onClick={() => void finalizeTranscript()}
+                disabled={isFinalizing}
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+              >
+                <CheckCircle className="size-3.5" />
+                {isFinalizing ? "Finalizing…" : "Finalize"}
+              </button>
+            ) : null}
+            {/* Said out loud, because after finalizing the pencils simply stop appearing and
+                that on its own reads as the page having broken. */}
+            {isFinalized ? (
+              <InlineChip icon={<CheckCircle className="size-3.5" />}>Finalized</InlineChip>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -643,8 +748,35 @@ function MeetingTranscriptArtifact({
                         <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
                         {base ? <span>{segmentTime(segment.startTimeMs)}</span> : null}
                       </div>
+                      {editingSegmentId === segment.id ? (
+                        <div className="w-full min-w-0 space-y-2 rounded-xl border border-primary/40 bg-surface-1 p-2.5">
+                          <textarea
+                            value={draftText}
+                            onChange={(event) => setDraftText(event.target.value)}
+                            aria-label={`Edit transcript line by ${segment.speakerName || "unknown speaker"}`}
+                            className="min-h-24 w-full resize-y rounded-md border border-border bg-canvas px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingSegmentId(null)}
+                              className="rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingCorrection || !draftText.trim()}
+                              onClick={() => void saveCorrection(segment)}
+                              className="rounded-md bg-ink px-2.5 py-1 text-[12px] font-medium text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
+                            >
+                              {isSavingCorrection ? "Saving…" : "Save correction"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
                       <div
-                        className={`rounded-2xl px-3 py-2 ${
+                        className={`group/line relative rounded-2xl px-3 py-2 ${canCorrect ? "pr-9" : ""} ${
                           isSelf
                             ? "rounded-tr-sm bg-primary"
                             : "rounded-tl-sm border border-border bg-white"
@@ -653,7 +785,24 @@ function MeetingTranscriptArtifact({
                         <p className={`text-[13px] leading-6 ${isSelf ? "text-white" : "text-ink-subtle"}`}>
                           {segment.originalText}
                         </p>
+                        {canCorrect ? (
+                          <button
+                            type="button"
+                            aria-label="Edit transcript line"
+                            title="Edit this line"
+                            onClick={() => {
+                              setEditingSegmentId(segment.id);
+                              setDraftText(segment.originalText);
+                            }}
+                            className={`absolute right-1 top-1 grid size-7 place-items-center rounded-md opacity-60 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 ${
+                              isSelf ? "text-white hover:bg-white/20" : "hover:bg-surface-2"
+                            }`}
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                        ) : null}
                       </div>
+                      )}
                     </div>
                   </div>
                 );
