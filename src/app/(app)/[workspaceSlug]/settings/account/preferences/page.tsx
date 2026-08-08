@@ -195,7 +195,11 @@ export default function PersonalPreferencesPage() {
                 onValueChange={(val) => queuePreference("defaultSpeakLanguage", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select language..." />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language..."
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {languages.map((l) => (
@@ -218,7 +222,11 @@ export default function PersonalPreferencesPage() {
                 onValueChange={(val) => queuePreference("defaultListenLanguage", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select language..." />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language..."
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {languages.map((l) => (

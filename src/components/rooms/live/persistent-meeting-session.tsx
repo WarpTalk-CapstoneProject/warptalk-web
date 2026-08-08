@@ -115,6 +115,7 @@ import {
 } from "@/hooks/use-breakouts";
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
+import { describeLiveKitError } from "@/lib/livekit-error";
 
 function getJoinLink(code: string) {
   if (typeof window === "undefined") return code;
@@ -1751,6 +1752,12 @@ export function PersistentMeetingSession({
             : "localhost",
         )}
         connect={shouldConnectLiveKit}
+        // `meetingError` was declared, passed to the stage, and gated the Retry button — and
+        // nothing ever called setMeetingError. So every failure to connect rendered as
+        // "Waiting for LiveKit" with no message and no retry, indistinguishable from a slow
+        // join. This is the wire that was missing.
+        onError={(error) => setMeetingError(describeLiveKitError(error))}
+        onConnected={() => setMeetingError(null)}
         data-lk-theme="default"
         className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >

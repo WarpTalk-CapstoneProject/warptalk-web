@@ -71,7 +71,11 @@ export function LanguagePickerModal({
             <label className="text-[13px] font-medium text-ink">Which language will you speak?</label>
             <Select value={speakLanguage} onValueChange={(value) => setSpeakLanguage(String(value))}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>
+                  {(value) =>
+                    value ? <LanguageLabel value={String(value)} /> : "Select language"
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {availableLanguages.map((language) => (
@@ -87,7 +91,11 @@ export function LanguagePickerModal({
             <label className="text-[13px] font-medium text-ink">Which language do you want to hear?</label>
             <Select value={listenLanguage} onValueChange={(value) => setListenLanguage(String(value))}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>
+                  {(value) =>
+                    value ? <LanguageLabel value={String(value)} /> : "Select language"
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {availableLanguages.map((language) => (

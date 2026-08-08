@@ -526,7 +526,11 @@ export default function WorkspaceSettingsPage() {
                 disabled={isSubmitting || !isOwnerOrAdmin}
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select language" />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {/* Through LanguageLabel like every other picker, rather than a bare name.
@@ -554,7 +558,11 @@ export default function WorkspaceSettingsPage() {
                 disabled={isSubmitting || !isOwnerOrAdmin}
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select timezone" />
+                  <SelectValue>
+                    {(value) =>
+                      value ? describeTimeZone(String(value)) : "Select timezone"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 {/* Every zone the platform knows, not four guesses about where customers are.
                     A workspace in Singapore, Sydney or Berlin previously had no way to say so,
