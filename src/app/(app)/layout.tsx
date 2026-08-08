@@ -350,8 +350,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     parts.push({ label: "Home" });
                   } else if (feature === "members") {
                     parts.push({ label: "Members" });
-                  } else if (feature === "invitations") {
-                    parts.push({ label: "Invitations" });
                   } else if (feature === "documents") {
                     parts.push({ label: "Documents" });
                   } else if (feature === "settings") {
