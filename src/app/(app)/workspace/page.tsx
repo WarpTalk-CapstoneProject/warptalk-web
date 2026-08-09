@@ -19,7 +19,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   extractEmailDomain,
   isPublicEmailDomain,
-} from "@/features/workspace/lib/email-domain";
+} from "@/lib/workspace/email-domain";
 import {
   useAcceptWorkspaceInvitationById,
   usePendingWorkspaceInvitations,

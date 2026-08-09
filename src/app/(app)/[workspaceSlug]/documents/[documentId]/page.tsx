@@ -30,7 +30,7 @@ import {
   useWorkspace,
   useWorkspaceDocument,
 } from "@/hooks/use-workspace";
-import { downloadBlob } from "@/lib/download-blob";
+import { downloadBlob } from "@/lib/ui/download-blob";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 import { DocumentAccessPolicyPanel } from "./components/DocumentAccessPolicyPanel";

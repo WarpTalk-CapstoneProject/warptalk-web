@@ -22,12 +22,12 @@ import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { cn } from "@/lib/utils";
-import { formatLanguageRoute as formatRoute } from "@/lib/languages";
-import { translationRoomService } from "@/services/translationRoom.service";
-import { openArtifactDownload } from "@/lib/download-artifact";
+import { formatLanguageRoute as formatRoute } from "@/lib/language/languages";
+import { translationRoomService } from "@/services/translation-room.service";
+import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
 

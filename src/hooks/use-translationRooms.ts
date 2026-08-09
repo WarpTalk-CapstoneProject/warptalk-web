@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { translationRoomService } from "@/services/translationRoom.service";
+import { translationRoomService } from "@/services/translation-room.service";
 import type {
   CreateTranslationRoomRequest,
   RecurrenceRequest,

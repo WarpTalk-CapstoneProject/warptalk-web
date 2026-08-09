@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
+import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import {
   ACCESS_TOKEN_COOKIE,
   SESSION_MARKER_COOKIE,

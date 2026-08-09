@@ -10,11 +10,11 @@ import {
 } from "@/constants/realtime";
 import { WORKSPACE_KEYS } from "@/hooks/use-workspace";
 import { endDeadSession, isSessionEnded } from "@/lib/api/client";
-import { createHubConnection, isUnauthorizedHubError } from "@/lib/signalr";
+import { createHubConnection, isUnauthorizedHubError } from "@/lib/realtime/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePresenceStore } from "@/stores/presence-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { liveMeetingPath } from "@/lib/workspace-routes";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import type { PresenceChangedEvent } from "@/types/presence";
 import * as signalR from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";

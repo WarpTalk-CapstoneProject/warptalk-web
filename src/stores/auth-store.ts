@@ -5,7 +5,7 @@ import { clearSessionCookies, isLiveAccessToken } from "@/lib/auth/session-cooki
 import {
   resetSessionScopedStateOnLogin,
   resetSessionScopedStateOnLogout,
-} from "@/lib/session-scoped-state";
+} from "@/lib/auth/session-scoped-state";
 
 const AUTH_STORAGE_KEY = "warptalk-auth";
 

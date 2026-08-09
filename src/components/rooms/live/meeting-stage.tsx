@@ -24,14 +24,25 @@ import {
   INITIAL_STICKY_SPEAKER,
   SPEAKER_HOLD_MS,
   nextStickySpeaker,
-} from "@/lib/sticky-speaker";
+} from "@/lib/meeting/sticky-speaker";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { HandRaiseBadge } from "./hand-raise-badge";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
 import { NetworkQualityIcon } from "./network-quality-icon";
 
+/**
+ * WT-330 follow-up: the tile carries no colour of its own and no radius of its own.
+ *
+ * It used to set `!bg-surface-3` (#e5e7eb) while the LiveKitRoom wrapper set
+ * `[&_.lk-participant-tile]:!bg-surface-1` on the same element — two !important rules fighting
+ * over one background, which is not a thing you can reason about from either site. It also set
+ * `rounded-xl` while the frame around it clips at 24px, so the two curves left a wedge of
+ * whichever background won showing in each corner. That wedge is the grey corner in the report.
+ *
+ * The frame owns the shape; the surface is one white everywhere.
+ */
 const TILE_CLASSNAME =
-  "!h-full !w-full !border-0 overflow-hidden rounded-xl !bg-surface-3 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
+  "!h-full !w-full !border-0 overflow-hidden !bg-surface-1 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
 
 /**
  * A grid or featured tile fills the cell it is given.
@@ -65,6 +76,7 @@ export function LiveKitMeetingStage({
   onPinParticipant,
   spotlightedUserId,
   raisedHandUserIds,
+  bottomInset = 0,
   onRetry,
 }: {
   fallbackName: string;
@@ -81,6 +93,15 @@ export function LiveKitMeetingStage({
   /** Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged. Overrides pinnedUserId when set. */
   spotlightedUserId?: string | null;
   raisedHandUserIds?: Set<string>;
+  /**
+   * Pixels of chrome sitting over the bottom of the stage.
+   *
+   * The mini window centres a control tray that is nearly as wide as the window itself, so a
+   * name pinned to the bottom-left does not sit beside it — it sits behind it. The stage is
+   * told how much room to leave rather than being told it is "compact", because the number is
+   * the thing that matters and the caller is the only one who knows it.
+   */
+  bottomInset?: number;
   onRetry: () => void;
 }) {
   const connectionState = useConnectionState();
@@ -239,7 +260,7 @@ export function LiveKitMeetingStage({
         {showCameraOffState ? (
           <div
             data-camera-state="off"
-            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm ${
+            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-surface-1 ${
               isThumbnail ? "gap-1.5" : "gap-3"
             }`}
           >
@@ -285,10 +306,11 @@ export function LiveKitMeetingStage({
           </span>
         </div>
         <div
+          style={{ bottom: (isThumbnail ? 8 : 20) + bottomInset }}
           className={`pointer-events-none absolute max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 font-medium text-white shadow-sm backdrop-blur ${
             isThumbnail
-              ? "bottom-2 left-2 px-2 py-0.5 text-[11px]"
-              : "bottom-5 left-5 px-3 py-1 text-[13px]"
+              ? "left-2 px-2 py-0.5 text-[11px]"
+              : "left-5 px-3 py-1 text-[13px]"
           }`}
         >
           {displayName}

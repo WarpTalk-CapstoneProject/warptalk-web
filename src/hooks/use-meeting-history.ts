@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { meetingHistoryService } from "@/services/meetingHistory.service";
+import { meetingHistoryService } from "@/services/meeting-history.service";
 
 export function useMeetingHistory(page = 1, pageSize = 20, search?: string) {
   return useQuery({

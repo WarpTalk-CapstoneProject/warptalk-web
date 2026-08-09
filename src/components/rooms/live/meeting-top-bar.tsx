@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useEndMeetingForAll } from "@/hooks/use-meeting";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 

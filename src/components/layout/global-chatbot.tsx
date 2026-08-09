@@ -42,7 +42,7 @@ import {
   useLoadAssistantConversation,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import type * as signalR from "@microsoft/signalr";
 import type {
   AssistantConversationDto,

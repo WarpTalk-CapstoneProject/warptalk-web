@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
-import { resolveRoomHost } from "@/lib/room-host";
+import { resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";

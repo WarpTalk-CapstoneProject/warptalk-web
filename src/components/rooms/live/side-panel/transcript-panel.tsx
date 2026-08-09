@@ -3,7 +3,7 @@
 import { useRef, useEffect, useMemo } from "react";
 import { ClosedCaptioning } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
-import { getLanguageName } from "@/lib/languages";
+import { getLanguageName } from "@/lib/language/languages";
 import {
   findSuggestionForUtterance,
   formatTranscriptTimestamp,
@@ -11,7 +11,7 @@ import {
   groupTranscriptSegments,
   type GroupedTranscriptSegment,
   type TranslationSessionBlock,
-} from "@/lib/transcript-display";
+} from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import { SuggestionStrip } from "@/components/rooms/live/side-panel/suggestion-strip";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";

@@ -18,8 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getErrorMessage } from "@/lib/errors";
-import { createHubConnection } from "@/lib/signalr";
+import { getErrorMessage } from "@/lib/api/errors";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -40,7 +40,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney } from "@/lib/format/currency";
 
 // We fetch plans dynamically now.
 

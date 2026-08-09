@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { notificationService } from "@/services/notification.service";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import type { CreateAdminNotificationDto } from "@/types/notification";
 import { useMutation } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, Loader2, Megaphone, Send } from "lucide-react";

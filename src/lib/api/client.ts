@@ -66,21 +66,57 @@ function getAccessToken(): string | null {
 }
 
 function getRefreshToken(): string | null {
-  // The STORE first, then the persisted copy — the opposite of what this used to do.
+  // localStorage FIRST, and persistTokens now writes it synchronously so that is safe.
   //
-  // Refresh tokens rotate, and the server revokes the whole rotation family when an already
-  // rotated token is presented again. persistTokens() writes the store synchronously and
-  // localStorage through the persist middleware, so reading localStorage first can hand back
-  // the token that was just rotated away — which the server correctly reads as a replay and
-  // answers by ending the session. Unlike access tokens there is no `exp` to compare, so
-  // freshness has to come from the write order.
-  return useAuthStore.getState().refreshToken
-    ?? getPersistedAuthState()?.refreshToken
+  // This was the other way round, and the reasoning was right about one tab and wrong about
+  // two. Refresh tokens rotate and the server revokes the whole family when an already-rotated
+  // token is presented, so freshness matters more here than anywhere else. Within a tab the
+  // in-memory store is written first, which is why it used to win. But zustand's persist
+  // middleware does not listen for the storage event, so a second tab's store never learns
+  // that the first tab rotated the family:
+  //
+  //   tab A refreshes  -> new token in A's store and in localStorage
+  //   tab B refreshes  -> reads ITS OWN store, still holding the token A rotated away
+  //   server           -> replay detected, family revoked, BOTH tabs logged out
+  //
+  // The Web Lock below stops the two refreshes overlapping; it cannot stop the second one
+  // being stale. localStorage is the only copy both tabs share, so it is the one to trust —
+  // and writing it synchronously removes the lag that made the store the safer read.
+  return getPersistedAuthState()?.refreshToken
+    ?? useAuthStore.getState().refreshToken
     ?? null;
+}
+
+/**
+ * Writes the rotated pair everywhere a reader might look, in the same tick.
+ *
+ * The synchronous localStorage write is the point: the persist middleware gets there
+ * eventually, and "eventually" is long enough for another tab to refresh with a token this
+ * one just rotated away — which the server answers by revoking the family and logging both
+ * tabs out. The existing shape is patched rather than replaced so the middleware's own
+ * version marker and any other persisted field survive.
+ */
+function writePersistedTokens(accessToken: string, refreshToken: string) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const raw = localStorage.getItem("warptalk-auth");
+    const parsed = raw ? JSON.parse(raw) : {};
+    localStorage.setItem(
+      "warptalk-auth",
+      JSON.stringify({
+        ...parsed,
+        state: { ...(parsed?.state ?? {}), accessToken, refreshToken },
+      }),
+    );
+  } catch {
+    // A quota or privacy-mode failure must not take the refresh down with it: the store copy
+    // still works for this tab, which is strictly better than throwing here.
+  }
 }
 
 function persistTokens(accessToken: string, refreshToken: string, expiresAt?: string) {
   useAuthStore.getState().setTokens(accessToken, refreshToken);
+  writePersistedTokens(accessToken, refreshToken);
   // A refresh issues a brand new 30-minute token. Re-stamping the cookie with a hardcoded
   // seven days here is how a session that had been refreshed once still ended up holding a
   // week-long cookie around a half-hour token.

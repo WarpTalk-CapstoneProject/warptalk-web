@@ -5,7 +5,7 @@ import { useLocalParticipant } from "@livekit/components-react";
 import { LocalAudioTrack, LocalVideoTrack } from "livekit-client";
 import { KrispNoiseFilter, isKrispNoiseFilterSupported, type KrispNoiseFilterProcessor } from "@livekit/krisp-noise-filter";
 import { BackgroundProcessor, type BackgroundProcessorWrapper } from "@livekit/track-processors";
-import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 
 const DEVICE_PREVIEW_KEY = "warptalk.devices.preview";
 const BLUR_RADIUS = 10;

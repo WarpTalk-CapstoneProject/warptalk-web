@@ -53,7 +53,7 @@ import { toast } from "sonner";
 import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
-import { liveMeetingPath } from "@/lib/workspace-routes";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import {
   Collapsible,
   CollapsiblePanel,
@@ -72,7 +72,7 @@ import {
 } from "@/components/ui/popover";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
-import { findSegmentAtMs } from "@/lib/meeting-summary";
+import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
 import {
   ArtifactsPanel,
   MeetingRecordTabButton,
@@ -95,24 +95,24 @@ import {
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
-import { getErrorMessage } from "@/lib/errors";
-import { getLanguageName } from "@/lib/languages";
-import { saveBlobDownload } from "@/lib/download-artifact";
+import { getErrorMessage } from "@/lib/api/errors";
+import { getLanguageName } from "@/lib/language/languages";
+import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { transcriptService } from "@/services/transcript.service";
 import {
   resolveRoomEntryIntent,
   type RoomEntryIntent,
-} from "@/lib/translation-room-access";
+} from "@/lib/meeting/translation-room-access";
 import {
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
   type TranslationSessionBlock,
-} from "@/lib/transcript-display";
+} from "@/lib/transcript/transcript-display";
 import { cn } from "@/lib/utils";
 import {
   buildGoogleCalendarUrl,
   translationRoomService,
-} from "@/services/translationRoom.service";
+} from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { UserDto } from "@/types/auth";

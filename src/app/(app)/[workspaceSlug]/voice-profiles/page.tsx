@@ -1,7 +1,7 @@
 "use client";
 
 import { LanguageLabel, languageLabelText } from "@/components/language/language-label";
-import { languagesInScope } from "@/lib/languages";
+import { languagesInScope } from "@/lib/language/languages";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle,
@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
 import { useCreateVoiceProfile, useDeleteVoiceProfile, useVoiceProfiles } from "@/hooks/use-voice-profiles";
-import { analyzeVoiceSample } from "@/lib/voice-sample-quality";
+import { analyzeVoiceSample } from "@/lib/voice/voice-sample-quality";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
 // Values are the locale tags the backend stores and must not change; the label is what a

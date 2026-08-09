@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import {
   dedupeTranscriptSegments,
   resolveTranscriptSpeakerName,
-} from "@/lib/transcript-display";
+} from "@/lib/transcript/transcript-display";
 import {
   useJoinMeeting,
   useSetMuteOnEntry,
@@ -40,18 +40,20 @@ import {
   useTranslationRoom,
   useTranslationRoomParticipants,
 } from "@/hooks/use-translationRooms";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { liveMeetingPath } from "@/lib/workspace-routes";
-import { mergeParticipants } from "@/lib/merge-participants";
-import { roomOccupancy } from "@/lib/room-occupancy";
-import { resolveVoicePreference } from "@/lib/voice-preference";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
+import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
+import { mergeParticipants } from "@/lib/meeting/merge-participants";
+import { roomOccupancy } from "@/lib/meeting/room-occupancy";
+import { resolveVoicePreference } from "@/lib/voice/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
-import { buildMeetingEndedPath } from "@/lib/meeting-navigation";
+import { buildMeetingEndedPath } from "@/lib/meeting/meeting-navigation";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   AiSuggestionDto,
@@ -83,12 +85,12 @@ import {
   JOIN_PREVIEW_KEY,
   readMeetingJoinState,
   readMeetingMediaPreferences,
-} from "@/lib/meeting-join-state";
+} from "@/lib/meeting/meeting-join-state";
 import {
   isResolvedSpeakLanguage,
   resolveListenLanguage,
   resolveSpeakLanguage,
-} from "@/lib/participant-language-preference";
+} from "@/lib/language/participant-language-preference";
 import {
   MINI_MEETING_IDLE_WARNING_MS,
   evaluateIdleMeeting,
@@ -96,7 +98,7 @@ import {
   isIdleReaped,
   isRestoredMeetingStale,
   shouldConnectMeeting,
-} from "@/lib/meeting-session-lifecycle";
+} from "@/lib/meeting/meeting-session-lifecycle";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import {
   MeetingSidePanel,
@@ -117,15 +119,15 @@ import { useUpdateUserSettings, useUserSettings } from "@/hooks/use-user-setting
 import {
   shouldAskForLanguages,
   suggestLanguageProfile,
-} from "@/lib/language-profile";
+} from "@/lib/language/language-profile";
 import {
   fetchMyBreakoutAssignment,
   useEndBreakouts,
 } from "@/hooks/use-breakouts";
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
-import { describeLiveKitError } from "@/lib/livekit-error";
-import { buildCatchUpTranscript } from "@/lib/transcript-catch-up";
+import { describeLiveKitError } from "@/lib/meeting/livekit-error";
+import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 
 function getJoinLink(code: string) {
@@ -146,6 +148,8 @@ type LocalMediaControl = {
   /** Resolves to what the share ended up as, so the caller can reflect a cancelled prompt. */
   setScreenShareEnabled: (enabled: boolean) => Promise<boolean>;
 };
+
+const MINI_TRAY_INSET = bottomChromeInset(MIN_DOCK_SIZE);
 
 export function PersistentMeetingSession({
   roomId,
@@ -1310,7 +1314,19 @@ export function PersistentMeetingSession({
     });
     // WT-06
     connection.on("RecordingStateChanged", (recording: boolean) => {
-      setIsRecording(recording);
+      // Announce the transition, not the state. This fires on every participant, including the
+      // host who pressed the button — they get their own confirmation from the mutation, so
+      // only tell the people who did not ask for it.
+      setIsRecording((wasRecording) => {
+        if (recording !== wasRecording) {
+          toast[recording ? "info" : "success"](
+            recording
+              ? "This meeting is now being recorded."
+              : "Recording stopped.",
+          );
+        }
+        return recording;
+      });
     });
     // WT-08
     connection.on("HostChanged", (newHostUserId: string) => {
@@ -1784,6 +1800,39 @@ export function PersistentMeetingSession({
     });
   }
 
+  // Recording starts on its own, once, for the host.
+  //
+  // The reason is not convenience: a summary's timestamps are only useful if there is a
+  // recording behind them, and leaving the button to whoever remembered it meant most meetings
+  // produced citations pointing at nothing. Participants are told by toast the moment it
+  // starts — see the RecordingStateChanged handler — so nobody is recorded without being told.
+  //
+  // The ref, not state: it must be set before the mutation resolves, or a re-render in the gap
+  // fires a second start against an egress that is already coming up.
+  const autoRecordAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (
+      !shouldAutoStartRecording({
+        isHost,
+        isConnected: Boolean(meetingSession?.token) && !isMeetingJoining,
+        isRecording,
+        hasAttempted: autoRecordAttemptedRef.current,
+      })
+    ) {
+      return;
+    }
+    autoRecordAttemptedRef.current = true;
+    setRecordingMutation.mutate("start", {
+      onSuccess: (state) => setIsRecording(state.recording),
+      // Deliberately silent. A host who did not ask for this does not need an error about it,
+      // and the manual button still reports its own failures.
+      onError: () => {},
+    });
+    // setRecordingMutation is a fresh object on every render, so depending on it would re-run
+    // this effect forever. The ref is what makes it run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, meetingSession?.token, isMeetingJoining, isRecording]);
+
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
   function handleToggleRecording() {
@@ -1889,7 +1938,7 @@ export function PersistentMeetingSession({
         onError={(error) => setMeetingError(describeLiveKitError(error))}
         onConnected={() => setMeetingError(null)}
         data-lk-theme="default"
-        className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
+        className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-1 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
         <LiveKitReconnectWatcher
           onReconnecting={() => setIsLiveKitReconnecting(true)}
@@ -1922,12 +1971,11 @@ export function PersistentMeetingSession({
           </div>
         ) : null}
 
-        {!compact && isRecording ? (
-          <div className="flex items-center justify-center gap-2 bg-red-600 px-4 py-1.5 text-xs font-medium text-white">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-            This meeting is being recorded
-          </div>
-        ) : null}
+        {/* The full-width red bar that used to sit here is gone. It repeated, in the loudest
+            possible form and for the entire meeting, something the REC badge on the camera view
+            already says — and it said it by taking a strip off the top of every participant's
+            screen. Consent is a moment, not a permanent state: people are told once, by toast,
+            when recording starts, and the badge is the standing reminder. */}
 
         {compact ? (
           // The whole window drags, not just a strip across the top. That strip existed
@@ -1952,6 +2000,9 @@ export function PersistentMeetingSession({
               onPinParticipant={handlePinParticipant}
               spotlightedUserId={spotlightedUserId}
               raisedHandUserIds={raisedHandUserIds}
+              // The tray is centred and nearly the full width of this window, so without this
+              // the participant's name renders behind it.
+              bottomInset={MINI_TRAY_INSET}
               onRetry={retryMeetingConnection}
             />
 

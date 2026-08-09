@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { liveMeetingPath } from "@/lib/workspace-routes";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { Copy, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -13,8 +13,8 @@ import { BackToSetupButton } from "@/components/rooms/setup/back-to-setup-button
 import { DevicePreview } from "@/components/rooms/setup/device-preview";
 import { LanguageLabel } from "@/components/language/language-label";
 import { useDevicePreview } from "@/hooks/use-device-preview";
-import { getErrorMessage } from "@/lib/errors";
-import { roomOccupancy } from "@/lib/room-occupancy";
+import { getErrorMessage } from "@/lib/api/errors";
+import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useAdmitParticipant,

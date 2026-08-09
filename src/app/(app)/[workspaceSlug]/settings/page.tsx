@@ -17,7 +17,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { languagesInScope } from "@/lib/languages";
+import { languagesInScope } from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
 import {
@@ -34,8 +34,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
-import { parseIntegerInRange } from "@/lib/settings-validation";
-import { describeTimeZone, supportedTimeZones } from "@/lib/time-zones";
+import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
+import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 
 const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),

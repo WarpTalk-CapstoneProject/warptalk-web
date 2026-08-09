@@ -37,7 +37,7 @@ assert.match(
 // than by prose so a comment explaining the rule cannot trip it — this repo has failed a
 // contract on its own explanatory comment before.
 for (const rel of [
-  "src/lib/signalr.ts",
+  "src/lib/realtime/signalr.ts",
   "src/stores/auth-store.ts",
   "src/components/providers/realtime-notification-provider.tsx",
 ]) {
@@ -48,7 +48,7 @@ for (const rel of [
   );
 }
 
-const signalr = read("src/lib/signalr.ts");
+const signalr = read("src/lib/realtime/signalr.ts");
 assert.match(
   signalr,
   /getUsableAccessToken\(\)/,
@@ -59,17 +59,27 @@ assert.ok(
   "lib/signalr.ts must not keep an in-flight refresh of its own.",
 );
 
-// The store is written first by persistTokens, so it is never staler than localStorage.
-// Reading localStorage first hands back the token that was just rotated away.
+// This assertion used to require the opposite order, on the reasoning that persistTokens
+// writes the in-memory store first so the store can never be staler. That is true of ONE tab.
+// zustand's persist middleware does not listen for the storage event, so a second tab's store
+// never learns that the first tab rotated the family — it refreshes with a token the server
+// has already retired, which is a replay, which revokes the family and logs both tabs out.
+// localStorage is the only copy the tabs share, so it is the one to trust; persistTokens now
+// writes it synchronously, which is what makes trusting it safe.
 const refresherAt = client.indexOf("function getRefreshToken()");
 assert.ok(refresherAt > 0, "getRefreshToken must exist.");
-const body = client.slice(refresherAt, refresherAt + 800);
+const body = client.slice(refresherAt, refresherAt + 1400);
 const storeAt = body.indexOf("useAuthStore.getState().refreshToken");
 const persistedAt = body.indexOf("getPersistedAuthState()?.refreshToken");
 assert.ok(storeAt > 0 && persistedAt > 0, "Both token sources must still be consulted.");
 assert.ok(
-  storeAt < persistedAt,
-  "The in-memory store must be preferred over the persisted copy — it is written first.",
+  persistedAt < storeAt,
+  "The shared persisted copy must be preferred — the in-memory store is per-tab and goes stale the moment another tab rotates the family.",
+);
+assert.match(
+  client,
+  /function persistTokens\([\s\S]{0,300}writePersistedTokens\(accessToken, refreshToken\)/,
+  "persistTokens must write localStorage synchronously — preferring it is only safe if it is not behind.",
 );
 
 console.log("Single token refresher contract: PASS");

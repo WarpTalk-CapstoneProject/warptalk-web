@@ -9,7 +9,7 @@ import {
   mentionMatches,
   mentionMenuHandlesKey,
   type MentionAgent as DomainAgent,
-} from "@/lib/mention-menu";
+} from "@/lib/meeting/mention-menu";
 import { forwardRef, useImperativeHandle, useState } from "react";
 
 interface MentionCommandAttributes {

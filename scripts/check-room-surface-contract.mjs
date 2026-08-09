@@ -14,9 +14,9 @@ const root = path.resolve(import.meta.dirname, "..");
 const read = (relative) =>
   fs.readFileSync(path.join(root, relative), "utf8");
 
-const occupancy = read("src/lib/room-occupancy.ts");
+const occupancy = read("src/lib/meeting/room-occupancy.ts");
 const occupancyHook = read("src/hooks/use-room-occupancy.ts");
-const access = read("src/lib/translation-room-access.ts");
+const access = read("src/lib/meeting/translation-room-access.ts");
 const roomDetail = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx",
 );

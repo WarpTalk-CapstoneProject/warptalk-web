@@ -19,7 +19,7 @@ import {
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
-import { getLanguageName, languagesInScope } from "@/lib/languages";
+import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import {
   useGlossariesByWorkspace,
   useCreateGlossary,

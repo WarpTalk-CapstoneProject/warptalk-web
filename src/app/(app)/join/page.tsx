@@ -23,11 +23,11 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
-import { getErrorMessage } from "@/lib/errors";
-import { getFlagEmoji } from "@/lib/language-flag";
-import { getLanguageName, languagesInScope } from "@/lib/languages";
-import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
-import { completeMeetingJoin } from "@/lib/meeting-join-state";
+import { getErrorMessage } from "@/lib/api/errors";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
+import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";

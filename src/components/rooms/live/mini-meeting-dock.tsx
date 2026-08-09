@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   type DockPosition,
+  type DockSize,
+  clampDockSize,
   clampToViewport,
   defaultPosition,
-} from "@/lib/mini-dock-position";
+} from "@/lib/meeting/mini-dock-position";
 
-const DOCK_WIDTH = 232;
-const DOCK_HEIGHT = 388;
+const DEFAULT_SIZE: DockSize = { width: 232, height: 388 };
 
 /**
  * The floating meeting window, which the person on the call can move.
@@ -33,17 +34,19 @@ export function MiniMeetingDock({
   children: React.ReactNode;
 }) {
   const [position, setPosition] = useState<DockPosition | null>(null);
+  const [size, setSize] = useState<DockSize>(DEFAULT_SIZE);
   const dragOffset = useRef<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
   const bounds = useCallback(
     () => ({
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
-      dockWidth: DOCK_WIDTH,
-      dockHeight: DOCK_HEIGHT,
+      dockWidth: size.width,
+      dockHeight: size.height,
     }),
-    [],
+    [size.width, size.height],
   );
 
   // Placed on the first render that has a viewport to measure, not in an effect: an effect
@@ -58,6 +61,12 @@ export function MiniMeetingDock({
 
   useEffect(() => {
     function handleResize() {
+      // Size first: a window sized on a large screen and carried to a small one has to shrink
+      // before its position can be clamped, or it is clamped against a stale footprint.
+      setSize((current) => clampDockSize(current, {
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      }));
       setPosition((current) => (current ? clampToViewport(current, bounds()) : current));
     }
     window.addEventListener("resize", handleResize);
@@ -92,6 +101,38 @@ export function MiniMeetingDock({
     };
   }, [isDragging, bounds]);
 
+  useEffect(() => {
+    if (!isResizing) return;
+
+    function handleMove(event: PointerEvent) {
+      if (!position) return;
+      // Dragged from the bottom-right corner, so the top-left stays put and the pointer is
+      // the opposite corner. No aspect ratio is held: the whole point is choosing both.
+      setSize(
+        clampDockSize(
+          {
+            width: event.clientX - position.x,
+            height: event.clientY - position.y,
+          },
+          { viewportWidth: window.innerWidth, viewportHeight: window.innerHeight },
+        ),
+      );
+    }
+
+    function stop() {
+      setIsResizing(false);
+    }
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, [isResizing, position]);
+
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!position) return;
     const target = event.target as HTMLElement;
@@ -100,6 +141,7 @@ export function MiniMeetingDock({
     // strip across the top to the whole window: the strip could never be hidden, because
     // hiding it left nothing to grab, which is why the window wore a permanent black bar.
     if (target.closest("button, a, input, textarea, select, [role='button']")) return;
+    if (target.closest("[data-mini-resize]")) return;
     // Only the primary button, and never a right-click that is on its way to a context menu.
     if (event.button !== 0) return;
 
@@ -118,8 +160,8 @@ export function MiniMeetingDock({
       style={
         floating
           ? {
-              width: DOCK_WIDTH,
-              height: DOCK_HEIGHT,
+              width: size.width,
+              height: size.height,
               left: position?.x ?? 0,
               top: position?.y ?? 0,
               // Hidden until measured, so it never paints in the wrong corner for one frame.
@@ -135,6 +177,25 @@ export function MiniMeetingDock({
       }
     >
       {children}
+      {floating ? (
+        <div
+          data-mini-resize
+          role="separator"
+          aria-label="Resize meeting window"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            setIsResizing(true);
+          }}
+          className="absolute bottom-0 right-0 z-50 size-4 cursor-nwse-resize"
+        >
+          {/* Two short strokes rather than a filled block: the corner is over the picture, and
+              a grip that reads at a glance does not need to be opaque. */}
+          <svg viewBox="0 0 16 16" className="size-4 text-black/25" aria-hidden="true">
+            <path d="M15 7 L7 15 M15 12 L12 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+          </svg>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import { chatSenderName, isAssistantMessage } from "@/lib/chat-sender";
+import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useMeetingChat,
@@ -9,8 +9,8 @@ import {
 } from "@/hooks/use-meeting";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
-import { getLanguageName } from "@/lib/languages";
-import { downloadAuthenticatedFile } from "@/lib/download-artifact";
+import { getLanguageName } from "@/lib/language/languages";
+import { downloadAuthenticatedFile } from "@/lib/ui/download-artifact";
 import { API } from "@/lib/api/endpoints";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
@@ -21,7 +21,7 @@ import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
-import { mentionMatches, mentionMenuHandlesKey } from "@/lib/mention-menu";
+import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
 import {
   CHAT_MESSAGE_COUNTER_THRESHOLD,
   MAX_CHAT_MESSAGE_LENGTH,
