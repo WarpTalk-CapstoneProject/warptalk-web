@@ -1460,18 +1460,12 @@ export function PersistentMeetingSession({
     // exactly like being ignored. The realtime-event contract had it listed as "emitted,
     // never handled" with the note that the panel showed its own optimistic state — it did
     // not, and there was no such state anywhere in the chat panel.
-    let assistantTimeout: number | undefined;
     chatConnection.on("ChatAssistantResponsePending", () => {
-      const store = useTranslationRoomStore.getState();
-      store.setAssistantState("thinking");
-      window.clearTimeout(assistantTimeout);
-      // A spinner with no end is its own lie. If no answer lands, say so rather than
-      // leaving WarpBot thinking forever.
-      assistantTimeout = window.setTimeout(() => {
-        if (useTranslationRoomStore.getState().assistantState === "thinking") {
-          useTranslationRoomStore.getState().setAssistantState("timed_out");
-        }
-      }, 90_000);
+      // A second, confirming trigger. The chat panel already sets this optimistically the
+      // moment somebody sends an @agent mention, because waiting for this round trip leaves
+      // the send looking ignored — and when the answer is fast, this signal arrives and is
+      // cleared in the same breath, so nothing is ever seen. The panel owns the deadline.
+      useTranslationRoomStore.getState().setAssistantState("thinking");
     });
 
     let cancelled = false;
@@ -1507,7 +1501,6 @@ export function PersistentMeetingSession({
 
     return () => {
       cancelled = true;
-      window.clearTimeout(assistantTimeout);
       // Leaving the room while WarpBot is thinking must not carry the state into the next
       // one — the answer, if it comes, belongs to a conversation this client has left.
       useTranslationRoomStore.getState().setAssistantState("idle");
