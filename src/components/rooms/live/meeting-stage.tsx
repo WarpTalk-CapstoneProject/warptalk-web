@@ -30,8 +30,19 @@ import { HandRaiseBadge } from "./hand-raise-badge";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
 import { NetworkQualityIcon } from "./network-quality-icon";
 
+/**
+ * WT-330 follow-up: the tile carries no colour of its own and no radius of its own.
+ *
+ * It used to set `!bg-surface-3` (#e5e7eb) while the LiveKitRoom wrapper set
+ * `[&_.lk-participant-tile]:!bg-surface-1` on the same element — two !important rules fighting
+ * over one background, which is not a thing you can reason about from either site. It also set
+ * `rounded-xl` while the frame around it clips at 24px, so the two curves left a wedge of
+ * whichever background won showing in each corner. That wedge is the grey corner in the report.
+ *
+ * The frame owns the shape; the surface is one white everywhere.
+ */
 const TILE_CLASSNAME =
-  "!h-full !w-full !border-0 overflow-hidden rounded-xl !bg-surface-3 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
+  "!h-full !w-full !border-0 overflow-hidden !bg-surface-1 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
 
 /**
  * A grid or featured tile fills the cell it is given.
@@ -239,7 +250,7 @@ export function LiveKitMeetingStage({
         {showCameraOffState ? (
           <div
             data-camera-state="off"
-            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm ${
+            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-surface-1 ${
               isThumbnail ? "gap-1.5" : "gap-3"
             }`}
           >

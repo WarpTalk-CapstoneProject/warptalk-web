@@ -47,6 +47,7 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
@@ -1310,7 +1311,19 @@ export function PersistentMeetingSession({
     });
     // WT-06
     connection.on("RecordingStateChanged", (recording: boolean) => {
-      setIsRecording(recording);
+      // Announce the transition, not the state. This fires on every participant, including the
+      // host who pressed the button — they get their own confirmation from the mutation, so
+      // only tell the people who did not ask for it.
+      setIsRecording((wasRecording) => {
+        if (recording !== wasRecording) {
+          toast[recording ? "info" : "success"](
+            recording
+              ? "This meeting is now being recorded."
+              : "Recording stopped.",
+          );
+        }
+        return recording;
+      });
     });
     // WT-08
     connection.on("HostChanged", (newHostUserId: string) => {
@@ -1784,6 +1797,39 @@ export function PersistentMeetingSession({
     });
   }
 
+  // Recording starts on its own, once, for the host.
+  //
+  // The reason is not convenience: a summary's timestamps are only useful if there is a
+  // recording behind them, and leaving the button to whoever remembered it meant most meetings
+  // produced citations pointing at nothing. Participants are told by toast the moment it
+  // starts — see the RecordingStateChanged handler — so nobody is recorded without being told.
+  //
+  // The ref, not state: it must be set before the mutation resolves, or a re-render in the gap
+  // fires a second start against an egress that is already coming up.
+  const autoRecordAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (
+      !shouldAutoStartRecording({
+        isHost,
+        isConnected: Boolean(meetingSession?.token) && !isMeetingJoining,
+        isRecording,
+        hasAttempted: autoRecordAttemptedRef.current,
+      })
+    ) {
+      return;
+    }
+    autoRecordAttemptedRef.current = true;
+    setRecordingMutation.mutate("start", {
+      onSuccess: (state) => setIsRecording(state.recording),
+      // Deliberately silent. A host who did not ask for this does not need an error about it,
+      // and the manual button still reports its own failures.
+      onError: () => {},
+    });
+    // setRecordingMutation is a fresh object on every render, so depending on it would re-run
+    // this effect forever. The ref is what makes it run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, meetingSession?.token, isMeetingJoining, isRecording]);
+
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
   function handleToggleRecording() {
@@ -1889,7 +1935,7 @@ export function PersistentMeetingSession({
         onError={(error) => setMeetingError(describeLiveKitError(error))}
         onConnected={() => setMeetingError(null)}
         data-lk-theme="default"
-        className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-2 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
+        className="flex min-h-0 flex-1 flex-col !bg-transparent !text-ink [&_.lk-participant-placeholder]:!bg-surface-1 [&_.lk-participant-placeholder_svg]:!text-ink-muted [&_.lk-participant-tile]:!bg-surface-1"
       >
         <LiveKitReconnectWatcher
           onReconnecting={() => setIsLiveKitReconnecting(true)}
@@ -1922,12 +1968,11 @@ export function PersistentMeetingSession({
           </div>
         ) : null}
 
-        {!compact && isRecording ? (
-          <div className="flex items-center justify-center gap-2 bg-red-600 px-4 py-1.5 text-xs font-medium text-white">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-            This meeting is being recorded
-          </div>
-        ) : null}
+        {/* The full-width red bar that used to sit here is gone. It repeated, in the loudest
+            possible form and for the entire meeting, something the REC badge on the camera view
+            already says — and it said it by taking a strip off the top of every participant's
+            screen. Consent is a moment, not a permanent state: people are told once, by toast,
+            when recording starts, and the badge is the standing reminder. */}
 
         {compact ? (
           // The whole window drags, not just a strip across the top. That strip existed
