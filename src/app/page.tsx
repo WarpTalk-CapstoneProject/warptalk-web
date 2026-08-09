@@ -12,14 +12,14 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
 import { getPlanDescription, buildFeatureList } from "@/lib/utils";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import {
   getLandingGetStartedHref,
   getRememberedWorkspaceSlug,
   hasRememberedAccessToken,
-} from "@/lib/landing-redirect";
+} from "@/lib/auth/landing-redirect";
 import type { PlanDto } from "@/types/billing";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney } from "@/lib/format/currency";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 

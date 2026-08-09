@@ -6,7 +6,7 @@ import {
   type DockPosition,
   clampToViewport,
   defaultPosition,
-} from "@/lib/mini-dock-position";
+} from "@/lib/meeting/mini-dock-position";
 
 const DOCK_WIDTH = 232;
 const DOCK_HEIGHT = 388;

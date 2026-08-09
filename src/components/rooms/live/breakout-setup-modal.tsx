@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useStartBreakouts } from "@/hooks/use-breakouts";
 import type { TranslationRoomParticipantDto } from "@/types/translationRoom";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 
 interface GroupDraft {
   label: string;

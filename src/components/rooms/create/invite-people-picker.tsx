@@ -10,7 +10,7 @@ import { PillButton } from "./pill-button";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { matchesSearchText } from "@/lib/search-text";
+import { matchesSearchText } from "@/lib/ui/search-text";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { usePresence } from "@/hooks/use-presence";
 

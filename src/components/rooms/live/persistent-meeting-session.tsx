@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import {
   dedupeTranscriptSegments,
   resolveTranscriptSpeakerName,
-} from "@/lib/transcript-display";
+} from "@/lib/transcript/transcript-display";
 import {
   useJoinMeeting,
   useSetMuteOnEntry,
@@ -40,18 +40,18 @@ import {
   useTranslationRoom,
   useTranslationRoomParticipants,
 } from "@/hooks/use-translationRooms";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { liveMeetingPath } from "@/lib/workspace-routes";
-import { mergeParticipants } from "@/lib/merge-participants";
-import { roomOccupancy } from "@/lib/room-occupancy";
-import { resolveVoicePreference } from "@/lib/voice-preference";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { mergeParticipants } from "@/lib/meeting/merge-participants";
+import { roomOccupancy } from "@/lib/meeting/room-occupancy";
+import { resolveVoicePreference } from "@/lib/voice/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
-import { buildMeetingEndedPath } from "@/lib/meeting-navigation";
+import { buildMeetingEndedPath } from "@/lib/meeting/meeting-navigation";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   AiSuggestionDto,
@@ -83,12 +83,12 @@ import {
   JOIN_PREVIEW_KEY,
   readMeetingJoinState,
   readMeetingMediaPreferences,
-} from "@/lib/meeting-join-state";
+} from "@/lib/meeting/meeting-join-state";
 import {
   isResolvedSpeakLanguage,
   resolveListenLanguage,
   resolveSpeakLanguage,
-} from "@/lib/participant-language-preference";
+} from "@/lib/language/participant-language-preference";
 import {
   MINI_MEETING_IDLE_WARNING_MS,
   evaluateIdleMeeting,
@@ -96,7 +96,7 @@ import {
   isIdleReaped,
   isRestoredMeetingStale,
   shouldConnectMeeting,
-} from "@/lib/meeting-session-lifecycle";
+} from "@/lib/meeting/meeting-session-lifecycle";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import {
   MeetingSidePanel,
@@ -117,15 +117,15 @@ import { useUpdateUserSettings, useUserSettings } from "@/hooks/use-user-setting
 import {
   shouldAskForLanguages,
   suggestLanguageProfile,
-} from "@/lib/language-profile";
+} from "@/lib/language/language-profile";
 import {
   fetchMyBreakoutAssignment,
   useEndBreakouts,
 } from "@/hooks/use-breakouts";
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
-import { describeLiveKitError } from "@/lib/livekit-error";
-import { buildCatchUpTranscript } from "@/lib/transcript-catch-up";
+import { describeLiveKitError } from "@/lib/meeting/livekit-error";
+import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 
 function getJoinLink(code: string) {

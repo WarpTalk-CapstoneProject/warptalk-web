@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { billingService } from "@/services/billing.service";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {

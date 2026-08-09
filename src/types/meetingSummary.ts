@@ -7,8 +7,8 @@
  * WarpTalk.TranslationRoomService's ArtifactsFinalizer.BuildStructuredSummaryContent.
  */
 
-import type { MeetingSummarySectionView } from "@/lib/meeting-summary";
-import { parseSummarySections } from "@/lib/meeting-summary";
+import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
+import { parseSummarySections } from "@/lib/meeting/meeting-summary";
 
 export interface MeetingSummaryActionItem {
   owner: string;

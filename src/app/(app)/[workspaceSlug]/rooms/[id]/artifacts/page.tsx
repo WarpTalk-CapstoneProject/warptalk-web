@@ -9,8 +9,8 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getErrorMessage } from "@/lib/errors";
-import { translationRoomService } from "@/services/translationRoom.service";
+import { getErrorMessage } from "@/lib/api/errors";
+import { translationRoomService } from "@/services/translation-room.service";
 import type { TranslationRoomArtifactDto } from "@/types/translationRoom";
 
 export default function RoomArtifactsPage() {

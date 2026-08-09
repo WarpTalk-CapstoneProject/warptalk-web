@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Spinner } from "@phosphor-icons/react";
 
-import { languagesInScope } from "@/lib/languages";
+import { languagesInScope } from "@/lib/language/languages";
 import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import type { UpdateUserSettingsRequest } from "@/types/auth";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
-import { parseIntegerInRange } from "@/lib/settings-validation";
+import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
 
 const preferencesSchema = z.object({
   defaultSpeakLanguage: z.string().min(1, "Required"),

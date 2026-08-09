@@ -15,18 +15,18 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { openArtifactDownload } from "@/lib/download-artifact";
+import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import {
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
-} from "@/lib/meeting-artifacts";
+} from "@/lib/meeting/meeting-artifacts";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
   SUMMARY_TEMPLATES,
   formatCitationTime,
-} from "@/lib/meeting-summary";
-import { translationRoomService } from "@/services/translationRoom.service";
+} from "@/lib/meeting/meeting-summary";
+import { translationRoomService } from "@/services/translation-room.service";
 import type {
   EndedRoomHistoryItem,
   RoomHistoryArtifact,

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClosePoll, useCreatePoll, usePolls, useVotePoll } from "@/hooks/use-polls";
 import type { PollDto } from "@/types/poll";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;

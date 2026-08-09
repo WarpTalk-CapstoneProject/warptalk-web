@@ -7,8 +7,8 @@ const read = (relativePath) => readFile(path.join(root, relativePath), "utf8");
 
 const [hook, historyService, roomService, roomDetailPage, historyPage, workspaceLayout] = await Promise.all([
   read("src/hooks/use-room-history.ts"),
-  read("src/services/roomHistory.service.ts"),
-  read("src/services/translationRoom.service.ts"),
+  read("src/services/room-history.service.ts"),
+  read("src/services/translation-room.service.ts"),
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
   read("src/app/(app)/[workspaceSlug]/history/page.tsx"),
   read("src/app/(app)/[workspaceSlug]/layout.tsx"),

@@ -6,7 +6,7 @@
 // no identity. `logout()` cleared the auth state, the cookies, the active workspace and the
 // presence map, and nothing else.
 //
-// `src/lib/session-scoped-state.test.ts` proves the reset actually empties a real query
+// `src/lib/auth/__tests__/session-scoped-state.test.ts` proves the reset actually empties a real query
 // client and the real stores. What that test cannot see is *wiring*: whether the auth store
 // still calls it, whether the provider still hands the query client over, and whether a
 // newly added store was ever added to the reset. Those are the assertions here, and they are
@@ -21,7 +21,7 @@ import path from "node:path";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => readFile(path.join(root, rel), "utf8");
 
-const sessionScopedState = await read("src/lib/session-scoped-state.ts");
+const sessionScopedState = await read("src/lib/auth/session-scoped-state.ts");
 const authStore = await read("src/stores/auth-store.ts");
 const providers = await read("src/app/providers.tsx");
 const workspacePage = await read("src/app/(app)/workspace/page.tsx");

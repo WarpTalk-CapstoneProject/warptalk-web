@@ -25,7 +25,7 @@ import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
 import { cn } from "@/lib/utils";
-import { isLiveMeetingPath } from "@/lib/workspace-routes";
+import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";

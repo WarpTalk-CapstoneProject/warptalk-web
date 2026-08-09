@@ -12,9 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import { useSetPreferredVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
-import { languagesInScope } from "@/lib/languages";
+import { languagesInScope } from "@/lib/language/languages";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
 /**

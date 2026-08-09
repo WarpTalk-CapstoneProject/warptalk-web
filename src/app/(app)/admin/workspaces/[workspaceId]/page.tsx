@@ -23,7 +23,7 @@ import {
   useReactivateAdminWorkspace,
   useSuspendAdminWorkspace,
 } from "@/hooks/use-admin-workspaces";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type { AdminWorkspaceDetailDto } from "@/types/admin-workspace";
 

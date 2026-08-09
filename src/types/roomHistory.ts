@@ -15,7 +15,7 @@ export type RoomArtifactStatus = "ready" | "processing" | "expired" | "missing" 
 
 export type RoomConsentStatus = "granted" | "limited" | "declined" | "not_required";
 
-import type { MeetingSummarySectionView } from "@/lib/meeting-summary";
+import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
 
 export interface RoomHistoryParticipant {
   id: string;

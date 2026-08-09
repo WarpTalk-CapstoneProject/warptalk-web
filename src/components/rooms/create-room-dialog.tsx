@@ -14,7 +14,7 @@ import gsap from "gsap";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { meetingTypeByLabel } from "@/lib/meeting-types";
+import { meetingTypeByLabel } from "@/lib/meeting/meeting-types";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -31,18 +31,18 @@ import {
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceSettings } from "@/hooks/use-workspace";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   normalizeLanguagePolicy,
   reconcileMeetingLanguages,
-} from "@/lib/languages";
+} from "@/lib/language/languages";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   type DailyRecurrenceDraft,
   detectTimeZone,
-} from "@/lib/daily-recurrence";
+} from "@/lib/meeting/daily-recurrence";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
 import { LanguageSelector } from "./create/language-selector";
 import { PillButton } from "./create/pill-button";

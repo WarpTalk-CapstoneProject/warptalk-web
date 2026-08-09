@@ -23,8 +23,8 @@ const sessionCookie = await read("src/lib/auth/session-cookie.ts");
 const proxy = await read("src/proxy.ts");
 const client = await read("src/lib/api/client.ts");
 const authStore = await read("src/stores/auth-store.ts");
-const signalr = await read("src/lib/signalr.ts");
-const landingRedirect = await read("src/lib/landing-redirect.ts");
+const signalr = await read("src/lib/realtime/signalr.ts");
+const landingRedirect = await read("src/lib/auth/landing-redirect.ts");
 
 const callSites = [
   "src/app/(auth)/login/page.tsx",

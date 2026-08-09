@@ -2,8 +2,8 @@ import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
-import { getFlagEmoji } from "@/lib/language-flag";
-import { isLanguageAllowedByPolicy, languagesInScope } from "@/lib/languages";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { isLanguageAllowedByPolicy, languagesInScope } from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
 import { cn } from "@/lib/utils";
 

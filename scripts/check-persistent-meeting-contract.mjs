@@ -18,7 +18,7 @@ const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle, miniDock] 
     source("src/app/(app)/[workspaceSlug]/rooms/[id]/live/page.tsx"),
     source("src/components/rooms/live/persistent-meeting-session.tsx"),
     source("src/stores/active-meeting-store.ts"),
-    source("src/lib/meeting-session-lifecycle.ts"),
+    source("src/lib/meeting/meeting-session-lifecycle.ts"),
     source("src/components/rooms/live/mini-meeting-dock.tsx"),
   ]);
 

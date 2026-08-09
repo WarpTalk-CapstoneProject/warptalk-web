@@ -8,7 +8,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { RealtimeNotificationProvider } from "@/components/providers/realtime-notification-provider";
 import { isSessionEnded } from "@/lib/api/client";
 import { getRetryDelayMs, shouldRetryRequest } from "@/lib/api/retry-policy";
-import { registerSessionQueryClient } from "@/lib/session-scoped-state";
+import { registerSessionQueryClient } from "@/lib/auth/session-scoped-state";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "not-configured.apps.googleusercontent.com";
 

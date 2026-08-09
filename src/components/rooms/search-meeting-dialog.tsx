@@ -24,12 +24,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Lumidot } from "lumidot";
-import { looksLikeRoomCode } from "@/lib/room-code-guess";
+import { looksLikeRoomCode } from "@/lib/meeting/room-code-guess";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useTheme } from "next-themes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { liveMeetingPath } from "@/lib/workspace-routes";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 
 type QuickSearchAction = {
   title: string;

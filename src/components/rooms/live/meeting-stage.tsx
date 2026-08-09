@@ -24,7 +24,7 @@ import {
   INITIAL_STICKY_SPEAKER,
   SPEAKER_HOLD_MS,
   nextStickySpeaker,
-} from "@/lib/sticky-speaker";
+} from "@/lib/meeting/sticky-speaker";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { HandRaiseBadge } from "./hand-raise-badge";
 import type { MeetingLayoutMode } from "./meeting-control-bar";

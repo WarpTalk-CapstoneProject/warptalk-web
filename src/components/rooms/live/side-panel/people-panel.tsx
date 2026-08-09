@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   useKickMeetingParticipant,
   useMuteMeetingParticipant,
@@ -42,7 +42,7 @@ import {
   PRESENCE_LABELS,
   participantPresence,
   type ParticipantPresence,
-} from "@/lib/room-occupancy";
+} from "@/lib/meeting/room-occupancy";
 
 export function PeoplePanel({
   roomId,

@@ -36,7 +36,7 @@ import {
   DIRECTORY_STATUS_LABELS,
   type DirectoryFilter,
   type DirectoryRow,
-} from "@/lib/member-directory";
+} from "@/lib/workspace/member-directory";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { usePresence } from "@/hooks/use-presence";

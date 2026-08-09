@@ -4,8 +4,8 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
-import { getFlagEmoji } from "@/lib/language-flag";
-import { getLanguageName } from "@/lib/languages";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { getLanguageName } from "@/lib/language/languages";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

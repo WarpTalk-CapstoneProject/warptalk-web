@@ -16,16 +16,16 @@ import { DeviceSelect } from "@/components/rooms/setup/device-select";
 import {
   normalizeLanguageCode,
   resolveRoomDefaultListenLanguage,
-} from "@/lib/participant-language-preference";
+} from "@/lib/language/participant-language-preference";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   useJoinTranslationRoomByCode,
   useTranslationRoom,
 } from "@/hooks/use-translationRooms";
-import { canJoinTranslationRoom } from "@/lib/translation-room-access";
-import { completeMeetingJoin } from "@/lib/meeting-join-state";
+import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
+import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";

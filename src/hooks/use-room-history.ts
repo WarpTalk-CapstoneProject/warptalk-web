@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { roomHistoryService } from "@/services/roomHistory.service";
+import { roomHistoryService } from "@/services/room-history.service";
 import type { RoomArtifactStatus, RoomHistoryLoadState } from "@/types/roomHistory";
 
 type RoomHistoryOptions = {

@@ -37,7 +37,7 @@ assert.match(
 // than by prose so a comment explaining the rule cannot trip it — this repo has failed a
 // contract on its own explanatory comment before.
 for (const rel of [
-  "src/lib/signalr.ts",
+  "src/lib/realtime/signalr.ts",
   "src/stores/auth-store.ts",
   "src/components/providers/realtime-notification-provider.tsx",
 ]) {
@@ -48,7 +48,7 @@ for (const rel of [
   );
 }
 
-const signalr = read("src/lib/signalr.ts");
+const signalr = read("src/lib/realtime/signalr.ts");
 assert.match(
   signalr,
   /getUsableAccessToken\(\)/,

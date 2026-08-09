@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
-import { normalizeWorkspaceRole } from "@/lib/workspace-role";
+import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
 import { useWorkspaceMembers, usePreviewWorkspaceMemberRoleChange, useApplyWorkspaceMemberRoleChange } from "@/hooks/use-workspace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

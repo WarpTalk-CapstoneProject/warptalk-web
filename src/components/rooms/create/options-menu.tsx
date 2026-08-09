@@ -15,7 +15,7 @@ import {
   describeDailyDraftProblem,
   toLocalDateString,
   validateDailyDraft,
-} from "@/lib/daily-recurrence";
+} from "@/lib/meeting/daily-recurrence";
 
 /**
  * The scheduling menu: a one-off date, or a daily rule.
