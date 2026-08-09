@@ -15,7 +15,7 @@ async function source(relativePath) {
 const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle, miniDock] =
   await Promise.all([
     source("src/app/(app)/layout.tsx"),
-    source("src/app/(app)/room/[id]/page.tsx"),
+    source("src/app/(app)/[workspaceSlug]/rooms/[id]/live/page.tsx"),
     source("src/components/rooms/live/persistent-meeting-session.tsx"),
     source("src/stores/active-meeting-store.ts"),
     source("src/lib/meeting-session-lifecycle.ts"),
@@ -83,9 +83,11 @@ assert.match(
   /<LiveKitRoom[\s\S]*compact \? \([\s\S]*data-mini-meeting[\s\S]*\) : \([\s\S]*data-meeting-content/,
   "full and mini views must share one mounted LiveKitRoom",
 );
+// Through liveMeetingPath, not a literal. The path is spelled once now; a second copy here
+// is how `/room/{id}` survived without a workspace slug while every route around it had one.
 assert.match(
   meetingSession,
-  /aria-label="Return to meeting"[\s\S]*router\.push\(`\/room\/\$\{roomId\}`\)/,
+  /aria-label="Return to meeting"[\s\S]*router\.push\(liveMeetingPath\(activeWorkspaceSlug, roomId\)\)/,
   "the mini meeting must provide a clear route back to the full meeting",
 );
 assert.match(

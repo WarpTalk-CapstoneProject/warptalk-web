@@ -2,6 +2,9 @@ import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "./track-effects-preference
 
 export const JOIN_PREVIEW_KEY = "warptalk.join.preview";
 export const DEVICE_PREVIEW_KEY = "warptalk.devices.preview";
+// Extension included on purpose: this module is exercised by node --experimental-strip-types,
+// which does not resolve extensionless relative imports.
+import { liveMeetingPath } from "./workspace-routes.ts";
 
 type StorageReader = Pick<Storage, "getItem">;
 type StorageWriter = Pick<Storage, "setItem">;
@@ -100,6 +103,7 @@ export function readMeetingMediaPreferences(
 export function completeMeetingJoin({
   storage,
   roomId,
+  workspaceSlug,
   joinState,
   deviceState,
   navigate,
@@ -107,6 +111,8 @@ export function completeMeetingJoin({
 }: {
   storage: StorageWriter;
   roomId: string;
+  /** The workspace the meeting belongs to; see liveMeetingPath for the slug-less case. */
+  workspaceSlug: string | null | undefined;
   joinState: JoinState;
   deviceState: DeviceState;
   navigate: (path: string) => void;
@@ -123,6 +129,6 @@ export function completeMeetingJoin({
 
   // Start navigation while the modal is still mounted. Closing it first can remove
   // the component that owns the router during the successful mutation callback.
-  navigate(`/room/${roomId}`);
+  navigate(liveMeetingPath(workspaceSlug, roomId));
   closePreview();
 }

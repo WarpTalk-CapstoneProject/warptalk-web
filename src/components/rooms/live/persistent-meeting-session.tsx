@@ -45,6 +45,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { liveMeetingPath } from "@/lib/workspace-routes";
 import { mergeParticipants } from "@/lib/merge-participants";
 import { roomOccupancy } from "@/lib/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice-preference";
@@ -1978,7 +1979,7 @@ export function PersistentMeetingSession({
               type="button"
               aria-label="Return to meeting"
               title="Return to meeting"
-              onClick={() => router.push(`/room/${roomId}`)}
+              onClick={() => router.push(liveMeetingPath(activeWorkspaceSlug, roomId))}
               className="absolute right-3 top-3 z-40 grid size-8 place-items-center rounded-full bg-black/55 text-white shadow-sm backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             >
               <ArrowsOut className="size-4" weight="bold" />

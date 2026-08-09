@@ -92,10 +92,17 @@ assert.doesNotMatch(
   /otherTracks\.slice\(0, 1\)/,
   "the thumbnail filmstrip must not discard participants after the first one",
 );
+// The shell used to spell this path itself. It is now one helper, tested on its own,
+// because getting it wrong floats the minimised window on top of the live meeting.
 assert.match(
   appLayout,
-  /const isLiveMeetingRoute = pathname\.startsWith\("\/room\/"\)/,
+  /const isLiveMeetingRoute = isLiveMeetingPath\(pathname\)/,
   "the app shell must identify the active meeting route",
+);
+assert.doesNotMatch(
+  appLayout,
+  /pathname\.startsWith\('\/room\/'\)|pathname\.startsWith\("\/room\/"\)/,
+  "the app shell must not re-derive the live meeting path beside the helper",
 );
 assert.match(
   appLayout,

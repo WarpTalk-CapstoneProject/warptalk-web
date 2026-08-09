@@ -53,6 +53,7 @@ import { toast } from "sonner";
 import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
+import { liveMeetingPath } from "@/lib/workspace-routes";
 import {
   Collapsible,
   CollapsiblePanel,
@@ -275,7 +276,7 @@ export default function RoomInformationPage() {
         // own start action (rooms/[id]/waiting/page.tsx).
         try {
           await startRoomMutation.mutateAsync(room.id);
-          router.push(`/room/${room.id}`);
+          router.push(liveMeetingPath(workspaceSlug, room.id));
         } catch (error) {
           toast.error(getErrorMessage(error, "Could not start the meeting."));
         }

@@ -293,6 +293,7 @@ function JoinMeetingContent() {
         completeMeetingJoin({
           storage: window.sessionStorage,
           roomId: result.room.id,
+          workspaceSlug: activeWorkspaceSlug,
           joinState: {
             displayName: displayName.trim(),
             roomCode: normalizedCode,

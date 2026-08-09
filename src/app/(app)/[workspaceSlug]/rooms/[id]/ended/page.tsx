@@ -153,7 +153,7 @@ export default function RoomEndedPage() {
           Open artifacts
         </Link>
         <Link
-          href={`/feedback?roomId=${encodeURIComponent(roomId)}`}
+          href={`/${workspaceSlug}/feedback?roomId=${encodeURIComponent(roomId)}`}
           className="inline-flex h-8 items-center justify-center rounded-full border border-border px-3 text-sm font-medium transition hover:bg-muted"
         >
           <Star className="mr-2 h-4 w-4" />

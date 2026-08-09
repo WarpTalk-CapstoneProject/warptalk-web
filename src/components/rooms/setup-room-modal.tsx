@@ -24,6 +24,7 @@ import {
 } from "@/hooks/use-translationRooms";
 import { canJoinTranslationRoom } from "@/lib/translation-room-access";
 import { completeMeetingJoin } from "@/lib/meeting-join-state";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -316,6 +317,7 @@ export function SetupRoomModal() {
       completeMeetingJoin({
         storage: window.sessionStorage,
         roomId: result.room.id,
+        workspaceSlug: useWorkspaceStore.getState().activeWorkspaceSlug,
         joinState: {
           displayName,
           roomCode: room.translationRoomCode,

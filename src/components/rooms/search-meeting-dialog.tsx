@@ -29,6 +29,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useTheme } from "next-themes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { liveMeetingPath } from "@/lib/workspace-routes";
 
 type QuickSearchAction = {
   title: string;
@@ -83,7 +84,7 @@ export function SearchMeetingDialog() {
   const meetings = data?.rooms || [];
 
   const handleSelect = (roomId: string) => {
-    router.push(`/room/${roomId}`);
+    router.push(liveMeetingPath(activeWorkspaceSlug, roomId));
     setSearchMeetingModalOpen(false);
   };
 

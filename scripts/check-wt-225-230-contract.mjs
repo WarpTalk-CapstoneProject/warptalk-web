@@ -17,7 +17,7 @@ const [
   read("src/components/rooms/live/persistent-meeting-session.tsx"),
   read("src/lib/api/endpoints.ts"),
   read("src/components/rooms/live/chat-panel.tsx"),
-  read("src/app/(app)/voice-profiles/page.tsx"),
+  read("src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx"),
   read("package.json"),
 ]);
 
