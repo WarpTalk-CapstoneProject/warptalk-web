@@ -63,6 +63,40 @@ export function sectionTitle(key: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/**
+ * The shapes a summary can be rewritten into.
+ *
+ * Mirrors warptalk-ai's summary_templates registry. Two copies of a list is a drift risk, but
+ * the alternative — an endpoint whose only job is to list five constants — buys a network
+ * round trip on every page load to avoid an edit that happens once a quarter. An unknown key
+ * falls back to General on the AI side, so a stale entry here degrades rather than breaks.
+ */
+export const SUMMARY_TEMPLATES: { key: string; label: string; description: string }[] = [
+  {
+    key: "general",
+    label: "General meeting",
+    description: "Overview, decisions, action items and anything left unresolved.",
+  },
+  { key: "standup", label: "Standup", description: "Per-person progress, plans and blockers." },
+  {
+    key: "interview",
+    label: "Candidate interview",
+    description: "Background, answers, strengths, concerns and next steps.",
+  },
+  {
+    key: "demo",
+    label: "Product demo",
+    description: "What was shown, how it landed, objections and follow-ups.",
+  },
+  {
+    key: "technical",
+    label: "Technical discussion",
+    description: "Problems, options weighed, what was chosen and why.",
+  },
+];
+
+export const DEFAULT_SUMMARY_TEMPLATE = "general";
+
 /** Keys that are not sections of the summary body. */
 const NON_SECTION_KEYS = new Set([
   "summary",

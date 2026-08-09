@@ -648,6 +648,26 @@ function MeetingRecordSection({
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
 
+  // Read inside the polling interval, which closes over the render that started it and
+  // would otherwise never see the rewritten summary arrive.
+  const summaryTemplateRef = useRef(endedRecord?.summary?.templateKey);
+  const rewritePollRef = useRef<number | null>(null);
+
+  // In an effect, not during render: writing a ref while rendering is how a component ends
+  // up reading a value React has not committed yet.
+  useEffect(() => {
+    summaryTemplateRef.current = endedRecord?.summary?.templateKey;
+  }, [endedRecord?.summary?.templateKey]);
+
+  useEffect(
+    () => () => {
+      // Leaving the page mid-rewrite must not leave a timer refetching a room nobody is
+      // looking at.
+      if (rewritePollRef.current !== null) window.clearInterval(rewritePollRef.current);
+    },
+    [],
+  );
+
   // No ended record means the meeting has not finished, so there is nothing to summarise and
   // no files to retain. Showing two permanently empty tabs would only invite clicking them.
   const hasRecord = Boolean(endedRecord);
@@ -700,6 +720,31 @@ function MeetingRecordSection({
           onJumpToMoment={(atMs) => {
             setTab("transcript");
             onJumpToMoment(atMs);
+          }}
+          onRewrite={async (templateKey) => {
+            await translationRoomService.regenerateSummary(
+              endedRecord.id,
+              templateKey,
+            );
+            toast.success("Rewriting the summary…");
+            // The endpoint answers 202 — the summary lands on the artifact later, so this
+            // polls for it rather than trusting the response. It stops the moment the new
+            // shape arrives, and gives up after 90 seconds either way.
+            if (rewritePollRef.current !== null) {
+              window.clearInterval(rewritePollRef.current);
+            }
+            const stopAt = Date.now() + 90_000;
+            rewritePollRef.current = window.setInterval(() => {
+              const arrived = summaryTemplateRef.current === templateKey;
+              if (arrived || Date.now() > stopAt) {
+                if (rewritePollRef.current !== null) {
+                  window.clearInterval(rewritePollRef.current);
+                  rewritePollRef.current = null;
+                }
+                return;
+              }
+              onRecordChanged();
+            }, 4000);
           }}
         />
       ) : null}

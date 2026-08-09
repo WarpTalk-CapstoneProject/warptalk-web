@@ -325,6 +325,19 @@ export const translationRoomService = {
     return apiClient.post<void>(API.roomArtifacts.consent(id));
   },
 
+  /**
+   * Ask for this meeting's summary to be written again in a different shape.
+   *
+   * Answers 202, not 200 — the summary is not rewritten when this resolves. It arrives on
+   * the artifact, so the caller has to refetch rather than trust the response body.
+   */
+  regenerateSummary(roomId: string, templateKey: string) {
+    return apiClient.post<{ message: string }>(
+      API.roomArtifacts.regenerateSummary(roomId),
+      { templateKey },
+    );
+  },
+
   async invitations(id: string) {
     return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
   },

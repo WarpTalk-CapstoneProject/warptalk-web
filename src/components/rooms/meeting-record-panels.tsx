@@ -21,7 +21,11 @@ import {
   artifactStatusLabel,
   canDownloadArtifact,
 } from "@/lib/meeting-artifacts";
-import { formatCitationTime } from "@/lib/meeting-summary";
+import {
+  DEFAULT_SUMMARY_TEMPLATE,
+  SUMMARY_TEMPLATES,
+  formatCitationTime,
+} from "@/lib/meeting-summary";
 import { translationRoomService } from "@/services/translationRoom.service";
 import type {
   EndedRoomHistoryItem,
@@ -140,6 +144,7 @@ export function SummaryPanel({
   busyArtifactId,
   onDownload,
   onJumpToMoment,
+  onRewrite,
 }: {
   room: EndedRoomHistoryItem;
   busyArtifactId: string | null;
@@ -147,6 +152,8 @@ export function SummaryPanel({
   /** Open the transcript at the moment a summary item cites. Omit to render items as
    *  plain text — which is also what happens for a summary written before citations. */
   onJumpToMoment?: (atMs: number) => void;
+  /** Ask for the summary to be rewritten in another shape. Omit to hide the picker. */
+  onRewrite?: (templateKey: string) => Promise<void>;
 }) {
   const artifact = room.artifacts.find(
     (item) => item.type === "summary_export",
@@ -161,6 +168,22 @@ export function SummaryPanel({
   );
   const recentlyEnded = useRecentlyEnded(room.endedAt);
   const isGenerating = !artifact && recentlyEnded;
+
+  const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
+  const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
+  const isRewriting = requestedTemplate !== null && requestedTemplate !== currentTemplate;
+
+  useEffect(() => {
+    // A rewrite that never lands must not leave the picker spinning forever — the summary
+    // arrives on the artifact asynchronously, and "still waiting" and "never coming" look
+    // identical without a deadline.
+    if (!isRewriting) return;
+    const timer = window.setTimeout(() => {
+      setRequestedTemplate(null);
+      toast.error("The rewritten summary has not arrived. Try again.");
+    }, 90_000);
+    return () => window.clearTimeout(timer);
+  }, [isRewriting]);
 
   async function copyAsText() {
     if (!summary) return;
@@ -198,6 +221,36 @@ export function SummaryPanel({
           SUMMARY OUTPUT
         </span>
         <span className="flex items-center gap-3">
+          {onRewrite ? (
+            <select
+              value={isRewriting ? (requestedTemplate as string) : currentTemplate}
+              disabled={isRewriting}
+              onChange={async (event) => {
+                const templateKey = event.target.value;
+                if (templateKey === currentTemplate) return;
+                setRequestedTemplate(templateKey);
+                try {
+                  await onRewrite(templateKey);
+                } catch {
+                  setRequestedTemplate(null);
+                }
+              }}
+              aria-label="Summary shape"
+              title="Rewrite this summary in a different shape"
+              className="h-6 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
+            >
+              {SUMMARY_TEMPLATES.map((template) => (
+                <option key={template.key} value={template.key} title={template.description}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {isRewriting ? (
+            <span className="flex items-center gap-1 text-[10px] text-ink-subtle">
+              <SpinnerGap size={12} className="animate-spin" /> Rewriting…
+            </span>
+          ) : null}
           <span className="text-[10px] text-ink-subtle">
             {artifact?.format || "No file"}
           </span>
