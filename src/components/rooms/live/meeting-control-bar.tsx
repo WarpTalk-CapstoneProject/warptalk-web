@@ -699,11 +699,17 @@ function VoiceCloneRow({
 
   return (
     <>
+      {/* The value names the voice, it does not report a switch position.
+          "Voice Clone: Off" was read as "nothing will be spoken", because the row directly
+          above it is "Voice: On" and both looked like the same kind of switch. They are not:
+          Voice decides whether the dub is spoken at all, Voice Clone decides whose voice
+          speaks it. Saying "Default voice" / "My voice" answers the question people were
+          actually asking of this row. */}
       <SettingsRow
         label="Voice Clone"
         icon={<Fingerprint className="h-4 w-4" weight={enabled ? "fill" : "regular"} />}
         active={enabled}
-        value={enabled ? "On" : "Off"}
+        value={enabled ? "My voice" : "Default voice"}
         onClick={() => {
           if (enabled) {
             onToggle(false);
