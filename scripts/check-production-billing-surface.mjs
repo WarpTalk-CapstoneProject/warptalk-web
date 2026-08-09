@@ -39,6 +39,21 @@ const failures = forbidden
 if (fs.existsSync("src/services/payment.service.ts")) {
   failures.push("checkout must be owned by billingService; standalone payment.service.ts is forbidden");
 }
+
+// Stripe returns customers to these two paths — Stripe__SuccessUrl and Stripe__CancelUrl in
+// deploy/production/app.compose.yml. Nothing inside the app links to the cancel page any
+// more, so a routing audit reads it as a stale unslugged duplicate of
+// /{slug}/payment/plans. It is not: deleting it 404s anyone who abandons a checkout.
+for (const stripeLandingPage of [
+  "src/app/workspace/payment/success/page.tsx",
+  "src/app/workspace/payment/plans/page.tsx",
+]) {
+  if (!fs.existsSync(stripeLandingPage)) {
+    failures.push(
+      `${stripeLandingPage} is a Stripe return URL; removing it breaks checkout in production`,
+    );
+  }
+}
 for (const marker of ["createCheckoutSession:", "getCheckoutSession:"]) {
   if (!billingService.includes(marker)) {
     failures.push(`billingService is missing merged checkout operation: ${marker}`);
