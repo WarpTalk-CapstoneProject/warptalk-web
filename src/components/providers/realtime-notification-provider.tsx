@@ -227,6 +227,23 @@ export function RealtimeNotificationProvider({
       };
     }
 
+    // The bell's live wire, and it was never connected.
+    //
+    // SIGNALR_EVENTS.NEW_NOTIFICATION has existed as a constant with no handler, and the
+    // gateway subscribed to the channel every notification passes through and forwarded only
+    // the billing ones. So a notification could be created, persisted, published and relayed
+    // and still not appear until something else happened to refetch. Both halves are fixed
+    // together; either one alone changes nothing.
+    hubConn.on(SIGNALR_EVENTS.NEW_NOTIFICATION, (payload?: { title?: string }) => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
+      syncBroadcast?.postMessage("REFRESH_NOTIFICATIONS");
+      // A toast as well as the badge: the bell is in the corner, and the whole complaint was
+      // that nothing about this feature was ever visible.
+      if (payload?.title) {
+        toast(payload.title);
+      }
+    });
+
     hubConn.on(SIGNALR_EVENTS.NOTIFICATION_READ, () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
       syncBroadcast?.postMessage("REFRESH_NOTIFICATIONS");
