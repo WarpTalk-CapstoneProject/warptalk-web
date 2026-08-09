@@ -66,8 +66,17 @@ function getAccessToken(): string | null {
 }
 
 function getRefreshToken(): string | null {
-  return getPersistedAuthState()?.refreshToken
-    ?? useAuthStore.getState().refreshToken;
+  // The STORE first, then the persisted copy — the opposite of what this used to do.
+  //
+  // Refresh tokens rotate, and the server revokes the whole rotation family when an already
+  // rotated token is presented again. persistTokens() writes the store synchronously and
+  // localStorage through the persist middleware, so reading localStorage first can hand back
+  // the token that was just rotated away — which the server correctly reads as a replay and
+  // answers by ending the session. Unlike access tokens there is no `exp` to compare, so
+  // freshness has to come from the write order.
+  return useAuthStore.getState().refreshToken
+    ?? getPersistedAuthState()?.refreshToken
+    ?? null;
 }
 
 function persistTokens(accessToken: string, refreshToken: string, expiresAt?: string) {
@@ -227,7 +236,15 @@ function refreshAccessToken(failedAccessToken?: string | null): Promise<string> 
   return refreshPromise;
 }
 
-async function getUsableAccessToken(): Promise<string | null> {
+/**
+ * The one place anything may obtain a usable access token.
+ *
+ * Exported because lib/signalr.ts used to carry its OWN refresh — its own in-flight promise,
+ * and no cross-tab Web Lock at all. Two independent refreshers against a rotating token whose
+ * server revokes the entire family on replay is a session that ends itself, on a timer, for
+ * no reason the user can see.
+ */
+export async function getUsableAccessToken(): Promise<string | null> {
   const token = getAccessToken();
   if (token && !isAccessTokenExpiring(token)) {
     return token;
