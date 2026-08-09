@@ -109,6 +109,7 @@ export const API = {
     breakoutsStart: (roomId: string) => `/meetings/rooms/${roomId}/breakouts`,
     breakoutsEnd: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/end`,
     breakoutsMyAssignment: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/my-assignment`,
+    adjustQuota: (roomId: string) => `/meetings/rooms/${roomId}/quota`,
   },
   workspaces: {
     base: "/workspaces",
@@ -139,6 +140,7 @@ export const API = {
     documentDownload: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/download`,
     documentPolicies: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies`,
     documentPolicyDetail: (workspaceId: string, docId: string, policyId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies/${policyId}`,
+    meetingsActive: (workspaceId: string) => `/workspaces/${workspaceId}/meetings/active`,
   },
   glossaries: {
     base: "/glossaries",

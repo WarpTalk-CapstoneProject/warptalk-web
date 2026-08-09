@@ -60,6 +60,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
+import { WorkspaceService } from "@/services/workspace.service";
+import { meetingService } from "@/services/meeting.service";
 import type {
   GroupedCreditTransaction,
   UsageGroupSummary,
@@ -182,6 +184,7 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
       ) {
         queryClient.invalidateQueries({ queryKey: ["billing"] });
         queryClient.invalidateQueries({ queryKey: ["workspace-usage-chart"] });
+        queryClient.invalidateQueries({ queryKey: ["active-meetings"] });
         queryClient.invalidateQueries({
           queryKey: ["workspace-feature-breakdown"],
         });
@@ -194,7 +197,7 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
       .start()
       .then(() => {
         if (isMounted && workspaceId) {
-          connection.invoke("JoinWorkspace", workspaceId).catch(console.error);
+          connection.invoke("SubscribeWorkspace", workspaceId).catch(console.error);
         }
       })
       .catch((err) => {
@@ -256,6 +259,24 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
   );
   const [selectedTxGroup, setSelectedTxGroup] =
     useState<GroupedCreditTransaction | null>(null);
+
+  
+  const { data: activeMeetings, isLoading: isActiveMeetingsLoading, refetch: refetchActiveMeetings } = useQuery({
+    queryKey: ["active-meetings", workspaceId],
+    queryFn: () => WorkspaceService.getActiveMeetings(workspaceId),
+    enabled: !!workspaceId,
+    refetchInterval: 5000 // Poll every 5s for real-time Capstone demo
+  });
+
+  const handleAdjustQuota = async (roomId: string) => {
+    try {
+      await meetingService.adjustQuota(roomId, 5000); // hardcode +5000 for demo
+      toast.success("Added 5,000 quota successfully");
+      refetchActiveMeetings();
+    } catch (e) {
+      toast.error("Failed to adjust quota");
+    }
+  };
 
   const { data: invoicesPage, isLoading: isInvoicesLoading } = useQuery({
     queryKey: ["billing", "invoices", workspaceId, invoicesPageNumber],
@@ -553,6 +574,7 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
   const retryBillingQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["billing"] });
     queryClient.invalidateQueries({ queryKey: ["workspace-usage-chart"] });
+        queryClient.invalidateQueries({ queryKey: ["active-meetings"] });
     queryClient.invalidateQueries({ queryKey: ["workspace-feature-breakdown"] });
   };
 
@@ -633,12 +655,7 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
             <span>Export usage</span>
           </button>
 
-          <Link href={`/${workspaceSlug}/payment/plans`}>
-            <button className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90">
-              <Wallet className="h-3.5 w-3.5" />
-              <span>Manage Plan &amp; Credits</span>
-            </button>
-          </Link>
+
         </div>
       </div>
 
@@ -658,172 +675,78 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
         
       </section>
 
-      <div className="w-full">
-        <div className="mt-6 space-y-6 outline-none">
-          <section className="flex flex-col gap-6">
-            <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
-              <CardContent className="pt-6">
-                <UsageChart workspaceId={workspaceId} />
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
-                <CardContent className="pt-6">
-                  <FeatureBreakdownChart workspaceId={workspaceId} />
-                </CardContent>
-              </Card>
-
-              <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-semibold">
-                    Credit allocation
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div
-                    className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full"
-                    style={{
-                      background: `conic-gradient(#5e6ad2 0 ${usagePercent}%, var(--color-surface-3) ${usagePercent}% 100%)`,
-                    }}
-                  >
-                    <div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-surface-1 border border-hairline/40">
-                      <p className="text-2xl font-bold">{usagePercent}%</p>
-                      <p className="text-xs text-ink-muted">used</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3 text-xs border-t border-hairline/25 pt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-ink-muted">Monthly allowance</span>
-                      <strong className="font-semibold text-ink">
-                        {totalCredits.toLocaleString()}
-                      </strong>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-ink-muted">Consumed</span>
-                      <strong className="font-semibold text-ink">
-                        {creditsUsed.toLocaleString()}
-                      </strong>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-ink-muted">Remaining</span>
-                      <strong className="font-semibold text-primary">
-                        {currentCredits.toLocaleString()}
-                      </strong>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-
-          <section className="grid min-h-0 flex-1 gap-6">
-            <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-hairline/20 px-5 pt-5">
-                <div>
-                  <CardTitle className="text-base font-semibold">
-                    Cost by AI service
-                  </CardTitle>
-                  <p className="text-xs text-ink-muted mt-1">
-                    Variable AI usage costs this billing cycle
-                    {subscription?.planName
-                      ? ` · ${subscription.planName} plan`
-                      : ""}
-                    .
-                  </p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className="rounded-md border-hairline text-xs"
-                >
-                  {format(new Date(), "MMMM yyyy")}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-4 p-5">
-                {isReportLoading ? (
-                  <p className="text-xs text-ink-muted py-4">
-                    Loading usage data...
-                  </p>
-                ) : usageBreakdown.length === 0 ? (
-                  <p className="text-xs text-ink-muted py-4">
-                    No usage data for this month.
-                  </p>
+      <div className="w-full mt-6">
+        <section className="flex flex-col gap-6">
+          <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-hairline/20 px-5 pt-5">
+              <div>
+                <CardTitle className="text-base font-semibold">
+                  Active Meetings (Live Usage)
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-muted mt-1">
+                  Real-time token consumption for ongoing sessions in this workspace.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="rounded-md border-hairline text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                Live Data
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-hairline/20">
+                {isActiveMeetingsLoading ? (
+                  <div className="p-5 flex justify-center"><Spinner className="h-5 w-5 animate-spin" /></div>
+                ) : (!activeMeetings || activeMeetings.length === 0) ? (
+                  <div className="p-5 text-center text-sm text-ink-muted">No active meetings right now</div>
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {usageBreakdown.map((usage: UsageBreakdownDto) => {
-                      const Icon = getIconForUsage(usage.usageType);
-                      const name = getLabelForUsage(usage.usageType);
-                      const percent = report?.totalConsumedCredits
-                        ? Math.round(
-                            (usage.creditsConsumed /
-                              report.totalConsumedCredits) *
-                              100,
-                          )
-                        : 0;
-
-                      return (
-                        <div
-                          key={usage.usageType}
-                          className="rounded-lg border border-hairline/50 bg-surface-2 p-4 flex flex-col justify-between"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-canvas text-ink border border-hairline/40">
-                                <Icon className="h-4 w-4" />
-                              </span>
-                              <div>
-                                <p className="text-xs font-semibold text-ink">
-                                  {name}
-                                </p>
-                                <p className="text-[11px] text-ink-muted">
-                                  {percent}% of variable AI spend
-                                </p>
-                              </div>
-                            </div>
-                            <p className="text-sm font-semibold text-ink">
-                              {usage.creditsConsumed.toLocaleString()} cr
-                            </p>
+                  activeMeetings?.map((m: any) => {
+                    const isExceeded = m.usedToken >= m.maxQuota;
+                    const percent = Math.min(100, Math.round((m.usedToken / m.maxQuota) * 100));
+                    
+                    return (
+                      <div key={m.translationRoomId} className={`p-5 flex flex-col gap-3 ${isExceeded ? 'bg-surface-2/30' : ''}`}>
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h4 className="text-sm font-semibold text-ink flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${isExceeded ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></span>
+                              {m.providerRoomName}
+                            </h4>
+                            <p className="text-xs text-ink-muted mt-0.5">ID: {m.translationRoomId.split('-')[0]}</p>
                           </div>
-                          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-3/60">
-                            <div
-                              className="h-full rounded-full bg-primary"
-                              style={{ width: `${percent}%` }}
-                            />
+                          <Badge variant="outline" className={isExceeded ? "bg-rose-500/10 text-rose-600 border-rose-500/20 text-xs" : "bg-surface-2 text-xs"}>
+                            {isExceeded ? "Quota Exceeded" : "Audio Translation Active"}
+                          </Badge>
+                        </div>
+                        
+                        <div className="space-y-1.5 mt-2">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-ink-muted">Token Consumption</span>
+                            <span className={`font-semibold ${isExceeded ? 'text-rose-600' : 'text-ink'}`}>
+                              {m.usedToken.toLocaleString()} / {m.maxQuota.toLocaleString()} Quota
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-surface-3/60 overflow-hidden">
+                            <div className={`h-full rounded-full ${isExceeded ? 'bg-rose-500' : 'bg-primary'}`} style={{ width: `${percent}%` }}></div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                        
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => handleAdjustQuota(m.translationRoomId)} className={`h-8 px-3 text-xs font-semibold rounded-md transition ${isExceeded ? 'bg-primary hover:bg-primary-hover text-white' : 'border border-hairline bg-surface-1 hover:bg-surface-2'}`}>
+                            {isExceeded ? "Increase Quota" : "+5000 Quota"}
+                          </button>
+                          {!isExceeded && (
+                            <button className="h-8 px-3 text-xs font-semibold rounded-md border border-hairline bg-surface-1 text-rose-600 hover:bg-rose-500/10 transition">
+                              Pause AI
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
-
-                <div className="grid gap-4 sm:grid-cols-2 mt-2">
-                  <div className="rounded-lg border border-hairline/40 bg-surface-2/60 p-4">
-                    <p className="text-xs text-ink-muted">
-                      Average translation cost
-                    </p>
-                    <p className="text-base font-bold mt-1 text-ink">
-                      {report?.averageTranslationCostPer100Chars !== undefined &&
-                      report?.averageTranslationCostPer100Chars !== null
-                        ? `${report.averageTranslationCostPer100Chars} cr / 100 chars`
-                        : "--"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-hairline/40 bg-surface-2/60 p-4">
-                    <p className="text-xs text-ink-muted">
-                      Average cost per meeting
-                    </p>
-                    <p className="text-base font-bold mt-1 text-ink">
-                      {report?.averageCostPerMeeting !== undefined &&
-                      report?.averageCostPerMeeting !== null
-                        ? `${report.averageCostPerMeeting} cr`
-                        : "--"}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </section>
-        </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       </div>
 
       <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>

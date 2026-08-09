@@ -39,6 +39,7 @@ const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),
   timezone: z.string().min(1, "Please select timezone"),
   maxActiveRooms: z.number().int("Must be a whole number").min(1, "Must be at least 1 room").max(50, "Max 50 rooms"),
+  defaultMeetingQuota: z.number().int("Must be a whole number").min(100, "Minimum quota is 100").max(1000000, "Max quota is 1,000,000"),
   artifactRetentionDays: z.number().int("Must be a whole number").min(0, "Retention must be 0 (indefinite) or positive").max(3650, "Max 3650 days"),
   invitationExpiryDays: z.number().int("Must be a whole number").min(1, "Expiry must be at least 1 day").max(365, "Max 365 days"),
   enforceHostApprovalDefault: z.boolean(),
@@ -86,6 +87,7 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   defaultLanguage: "en",
   timezone: "UTC",
   maxActiveRooms: 5,
+  defaultMeetingQuota: 10000,
   artifactRetentionDays: 30,
   invitationExpiryDays: 7,
   enforceHostApprovalDefault: true,
@@ -121,6 +123,7 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     defaultLanguage: settings.defaultLanguage || DEFAULT_SETTINGS_FORM_DATA.defaultLanguage,
     timezone: settings.timezone || DEFAULT_SETTINGS_FORM_DATA.timezone,
     maxActiveRooms: settings.maxActiveRooms ?? DEFAULT_SETTINGS_FORM_DATA.maxActiveRooms,
+    defaultMeetingQuota: settings.defaultMeetingQuota ?? DEFAULT_SETTINGS_FORM_DATA.defaultMeetingQuota,
     artifactRetentionDays: settings.artifactRetentionDays ?? DEFAULT_SETTINGS_FORM_DATA.artifactRetentionDays,
     invitationExpiryDays: settings.invitationExpiryDays ?? DEFAULT_SETTINGS_FORM_DATA.invitationExpiryDays,
     enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
@@ -306,8 +309,8 @@ export default function WorkspaceSettingsPage() {
     queuePatch(String(field), { [field]: value } as Partial<WorkspaceSettingsDto>, value);
   };
 
-  const commitNumericField = (field: "maxActiveRooms" | "artifactRetentionDays" | "invitationExpiryDays", rawValue: string) => {
-    const limits = field === "maxActiveRooms" ? [1, 50] : field === "invitationExpiryDays" ? [1, 365] : [0, 3650];
+  const commitNumericField = (field: "maxActiveRooms" | "defaultMeetingQuota" | "artifactRetentionDays" | "invitationExpiryDays", rawValue: string) => {
+    const limits = field === "maxActiveRooms" ? [1, 50] : field === "defaultMeetingQuota" ? [100, 1000000] : field === "invitationExpiryDays" ? [1, 365] : [0, 3650];
     const parsedInput = parseIntegerInRange(rawValue, limits[0], limits[1]);
     const value = parsedInput.value;
     setValue(field, value, { shouldDirty: true, shouldValidate: true });
@@ -576,6 +579,34 @@ export default function WorkspaceSettingsPage() {
                 <span className="text-[11px] text-destructive">{errors.maxActiveRooms.message}</span>
               )}
             </div>
+
+            {/* Default Meeting Quota */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-ink">Default AI Quota per Meeting</span>
+                <span className="text-[11px] text-ink-muted">Default tokens allocated to a newly created meeting.</span>
+              </div>
+              <Input
+                type="number"
+                min={100}
+                max={1000000}
+                {...register("defaultMeetingQuota", { valueAsNumber: true })}
+                onBlur={(event) => commitNumericField("defaultMeetingQuota", event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitNumericField("defaultMeetingQuota", event.currentTarget.value);
+                    event.currentTarget.blur();
+                  }
+                }}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+                className="w-[140px] h-8 text-xs bg-surface-2 border-hairline"
+              />
+              {errors.defaultMeetingQuota?.message && (
+                <span className="text-[11px] text-destructive">{errors.defaultMeetingQuota.message}</span>
+              )}
+            </div>
+
 
             {/* Artifact Retention Days */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">

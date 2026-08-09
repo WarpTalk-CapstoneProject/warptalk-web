@@ -74,4 +74,8 @@ export const meetingService = {
   setRecording(roomId: string, action: "start" | "stop") {
     return apiClient.post<RecordingStateDto>(API.meetings.setRecording(roomId), { action });
   },
+
+  adjustQuota(roomId: string, additionalQuota: number) {
+    return apiClient.post<{ message: string }>(API.meetings.adjustQuota(roomId), { additionalQuota });
+  },
 };

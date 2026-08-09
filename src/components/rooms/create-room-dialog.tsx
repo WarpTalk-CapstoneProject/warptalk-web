@@ -71,6 +71,8 @@ export function CreateRoomDialog() {
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
+  const role = useWorkspaceStore((state) => state.role);
+  const isOwnerOrAdmin = role === "owner" || role === "admin";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -89,6 +91,7 @@ export function CreateRoomDialog() {
   const [dailyRecurrence, setDailyRecurrence] = useState<DailyRecurrenceDraft | null>(null);
   const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
+  const [maxQuota, setMaxQuota] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
   const [initializedEditRoomId, setInitializedEditRoomId] = useState<
@@ -203,6 +206,7 @@ export function CreateRoomDialog() {
         // it on the next open — otherwise a forbidden default returns unchecked.
         setAppliedLanguagePolicyKey(null);
         setScheduledAt(null);
+        setMaxQuota("");
         // WT-327: reset with everything else. The old `isDaily` was left out of this block, so
         // its check mark survived into the next dialog the user opened.
         setDailyRecurrence(null);
@@ -247,6 +251,15 @@ export function CreateRoomDialog() {
       failSubmit("Please complete all required fields.");
       return;
     }
+    
+    if (maxQuota) {
+      const parsedQuota = parseInt(maxQuota, 10);
+      if (isNaN(parsedQuota) || parsedQuota <= 0) {
+        failSubmit("AI Quota must be a positive number.");
+        return;
+      }
+    }
+
     try {
       // The meeting is defined by its set of languages. The backend still models a
       // (sourceLanguage, targetLanguages) pair, so derive them: source is just the first
@@ -290,6 +303,7 @@ export function CreateRoomDialog() {
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+          maxQuota: maxQuota ? parseInt(maxQuota, 10) : undefined,
         };
 
         if (dailyRecurrence) {
@@ -491,16 +505,35 @@ export function CreateRoomDialog() {
                 {/* WT-270: the refusal stays put next to the button that caused it, so a
                     dismissed or missed toast does not leave the host staring at a dialog
                     that simply refuses to close for no stated reason. */}
-                {submitError ? (
-                  <p
-                    role="alert"
-                    className="text-[12px] leading-snug text-destructive min-w-0"
-                  >
-                    {submitError}
-                  </p>
-                ) : (
-                  <span />
-                )}
+                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                  {submitError && (
+                    <p
+                      role="alert"
+                      className="text-[12px] leading-snug text-destructive min-w-0"
+                    >
+                      {submitError}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 text-[12px] text-ink-muted">
+                    {isOwnerOrAdmin && (
+                      <>
+                        <span>AI Quota:</span>
+                        <input 
+                          type="number" 
+                          min="1"
+                          value={maxQuota} 
+                          onChange={(e) => {
+                            setMaxQuota(e.target.value);
+                            setSubmitError(null);
+                          }} 
+                          placeholder="Default" 
+                          className="w-[80px] h-6 px-1.5 text-xs bg-surface-2 border border-border/60 rounded text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                          title="AI Quota Limit (Credits)"
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
                 <div className="flex items-center gap-4 shrink-0">
                   <Button
                     onClick={handleSubmit}

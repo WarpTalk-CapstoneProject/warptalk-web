@@ -77,6 +77,11 @@ export const WorkspaceService = {
     await apiClient.delete(API.workspaces.get(id));
   },
 
+  async getActiveMeetings(workspaceId: string) {
+    const { data } = await apiClient.get<any[]>(API.workspaces.meetingsActive(workspaceId));
+    return data;
+  },
+
   // ─── Members ───
   async listMembers(workspaceId: string, page = 1, pageSize = 10, search = ""): Promise<PagedResult<WorkspaceMemberDto>> {
     const { data } = await apiClient.get<PagedResult<WorkspaceMemberDto>>(API.workspaces.members(workspaceId), {

@@ -88,6 +88,8 @@ export interface CreateTranslationRoomRequest {
   translationRoomType: string;
   /** Omit to let the meeting type decide the seat count. */
   maxParticipants?: number;
+  /** AI Quota allocated for this meeting */
+  maxQuota?: number;
   sourceLanguage: string;
   targetLanguages: string[];
   /**

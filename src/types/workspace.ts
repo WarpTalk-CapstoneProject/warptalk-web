@@ -35,6 +35,7 @@ export interface WorkspaceSettingsDto {
   artifactRetentionDays: number;
   invitationExpiryDays: number;
   enforceHostApprovalDefault: boolean;
+  defaultMeetingQuota?: number;
   verifiedDomains: string[];
   allowExternalCollaboration: boolean;
   requireVerifiedDomainForInternal: boolean;
