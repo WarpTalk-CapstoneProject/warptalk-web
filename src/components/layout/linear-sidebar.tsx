@@ -192,7 +192,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
-    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
+    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles` },
   ];
 
   const role = useWorkspaceStore((state) => state.role);

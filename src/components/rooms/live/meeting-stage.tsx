@@ -379,10 +379,14 @@ export function LiveKitMeetingStage({
         <div
           className={`${SINGLE_PARTICIPANT_STAGE_CLASSNAME} flex items-stretch justify-stretch`}
         >
+          {/* Square, like the featured branch above. The frame around the stage already
+              rounds at 24 and clips to it; rounding the tile again at 16 inside that only
+              left the frame's backing visible in the corners. One radius, owned by the
+              frame. */}
           <div className="h-full min-h-0 w-full">
             {renderTile(onlyTrack, {
-              className: "!rounded-2xl",
-              tileClassName: "!rounded-2xl",
+              className: "!rounded-none",
+              tileClassName: "!rounded-none",
             })}
           </div>
         </div>

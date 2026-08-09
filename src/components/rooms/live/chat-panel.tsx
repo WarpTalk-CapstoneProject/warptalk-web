@@ -235,7 +235,10 @@ export function ChatPanel({
         horizontalRule: false,
       }),
       Placeholder.configure({
-        placeholder: "Type a message or @agent for AI help...",
+        // Short on purpose. This panel is a narrow column, and "Type a message or @agent for
+        // AI help..." wrapped onto a second line inside a one-line box. The @ hint does not
+        // need to live here: typing "@" opens the agent menu, which names WarpBot itself.
+        placeholder: "Type a message…",
       }),
       // Stops the typing at the cap rather than letting the message be composed and then
       // rejected by the API (WT-237).
@@ -615,7 +618,11 @@ export function ChatPanel({
           className="hidden"
           onChange={handleFileSelected}
         />
-        <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0">
+        {/* The placeholder is a floated pseudo-element with `h-0`, so it adds no height to the
+            line it sits on — which means a placeholder long enough to wrap put its second line
+            outside the box and the editor clipped it. It is now held to one line and
+            ellipsised, so no future wording can break the composer's shape. */}
+        <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:max-w-full [&_.ProseMirror_p.is-editor-empty:first-child::before]:overflow-hidden [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ellipsis [&_.ProseMirror_p.is-editor-empty:first-child::before]:whitespace-nowrap">
           <button
             type="button"
             onClick={handleFileButtonClick}

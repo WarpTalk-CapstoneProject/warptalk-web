@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { liveMeetingPath } from "@/lib/workspace-routes";
 import { Copy, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -32,7 +33,10 @@ import {
  * before a meeting. The self-view now takes the space the diagnostics had.
  */
 export default function WaitingRoomPage() {
-  const { id: roomId } = useParams<{ workspaceSlug: string; id: string }>();
+  const { workspaceSlug, id: roomId } = useParams<{
+    workspaceSlug: string;
+    id: string;
+  }>();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
 
@@ -51,14 +55,14 @@ export default function WaitingRoomPage() {
     // The host is routed by startMeeting() itself; this carries everyone else in once the
     // meeting actually opens, which is the whole point of sitting in a lobby.
     if (roomStatus === "in_progress" || roomStatus === "paused") {
-      router.push(`/room/${roomId}`);
+      router.push(liveMeetingPath(workspaceSlug, roomId));
     }
-  }, [roomStatus, roomId, router]);
+  }, [roomStatus, workspaceSlug, roomId, router]);
 
   async function startMeeting() {
     try {
       await startRoom.mutateAsync(roomId);
-      router.push(`/room/${roomId}`);
+      router.push(liveMeetingPath(workspaceSlug, roomId));
     } catch (error) {
       toast.error(getErrorMessage(error, "Could not start the meeting."));
     }

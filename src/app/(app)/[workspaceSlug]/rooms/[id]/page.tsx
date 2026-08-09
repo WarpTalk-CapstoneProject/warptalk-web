@@ -53,6 +53,7 @@ import { toast } from "sonner";
 import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
+import { liveMeetingPath } from "@/lib/workspace-routes";
 import {
   Collapsible,
   CollapsiblePanel,
@@ -275,7 +276,7 @@ export default function RoomInformationPage() {
         // own start action (rooms/[id]/waiting/page.tsx).
         try {
           await startRoomMutation.mutateAsync(room.id);
-          router.push(`/room/${room.id}`);
+          router.push(liveMeetingPath(workspaceSlug, room.id));
         } catch (error) {
           toast.error(getErrorMessage(error, "Could not start the meeting."));
         }
@@ -291,6 +292,17 @@ export default function RoomInformationPage() {
         useUIStore.getState().setSetupRoomModalOpen(true);
     }
   }
+
+  // Only the host, and only while the room still has settings worth changing — once it is
+  // live or ended, editing it would rewrite a meeting already in progress or already over.
+  const canEditRoom =
+    room.hostId === user?.id &&
+    (room.status === "scheduled" || room.status === "waiting");
+
+  const openRoomEditor = () => {
+    useUIStore.getState().setEditRoomId(room.id);
+    useUIStore.getState().setCreateRoomModalOpen(true);
+  };
 
   const participants = buildUserList(
     room,
@@ -331,9 +343,29 @@ export default function RoomInformationPage() {
                       stays — it is present on every route, and it links to the list rather
                       than calling router.back(), which sent the user wherever they came
                       from instead of to Meetings. */}
-                  <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground">
-                    {room.title}
-                  </h1>
+                  {/* The edit control sits on the title because the title is what it edits.
+                      As a labelled outline button it stood in the top-right action stack
+                      directly under "Start meeting", where a secondary action borrowed the
+                      weight of the primary one and read as the second half of a pair. */}
+                  <div className="flex items-center gap-2">
+                    <h1 className="min-w-0 truncate text-[30px] font-semibold leading-tight tracking-tight text-foreground">
+                      {room.title}
+                    </h1>
+                    {canEditRoom ? (
+                      <button
+                        type="button"
+                        aria-label="Edit room"
+                        title="Edit room"
+                        // Visible at rest, not on hover. A hover-revealed control is
+                        // undiscoverable on a touch screen and unfindable by anyone watching
+                        // a demo who is not moving the pointer.
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={openRoomEditor}
+                      >
+                        <Pencil className="size-[18px]" />
+                      </button>
+                    ) : null}
+                  </div>
                   <MeetingPropertiesPills
                     room={room}
                     apiParticipants={apiParticipants}
@@ -378,20 +410,6 @@ export default function RoomInformationPage() {
                         </p>
                       ) : null}
                     </>
-                  ) : null}
-                  {room.hostId === user?.id &&
-                  (room.status === "scheduled" || room.status === "waiting") ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-[12px]"
-                      onClick={() => {
-                        useUIStore.getState().setEditRoomId(room.id);
-                        useUIStore.getState().setCreateRoomModalOpen(true);
-                      }}
-                    >
-                      Edit room
-                    </Button>
                   ) : null}
                 </div>
               </div>

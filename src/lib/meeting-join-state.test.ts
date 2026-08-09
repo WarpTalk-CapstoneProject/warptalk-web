@@ -85,6 +85,7 @@ test("persists room-scoped state and starts navigation before closing preview", 
   completeMeetingJoin({
     storage,
     roomId: "room-1",
+    workspaceSlug: "acme",
     joinState: {
       displayName: "Host",
       roomCode: "abc-defg-hij",
@@ -105,7 +106,9 @@ test("persists room-scoped state and starts navigation before closing preview", 
     closePreview: () => events.push("close"),
   });
 
-  assert.deepEqual(events, ["navigate:/room/room-1", "close"]);
+  // The workspace slug rides along: joining used to land on a bare /room/{id} that said
+  // nothing about which workspace the meeting belonged to.
+  assert.deepEqual(events, ["navigate:/acme/rooms/room-1/live", "close"]);
   assert.equal(
     JSON.parse(storage.getItem("warptalk.devices.preview") ?? "{}").roomId,
     "room-1",

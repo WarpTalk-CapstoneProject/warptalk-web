@@ -14,6 +14,7 @@ import { createHubConnection, isUnauthorizedHubError } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePresenceStore } from "@/stores/presence-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { liveMeetingPath } from "@/lib/workspace-routes";
 import type { PresenceChangedEvent } from "@/types/presence";
 import * as signalR from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
@@ -385,7 +386,13 @@ export function RealtimeNotificationProvider({
           action: roomId
             ? {
                 label: "Join Now",
-                onClick: () => router.push(`/room/${roomId}`),
+                onClick: () =>
+                  router.push(
+                    liveMeetingPath(
+                      useWorkspaceStore.getState().activeWorkspaceSlug,
+                      roomId,
+                    ),
+                  ),
               }
             : undefined,
         });
