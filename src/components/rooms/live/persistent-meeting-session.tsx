@@ -90,6 +90,7 @@ import {
 import {
   MINI_MEETING_IDLE_WARNING_MS,
   evaluateIdleMeeting,
+  canConnectToRoom,
   isIdleReaped,
   isRestoredMeetingStale,
   shouldConnectMeeting,
@@ -169,6 +170,11 @@ export function PersistentMeetingSession({
     idleWarningShownRef.current = false;
   }, []);
   const meetingIsIdleReaped = isIdleReaped({ compact, idleDisconnected });
+  // What we last knew about the room, so a lookup we could not make holds the line instead of
+  // ending the call. State rather than a ref because it decides what renders. Starts false: a
+  // room id restored from sessionStorage that has never resolved must not connect on the
+  // strength of not knowing.
+  const [wasConnectable, setWasConnectable] = useState(false);
 
   const roomQuery = useTranslationRoom(roomId);
   // The LiveKit disconnect is only half of what an abandoned tab costs. This query polls every
@@ -483,12 +489,24 @@ export function PersistentMeetingSession({
   );
   const panelSegments = catchUp.segments;
 
-  const canConnectMeeting =
-    Boolean(room) &&
-    room?.status !== "ended" &&
-    room?.status !== "cancelled" &&
-    room?.status !== "expired" &&
-    room?.status !== "failed";
+  // Boolean(room) was the defect. `room` comes from a REST query, so a network failure — the
+  // exact moment LiveKit is trying hardest to recover — made it undefined, which read as "the
+  // meeting is over" and flipped connect to false. That runs room.disconnect() and aborts the
+  // reconnection: "Abort connection attempt due to user initiated disconnect". LiveKit was not
+  // failing to reconnect. We were killing it. Absence is not evidence; a 404 is.
+  const canConnectMeeting = canConnectToRoom({
+    status: room?.status,
+    lookupErrorStatus: (roomQuery.error as { response?: { status?: number } } | null)
+      ?.response?.status,
+    wasConnectable,
+  });
+
+  // Adjusted during render rather than in an effect: React re-renders immediately with the new
+  // value instead of painting one frame with the stale one, and it converges — once the two
+  // agree nothing further is set. The same pattern the search dialog uses to reset itself.
+  if (wasConnectable !== canConnectMeeting) {
+    setWasConnectable(canConnectMeeting);
+  }
 
   // WT-306 + billing: the mini window's idle reaper.
   //

@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   MINI_MEETING_IDLE_TIMEOUT_MS,
   MINI_MEETING_IDLE_WARNING_MS,
+  TERMINAL_ROOM_STATUSES,
+  canConnectToRoom,
   evaluateIdleMeeting,
   isIdleReaped,
   isRestoredMeetingStale,
@@ -224,6 +226,63 @@ test("the full-size meeting is never retired from here — the hub owns that exi
       hasRoom: false,
       canConnectRoom: false,
     }),
+    false,
+  );
+});
+
+// ─── canConnectToRoom ───
+//
+// A network outage used to end the meeting. The room comes from a REST query, so when the
+// network dropped, `room` became undefined, `Boolean(room)` read as "the meeting is over",
+// and <LiveKitRoom connect> flipped false — which runs room.disconnect() and aborts the
+// reconnection LiveKit was already attempting. The console said it plainly: "Abort connection
+// attempt due to user initiated disconnect".
+
+test("a live room stays connectable", () => {
+  assert.equal(
+    canConnectToRoom({ status: "active", wasConnectable: true }),
+    true,
+  );
+});
+
+for (const status of TERMINAL_ROOM_STATUSES) {
+  test(`a ${status} room is not connectable, even if it was a moment ago`, () => {
+    assert.equal(canConnectToRoom({ status, wasConnectable: true }), false);
+  });
+}
+
+test("a network failure does not end the meeting", () => {
+  // No response at all: DNS failure, timeout, a request that never left the machine.
+  assert.equal(
+    canConnectToRoom({ status: undefined, wasConnectable: true }),
+    true,
+    "a lookup that could not be made must not tear down a live session",
+  );
+});
+
+test("a server error does not end the meeting either", () => {
+  assert.equal(
+    canConnectToRoom({ status: undefined, lookupErrorStatus: 500, wasConnectable: true }),
+    true,
+  );
+});
+
+test("a 404 does end it — that is the server answering", () => {
+  assert.equal(
+    canConnectToRoom({ status: undefined, lookupErrorStatus: 404, wasConnectable: true }),
+    false,
+  );
+  assert.equal(
+    canConnectToRoom({ status: undefined, lookupErrorStatus: 410, wasConnectable: true }),
+    false,
+  );
+});
+
+test("an unknown room that was never connectable stays that way", () => {
+  // A room id restored from sessionStorage that has never resolved must not connect on the
+  // strength of not knowing.
+  assert.equal(
+    canConnectToRoom({ status: undefined, wasConnectable: false }),
     false,
   );
 });
