@@ -5,6 +5,7 @@ import {
   buildAccessTokenCookie,
   isLiveAccessToken,
   resolveAccessTokenExpiryMs,
+  setAccessTokenCookie,
 } from "../session-cookie.ts";
 
 const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
@@ -86,4 +87,41 @@ test("an unsubstantiated lifetime produces a session cookie, not a seven day gue
   assert.ok(cookie);
   assert.doesNotMatch(cookie, /expires=/i);
   assert.doesNotMatch(cookie, /max-age/i);
+});
+
+
+// ── an aged-out access token is not a sign-out ──────────────────────────────────────
+
+test("an access token that arrives already expired clears only itself", () => {
+  // This branch used to call clearSessionCookies(), taking the seven-day marker with it.
+  // The marker is what tells middleware there is still a refresh token worth redeeming, so
+  // removing it turned a token that had merely aged out into a full sign-out — the exact
+  // "every 7-day session becomes a 30-minute one" this module's header exists to prevent.
+  const written: string[] = [];
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      set cookie(value: string) {
+        written.push(value);
+      },
+      get cookie() {
+        return "";
+      },
+    },
+  });
+
+  try {
+    setAccessTokenCookie(deadToken, new Date(NOW - 60_000).toISOString());
+  } finally {
+    // @ts-expect-error the test environment had no document before this
+    delete globalThis.document;
+  }
+
+  const cleared = written.join("\n");
+  assert.match(cleared, /access_token=;/);
+  assert.doesNotMatch(
+    cleared,
+    /warptalk_session=;/,
+    "the session marker must survive an expired access token",
+  );
 });
