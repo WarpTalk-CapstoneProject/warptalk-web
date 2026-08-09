@@ -1,4 +1,5 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { chatSenderName, isAssistantMessage } from "@/lib/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useMeetingChat,
@@ -75,6 +76,7 @@ export function ChatPanel({
   const messages = useTranslationRoomStore((state) => state.chatMessages);
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
+  const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
   );
@@ -171,6 +173,21 @@ export function ChatPanel({
       setChatMessages(historyQuery.data);
     }
   }, [historyQuery.data, setChatMessages]);
+
+  // One deadline, wherever "thinking" came from — the optimistic set on send, or the
+  // server's pending signal. A spinner with no end is its own lie, and this one would
+  // otherwise outlive the meeting.
+  useEffect(() => {
+    if (assistantState !== "thinking") return;
+    const timer = window.setTimeout(() => {
+      if (
+        useTranslationRoomStore.getState().assistantState === "thinking"
+      ) {
+        useTranslationRoomStore.getState().setAssistantState("timed_out");
+      }
+    }, 90_000);
+    return () => window.clearTimeout(timer);
+  }, [assistantState]);
 
   useEffect(() => {
     if (containerRef.current && shouldAutoScrollRef.current) {
@@ -295,6 +312,13 @@ export function ChatPanel({
         onSuccess: (message) => {
           addChatMessage(message);
           editor.commands.clearContent(true);
+          // Optimistic, because the client already knows it just asked WarpBot. Waiting for
+          // the server's ChatAssistantResponsePending leaves the send looking ignored for as
+          // long as the round trip takes — and if the answer comes back fast the signal
+          // arrives and clears in the same breath, so nothing is ever seen at all.
+          if (mentions.some((mention) => mention.type === "agent")) {
+            setAssistantState("thinking");
+          }
         },
         onError: () => {
           setSendError("Message could not be sent. Try again.");
@@ -382,22 +406,9 @@ export function ChatPanel({
         ) : null}
         <AnimatePresence initial={false}>
           {messages.map((message: ChatMessageDto) => {
-            const isMine = message.senderUserId === user?.id;
-            const isAssistant = message.messageType === "assistant";
-
-            let displayName = "";
-            if (isMine && user) {
-              displayName = user.fullName;
-            } else if (isAssistant) {
-              displayName = "WarpBot";
-            } else {
-              const senderParticipant = participants.find(
-                (p) =>
-                  p.userId === message.senderUserId ||
-                  p.displayName === message.senderDisplayName,
-              );
-              displayName = senderParticipant?.displayName || "User";
-            }
+            const isAssistant = isAssistantMessage(message);
+            const isMine = !isAssistant && message.senderUserId === user?.id;
+            const displayName = chatSenderName(message, user, participants);
 
             return (
               <motion.div
