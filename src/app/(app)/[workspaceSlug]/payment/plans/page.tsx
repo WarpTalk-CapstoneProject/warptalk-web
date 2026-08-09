@@ -475,9 +475,6 @@ export default function WorkspacePlansPage() {
                     <p className="text-[11px] text-gray-500 font-semibold mt-2">
                       Pause or cancel anytime.
                     </p>
-                    <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
-                      24/7 dedicated support.
-                    </p>
                   </div>
                 </CardHeader>
 
@@ -550,8 +547,7 @@ export default function WorkspacePlansPage() {
                             ✓
                           </span>
                           <span className="text-gray-700 font-medium">
-                            {plan.creditsPerCycle?.toLocaleString()} credits per
-                            cycle
+                            {plan.creditsPerCycle?.toLocaleString()} credits per cycle
                           </span>
                         </li>
                         <li className="flex items-start gap-2.5 text-[13px]">
@@ -559,9 +555,15 @@ export default function WorkspacePlansPage() {
                             ✓
                           </span>
                           <span className="text-gray-700 font-medium">
-                            {plan.voiceCloneEnabled
-                              ? "Voice Cloning Enabled"
-                              : "No Voice Cloning"}
+                            Full access to all AI features
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-2.5 text-[13px]">
+                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
+                            ✓
+                          </span>
+                          <span className="text-gray-700 font-medium">
+                            Up to {plan.maxLanguages} active languages
                           </span>
                         </li>
                         <li className="flex items-start gap-2.5 text-[13px]">

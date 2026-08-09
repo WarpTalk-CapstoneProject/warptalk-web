@@ -402,7 +402,7 @@ export default function AdminPlansPage() {
                   <TableHead>Tier</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Credits/Cycle</TableHead>
-                  <TableHead>Limits (Voice / Glossary / ACL)</TableHead>
+                  <TableHead>Limits (Members / Languages)</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -443,19 +443,11 @@ export default function AdminPlansPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1 text-xs">
-                        <span className="flex items-center gap-1.5">
-                          <CheckCircle2
-                            className={`h-3.5 w-3.5 ${plan.voiceCloneEnabled ? "text-emerald-500" : "text-muted-foreground"}`}
-                          />
-                          Voice Clone:{" "}
-                          {plan.voiceCloneEnabled ? "Enabled" : "Disabled"}
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          Members: {plan.maxParticipants}
                         </span>
-                        <span className="flex items-center gap-1.5">
-                          <CheckCircle2
-                            className={`h-3.5 w-3.5 ${plan.glossaryEnabled ? "text-emerald-500" : "text-muted-foreground"}`}
-                          />
-                          Glossary Access:{" "}
-                          {plan.glossaryEnabled ? "Enabled" : "Disabled"}
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          Languages: {plan.maxLanguages}
                         </span>
                       </div>
                     </TableCell>
@@ -675,56 +667,9 @@ export default function AdminPlansPage() {
                 <Shield className="h-4 w-4 text-primary" /> Feature
                 Authorization Flags
               </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="voiceClone">Voice Cloning</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Allows neural voice mimicking
-                    </p>
-                  </div>
-                  <Switch
-                    id="voiceClone"
-                    checked={formState.voiceCloneEnabled}
-                    onCheckedChange={(checked) =>
-                      setFormState({ ...formState, voiceCloneEnabled: checked })
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="aiAssistant">AI Assistant</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Interactive AI in meetings
-                    </p>
-                  </div>
-                  <Switch
-                    id="aiAssistant"
-                    checked={formState.aiAssistantEnabled}
-                    onCheckedChange={(checked) =>
-                      setFormState({
-                        ...formState,
-                        aiAssistantEnabled: checked,
-                      })
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="glossaryEnabled">Glossary Access</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Define business specific terminology
-                    </p>
-                  </div>
-                  <Switch
-                    id="glossaryEnabled"
-                    checked={formState.glossaryEnabled}
-                    onCheckedChange={(checked) =>
-                      setFormState({ ...formState, glossaryEnabled: checked })
-                    }
-                  />
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                All advanced AI features (Voice Cloning, AI Assistant, Glossary) are now enabled by default across all plans to ensure feature parity.
+              </p>
             </div>
 
             {/* Sub Limits & Features JSON */}

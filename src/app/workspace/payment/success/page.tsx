@@ -13,7 +13,9 @@ import type { CheckoutSessionDto, SubscriptionDto } from "@/types/billing";
 import { CheckCircle } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/currency";
 
-const REDIRECT_SECONDS = 6;
+const REDIRECT_SECONDS = 8;
+const MAX_POLL_ATTEMPTS = 8;
+const POLL_INTERVAL_MS = 1500;
 
 function SuccessContent() {
   const searchParams = useSearchParams();
@@ -29,45 +31,69 @@ function SuccessContent() {
 
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<CheckoutSessionDto | null>(null);
-  const [subscription, setSubscription] = useState<SubscriptionDto | null>(
-    null,
-  );
+  const [subscription, setSubscription] = useState<SubscriptionDto | null>(null);
   const [countdown, setCountdown] = useState(REDIRECT_SECONDS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
+  // workspaceId extracted from session metadata (not from store — store is unavailable here)
+  const workspaceIdFromSession = useRef<string | null>(null);
 
   const returnLink = activeWorkspaceSlug
-    ? `/${activeWorkspaceSlug}/billing`
+    ? `/${activeWorkspaceSlug}/settings/billing`
     : "/";
 
+  // Fetch session info (amount, transaction id) — one-time
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchSession = async () => {
       try {
-        // 1. Fetch checkout session for amount/transaction display
         if (sessionId) {
           const data = await billingService.getCheckoutSession(sessionId);
           setSession(data);
-        }
-        // 2. Fetch active subscription to show real plan + credits
-        if (activeWorkspaceId) {
-          try {
-            const sub =
-              await billingService.getActiveSubscription(activeWorkspaceId);
-            setSubscription(sub);
-          } catch {
-            // Subscription might not be ready yet — non-fatal
-          }
+          // Extract workspaceId from Stripe metadata
+          const wid = data.metadata?.WorkspaceId ?? null;
+          workspaceIdFromSession.current = wid;
         }
       } catch {
-        // Non-fatal: still show success page without details
-      } finally {
+        // Non-fatal: still show success page without session details
+      }
+    };
+    fetchSession();
+  }, [sessionId]);
+
+  // Poll for subscription until it becomes active (webhook may have a small delay)
+  // Starts after session is fetched and workspaceId is known
+  useEffect(() => {
+    // Use workspaceId from store if available, fall back to session metadata
+    const wid = activeWorkspaceId ?? workspaceIdFromSession.current;
+    if (!wid) return;
+
+    const pollSubscription = async () => {
+      try {
+        const sub = await billingService.getActiveSubscription(wid);
+        if (sub && sub.status === "active") {
+          setSubscription(sub);
+          setLoading(false);
+          return; // Stop polling — subscription is live
+        }
+      } catch {
+        // Not ready yet — keep polling
+      }
+
+      pollCountRef.current += 1;
+      if (pollCountRef.current < MAX_POLL_ATTEMPTS) {
+        setTimeout(pollSubscription, POLL_INTERVAL_MS);
+      } else {
+        // Give up after MAX attempts — still show success without credits
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [sessionId, activeWorkspaceId]);
+    pollSubscription();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspaceId, session]); // re-run when session is fetched (gives us workspaceId from metadata)
 
-  // Auto-redirect countdown after loading completes
+
+  // Start countdown only after loading resolves
   useEffect(() => {
     if (loading) return;
 
@@ -107,11 +133,15 @@ function SuccessContent() {
 
   if (loading) {
     return (
-      <Card className="w-full max-w-md rounded-xl border-hairline bg-surface-1 shadow-linear p-8 flex flex-col items-center justify-center text-center min-h-[260px]">
+      <Card className="w-full max-w-md rounded-xl border-hairline bg-surface-1 shadow-linear p-8 flex flex-col items-center justify-center text-center min-h-[280px]">
         <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-        <h2 className="text-xl font-semibold text-ink">Verifying payment...</h2>
+        <h2 className="text-xl font-semibold text-ink">Confirming payment...</h2>
         <p className="text-sm text-ink-muted mt-2">
-          Please wait while we confirm your transaction details.
+          Waiting for subscription to activate. This may take a few seconds.
+        </p>
+        <p className="text-xs text-ink-muted/60 mt-3">
+          Attempt {Math.min(pollCountRef.current + 1, MAX_POLL_ATTEMPTS)} of{" "}
+          {MAX_POLL_ATTEMPTS}
         </p>
       </Card>
     );
@@ -139,9 +169,7 @@ function SuccessContent() {
         {/* Receipt rows */}
         <div className="space-y-0 mb-6 rounded-lg border border-hairline overflow-hidden">
           <div className="flex justify-between items-center px-4 py-3 bg-surface-2/50">
-            <span className="text-sm text-muted-foreground">
-              Transaction ID
-            </span>
+            <span className="text-sm text-muted-foreground">Transaction ID</span>
             <span className="text-sm font-mono text-ink text-right break-all max-w-[200px]">
               {transactionId ? (
                 transactionId.length > 20 ? (
@@ -167,19 +195,21 @@ function SuccessContent() {
                 formattedAmount
               ) : (
                 <span className="text-ink-muted italic text-xs">
-                  Processing...
+                  See invoice
                 </span>
               )}
             </span>
           </div>
           <div className="flex justify-between items-center px-4 py-3 border-t border-hairline">
-            <span className="text-sm text-muted-foreground">Current Credit Balance</span>
+            <span className="text-sm text-muted-foreground">
+              Current Credit Balance
+            </span>
             <span className="text-sm font-semibold text-semantic-success">
               {currentCredits !== null ? (
-                currentCredits.toLocaleString()
+                currentCredits.toLocaleString() + " cr"
               ) : (
                 <span className="text-ink-muted italic text-xs">
-                  Pending webhook confirmation
+                  Check billing page
                 </span>
               )}
             </span>

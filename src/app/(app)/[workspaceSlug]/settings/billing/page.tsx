@@ -194,7 +194,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
       .start()
       .then(() => {
         if (isMounted && workspaceId) {
-          connection.invoke("JoinWorkspace", workspaceId).catch(console.error);
+          connection.invoke("SubscribeWorkspace", workspaceId).catch(console.error);
         }
       })
       .catch((err) => {
@@ -602,7 +602,6 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
       <div className="flex shrink-0 flex-col gap-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
           {[
-            { value: "overview", label: "Overview & Usage" },
             { value: "history", label: "Transaction History" },
             { value: "invoices", label: "Billing History" },
           ].map((item) => (

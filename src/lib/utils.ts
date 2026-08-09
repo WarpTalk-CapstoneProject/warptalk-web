@@ -24,7 +24,7 @@ export function buildFeatureList(plan: PlanDto): string[] {
     features.push(`${plan.creditsPerCycle.toLocaleString()} credits per cycle`);
   }
   if (plan.maxParticipants) {
-    features.push(`Up to ${plan.maxParticipants} participants per meeting`);
+    features.push(`Up to ${plan.maxParticipants} members per workspace`);
   }
   if (plan.maxLanguages) {
     features.push(`Up to ${plan.maxLanguages} languages simultaneously`);

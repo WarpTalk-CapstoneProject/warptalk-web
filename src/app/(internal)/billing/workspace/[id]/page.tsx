@@ -117,7 +117,7 @@ export default function AdminWorkspaceBillingPage({
       .then(() => {
         if (isMounted && workspaceId) {
           connection
-            .invoke("JoinWorkspace", workspaceId)
+            .invoke("SubscribeWorkspace", workspaceId)
             .catch((err) =>
               console.error("Error joining workspace group:", err),
             );

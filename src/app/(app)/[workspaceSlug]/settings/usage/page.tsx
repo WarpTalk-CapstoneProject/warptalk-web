@@ -600,26 +600,7 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
     <div className="flex h-full flex-col bg-surface-1 px-4 pb-6 text-ink">
       {/* Header section with styling consistent with members and documents */}
       <div className="flex shrink-0 flex-col gap-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
-          {[
-            { value: "overview", label: "Overview & Usage" },
-            { value: "history", label: "Transaction History" },
-            { value: "invoices", label: "Billing History" },
-          ].map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => setBillingTab(item.value)}
-              className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
-                billingTab === item.value
-                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        
 
         <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
           <button
@@ -662,7 +643,7 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
       </div>
 
       {/* Grid wrapper using standard border-hairline/30 bg-surface-1/40 card styling */}
-      <section className="grid gap-6 md:grid-cols-2">
+      <section className="grid gap-6 md:grid-cols-1">
         <BillingMetric
           icon={Coins}
           label="AI credits remaining"
@@ -674,46 +655,11 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
           }
         />
 
-        <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm text-ink overflow-hidden">
-          <CardContent className="flex items-center justify-between gap-4 p-5 h-full">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-ink border border-hairline/50 shrink-0">
-                <CreditCard className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-ink-muted mb-1">
-                  Current subscription plan
-                </p>
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl font-bold tracking-tight">
-                    {isSubscriptionLoading ? "..." : displayPlanName}
-                  </p>
-                  {subscription && (
-                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 border-none rounded-md text-[11px] px-1.5 py-0.5 font-semibold">
-                      Active
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-ink-muted mt-1">
-                  {isSubscriptionLoading
-                    ? "Loading plan details..."
-                    : subscription
-                      ? `${displayPlanPrice} / month`
-                      : "No active plan. Upgrade to unlock advanced AI capabilities."}
-                </p>
-              </div>
-            </div>
-            <Link href={`/${workspaceSlug}/payment/plans`}>
-              <button className="inline-flex h-8 items-center rounded-md border border-hairline bg-surface-2 hover:bg-surface-3 px-3 text-xs font-semibold text-ink transition duration-150 cursor-pointer shrink-0">
-                {subscription ? "Change Plan" : "Upgrade Plan"}
-              </button>
-            </Link>
-          </CardContent>
-        </Card>
+        
       </section>
 
-      <Tabs value={billingTab} onValueChange={setBillingTab} className="w-full">
-        <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
+      <div className="w-full">
+        <div className="mt-6 space-y-6 outline-none">
           <section className="flex flex-col gap-6">
             <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
               <CardContent className="pt-6">
@@ -877,9 +823,8 @@ function WorkspaceUsageContent({ slug }: { slug: string }) {
               </CardContent>
             </Card>
           </section>
-        </TabsContent>
-
-        </Tabs>
+        </div>
+      </div>
 
       <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
         <DialogContent className="sm:max-w-[500px] border-hairline bg-surface-1 shadow-lg rounded-xl">
