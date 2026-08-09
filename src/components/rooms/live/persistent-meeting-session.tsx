@@ -2049,9 +2049,14 @@ export function PersistentMeetingSession({
           className="flex min-h-0 flex-1 gap-3 p-3 pt-0"
         >
           <div className="flex min-w-0 flex-1 flex-col gap-3">
+            {/* No border on this frame. It drew a grey outline at radius 24 around a tile that
+                rounds at 16, so the two curves never met and the square backing showed through
+                as four grey wedges at the corners — read as a hairline box bolted onto the
+                video. The rounding lives here and `overflow-hidden` clips the picture to it;
+                the stage fills the frame square and lets this clip do the shaping. */}
             <section
               data-meeting-camera-view
-              className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-border/40 bg-surface-1 shadow-none"
+              className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] bg-surface-1"
             >
               <MeetingStageTimer
                 createdAt={room.createdAt}

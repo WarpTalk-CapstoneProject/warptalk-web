@@ -23,10 +23,24 @@ assert.match(
   /data-meeting-camera-view[\s\S]*<MeetingStageTimer[\s\S]*<LiveKitMeetingStage/,
   "the meeting timer must render inside the camera view",
 );
+// The border this used to require is gone, on the owner's call. It outlined the frame at
+// radius 24 while the tile inside rounded at 16, so the curves never met and the backing
+// showed as grey wedges in the corners. The radius and the clip stay — they are what shapes
+// the picture — and nothing may draw an edge around them again.
 assert.match(
   roomPage,
-  /data-meeting-camera-view[\s\S]*rounded-\[24px\][\s\S]*border-border\/40[\s\S]*shadow-none/,
-  "the outer camera surface must use a soft radius, low-contrast border, and no hard shadow",
+  /data-meeting-camera-view[\s\S]{0,220}overflow-hidden rounded-\[24px\]/,
+  "the outer camera surface must round softly and clip the picture to that radius",
+);
+assert.doesNotMatch(
+  roomPage,
+  /data-meeting-camera-view[\s\S]{0,220}border-border/,
+  "the outer camera surface must not draw a border around the picture",
+);
+assert.match(
+  meetingStage,
+  /visibleTracks\.length === 1[\s\S]{0,900}className: "!rounded-none",\n\s*tileClassName: "!rounded-none"/,
+  "a lone participant must fill the frame square and let the frame's clip do the rounding",
 );
 assert.match(
   roomPage,
