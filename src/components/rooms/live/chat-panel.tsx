@@ -20,6 +20,8 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { suggestion } from "./mentions";
+import { SuggestionPluginKey } from "@tiptap/suggestion";
+import { mentionMatches, mentionMenuHandlesKey } from "@/lib/mention-menu";
 import {
   CHAT_MESSAGE_COUNTER_THRESHOLD,
   MAX_CHAT_MESSAGE_LENGTH,
@@ -233,7 +235,22 @@ export function ChatPanel({
         class:
           "min-h-[36px] max-h-[120px] overflow-y-auto custom-scrollbar w-full bg-transparent text-[13px] text-ink outline-none px-3 py-2",
       },
-      handleKeyDown: (_view: EditorView, event: KeyboardEvent) => {
+      handleKeyDown: (view: EditorView, event: KeyboardEvent) => {
+        // Hand Enter and Tab back to the @ menu while it is offering something.
+        //
+        // ProseMirror checks these direct props BEFORE any plugin, so this handler used to
+        // beat the mention menu outright: you typed "@", saw "@WarpBot AGENT" highlighted,
+        // pressed Enter, and sent the literal text "@" instead of picking what was on screen.
+        const mention = SuggestionPluginKey.getState(view.state) as
+          | { active?: boolean; query?: string }
+          | undefined;
+        if (
+          mention?.active &&
+          mentionMenuHandlesKey(event.key, mentionMatches(mention.query ?? "").length)
+        ) {
+          return false;
+        }
+
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
           sendMessage();
