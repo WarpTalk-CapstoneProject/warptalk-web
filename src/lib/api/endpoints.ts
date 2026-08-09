@@ -60,6 +60,8 @@ export const API = {
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
     consent: (id: string) => `/room-artifacts/${id}/consent`,
+    regenerateSummary: (roomId: string) =>
+      `/room-artifacts/rooms/${roomId}/summary/regenerate`,
   },
   transcripts: {
     start: "/transcripts",

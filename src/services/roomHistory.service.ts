@@ -72,6 +72,8 @@ function buildSummaryArtifact(
     generatedAt: artifact.createdAt ?? "",
     insufficientData: parsed.insufficientData,
     translations: parsed.translations,
+    templateKey: parsed.templateKey,
+    sections: parsed.sections,
   };
 }
 

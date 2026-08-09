@@ -44,6 +44,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -70,6 +71,7 @@ import {
 } from "@/components/ui/popover";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
+import { findSegmentAtMs } from "@/lib/meeting-summary";
 import {
   ArtifactsPanel,
   MeetingRecordTabButton,
@@ -164,7 +166,14 @@ export default function RoomInformationPage() {
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
-  const transcriptSegments = segmentsQuery.data?.items || [];
+  // Memoised because jumpToTranscriptMoment depends on it; `?? []` allocates a fresh
+  // array every render, which would rebuild the callback on every keystroke of a
+  // transcript correction.
+  const transcriptSegments = useMemo(
+    () => segmentsQuery.data?.items ?? [],
+    [segmentsQuery.data],
+  );
+  const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
@@ -180,6 +189,33 @@ export default function RoomInformationPage() {
   const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
+
+  /**
+   * Scroll the transcript to the moment a summary claim cites, and mark it.
+   *
+   * Resolved to the segment that was BEING SPOKEN at that moment rather than the nearest
+   * one — see findSegmentAtMs. The DOM node is found by segment id rather than held in a
+   * ref map, because the transcript re-renders on every correction and a ref map would go
+   * stale exactly when the host is editing.
+   */
+  const jumpToTranscriptMoment = useCallback(
+    (atMs: number) => {
+      const segment = findSegmentAtMs(transcriptSegments, atMs);
+      if (!segment) {
+        toast.error("That moment is not in the saved transcript.");
+        return;
+      }
+      // The tab switch renders the transcript in the same commit, so the node does not
+      // exist yet on this frame.
+      requestAnimationFrame(() => {
+        const node = document.getElementById(`transcript-segment-${segment.id}`);
+        if (!node) return;
+        node.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightedSegmentId(segment.id);
+      });
+    },
+    [transcriptSegments],
+  );
 
   // WT-274: the ONE read of "who is in this room" on this page. The header chip and the
   // Tracking panel both render off this object; neither one filters a status itself, which is
@@ -401,6 +437,7 @@ export default function RoomInformationPage() {
               <MeetingRecordSection
                 endedRecord={endedRecordQuery.data ?? null}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
+                onJumpToMoment={jumpToTranscriptMoment}
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
@@ -417,6 +454,7 @@ export default function RoomInformationPage() {
                     transcriptStatus={transcriptQuery.data?.status}
                     canEdit={isHost}
                     onSegmentsChanged={() => void segmentsQuery.refetch()}
+                    highlightedSegmentId={highlightedSegmentId}
                   />
                 }
                 transcriptCount={transcriptSegments.length}
@@ -596,17 +634,39 @@ function MeetingRecordSection({
   transcriptCount,
   endedRecord,
   onRecordChanged,
+  onJumpToMoment,
 }: {
   transcript: React.ReactNode;
   transcriptCount: number;
   endedRecord: EndedRoomHistoryItem | null;
   onRecordChanged: () => void;
+  onJumpToMoment: (atMs: number) => void;
 }) {
   const [tab, setTab] = useState<"transcript" | "summary" | "artifacts">(
     "transcript",
   );
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
+
+  // Read inside the polling interval, which closes over the render that started it and
+  // would otherwise never see the rewritten summary arrive.
+  const summaryTemplateRef = useRef(endedRecord?.summary?.templateKey);
+  const rewritePollRef = useRef<number | null>(null);
+
+  // In an effect, not during render: writing a ref while rendering is how a component ends
+  // up reading a value React has not committed yet.
+  useEffect(() => {
+    summaryTemplateRef.current = endedRecord?.summary?.templateKey;
+  }, [endedRecord?.summary?.templateKey]);
+
+  useEffect(
+    () => () => {
+      // Leaving the page mid-rewrite must not leave a timer refetching a room nobody is
+      // looking at.
+      if (rewritePollRef.current !== null) window.clearInterval(rewritePollRef.current);
+    },
+    [],
+  );
 
   // No ended record means the meeting has not finished, so there is nothing to summarise and
   // no files to retain. Showing two permanently empty tabs would only invite clicking them.
@@ -654,6 +714,38 @@ function MeetingRecordSection({
           room={endedRecord}
           busyArtifactId={busyArtifactId}
           onDownload={downloadArtifact}
+          // Checking a claim means leaving the summary, so the tab switches with it —
+          // scrolling the transcript while the reader is still looking at the summary
+          // would look like the button did nothing.
+          onJumpToMoment={(atMs) => {
+            setTab("transcript");
+            onJumpToMoment(atMs);
+          }}
+          onRewrite={async (templateKey) => {
+            await translationRoomService.regenerateSummary(
+              endedRecord.id,
+              templateKey,
+            );
+            toast.success("Rewriting the summary…");
+            // The endpoint answers 202 — the summary lands on the artifact later, so this
+            // polls for it rather than trusting the response. It stops the moment the new
+            // shape arrives, and gives up after 90 seconds either way.
+            if (rewritePollRef.current !== null) {
+              window.clearInterval(rewritePollRef.current);
+            }
+            const stopAt = Date.now() + 90_000;
+            rewritePollRef.current = window.setInterval(() => {
+              const arrived = summaryTemplateRef.current === templateKey;
+              if (arrived || Date.now() > stopAt) {
+                if (rewritePollRef.current !== null) {
+                  window.clearInterval(rewritePollRef.current);
+                  rewritePollRef.current = null;
+                }
+                return;
+              }
+              onRecordChanged();
+            }, 4000);
+          }}
         />
       ) : null}
       {activeTab === "artifacts" && endedRecord ? (
@@ -682,6 +774,7 @@ function MeetingTranscriptArtifact({
   onCopy,
   transcriptId,
   transcriptStatus,
+  highlightedSegmentId,
   canEdit,
   onSegmentsChanged,
 }: {
@@ -694,6 +787,9 @@ function MeetingTranscriptArtifact({
   /** Needed to correct or finalize; omit and the section stays read-only. */
   transcriptId?: string;
   transcriptStatus?: string;
+  /** Set when a summary citation jumped here; the row is marked so the reader can see
+   *  which line the claim came from rather than landing in an anonymous wall of text. */
+  highlightedSegmentId?: string | null;
   /** Only the host may rewrite what the room recorded. */
   canEdit?: boolean;
   /** Refetch after a correction lands, so the line shows what was actually saved. */
@@ -856,7 +952,14 @@ function MeetingTranscriptArtifact({
                 return (
                   <div
                     key={segment.id}
-                    className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
+                    id={`transcript-segment-${segment.id}`}
+                    className={`flex scroll-mt-4 rounded-md transition-colors ${
+                      isSelf ? "justify-end" : "justify-start"
+                    } ${
+                      highlightedSegmentId === segment.id
+                        ? "bg-primary/10 ring-1 ring-primary/30"
+                        : ""
+                    }`}
                   >
                     <div className={`flex max-w-[75%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
                       <div className={`flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground ${isSelf ? "flex-row-reverse" : ""}`}>
