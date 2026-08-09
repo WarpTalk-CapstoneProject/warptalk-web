@@ -41,6 +41,7 @@ import {
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/signalr";
 import { useAuthStore } from "@/stores/auth-store";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -332,6 +333,7 @@ export function PersistentMeetingSession({
   );
   const addSuggestion = useTranslationRoomStore((state) => state.addSuggestion);
   const resetLiveRoom = useTranslationRoomStore((state) => state.reset);
+  const queryClient = useQueryClient();
   const addChatMessage = useTranslationRoomStore(
     (state) => state.addChatMessage,
   );
@@ -1494,6 +1496,11 @@ export function PersistentMeetingSession({
 
     chatConnection.onreconnected(() => {
       void joinChatRoom();
+      // Backfill what the socket missed. The chat panel loads its history ONCE and lives on
+      // ChatMessageReceived after that, so anything broadcast while the hub was down — a
+      // WarpBot answer, somebody else's message — was lost to this client for good. The
+      // store merges rather than replaces, so live messages that arrived first survive.
+      void queryClient.invalidateQueries({ queryKey: ["meeting-chat", roomId] });
     });
 
     void startAndJoinChat();
@@ -1506,7 +1513,7 @@ export function PersistentMeetingSession({
       useTranslationRoomStore.getState().setAssistantState("idle");
       chatConnection.stop().catch(() => undefined);
     };
-  }, [roomId, addChatMessage]);
+  }, [roomId, addChatMessage, queryClient]);
 
   // A second camera capture lived here, opened straight off navigator.mediaDevices in parallel
   // with LiveKit's own. It fed `localStream`, which fed a <video ref={localVideoRef}> in
