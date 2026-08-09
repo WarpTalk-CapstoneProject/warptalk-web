@@ -48,6 +48,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
+import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
@@ -147,6 +148,8 @@ type LocalMediaControl = {
   /** Resolves to what the share ended up as, so the caller can reflect a cancelled prompt. */
   setScreenShareEnabled: (enabled: boolean) => Promise<boolean>;
 };
+
+const MINI_TRAY_INSET = bottomChromeInset(MIN_DOCK_SIZE);
 
 export function PersistentMeetingSession({
   roomId,
@@ -1997,6 +2000,9 @@ export function PersistentMeetingSession({
               onPinParticipant={handlePinParticipant}
               spotlightedUserId={spotlightedUserId}
               raisedHandUserIds={raisedHandUserIds}
+              // The tray is centred and nearly the full width of this window, so without this
+              // the participant's name renders behind it.
+              bottomInset={MINI_TRAY_INSET}
               onRetry={retryMeetingConnection}
             />
 

@@ -76,6 +76,7 @@ export function LiveKitMeetingStage({
   onPinParticipant,
   spotlightedUserId,
   raisedHandUserIds,
+  bottomInset = 0,
   onRetry,
 }: {
   fallbackName: string;
@@ -92,6 +93,15 @@ export function LiveKitMeetingStage({
   /** Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged. Overrides pinnedUserId when set. */
   spotlightedUserId?: string | null;
   raisedHandUserIds?: Set<string>;
+  /**
+   * Pixels of chrome sitting over the bottom of the stage.
+   *
+   * The mini window centres a control tray that is nearly as wide as the window itself, so a
+   * name pinned to the bottom-left does not sit beside it — it sits behind it. The stage is
+   * told how much room to leave rather than being told it is "compact", because the number is
+   * the thing that matters and the caller is the only one who knows it.
+   */
+  bottomInset?: number;
   onRetry: () => void;
 }) {
   const connectionState = useConnectionState();
@@ -296,10 +306,11 @@ export function LiveKitMeetingStage({
           </span>
         </div>
         <div
+          style={{ bottom: (isThumbnail ? 8 : 20) + bottomInset }}
           className={`pointer-events-none absolute max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 font-medium text-white shadow-sm backdrop-blur ${
             isThumbnail
-              ? "bottom-2 left-2 px-2 py-0.5 text-[11px]"
-              : "bottom-5 left-5 px-3 py-1 text-[13px]"
+              ? "left-2 px-2 py-0.5 text-[11px]"
+              : "left-5 px-3 py-1 text-[13px]"
           }`}
         >
           {displayName}
