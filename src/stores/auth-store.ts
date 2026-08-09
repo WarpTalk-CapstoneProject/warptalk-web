@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UserDto } from "@/types/auth";
-import { clearSessionCookies, isLiveAccessToken } from "@/lib/auth/session-cookie";
+import {
+  clearSessionCookies,
+  isLiveAccessToken,
+  recordSessionTeardown,
+} from "@/lib/auth/session-cookie";
 import {
   resetSessionScopedStateOnLogin,
   resetSessionScopedStateOnLogout,
@@ -93,6 +97,9 @@ export const useAuthStore = create<AuthState>()(
           revokeRefreshTokenOnServer(refreshToken, accessToken);
         }
 
+        recordSessionTeardown(
+          replayingRemoteSignOut ? "remote-sign-out" : "user-sign-out",
+        );
         clearSessionCookies();
         // The identity goes first, and the order is load-bearing. Emptying the query cache
         // notifies every mounted observer, and an observer whose query has just been removed
@@ -134,6 +141,9 @@ export const useAuthStore = create<AuthState>()(
         if (isLiveAccessToken(state.accessToken) || state.refreshToken) return;
         if (!state.user && !state.accessToken && !state.isAuthenticated) return;
 
+        // The one that has never been observed firing and is the prime suspect: it means
+        // localStorage came back with no live access token AND no refresh token at all.
+        recordSessionTeardown("rehydrate-nothing-to-refresh-with");
         clearSessionCookies();
         state.user = null;
         state.accessToken = null;
