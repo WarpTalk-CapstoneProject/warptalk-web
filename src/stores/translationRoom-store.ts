@@ -197,11 +197,11 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
 
   addChatMessage: (message) =>
     set((s) => ({
-      // A WarpBot message IS the answer arriving, so it ends the waiting state wherever it
-      // came from — including the "temporarily unavailable" one the server writes when the
-      // request could not even be queued.
-      assistantState:
-        message.senderType === "assistant" ? "idle" : s.assistantState,
+      // Clearing the waiting state is NOT done here. The store is imported by a node test
+      // that cannot resolve the "@/" alias for a value import — and more to the point, a
+      // message store has no business knowing what an assistant message means. The chat
+      // panel watches for the answer instead, in one place, covering both the live broadcast
+      // and a history backfill.
       chatMessages: s.chatMessages.some((existing) => existing.id === message.id)
         ? s.chatMessages.map((existing) => (existing.id === message.id ? message : existing))
         : [...s.chatMessages, message],

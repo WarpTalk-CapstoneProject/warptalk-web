@@ -110,6 +110,12 @@ import {
 } from "@/components/rooms/live/reaction-overlay";
 import { BreakoutSetupModal } from "@/components/rooms/live/breakout-setup-modal";
 import { LanguagePickerModal } from "@/components/rooms/live/language-picker-modal";
+import { useRoomHistory } from "@/hooks/use-room-history";
+import { useUpdateUserSettings, useUserSettings } from "@/hooks/use-user-settings";
+import {
+  shouldAskForLanguages,
+  suggestLanguageProfile,
+} from "@/lib/language-profile";
 import {
   fetchMyBreakoutAssignment,
   useEndBreakouts,
@@ -931,7 +937,7 @@ export function PersistentMeetingSession({
    * whenever someone reached the room without going through the join screen — used to be
    * dropped on the next read, and the participant fell back a tier.
    */
-  function rememberJoinPreference(patch: Record<string, string>) {
+  const rememberJoinPreference = useCallback((patch: Record<string, string>) => {
     try {
       const config = JSON.parse(
         window.sessionStorage.getItem(JOIN_PREVIEW_KEY) || "{}",
@@ -943,19 +949,21 @@ export function PersistentMeetingSession({
     } catch {
       // Non-critical — worst case the picked language doesn't survive a page refresh.
     }
-  }
+  }, [roomId]);
 
-  function handleChangeListenLanguage(language: string) {
+  // Memoised because the remembered-language effect depends on them: redefined every render,
+  // they would restart that effect on every render for no reason.
+  const handleChangeListenLanguage = useCallback((language: string) => {
     const normalizedLanguage = normalizeLanguageCode(language);
     setListenLanguageState(normalizedLanguage);
     rememberJoinPreference({ listenLanguage: normalizedLanguage });
-  }
+  }, [rememberJoinPreference]);
 
-  function handleChangeSpeakLanguage(language: string) {
+  const handleChangeSpeakLanguage = useCallback((language: string) => {
     const normalizedLanguage = normalizeLanguageCode(language);
     setSpeakLanguageState(normalizedLanguage);
     rememberJoinPreference({ speakLanguage: normalizedLanguage });
-  }
+  }, [rememberJoinPreference]);
 
   /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
   function handleChangeVoicePreference(voiceId: string) {
@@ -1083,16 +1091,91 @@ export function PersistentMeetingSession({
     });
   }, [canConnectMeeting, displayName, joinMeetingAsync, room?.id]);
 
+  const userSettingsQuery = useUserSettings();
+  const updateUserSettings = useUpdateUserSettings();
+  const userSettings = userSettingsQuery.data;
+
+  const languagesAreRemembered = !shouldAskForLanguages({
+    settingsSpeak: userSettings?.defaultSpeakLanguage,
+    settingsListen: userSettings?.defaultListenLanguage,
+  });
+
+  // What this user chose to SPEAK in past meetings, most recent first. Only fetched when we
+  // are actually going to ask — for everyone who has answered once, this costs nothing.
+  const languageHistoryQuery = useRoomHistory(
+    userSettingsQuery.isSuccess && !languagesAreRemembered
+      ? (activeWorkspaceId ?? null)
+      : null,
+  );
+  const historySpeak = useMemo(() => {
+    const rooms = languageHistoryQuery.data?.rooms ?? [];
+    return rooms
+      .flatMap((endedRoom) =>
+        endedRoom.participants.filter(
+          (participant) => participant.userId === user?.id,
+        ),
+      )
+      .map((participant) => participant.speakLanguage)
+      .filter((code): code is string => Boolean(code));
+  }, [languageHistoryQuery.data, user?.id]);
+
+  const suggestedLanguages = useMemo(
+    () =>
+      suggestLanguageProfile({
+        settingsSpeak: userSettings?.defaultSpeakLanguage,
+        settingsListen: userSettings?.defaultListenLanguage,
+        historySpeak,
+        locales: typeof navigator !== "undefined" ? navigator.languages : [],
+        roomSpeak: isResolvedSpeakLanguage(sourceLanguage) ? sourceLanguage : null,
+        roomListen: listenLanguage,
+        available: availableListenLanguages,
+      }),
+    [
+      userSettings?.defaultSpeakLanguage,
+      userSettings?.defaultListenLanguage,
+      historySpeak,
+      sourceLanguage,
+      listenLanguage,
+      availableListenLanguages,
+    ],
+  );
+
   useEffect(() => {
     if (languagePickerShownRef.current) return;
     if (!meetingSession?.token) return;
+    // Wait for the answer we may already have. Opening before the settings resolve is how a
+    // remembered preference still gets asked for.
+    if (!userSettingsQuery.isSuccess) return;
+
     languagePickerShownRef.current = true;
+
+    if (languagesAreRemembered) {
+      // Applied silently. Being asked again is the product forgetting, which is the whole
+      // complaint — the answer is on file, so use it.
+      handleChangeSpeakLanguage(suggestedLanguages.speak);
+      handleChangeListenLanguage(suggestedLanguages.listen);
+      return;
+    }
+
     queueMicrotask(() => setShowLanguagePicker(true));
-  }, [meetingSession]);
+  }, [
+    meetingSession,
+    userSettingsQuery.isSuccess,
+    languagesAreRemembered,
+    suggestedLanguages,
+    handleChangeSpeakLanguage,
+    handleChangeListenLanguage,
+  ]);
 
   function handleConfirmLanguagePicker(speak: string, listen: string) {
     handleChangeSpeakLanguage(speak);
     handleChangeListenLanguage(listen);
+    // Remembered, so the next meeting does not ask. Fire-and-forget: failing to save a
+    // preference must not interrupt joining a call — the worst case is being asked once more.
+    updateUserSettings.mutate({
+      defaultSpeakLanguage: speak,
+      defaultListenLanguage: listen,
+    });
   }
 
   useEffect(() => {
@@ -2135,10 +2218,8 @@ export function PersistentMeetingSession({
         open={showLanguagePicker}
         onOpenChange={setShowLanguagePicker}
         availableLanguages={availableListenLanguages}
-        defaultSpeakLanguage={
-          isResolvedSpeakLanguage(sourceLanguage) ? sourceLanguage : undefined
-        }
-        defaultListenLanguage={listenLanguage ?? undefined}
+        defaultSpeakLanguage={suggestedLanguages.speak}
+        defaultListenLanguage={suggestedLanguages.listen}
         onConfirm={handleConfirmLanguagePicker}
         onSkip={() => {
           // No-op: leaving speak/listen exactly as they already are (STT auto-detect +

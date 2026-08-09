@@ -20,6 +20,8 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { suggestion } from "./mentions";
+import { SuggestionPluginKey } from "@tiptap/suggestion";
+import { mentionMatches, mentionMenuHandlesKey } from "@/lib/mention-menu";
 import {
   CHAT_MESSAGE_COUNTER_THRESHOLD,
   MAX_CHAT_MESSAGE_LENGTH,
@@ -77,6 +79,7 @@ export function ChatPanel({
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
+  const answersWhenAskedRef = useRef(0);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
   );
@@ -174,6 +177,23 @@ export function ChatPanel({
     }
   }, [historyQuery.data, setChatMessages]);
 
+  // A NEW answer has landed — stop waiting, whichever way it arrived.
+  //
+  // Counted, not merely present: a second question in a room that already holds WarpBot
+  // replies would otherwise clear the indicator the instant it appeared. The baseline is
+  // taken when the question is asked, so what this watches for is one MORE answer than
+  // existed then.
+  //
+  // Both delivery paths are covered: the live broadcast, and a history backfill after a hub
+  // reconnect — which is how the answer arrives when the socket was down while WarpBot
+  // replied.
+  useEffect(() => {
+    if (assistantState !== "thinking") return;
+    if (messages.filter(isAssistantMessage).length > answersWhenAskedRef.current) {
+      setAssistantState("idle");
+    }
+  }, [messages, assistantState, setAssistantState]);
+
   // One deadline, wherever "thinking" came from — the optimistic set on send, or the
   // server's pending signal. A spinner with no end is its own lie, and this one would
   // otherwise outlive the meeting.
@@ -233,7 +253,22 @@ export function ChatPanel({
         class:
           "min-h-[36px] max-h-[120px] overflow-y-auto custom-scrollbar w-full bg-transparent text-[13px] text-ink outline-none px-3 py-2",
       },
-      handleKeyDown: (_view: EditorView, event: KeyboardEvent) => {
+      handleKeyDown: (view: EditorView, event: KeyboardEvent) => {
+        // Hand Enter and Tab back to the @ menu while it is offering something.
+        //
+        // ProseMirror checks these direct props BEFORE any plugin, so this handler used to
+        // beat the mention menu outright: you typed "@", saw "@WarpBot AGENT" highlighted,
+        // pressed Enter, and sent the literal text "@" instead of picking what was on screen.
+        const mention = SuggestionPluginKey.getState(view.state) as
+          | { active?: boolean; query?: string }
+          | undefined;
+        if (
+          mention?.active &&
+          mentionMenuHandlesKey(event.key, mentionMatches(mention.query ?? "").length)
+        ) {
+          return false;
+        }
+
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
           sendMessage();
@@ -298,6 +333,23 @@ export function ChatPanel({
     }
 
     setSendError(null);
+
+    // BEFORE the request, not in onSuccess.
+    //
+    // onSuccess runs after the HTTP round trip, and WarpBot's answer arrives over SignalR
+    // independently — so a fast answer landed FIRST, cleared a state that was still idle, and
+    // then onSuccess switched "thinking" on with nothing left to turn it off. Ninety seconds
+    // later the user saw "WarpBot didn't answer" sitting underneath the answer.
+    const asksTheAgent = mentions.some((mention) => mention.type === "agent");
+    if (asksTheAgent) {
+      // How many answers existed at the moment of asking. Captured here, synchronously,
+      // rather than in an effect: an effect runs after the render, by which time a fast
+      // answer may already have arrived and would be counted as part of the baseline — which
+      // is a spinner that never stops.
+      answersWhenAskedRef.current = messages.filter(isAssistantMessage).length;
+      setAssistantState("thinking");
+    }
+
     sendMessageAPI(
       {
         roomId,
@@ -312,16 +364,14 @@ export function ChatPanel({
         onSuccess: (message) => {
           addChatMessage(message);
           editor.commands.clearContent(true);
-          // Optimistic, because the client already knows it just asked WarpBot. Waiting for
-          // the server's ChatAssistantResponsePending leaves the send looking ignored for as
-          // long as the round trip takes — and if the answer comes back fast the signal
-          // arrives and clears in the same breath, so nothing is ever seen at all.
-          if (mentions.some((mention) => mention.type === "agent")) {
-            setAssistantState("thinking");
-          }
         },
         onError: () => {
           setSendError("Message could not be sent. Try again.");
+          // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
+          // seconds and then blame WarpBot for a message that never reached it.
+          if (asksTheAgent) {
+            setAssistantState("idle");
+          }
         },
       },
     );

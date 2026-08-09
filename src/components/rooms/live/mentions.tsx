@@ -5,13 +5,12 @@ import type {
   SuggestionProps,
 } from "@tiptap/suggestion";
 import tippy, { Instance as TippyInstance } from "tippy.js";
+import {
+  mentionMatches,
+  mentionMenuHandlesKey,
+  type MentionAgent as DomainAgent,
+} from "@/lib/mention-menu";
 import { forwardRef, useImperativeHandle, useState } from "react";
-
-interface DomainAgent {
-  id: string;
-  display: string;
-  type: string;
-}
 
 interface MentionCommandAttributes {
   id: string | null;
@@ -27,11 +26,6 @@ type MentionListProps = Pick<
 interface MentionListHandle {
   onKeyDown: (props: SuggestionKeyDownProps) => boolean;
 }
-
-// WarpBot is the built-in meeting agent understood by the chat backend.
-const DOMAIN_AGENTS: DomainAgent[] = [
-  { id: "bot-warpbot", display: "WarpBot", type: "agent" },
-];
 
 export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
   (props, ref) => {
@@ -74,7 +68,11 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
           downHandler();
           return true;
         }
-        if (event.key === "Enter") {
+        // Enter AND Tab pick the highlighted agent — and only while one is offered. Claiming
+        // Enter over an empty menu left the composer doing nothing at all: no send, no
+        // mention. mentionMenuHandlesKey is the single answer both this and the composer's
+        // own handler ask, because the two disagreeing is exactly the bug being fixed.
+        if (mentionMenuHandlesKey(event.key, props.items.length)) {
           enterHandler();
           return true;
         }
@@ -117,11 +115,7 @@ export const suggestion: Omit<
   SuggestionOptions<DomainAgent, MentionCommandAttributes>,
   "editor"
 > = {
-  items: ({ query }: { query: string }) => {
-    return DOMAIN_AGENTS.filter((item) =>
-      item.display.toLowerCase().startsWith(query.toLowerCase()),
-    ).slice(0, 5);
-  },
+  items: ({ query }: { query: string }) => mentionMatches(query),
   render: () => {
     let component: ReactRenderer<MentionListHandle, MentionListProps>;
     let popup: TippyInstance[] | undefined;
