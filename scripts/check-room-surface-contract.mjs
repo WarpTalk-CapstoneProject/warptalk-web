@@ -282,19 +282,35 @@ assert.doesNotMatch(
   /<aside[^>]*xl:overflow-y-auto/,
   "The right column must not scroll as one block; only the roster region may scroll (WT-330(8)).",
 );
-// Tracking flexes and owns the single scroll region; Actions and Meeting access are pinned.
+// Tracking flexes and owns the single scroll region; Actions stays pinned.
 assert.match(
   roomDetail,
   /title="Tracking"[\s\S]{0,400}?bodyClassName="[^"]*xl:flex-1[^"]*xl:overflow-y-auto/,
   "The Tracking panel's body must be the one bounded, flexing scroll region (WT-330(8)).",
 );
-for (const panel of ["Actions", "Meeting access"]) {
+// "Meeting access" was pinned alongside Actions and is now deleted, on the owner's call. It
+// held a hardcoded "WarpTalk Session" over the room code, and the pills row under the title
+// already shows that code AND lets you click it to copy — the panel was the same fact with
+// less to do. WT-330 had already taken its entry button; nothing unique was left to bury.
+for (const panel of ["Actions"]) {
   assert.match(
     roomDetail,
     new RegExp(`title="${panel}" className="xl:shrink-0"`),
     `The ${panel} panel must stay pinned so no invitee count can push it off screen.`,
   );
 }
+assert.doesNotMatch(
+  roomDetail,
+  /<PropertyPanel title="Meeting access"/,
+  "The Meeting access panel must not come back: the room code lives in the pills row, where it is also copyable.",
+);
+// The one fact that panel and the deleted "When" row owned between them — which day the
+// meeting actually runs — has to survive somewhere, or this was a deletion of information.
+assert.match(
+  pills,
+  /room\.scheduledAt \?\? room\.createdAt/,
+  "The date pill must show the scheduled time when there is one; createdAt alone is the day the room was made, not the day it runs.",
+);
 // A max-height on the list itself would nest a second scrollbar inside the first.
 assert.doesNotMatch(
   roomDetail,
