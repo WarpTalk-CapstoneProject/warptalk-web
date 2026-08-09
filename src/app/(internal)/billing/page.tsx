@@ -9,6 +9,10 @@ import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart"
 import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { Badge } from "@/components/ui/badge";
+import {
+  AdminPage,
+  AdminPageHeader,
+} from "@/components/admin/admin-page-chrome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -387,26 +391,14 @@ export default function AdminBillingPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 pb-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-surface-1 p-6 rounded-xl border border-hairline shadow-linear gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold tracking-tight text-ink">
-              System Billing Overview
-            </h1>
-            <Badge
-              variant="outline"
-              className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Admin
-            </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Monitor system-wide credits, consumption, and active workspaces.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+    <AdminPage>
+        <AdminPageHeader
+          eyebrow="Platform billing"
+          eyebrowIcon={<Coins size={14} weight="fill" />}
+          title="Billing"
+          description="System-wide credits, consumption, and active workspaces."
+          actions={
+            <>
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -459,11 +451,12 @@ export default function AdminBillingPage() {
             </Button>
           </Link>
           <AdjustCreditModal />
-        </div>
-      </div>
+            </>
+          }
+        />
 
       {/* Metrics */}
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="mt-5 grid gap-4 md:grid-cols-4">
         <AdminMetric
           icon={Coins}
           label="Total Issued Credits"
@@ -494,34 +487,37 @@ export default function AdminBillingPage() {
       </section>
 
       <Tabs defaultValue="overview" className="w-full mt-2">
-        <TabsList className="bg-surface-2 p-1 rounded-lg">
+        {/* Same shape as AdminFilterTabs on the other admin pages: ink fills the selected
+            tab. shadcn Tabs stays because these panels are genuinely tabbed content, not a
+            filter over one list — but it should not look like a fourth control style. */}
+        <TabsList className="h-auto gap-1 rounded-none border-b border-border bg-transparent p-0 py-3">
           <TabsTrigger
             value="overview"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Economics & Analytics
           </TabsTrigger>
           <TabsTrigger
             value="ledger"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Global Transactions
           </TabsTrigger>
           <TabsTrigger
             value="invoices"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Invoices
           </TabsTrigger>
           <TabsTrigger
             value="subscriptions"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Subscriptions
           </TabsTrigger>
           <TabsTrigger
             value="alerts"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Fraud Alerts
           </TabsTrigger>
@@ -1124,7 +1120,7 @@ export default function AdminBillingPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPage>
   );
 }
 
