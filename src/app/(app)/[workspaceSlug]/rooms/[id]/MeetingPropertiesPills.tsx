@@ -26,6 +26,10 @@ export function MeetingPropertiesPills({
   /** WT-310(12) — the page's copy handler, so the room-code pill reuses its confirmation. */
   onCopy: (text: string, label: string) => void;
 }) {
+  // The day this meeting runs: its scheduled time when it has one, otherwise the day it was
+  // created — which for an ad-hoc room is the same thing.
+  const meetingDate = new Date(room.scheduledAt ?? room.createdAt);
+
   const updateSettings = useUpdateTranslationRoomSettings();
 
   // Edit the room's declared language set; source language is derived as the first
@@ -95,18 +99,23 @@ export function MeetingPropertiesPills({
         <span className="sr-only">participants in the room, out of the seat capacity</span>
       </div>
 
+      {/* scheduledAt, not createdAt.
+          This showed the day the room was created, which for a scheduled meeting is not the
+          day it runs — the "When" row below the title carried the real answer, and that row is
+          gone. The full timestamp rides along in the tooltip, because month-and-day cannot say
+          5:04 PM and that was the other thing the row said. */}
       <Popover>
-        <PopoverTrigger className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] min-w-[80px] justify-center text-muted-foreground cursor-pointer hover:bg-surface-2 transition-colors">
+        <PopoverTrigger
+          title={meetingDate.toLocaleString()}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] min-w-[80px] justify-center text-muted-foreground cursor-pointer hover:bg-surface-2 transition-colors"
+        >
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums text-[12px] font-medium">
-            {new Date(room.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            {meetingDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </span>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 rounded-xl" align="end">
-          <Calendar
-            mode="single"
-            selected={new Date(room.createdAt)}
-          />
+          <Calendar mode="single" selected={meetingDate} />
         </PopoverContent>
       </Popover>
     </div>

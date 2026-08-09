@@ -18,7 +18,6 @@ import {
   CalendarPlus,
   Check,
   ChevronDown,
-  Clock,
   Code,
   Code2,
   CheckCircle,
@@ -38,7 +37,6 @@ import {
   StopCircle,
   Strikethrough,
   Underline as UnderlineIcon,
-  Video,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -414,29 +412,12 @@ export default function RoomInformationPage() {
                 </div>
               </div>
 
-              {/* WT-330: "When" is the only metadata row left, and that is the point.
-                  - "People" listed `participants` capped at 8. The right column's Tracking
-                    panel renders the same identities through UserRow — which wraps the very
-                    same UserChip popover — split into who holds a seat and who does not, and
-                    with no cap. Every chip this row could show appears there, so deleting it
-                    removes a duplicate, not a source.
-                  - The location row answered with a hardcoded product string for a bridge that
-                    does not exist. WT-310(6) had already caught that its location pin promised
-                    a place and swapped the icon for a video glyph — which left a row asking
-                    "where" and answering with a video chip, contradicting itself. The honest
-                    fix is not a better icon; it is not claiming a location at all. */}
-              <div className="grid gap-2 border-y border-border/60 py-2 text-[13px]">
-                <MetadataRow icon={<Clock className="size-4" />} label="When">
-                  <span>
-                    {formatDateTime(room.scheduledAt ?? room.createdAt)}
-                  </span>
-                  {room.endedAt ? (
-                    <span className="text-muted-foreground">
-                      - {formatDateTime(room.endedAt)}
-                    </span>
-                  ) : null}
-                </MetadataRow>
-              </div>
+              {/* The "When" row stood here, and it is gone with the last of the metadata
+                  rows it belonged to. It was not a pure duplicate: the date pill under the
+                  title showed createdAt and only the month and day, so a scheduled meeting
+                  displayed the day it was created rather than the day it runs, and never the
+                  time. The pill now carries both — scheduledAt when there is one, and the full
+                  timestamp on hover — so this row's last unique fact survives it. */}
             </div>
 
             <RoomNotesEditor
@@ -572,22 +553,10 @@ export default function RoomInformationPage() {
               ) : null}
             </PropertyPanel>
 
-            <PropertyPanel title="Meeting access" className="xl:shrink-0">
-              <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
-                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-1 text-ink">
-                  <Video className="size-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold">WarpTalk Session</p>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                    {room.translationRoomCode}
-                  </p>
-                </div>
-              </div>
-              {/* WT-330: the second RoomEntryButton stood here. See the header CTA above — the
-                  control and its help text now live there, once. This panel keeps what is
-                  actually specific to it: the session identity and the room code. */}
-            </PropertyPanel>
+            {/* "Meeting access" stood here: a hardcoded "WarpTalk Session" over the room
+                code. The pills row under the title already shows that code and, unlike this
+                panel, lets you click it to copy — so the panel was the same fact with less
+                to do. WT-330 had already taken its entry button; this is the rest. */}
           </aside>
         </div>
       </div>
@@ -1648,25 +1617,6 @@ function getHostUser(
   );
 }
 
-function MetadataRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: ReactNode;
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid min-h-9 grid-cols-[28px_90px_minmax(0,1fr)] items-center gap-2">
-      <div className="flex justify-center text-muted-foreground">{icon}</div>
-      <div className="text-[12px] text-muted-foreground">{label}</div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function PropertyPanel({
   title,
