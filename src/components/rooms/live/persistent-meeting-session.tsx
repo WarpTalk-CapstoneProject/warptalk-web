@@ -14,6 +14,7 @@ import {
   ArrowsOut,
   Microphone,
   MicrophoneSlash,
+  PhoneDisconnect,
   VideoCamera,
   VideoCameraSlash,
   WarningCircle,
@@ -1929,9 +1930,15 @@ export function PersistentMeetingSession({
         ) : null}
 
         {compact ? (
+          // The whole window drags, not just a strip across the top. That strip existed
+          // because it had to: it was the only thing carrying [data-mini-drag-handle], so it
+          // could never be hidden or the window could never be moved again. The dock now
+          // ignores pointer-downs that land on a control, which frees the chrome to be as
+          // small as it likes.
           <div
             data-mini-meeting
-            className="group relative h-full min-h-0 w-full overflow-hidden bg-surface-2"
+            data-mini-drag-handle
+            className="group relative h-full min-h-0 w-full cursor-grab overflow-hidden bg-surface-1 active:cursor-grabbing"
           >
             <LiveKitMeetingStage
               fallbackName={user?.fullName || user?.email || room.title}
@@ -1948,45 +1955,34 @@ export function PersistentMeetingSession({
               onRetry={retryMeetingConnection}
             />
 
-            {/* The header is the drag handle, and it is a solid strip rather than the gradient
-                that used to wash out the top of the picture. The same went for a second
-                gradient over the buttons at the bottom: two soft-edged bands on a 388px window
-                left the video visible only through the middle of itself. */}
-            <div
-              data-mini-drag-handle
-              className="absolute inset-x-0 top-0 z-30 flex cursor-grab items-start justify-between bg-black/65 px-3 py-2 text-white active:cursor-grabbing"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold">
-                  <span
-                    className={`size-1.5 rounded-full ${isReconnecting ? "animate-pulse bg-amber-400" : "bg-emerald-400"}`}
-                  />
-                  {isReconnecting ? "Reconnecting" : "Meeting live"}
-                </div>
-                <p className="mt-0.5 max-w-52 truncate text-[12px] text-white/75">
-                  {room.title}
-                  <span className="px-1.5 text-white/35">·</span>
-                  <MeetingTimer
-                    createdAt={room.createdAt}
-                    endedAt={room.endedAt}
-                    className="!text-white/70"
-                  />
-                </p>
-              </div>
+            {/* Status, and nothing else, at rest. What stood here was a full-width bar at 65%
+                black — over a camera-off tile that the stage already renders as bg-white/95, so
+                it was black on white in an app that is white throughout. Between it and the bar
+                at the bottom, 92 of the window's 388 pixels were permanently chrome. */}
+            <div className="pointer-events-none absolute left-2.5 top-2.5 z-30 flex items-center gap-1.5 rounded-full border border-black/[0.07] bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur-md">
+              <span
+                className={`size-1.5 rounded-full ${isReconnecting ? "animate-pulse bg-amber-500" : "bg-emerald-500"}`}
+              />
+              {isReconnecting ? (
+                "Reconnecting"
+              ) : (
+                <MeetingTimer
+                  createdAt={room.createdAt}
+                  endedAt={room.endedAt}
+                  className="!text-ink"
+                />
+              )}
             </div>
 
-            <button
-              type="button"
-              aria-label="Return to meeting"
-              title="Return to meeting"
-              onClick={() => router.push(liveMeetingPath(activeWorkspaceSlug, roomId))}
-              className="absolute right-3 top-3 z-40 grid size-8 place-items-center rounded-full bg-black/55 text-white shadow-sm backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
-            >
-              <ArrowsOut className="size-4" weight="bold" />
-            </button>
+            {/* The room title is the one thing here that is not needed at a glance — you
+                minimised this window, so you know which meeting it is. It comes back when the
+                pointer does. */}
+            <p className="pointer-events-none absolute inset-x-2.5 top-10 z-30 truncate text-[11px] font-medium text-ink opacity-0 drop-shadow-[0_1px_4px_rgba(255,255,255,0.9)] transition-opacity group-hover:opacity-100">
+              {room.title}
+            </p>
 
             {subtitlesEnabled ? (
-              <div className="absolute inset-x-2 bottom-12 z-30 h-14 overflow-hidden">
+              <div className="absolute inset-x-2 bottom-16 z-30 h-14 overflow-hidden">
                 <LiveSubtitleOverlay
                   enabled={warptalkStarted && subtitlesEnabled}
                 />
@@ -2023,25 +2019,56 @@ export function PersistentMeetingSession({
               through useTrackToggle, the identical mechanism <TrackToggle> gives the full-size
               bar, which is also why the two no longer disagree when the mini window is expanded.
             */}
-            <div className="absolute inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 bg-black/65 px-3 py-2">
-              <MiniTrackToggle
-                source={Track.Source.Microphone}
-                enabledLabel="Turn off microphone"
-                disabledLabel="Turn on microphone"
-                enabledIcon={<Microphone className="size-[18px]" weight="fill" />}
-                disabledIcon={
-                  <MicrophoneSlash className="size-[18px]" weight="bold" />
-                }
-              />
-              <MiniTrackToggle
-                source={Track.Source.Camera}
-                enabledLabel="Turn off camera"
-                disabledLabel="Turn on camera"
-                enabledIcon={<VideoCamera className="size-[18px]" weight="fill" />}
-                disabledIcon={
-                  <VideoCameraSlash className="size-[18px]" weight="bold" />
-                }
-              />
+            {/* One tray, in the app's own white glass, instead of two black bars and a third
+                black circle floating on top of the first one. It carries its own hairline and
+                shadow, which is why it holds its shape over a white camera-off panel and over
+                a dark picture alike — black chrome managed neither. */}
+            <div className="absolute inset-x-0 bottom-3 z-40 flex justify-center">
+              <div className="flex items-center gap-0.5 rounded-full border border-black/[0.07] bg-white/88 p-1 shadow-[0_6px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+                <MiniTrackToggle
+                  source={Track.Source.Microphone}
+                  enabledLabel="Turn off microphone"
+                  disabledLabel="Turn on microphone"
+                  enabledIcon={<Microphone className="size-[17px]" weight="fill" />}
+                  disabledIcon={
+                    <MicrophoneSlash className="size-[17px]" weight="bold" />
+                  }
+                />
+                <MiniTrackToggle
+                  source={Track.Source.Camera}
+                  enabledLabel="Turn off camera"
+                  disabledLabel="Turn on camera"
+                  enabledIcon={<VideoCamera className="size-[17px]" weight="fill" />}
+                  disabledIcon={
+                    <VideoCameraSlash className="size-[17px]" weight="bold" />
+                  }
+                />
+
+                <span className="mx-1 h-4 w-px bg-black/10" />
+
+                <button
+                  type="button"
+                  aria-label="Return to meeting"
+                  title="Return to meeting"
+                  onClick={() => router.push(liveMeetingPath(activeWorkspaceSlug, roomId))}
+                  className="grid size-8 place-items-center rounded-full text-ink transition hover:bg-black/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <ArrowsOut className="size-[17px]" weight="bold" />
+                </button>
+
+                {/* New here. Leaving a minimised meeting used to mean expanding it first, so
+                    the quickest way out of a call was two steps through the thing you were
+                    trying to leave. */}
+                <button
+                  type="button"
+                  aria-label="Leave meeting"
+                  title="Leave meeting"
+                  onClick={() => void handleExit("leave")}
+                  className="grid size-8 place-items-center rounded-full bg-red-600 text-white transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                >
+                  <PhoneDisconnect className="size-[17px]" weight="fill" />
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -2382,7 +2409,9 @@ function MiniTrackToggle({
       aria-label={enabled ? enabledLabel : disabledLabel}
       disabled={pending}
       onClick={() => void toggle()}
-      className={`grid size-9 place-items-center rounded-full text-white shadow-sm backdrop-blur transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-60 ${enabled ? "bg-black/55 hover:bg-black/75" : "bg-red-600 hover:bg-red-700"}`}
+      // A muted track turns the button red rather than only swapping in a slashed glyph. At
+      // 17px a slash is a detail you have to look for; a red button is a state you see.
+      className={`grid size-8 place-items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60 ${enabled ? "text-ink hover:bg-black/[0.06]" : "bg-red-50 text-red-600 hover:bg-red-100"}`}
     >
       {enabled ? enabledIcon : disabledIcon}
     </button>

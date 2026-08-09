@@ -96,6 +96,10 @@ export function MiniMeetingDock({
     if (!position) return;
     const target = event.target as HTMLElement;
     if (!target.closest("[data-mini-drag-handle]")) return;
+    // Controls are not drag surfaces. This exclusion is what let the drag handle grow from a
+    // strip across the top to the whole window: the strip could never be hidden, because
+    // hiding it left nothing to grab, which is why the window wore a permanent black bar.
+    if (target.closest("button, a, input, textarea, select, [role='button']")) return;
     // Only the primary button, and never a right-click that is on its way to a context menu.
     if (event.button !== 0) return;
 

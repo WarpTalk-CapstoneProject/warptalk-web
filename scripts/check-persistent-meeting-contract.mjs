@@ -95,6 +95,22 @@ assert.match(
   /handleExit[\s\S]*onMeetingClosed\(\)[\s\S]*router\.push/,
   "only an explicit leave or end action should close the persistent meeting",
 );
+// The mini window's chrome, pinned where it can be undone.
+assert.match(
+  meetingSession,
+  /aria-label="Leave meeting"[\s\S]{0,400}handleExit\("leave"\)/,
+  "the mini meeting must offer a way out that does not require expanding it first",
+);
+assert.doesNotMatch(
+  meetingSession,
+  /data-mini-meeting[\s\S]{0,4000}(inset-x-0 top-0[^"]*bg-black|bottom-0 z-40[\s\S]{0,80}bg-black)/,
+  "the mini meeting must not reintroduce full-width opaque bars over the picture",
+);
+assert.match(
+  miniDock,
+  /closest\("button, a, input, textarea, select, \[role='button'\]"\)/,
+  "the dock must treat controls as controls, not as drag surfaces — that exclusion is what lets the whole window be the handle",
+);
 
 // --- Billing: a minimised tab must not hold LiveKit open forever -------------------------
 // A LiveKit token is never withdrawn, so `connect={Boolean(token)}` was true for the life of
