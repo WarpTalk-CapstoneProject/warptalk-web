@@ -70,7 +70,7 @@
     "test:presence": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/components/presence/presence-appearance.test.ts",
     "test:sticky-speaker": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/sticky-speaker.test.ts",
     "test:members-directory": "node scripts/check-members-directory-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/member-directory.test.ts",
-    "test:meeting-record": "node scripts/check-meeting-record-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting-artifacts.test.ts"
+    "test:meeting-record": "node scripts/check-meeting-record-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting-artifacts.test.ts src/lib/meeting-summary.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
