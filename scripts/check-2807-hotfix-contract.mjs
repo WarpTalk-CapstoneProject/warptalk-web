@@ -4,7 +4,7 @@ const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "
 
 const invite = read("src/components/rooms/create/invite-people-picker.tsx");
 const chatbot = read("src/components/layout/global-chatbot.tsx");
-const room = read("src/app/(app)/room/[id]/page.tsx");
+const room = read("src/app/(app)/[workspaceSlug]/rooms/[id]/live/page.tsx");
 const persistentMeeting = read("src/components/rooms/live/persistent-meeting-session.tsx");
 const liveRoom = `${room}\n${persistentMeeting}`;
 const documents = read("src/app/(app)/[workspaceSlug]/documents/page.tsx");

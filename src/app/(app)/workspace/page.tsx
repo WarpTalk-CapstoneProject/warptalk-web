@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -17,6 +17,10 @@ import Image from "next/image";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
+  extractEmailDomain,
+  isPublicEmailDomain,
+} from "@/lib/workspace/email-domain";
+import {
   useAcceptWorkspaceInvitationById,
   usePendingWorkspaceInvitations,
   useWorkspaces,
@@ -28,7 +32,13 @@ import type { WorkspaceInvitationDto } from "@/types/workspace";
 export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  // Same helper the create form uses, so the two screens cannot drift on what counts as a
+  // public domain. Only affects what this screen says; the server does the refusing.
+  const publicDomainLabel = extractEmailDomain(user?.email);
+  const cannotCreateWorkspace = isPublicEmailDomain(publicDomainLabel);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
@@ -39,6 +49,37 @@ export default function WorkspaceOnboardingGatePage() {
   const joinRequests = useMemo(() => joinRequestsData ?? [], [joinRequestsData]);
   const selectWorkspace = useSelectWorkspace();
   const acceptInvitation = useAcceptWorkspaceInvitationById();
+
+  // Every sign-in lands here first, and for an account that already has a workspace this
+  // page is a waypoint it passes through, not a destination. The redirect that moves it on
+  // lives in an effect, and effects run after the browser has painted — so the frame between
+  // "the workspace list arrived" and "the navigation committed" used to paint "Set up your
+  // workspace" and a Create workspace button at every single sign-in.
+  //
+  // Answering it during render is the fix. The condition below is the same one the effect
+  // acts on, evaluated one phase earlier, so the interstitial is never handed over to the
+  // onboarding surface for an account that is on its way somewhere else.
+  //
+  // Note this is not a blanket "wait a bit". An account with no workspaces and no pending
+  // invitations fails this test on the first render after the list resolves, and reaches the
+  // create page exactly as promptly as before.
+  // Read once, at mount, and not on every render. `activeWorkspaceId` is what the redirect
+  // below sets, so a live read would flip this condition false the instant the redirect
+  // starts — while router.replace() is still in flight — and simply move the flash from
+  // before the navigation to during it. Sampling it at mount answers the question this
+  // actually asks, which is why the account came to this page: with nothing selected it is
+  // passing through; with a workspace already active it came here to choose another, and
+  // then the chooser is the correct thing to show.
+  //
+  // The (app) layout gates its children behind a mounted flag, so this component's first
+  // render is a client render with the persisted workspace store already rehydrated.
+  const [arrivedWithoutActiveWorkspace] = useState(() => !activeWorkspaceId);
+
+  const willAutoOpenWorkspace =
+    isAuthenticated &&
+    arrivedWithoutActiveWorkspace &&
+    pendingInvitations.length === 0 &&
+    (workspacesData?.items?.length ?? 0) > 0;
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
@@ -90,7 +131,13 @@ export default function WorkspaceOnboardingGatePage() {
     router.push(`/${workspaceSlug}/home`);
   }
 
-  if (!isAuthenticated || workspacesLoading || pendingInvitationsLoading || joinRequestsLoading) {
+  if (
+    !isAuthenticated ||
+    workspacesLoading ||
+    pendingInvitationsLoading ||
+    joinRequestsLoading ||
+    willAutoOpenWorkspace
+  ) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -112,8 +159,23 @@ export default function WorkspaceOnboardingGatePage() {
             priority
           />
         </div>
-        <div className="text-[12px] text-ink-muted font-medium">
-          {user?.email}
+        {/* Signed in as, and a way back out.
+            This screen showed the email as plain text. Someone who signed in with the wrong
+            account — or whose domain already belongs to a workspace they cannot create over —
+            had no exit from it: no sign-out, no navigation, and every action on the page
+            refused them. The only escape was clearing site data. */}
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] font-medium text-ink-muted">{user?.email}</span>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              router.replace("/login");
+            }}
+            className="rounded-md border border-border px-2 py-1 text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
@@ -256,21 +318,45 @@ export default function WorkspaceOnboardingGatePage() {
               </div>
             </button>
 
-            {/* Create Workspace */}
+            {/*
+              Create Workspace — unavailable on a public email domain.
+
+              The server refuses this unconditionally (WorkspaceService.CreateWorkspaceAsync):
+              founding a workspace claims a domain, and a public domain cannot be claimed by
+              anyone. Presenting the two cards as equals meant a Gmail user picked Create,
+              filled in a form, and only then learned it was never going to work — while the
+              path that IS open to them sat beside it looking no more relevant.
+
+              Stated here rather than enforced here: this is the reason shown to the user, not
+              the check. The server remains the authority.
+            */}
             <button
               type="button"
               onClick={() => router.push("/workspace/create")}
-              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all hover:bg-surface-2 hover:border-hairline-strong shadow-sm hover:shadow-md cursor-pointer h-[160px]"
+              disabled={cannotCreateWorkspace}
+              aria-describedby={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
+              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all shadow-sm h-[160px] enabled:hover:bg-surface-2 enabled:hover:border-hairline-strong enabled:hover:shadow-md enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <div className="flex size-9 items-center justify-center rounded-[6px] bg-primary text-white">
+              <div
+                className={
+                  cannotCreateWorkspace
+                    ? "flex size-9 items-center justify-center rounded-[6px] border border-border bg-surface-2 text-ink-muted"
+                    : "flex size-9 items-center justify-center rounded-[6px] bg-primary text-white"
+                }
+              >
                 <Plus weight="bold" size={18} />
               </div>
               <div>
                 <span className="block text-[15px] font-semibold text-foreground">
                   Create workspace
                 </span>
-                <span className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty">
-                  Create a new workspace for your organization.
+                <span
+                  id={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
+                  className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty"
+                >
+                  {cannotCreateWorkspace
+                    ? `Needs a work email — ${publicDomainLabel} addresses can join an existing workspace by invitation.`
+                    : "Create a new workspace for your organization."}
                 </span>
               </div>
             </button>

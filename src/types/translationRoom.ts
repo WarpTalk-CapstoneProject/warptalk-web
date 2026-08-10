@@ -41,6 +41,12 @@ export interface TranslationRoomDto {
   };
   participantCount?: number;
   isHost?: boolean;
+  /**
+   * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.
+   * An occurrence is an ORDINARY meeting in every other respect — its own code, transcript,
+   * artifacts and billing — so this is only ever used to say "this repeats" in the UI.
+   */
+  seriesId?: string;
 }
 
 /** One Start→Pause (or Start→End) window — "Translation N" in the transcript is this
@@ -97,6 +103,61 @@ export interface CreateTranslationRoomRequest {
   };
   scheduledAt?: string;
   invitedEmails?: string[];
+  /**
+   * WT-327: present means "this is a repeating booking, not a single meeting". The server
+   * derives every occurrence's `scheduledAt` from this rule, so sending BOTH `recurrence` and
+   * `scheduledAt` is refused rather than silently resolved in favour of one of them.
+   */
+  recurrence?: RecurrenceRequest;
+}
+
+/**
+ * WT-327: the daily repeat rule.
+ *
+ * Time is a WALL CLOCK plus an IANA zone, never a UTC instant: "08:00 daily" is a statement
+ * about the clock on the wall in `timeZone`, and it has to stay 08:00 there even if that zone's
+ * rules change. Sending a UTC instant, or a fixed offset, cannot express that.
+ */
+export interface RecurrenceRequest {
+  /** Only "DAILY" is accepted by the server today. The field exists so weekly/monthly need no new shape. */
+  type: "DAILY" | "WEEKLY" | "MONTHLY";
+  /** "HH:mm", 24-hour, zero-padded. The hour picked in the Daily modal. */
+  startTimeLocal: string;
+  /** IANA zone id, e.g. "Asia/Ho_Chi_Minh". Read from the browser, not hardcoded. */
+  timeZone: string;
+  /** "yyyy-MM-dd". Omitted lets the server pick the next occurrence. */
+  startDateLocal?: string;
+  /** "yyyy-MM-dd", INCLUSIVE. Omitted means the server's default span — never "forever". */
+  endDateLocal?: string;
+}
+
+/** WT-327: what a room reports about the series it belongs to. */
+export interface RecurrenceSummaryResponse {
+  seriesId: string;
+  type: string;
+  startTimeLocal: string;
+  timeZone: string;
+  startDateLocal: string;
+  endDateLocal: string;
+  status: "ACTIVE" | "CANCELLED" | "COMPLETED";
+}
+
+/**
+ * WT-327: what POST /translation-rooms returns when the request carried a `recurrence` block.
+ * `firstOccurrence` is an ordinary room, so the dialog's success screen is unchanged.
+ */
+export interface CreateRecurringRoomResponse {
+  series: RecurrenceSummaryResponse;
+  firstOccurrence: TranslationRoomDto;
+  /** How many rooms exist right now; the rest arrive as the server's horizon rolls forward. */
+  materializedOccurrenceCount: number;
+  /** How many the series will have in total. */
+  totalOccurrenceCount: number;
+}
+
+export interface CancelSeriesResult {
+  seriesId: string;
+  cancelledOccurrenceCount: number;
 }
 
 export interface TranslationRoomListResponse {

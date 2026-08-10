@@ -5,7 +5,16 @@ import { notificationService } from "@/services/notification.service";
 import type { NotificationMessageDto } from "@/types/notification";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { CalendarClock, CheckCircle2, CreditCard, Info, Megaphone, Wrench } from "lucide-react";
+import {
+  CalendarClock,
+  CheckCircle2,
+  CreditCard,
+  Info,
+  Megaphone,
+  UserPlus,
+  Video,
+  Wrench,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface NotificationItemProps {
@@ -40,6 +49,14 @@ export function NotificationItem({
         return <Wrench className="h-5 w-5 text-orange-500" />;
       case "MEETING_REMINDER":
         return <CalendarClock className="h-5 w-5 text-blue-500" />;
+      // The two meeting types that reached this switch and fell through to the megaphone:
+      // MEETING_INVITED has been sent since invitations rang the bell, and MEETING_STARTED is
+      // new in WT-341. A meeting that is live now is the one notification worth acting on
+      // immediately, so it gets the loudest colour in the list.
+      case "MEETING_INVITED":
+        return <UserPlus className="h-5 w-5 text-blue-500" />;
+      case "MEETING_STARTED":
+        return <Video className="h-5 w-5 text-emerald-500" />;
       case "BILLING_PAYMENT_SUCCEEDED":
       case "BILLING_PAYMENT_FAILED":
       case "BILLING_PAYMENT_REFUNDED":

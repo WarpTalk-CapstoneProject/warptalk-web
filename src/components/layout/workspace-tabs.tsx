@@ -13,7 +13,6 @@ import {
   House,
   List,
   Plus,
-  Scroll,
   SquaresFour,
   Users,
   Waveform,
@@ -61,16 +60,9 @@ export function buildTabOptions(slug: string): TabOption[] {
       icon: SquaresFour,
     },
     {
-      id: "transcripts",
-      title: "Transcripts",
-      href: buildWorkspacePath(slug, "ai-summaries"),
-      description: "Summaries and retained artifacts",
-      icon: Scroll,
-    },
-    {
       id: "voice-profiles",
       title: "Voice Profiles",
-      href: "/voice-profiles",
+      href: buildWorkspacePath(slug, "voice-profiles"),
       description: "Voice and clone settings",
       icon: Waveform,
     },
@@ -107,7 +99,9 @@ export function buildTabOptions(slug: string): TabOption[] {
 
 export function resolveCurrentTab(pathname: string, options: TabOption[]): WorkspaceTab | null {
   const match = options.find((option) => {
-    if (option.href === "/voice-profiles") return pathname === option.href;
+    // Voice Profiles has no sub-pages, so a prefix match here would claim any route that
+    // merely starts with the same text.
+    if (option.id === "voice-profiles") return pathname === option.href;
     return pathname === option.href || pathname.startsWith(`${option.href}/`);
   });
 

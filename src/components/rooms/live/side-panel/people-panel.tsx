@@ -21,15 +21,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   useKickMeetingParticipant,
+  useMuteMeetingParticipant,
   useTransferMeetingHost,
   useRejectMeetingParticipant,
 } from "@/hooks/use-meeting";
 import {
   useAdmitParticipant,
-  useUpdateParticipantAudio,
 } from "@/hooks/use-translationRooms";
 import type {
   TranslationRoomDto,
@@ -38,6 +38,11 @@ import type {
 import { useParticipants } from "@livekit/components-react";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
+import {
+  PRESENCE_LABELS,
+  participantPresence,
+  type ParticipantPresence,
+} from "@/lib/meeting/room-occupancy";
 
 export function PeoplePanel({
   roomId,
@@ -68,9 +73,13 @@ export function PeoplePanel({
   const lkParticipantIds = new Set(lkParticipants.map((p) => p.identity));
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
+  // WT-308: "who is gone" is the same question the badge answers, so it is asked the same
+  // way. This used to be a second, private status list; keeping two meant they could
+  // disagree, and a roster that hides a status the badge still renders is exactly how the
+  // "Left" arm went unnoticed. Status only — a stale row must not be resurrected into the
+  // list by a LiveKit identity that happens to still be around.
   const visibleParticipants = participants.filter(
-    (participant) =>
-      !["left", "removed", "kicked", "rejected"].includes(participant.status),
+    (participant) => participantPresence(participant.status) !== "left",
   );
 
   // One request for the whole roster instead of one per row.
@@ -151,10 +160,10 @@ function ParticipantRow({
   /** Host-only: spotlight this participant for everyone. Omit (or !isHost) to hide the control. */
   onToggleSpotlight?: (userId: string) => void;
 }) {
-  const updateAudio = useUpdateParticipantAudio(roomId);
   const admit = useAdmitParticipant(roomId);
   const reject = useRejectMeetingParticipant(roomId);
   const kickLivekit = useKickMeetingParticipant(roomId);
+  const muteParticipant = useMuteMeetingParticipant(roomId);
   const transferHost = useTransferMeetingHost(roomId);
 
   const canManage = isHost && !isRoomHost;
@@ -164,14 +173,14 @@ function ParticipantRow({
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [kickScope, setKickScope] = useState<"live" | "record">("live");
 
-  async function runAction(action: "audio" | "admit" | "reject" | "transfer") {
+  async function runAction(action: "mute" | "admit" | "reject" | "transfer") {
     try {
-      if (action === "audio") {
-        await updateAudio.mutateAsync({
-          participantId: participant.id,
-          isTranslationAudioEnabled: !audioEnabled,
-        });
-        toast.success("Participant audio route updated.");
+      if (action === "mute") {
+        // Muted at the SFU, not asked over the data channel: a request is something an
+        // unresponsive or modified client can ignore, and a host asking for silence means
+        // silence. There is no unmute here — only the speaker can turn their own mic back on.
+        await muteParticipant.mutateAsync(participant.userId);
+        toast.success(`${participant.displayName} has been muted.`);
       }
       if (action === "admit") {
         await admit.mutateAsync(participant.id);
@@ -187,7 +196,7 @@ function ParticipantRow({
         setShowTransferDialog(false);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Action failed.");
+      toast.error(getErrorMessage(error, "Action failed."));
     }
   }
 
@@ -227,27 +236,13 @@ function ParticipantRow({
                   External
                 </span>
               )}
-              {isInRoom ? (
-                <span className="rounded bg-green-50 px-1 py-0.5 text-[10px] font-medium text-green-600 border border-green-200">
-                  In Room
-                </span>
-              ) : participant.status === "invited" ? (
-                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">
-                  Not in room
-                </span>
-              ) : participant.status === "waiting" ? (
-                <span className="rounded bg-amber-50 px-1 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-200">
-                  Waiting in Lobby
-                </span>
-              ) : participant.status === "disconnected" ? (
-                <span className="rounded bg-red-50 px-1 py-0.5 text-[10px] font-medium text-red-600 border border-red-200">
-                  Disconnected
-                </span>
-              ) : (
-                <span className="rounded bg-surface-2 px-1 py-0.5 text-[10px] font-medium text-ink-subtle border border-border">
-                  Left
-                </span>
-              )}
+              {/* WT-308: presence comes from the shared resolver, not an inline if/else
+                  chain. The chain this replaced had no CONNECTED arm, so the host's own
+                  row — seeded CONNECTED the moment the room is created — fell through to
+                  the `else` and read "Left" while the host was sitting in the meeting. */}
+              <PresenceBadge
+                presence={participantPresence(participant.status, { isInRoom })}
+              />
             </div>
             <p className="truncate text-[11px] text-ink-subtle capitalize">
               {participant.role.toString().toLowerCase()}
@@ -313,16 +308,18 @@ function ParticipantRow({
                   >
                     <CheckCircle className="h-3.5 w-3.5" />
                   </button>
+                  {/* One direction only. This used to be a "Toggle audio" button that wrote
+                      isTranslationAudioEnabled — whether this person HEARS the translation —
+                      while wearing a microphone icon in the host's control cluster. The host
+                      pressed it, the participant kept talking, and the transcript kept
+                      filling. It mutes now, and says so. */}
                   <button
-                    onClick={() => runAction("audio")}
-                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted"
-                    title="Toggle audio"
+                    onClick={() => runAction("mute")}
+                    disabled={!audioEnabled || muteParticipant.isPending}
+                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                    title={audioEnabled ? "Mute microphone" : "Already muted"}
                   >
-                    {audioEnabled ? (
-                      <MicrophoneSlash className="h-3.5 w-3.5" />
-                    ) : (
-                      <Microphone className="h-3.5 w-3.5" />
-                    )}
+                    <MicrophoneSlash className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => setShowKickDialog(true)}
@@ -432,6 +429,30 @@ function ParticipantRow({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * WT-308: one badge, driven by `ParticipantPresence`. A `Record` rather than a chain of
+ * ternaries, so adding a presence without giving it a style is a type error instead of a
+ * participant silently rendering as somebody who left.
+ */
+const PRESENCE_STYLES: Record<ParticipantPresence, string> = {
+  "in-room": "bg-green-50 text-green-600 border-green-200",
+  connected: "bg-green-50 text-green-600 border-green-200",
+  lobby: "bg-amber-50 text-amber-600 border-amber-200",
+  "not-in-room": "bg-surface-2 text-ink-subtle border-border",
+  disconnected: "bg-red-50 text-red-600 border-red-200",
+  left: "bg-surface-2 text-ink-subtle border-border",
+};
+
+function PresenceBadge({ presence }: { presence: ParticipantPresence }) {
+  return (
+    <span
+      className={`rounded px-1 py-0.5 text-[10px] font-medium border ${PRESENCE_STYLES[presence]}`}
+    >
+      {PRESENCE_LABELS[presence]}
+    </span>
   );
 }
 

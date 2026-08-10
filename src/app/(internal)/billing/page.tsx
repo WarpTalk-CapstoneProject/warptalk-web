@@ -9,6 +9,10 @@ import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart"
 import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { Badge } from "@/components/ui/badge";
+import {
+  AdminPage,
+  AdminPageHeader,
+} from "@/components/admin/admin-page-chrome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -38,7 +42,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { billingService } from "@/services/billing.service";
 import type {
   GroupedCreditTransaction,
@@ -211,7 +215,7 @@ export default function AdminBillingPage() {
     .filter((t) => t.type === "top_up")
     .reduce((s, t) => s + t.amount, 0);
   const totalConsumed = logs
-    .filter((t) => t.type === "consumption")
+    .filter((t) => t.type === "consume")
     .reduce((s, t) => s + t.amount, 0);
   const totalAdjusted = logs
     .filter((t) => t.type === "adjustment")
@@ -387,26 +391,14 @@ export default function AdminBillingPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 pb-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-surface-1 p-6 rounded-xl border border-hairline shadow-linear gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold tracking-tight text-ink">
-              System Billing Overview
-            </h1>
-            <Badge
-              variant="outline"
-              className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold uppercase tracking-wider"
-            >
-              Admin
-            </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Monitor system-wide credits, consumption, and active workspaces.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+    <AdminPage>
+        <AdminPageHeader
+          eyebrow="Platform billing"
+          eyebrowIcon={<Coins size={14} weight="fill" />}
+          title="Billing"
+          description="System-wide credits, consumption, and active workspaces."
+          actions={
+            <>
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -459,11 +451,12 @@ export default function AdminBillingPage() {
             </Button>
           </Link>
           <AdjustCreditModal />
-        </div>
-      </div>
+            </>
+          }
+        />
 
       {/* Metrics */}
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="mt-5 grid gap-4 md:grid-cols-4">
         <AdminMetric
           icon={Coins}
           label="Total Issued Credits"
@@ -494,34 +487,37 @@ export default function AdminBillingPage() {
       </section>
 
       <Tabs defaultValue="overview" className="w-full mt-2">
-        <TabsList className="bg-surface-2 p-1 rounded-lg">
+        {/* Same shape as AdminFilterTabs on the other admin pages: ink fills the selected
+            tab. shadcn Tabs stays because these panels are genuinely tabbed content, not a
+            filter over one list — but it should not look like a fourth control style. */}
+        <TabsList className="h-auto gap-1 rounded-none border-b border-border bg-transparent p-0 py-3">
           <TabsTrigger
             value="overview"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Economics & Analytics
           </TabsTrigger>
           <TabsTrigger
             value="ledger"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Global Transactions
           </TabsTrigger>
           <TabsTrigger
             value="invoices"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Invoices
           </TabsTrigger>
           <TabsTrigger
             value="subscriptions"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Subscriptions
           </TabsTrigger>
           <TabsTrigger
             value="alerts"
-            className="rounded-md text-sm px-4 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
             Fraud Alerts
           </TabsTrigger>
@@ -572,7 +568,7 @@ export default function AdminBillingPage() {
                     <SelectContent>
                       <SelectItem value="ALL">All Types</SelectItem>
                       <SelectItem value="top_up">Top Up</SelectItem>
-                      <SelectItem value="consumption">Consumption</SelectItem>
+                      <SelectItem value="consume">Consumption</SelectItem>
                       <SelectItem value="adjustment">Adjustment</SelectItem>
                     </SelectContent>
                   </Select>
@@ -709,8 +705,9 @@ export default function AdminBillingPage() {
                     </TableRow>
                   ) : (
                     displayedLogs.map((log) => {
-                      const isSystemLog =
-                        log.type === "reserve" || log.type === "refund";
+                      // The billing service emits only consume/top_up/adjustment; there is no reserve or
+                      // refund transaction type, so this was always false.
+                      const isSystemLog = false;
                       const isRaw = false;
                       const isPositive = log.amount > 0;
                       const sign = isPositive ? "+" : "";
@@ -760,12 +757,10 @@ export default function AdminBillingPage() {
                                   ? "bg-surface-3 text-ink uppercase"
                                   : log.type === "top_up"
                                     ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                                    : log.type === "consumption"
+                                    : log.type === "consume"
                                       ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
                                       : log.type === "adjustment"
                                         ? "bg-primary/15 text-primary border border-primary/30"
-                                        : log.type === "reserve"
-                                          ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
                                           : "bg-surface-2 text-ink border-hairline"
                               }`}
                             >
@@ -803,7 +798,7 @@ export default function AdminBillingPage() {
                               : log.balanceAfter.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right pr-4">
-                            {(isGrouped || log.type === "consumption") && (
+                            {(isGrouped || log.type === "consume") && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1125,7 +1120,7 @@ export default function AdminBillingPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPage>
   );
 }
 
@@ -1152,19 +1147,22 @@ function IdBadge({
   type,
   name,
 }: {
-  id: string;
+  // Nullable because of what is fed in here: a credit transaction's workspaceId and userId are
+  // both `Guid?` on the wire, so a user-scoped or system transaction supplies null.
+  id: string | null;
   type: "workspace" | "user" | "system" | "admin";
   name?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
+    if (!id) return;
     navigator.clipboard.writeText(id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const shortId = id.substring(0, 8);
+  const shortId = id ? id.substring(0, 8) : "";
   const displayName = name && name.trim() !== "" ? name : shortId;
 
   return (

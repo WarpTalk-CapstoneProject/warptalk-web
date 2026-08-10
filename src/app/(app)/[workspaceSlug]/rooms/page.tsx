@@ -16,11 +16,12 @@ import { Label } from "@/components/ui/label";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
-import { resolveRoomHost } from "@/lib/room-host";
+import { resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import { LanguageLabel } from "@/components/language/language-label";
+import { meetingLanguageSet } from "@/lib/language/languages";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -32,7 +33,9 @@ import {
   Funnel,
   Keyboard,
   Plus,
+  Repeat,
   SlidersHorizontal,
+  Users,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -63,6 +66,34 @@ function startOfDay(date: Date) {
 function isScheduledOn(room: TranslationRoomDto, day: Date) {
   if (!room.scheduledAt) return false;
   return new Date(room.scheduledAt).toDateString() === day.toDateString();
+}
+
+/**
+ * WT-327: marks a room that is one occurrence of a recurring booking.
+ *
+ * A series is NOT grouped or collapsed in this list, deliberately. Every occurrence is a real,
+ * separate meeting — its own code, its own transcript, its own artifacts, its own billing — and
+ * a collapsed "1 series" row would hide exactly the thing the host came here to check: whether
+ * tomorrow's 8am actually exists. The day timeline could not collapse it at all, since each
+ * occurrence belongs to a different day. So they look like N meetings, because they ARE N
+ * meetings; this badge is the only thing that says they share a rule.
+ */
+function RepeatBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      data-testid="recurring-room-badge"
+      title="Part of a daily repeating schedule"
+      className={
+        compact
+          ? "shrink-0 inline-flex items-center gap-0.5 rounded bg-primary/10 px-1 py-0.5 text-[8px] font-medium text-primary border border-primary/20"
+          : "shrink-0 inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary border border-primary/20"
+      }
+    >
+      <Repeat weight="bold" size={compact ? 8 : 10} aria-hidden />
+      Daily
+      <span className="sr-only">This meeting repeats daily</span>
+    </span>
+  );
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -146,6 +177,7 @@ function LinearRow({
         <span className="text-foreground font-medium truncate block">
           {room.title}
         </span>
+        {room.seriesId && <RepeatBadge />}
         {user?.id && room.hostId !== user.id && (
           <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-500/20">
             Invited
@@ -153,60 +185,71 @@ function LinearRow({
         )}
       </div>
 
+      {/* WT-321(4): every cell in this trailing group is a fixed-width column. It used to be a
+          row of shrink-wrapped pills, so each one started wherever the pill before it happened
+          to end — a longer host name or a third target language shifted the occupancy and date
+          columns sideways, and no two rows lined up. Widths here, not content-derived widths. */}
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
-        <StatusPanel status={room.status} />
+        <div className="flex w-[104px] shrink-0 items-center">
+          <StatusPanel status={room.status} />
+        </div>
 
-        <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <Avatar className="size-5 rounded-full">
+        <div className="flex h-[26px] w-[164px] shrink-0 items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+          <Avatar className="size-5 shrink-0 rounded-full">
             <AvatarImage src={hostAvatar} alt={hostName} />
             <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
               {hostName.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <span className="text-ink-muted pr-1.5">{hostName}</span>
+          <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <LanguageLabel value={room.sourceLanguage || "en-US"} />
-          {room.targetLanguages.length > 1 ? (
-            <>
-              <span className="text-muted-foreground/40 font-bold px-1 text-[13px]">
-                ;
-              </span>
-              <div className="flex items-center">
-                {room.targetLanguages.map((t, i) => (
-                  <div key={t} className="flex items-center">
-                    {i > 0 && (
-                      <span className="text-muted-foreground/40 font-bold text-[13px] px-1">
-                        ;
-                      </span>
-                    )}
-                    <LanguageLabel value={t} showName={false} />
-                  </div>
-                ))}
-                <div className="flex items-center">
-                  <span className="text-muted-foreground/40 font-bold text-[13px] px-1">
-                    ;
+        <div className="flex h-[26px] w-[176px] shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+          {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
+
+              It used to read "English → 🇻🇳 · 🇯🇵", which asserted a relationship the product
+              does not have: every participant picks their own speak and listen language, so
+              there is no meeting-wide source and no direction to point an arrow at. A room
+              only ever declares a SET. The named source was the loudest thing in the chip and
+              it was the one part that meant nothing.
+
+              The trailing "+" is gone too. It was a permanent icon, not an overflow count —
+              it sat after every multi-language room whether or not anything had been hidden,
+              so it punctuated a gap that was never there.
+
+              Flags only, no names: the chip is 176px and two language names do not fit.
+              LanguageLabel keeps the name as the title and aria-label, so the flag is not the
+              only thing carrying the meaning. */}
+          {meetingLanguageSet(room.sourceLanguage, room.targetLanguages).map(
+            (language, index) => (
+              <div key={language} className="flex items-center">
+                {index > 0 && (
+                  <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
+                    ·
                   </span>
-                  <div className="flex items-center justify-center px-1">
-                    <Plus weight="bold" size={12} className="text-ink-muted" />
-                  </div>
-                </div>
+                )}
+                <LanguageLabel value={language} showName={false} />
               </div>
-            </>
-          ) : (
-            <>
-              <span className="text-border mx-0.5 font-bold">→</span>
-              <LanguageLabel value={room.targetLanguages[0]} />
-            </>
+            ),
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        {/* WT-321(3): the bare "0/100" was read as an error code, a progress bar, anything but
+            what it is. It is unchanged in meaning — `useRoomOccupancy` still returns
+            seats-taken over the meeting type's seat cap (WT-274) — it just says so now. A
+            people icon and a title are the whole fix; the number itself was never wrong. */}
+        <div
+          className="flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+          title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
+        >
+          <Users size={13} weight="regular" aria-hidden />
           <span className="tabular-nums">{occupancy.label}</span>
+          <span className="sr-only">
+            participants in the room, out of {occupancy.capacity} seats
+          </span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] min-w-[80px] justify-center">
+        <div className="flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums">
             {formatTimeShort(room.scheduledAt ?? room.createdAt)}
@@ -384,6 +427,7 @@ function DailyTimeline({
                         <span className="font-semibold text-primary text-[12px] leading-tight truncate">
                           {room.title}
                         </span>
+                        {room.seriesId && <RepeatBadge compact />}
                         {user?.id && room.hostId !== user.id && (
                           <span className="shrink-0 rounded bg-amber-500/10 px-1 py-0.5 text-[8px] font-medium text-amber-600 border border-amber-500/20">
                             Invited
@@ -406,13 +450,20 @@ function DailyTimeline({
                     </div>
                     {height >= 40 && (
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">
+                        {/* Same set, same punctuation as the list chip. This block used to
+                            switch between "→" and ";" on the target count, so the two
+                            surfaces described the same room differently — and it repeated the
+                            source among its own targets for exactly the same reason. */}
                         <span className="inline-flex items-center gap-1">
-                          <LanguageLabel value={room.sourceLanguage} />
-                          {room.targetLanguages.length > 1 ? ";" : "→"}
-                          {room.targetLanguages.map((target, index) => (
-                            <span key={target} className="inline-flex items-center gap-1">
-                              {index > 0 ? "," : null}
-                              <LanguageLabel value={target} />
+                          {meetingLanguageSet(
+                            room.sourceLanguage,
+                            room.targetLanguages,
+                          ).map((language, index) => (
+                            <span key={language} className="inline-flex items-center gap-1">
+                              {index > 0 ? (
+                                <span className="text-primary/40">·</span>
+                              ) : null}
+                              <LanguageLabel value={language} showName={false} />
                             </span>
                           ))}
                         </span>
@@ -462,9 +513,14 @@ export default function MeetingsPageLinear() {
     "active" | "scheduled" | "history" | "all"
   >("active");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // workspaceId is what lets the server answer this question for a workspace Owner/Admin at all:
+  // without it the list falls back to host-or-participant-or-invitee and an Admin sees an empty
+  // page for a workspace that has meetings in it. It also stops this workspace-scoped screen from
+  // listing another workspace's rooms.
   const roomList = useTranslationRooms({
     pageSize: 100,
     status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
+    workspaceId: activeWorkspaceId ?? undefined,
   });
   const setCreateRoomModalOpen = useUIStore(
     (state) => state.setCreateRoomModalOpen,

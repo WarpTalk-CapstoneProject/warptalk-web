@@ -1,5 +1,5 @@
-import { getFlagEmoji } from "@/lib/language-flag";
-import { getLanguageName } from "@/lib/languages";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { getLanguageName } from "@/lib/language/languages";
 import { cn } from "@/lib/utils";
 
 /**

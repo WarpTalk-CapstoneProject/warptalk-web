@@ -31,6 +31,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
+import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
@@ -62,19 +63,6 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-function setAccessTokenCookie(accessToken: string, expiresAt?: string) {
-  let expiresString = "";
-  if (expiresAt) {
-    const expiresDate = new Date(expiresAt);
-    if (!isNaN(expiresDate.getTime())) {
-      expiresString = `; expires=${expiresDate.toUTCString()}`;
-    }
-  }
-
-  const maxAgeString = expiresString ? "" : `; max-age=${7 * 24 * 60 * 60}`;
-  document.cookie = `access_token=${accessToken}; path=/${maxAgeString}${expiresString}; SameSite=Lax`;
-}
-
 function openContactPage() {
   const bridge = window as Window & { warptalk?: ExternalBridge };
 
@@ -97,10 +85,10 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, {
           idToken,
         });
-        const { user, accessToken, refreshToken } = res.data;
+        const { user, accessToken, refreshToken, expiresAt } = res.data;
 
         login(user, accessToken, refreshToken);
-        setAccessTokenCookie(accessToken);
+        setAccessTokenCookie(accessToken, expiresAt);
 
         const isAdmin = user.roles?.some(
           (role: string) => role.toLowerCase() === "admin",
@@ -273,10 +261,10 @@ function LoginContent() {
         email: data.email,
         password: data.password,
       });
-      const { user, accessToken, refreshToken } = res.data;
+      const { user, accessToken, refreshToken, expiresAt } = res.data;
 
       login(user, accessToken, refreshToken);
-      setAccessTokenCookie(accessToken);
+      setAccessTokenCookie(accessToken, expiresAt);
 
       const isAdmin = user.roles?.some(
         (role: string) => role.toLowerCase() === "admin",
@@ -378,7 +366,7 @@ function LoginContent() {
 
               <header data-welcome-title className="mb-8">
                 <BlurText
-                  text="Chào mừng bạn quay trở lại Warptalk"
+                  text="Welcome back to WarpTalk"
                   animateBy="words"
                   direction="top"
                   threshold={0.1}
@@ -402,7 +390,7 @@ function LoginContent() {
                   className="h-14 min-w-[150px] rounded-[12px] border border-white/14 bg-white/[0.08] px-7 text-base font-semibold text-white/60 backdrop-blur-md transition hover:bg-white/14 hover:text-white"
                   data-welcome-action
                 >
-                  Liên hệ với chúng tôi
+                  Contact us
                 </button>
               </div>
               </div>
@@ -427,7 +415,7 @@ function LoginContent() {
                 data-login-field
               >
                 <ArrowLeft size={17} />
-                Quay lại
+                Back
               </button>
 
               <div className="mb-7">
@@ -435,7 +423,7 @@ function LoginContent() {
                   Warptalk-V1
                 </p>
                 <h1 className="text-3xl font-semibold tracking-normal text-white">
-                  Đăng nhập
+                  Sign in
                 </h1>
               </div>
 

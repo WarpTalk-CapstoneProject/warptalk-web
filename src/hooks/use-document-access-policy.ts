@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { isExternalViewPolicy } from "@/lib/document-access-policy";
+import { isExternalViewPolicy } from "@/lib/workspace/document-access-policy";
 import type { WorkspaceDocumentAccessPolicyDto, WorkspaceMemberDto } from "@/types/workspace";
 import {
   useWorkspaceDocumentAccessPolicies,

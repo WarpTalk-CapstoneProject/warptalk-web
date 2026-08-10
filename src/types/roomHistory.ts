@@ -15,6 +15,8 @@ export type RoomArtifactStatus = "ready" | "processing" | "expired" | "missing" 
 
 export type RoomConsentStatus = "granted" | "limited" | "declined" | "not_required";
 
+import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
+
 export interface RoomHistoryParticipant {
   id: string;
   userId: string;
@@ -56,6 +58,10 @@ export interface TranslationRoomSummaryArtifact {
   insufficientData?: boolean;
   /** Per-target-language translated section, when the room has more than one target language. */
   translations?: Record<string, MeetingSummarySection>;
+  /** Which template produced this summary; absent on pre-template summaries. */
+  templateKey?: string;
+  /** Normalised sections carrying their citations — what the Summary tab renders. */
+  sections?: MeetingSummarySectionView[];
 }
 
 export interface TranscriptExportArtifact {

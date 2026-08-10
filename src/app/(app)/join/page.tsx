@@ -23,10 +23,11 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
-import { getFlagEmoji } from "@/lib/language-flag";
-import { getLanguageName, languagesInScope } from "@/lib/languages";
-import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
-import { completeMeetingJoin } from "@/lib/meeting-join-state";
+import { getErrorMessage } from "@/lib/api/errors";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
+import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -100,6 +101,16 @@ function JoinMeetingContent() {
 
   const normalizedCode = useMemo(() => roomCode.trim(), [roomCode]);
 
+  // The preflight call this screen used to make has no endpoint behind it — there is no
+  // `preflight` route anywhere in translation-room. Every request 404'd, which tripped the
+  // error branch below, which returned a dead end reading "This meeting or workspace is
+  // inactive or no longer exists." So /join?code=<anything> was unreachable, and it blamed
+  // the room for it.
+  //
+  // Joining does not need it: useJoinTranslationRoomByCode validates the code server-side
+  // and returns the real reason when it refuses. The redirect this used to drive
+  // (requiresJoinRequest -> /workspace/join) only ever fired when preflight SUCCEEDED, which
+  // never happened, so nothing that worked is being removed here.
   const joinMutation = useJoinTranslationRoomByCode();
   const canJoin = displayName.trim().length > 1 && normalizedCode.length >= 4;
 
@@ -282,6 +293,7 @@ function JoinMeetingContent() {
         completeMeetingJoin({
           storage: window.sessionStorage,
           roomId: result.room.id,
+          workspaceSlug: activeWorkspaceSlug,
           joinState: {
             displayName: displayName.trim(),
             roomCode: normalizedCode,
@@ -310,12 +322,19 @@ function JoinMeetingContent() {
         toast.error(result.message || "Failed to join room.");
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not join room.",
-      );
+      // WT-201: an AxiosError IS an Error, and its `.message` is only ever the generic
+      // "Request failed with status code 400" — the reason the API actually gave
+      // ("This room has already ended or has been cancelled.") lives in the response body.
+      // getErrorMessage reads the body first, exactly as create-room-dialog already does.
+      toast.error(getErrorMessage(error, "Could not join room."));
     }
   }
 
+  // The "Checking meeting access…" spinner and the "inactive or no longer exists" dead end
+  // that used to sit here were both driven by the preflight call removed above. With no
+  // endpoint behind it the error branch caught every single visit, so this screen only ever
+  // rendered its own failure. Whether the code is good is now answered by the join attempt,
+  // which reports the actual reason.
   return (
     <div className="flex flex-col items-center p-4 sm:p-8 h-full overflow-y-auto">
       {/* Top Header Navigation */}

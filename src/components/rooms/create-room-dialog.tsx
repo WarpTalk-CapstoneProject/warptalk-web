@@ -5,14 +5,16 @@ import {
   ArrowsOutSimple,
   CheckCircle,
   Copy,
+  Repeat,
   SignIn,
   SlidersHorizontal,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import gsap from "gsap";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { meetingTypeByLabel, meetingTypeHighlights } from "@/lib/meeting-types";
+import { meetingTypeByLabel } from "@/lib/meeting/meeting-types";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -22,22 +24,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  useCreateRecurringTranslationRoom,
   useCreateTranslationRoom,
   useTranslationRoom,
   useTranslationRoomInvitations,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceSettings } from "@/hooks/use-workspace";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   normalizeLanguagePolicy,
   reconcileMeetingLanguages,
-} from "@/lib/languages";
+} from "@/lib/language/languages";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  type DailyRecurrenceDraft,
+  detectTimeZone,
+} from "@/lib/meeting/daily-recurrence";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
 import { LanguageSelector } from "./create/language-selector";
+import { PillButton } from "./create/pill-button";
 import { OptionsMenu } from "./create/options-menu";
 import { StartTimePicker } from "./create/start-time-picker";
 import { TemplatePicker } from "./create/template-picker";
@@ -73,7 +81,18 @@ export function CreateRoomDialog() {
     "en-US",
     "vi-VN",
   ]);
-  const [isDaily, setIsDaily] = useState(false);
+  // WT-327: the Daily rule actually in force, or null when this is a one-off meeting. This
+  // replaces the old boolean `isDaily`, which was declared, rendered as a check mark, and then
+  // never read by handleSubmit — the switch was dead, and a boolean could not have carried the
+  // hour anyway.
+  // The rule itself is the only state left. There is no "is the editor open" flag any more:
+  // the editor is the menu row, so being open and being on are the same thing.
+  const [dailyRecurrence, setDailyRecurrence] = useState<DailyRecurrenceDraft | null>(null);
+  // WT-341: whether joiners wait in the lobby for the host — and, since the same setting decides
+  // who may open the meeting, whether a busy host can strand it. null means "not chosen yet", at
+  // which point the workspace's own default fills it in below; only a non-null value is sent, so
+  // a host who never opens the menu still gets the meeting type's server-side default.
+  const [requiresApproval, setRequiresApproval] = useState<boolean | null>(null);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -94,6 +113,7 @@ export function CreateRoomDialog() {
   // was not enough — it expires, and the dialog it refers to stays open behind it.
   const [submitError, setSubmitError] = useState<string | null>(null);
   const createRoomMutation = useCreateTranslationRoom();
+  const createRecurringRoomMutation = useCreateRecurringTranslationRoom();
   const updateRoomMutation = useUpdateTranslationRoomSettings();
 
   // WT-271: the workspace's language policy, so the picker offers only what the server will
@@ -161,6 +181,16 @@ export function CreateRoomDialog() {
   // Deliberately not sent any more: the meeting type decides the seat count server-side
   // (a Virtual Appointment is 1:1, a Live Event is not), and a hardcoded 100 here would
   // override every one of those.
+  // What the toggle shows. Until the host touches it, it mirrors the meeting type's own default
+  // — the exact value the server would seed if nothing were sent — so the control tells the truth
+  // about the meeting rather than showing an invented "off" beside a Webinar that will require
+  // approval. Picking a different type re-seeds; an explicit choice survives the switch.
+  //
+  // WT-343: a workspace-wide default sat between these two for one release. Host approval is a
+  // per-meeting decision and a second place to set it was one place too many.
+  const effectiveRequiresApproval =
+    requiresApproval ?? meetingTypeByLabel(meetingTemplate).defaults.requiresApproval;
+
   const validation = {
     title: title.trim().length > 0,
     languages: meetingLanguages.length > 0,
@@ -188,6 +218,12 @@ export function CreateRoomDialog() {
         // it on the next open — otherwise a forbidden default returns unchecked.
         setAppliedLanguagePolicyKey(null);
         setScheduledAt(null);
+        // WT-327: reset with everything else. The old `isDaily` was left out of this block, so
+        // its check mark survived into the next dialog the user opened.
+        setDailyRecurrence(null);
+        // WT-341: back to "not chosen", so the next dialog seeds from its own meeting type
+        // rather than inheriting the last host's decision — the same reset the Daily rule needed.
+        setRequiresApproval(null);
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
@@ -256,8 +292,11 @@ export function CreateRoomDialog() {
           failSubmit("Please select a workspace before creating a room.");
           return;
         }
-        const room = await createRoomMutation.mutateAsync({
-          workspaceId: activeWorkspaceId,
+        // Everything both paths send. `workspaceId` is deliberately NOT hoisted in here: it is
+        // spelled out at each mutateAsync below so the workspace-scoping contract
+        // (scripts/check-create-room-language-contract.mjs) still reads it where it is sent,
+        // rather than trusting a spread to carry it.
+        const common = {
           title: title.trim(),
           description: description.trim() || undefined,
           // The picked type is what the room actually becomes now — it decides the lobby,
@@ -267,8 +306,43 @@ export function CreateRoomDialog() {
           translationRoomType: meetingTypeByLabel(meetingTemplate).value,
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
-          scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+          // WT-341. Sent only when the host actually chose: RoomSettingsRequest makes every
+          // member nullable precisely so "not sent" stays distinguishable from "sent false", and
+          // that is what lets the meeting type seed the rest. Echoing the type's own default back
+          // at it would work today and quietly pin the value if a type's profile ever changed.
+          settings:
+            requiresApproval === null ? undefined : { requiresApproval },
+        };
+
+        if (dailyRecurrence) {
+          // WT-327: THIS is the line the Daily switch never had. The rule owns every
+          // occurrence's time, so `scheduledAt` is deliberately not sent alongside it — the
+          // server refuses a request carrying both rather than silently discarding one, which
+          // is the failure mode this whole change exists to remove.
+          const result = await createRecurringRoomMutation.mutateAsync({
+            ...common,
+            workspaceId: activeWorkspaceId,
+            recurrence: {
+              type: "DAILY",
+              startTimeLocal: dailyRecurrence.time,
+              // The browser's zone, not a hardcoded one: "8am" means 8am where the host is.
+              timeZone: detectTimeZone(),
+              endDateLocal: dailyRecurrence.endDate,
+            },
+          });
+          setCreatedRoomId(result.firstOccurrence.id);
+          setCreatedRoomCode(result.firstOccurrence.translationRoomCode);
+          toast.success(
+            `Daily meeting scheduled at ${dailyRecurrence.time} — ${result.totalOccurrenceCount} meetings.`,
+          );
+          return;
+        }
+
+        const room = await createRoomMutation.mutateAsync({
+          ...common,
+          workspaceId: activeWorkspaceId,
+          scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
         });
         setCreatedRoomId(room.id);
         setCreatedRoomCode(room.translationRoomCode);
@@ -329,17 +403,13 @@ export function CreateRoomDialog() {
                     value={meetingTemplate}
                     onChange={setMeetingTemplate}
                   />
-                  {/* The type is no longer cosmetic — say out loud what it will configure,
-                      rather than letting the host discover it after the room exists. */}
-                  {!editRoomId &&
-                    meetingTypeHighlights(meetingTemplate).map((highlight) => (
-                      <span
-                        key={highlight}
-                        className="hidden sm:inline rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-ink-muted"
-                      >
-                        {highlight}
-                      </span>
-                    ))}
+                  {/* The type's consequences were spelled out here as a row of chips —
+                      "Approval to join", "Muted on entry", "Records automatically", "No
+                      breakout rooms", "Max 500 participants". Five read-only labels across
+                      the top of a five-field dialog, none of them actionable, and picking a
+                      different type reflowed the whole header. The type name is the control;
+                      what it configures belongs in the picker that changes it, not stacked
+                      beside the workspace name. */}
                 </div>
 
                 <button
@@ -393,20 +463,56 @@ export function CreateRoomDialog() {
                   onLanguagesChange={setMeetingLanguages}
                   allowedTargetLanguages={allowedTargetLanguages}
                 />
-                {scheduledAt && (
+                {/* WT-327: a one-off time and a daily rule are mutually exclusive — the rule
+                    owns every occurrence's time — so only one of the two pills is ever offered. */}
+                {scheduledAt && !dailyRecurrence && (
                   <StartTimePicker
                     scheduledAt={scheduledAt}
                     onChange={setScheduledAt}
                     onRemove={() => setScheduledAt(null)}
                   />
                 )}
+                {/* The rule at a glance, without opening the menu. Clicking it turns Daily
+                    off, which is what the same X on the one-off time pill beside it does —
+                    editing the hour happens where the hour is shown, in the menu row. */}
+                {dailyRecurrence && (
+                  <PillButton
+                    icon={Repeat}
+                    active
+                    onClick={() => setDailyRecurrence(null)}
+                    label={
+                      <span data-testid="daily-pill">
+                        Daily {dailyRecurrence.time}
+                        <X weight="bold" className="ml-1 inline h-3 w-3 align-[-1px]" />
+                      </span>
+                    }
+                  />
+                )}
+                {/* WT-327: the hour is asked for, never assumed — but the asking happens in
+                    the menu row itself now. A modal, and then a panel in this dialog, both
+                    answered "ask for the hour" by opening a second surface over the first. */}
                 <OptionsMenu
-                  hasScheduledAt={!!scheduledAt}
+                  hasScheduledAt={!!scheduledAt || !!dailyRecurrence}
                   onAddScheduledAt={() => setScheduledAt(getDefaultStartTime())}
-                  isDaily={isDaily}
-                  onToggleDaily={() => setIsDaily(!isDaily)}
+                  daily={dailyRecurrence}
+                  onDailyChange={(draft) => {
+                    setDailyRecurrence(draft);
+                    // A one-off time cannot coexist with a rule that decides every
+                    // occurrence's time.
+                    if (draft) setScheduledAt(null);
+                  }}
+                  requiresApproval={effectiveRequiresApproval}
+                  onRequiresApprovalChange={setRequiresApproval}
                 />
               </div>
+
+              {/* WT-327 put a summary here — "Every day at 09:00 · 31 meetings · Asia/Saigon"
+                  — as the guard against the dead switch it replaced. The owner has removed it:
+                  it restated the two fields that set it, and named a zone nobody asked to see.
+                  What stands in its place is that both of those fields are visible and
+                  editable in the Daily row itself, and "Repeat until" bounds the series where
+                  the sentence merely counted it. The `Daily 09:00` pill still reports the rule
+                  in force, so the state cannot be silent — which was the actual WT-327 bug. */}
 
               {/* Footer */}
               <div className="flex items-center justify-between gap-4 px-5 py-3 bg-surface-1/50 shrink-0">
@@ -429,11 +535,13 @@ export function CreateRoomDialog() {
                     disabled={
                       !canSubmit ||
                       createRoomMutation.isPending ||
+                      createRecurringRoomMutation.isPending ||
                       updateRoomMutation.isPending
                     }
                     className="h-[30px] px-3.5 rounded-md bg-ink text-canvas hover:opacity-90 disabled:opacity-40 transition-all font-medium text-[13px] shadow-sm"
                   >
                     {createRoomMutation.isPending ||
+                    createRecurringRoomMutation.isPending ||
                     updateRoomMutation.isPending
                       ? "Saving..."
                       : editRoomId
@@ -516,6 +624,7 @@ export function CreateRoomDialog() {
               </div>
             </div>
           )}
+
         </div>
       </DialogContent>
     </Dialog>

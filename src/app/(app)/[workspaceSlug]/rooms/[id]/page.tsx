@@ -12,37 +12,37 @@ import {
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import {
+  Archive,
   ArrowRight,
   Bold,
   CalendarPlus,
   Check,
   ChevronDown,
-  Clock,
   Code,
   Code2,
+  CheckCircle,
   Copy,
   Download,
   FileText,
+  Pencil,
   Italic,
   Link as LinkIcon,
   List,
   ListOrdered,
   Loader2,
-  MapPin,
-  MoreHorizontal,
   Play,
   Quote,
+  Sparkles,
   Star,
   StopCircle,
   Strikethrough,
   Underline as UnderlineIcon,
-  Users,
-  Video,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -51,6 +51,12 @@ import { toast } from "sonner";
 import { Markdown } from "tiptap-markdown";
 
 import { Button } from "@/components/ui/button";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +69,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { useEndedRoomRecord } from "@/hooks/use-room-history";
+import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
+import {
+  ArtifactsPanel,
+  MeetingRecordTabButton,
+  SummaryPanel,
+  useArtifactDownload,
+} from "@/components/rooms/meeting-record-panels";
+import type { EndedRoomHistoryItem } from "@/types/roomHistory";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import {
   useTranscriptByRoom,
@@ -78,23 +93,24 @@ import {
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
-import { getErrorMessage } from "@/lib/errors";
-import { getLanguageName } from "@/lib/languages";
-import { saveBlobDownload } from "@/lib/download-artifact";
+import { getErrorMessage } from "@/lib/api/errors";
+import { getLanguageName } from "@/lib/language/languages";
+import { saveBlobDownload } from "@/lib/ui/download-artifact";
+import { transcriptService } from "@/services/transcript.service";
 import {
   resolveRoomEntryIntent,
   type RoomEntryIntent,
-} from "@/lib/translation-room-access";
+} from "@/lib/meeting/translation-room-access";
 import {
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
   type TranslationSessionBlock,
-} from "@/lib/transcript-display";
+} from "@/lib/transcript/transcript-display";
 import { cn } from "@/lib/utils";
 import {
   buildGoogleCalendarUrl,
   translationRoomService,
-} from "@/services/translationRoom.service";
+} from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { UserDto } from "@/types/auth";
@@ -149,7 +165,14 @@ export default function RoomInformationPage() {
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
-  const transcriptSegments = segmentsQuery.data?.items || [];
+  // Memoised because jumpToTranscriptMoment depends on it; `?? []` allocates a fresh
+  // array every render, which would rebuild the callback on every keystroke of a
+  // transcript correction.
+  const transcriptSegments = useMemo(
+    () => segmentsQuery.data?.items ?? [],
+    [segmentsQuery.data],
+  );
+  const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
@@ -160,8 +183,38 @@ export default function RoomInformationPage() {
     room.workspaceId !== "00000000-0000-0000-0000-000000000000"
       ? room.workspaceId
       : workspaces?.items?.[0]?.id;
+  // The AI summary and retained files for this meeting. Keyed on the room's own
+  // workspace, and sharing the workspace history query — the only endpoint carrying them.
+  const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
+
+  /**
+   * Scroll the transcript to the moment a summary claim cites, and mark it.
+   *
+   * Resolved to the segment that was BEING SPOKEN at that moment rather than the nearest
+   * one — see findSegmentAtMs. The DOM node is found by segment id rather than held in a
+   * ref map, because the transcript re-renders on every correction and a ref map would go
+   * stale exactly when the host is editing.
+   */
+  const jumpToTranscriptMoment = useCallback(
+    (atMs: number) => {
+      const segment = findSegmentAtMs(transcriptSegments, atMs);
+      if (!segment) {
+        toast.error("That moment is not in the saved transcript.");
+        return;
+      }
+      // The tab switch renders the transcript in the same commit, so the node does not
+      // exist yet on this frame.
+      requestAnimationFrame(() => {
+        const node = document.getElementById(`transcript-segment-${segment.id}`);
+        if (!node) return;
+        node.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightedSegmentId(segment.id);
+      });
+    },
+    [transcriptSegments],
+  );
 
   // WT-274: the ONE read of "who is in this room" on this page. The header chip and the
   // Tracking panel both render off this object; neither one filters a status itself, which is
@@ -209,6 +262,9 @@ export default function RoomInformationPage() {
     isHost,
     statusLabel: statusLabels[room.status],
     scheduledAtLabel: room.scheduledAt ? formatDateTime(room.scheduledAt) : null,
+    // WT-341: a meeting that does not require the host's approval can be opened by anyone
+    // invited to it, so a busy host no longer blocks it. Undefined stays host-only.
+    requiresApproval: room.settings?.requiresApproval,
   });
 
   async function handleRoomEntry() {
@@ -221,7 +277,7 @@ export default function RoomInformationPage() {
         // own start action (rooms/[id]/waiting/page.tsx).
         try {
           await startRoomMutation.mutateAsync(room.id);
-          router.push(`/room/${room.id}`);
+          router.push(liveMeetingPath(workspaceSlug, room.id));
         } catch (error) {
           toast.error(getErrorMessage(error, "Could not start the meeting."));
         }
@@ -237,6 +293,17 @@ export default function RoomInformationPage() {
         useUIStore.getState().setSetupRoomModalOpen(true);
     }
   }
+
+  // Only the host, and only while the room still has settings worth changing — once it is
+  // live or ended, editing it would rewrite a meeting already in progress or already over.
+  const canEditRoom =
+    room.hostId === user?.id &&
+    (room.status === "scheduled" || room.status === "waiting");
+
+  const openRoomEditor = () => {
+    useUIStore.getState().setEditRoomId(room.id);
+    useUIStore.getState().setCreateRoomModalOpen(true);
+  };
 
   const participants = buildUserList(
     room,
@@ -270,88 +337,90 @@ export default function RoomInformationPage() {
             <div className="mb-8 flex flex-col gap-5 border-b border-border/60 pb-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-muted">
-                    <button
-                      type="button"
-                      onClick={() => router.back()}
-                      className="rounded-md px-1.5 py-1 hover:bg-surface-2"
-                    >
-                      Meetings
-                    </button>
-                    <span>/</span>
-                    <span className="truncate text-ink">{room.title}</span>
+                  {/* WT-310(8): no breadcrumb here. The app shell's Topbar already renders
+                      "Meetings / {room title}" for this exact route (see topbar.tsx's
+                      Breadcrumbs, isRoomInformationPage), so this second copy printed the
+                      identical trail one line below the first. The shell's is the one that
+                      stays — it is present on every route, and it links to the list rather
+                      than calling router.back(), which sent the user wherever they came
+                      from instead of to Meetings. */}
+                  {/* The edit control sits on the title because the title is what it edits.
+                      As a labelled outline button it stood in the top-right action stack
+                      directly under "Start meeting", where a secondary action borrowed the
+                      weight of the primary one and read as the second half of a pair. */}
+                  <div className="flex items-center gap-2">
+                    <h1 className="min-w-0 truncate text-[30px] font-semibold leading-tight tracking-tight text-foreground">
+                      {room.title}
+                    </h1>
+                    {canEditRoom ? (
+                      <button
+                        type="button"
+                        aria-label="Edit room"
+                        title="Edit room"
+                        // Visible at rest, not on hover. A hover-revealed control is
+                        // undiscoverable on a touch screen and unfindable by anyone watching
+                        // a demo who is not moving the pointer.
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={openRoomEditor}
+                      >
+                        <Pencil className="size-[18px]" />
+                      </button>
+                    ) : null}
                   </div>
-                  <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-foreground">
-                    {room.title}
-                  </h1>
                   <MeetingPropertiesPills
                     room={room}
                     apiParticipants={apiParticipants}
                     occupancyLabel={occupancy.label}
                     user={user}
+                    onCopy={handleCopy}
                   />
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <StatusChip status={room.status} />
+                <div className="flex w-full max-w-[280px] shrink-0 flex-col items-end gap-2">
+                  {/* WT-310(10): the status is rendered once, by MeetingPropertiesPills under
+                      the title. A second StatusChip stood here, so the same room announced
+                      "Waiting" twice on one screen in two different visual languages — a grey
+                      chip up here and an amber pill down there — and a reader had no way to
+                      know which was authoritative. The pills row keeps it: it is the same
+                      StatusPanel the meetings list row uses, so the state a room shows in the
+                      list is the state it shows when opened. */}
                   {/* WT-197: the primary action lives here, at the top of the page, next to the
                       title. It used to exist only in "Meeting access" — the last panel of a
                       sticky, independently scrolling right column — so it sat below the fold
                       with nothing on screen hinting that more content existed. A mentor lost
-                      ~40 minutes hunting for it during a live demo. The panel keeps its copy of
-                      the control; both render the same `entryIntent`. */}
+                      ~40 minutes hunting for it during a live demo.
+
+                      WT-330: and now it lives here ONLY. WT-197 promoted a second copy rather
+                      than moving the control, so the page offered the same lobby action twice —
+                      once here and once at the bottom of the right column, where the original
+                      still sat below the fold behind that column's own scrollbar. Two buttons
+                      firing the same handler is not redundancy a reader can benefit from; it
+                      reads as two different actions. The panel copy is gone, and `helpText`
+                      came up here with it so the explanation stays attached to the control it
+                      explains. */}
                   {entryIntent.isActionable ? (
-                    <RoomEntryButton
-                      intent={entryIntent}
-                      pending={startRoomMutation.isPending}
-                      onActivate={handleRoomEntry}
-                      className="h-9 px-4"
-                    />
-                  ) : null}
-                  {room.hostId === user?.id &&
-                  (room.status === "scheduled" || room.status === "waiting") ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-[12px]"
-                      onClick={() => {
-                        useUIStore.getState().setEditRoomId(room.id);
-                        useUIStore.getState().setCreateRoomModalOpen(true);
-                      }}
-                    >
-                      Edit room
-                    </Button>
+                    <>
+                      <RoomEntryButton
+                        intent={entryIntent}
+                        pending={startRoomMutation.isPending}
+                        onActivate={handleRoomEntry}
+                        className="h-9 px-4"
+                      />
+                      {entryIntent.helpText ? (
+                        <p className="text-right text-[12px] leading-relaxed text-muted-foreground">
+                          {entryIntent.helpText}
+                        </p>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               </div>
 
-              <div className="grid gap-2 border-y border-border/60 py-2 text-[13px]">
-                <MetadataRow icon={<Users className="size-4" />} label="People">
-                  <div className="flex flex-wrap gap-1.5">
-                    {participants.length > 0
-                      ? participants
-                          .slice(0, 8)
-                          .map((participant) => (
-                            <UserChip key={participant.id} user={participant} />
-                          ))
-                      : "No participants added"}
-                  </div>
-                </MetadataRow>
-                <MetadataRow icon={<Clock className="size-4" />} label="When">
-                  <span>
-                    {formatDateTime(room.scheduledAt ?? room.createdAt)}
-                  </span>
-                  {room.endedAt ? (
-                    <span className="text-muted-foreground">
-                      - {formatDateTime(room.endedAt)}
-                    </span>
-                  ) : null}
-                </MetadataRow>
-                <MetadataRow icon={<MapPin className="size-4" />} label="Where">
-                  <InlineChip icon={<Video className="size-3.5" />}>
-                    Virtual Audio Bridge
-                  </InlineChip>
-                </MetadataRow>
-              </div>
+              {/* The "When" row stood here, and it is gone with the last of the metadata
+                  rows it belonged to. It was not a pure duplicate: the date pill under the
+                  title showed createdAt and only the month and day, so a scheduled meeting
+                  displayed the day it was created rather than the day it runs, and never the
+                  time. The pill now carries both — scheduledAt when there is one, and the full
+                  timestamp on hover — so this row's last unique fact survives it. */}
             </div>
 
             <RoomNotesEditor
@@ -367,60 +436,81 @@ export default function RoomInformationPage() {
             />
 
             {isEnded || transcriptSegments.length > 0 ? (
-              <MeetingTranscriptArtifact
-                segments={transcriptSegments}
-                baseTime={
-                  transcriptQuery.data?.createdAt ||
-                  room.startedAt ||
-                  room.createdAt
+              <MeetingRecordSection
+                endedRecord={endedRecordQuery.data ?? null}
+                onRecordChanged={() => void endedRecordQuery.refetch()}
+                onJumpToMoment={jumpToTranscriptMoment}
+                transcript={
+                  <MeetingTranscriptArtifact
+                    segments={transcriptSegments}
+                    baseTime={
+                      transcriptQuery.data?.createdAt ||
+                      room.startedAt ||
+                      room.createdAt
+                    }
+                    roomId={room.id}
+                    currentUserId={user?.id}
+                    isEnded={isEnded}
+                    onCopy={handleCopy}
+                    transcriptId={transcriptQuery.data?.id}
+                    transcriptStatus={transcriptQuery.data?.status}
+                    canEdit={isHost}
+                    onSegmentsChanged={() => void segmentsQuery.refetch()}
+                    highlightedSegmentId={highlightedSegmentId}
+                  />
                 }
-                roomId={room.id}
-                currentUserId={user?.id}
-                isEnded={isEnded}
-                onCopy={handleCopy}
+                transcriptCount={transcriptSegments.length}
               />
             ) : null}
 
           </main>
 
-          <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
-            <PropertyPanel title="Tracking">
+          {/* WT-330(8): the column no longer scrolls as one block. It used to be a single
+              `xl:overflow-y-auto`, so the ONE thing that grows with the data — the invitee
+              list — drove the scroll of everything: six invitees already pushed `Actions`
+              215px below the fold, and thirty buried it entirely. The controls a host came
+              here for cannot be a function of how many people were invited.
+
+              Now the column is a flex stack that fits the viewport: `Actions` and `Meeting
+              access` are fixed-size and pinned (`shrink-0`), and `Tracking` takes whatever
+              height is left and scrolls its own body. That gives the roster a bounded area
+              that GROWS on a tall screen instead of a hardcoded max-height that is wrong on
+              every screen but one. Below `xl` the column is a normal stacked block and the
+              page scrolls, so none of this applies — hence every class here is `xl:`. */}
+          <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-hidden">
+            <PropertyPanel
+              title="Tracking"
+              className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden"
+              /* The one bounded scroll region. `overscroll-auto` is the default, restated:
+                 chaining is what keeps this from trapping the page's scroll at its end. */
+              bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-auto xl:pr-1"
+            >
               <PropertyLine label="Organizer">
                 <UserChip user={hostUser} compact />
               </PropertyLine>
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-                  <ChevronDown className="size-3" />
-                  Attendees: {occupancy.label}
-                </div>
-                <div className="space-y-1.5">
-                  {seatedIdentities.length > 0 ? (
-                    seatedIdentities.map((participant) => (
-                      <UserRow key={participant.id} user={participant} />
-                    ))
-                  ) : (
-                    <p className="text-[12px] text-muted-foreground">
-                      Nobody is in the room right now.
-                    </p>
-                  )}
-                </div>
-              </div>
+              {/* WT-330(5): "Attendees" here was the page's only use of that word — every other
+                  surface, and the seat rule itself, says "participants". One word, everywhere. */}
+              <CollapsibleSection label={`Participants: ${occupancy.label}`}>
+                {seatedIdentities.length > 0 ? (
+                  seatedIdentities.map((participant) => (
+                    <UserRow key={participant.id} user={participant} />
+                  ))
+                ) : (
+                  <p className="text-[12px] text-muted-foreground">
+                    Nobody is in the room right now.
+                  </p>
+                )}
+              </CollapsibleSection>
               {notInRoom.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-                    <ChevronDown className="size-3" />
-                    Invited: {notInRoom.length}
-                  </div>
-                  <div className="space-y-1.5">
-                    {notInRoom.map((participant) => (
-                      <UserRow key={participant.id} user={participant} />
-                    ))}
-                  </div>
-                </div>
+                <CollapsibleSection label={`Invited: ${notInRoom.length}`}>
+                  {notInRoom.map((participant) => (
+                    <UserRow key={participant.id} user={participant} />
+                  ))}
+                </CollapsibleSection>
               ) : null}
             </PropertyPanel>
 
-            <PropertyPanel title="Actions">
+            <PropertyPanel title="Actions" className="xl:shrink-0">
               <ActionButton
                 icon={<Copy className="size-3.5" />}
                 onClick={() =>
@@ -466,30 +556,10 @@ export default function RoomInformationPage() {
               ) : null}
             </PropertyPanel>
 
-            <PropertyPanel title="Meeting access">
-              <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/70 p-3">
-                <div className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-1 text-ink">
-                  <Video className="size-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold">WarpTalk Session</p>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                    {room.translationRoomCode}
-                  </p>
-                </div>
-              </div>
-              <RoomEntryButton
-                intent={entryIntent}
-                pending={startRoomMutation.isPending}
-                onActivate={handleRoomEntry}
-                className="h-9 w-full justify-between"
-              />
-              {entryIntent.helpText ? (
-                <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-                  {entryIntent.helpText}
-                </p>
-              ) : null}
-            </PropertyPanel>
+            {/* "Meeting access" stood here: a hardcoded "WarpTalk Session" over the room
+                code. The pills row under the title already shows that code and, unlike this
+                panel, lets you click it to copy — so the panel was the same fact with less
+                to do. WT-330 had already taken its entry button; this is the rest. */}
           </aside>
         </div>
       </div>
@@ -527,10 +597,155 @@ function RoomEntryButton({
       disabled={!intent.isActionable || pending}
       onClick={onActivate}
     >
-      {isStart ? <Play className="size-4" /> : null}
+      {/* Filled. This is a lucide icon, which strokes an outline and leaves the interior
+          transparent — a hollow triangle on a solid primary button reads as disabled, and at
+          16px the outline is most of what is left of the shape. `fill="currentColor"` rather
+          than a literal white, so it keeps following the `!text-white` above it. */}
+      {isStart ? <Play fill="currentColor" className="size-4" /> : null}
       {pending ? "Starting..." : intent.label}
       {isStart ? null : <ArrowRight className="size-4" />}
     </Button>
+  );
+}
+
+/**
+ * Everything a meeting left behind, on the meeting's own page.
+ *
+ * The transcript, the AI summary and the retained files used to be a separate Transcripts
+ * page: to read what a meeting decided you left the meeting, found it again in a
+ * workspace-wide queue, and picked a tab. They are three views of one meeting, so they are
+ * three tabs here instead, directly below the description.
+ *
+ * The transcript is passed in rather than rendered here because it is the one tab that is
+ * live during a meeting — it has its own data, its own corrections, and its own actions.
+ */
+function MeetingRecordSection({
+  transcript,
+  transcriptCount,
+  endedRecord,
+  onRecordChanged,
+  onJumpToMoment,
+}: {
+  transcript: React.ReactNode;
+  transcriptCount: number;
+  endedRecord: EndedRoomHistoryItem | null;
+  onRecordChanged: () => void;
+  onJumpToMoment: (atMs: number) => void;
+}) {
+  const [tab, setTab] = useState<"transcript" | "summary" | "artifacts">(
+    "transcript",
+  );
+  const { busyArtifactId, downloadArtifact } =
+    useArtifactDownload(onRecordChanged);
+
+  // Read inside the polling interval, which closes over the render that started it and
+  // would otherwise never see the rewritten summary arrive.
+  const summaryTemplateRef = useRef(endedRecord?.summary?.templateKey);
+  const rewritePollRef = useRef<number | null>(null);
+
+  // In an effect, not during render: writing a ref while rendering is how a component ends
+  // up reading a value React has not committed yet.
+  useEffect(() => {
+    summaryTemplateRef.current = endedRecord?.summary?.templateKey;
+  }, [endedRecord?.summary?.templateKey]);
+
+  useEffect(
+    () => () => {
+      // Leaving the page mid-rewrite must not leave a timer refetching a room nobody is
+      // looking at.
+      if (rewritePollRef.current !== null) window.clearInterval(rewritePollRef.current);
+    },
+    [],
+  );
+
+  // No ended record means the meeting has not finished, so there is nothing to summarise and
+  // no files to retain. Showing two permanently empty tabs would only invite clicking them.
+  const hasRecord = Boolean(endedRecord);
+  const activeTab = hasRecord ? tab : "transcript";
+
+  return (
+    <section className="mt-8 border-b border-border/60 pb-7">
+      <h2 className="text-[15px] font-semibold text-ink">Meeting record</h2>
+
+      {hasRecord ? (
+        <div
+          className="mt-2 mb-4 flex items-center gap-1 border-b border-border"
+          role="tablist"
+          aria-label="Meeting record sections"
+        >
+          <MeetingRecordTabButton
+            active={activeTab === "transcript"}
+            onClick={() => setTab("transcript")}
+            icon={FileText}
+            label="Transcript"
+            count={transcriptCount || undefined}
+          />
+          <MeetingRecordTabButton
+            active={activeTab === "summary"}
+            onClick={() => setTab("summary")}
+            icon={Sparkles}
+            label="Summary"
+          />
+          <MeetingRecordTabButton
+            active={activeTab === "artifacts"}
+            onClick={() => setTab("artifacts")}
+            icon={Archive}
+            label="Artifacts"
+            count={endedRecord?.artifacts.length}
+          />
+        </div>
+      ) : (
+        <div className="mt-3" />
+      )}
+
+      {activeTab === "transcript" ? transcript : null}
+      {activeTab === "summary" && endedRecord ? (
+        <SummaryPanel
+          room={endedRecord}
+          busyArtifactId={busyArtifactId}
+          onDownload={downloadArtifact}
+          // Checking a claim means leaving the summary, so the tab switches with it —
+          // scrolling the transcript while the reader is still looking at the summary
+          // would look like the button did nothing.
+          onJumpToMoment={(atMs) => {
+            setTab("transcript");
+            onJumpToMoment(atMs);
+          }}
+          onRewrite={async (templateKey) => {
+            await translationRoomService.regenerateSummary(
+              endedRecord.id,
+              templateKey,
+            );
+            toast.success("Rewriting the summary…");
+            // The endpoint answers 202 — the summary lands on the artifact later, so this
+            // polls for it rather than trusting the response. It stops the moment the new
+            // shape arrives, and gives up after 90 seconds either way.
+            if (rewritePollRef.current !== null) {
+              window.clearInterval(rewritePollRef.current);
+            }
+            const stopAt = Date.now() + 90_000;
+            rewritePollRef.current = window.setInterval(() => {
+              const arrived = summaryTemplateRef.current === templateKey;
+              if (arrived || Date.now() > stopAt) {
+                if (rewritePollRef.current !== null) {
+                  window.clearInterval(rewritePollRef.current);
+                  rewritePollRef.current = null;
+                }
+                return;
+              }
+              onRecordChanged();
+            }, 4000);
+          }}
+        />
+      ) : null}
+      {activeTab === "artifacts" && endedRecord ? (
+        <ArtifactsPanel
+          artifacts={endedRecord.artifacts}
+          busyArtifactId={busyArtifactId}
+          onDownload={downloadArtifact}
+        />
+      ) : null}
+    </section>
   );
 }
 
@@ -547,6 +762,11 @@ function MeetingTranscriptArtifact({
   currentUserId,
   isEnded,
   onCopy,
+  transcriptId,
+  transcriptStatus,
+  highlightedSegmentId,
+  canEdit,
+  onSegmentsChanged,
 }: {
   segments: TranscriptSegmentDto[];
   baseTime?: string;
@@ -554,6 +774,16 @@ function MeetingTranscriptArtifact({
   currentUserId?: string;
   isEnded: boolean;
   onCopy: (text: string, label: string) => void;
+  /** Needed to correct or finalize; omit and the section stays read-only. */
+  transcriptId?: string;
+  transcriptStatus?: string;
+  /** Set when a summary citation jumped here; the row is marked so the reader can see
+   *  which line the claim came from rather than landing in an anonymous wall of text. */
+  highlightedSegmentId?: string | null;
+  /** Only the host may rewrite what the room recorded. */
+  canEdit?: boolean;
+  /** Refetch after a correction lands, so the line shows what was actually saved. */
+  onSegmentsChanged?: () => void;
 }) {
   const ordered = [...segments].sort(
     (left, right) => left.sequenceOrder - right.sequenceOrder,
@@ -565,6 +795,67 @@ function MeetingTranscriptArtifact({
   const totalCount = grouped.length;
   const base = baseTime ? new Date(baseTime) : null;
 
+  // Correcting the transcript used to live on a separate Transcripts page, which showed the
+  // same segments for the same room under its own queue and its own tabs. The room already
+  // owns everything that page needed — the meeting, the host, the segments — so the editing
+  // moved to where the transcript is read rather than the reading moving to where it was
+  // edited.
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
+  const [draftText, setDraftText] = useState("");
+  const [isSavingCorrection, setIsSavingCorrection] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+
+  const isFinalized = transcriptStatus === "finalized";
+  const canCorrect = Boolean(canEdit && transcriptId) && !isFinalized;
+
+  async function saveCorrection(segment: TranscriptSegmentDto) {
+    const correctedText = draftText.trim();
+    // Closing without a change is not a correction — posting one would record an edit that
+    // changed nothing and count against the transcript's revision history.
+    if (!transcriptId || !correctedText || correctedText === segment.originalText.trim()) {
+      setEditingSegmentId(null);
+      return;
+    }
+
+    setIsSavingCorrection(true);
+    try {
+      await transcriptService.correctSegment(transcriptId, segment.id, {
+        originalText: segment.originalText,
+        correctedText,
+        correctionType: "stt",
+        triggeredRetranslation: false,
+      });
+      onSegmentsChanged?.();
+      setEditingSegmentId(null);
+      toast.success("Transcript correction saved.");
+    } catch {
+      toast.error("Could not save the transcript correction.");
+    } finally {
+      setIsSavingCorrection(false);
+    }
+  }
+
+  async function finalizeTranscript() {
+    if (!transcriptId) return;
+    setIsFinalizing(true);
+    try {
+      await transcriptService.finalize(transcriptId);
+      onSegmentsChanged?.();
+      toast.success("Transcript finalized.");
+    } catch {
+      toast.error("Could not finalize the transcript.");
+    } finally {
+      setIsFinalizing(false);
+    }
+  }
+
+  function downloadTranscript() {
+    saveBlobDownload(
+      new Blob([assembleTranscriptText(blocks)], { type: "text/plain;charset=utf-8" }),
+      `transcript-${roomId}.txt`,
+    );
+  }
+
   function segmentTime(startMs: number) {
     if (!base) return "";
     const stamp = new Date(base);
@@ -573,26 +864,52 @@ function MeetingTranscriptArtifact({
   }
 
   return (
-    <section className="mt-8 border-b border-border/60 pb-7">
+    /* The heading and the section frame belong to MeetingRecordSection now — this is the
+       Transcript tab, not a section of its own. The action row stays: copy, download and
+       finalize act on the transcript specifically, not on the record as a whole. */
+    <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-[15px] font-semibold text-ink">
-            Meeting transcript
-          </h2>
           <InlineChip icon={<FileText className="size-3.5" />}>
             {isEnded ? "Saved" : "Live"} · {totalCount}{" "}
             {totalCount === 1 ? "entry" : "entries"}
           </InlineChip>
         </div>
         {totalCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => onCopy(assembleTranscriptText(blocks), "Transcript")}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <Copy className="size-3.5" />
-            Copy
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onCopy(assembleTranscriptText(blocks), "Transcript")}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <Copy className="size-3.5" />
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={downloadTranscript}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <Download className="size-3.5" />
+              Download
+            </button>
+            {canCorrect ? (
+              <button
+                type="button"
+                onClick={() => void finalizeTranscript()}
+                disabled={isFinalizing}
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+              >
+                <CheckCircle className="size-3.5" />
+                {isFinalizing ? "Finalizing…" : "Finalize"}
+              </button>
+            ) : null}
+            {/* Said out loud, because after finalizing the pencils simply stop appearing and
+                that on its own reads as the page having broken. */}
+            {isFinalized ? (
+              <InlineChip icon={<CheckCircle className="size-3.5" />}>Finalized</InlineChip>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -603,7 +920,18 @@ function MeetingTranscriptArtifact({
             : "The transcript is saved here as the meeting is transcribed."}
         </div>
       ) : (
-        <div className="space-y-1 rounded-xl border border-border bg-surface-1 p-4">
+        /* The transcript is the one thing on this page with no upper bound — an hour of
+           talking is hundreds of entries, and letting it set the page height pushed every
+           section below it, and the page's own scrollbar, out of reach. It scrolls inside
+           its own frame instead. Capped against the viewport rather than a fixed pixel
+           height so it does not swallow a short laptop screen whole.
+
+           Scroll chaining is left at its default, as WT-330(8) requires of every inner
+           scroller here — and requires by name, so do not write the containment utility
+           into this comment either: check-room-surface-contract matches the file's text,
+           not its markup, and the word alone fails it. Containing the scroll would stop
+           the page at the end of the transcript, which is the trap that ticket removed. */
+        <div className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4">
           {blocks.map((block) => (
             <div key={block.sessionNumber} className="space-y-2">
               {showSessionLabels ? (
@@ -614,7 +942,14 @@ function MeetingTranscriptArtifact({
                 return (
                   <div
                     key={segment.id}
-                    className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
+                    id={`transcript-segment-${segment.id}`}
+                    className={`flex scroll-mt-4 rounded-md transition-colors ${
+                      isSelf ? "justify-end" : "justify-start"
+                    } ${
+                      highlightedSegmentId === segment.id
+                        ? "bg-primary/10 ring-1 ring-primary/30"
+                        : ""
+                    }`}
                   >
                     <div className={`flex max-w-[75%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
                       <div className={`flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground ${isSelf ? "flex-row-reverse" : ""}`}>
@@ -624,8 +959,35 @@ function MeetingTranscriptArtifact({
                         <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
                         {base ? <span>{segmentTime(segment.startTimeMs)}</span> : null}
                       </div>
+                      {editingSegmentId === segment.id ? (
+                        <div className="w-full min-w-0 space-y-2 rounded-xl border border-primary/40 bg-surface-1 p-2.5">
+                          <textarea
+                            value={draftText}
+                            onChange={(event) => setDraftText(event.target.value)}
+                            aria-label={`Edit transcript line by ${segment.speakerName || "unknown speaker"}`}
+                            className="min-h-24 w-full resize-y rounded-md border border-border bg-canvas px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingSegmentId(null)}
+                              className="rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingCorrection || !draftText.trim()}
+                              onClick={() => void saveCorrection(segment)}
+                              className="rounded-md bg-ink px-2.5 py-1 text-[12px] font-medium text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
+                            >
+                              {isSavingCorrection ? "Saving…" : "Save correction"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
                       <div
-                        className={`rounded-2xl px-3 py-2 ${
+                        className={`group/line relative rounded-2xl px-3 py-2 ${canCorrect ? "pr-9" : ""} ${
                           isSelf
                             ? "rounded-tr-sm bg-primary"
                             : "rounded-tl-sm border border-border bg-white"
@@ -634,7 +996,24 @@ function MeetingTranscriptArtifact({
                         <p className={`text-[13px] leading-6 ${isSelf ? "text-white" : "text-ink-subtle"}`}>
                           {segment.originalText}
                         </p>
+                        {canCorrect ? (
+                          <button
+                            type="button"
+                            aria-label="Edit transcript line"
+                            title="Edit this line"
+                            onClick={() => {
+                              setEditingSegmentId(segment.id);
+                              setDraftText(segment.originalText);
+                            }}
+                            className={`absolute right-1 top-1 grid size-7 place-items-center rounded-md opacity-60 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 ${
+                              isSelf ? "text-white hover:bg-white/20" : "hover:bg-surface-2"
+                            }`}
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                        ) : null}
                       </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -643,7 +1022,7 @@ function MeetingTranscriptArtifact({
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -1241,43 +1620,38 @@ function getHostUser(
   );
 }
 
-function MetadataRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: ReactNode;
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid min-h-9 grid-cols-[28px_90px_minmax(0,1fr)] items-center gap-2">
-      <div className="flex justify-center text-muted-foreground">{icon}</div>
-      <div className="text-[12px] text-muted-foreground">{label}</div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function PropertyPanel({
   title,
   children,
+  className,
+  bodyClassName,
 }: {
   title: string;
   children: ReactNode;
+  /** WT-330(8): lets the Tracking panel flex while Actions / Meeting access stay fixed. */
+  className?: string;
+  /** WT-330(8): lets the Tracking panel's body become the one bounded scroll region. */
+  bodyClassName?: string;
 }) {
   return (
-    <div className="rounded-[10px] border border-border bg-surface-1 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-      <div className="mb-3 flex items-center justify-between">
+    <div
+      className={cn(
+        "rounded-[10px] border border-border bg-surface-1 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+        className,
+      )}
+    >
+      {/* WT-310(7): the caret and the overflow dots are gone. Neither was a button — they were
+          bare icons with no handler, no menu and no state — but they are the exact glyphs the
+          rest of the app uses for "opens a menu", so "Tracking ⌄" and "Actions ⌄ ⋯" read as
+          three controls per panel that did nothing when clicked. A panel heading that is only
+          a heading is written as only a heading. */}
+      <div className="mb-3 flex shrink-0 items-center justify-between">
         <span className="flex items-center gap-1 px-0.5 text-[12px] font-medium text-muted-foreground">
           {title}
-          <ChevronDown className="size-3" />
         </span>
-        <MoreHorizontal className="size-4 text-muted-foreground" />
       </div>
-      <div className="space-y-3">{children}</div>
+      <div className={cn("space-y-3", bodyClassName)}>{children}</div>
     </div>
   );
 }
@@ -1294,6 +1668,51 @@ function PropertyLine({
       <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
       {children}
     </div>
+  );
+}
+
+/**
+ * WT-330(6): a Tracking-panel section that actually opens and closes.
+ *
+ * The two headings this replaces drew a static `ChevronDown` and wired nothing to it. The
+ * chevron is the app's own "this opens" glyph, so a reader who clicked it and got nothing had
+ * been told the panel was broken. Now the whole heading is the trigger, the chevron rotates
+ * with `data-panel-open`, and `aria-expanded` is handled by the primitive.
+ *
+ * Open by default: the roster is the reason the panel exists, so collapsing is the deliberate
+ * act, not the resting state.
+ *
+ * WT-330(8): note what is deliberately NOT here — a `max-h` on the list.
+ *
+ * The growing list does need a bounded scroll area, but bounding it HERE was the wrong place.
+ * A hardcoded height (210px, say) is wrong on every screen but the one it was measured on, and
+ * with two of these sections plus ~500px of fixed panel chrome it still could not fit a 720px
+ * viewport — `Actions` stayed below the fold. Worse, a scroll box inside the panel's own
+ * scroll box is two nested scrollbars, which is the trap this was supposed to avoid.
+ *
+ * So the bound lives one level up: the Tracking panel's body is the single scroll region, and
+ * it FLEXES — it takes whatever height the viewport leaves after the pinned Actions and
+ * Meeting access panels, so it grows on a tall screen instead of being frozen at one guess.
+ * Collapsing one section hands its space to the other, which is a real reason for item 6's
+ * collapsing to exist rather than being decoration.
+ */
+function CollapsibleSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Collapsible defaultOpen className="space-y-2">
+      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md py-0.5 text-left text-[12px] font-medium text-muted-foreground transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
+        <ChevronDown className="size-3 shrink-0 transition-transform duration-200 group-data-[panel-open]:rotate-0 -rotate-90" />
+        {label}
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        <div className="space-y-1.5">{children}</div>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 }
 
@@ -1387,26 +1806,6 @@ function AddToCalendarMenu({ room }: { room: TranslationRoomDto }) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function StatusChip({ status }: { status: TranslationRoomStatus }) {
-  return (
-    <InlineChip icon={<StatusDot status={status} />}>
-      {statusLabels[status]}
-    </InlineChip>
-  );
-}
-
-function StatusDot({ status }: { status: string }) {
-  const isLive = status === "in_progress";
-  return (
-    <span
-      className={cn(
-        "size-2 rounded-full",
-        isLive ? "bg-blue-500" : "bg-muted-foreground/50",
-      )}
-    />
   );
 }
 

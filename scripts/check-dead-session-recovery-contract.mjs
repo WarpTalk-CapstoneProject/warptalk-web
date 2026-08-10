@@ -25,14 +25,13 @@ const responseInterceptor = client.slice(
 const checks = [
   [
     "a dead session is ended in one shared place",
-    client.includes("function endDeadSession()")
+    client.includes("function endDeadSession(")
       && client.includes("useAuthStore.getState().logout()"),
   ],
   [
     "only a server rejection (4xx) counts as a dead session",
     client.includes("function isRefreshRejectedByServer")
-      && client.includes("status >= 400")
-      && client.includes("status < 500"),
+      && client.includes("status < 400 || status >= 500"),
   ],
   [
     "the redirect cannot loop on the login page itself",
@@ -46,16 +45,30 @@ const checks = [
   ],
   [
     "the request interceptor ends the session on that failure",
-    requestInterceptor.includes("endDeadSession()"),
+    requestInterceptor.includes("endDeadSession(describeRefreshFailure(error))"),
   ],
   [
     "the response interceptor still ends the session on a failed retry refresh",
     responseInterceptor.includes("isRefreshRejectedByServer")
-      && responseInterceptor.includes("endDeadSession()"),
+      && responseInterceptor.includes("endDeadSession(describeRefreshFailure(refreshError))"),
   ],
   [
     "a network error or 5xx does not log the user out",
     client.includes("Do not log out on network errors or 5xx server errors"),
+  ],
+  // WT-344: users were signed out of production by our own rolling deploys. The auth service
+  // answered a transient database failure with 400, and "any 4xx" read that as a verdict on the
+  // refresh token. These two pin the client half of the fix.
+  [
+    "a 4xx that is not about the token does not log the user out",
+    client.includes("const TRANSIENT_REFRESH_STATUSES = new Set([404, 408, 425, 429])")
+      && client.includes("!TRANSIENT_REFRESH_STATUSES.has(status)"),
+  ],
+  [
+    "the teardown breadcrumb names the cause instead of erasing it",
+    client.includes("function describeRefreshFailure")
+      && client.includes("`client-declared-session-dead(${cause})`")
+      && client.includes('return `http-${error.response.status}`'),
   ],
 ];
 
