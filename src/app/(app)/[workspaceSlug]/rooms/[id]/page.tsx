@@ -262,6 +262,9 @@ export default function RoomInformationPage() {
     isHost,
     statusLabel: statusLabels[room.status],
     scheduledAtLabel: room.scheduledAt ? formatDateTime(room.scheduledAt) : null,
+    // WT-341: a meeting that does not require the host's approval can be opened by anyone
+    // invited to it, so a busy host no longer blocks it. Undefined stays host-only.
+    requiresApproval: room.settings?.requiresApproval,
   });
 
   async function handleRoomEntry() {

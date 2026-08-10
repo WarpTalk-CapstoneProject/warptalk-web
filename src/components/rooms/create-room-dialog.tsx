@@ -88,6 +88,11 @@ export function CreateRoomDialog() {
   // The rule itself is the only state left. There is no "is the editor open" flag any more:
   // the editor is the menu row, so being open and being on are the same thing.
   const [dailyRecurrence, setDailyRecurrence] = useState<DailyRecurrenceDraft | null>(null);
+  // WT-341: whether joiners wait in the lobby for the host — and, since the same setting decides
+  // who may open the meeting, whether a busy host can strand it. null means "not chosen yet", at
+  // which point the workspace's own default fills it in below; only a non-null value is sent, so
+  // a host who never opens the menu still gets the meeting type's server-side default.
+  const [requiresApproval, setRequiresApproval] = useState<boolean | null>(null);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -176,6 +181,14 @@ export function CreateRoomDialog() {
   // Deliberately not sent any more: the meeting type decides the seat count server-side
   // (a Virtual Appointment is 1:1, a Live Event is not), and a hardcoded 100 here would
   // override every one of those.
+  // WT-341: what the toggle shows. Until the host touches it, it mirrors the meeting type's own
+  // default — the exact value the server would seed if nothing were sent — so the control tells
+  // the truth about the meeting instead of showing an invented "off" beside a room that will
+  // require approval. Picking a different type re-seeds it; an explicit choice survives the
+  // switch, because it was a choice.
+  const effectiveRequiresApproval =
+    requiresApproval ?? meetingTypeByLabel(meetingTemplate).defaults.requiresApproval;
+
   const validation = {
     title: title.trim().length > 0,
     languages: meetingLanguages.length > 0,
@@ -206,6 +219,9 @@ export function CreateRoomDialog() {
         // WT-327: reset with everything else. The old `isDaily` was left out of this block, so
         // its check mark survived into the next dialog the user opened.
         setDailyRecurrence(null);
+        // WT-341: back to "not chosen", so the next dialog seeds from its own meeting type
+        // rather than inheriting the last host's decision — the same reset the Daily rule needed.
+        setRequiresApproval(null);
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
@@ -289,6 +305,12 @@ export function CreateRoomDialog() {
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+          // WT-341. Sent only when the host actually chose: RoomSettingsRequest makes every
+          // member nullable precisely so "not sent" stays distinguishable from "sent false", and
+          // that is what lets the meeting type seed the rest. Echoing the type's own default back
+          // at it would work today and quietly pin the value if a type's profile ever changed.
+          settings:
+            requiresApproval === null ? undefined : { requiresApproval },
         };
 
         if (dailyRecurrence) {
@@ -477,6 +499,8 @@ export function CreateRoomDialog() {
                     // occurrence's time.
                     if (draft) setScheduledAt(null);
                   }}
+                  requiresApproval={effectiveRequiresApproval}
+                  onRequiresApprovalChange={setRequiresApproval}
                 />
               </div>
 

@@ -31,12 +31,22 @@ export function canJoinTranslationRoom(
  * telling them "you'll wait in the lobby until the host opens this meeting" is telling them to
  * wait for themselves. Callers that know the viewer's host identity must pass it; omitting it
  * keeps the pre-WT-273 behaviour for viewers whose identity genuinely is not resolved yet.
+ *
+ * WT-341: and except everyone else too, when the meeting does not require the host's approval to
+ * join. There is then nothing for the lobby to hold anyone for — no approval is pending, and the
+ * server now lets any invited participant open the room. Sending them to a lobby that is waiting
+ * on a decision nobody has to make is how a busy host used to strand a whole meeting.
+ *
+ * `requiresApproval` is deliberately treated as TRUE when it is undefined. An older room, or a
+ * payload that predates the field, must keep the host-opens-it behaviour rather than silently
+ * become startable by anyone because a property was missing.
  */
 export function shouldEnterWaitingRoom(
   status: TranslationRoomStatus,
-  options?: { isHost?: boolean },
+  options?: { isHost?: boolean; requiresApproval?: boolean },
 ): boolean {
   if (options?.isHost) return false;
+  if (options?.requiresApproval === false) return false;
   return NOT_STARTED_ROOM_STATUSES.has(status);
 }
 
@@ -44,9 +54,17 @@ export function shouldEnterWaitingRoom(
 export type RoomEntryMode =
   /** Terminal status — nothing to enter. */
   | "unavailable"
-  /** Host of a room that has not started: they open it, they do not queue for it. */
+  /**
+   * A room that has not started, and this viewer may open it — the host always, and (WT-341)
+   * anyone else when the meeting does not require the host's approval. They open it; they do not
+   * queue for it.
+   *
+   * Still spelled `host_start` rather than renamed: the string is asserted by name in
+   * scripts/check-room-surface-contract.mjs and in the unit tests, and a rename would be a
+   * cosmetic diff across three files that changes no behaviour.
+   */
   | "host_start"
-  /** Not started, and this viewer is not the host: the lobby is where they wait. */
+  /** Not started, approval-gated, and this viewer is not the host: the lobby is where they wait. */
   | "lobby"
   /** Live: straight through device setup into the call. */
   | "join";
@@ -71,6 +89,12 @@ export function resolveRoomEntryIntent(input: {
   statusLabel: string;
   /** Formatted start time, when the room is scheduled. Used only for the lobby copy. */
   scheduledAtLabel?: string | null;
+  /**
+   * WT-341: the room's own `settings.requiresApproval`. Undefined means "assume it does" — see
+   * shouldEnterWaitingRoom. When false, a non-host gets the same "Start meeting" action the host
+   * gets, because the server now accepts it from them.
+   */
+  requiresApproval?: boolean;
 }): RoomEntryIntent {
   if (!canJoinTranslationRoom(input.status)) {
     return {
@@ -81,7 +105,12 @@ export function resolveRoomEntryIntent(input: {
     };
   }
 
-  if (shouldEnterWaitingRoom(input.status, { isHost: input.isHost })) {
+  if (
+    shouldEnterWaitingRoom(input.status, {
+      isHost: input.isHost,
+      requiresApproval: input.requiresApproval,
+    })
+  ) {
     return {
       mode: "lobby",
       label: "Enter waiting room",
@@ -96,10 +125,16 @@ export function resolveRoomEntryIntent(input: {
     return {
       mode: "host_start",
       label: "Start meeting",
-      // No help text. "You are the host — starting opens the room and admits everyone in the
-      // lobby" explained a button labelled "Start meeting" to the one person who cannot be
-      // confused about what it does. The lobby count sits beside it and says the rest.
-      helpText: null,
+      // No help text for the host. "You are the host — starting opens the room and admits
+      // everyone in the lobby" explained a button labelled "Start meeting" to the one person who
+      // cannot be confused about what it does. The lobby count sits beside it and says the rest.
+      //
+      // A non-host DOES get a line, because for them the button is new and its consequence is not
+      // private: clicking it takes the meeting live for everybody and notifies the people invited
+      // to it, including the host who is not here.
+      helpText: input.isHost
+        ? null
+        : "The host hasn't started this meeting. Opening it will let everyone invited join.",
       isActionable: true,
     };
   }
