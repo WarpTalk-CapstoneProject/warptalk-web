@@ -180,7 +180,7 @@ export function useApplyWorkspaceMemberRoleChange(workspaceId: string) {
       return WorkspaceService.applyMemberRoleChange(workspaceId, targetId, payload.request);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.members(workspaceId, 1, 10, "") });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
     },
   });
 }
