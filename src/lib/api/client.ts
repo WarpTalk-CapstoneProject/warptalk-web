@@ -350,8 +350,20 @@ useAuthStore.subscribe((state, previousState) => {
   }
 });
 
-// A reload lands here with a token already in the store, and no change event will follow it.
-if (typeof window !== "undefined") {
+/**
+ * Start the refresh timer for a session that is already in place on load.
+ *
+ * Called from a React effect, never at module scope. The module-level version of this took
+ * production down with "Cannot access 'X' before initialization": it read useAuthStore while
+ * this module and the auth store were still evaluating each other, and the store's binding
+ * was in its temporal dead zone. Deferring it with setTimeout would have hidden that; not
+ * running it during module evaluation at all removes it.
+ *
+ * `next build` compiles a TDZ error without complaint — it is a runtime fault — so nothing in
+ * CI could have caught this. The rule that can be enforced is simpler: this module performs
+ * no work when it is imported.
+ */
+export function startProactiveRefresh() {
   scheduleProactiveRefresh(getAccessToken());
 }
 

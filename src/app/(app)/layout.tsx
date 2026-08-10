@@ -24,6 +24,7 @@ import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
+import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -177,6 +178,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
   // window floats on top of the meeting it is a copy of.
   const isLiveMeetingRoute = isLiveMeetingPath(pathname);
+
+  // Starts the token's refresh timer for a session that was already in place on load.
+  //
+  // From an effect, deliberately. The same call at module scope in the api client took
+  // production down with a temporal-dead-zone error, because it read the auth store while
+  // the two modules were still evaluating each other. By the time an effect runs, every
+  // module has finished — which is the only guarantee that actually holds.
+  useEffect(() => {
+    startProactiveRefresh();
+  }, []);
 
   useEffect(() => {
     const handle = requestAnimationFrame(() => setMounted(true));
