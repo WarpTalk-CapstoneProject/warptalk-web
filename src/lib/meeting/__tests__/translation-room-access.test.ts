@@ -66,6 +66,65 @@ test("a live room is joined directly, by host and guest alike", () => {
   }
 });
 
+// ── WT-341: a busy host must not be able to strand the meeting ──────────────────
+
+test("WT-341: a guest may open a meeting that does not require approval", () => {
+  // The deadlock: this used to be `mode: "lobby"` for every non-host, which meant a host who
+  // was busy made the meeting unstartable by anyone, for as long as they stayed busy.
+  const intent = resolveRoomEntryIntent({
+    status: "scheduled",
+    isHost: false,
+    statusLabel: "Scheduled",
+    scheduledAtLabel: "Aug 5, 2026, 9:00 AM",
+    requiresApproval: false,
+  });
+
+  assert.equal(intent.mode, "host_start");
+  assert.equal(intent.label, "Start meeting");
+  assert.equal(intent.isActionable, true);
+  // Unlike the host, a guest is told what the button does to everyone else.
+  assert.ok(
+    /everyone invited/i.test(intent.helpText ?? ""),
+    "a guest must be told that opening it lets the others in",
+  );
+});
+
+test("WT-341: an approval-gated meeting stays the host's to open", () => {
+  // The half that must NOT be relaxed. Only the host can clear the lobby of an approval-gated
+  // room, so letting a guest open it produces a live meeting whose door nobody can answer.
+  const intent = resolveRoomEntryIntent({
+    status: "waiting",
+    isHost: false,
+    statusLabel: "Waiting",
+    requiresApproval: true,
+  });
+
+  assert.equal(intent.mode, "lobby");
+  assert.equal(intent.label, "Enter waiting room");
+});
+
+test("WT-341: an unknown approval setting is treated as approval required", () => {
+  // Fail closed. A room saved before the field existed, or a payload that simply omits it, must
+  // keep the host-opens-it behaviour rather than becoming startable by anyone because a property
+  // was missing.
+  assert.equal(shouldEnterWaitingRoom("scheduled", { isHost: false }), true);
+  assert.equal(
+    shouldEnterWaitingRoom("scheduled", {
+      isHost: false,
+      requiresApproval: undefined,
+    }),
+    true,
+  );
+  assert.equal(
+    resolveRoomEntryIntent({
+      status: "scheduled",
+      isHost: false,
+      statusLabel: "Scheduled",
+    }).mode,
+    "lobby",
+  );
+});
+
 test("a terminal room offers nothing, and says which terminal state it is in", () => {
   for (const status of [
     "ended",

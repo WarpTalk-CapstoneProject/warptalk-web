@@ -117,8 +117,32 @@ assert.doesNotMatch(
 
 assert.match(
   access,
-  /export function shouldEnterWaitingRoom\(\s*status: TranslationRoomStatus,\s*options\?: \{ isHost\?: boolean \},\s*\): boolean \{\s*if \(options\?\.isHost\) return false;/,
+  /export function shouldEnterWaitingRoom\([\s\S]{0,200}?\): boolean \{\s*if \(options\?\.isHost\) return false;/,
   "shouldEnterWaitingRoom must short-circuit for the host.",
+);
+
+// ── WT-341: a busy host must not be able to strand the meeting ──────────────
+
+// The lobby exists to hold people for a decision the host has to make. When the meeting does
+// not require approval there is no such decision, and holding everyone for a host who may
+// never arrive is how a meeting was lost rather than merely delayed.
+assert.match(
+  access,
+  /if \(options\?\.requiresApproval === false\) return false;/,
+  "An approval-free meeting must not send anyone to the lobby.",
+);
+// Strict `=== false`, never a truthiness test: `undefined` is an older room, or a payload that
+// predates the field, and it MUST keep the host-opens-it behaviour. `!options?.requiresApproval`
+// would silently make every such room startable by anyone.
+assert.doesNotMatch(
+  access,
+  /if \(!options\?\.requiresApproval\) return false;/,
+  "A missing approval setting must fail closed, not read as approval-not-required.",
+);
+assert.match(
+  roomDetail,
+  /requiresApproval: room\.settings\?\.requiresApproval/,
+  "The room detail CTA must resolve its intent with the room's own approval setting.",
 );
 assert.match(
   access,
