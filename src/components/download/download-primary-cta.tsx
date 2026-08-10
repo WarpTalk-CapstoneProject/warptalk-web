@@ -50,7 +50,7 @@ function platformFromString(value: string): DesktopPlatform | null {
  * Whether this Mac is Apple Silicon, from the GPU string.
  *
  * Safari and Firefox both report "Intel Mac OS X" in the user agent on an M-series Mac, so the
- * UA alone would hand every Safari user the Intel build. The renderer string does not lie —
+ * UA alone would hand every Safari user the Intel build. The renderer string does not lie:
  * Apple Silicon reports an Apple GPU, Intel Macs report Intel/AMD/NVIDIA.
  */
 function macLooksAppleSilicon(): boolean | null {
@@ -145,9 +145,9 @@ export function DownloadPrimaryCta({
     return (
       <a
         href={allDownloadsHref}
-        className="inline-flex h-12 items-center gap-2 rounded-xl bg-primary px-6 text-[15px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(94,106,210,0.65)] transition hover:bg-primary/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black shadow-[0_14px_40px_-22px_rgba(255,255,255,0.6)] transition hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
       >
-        <DownloadSimple size={18} weight="bold" />
+        <DownloadSimple size={16} weight="bold" />
         See all downloads
       </a>
     );
@@ -157,30 +157,30 @@ export function DownloadPrimaryCta({
   const size = formatFileSize(primary.sizeBytes);
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-2.5">
       <a
         href={primary.url}
         download
         className={cn(
-          "group inline-flex h-12 items-center gap-2.5 rounded-xl bg-primary px-6 text-[15px] font-semibold text-white",
-          "shadow-[0_8px_24px_-8px_rgba(94,106,210,0.65)] transition hover:bg-primary/85",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          "group inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black",
+          "shadow-[0_14px_40px_-22px_rgba(255,255,255,0.6)] transition hover:bg-white/85",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30",
         )}
       >
-        <PlatformIcon size={18} weight="fill" />
+        <PlatformIcon size={16} weight="fill" />
         Download for {PLATFORM_LABEL[primary.platform]}
-        <span className="text-white/70">·</span>
-        <span className="font-medium text-white/80">{primary.label}</span>
+        <span className="text-black/38">·</span>
+        <span className="font-medium text-black/60">{primary.label}</span>
       </a>
 
-      <p className="text-[13px] text-ink-subtle">
+      <p className="text-[11px] text-white/38">
         {size ? `${size} · ` : ""}
         {otherPlatforms.length > 0 ? (
           <>
             Also on{" "}
             <a
               href={allDownloadsHref}
-              className="text-ink-muted underline decoration-hairline-strong underline-offset-4 transition hover:text-ink"
+              className="text-white/52 underline decoration-white/20 underline-offset-4 transition hover:text-white"
             >
               {otherPlatforms.map((platform) => PLATFORM_LABEL[platform]).join(" and ")}
             </a>
@@ -188,7 +188,7 @@ export function DownloadPrimaryCta({
         ) : (
           <a
             href={allDownloadsHref}
-            className="text-ink-muted underline decoration-hairline-strong underline-offset-4 transition hover:text-ink"
+            className="text-white/52 underline decoration-white/20 underline-offset-4 transition hover:text-white"
           >
             All downloads
           </a>

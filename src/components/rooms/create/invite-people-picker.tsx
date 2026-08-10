@@ -128,7 +128,7 @@ export function InvitePeoplePicker({
       />
       <PopoverContent
         align="start"
-        className="w-[280px] p-2 bg-white rounded-xl shadow-xl border border-border/20"
+        className="w-[280px] rounded-xl border border-border/60 bg-popover p-2 text-popover-foreground shadow-xl"
       >
         <div className="space-y-2">
           <label className="text-[11px] font-medium text-ink-muted px-1">
@@ -148,7 +148,7 @@ export function InvitePeoplePicker({
               }}
               onKeyDown={handleKeyDown}
               placeholder="name@company.com..."
-              className="w-full h-8 pl-8 pr-3 text-[13px] bg-surface-1 border border-border/20 rounded-md focus:outline-none focus:ring-0 focus:border-border/20 text-ink"
+              className="w-full h-8 pl-8 pr-3 text-[13px] bg-surface-1 border border-border/50 rounded-md focus:outline-none focus:ring-0 focus:border-border text-ink placeholder:text-ink-muted"
               autoFocus
             />
           </div>
@@ -166,7 +166,7 @@ export function InvitePeoplePicker({
                 return (
                   <div
                     key={email}
-                    className="flex items-center justify-between text-[12px] bg-surface-2 px-2 py-1 rounded"
+                    className="flex items-center justify-between text-[12px] bg-surface-2 px-2 py-1 rounded text-ink"
                   >
                     <span className="truncate max-w-[180px] text-ink">
                       {displayText}
@@ -192,7 +192,7 @@ export function InvitePeoplePicker({
                   <button
                     key={member.id}
                     onClick={() => addEmail(member.email ?? "", member.fullName)}
-                    className="flex items-center gap-2 text-[12px] hover:bg-surface-2 px-2 py-1.5 rounded transition-colors text-left"
+                    className="flex items-center gap-2 text-[12px] hover:bg-surface-2 px-2 py-1.5 rounded transition-colors text-left text-ink"
                   >
                     <div className="relative h-6 w-6 shrink-0">
                       <div className="h-full w-full rounded-full bg-surface-3 flex items-center justify-center overflow-hidden text-ink-muted font-medium text-[10px] relative">

@@ -1,21 +1,15 @@
 import {
   AppleLogo,
-  ArrowsClockwise,
   ArrowSquareOut,
-  BellRinging,
-  Broadcast,
   CaretRight,
-  CheckCircle,
-  DownloadSimple,
   LinuxLogo,
-  Microphone,
-  ShieldCheck,
   WindowsLogo,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
+import { DownloadNavbar } from "@/components/download/download-navbar";
 import { DownloadPrimaryCta } from "@/components/download/download-primary-cta";
 import {
   formatFileSize,
@@ -28,105 +22,188 @@ import {
 } from "@/lib/desktop-releases.server";
 
 export const metadata: Metadata = {
-  title: "Download for Desktop",
+  title: "Download WarpTalk",
   description:
-    "Get the WarpTalk desktop app for macOS, Windows and Linux — system-wide audio capture, a floating live transcript, and always-on translation outside the browser.",
+    "Download the WarpTalk desktop app for macOS, Windows, and Linux.",
 };
 
-/** Matches the release cache in desktop-releases.server.ts. */
 export const revalidate = 600;
 
-const DESKTOP_FEATURES = [
-  {
-    icon: Microphone,
-    title: "System-wide audio capture",
-    body: "Translate any call, not just the ones in your browser tab. The desktop client captures system output and your microphone together, so Zoom, Teams and Meet all run through WarpTalk.",
-  },
-  {
-    icon: Broadcast,
-    title: "Floating live transcript",
-    body: "A frameless always-on-top window keeps the running transcript and translation in view while you work in another app. Move it, resize it, or park it on a second monitor.",
-  },
-  {
-    icon: BellRinging,
-    title: "Native notifications and tray",
-    body: "Room invites, speaker changes and summary-ready alerts arrive as real OS notifications. Mute the mic or leave a room straight from the system tray.",
-  },
-  {
-    icon: ArrowsClockwise,
-    title: "Silent auto-update",
-    body: "The app checks for new builds on launch and installs them in the background. You stay on the version the workspace expects without ever visiting this page again.",
-  },
-];
+type DownloadRow =
+  | {
+      kind: "asset";
+      icon: React.ElementType;
+      label: string;
+      asset: DesktopAsset;
+    }
+  | {
+      kind: "link";
+      icon: React.ElementType;
+      label: string;
+      href: string;
+      action: string;
+      external?: boolean;
+    };
 
-const REQUIREMENTS = [
-  "macOS 11 Big Sur or later — Apple Silicon and Intel",
-  "Windows 10 version 1809 or later (64-bit)",
-  "Ubuntu 20.04 or later, Debian 11 or later, and equivalents",
-  "A working microphone and an internet connection",
-];
-
-function AssetRow({ asset }: { asset: DesktopAsset }) {
-  const size = formatFileSize(asset.sizeBytes);
-
+function DesktopAssetRows({
+  title,
+  description,
+  rows,
+}: {
+  title: string;
+  description: string;
+  rows: DownloadRow[];
+}) {
   return (
-    <a
-      href={asset.url}
-      download
-      className="group flex items-center justify-between gap-3 rounded-lg border border-hairline bg-surface-1 px-3.5 py-3 transition hover:border-hairline-strong hover:bg-surface-2"
-    >
-      <span className="min-w-0">
-        <span className="block truncate text-[13px] font-medium text-ink">
-          {asset.label}
-        </span>
-        {size ? (
-          <span className="mt-0.5 block text-[12px] text-ink-subtle">{size}</span>
-        ) : null}
-      </span>
-      <DownloadSimple
-        size={16}
-        weight="bold"
-        className="shrink-0 text-ink-subtle transition group-hover:text-primary"
-      />
-    </a>
+    <section className="grid gap-8 border-t border-white/10 py-9 md:grid-cols-[280px_1fr]">
+      <div>
+        <h2 className="text-[13px] font-semibold leading-5 text-white">{title}</h2>
+        <p className="mt-1 max-w-[260px] text-[12px] leading-5 text-white/48">
+          {description}
+        </p>
+      </div>
+
+      <div className="divide-y divide-white/10">
+        {rows.map((row) => {
+          const Icon = row.icon;
+
+          if (row.kind === "asset") {
+            const size = formatFileSize(row.asset.sizeBytes);
+
+            return (
+              <a
+                key={`${row.label}-${row.asset.url}`}
+                href={row.asset.url}
+                download
+                className="group flex min-h-12 items-center gap-3 py-2.5"
+              >
+                <Icon
+                  size={16}
+                  weight="fill"
+                  className="shrink-0 text-white/42 transition group-hover:text-white"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium text-white">
+                    {row.label}
+                  </span>
+                  {size ? (
+                    <span className="mt-0.5 block text-[11px] text-white/38">
+                      {row.asset.label} · {size}
+                    </span>
+                  ) : (
+                    <span className="mt-0.5 block text-[11px] text-white/38">
+                      {row.asset.label}
+                    </span>
+                  )}
+                </span>
+                <span className="inline-flex h-6 items-center rounded-full bg-white/[0.08] px-2.5 text-[11px] font-semibold text-white transition group-hover:bg-white/[0.14]">
+                  Download
+                </span>
+              </a>
+            );
+          }
+
+          const content = (
+            <>
+              <Icon
+                size={16}
+                weight="duotone"
+                className="shrink-0 text-white/42 transition group-hover:text-white"
+              />
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-white">
+                {row.label}
+              </span>
+              <span className="inline-flex h-6 items-center rounded-full bg-white/[0.08] px-2.5 text-[11px] font-semibold text-white transition group-hover:bg-white/[0.14]">
+                {row.action}
+              </span>
+            </>
+          );
+
+          if (row.external) {
+            return (
+              <a
+                key={row.label}
+                href={row.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex min-h-12 items-center gap-3 py-2.5"
+              >
+                {content}
+              </a>
+            );
+          }
+
+          return (
+            <Link
+              key={row.label}
+              href={row.href}
+              className="group flex min-h-12 items-center gap-3 py-2.5"
+            >
+              {content}
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
-function PlatformCard({
-  icon: Icon,
-  name,
-  assets,
-}: {
-  icon: React.ElementType;
-  name: string;
-  assets: DesktopAsset[];
-}) {
-  return (
-    <div className="rounded-2xl border border-hairline bg-surface-1/60 p-5">
-      <div className="flex items-center gap-2.5">
-        <span className="grid size-9 place-items-center rounded-xl bg-surface-2 text-ink">
-          <Icon size={18} weight="fill" />
-        </span>
-        <h3 className="text-[15px] font-semibold tracking-tight text-ink">{name}</h3>
-      </div>
-
-      <div className="mt-4 flex flex-col gap-2">
-        {assets.length > 0 ? (
-          assets.map((asset) => <AssetRow key={asset.url} asset={asset} />)
-        ) : (
-          <p className="rounded-lg border border-dashed border-hairline px-3.5 py-3 text-[13px] text-ink-subtle">
-            No build published for this platform yet.
-          </p>
-        )}
-      </div>
-    </div>
-  );
+function firstAsset(assets: DesktopAsset[]) {
+  return assets[0] ?? null;
 }
 
 export default async function DownloadPage() {
   const release = await fetchLatestDesktopRelease();
   const releasesPageUrl = getReleasesPageUrl();
   const grouped = groupAssetsByPlatform(release?.assets ?? []);
+
+  const desktopRows: DownloadRow[] = [
+    firstAsset(grouped.mac)
+      ? {
+          kind: "asset",
+          icon: AppleLogo,
+          label: "macOS",
+          asset: firstAsset(grouped.mac) as DesktopAsset,
+        }
+      : {
+          kind: "link",
+          icon: AppleLogo,
+          label: "macOS",
+          href: releasesPageUrl,
+          action: "Coming soon",
+          external: true,
+        },
+    firstAsset(grouped.windows)
+      ? {
+          kind: "asset",
+          icon: WindowsLogo,
+          label: "Windows",
+          asset: firstAsset(grouped.windows) as DesktopAsset,
+        }
+      : {
+          kind: "link",
+          icon: WindowsLogo,
+          label: "Windows",
+          href: releasesPageUrl,
+          action: "Coming soon",
+          external: true,
+        },
+    firstAsset(grouped.linux)
+      ? {
+          kind: "asset",
+          icon: LinuxLogo,
+          label: "Linux",
+          asset: firstAsset(grouped.linux) as DesktopAsset,
+        }
+      : {
+          kind: "link",
+          icon: LinuxLogo,
+          label: "Linux",
+          href: releasesPageUrl,
+          action: "Coming soon",
+          external: true,
+        },
+  ];
 
   const publishedLabel = release?.publishedAt
     ? new Date(release.publishedAt).toLocaleDateString("en-US", {
@@ -137,65 +214,32 @@ export default async function DownloadPage() {
     : null;
 
   return (
-    <div className="min-h-dvh bg-canvas text-ink">
-      <header className="sticky top-0 z-30 border-b border-hairline bg-canvas/85 backdrop-blur-xl">
-        <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5 md:px-8">
-          <Link href="/" className="flex items-center gap-2.5" aria-label="WarpTalk home">
-            <Image
-              src="/assets/logos/warptalk-sidebar-icon.png"
-              alt=""
-              width={26}
-              height={26}
-              className="rounded-md"
-            />
-            <span className="text-[15px] font-semibold tracking-tight">WarpTalk</span>
-          </Link>
+    <div className="min-h-dvh bg-[#050505] font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-white antialiased">
+      <DownloadNavbar />
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/#pricing"
-              className="hidden rounded-lg px-3 py-1.5 text-[13px] font-medium text-ink-muted transition hover:bg-surface-2 hover:text-ink sm:inline-flex"
-            >
-              Pricing
-            </Link>
-            <Link
-              href="/workspace"
-              className="inline-flex h-8 items-center rounded-lg border border-hairline bg-surface-1 px-3 text-[13px] font-medium text-ink transition hover:bg-surface-2"
-            >
-              Open WarpTalk
-            </Link>
-          </div>
-        </nav>
-      </header>
+      <main>
+        <section className="mx-auto max-w-[720px] px-6 pb-11 pt-[116px] text-center">
+          <Image
+            src="/assets/logos/warptalk-sidebar-icon.png"
+            alt="WarpTalk desktop app icon"
+            width={92}
+            height={92}
+            className="mx-auto h-[92px] w-[92px] rounded-[22px] bg-white object-contain p-5 shadow-[0_18px_70px_-40px_rgba(255,255,255,0.5)]"
+            priority
+          />
 
-      {/* Hero */}
-      <section className="relative overflow-hidden border-b border-hairline">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-[-14rem] h-[32rem] bg-[radial-gradient(50%_50%_at_50%_50%,rgba(94,106,210,0.22),transparent_70%)]"
-        />
-        <div className="relative mx-auto max-w-3xl px-5 pb-16 pt-20 text-center md:px-8 md:pb-20 md:pt-28">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-1 px-3 py-1 text-[12px] font-medium text-ink-muted">
-            <span className="size-1.5 rounded-full bg-primary" />
-            WarpTalk Desktop
-          </span>
-
-          <h1 className="mt-6 text-[40px] font-semibold leading-[1.05] tracking-[-0.03em] text-ink md:text-[56px]">
-            Translation that
-            <br className="hidden sm:block" /> lives outside the tab
+          <h1 className="mt-8 text-[30px] font-semibold leading-[1.1] tracking-[-0.035em] text-white">
+            Download WarpTalk
           </h1>
-
-          <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-ink-muted">
-            The desktop app captures system audio, keeps a live transcript floating above your
-            work, and stays connected in the tray — so every meeting is translated, whichever
-            app it happens in.
+          <p className="mx-auto mt-3 max-w-[460px] text-[14px] leading-6 text-white/50">
+            Available for macOS, Windows, and Linux.
           </p>
 
-          <div className="mt-9 flex flex-col items-center gap-4">
+          <div className="mt-6 flex flex-col items-center gap-2.5">
             {release ? (
               <>
                 <DownloadPrimaryCta assets={release.assets} />
-                <p className="text-[12px] text-ink-tertiary">
+                <p className="text-[11px] text-white/34">
                   Version {release.version}
                   {publishedLabel ? ` · Released ${publishedLabel}` : ""}
                   {release.notesUrl ? (
@@ -205,7 +249,7 @@ export default async function DownloadPage() {
                         href={release.notesUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-ink-subtle underline decoration-hairline-strong underline-offset-4 transition hover:text-ink"
+                        className="text-white/50 underline decoration-white/20 underline-offset-4 transition hover:text-white"
                       >
                         Release notes
                       </a>
@@ -214,184 +258,45 @@ export default async function DownloadPage() {
                 </p>
               </>
             ) : (
-              <div className="rounded-2xl border border-hairline bg-surface-1 px-6 py-5">
-                <p className="text-[14px] font-medium text-ink">
-                  No desktop build has been published yet.
-                </p>
-                <p className="mt-1.5 text-[13px] text-ink-muted">
-                  Builds appear here automatically once a release is cut.
-                </p>
+              <>
                 <a
                   href={releasesPageUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary transition hover:underline"
+                  className="inline-flex h-9 items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black transition hover:bg-white/85"
                 >
-                  Check the releases page
-                  <ArrowSquareOut size={14} weight="bold" />
+                  View releases
+                  <ArrowSquareOut size={13} weight="bold" />
                 </a>
-              </div>
+                <p className="text-[11px] text-white/34">
+                  Desktop builds will appear here once a release is published.
+                </p>
+              </>
             )}
           </div>
-        </div>
+        </section>
 
-        {/* App preview */}
-        <div className="relative mx-auto max-w-5xl px-5 pb-16 md:px-8 md:pb-24">
-          <div className="overflow-hidden rounded-2xl border border-hairline bg-surface-1 shadow-[0_30px_90px_-40px_rgba(0,0,0,0.55)]">
-            <div className="flex h-9 items-center gap-1.5 border-b border-hairline bg-surface-2 px-4">
-              <span className="size-2.5 rounded-full bg-hairline-tertiary" />
-              <span className="size-2.5 rounded-full bg-hairline-tertiary" />
-              <span className="size-2.5 rounded-full bg-hairline-tertiary" />
-              <span className="ml-3 text-[11px] font-medium text-ink-subtle">
-                WarpTalk — Live translation
-              </span>
-            </div>
-            <Image
-              src="/assets/backgrounds/dashboard-nebula.png"
-              alt="The WarpTalk desktop app running a live translated meeting"
-              width={1600}
-              height={900}
-              className="h-auto w-full"
-              priority
-            />
-          </div>
-        </div>
-      </section>
+        <section id="all-downloads" className="mx-auto max-w-[760px] px-6 pb-20">
+          <DesktopAssetRows
+            title="WarpTalk Desktop"
+            description="A focused desktop experience for live translation, system audio capture, and meeting workflows outside the browser."
+            rows={desktopRows}
+          />
+        </section>
+      </main>
 
-      {/* Why desktop */}
-      <section className="border-b border-hairline">
-        <div className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-24">
-          <h2 className="text-[26px] font-semibold tracking-[-0.02em] text-ink md:text-[32px]">
-            What the browser cannot do
-          </h2>
-          <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-muted">
-            Everything in the web app is here too. These are the parts that need to run
-            natively.
-          </p>
-
-          <div className="mt-10 grid gap-4 sm:grid-cols-2">
-            {DESKTOP_FEATURES.map((feature) => (
-              <div
-                key={feature.title}
-                className="rounded-2xl border border-hairline bg-surface-1/60 p-6 transition hover:border-hairline-strong"
-              >
-                <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <feature.icon size={20} weight="duotone" />
-                </span>
-                <h3 className="mt-4 text-[15px] font-semibold tracking-tight text-ink">
-                  {feature.title}
-                </h3>
-                <p className="mt-2 text-[14px] leading-relaxed text-ink-muted">
-                  {feature.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* All downloads */}
-      <section id="all-downloads" className="scroll-mt-16 border-b border-hairline">
-        <div className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-24">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="text-[26px] font-semibold tracking-[-0.02em] text-ink md:text-[32px]">
-                All downloads
-              </h2>
-              <p className="mt-3 text-[15px] text-ink-muted">
-                {release
-                  ? `Every build in version ${release.version}.`
-                  : "Builds will be listed here once the first release is published."}
-              </p>
-            </div>
-            <a
-              href={releasesPageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-muted transition hover:text-ink"
-            >
-              Older versions
-              <CaretRight size={13} weight="bold" />
-            </a>
-          </div>
-
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            <PlatformCard icon={AppleLogo} name="macOS" assets={grouped.mac} />
-            <PlatformCard icon={WindowsLogo} name="Windows" assets={grouped.windows} />
-            <PlatformCard icon={LinuxLogo} name="Linux" assets={grouped.linux} />
-          </div>
-        </div>
-      </section>
-
-      {/* Requirements */}
-      <section>
-        <div className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-20">
-          <div className="grid gap-10 md:grid-cols-2">
-            <div>
-              <h2 className="text-[20px] font-semibold tracking-[-0.01em] text-ink">
-                System requirements
-              </h2>
-              <ul className="mt-5 flex flex-col gap-3">
-                {REQUIREMENTS.map((requirement) => (
-                  <li key={requirement} className="flex items-start gap-2.5">
-                    <CheckCircle
-                      size={17}
-                      weight="duotone"
-                      className="mt-0.5 shrink-0 text-primary"
-                    />
-                    <span className="text-[14px] leading-relaxed text-ink-muted">
-                      {requirement}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border border-hairline bg-surface-1/60 p-6">
-              <span className="grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-muted">
-                <ShieldCheck size={20} weight="duotone" />
-              </span>
-              <h3 className="mt-4 text-[15px] font-semibold tracking-tight text-ink">
-                Signing in
-              </h3>
-              <p className="mt-2 text-[14px] leading-relaxed text-ink-muted">
-                The desktop app opens your browser to sign in, then hands the session back — so
-                your password and Google account never pass through the app itself. You land in
-                the same workspaces you already use on the web.
-              </p>
-              <Link
-                href="/login"
-                className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary transition hover:underline"
-              >
-                Sign in on the web
-                <CaretRight size={13} weight="bold" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-hairline">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 md:px-8">
-          <p className="text-[12px] text-ink-tertiary">
-            © {new Date().getFullYear()} WarpTalk. All rights reserved.
-          </p>
-          <div className="flex items-center gap-5 text-[12px] text-ink-subtle">
-            <Link href="/" className="transition hover:text-ink">
-              Home
-            </Link>
-            <Link href="/workspace" className="transition hover:text-ink">
-              Open app
-            </Link>
-            <a
-              href={releasesPageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition hover:text-ink"
-            >
-              Changelog
-            </a>
-          </div>
+      <footer className="border-t border-white/10">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 text-[11px] text-white/34 md:px-12">
+          <span>© {new Date().getFullYear()} WarpTalk</span>
+          <a
+            href={releasesPageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 transition hover:text-white"
+          >
+            Releases
+            <CaretRight size={12} weight="bold" />
+          </a>
         </div>
       </footer>
     </div>

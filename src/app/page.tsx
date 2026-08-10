@@ -27,6 +27,7 @@ const navLinks = [
   { id: "about", label: "About", href: "#about" },
   { id: "features", label: "Feature", href: "#features" },
   { id: "pricing", label: "Pricing", href: "#pricing" },
+  { id: "download", label: "Download app", href: "/download" },
   { id: "contact", label: "Contact", href: "#contact" },
 ];
 
@@ -1424,10 +1425,14 @@ export default function HomePage() {
 
               <div className="hidden items-center gap-2 text-sm text-white/62 md:flex">
                 {navLinks.map((link) => (
-                  <a
+                  <Link
                     key={link.label}
                     href={link.href}
-                    onClick={(event) => handleNavClick(event, link.id)}
+                    onClick={
+                      link.href.startsWith("#")
+                        ? (event) => handleNavClick(event, link.id)
+                        : undefined
+                    }
                     className="relative rounded-full px-4 py-2 transition-colors hover:text-white"
                   >
                     {activeSection === link.id ? (
@@ -1453,7 +1458,7 @@ export default function HomePage() {
                     >
                       {link.label}
                     </span>
-                  </a>
+                  </Link>
                 ))}
               </div>
 

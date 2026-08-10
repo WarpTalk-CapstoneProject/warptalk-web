@@ -163,6 +163,7 @@ export default function RoomInformationPage() {
   const startRoomMutation = useStartTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
   const user = useAuthStore((state) => state.user);
+  const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
@@ -255,7 +256,6 @@ export default function RoomInformationPage() {
 
   const isEnded = room.status === "ended";
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
-  const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
   const isActiveInMeeting = activeRoomId === room.id;
   // WT-273: the CTA is one decision, taken with the viewer's host identity in hand. It used to
   // be derived from room.status alone, three lines above where `isHost` was computed, so the
@@ -325,7 +325,8 @@ export default function RoomInformationPage() {
   );
   const seatedIds = new Set(seatedIdentities.map((identity) => identity.id));
   const notInRoom = participants.filter(
-    (participant) => !seatedIds.has(participant.id),
+    (participant) =>
+      participant.role === "Invitee" && !seatedIds.has(participant.id),
   );
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">

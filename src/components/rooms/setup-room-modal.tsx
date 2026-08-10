@@ -356,6 +356,7 @@ export function SetupRoomModal() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent
+        showCloseButton={false}
         overlayClassName="!bg-black/40 !backdrop-blur-none"
         className="max-w-[calc(100vw-2rem)] sm:max-w-[900px] w-full p-6 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden flex flex-col gap-6"
       >
@@ -505,7 +506,11 @@ export function SetupRoomModal() {
                   !room ||
                   !canJoinTranslationRoom(room.status)
                 }
-                className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                className={cn(
+                  "flex h-[36px] w-full items-center justify-center rounded-[6px] px-4 text-[13px] font-medium shadow-sm transition-colors",
+                  "bg-primary text-primary-foreground hover:bg-primary/90",
+                  "disabled:cursor-not-allowed disabled:border disabled:border-border/70 disabled:bg-surface-2 disabled:text-muted-foreground disabled:shadow-none disabled:hover:bg-surface-2",
+                )}
               >
                 {!room
                   ? "Join Meeting"
