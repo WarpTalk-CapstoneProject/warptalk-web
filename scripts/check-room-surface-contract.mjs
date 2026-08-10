@@ -24,6 +24,7 @@ const pills = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/MeetingPropertiesPills.tsx",
 );
 const roomsList = read("src/app/(app)/[workspaceSlug]/rooms/page.tsx");
+const createRoomDialog = read("src/components/rooms/create-room-dialog.tsx");
 const waitingRoom = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/waiting/page.tsx",
 );
@@ -143,6 +144,25 @@ assert.match(
   roomDetail,
   /requiresApproval: room\.settings\?\.requiresApproval/,
   "The room detail CTA must resolve its intent with the room's own approval setting.",
+);
+
+// ── WT-342: the create toggle must show what the server will actually store ──
+
+// Three layers, same order as TranslationRoomMapper.ResolveSettings. If this drifts, the toggle
+// silently lies about the meeting being created — a host sees "off" and then finds nobody can
+// start the meeting. The workspace layer is the one that was missing: EnforceHostApprovalDefault
+// had a working settings toggle and was read by nothing at all.
+assert.match(
+  createRoomDialog,
+  /requiresApproval \?\?\s*workspaceSettings\?\.enforceHostApprovalDefault \?\?\s*meetingTypeByLabel\(meetingTemplate\)\.defaults\.requiresApproval/,
+  "The create dialog's approval toggle must resolve explicit → workspace default → meeting type.",
+);
+// Only an explicit choice is sent. Echoing the resolved default back would pin the value into the
+// room's settings blob and defeat the server-side resolution this mirrors.
+assert.match(
+  createRoomDialog,
+  /settings:\s*\n?\s*requiresApproval === null \? undefined : \{ requiresApproval \}/,
+  "The create dialog must send settings only when the host made an explicit choice.",
 );
 assert.match(
   access,
