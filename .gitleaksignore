@@ -1,0 +1,23 @@
+# Findings gitleaks must not fail on, one fingerprint per line.
+#
+# CI scans a COMMIT RANGE, not the working tree (see .github/workflows/ci.yml), so it
+# re-reads historical diffs. A false positive that has already been corrected in the tree
+# is still present in the commit that introduced it, and reappears as soon as a wider
+# range is scanned — which is exactly what happens when `development` is promoted to
+# `main` and the range spans every commit since the last release.
+#
+# Exempt individual findings by fingerprint only. Never disable a rule or exclude a path:
+# a path exclusion silently covers every future secret committed there, a fingerprint
+# covers one line of one commit.
+
+# Test assertion, not a credential.
+#
+# src/lib/workspace/__tests__/member-role-change.test.ts:70 asserted on an idempotency key
+# literal ("idempotency-1"). The generic-api-key rule matched the word "Key" beside a
+# quoted string; entropy was 3.55, consistent with a readable label rather than a key, and
+# the value grants access to nothing.
+#
+# Already fixed in the tree by 8d943bc "test(workspace): avoid gitleaks false positive
+# (WT-344)", which renamed the literals. This line exists only because the introducing
+# commit remains in history and the range scan still reaches it.
+2171c0c953795078b9b97b958aa32e8309d03464:src/lib/workspace/__tests__/member-role-change.test.ts:generic-api-key:70
