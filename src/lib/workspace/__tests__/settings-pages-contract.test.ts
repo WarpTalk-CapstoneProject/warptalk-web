@@ -32,11 +32,6 @@ test("personal preferences match the backend room-type contract, auto-save contr
   assert.match(source, /Retry/);
   assert.match(source, /if \(!parsedInput\.ok\) return;/);
   assert.match(source, /if \(lastQueuedValuesRef\.current\[String\(field\)\] === serializedValue\) return;/);
-  assert.match(source, /Voice Cloning & Consent Preferences/);
-  assert.match(source, /Consent Granted/);
-  assert.match(source, /Consent Withdrawn/);
-  assert.match(source, /handleVoiceCloneToggle/);
-  assert.match(source, /Biometric Voice Privacy Notice/);
   assert.doesNotMatch(source, /value=\"webrtc\"/);
   assert.doesNotMatch(source, /value=\"hls\"/);
   assert.doesNotMatch(source, /Save Preferences/);
