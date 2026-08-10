@@ -507,7 +507,9 @@ export function SetupRoomModal() {
                 }
                 className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {room && !canJoinTranslationRoom(room.status)
+                {!room
+                  ? "Join Meeting"
+                  : !canJoinTranslationRoom(room.status)
                   ? "Meeting unavailable"
                   : isJoining
                   ? isHost
@@ -515,7 +517,7 @@ export function SetupRoomModal() {
                     : "Joining..."
                   : shouldEnterWaitingRoom(room.status, {
                       isHost,
-                      requiresApproval: room?.settings?.requiresApproval,
+                      requiresApproval: room.settings?.requiresApproval,
                     })
                   ? "Enter Waiting Room"
                   : isHost && (room.status === "scheduled" || room.status === "waiting")
