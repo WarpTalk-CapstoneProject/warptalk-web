@@ -12,13 +12,14 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
 import { getPlanDescription, buildFeatureList } from "@/lib/utils";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import {
   getLandingGetStartedHref,
   getRememberedWorkspaceSlug,
   hasRememberedAccessToken,
-} from "@/lib/landing-redirect";
+} from "@/lib/auth/landing-redirect";
 import type { PlanDto } from "@/types/billing";
+import { formatMoney } from "@/lib/format/currency";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
@@ -682,7 +683,7 @@ function FeatureStoryBoard() {
             y={652}
             tickTop={646}
             tickBottom={696}
-            label="xin chao"
+            label="Vietnamese"
             progress={crossingForkProgress}
             revealAt={0.24}
           />
@@ -691,7 +692,7 @@ function FeatureStoryBoard() {
             y={686}
             tickTop={668}
             tickBottom={730}
-            label="hello"
+            label="English"
             progress={crossingForkProgress}
             revealAt={0.46}
           />
@@ -700,7 +701,7 @@ function FeatureStoryBoard() {
             y={628}
             tickTop={626}
             tickBottom={682}
-            label="bonjour"
+            label="French"
             progress={crossingForkProgress}
             revealAt={0.66}
           />
@@ -709,7 +710,7 @@ function FeatureStoryBoard() {
             y={808}
             tickTop={742}
             tickBottom={800}
-            label="konnichiwa"
+            label="Japanese"
             progress={crossingForkProgress}
             revealAt={0.84}
           />
@@ -928,9 +929,9 @@ function FeatureTraceSection() {
             </p>
           </div>
           <div className="feature-language-line">
-            <span>hello</span>
-            <span>xin chao</span>
-            <span>bonjour</span>
+            <span>English</span>
+            <span>Vietnamese</span>
+            <span>French</span>
             <span>meaning preserved</span>
             <span>voice returned</span>
           </div>
@@ -1013,7 +1014,7 @@ function PricingSection() {
                   <h3 className="c3-tier-large">
                     {plan.price === 0
                       ? "Free"
-                      : `${plan.price.toLocaleString()} ${plan.currency}/mo`}
+                      : `${formatMoney(plan.price, plan.currency)}/mo`}
                   </h3>
                   <p className="c3-desc">{getPlanDescription(plan.name)}</p>
                   <ul className="c3-list">
@@ -1514,11 +1515,17 @@ export default function HomePage() {
                 >
                   Get Started for Free
                 </button>
+                {/*
+                  Both hero CTAs used to lead to /login, and the login screen
+                  had no sign-up control — so a visitor without an account had
+                  no route to /register except typing the URL. This one now
+                  says what it does and goes where it says.
+                */}
                 <Link
-                  href="/login"
+                  href="/register"
                   className="rounded-xl border border-white/10 bg-white/[0.06] px-7 py-3 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white hover:text-black"
                 >
-                  Let&apos;s Get Connected
+                  Create an Account
                 </Link>
               </motion.div>
             </motion.div>

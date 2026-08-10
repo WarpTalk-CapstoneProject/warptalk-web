@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
+import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import {
   ACCESS_TOKEN_COOKIE,
   SESSION_MARKER_COOKIE,
@@ -17,6 +17,10 @@ const PUBLIC_ROUTES = [
   "/reset-password",
   "/join",
   "/invitations",
+  // Linked from the signed-out login screen. Without these entries the gate
+  // would bounce a guest who clicks them straight back to /login.
+  "/terms",
+  "/privacy",
   "/payment-cancelled",
   "/workspace/payment/plans",
   "/workspace/payment/success",

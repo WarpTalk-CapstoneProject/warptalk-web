@@ -56,6 +56,13 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  /* Registering these is what makes bg-/text-/border-destructive exist at all. In Tailwind v4 a
+     colour utility is generated only for a token declared in @theme; --destructive was defined
+     under :root and .dark but never registered here, so every one of the ~240 destructive
+     utilities in the app compiled to nothing. Danger buttons rendered white-on-white — present,
+     clickable and invisible — and no error text was red anywhere in the product. */
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
 
   /* Radius */
   --radius-xs: 4px;

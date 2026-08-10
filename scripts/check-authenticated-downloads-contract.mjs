@@ -6,7 +6,7 @@ const chatPanel = await readFile(
   "utf8",
 );
 const translationRoomService = await readFile(
-  new URL("../src/services/translationRoom.service.ts", import.meta.url),
+  new URL("../src/services/translation-room.service.ts", import.meta.url),
   "utf8",
 );
 const roomPage = await readFile(

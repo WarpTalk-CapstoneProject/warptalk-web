@@ -19,7 +19,9 @@ import {
   getDefaultProfileTimezone,
   getProfileLanguageOptions,
   getSupportedTimezoneOptions,
-} from "@/lib/profile-localization";
+} from "@/lib/format/profile-localization";
+import { LanguageLabel } from "@/components/language/language-label";
+import { describeTimeZone, isSameTimeZone } from "@/lib/format/time-zones";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -59,7 +61,13 @@ export default function SettingsPage() {
   }, [preferredLanguage]);
   const timezoneOptions = useMemo(() => {
     const options = getSupportedTimezoneOptions();
-    return options.includes(timezone) ? options : [timezone, ...options];
+    // `isSameTimeZone`, not `includes`. IANA carries Links as well as Zones, and this platform
+    // canonicalises Vietnam to Asia/Saigon while the accounts database defaults every user to
+    // Asia/Ho_Chi_Minh — a raw string compare therefore prepends the stored spelling and the
+    // list shows the same place twice, as two options that do different things to neither.
+    return options.some((option) => isSameTimeZone(option, timezone))
+      ? options
+      : [timezone, ...options];
   }, [timezone]);
 
   // Leave workspace mutation
@@ -304,7 +312,11 @@ export default function SettingsPage() {
                 }}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px]">
-                  <SelectValue placeholder="Select language" />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {languageOptions.map((option) => (
@@ -331,7 +343,9 @@ export default function SettingsPage() {
                 }}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px]">
-                  <SelectValue placeholder="Select timezone" />
+                  <SelectValue>
+                    {(value) => (value ? describeTimeZone(String(value)) : "Select timezone")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {timezoneOptions.map((option) => (

@@ -12,13 +12,14 @@ async function source(relativePath) {
   });
 }
 
-const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle] =
+const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle, miniDock] =
   await Promise.all([
     source("src/app/(app)/layout.tsx"),
-    source("src/app/(app)/room/[id]/page.tsx"),
+    source("src/app/(app)/[workspaceSlug]/rooms/[id]/live/page.tsx"),
     source("src/components/rooms/live/persistent-meeting-session.tsx"),
     source("src/stores/active-meeting-store.ts"),
-    source("src/lib/meeting-session-lifecycle.ts"),
+    source("src/lib/meeting/meeting-session-lifecycle.ts"),
+    source("src/components/rooms/live/mini-meeting-dock.tsx"),
   ]);
 
 assert.match(
@@ -41,10 +42,31 @@ assert.match(
   /<PersistentMeetingSession[\s\S]*key=\{activeMeetingRoomId\}[\s\S]*compact=\{!isLiveMeetingRoute\}/,
   "the persistent session must stay mounted while its presentation changes",
 );
+// The floating window used to be pinned to bottom-right in this file, and that literal was
+// asserted here. It is draggable now, so the position lives in MiniMeetingDock and the thing
+// worth pinning is what the pinning was FOR: the window must not end up somewhere it covers
+// the page permanently or cannot be grabbed again.
 assert.match(
   appLayout,
-  /!isLiveMeetingRoute[\s\S]*fixed[\s\S]*bottom-\[72px\][\s\S]*right-5/,
-  "the mini meeting must float above the global assistant without covering the page",
+  /<MiniMeetingDock floating=\{!isLiveMeetingRoute\}/,
+  "the floating presentation must be owned by the dock, which keeps it inside the viewport",
+);
+assert.match(
+  miniDock,
+  /clampToViewport/,
+  "every dock position must be clamped — a window dragged off the edge can never be grabbed again",
+);
+assert.match(
+  miniDock,
+  /addEventListener\("resize"/,
+  "a shrinking viewport must pull the window back into view, not strand it outside",
+);
+// The single-wrapper rule, stated where it can be broken. Two branches rendering their own
+// <PersistentMeetingSession> read as equivalent and are not: React unmounts on the switch.
+assert.doesNotMatch(
+  appLayout,
+  /isLiveMeetingRoute \?[\s\S]{0,600}?<PersistentMeetingSession[\s\S]{0,600}?<PersistentMeetingSession/,
+  "the session must be rendered once, not once per presentation — a ternary between two of them remounts it and drops the call",
 );
 assert.match(
   meetingSession,
@@ -61,15 +83,33 @@ assert.match(
   /<LiveKitRoom[\s\S]*compact \? \([\s\S]*data-mini-meeting[\s\S]*\) : \([\s\S]*data-meeting-content/,
   "full and mini views must share one mounted LiveKitRoom",
 );
+// Through liveMeetingPath, not a literal. The path is spelled once now; a second copy here
+// is how `/room/{id}` survived without a workspace slug while every route around it had one.
 assert.match(
   meetingSession,
-  /aria-label="Return to meeting"[\s\S]*router\.push\(`\/room\/\$\{roomId\}`\)/,
+  /aria-label="Return to meeting"[\s\S]*router\.push\(liveMeetingPath\(activeWorkspaceSlug, roomId\)\)/,
   "the mini meeting must provide a clear route back to the full meeting",
 );
 assert.match(
   meetingSession,
   /handleExit[\s\S]*onMeetingClosed\(\)[\s\S]*router\.push/,
   "only an explicit leave or end action should close the persistent meeting",
+);
+// The mini window's chrome, pinned where it can be undone.
+assert.match(
+  meetingSession,
+  /aria-label="Leave meeting"[\s\S]{0,400}handleExit\("leave"\)/,
+  "the mini meeting must offer a way out that does not require expanding it first",
+);
+assert.doesNotMatch(
+  meetingSession,
+  /data-mini-meeting[\s\S]{0,4000}(inset-x-0 top-0[^"]*bg-black|bottom-0 z-40[\s\S]{0,80}bg-black)/,
+  "the mini meeting must not reintroduce full-width opaque bars over the picture",
+);
+assert.match(
+  miniDock,
+  /closest\("button, a, input, textarea, select, \[role='button'\]"\)/,
+  "the dock must treat controls as controls, not as drag surfaces — that exclusion is what lets the whole window be the handle",
 );
 
 // --- Billing: a minimised tab must not hold LiveKit open forever -------------------------

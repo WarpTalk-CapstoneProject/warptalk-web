@@ -366,7 +366,7 @@ function LoginContent() {
 
               <header data-welcome-title className="mb-8">
                 <BlurText
-                  text="Chào mừng bạn quay trở lại Warptalk"
+                  text="Welcome back to WarpTalk"
                   animateBy="words"
                   direction="top"
                   threshold={0.1}
@@ -390,7 +390,7 @@ function LoginContent() {
                   className="h-14 min-w-[150px] rounded-[12px] border border-white/14 bg-white/[0.08] px-7 text-base font-semibold text-white/60 backdrop-blur-md transition hover:bg-white/14 hover:text-white"
                   data-welcome-action
                 >
-                  Liên hệ với chúng tôi
+                  Contact us
                 </button>
               </div>
               </div>
@@ -415,7 +415,7 @@ function LoginContent() {
                 data-login-field
               >
                 <ArrowLeft size={17} />
-                Quay lại
+                Back
               </button>
 
               <div className="mb-7">
@@ -423,7 +423,7 @@ function LoginContent() {
                   Warptalk-V1
                 </p>
                 <h1 className="text-3xl font-semibold tracking-normal text-white">
-                  Đăng nhập
+                  Sign in
                 </h1>
               </div>
 

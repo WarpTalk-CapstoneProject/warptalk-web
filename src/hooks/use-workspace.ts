@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
+import type { WorkspaceKnowledgeQuery } from "@/types/workspace-knowledge";
 import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
@@ -18,6 +19,8 @@ export const WORKSPACE_KEYS = {
   myJoinRequests: () => ["workspaces", "join-requests", "mine"] as const,
   invitationPreview: (token: string) => ["workspaces", "invitation-preview", token] as const,
   documentLists: (workspaceId: string) => ["workspaces", "documents", workspaceId] as const,
+  knowledge: (workspaceId: string, query: WorkspaceKnowledgeQuery) =>
+    ["workspaces", "knowledge", workspaceId, query] as const,
   documents: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "documents", workspaceId, { page, pageSize, search }] as const,
   documentDetail: (workspaceId: string, docId: string) => ["workspaces", "document", workspaceId, docId] as const,
@@ -74,17 +77,37 @@ export function useWorkspaceSettings(id: string) {
   });
 }
 
+/** Full-document replace. Callers must supply every field — the server binds the whole DTO. */
 export function useUpdateWorkspaceSettings(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (settings: Partial<WorkspaceSettingsDto>) => WorkspaceService.updateSettings(workspaceId, settings),
+    mutationFn: (settings: WorkspaceSettingsDto) => WorkspaceService.updateSettings(workspaceId, settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
 }
 
-export const usePatchWorkspaceSettings = useUpdateWorkspaceSettings;
+/**
+ * Partial update. This used to be an alias for the PUT hook, so every single-control save on
+ * the workspace settings page posted a one-key body to an endpoint that binds the whole DTO
+ * and got a 400 back — while the control kept the value the user picked until a reload.
+ * It now targets the read-merge-write PATCH, which is what a one-key body needs.
+ *
+ * The merged document comes back in the response, so we seed the cache with it rather than
+ * only invalidating: that closes the window where the UI would briefly show the pre-save
+ * value while the refetch is in flight.
+ */
+export function usePatchWorkspaceSettings(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<WorkspaceSettingsDto>) => WorkspaceService.patchSettings(workspaceId, patch),
+    onSuccess: (merged) => {
+      queryClient.setQueryData(WORKSPACE_KEYS.settings(workspaceId), merged);
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
+    },
+  });
+}
 
 export function useVerifiedDomains(workspaceId: string) {
   const settings = useWorkspaceSettings(workspaceId);
@@ -102,18 +125,16 @@ export function useVerifiedDomains(workspaceId: string) {
 export function useAddVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
   const settingsQuery = useWorkspaceSettings(workspaceId);
-  const updateSettings = useUpdateWorkspaceSettings(workspaceId);
+  const patchSettings = usePatchWorkspaceSettings(workspaceId);
 
   return useMutation({
     mutationFn: async (domain: string) => {
       if (!settingsQuery.data) throw new Error("Settings not loaded");
       const currentDomains = settingsQuery.data.verifiedDomains || [];
       if (currentDomains.includes(domain)) return;
-      const updated = {
-        ...settingsQuery.data,
-        verifiedDomains: [...currentDomains, domain],
-      };
-      await updateSettings.mutateAsync(updated);
+      // Only the domain list travels. Spreading the whole cached document used to make this
+      // a blind full-document overwrite of everything else in the settings JSON.
+      await patchSettings.mutateAsync({ verifiedDomains: [...currentDomains, domain] });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
@@ -124,20 +145,17 @@ export function useAddVerifiedDomain(workspaceId: string) {
 export function useRevokeVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
   const settingsQuery = useWorkspaceSettings(workspaceId);
-  const updateSettings = useUpdateWorkspaceSettings(workspaceId);
+  const patchSettings = usePatchWorkspaceSettings(workspaceId);
 
   return useMutation({
     mutationFn: async (domainIdOrName: string) => {
       if (!settingsQuery.data) throw new Error("Settings not loaded");
       const currentDomains = settingsQuery.data.verifiedDomains || [];
-      const updatedDomains = currentDomains.filter(
-        (d) => d.toLowerCase() !== domainIdOrName.toLowerCase()
-      );
-      const updated = {
-        ...settingsQuery.data,
-        verifiedDomains: updatedDomains,
-      };
-      await updateSettings.mutateAsync(updated);
+      await patchSettings.mutateAsync({
+        verifiedDomains: currentDomains.filter(
+          (d) => d.toLowerCase() !== domainIdOrName.toLowerCase()
+        ),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
@@ -165,7 +183,7 @@ export function useApplyWorkspaceMemberRoleChange(workspaceId: string) {
       return WorkspaceService.applyMemberRoleChange(workspaceId, targetId, payload.request);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.members(workspaceId, 1, 10, "") });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
     },
   });
 }
@@ -621,5 +639,26 @@ export function useDeleteWorkspace() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },
+  });
+}
+
+// ─── Indexed knowledge ───
+
+/**
+ * One page of what the system has indexed about this workspace.
+ *
+ * `placeholderData` keeps the previous page on screen while the next one loads, so paging
+ * does not flash an empty table — the same thing an empty workspace looks like.
+ */
+export function useWorkspaceKnowledge(
+  workspaceId: string,
+  query: WorkspaceKnowledgeQuery = {},
+) {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.knowledge(workspaceId, query),
+    queryFn: () => WorkspaceService.listKnowledge(workspaceId, query),
+    enabled: !!workspaceId,
+    placeholderData: (previousData) => previousData,
+    staleTime: 30000,
   });
 }

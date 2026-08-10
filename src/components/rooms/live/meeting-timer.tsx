@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { calculateMeetingDurationSeconds } from "@/lib/meeting-duration";
+import { calculateMeetingDurationSeconds } from "@/lib/meeting/meeting-duration";
 
 /**
  * Meeting duration is derived from persisted lifecycle timestamps, never from a

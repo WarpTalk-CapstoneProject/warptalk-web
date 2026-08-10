@@ -17,6 +17,12 @@ import { WorkspaceStatusBadge } from "@/components/admin/WorkspaceStatusBadge";
 import { Button } from "@/components/ui/button";
 import { useAdminWorkspaceDirectory } from "@/hooks/use-admin-workspaces";
 import { cn } from "@/lib/utils";
+import {
+  AdminFilterTabs,
+  AdminPage,
+  AdminPageHeader,
+  AdminPanel,
+} from "@/components/admin/admin-page-chrome";
 import type {
   AdminWorkspaceSort,
   AdminWorkspaceStatusFilter,
@@ -127,64 +133,46 @@ function WorkspacesDirectory() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="min-h-full bg-canvas text-ink">
-      <div className="mx-auto w-full max-w-[1480px] px-5 py-5 lg:px-7">
-        <header className="flex flex-col gap-4 border-b border-hairline pb-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-medium text-primary">
-              <Buildings size={14} weight="fill" />
-              Platform directory
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Workspaces</h1>
-            <p className="mt-1 max-w-2xl text-sm text-ink-muted">
-              Every workspace on the platform, independent of your own memberships.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void directoryQuery.refetch()}
-            disabled={directoryQuery.isFetching}
-          >
-            <ArrowsClockwise
-              size={14}
-              className={cn(directoryQuery.isFetching && "animate-spin")}
-            />
-            Refresh
-          </Button>
-        </header>
+    <AdminPage>
+        <AdminPageHeader
+          eyebrow="Platform directory"
+          eyebrowIcon={<Buildings size={14} weight="fill" />}
+          title="Workspaces"
+          description="Every workspace on the platform, independent of your own memberships."
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void directoryQuery.refetch()}
+              disabled={directoryQuery.isFetching}
+            >
+              <ArrowsClockwise
+                size={14}
+                className={cn(directoryQuery.isFetching && "animate-spin")}
+              />
+              Refresh
+            </Button>
+          }
+        />
 
-        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div
-            className="flex items-center gap-1 overflow-x-auto"
-            role="tablist"
-            aria-label="Workspace status"
-          >
-            {STATUS_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                role="tab"
-                aria-selected={status === tab.value}
-                onClick={() =>
-                  updateParams({
-                    status: tab.value === "all" ? undefined : tab.value,
-                    page: undefined,
-                  })
-                }
-                className={cn(
-                  "rounded-lg px-2.5 py-1.5 text-[13px] font-medium whitespace-nowrap transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                  status === tab.value
-                    ? "bg-surface-2 text-ink"
-                    : "text-ink-muted hover:bg-surface-2/60 hover:text-ink",
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        <AdminFilterTabs
+          tabs={STATUS_TABS}
+          value={status}
+          onChange={(value) =>
+            updateParams({
+              status: value === "all" ? undefined : value,
+              page: undefined,
+            })
+          }
+          label="Workspace status"
+          trailing={
+            directoryQuery.isPending
+              ? "Loading…"
+              : `${numberFormatter.format(total)} workspace${total === 1 ? "" : "s"}`
+          }
+        />
 
+        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
           <div className="flex flex-1 items-center gap-2 lg:max-w-md">
             <form
               className="relative flex-1"
@@ -224,19 +212,8 @@ function WorkspacesDirectory() {
           </div>
         </div>
 
-        <section className="mt-4 overflow-hidden rounded-xl border border-hairline bg-surface-1 shadow-linear">
-          <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
-            <p className="text-xs text-ink-muted">
-              {directoryQuery.isPending
-                ? "Loading workspaces…"
-                : `${numberFormatter.format(total)} workspace${total === 1 ? "" : "s"}`}
-            </p>
-            {directoryQuery.isFetching && !directoryQuery.isPending ? (
-              <span className="text-xs text-ink-subtle">Updating…</span>
-            ) : null}
-          </div>
-
-          <div className="hidden items-center border-b border-hairline px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle md:flex">
+        <AdminPanel className="mt-4">
+          <div className="hidden items-center border-b border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle md:flex">
             <span className="flex-1">Workspace</span>
             <span className="w-[110px] shrink-0">Status</span>
             <span className="w-[220px] shrink-0">Owner</span>
@@ -366,9 +343,8 @@ function WorkspacesDirectory() {
               </div>
             </div>
           ) : null}
-        </section>
-      </div>
-    </div>
+        </AdminPanel>
+    </AdminPage>
   );
 }
 

@@ -10,7 +10,8 @@ export interface CreditBalanceDto {
 
 export interface SubscriptionDto {
   id: string;
-  userId: string;
+  /** Nullable on the wire (`Guid? UserId`): a workspace contract subscription has no user. */
+  userId: string | null;
   workspaceId: string | null;
   planId: string;
   planName: string;
@@ -73,12 +74,19 @@ export type PlanMutationDto = Omit<PlanDto, "id">;
 
 export interface CreditTransactionDto {
   id: string;
-  workspaceId: string;
+  /** Nullable on the wire (`Guid? WorkspaceId`), and null for user-scoped transactions. */
+  workspaceId: string | null;
   workspaceName?: string | null;
-  userId: string;
+  /** Nullable on the wire (`Guid? UserId`), and null for system/workspace-scoped transactions. */
+  userId: string | null;
   userName?: string | null;
   amount: number; // negative = consumption, positive = top-up
-  type: "consumption" | "top_up" | "reserve" | "refund" | "adjustment";
+  /**
+   * Server-side values, verbatim from `TransactionConstants.TransactionTypes`. The consume
+   * case was spelled "consumption" here and never matched anything the API sends, which is
+   * why Total Consumed read 0 and the Consumption filter came back empty.
+   */
+  type: "consume" | "top_up" | "adjustment";
   description?: string;
   referenceType?: string;
   referenceId?: string;
@@ -86,9 +94,31 @@ export interface CreditTransactionDto {
   createdAt: string; // ISO datetime
 }
 
+/**
+ * Mirrors the billing service's `UsageSummaryDto` — the shape returned by the *global*
+ * usage-breakdown endpoint.
+ */
 export interface UsageSummaryDto {
   usageType: string;
   totalCreditsConsumed: number;
+}
+
+/** Mirrors `FeatureAdoptionDto` — the per-workspace usage-breakdown endpoint. */
+export interface FeatureAdoptionDto extends UsageSummaryDto {
+  usageCount: number;
+}
+
+/**
+ * Mirrors `UsageBreakdownDto` — the rows nested inside a `BillingReportDto`. Deliberately
+ * NOT `UsageSummaryDto`: the report nests a different record whose credit field is
+ * `creditsConsumed`, not `totalCreditsConsumed`. Typing both as one interface is what let
+ * `usage.totalCreditsConsumed.toLocaleString()` compile and then throw on the first
+ * workspace with any usage at all.
+ */
+export interface UsageBreakdownDto {
+  usageType: string;
+  creditsConsumed: number;
+  quantity: number;
 }
 
 export interface BillingReportDto {
@@ -99,9 +129,11 @@ export interface BillingReportDto {
   endingBalance: number;
   totalTopUpCredits: number;
   totalConsumedCredits: number;
-  usageBreakdown: UsageSummaryDto[];
-  averageTranslationCostPerMinute: number;
-  averageCostPerMeeting: number;
+  usageBreakdown: UsageBreakdownDto[];
+  // Both are nullable on the wire (`decimal?` / `int?`) when the month has nothing to
+  // average over. The per-100-chars name is the server's; "PerMinute" never existed there.
+  averageTranslationCostPer100Chars: number | null;
+  averageCostPerMeeting: number | null;
 }
 
 export interface PagedResult<T> {
@@ -159,19 +191,36 @@ export interface TopWorkspaceDto {
   totalCreditsConsumed: number;
 }
 
+/**
+ * Mirrors `WarpTalk.BillingService.Application.DTOs.InvoiceDto` field for field.
+ *
+ * It previously did not. It declared `amount`, `subscriptionId`, `paymentId`, `stripeInvoiceId`,
+ * `invoicePdfUrl` and `hostedInvoiceUrl` — none of which the API has ever sent — and omitted the
+ * eight fields it does send. TypeScript could not catch it: the type is applied by
+ * `apiClient.get<PagedResult<InvoiceDto>>(...)`, an assertion rather than a validation, so the
+ * compiler believed the fiction. Opening Billing History then called `.toLocaleString()` on
+ * `undefined` and the route was replaced by the error boundary.
+ *
+ * Keep this aligned with `InvoiceDtos.cs` when either side changes.
+ */
 export interface InvoiceDto {
   id: string;
-  workspaceId: string;
-  subscriptionId: string;
-  paymentId: string;
-  stripeInvoiceId: string;
-  amount: number;
+  invoiceNumber: string;
+  subtotal: number;
+  tax: number;
+  /** What the customer owes. This is the field the UI means by "amount". */
+  total: number;
   currency: string;
   status: string;
-  invoicePdfUrl: string;
-  hostedInvoiceUrl: string;
+  pdfUrl: string | null;
+  /** A JSON-encoded array, serialised as a string by the API. */
+  lineItems: string;
+  issuedAt: string;
+  dueAt: string | null;
+  paidAt: string | null;
   createdAt: string;
-  workspaceName?: string | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
 }
 
 export interface UsageAlertDto {

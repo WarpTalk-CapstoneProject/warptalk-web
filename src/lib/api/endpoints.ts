@@ -60,6 +60,8 @@ export const API = {
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
     consent: (id: string) => `/room-artifacts/${id}/consent`,
+    regenerateSummary: (roomId: string) =>
+      `/room-artifacts/rooms/${roomId}/summary/regenerate`,
   },
   transcripts: {
     start: "/transcripts",
@@ -93,6 +95,8 @@ export const API = {
     chatModerate: (roomId: string, messageId: string) => `/meetings/rooms/${roomId}/chat/${messageId}/moderate`,
     rejectParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/reject`,
     transferHost: (roomId: string, newHostId: string) => `/meetings/rooms/${roomId}/transfer-host/${newHostId}`,
+    muteParticipant: (roomId: string, participantId: string) =>
+      `/meetings/rooms/${roomId}/participants/${participantId}/mute`,
     kickParticipant: (roomId: string, participantId: string) => `/meetings/rooms/${roomId}/participants/${participantId}/kick`,
     endMeeting: (roomId: string) => `/meetings/rooms/${roomId}/end`,
     setLock: (roomId: string) => `/meetings/rooms/${roomId}/lock`,
@@ -133,6 +137,7 @@ export const API = {
     approveJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/approve`,
     rejectJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/reject`,
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
+    knowledge: (workspaceId: string) => `/workspaces/${workspaceId}/knowledge`,
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
     documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,
     documentApprove: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/approve`,

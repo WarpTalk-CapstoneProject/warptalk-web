@@ -19,13 +19,30 @@ import {
   type Participant,
 } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
+
+import {
+  INITIAL_STICKY_SPEAKER,
+  SPEAKER_HOLD_MS,
+  nextStickySpeaker,
+} from "@/lib/meeting/sticky-speaker";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { HandRaiseBadge } from "./hand-raise-badge";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
 import { NetworkQualityIcon } from "./network-quality-icon";
 
+/**
+ * WT-330 follow-up: the tile carries no colour of its own and no radius of its own.
+ *
+ * It used to set `!bg-surface-3` (#e5e7eb) while the LiveKitRoom wrapper set
+ * `[&_.lk-participant-tile]:!bg-surface-1` on the same element — two !important rules fighting
+ * over one background, which is not a thing you can reason about from either site. It also set
+ * `rounded-xl` while the frame around it clips at 24px, so the two curves left a wedge of
+ * whichever background won showing in each corner. That wedge is the grey corner in the report.
+ *
+ * The frame owns the shape; the surface is one white everywhere.
+ */
 const TILE_CLASSNAME =
-  "!h-full !w-full !border-0 overflow-hidden rounded-xl !bg-surface-3 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
+  "!h-full !w-full !border-0 overflow-hidden !bg-surface-1 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_.lk-participant-placeholder]:!flex [&_.lk-participant-placeholder]:!h-full [&_.lk-participant-placeholder]:!w-full [&_.lk-participant-placeholder]:!items-center [&_.lk-participant-placeholder]:!justify-center [&_.lk-participant-placeholder_svg]:!h-1/3 [&_.lk-participant-placeholder_svg]:!max-h-40 [&_.lk-participant-placeholder_svg]:!w-auto [&_.lk-participant-name]:!hidden";
 
 /**
  * A grid or featured tile fills the cell it is given.
@@ -44,6 +61,9 @@ const GRID_TILE_SIZING = "relative h-full min-h-[180px] w-full";
 const THUMBNAIL_SIZING =
   "relative aspect-video h-[clamp(84px,12vw,132px)] w-auto shrink-0";
 
+/** Below this, "auto" lays everyone out evenly instead of featuring one person. */
+const AUTO_FEATURED_MIN_PARTICIPANTS = 5;
+
 const STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1 p-3";
 const SINGLE_PARTICIPANT_STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1";
 const FULLSCREEN_FEATURED_STAGE_CLASSNAME =
@@ -59,12 +79,16 @@ export function LiveKitMeetingStage({
   onPinParticipant,
   spotlightedUserId,
   raisedHandUserIds,
+  bottomInset = 0,
   onRetry,
 }: {
   fallbackName: string;
   isJoining: boolean;
   error: string | null;
-  screenStream: MediaStream | null;
+  /** A presenter's own local preview. Optional since the share became a real published
+   * LiveKit track, which reaches the presenter through useTracks like everyone else — the
+   * session no longer captures a second copy with getDisplayMedia. */
+  screenStream?: MediaStream | null;
   layoutMode: MeetingLayoutMode;
   /** Locally-pinned participant (this viewer only) — clicking a tile toggles it. */
   pinnedUserId?: string | null;
@@ -72,6 +96,15 @@ export function LiveKitMeetingStage({
   /** Host-forced spotlight, synced to every viewer via TranslationRoomHub.SpotlightChanged. Overrides pinnedUserId when set. */
   spotlightedUserId?: string | null;
   raisedHandUserIds?: Set<string>;
+  /**
+   * Pixels of chrome sitting over the bottom of the stage.
+   *
+   * The mini window centres a control tray that is nearly as wide as the window itself, so a
+   * name pinned to the bottom-left does not sit beside it — it sits behind it. The stage is
+   * told how much room to leave rather than being told it is "compact", because the number is
+   * the thing that matters and the caller is the only one who knows it.
+   */
+  bottomInset?: number;
   onRetry: () => void;
 }) {
   const connectionState = useConnectionState();
@@ -99,7 +132,7 @@ export function LiveKitMeetingStage({
 
   useEffect(() => {
     if (!screenVideoRef.current) return;
-    screenVideoRef.current.srcObject = screenStream;
+    screenVideoRef.current.srcObject = screenStream ?? null;
   }, [screenStream]);
 
   // Highlight whoever LiveKit currently reports as speaking. The SDK already applies a
@@ -118,9 +151,35 @@ export function LiveKitMeetingStage({
     };
   }, [room]);
 
-  const activeSpeakerIdentity = visibleTracks.find((trackRef) =>
-    activeSpeakerIdentities.has(trackRef.participant.identity),
-  )?.participant.identity;
+  // The RING follows the voice directly — that is a light, and it should track speech.
+  // The LAYOUT does not: the large tile used to swap on every "mm", then swap back, so a
+  // two-person conversation flickered between two faces for its whole duration. Focus is
+  // sticky, and only moves once someone else has held the floor for SPEAKER_HOLD_MS.
+  const speakingNow = visibleTracks
+    .filter((trackRef) => activeSpeakerIdentities.has(trackRef.participant.identity))
+    .map((trackRef) => trackRef.participant.identity);
+
+  const [stickySpeaker, setStickySpeaker] = useState(INITIAL_STICKY_SPEAKER);
+  const speakingKey = speakingNow.join("|");
+
+  useEffect(() => {
+    const speaking = speakingKey ? speakingKey.split("|") : [];
+    setStickySpeaker((current) => nextStickySpeaker(current, speaking, Date.now()));
+
+    // A contender who holds the floor produces no further events while they keep talking,
+    // so the handover has to be re-evaluated once the hold has elapsed rather than only on
+    // the next change.
+    const timer = setTimeout(() => {
+      setStickySpeaker((current) => nextStickySpeaker(current, speaking, Date.now()));
+    }, SPEAKER_HOLD_MS + 50);
+    return () => clearTimeout(timer);
+  }, [speakingKey]);
+
+  const activeSpeakerIdentity =
+    stickySpeaker.focused &&
+    visibleTracks.some((trackRef) => trackRef.participant.identity === stickySpeaker.focused)
+      ? stickySpeaker.focused
+      : undefined;
   const localIdentity = room?.localParticipant.identity ?? null;
   const firstVisibleIdentity = visibleTracks[0]?.participant.identity;
   const firstRemoteIdentity = visibleTracks.find(
@@ -134,7 +193,11 @@ export function LiveKitMeetingStage({
         ? pinnedUserId || activeSpeakerIdentity || firstVisibleIdentity
         : layoutMode === "sidebar"
           ? pinnedUserId || firstVisibleIdentity
-          : layoutMode === "auto" && visibleTracks.length > 1
+          // Five is where an even grid stops being readable. Below it, everyone gets the
+          // same tile — a two- or three-person call has no "main" person, and picking one
+          // shrinks the others for nothing. At six and above the grid tiles get too small
+          // to read a face, so one large tile plus a corner strip is the better trade.
+          : layoutMode === "auto" && visibleTracks.length > AUTO_FEATURED_MIN_PARTICIPANTS
             ? pinnedUserId ||
               activeSpeakerIdentity ||
               firstRemoteIdentity ||
@@ -165,9 +228,11 @@ export function LiveKitMeetingStage({
 
   function renderThumbnail(trackRef: TrackReferenceOrPlaceholder) {
     return renderTile(trackRef, {
-      className:
-        "rounded-2xl border border-white/80 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.18)]",
-      tileClassName: "!rounded-2xl",
+      // Bordered, not shadowed, and it sits ON the corner rather than hovering near it.
+      // The drop shadow made a small tile look like it was floating a centimetre above the
+      // picture; a hairline says "this is a panel" without pretending to be lifted.
+      className: "rounded-xl border border-border bg-surface-1 shadow-none",
+      tileClassName: "!rounded-xl",
       variant: "thumbnail",
     });
   }
@@ -204,7 +269,7 @@ export function LiveKitMeetingStage({
         {showCameraOffState ? (
           <div
             data-camera-state="off"
-            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm ${
+            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-surface-1 ${
               isThumbnail ? "gap-1.5" : "gap-3"
             }`}
           >
@@ -250,10 +315,11 @@ export function LiveKitMeetingStage({
           </span>
         </div>
         <div
+          style={{ bottom: (isThumbnail ? 8 : 20) + bottomInset }}
           className={`pointer-events-none absolute max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 font-medium text-white shadow-sm backdrop-blur ${
             isThumbnail
-              ? "bottom-2 left-2 px-2 py-0.5 text-[11px]"
-              : "bottom-5 left-5 px-3 py-1 text-[13px]"
+              ? "left-2 px-2 py-0.5 text-[11px]"
+              : "left-5 px-3 py-1 text-[13px]"
           }`}
         >
           {displayName}
@@ -328,7 +394,10 @@ export function LiveKitMeetingStage({
             // WT-321(1): no height cap here. The strip is sized by the thumbnails, which now
             // carry one definite height; capping the strip below the tile height is what
             // clipped them.
-            <div className="absolute bottom-28 left-5 right-5 z-20 flex items-end gap-3 overflow-x-auto overflow-y-hidden pb-1">
+            // Bottom-right and flush to the edges. It used to sit 112px off the bottom and
+            // stretch the full width, which read as a strip adrift in the middle of the
+            // frame rather than as something docked to a corner.
+            <div className="absolute bottom-3 right-3 z-20 flex max-w-[calc(100%-1.5rem)] items-end justify-end gap-2 overflow-x-auto overflow-y-hidden">
               {thumbnailTracks.map((trackRef) => renderThumbnail(trackRef))}
             </div>
           ) : null}
@@ -344,10 +413,14 @@ export function LiveKitMeetingStage({
         <div
           className={`${SINGLE_PARTICIPANT_STAGE_CLASSNAME} flex items-stretch justify-stretch`}
         >
+          {/* Square, like the featured branch above. The frame around the stage already
+              rounds at 24 and clips to it; rounding the tile again at 16 inside that only
+              left the frame's backing visible in the corners. One radius, owned by the
+              frame. */}
           <div className="h-full min-h-0 w-full">
             {renderTile(onlyTrack, {
-              className: "!rounded-2xl",
-              tileClassName: "!rounded-2xl",
+              className: "!rounded-none",
+              tileClassName: "!rounded-none",
             })}
           </div>
         </div>

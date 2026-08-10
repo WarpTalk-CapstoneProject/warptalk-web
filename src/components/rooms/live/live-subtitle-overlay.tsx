@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import { groupTranscriptSegments } from "@/lib/transcript-display";
+import { groupTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 

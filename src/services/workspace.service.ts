@@ -2,6 +2,10 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 import type {
+  WorkspaceKnowledgePageDto,
+  WorkspaceKnowledgeQuery,
+} from "@/types/workspace-knowledge";
+import type {
   WorkspaceDto,
   CreateWorkspaceRequest,
   WorkspaceSettingsDto,
@@ -50,8 +54,27 @@ export const WorkspaceService = {
     return data;
   },
 
-  async updateSettings(id: string, settings: Partial<WorkspaceSettingsDto>): Promise<void> {
+  /**
+   * Replaces the whole settings document. The PUT binds the complete `WorkspaceSettingsDto`
+   * server-side, so every field must be present — use `patchSettings` for single-field edits.
+   */
+  async updateSettings(id: string, settings: WorkspaceSettingsDto): Promise<void> {
     await apiClient.put(API.workspaces.settings(id), settings);
+  },
+
+  /**
+   * Sends only the changed keys. The server reads the current document, merges the supplied
+   * keys over it and writes the result back, returning the merged document.
+   */
+  async patchSettings(
+    id: string,
+    patch: Partial<WorkspaceSettingsDto>,
+  ): Promise<WorkspaceSettingsDto> {
+    const { data } = await apiClient.patch<WorkspaceSettingsDto>(
+      API.workspaces.settings(id),
+      patch,
+    );
+    return data;
   },
 
   async deleteWorkspace(id: string): Promise<void> {
@@ -212,6 +235,22 @@ export const WorkspaceService = {
     const { data } = await apiClient.get<PagedResult<WorkspaceDocumentDto>>(API.workspaces.documents(workspaceId), {
       params: { page, pageSize, search },
     });
+    return data;
+  },
+
+  /**
+   * One page of indexed chunks for this workspace. Cursor-based, because the vector store
+   * pages by continuation token — an offset API on top of it would rescan from the start
+   * every page and silently skip or repeat rows when the collection changes mid-listing.
+   */
+  async listKnowledge(
+    workspaceId: string,
+    query: WorkspaceKnowledgeQuery = {},
+  ): Promise<WorkspaceKnowledgePageDto> {
+    const { data } = await apiClient.get<WorkspaceKnowledgePageDto>(
+      API.workspaces.knowledge(workspaceId),
+      { params: query },
+    );
     return data;
   },
 
