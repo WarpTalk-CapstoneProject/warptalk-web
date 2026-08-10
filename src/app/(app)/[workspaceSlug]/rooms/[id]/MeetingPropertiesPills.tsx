@@ -2,9 +2,10 @@ import { LanguageSelector } from "@/components/rooms/create/language-selector";
 import { useUpdateTranslationRoomSettings } from "@/hooks/use-translationRooms";
 import { StatusPanel } from "../StatusPanel";
 import { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/translationRoom";
-import { Calendar as CalendarIcon, Copy, Users } from "@phosphor-icons/react/dist/ssr";
+import { Calendar as CalendarIcon, Copy, Tag, Users } from "@phosphor-icons/react/dist/ssr";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { meetingTypeByValue } from "@/lib/meeting/meeting-types";
 
 export function MeetingPropertiesPills({
   room,
@@ -30,6 +31,9 @@ export function MeetingPropertiesPills({
   // created — which for an ad-hoc room is the same thing.
   const meetingDate = new Date(room.scheduledAt ?? room.createdAt);
 
+  // null for a type this build's registry does not know — the chip is then simply not rendered.
+  const meetingType = meetingTypeByValue(room.translationRoomType);
+
   const updateSettings = useUpdateTranslationRoomSettings();
 
   // Edit the room's declared language set; source language is derived as the first
@@ -45,6 +49,26 @@ export function MeetingPropertiesPills({
   return (
     <div className="flex flex-wrap items-center gap-2 mt-4 text-[11px]">
       <StatusPanel status={room.status} />
+
+      {/* The meeting type. It is picked at creation and it decides the things a viewer of this
+          page will otherwise be surprised by — the lobby, mute-on-entry, auto-record, breakouts
+          and the seat cap in the occupancy pill a few chips along. It was shown in the create
+          dialog and then never again, so a room's own page could not tell you whether it was an
+          Event or a Webinar.
+
+          Read-only, unlike the language selector beside it: the type is what stamped the room's
+          settings and seat cap at creation, and changing it here would imply those get restamped,
+          which no endpoint does. Nothing is rendered at all for a type the registry does not
+          know — better a missing chip than a confident wrong label. */}
+      {meetingType && (
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+          title={`Meeting type — sets the lobby, mute on entry, recording, breakouts and the ${meetingType.defaults.maxParticipants}-seat capacity`}
+        >
+          <Tag size={12} weight="regular" className="text-ink-muted" aria-hidden />
+          <span className="text-[12px] font-medium text-ink">{meetingType.label}</span>
+        </div>
+      )}
 
       <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
         <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold shrink-0 uppercase">

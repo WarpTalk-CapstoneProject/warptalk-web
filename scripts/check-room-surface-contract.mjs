@@ -174,16 +174,23 @@ assert.doesNotMatch(
   "Nothing may hand-filter the source out of the targets — raw-string comparison misses \"en\" vs \"en-US\".",
 );
 
-// ── WT-342: the create toggle must show what the server will actually store ──
+// ── The create toggle must show what the server will actually store ─────────
 
-// Three layers, same order as TranslationRoomMapper.ResolveSettings. If this drifts, the toggle
-// silently lies about the meeting being created — a host sees "off" and then finds nobody can
-// start the meeting. The workspace layer is the one that was missing: EnforceHostApprovalDefault
-// had a working settings toggle and was read by nothing at all.
+// Same two layers, same order, as TranslationRoomMapper.ResolveSettings. If this drifts, the
+// toggle silently lies about the meeting being created — a host sees "off" and then finds nobody
+// can start the meeting.
 assert.match(
   createRoomDialog,
-  /requiresApproval \?\?\s*workspaceSettings\?\.enforceHostApprovalDefault \?\?\s*meetingTypeByLabel\(meetingTemplate\)\.defaults\.requiresApproval/,
-  "The create dialog's approval toggle must resolve explicit → workspace default → meeting type.",
+  /requiresApproval \?\? meetingTypeByLabel\(meetingTemplate\)\.defaults\.requiresApproval/,
+  "The create dialog's approval toggle must resolve explicit choice → meeting type default.",
+);
+// WT-343: host approval is a PER-MEETING decision. A workspace-wide default for it existed for
+// one release and was removed as a second place to set the same thing; nothing may reintroduce a
+// workspace layer here without the owner asking for it back.
+assert.doesNotMatch(
+  createRoomDialog,
+  /enforceHostApprovalDefault/,
+  "Host approval is per-meeting; the create dialog must not read a workspace-wide default.",
 );
 // Only an explicit choice is sent. Echoing the resolved default back would pin the value into the
 // room's settings blob and defeat the server-side resolution this mirrors.

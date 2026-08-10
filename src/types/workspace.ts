@@ -34,7 +34,6 @@ export interface WorkspaceSettingsDto {
   maxActiveRooms: number;
   artifactRetentionDays: number;
   invitationExpiryDays: number;
-  enforceHostApprovalDefault: boolean;
   verifiedDomains: string[];
   allowExternalCollaboration: boolean;
   requireVerifiedDomainForInternal: boolean;
