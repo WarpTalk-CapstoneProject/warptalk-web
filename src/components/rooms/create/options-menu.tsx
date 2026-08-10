@@ -208,15 +208,6 @@ export function OptionsMenu({
                 )}
               </button>
             </div>
-
-            {/* The consequence, stated where the choice is made. Both sentences name the
-                start rule, because that is the half nobody expects from a control called
-                "Require approval". */}
-            <p className="px-2 pb-1.5 text-[11px] leading-snug text-ink-muted">
-              {requiresApproval
-                ? "Guests wait in the lobby, and only you can start this meeting."
-                : "Guests join straight away, and anyone invited can start this meeting."}
-            </p>
           </div>
         )}
       </PopoverContent>

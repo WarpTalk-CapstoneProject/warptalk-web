@@ -59,6 +59,24 @@ export function meetingTypeByLabel(label: string): MeetingType {
   return BY_LABEL.get(label) ?? MEETING_TYPES[0];
 }
 
+const BY_VALUE = new Map(MEETING_TYPES.map((type) => [type.value, type]));
+
+/**
+ * The stored API value ("CHANNEL_MEETING") read back as something a person should see
+ * ("Channel Meeting"). The create dialog goes label → value; every surface that DISPLAYS an
+ * existing room needs the other direction.
+ *
+ * Returns null rather than falling back to the first type, unlike `meetingTypeByLabel`. That
+ * one is fed by a picker whose options come from this list, so an unknown label is a bug and
+ * a default is harmless. This one is fed by whatever the database holds, and quietly relabelling
+ * an unrecognised type as "Event" would show the viewer a confident wrong answer about how
+ * their meeting is configured.
+ */
+export function meetingTypeByValue(value?: string | null): MeetingType | null {
+  if (!value) return null;
+  return BY_VALUE.get(value.trim().toUpperCase()) ?? null;
+}
+
 // `meetingTypeHighlights` lived here: a summary of what each type turns on, rendered as chips
 // beside the workspace name in the Create Room header. The chips are gone — five read-only
 // labels across the top of a five-field dialog, reflowing the header on every type change —
