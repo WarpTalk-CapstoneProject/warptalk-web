@@ -303,17 +303,32 @@ export async function getUsableAccessToken(): Promise<string | null> {
 }
 
 /**
- * True when the server itself rejected the refresh token (4xx), as opposed to a network
- * blip or a 5xx. Only the former means the session is genuinely dead — retrying through a
- * transient failure is worth doing, retrying a rejected token never succeeds.
+ * Statuses that are never a verdict on the refresh token, even though they are 4xx.
+ *
+ * WT-344: "any 4xx means the session is dead" was too wide by construction. None of these says
+ * anything about the credential — 404 is a route that is not there (a version skew mid-deploy),
+ * 408/425 are timing, 429 is rate limiting — and each one of them was, until now, able to end a
+ * perfectly good week-long session permanently.
+ */
+const TRANSIENT_REFRESH_STATUSES = new Set([404, 408, 425, 429]);
+
+/**
+ * True when the server itself rejected the refresh token, as opposed to a network blip, a 5xx,
+ * or a 4xx that is not about the token at all. Only a rejection means the session is genuinely
+ * dead — retrying through a transient failure is worth doing, retrying a rejected token never
+ * succeeds.
+ *
+ * 400 counts as a rejection because that is what this backend returns for one
+ * (TokenController.Refresh). It used to return 400 for a service fault too, which is what let a
+ * database blip during a deploy sign every open browser out; that now comes back as 503 and
+ * lands in the transient branch below. This client-side guard stays regardless — it must not
+ * take a single status code's word for the difference between "no" and "I could not check".
  */
 function isRefreshRejectedByServer(error: unknown): boolean {
-  return (
-    axios.isAxiosError(error)
-    && Boolean(error.response)
-    && error.response!.status >= 400
-    && error.response!.status < 500
-  );
+  if (!axios.isAxiosError(error) || !error.response) return false;
+  const { status } = error.response;
+  if (status < 400 || status >= 500) return false;
+  return !TRANSIENT_REFRESH_STATUSES.has(status);
 }
 
 /**
@@ -322,6 +337,19 @@ function isRefreshRejectedByServer(error: unknown): boolean {
  */
 function isMissingRefreshToken(error: unknown): boolean {
   return error instanceof MissingRefreshTokenError;
+}
+
+/**
+ * A short tag naming why the session was declared dead, for the teardown breadcrumb.
+ *
+ * The status is the whole point: "http-400" and "no-refresh-token" call for completely
+ * different investigations, and telling them apart afterwards is exactly what the breadcrumb
+ * failed to do the one time it mattered.
+ */
+function describeRefreshFailure(error: unknown): string {
+  if (isMissingRefreshToken(error)) return "no-refresh-token";
+  if (axios.isAxiosError(error) && error.response) return `http-${error.response.status}`;
+  return "unknown";
 }
 
 let sessionEnded = false;
@@ -377,7 +405,7 @@ export function startProactiveRefresh() {
  * and each one used to reassign window.location independently. One dead session is one
  * logout and one redirect, however many requests noticed it.
  */
-export function endDeadSession() {
+export function endDeadSession(cause: string = "unknown") {
   if (sessionEnded) {
     return;
   }
@@ -387,7 +415,14 @@ export function endDeadSession() {
   // AFTER logout, deliberately. logout() writes "user-sign-out", which is what it is when a
   // person clicks it and a lie when the client decides the session is dead. Last write wins,
   // so the breadcrumb ends up saying which of the two actually happened.
-  recordSessionTeardown("client-declared-session-dead");
+  //
+  // WT-344: the cause is part of the reason now. This wrote a bare
+  // "client-declared-session-dead", which overwrote the far more specific
+  // "refresh-token-missing(store=..,persisted=..)" recorded moments earlier — so the one
+  // breadcrumb that survived to be read could not tell a rejected token from a missing one,
+  // and a real production logout had to be narrowed down by correlating timestamps against a
+  // deploy log. An instrument that erases its own finding is worse than none.
+  recordSessionTeardown(`client-declared-session-dead(${cause})`);
   if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
     window.location.href = "/login";
   }
@@ -447,7 +482,7 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
       // A missing refresh token counts too: it produces a plain Error rather than an
       // AxiosError, so it used to slip past the 4xx check and leave the session alive.
       if (isRefreshRejectedByServer(error) || isMissingRefreshToken(error)) {
-        endDeadSession();
+        endDeadSession(describeRefreshFailure(error));
       }
       throw error;
     }
@@ -521,7 +556,7 @@ apiClient.interceptors.response.use(
     // would throw a non-Axios error that the 4xx check below cannot recognise, which is how an
     // expired session ended up spinning forever instead of landing on /login.
     if (!getRefreshToken()) {
-      endDeadSession();
+      endDeadSession("no-refresh-token-on-401");
       return Promise.reject(error);
     }
 
@@ -540,7 +575,7 @@ apiClient.interceptors.response.use(
       // token vanished between the check above and the refresh itself.
       // Do not log out on network errors or 5xx server errors.
       if (isRefreshRejectedByServer(refreshError) || isMissingRefreshToken(refreshError)) {
-        endDeadSession();
+        endDeadSession(describeRefreshFailure(refreshError));
       }
       return Promise.reject(refreshError);
     }
