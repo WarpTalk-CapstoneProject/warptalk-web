@@ -22,6 +22,9 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import { LanguageLabel } from "@/components/language/language-label";
 import { meetingLanguageSet } from "@/lib/language/languages";
+// The home day panel needs the same two answers; they live in one place so the two surfaces
+// cannot drift the way the language chip did.
+import { isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -51,22 +54,6 @@ function formatTimeShort(value?: string) {
   }).format(new Date(value));
 }
 
-/** Midnight of the given date as a timestamp, for comparing days without comparing times. */
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
-
-/**
- * Whether this room was booked for the given calendar day.
- *
- * Status is deliberately not part of the question (WT-247): a meeting that has started, or
- * already ended, still belongs on the day it was scheduled for. Rooms with no scheduledAt are
- * instant meetings and belong to no day at all.
- */
-function isScheduledOn(room: TranslationRoomDto, day: Date) {
-  if (!room.scheduledAt) return false;
-  return new Date(room.scheduledAt).toDateString() === day.toDateString();
-}
 
 /**
  * WT-327: marks a room that is one occurrence of a recurring booking.
