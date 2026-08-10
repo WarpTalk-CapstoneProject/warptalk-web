@@ -89,6 +89,8 @@ export function resolveRoomEntryIntent(input: {
   statusLabel: string;
   /** Formatted start time, when the room is scheduled. Used only for the lobby copy. */
   scheduledAtLabel?: string | null;
+  /** Whether the current user is active in this meeting session in the current tab. */
+  isActiveInMeeting?: boolean;
   /**
    * WT-341: the room's own `settings.requiresApproval`. Undefined means "assume it does" — see
    * shouldEnterWaitingRoom. When false, a non-host gets the same "Start meeting" action the host
@@ -102,6 +104,15 @@ export function resolveRoomEntryIntent(input: {
       label: input.statusLabel,
       helpText: null,
       isActionable: false,
+    };
+  }
+
+  if (input.isActiveInMeeting && input.status === "in_progress") {
+    return {
+      mode: "join",
+      label: "Return to meeting",
+      helpText: "You are currently in this meeting. Click to return.",
+      isActionable: true,
     };
   }
 
