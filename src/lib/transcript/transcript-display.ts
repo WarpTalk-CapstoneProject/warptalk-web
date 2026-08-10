@@ -196,10 +196,23 @@ export function resolveTranscriptSpeakerName(
   segment: TranscriptSegmentDto,
   participants: readonly SpeakerParticipant[],
 ): string {
+  // The same UUID guard the supplied-name branch below already applies. This branch trusted
+  // the participant's displayName absolutely, and after a sign-out and sign-in the roster can
+  // come back holding the user's id as their display name — which is how a transcript ended
+  // up attributing lines to "019f0d00-0de0-7000-9000-000000000003".
+  //
+  // A name that IS the id is not a name. Better to say "Speaker" than to print a UUID at
+  // someone and call it their name.
   const participantName = participants
     .find((participant) => participant.userId === segment.speakerId)
     ?.displayName.trim();
-  if (participantName) return participantName;
+  if (
+    participantName
+    && participantName !== segment.speakerId
+    && !UUID_PATTERN.test(participantName)
+  ) {
+    return participantName;
+  }
 
   const suppliedName = segment.speakerName?.trim();
   if (suppliedName && suppliedName !== segment.speakerId && !UUID_PATTERN.test(suppliedName)) {
