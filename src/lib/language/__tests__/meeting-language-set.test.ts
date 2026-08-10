@@ -53,3 +53,36 @@ test("a clean set is left exactly as it is", () => {
 test("empty and malformed entries do not become a language", () => {
   assert.deepEqual(dedupe(["en", "", "   ", "vi"]), ["en", "vi"]);
 });
+
+// ── what the meetings list shows ────────────────────────────────────────────────────
+
+/** Mirrors the list row: the meeting's declared languages, in order, each one once. */
+function declaredLanguages(sourceLanguage: string | undefined, targetLanguages: string[]) {
+  return [sourceLanguage, ...targetLanguages]
+    .filter((value): value is string => Boolean(value))
+    .reduce<string[]>((unique, value) => {
+      const bare = normalizeLanguage(value);
+      return bare && !unique.some((item) => normalizeLanguage(item) === bare)
+        ? [...unique, value]
+        : unique;
+    }, []);
+}
+
+test("the source is not repeated among the languages it is already in", () => {
+  // The row read "English → English · Vietnamese" because the filter that removed the
+  // source compared raw strings, and the room stored "en" beside "en-US".
+  assert.deepEqual(declaredLanguages("en-US", ["en", "vi"]), ["en-US", "vi"]);
+});
+
+test("a monolingual meeting names one language", () => {
+  assert.deepEqual(declaredLanguages("vi", ["vi"]), ["vi"]);
+  assert.deepEqual(declaredLanguages("vi", []), ["vi"]);
+});
+
+test("the whole declared set survives, in the order it was declared", () => {
+  assert.deepEqual(declaredLanguages("en", ["vi", "ja"]), ["en", "vi", "ja"]);
+});
+
+test("a room with no source still shows its targets", () => {
+  assert.deepEqual(declaredLanguages(undefined, ["vi", "en"]), ["vi", "en"]);
+});

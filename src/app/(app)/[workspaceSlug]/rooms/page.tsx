@@ -21,6 +21,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import { LanguageLabel } from "@/components/language/language-label";
+import { normalizeLanguageCode } from "@/lib/language/languages";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -204,52 +205,48 @@ function LinearRow({
         </div>
 
         <div className="flex h-[26px] w-[176px] shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          {/* Reads "English → 🇻🇳 · 🇯🇵". It used to read "English ; 🇺🇸 ; 🇻🇳 ;" — three
-              separate faults in one chip. The separator was a semicolon, so the two branches
-              of this same control punctuated the same relationship differently (the
-              single-target branch below has always used an arrow). There was a trailing
-              separator before the "+", punctuating a gap. And the source language was listed
-              again among its own targets, because create sends `targetLanguages = languages`
-              with the source still in the set — so a room appeared to translate English into
-              English. Only the display is corrected here; what gets sent to the API is
-              unchanged, since the backend may well want the source in that list. */}
-          <LanguageLabel value={room.sourceLanguage || "en-US"} />
+          {/* A meeting HAS languages; it does not point from one to another.
+              
+              This drew "source → targets", which was wrong twice over. It was wrong in
+              meaning: everyone in a room picks what they speak and what they listen to
+              individually, so there is no single direction the meeting translates in — the
+              room just declares a set. And it was wrong in fact, because the filter that
+              removed the source from the targets compared raw strings, so a room storing
+              "en" alongside "en-US" rendered "English → English · Vietnamese".
+              
+              The set is normalised and deduped for the same reason the picker is: the same
+              language reaches us spelled several ways. */}
           {(() => {
-            const source = room.sourceLanguage || "en-US";
-            const targets = room.targetLanguages.filter((t) => t !== source);
+            const declared: string[] = [room.sourceLanguage, ...(room.targetLanguages ?? [])]
+              .filter((value): value is string => Boolean(value));
+            const languages = declared.reduce<string[]>((unique, value) => {
+              const code = normalizeLanguageCode(value);
+              return code && !unique.some((item) => normalizeLanguageCode(item) === code)
+                ? [...unique, value]
+                : unique;
+            }, []);
 
-            // Everything the room translates into is the source itself — there is no second
-            // language to point an arrow at, so the source chip alone is the honest answer.
-            if (targets.length === 0) return null;
+            if (languages.length === 0) return null;
 
-            if (targets.length === 1) {
-              return (
-                <>
-                  <span className="text-border mx-0.5 font-bold">→</span>
-                  <LanguageLabel value={targets[0]} />
-                </>
-              );
+            // One language is a monolingual room, and its name fits. Beyond that the names
+            // stop fitting in a 176px chip, so flags carry it and the label appears on hover.
+            if (languages.length === 1) {
+              return <LanguageLabel value={languages[0]} />;
             }
 
             return (
-              <>
-                <span className="text-border mx-0.5 font-bold">→</span>
-                <div className="flex items-center">
-                  {targets.map((t, i) => (
-                    <div key={t} className="flex items-center">
-                      {i > 0 && (
-                        <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
-                          ·
-                        </span>
-                      )}
-                      <LanguageLabel value={t} showName={false} />
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-center px-1">
-                    <Plus weight="bold" size={12} className="text-ink-muted" />
+              <div className="flex items-center">
+                {languages.map((code, i) => (
+                  <div key={code} className="flex items-center">
+                    {i > 0 && (
+                      <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
+                        ·
+                      </span>
+                    )}
+                    <LanguageLabel value={code} showName={false} />
                   </div>
-                </div>
-              </>
+                ))}
+              </div>
             );
           })()}
         </div>
