@@ -34,6 +34,7 @@ import { getErrorStatus } from "@/lib/api/retry-policy";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 
 const PersistentMeetingSession = dynamic(
   () =>
@@ -202,27 +203,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!mounted || !isAuthenticated || isOnboardingRoute || isAdminRoute || workspacesLoading) return;
+    if (selectWorkspace.isPending) return;
 
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
-        const membershipType =
-          "membershipType" in firstWs && typeof firstWs.membershipType === "string"
-            ? firstWs.membershipType
-            : "Internal";
-        const defaultLanguage =
-          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
-            ? firstWs.defaultLanguage
-            : "en";
-        selectWorkspace.mutate(firstWs.id);
-        setActiveWorkspace(
-          firstWs.id,
-          firstWs.name,
-          firstWs.slug,
-          firstWs.role || "Member",
-          membershipType,
-          defaultLanguage
-        );
+        void (async () => {
+          try {
+            const selection = await selectWorkspace.mutateAsync(firstWs.id);
+            applySelectedWorkspace(selection, setActiveWorkspace);
+          } catch {
+            router.replace("/workspace");
+          }
+        })();
       } else {
         router.replace("/workspace");
       }
