@@ -1,4 +1,5 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useMeetingChat,
@@ -8,8 +9,8 @@ import {
 } from "@/hooks/use-meeting";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
-import { getLanguageName, languagesInScope } from "@/lib/languages";
-import { downloadAuthenticatedFile } from "@/lib/download-artifact";
+import { getLanguageName } from "@/lib/language/languages";
+import { downloadAuthenticatedFile } from "@/lib/ui/download-artifact";
 import { API } from "@/lib/api/endpoints";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
@@ -19,6 +20,8 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { suggestion } from "./mentions";
+import { SuggestionPluginKey } from "@tiptap/suggestion";
+import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
 import {
   CHAT_MESSAGE_COUNTER_THRESHOLD,
   MAX_CHAT_MESSAGE_LENGTH,
@@ -74,6 +77,9 @@ export function ChatPanel({
 }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
   const participants = useTranslationRoomStore((state) => state.participants);
+  const assistantState = useTranslationRoomStore((state) => state.assistantState);
+  const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
+  const answersWhenAskedRef = useRef(0);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
   );
@@ -96,25 +102,19 @@ export function ChatPanel({
     Record<string, MessageTranslationState>
   >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // User-facing "translate messages into" choice — defaults to the viewer's own listen
-  // language but can be overridden per session via the dropdown, since the viewer may
-  // not know (or want) the language it was inferred to.
-  const [selectedTargetLanguage, setSelectedTargetLanguage] = useState(
-    targetLanguage || "en",
-  );
+  // The language a translation is offered IN, taken from the viewer's own listen language.
+  //
+  // This used to be a dropdown in the panel header — "Translate to [Vietnamese]" — sitting
+  // above a thread most people never translate, asking a question before there was anything
+  // to ask it about. The per-message button already existed and already knew which language
+  // to use; the header was a second way to say the same thing, and the only way to discover
+  // the first was to hover a bubble.
+  const suggestedTargetLanguage = targetLanguage || "en";
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const previousTargetLanguageRef = useRef(targetLanguage);
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
-
-  function handleTargetLanguageChange(nextLanguage: string) {
-    setSelectedTargetLanguage(nextLanguage);
-    // Previously fetched translations are for the old target language — drop them so
-    // re-opening a message re-fetches under the newly selected language instead of
-    // silently showing stale text.
-    setTranslations({});
-  }
 
   function toggleTranslation(messageId: string) {
     const current = translations[messageId];
@@ -131,7 +131,7 @@ export function ChatPanel({
       [messageId]: { loading: true, visible: true },
     }));
     translateMessageAPI(
-      { messageId, targetLanguage: selectedTargetLanguage },
+      { messageId, targetLanguage: suggestedTargetLanguage },
       {
         onSuccess: (dto) => {
           setTranslations((prev) => ({
@@ -165,7 +165,9 @@ export function ChatPanel({
       return;
     }
     previousTargetLanguageRef.current = targetLanguage;
-    setSelectedTargetLanguage(targetLanguage);
+    // Translations already fetched are in the previous language — drop them so a message
+    // re-opened after the viewer changes what they listen in re-fetches rather than showing
+    // stale text under a new label.
     setTranslations({});
   }, [targetLanguage]);
 
@@ -174,6 +176,38 @@ export function ChatPanel({
       setChatMessages(historyQuery.data);
     }
   }, [historyQuery.data, setChatMessages]);
+
+  // A NEW answer has landed — stop waiting, whichever way it arrived.
+  //
+  // Counted, not merely present: a second question in a room that already holds WarpBot
+  // replies would otherwise clear the indicator the instant it appeared. The baseline is
+  // taken when the question is asked, so what this watches for is one MORE answer than
+  // existed then.
+  //
+  // Both delivery paths are covered: the live broadcast, and a history backfill after a hub
+  // reconnect — which is how the answer arrives when the socket was down while WarpBot
+  // replied.
+  useEffect(() => {
+    if (assistantState !== "thinking") return;
+    if (messages.filter(isAssistantMessage).length > answersWhenAskedRef.current) {
+      setAssistantState("idle");
+    }
+  }, [messages, assistantState, setAssistantState]);
+
+  // One deadline, wherever "thinking" came from — the optimistic set on send, or the
+  // server's pending signal. A spinner with no end is its own lie, and this one would
+  // otherwise outlive the meeting.
+  useEffect(() => {
+    if (assistantState !== "thinking") return;
+    const timer = window.setTimeout(() => {
+      if (
+        useTranslationRoomStore.getState().assistantState === "thinking"
+      ) {
+        useTranslationRoomStore.getState().setAssistantState("timed_out");
+      }
+    }, 90_000);
+    return () => window.clearTimeout(timer);
+  }, [assistantState]);
 
   useEffect(() => {
     if (containerRef.current && shouldAutoScrollRef.current) {
@@ -201,7 +235,10 @@ export function ChatPanel({
         horizontalRule: false,
       }),
       Placeholder.configure({
-        placeholder: "Type a message or @agent for AI help...",
+        // Short on purpose. This panel is a narrow column, and "Type a message or @agent for
+        // AI help..." wrapped onto a second line inside a one-line box. The @ hint does not
+        // need to live here: typing "@" opens the agent menu, which names WarpBot itself.
+        placeholder: "Type a message…",
       }),
       // Stops the typing at the cap rather than letting the message be composed and then
       // rejected by the API (WT-237).
@@ -219,7 +256,22 @@ export function ChatPanel({
         class:
           "min-h-[36px] max-h-[120px] overflow-y-auto custom-scrollbar w-full bg-transparent text-[13px] text-ink outline-none px-3 py-2",
       },
-      handleKeyDown: (_view: EditorView, event: KeyboardEvent) => {
+      handleKeyDown: (view: EditorView, event: KeyboardEvent) => {
+        // Hand Enter and Tab back to the @ menu while it is offering something.
+        //
+        // ProseMirror checks these direct props BEFORE any plugin, so this handler used to
+        // beat the mention menu outright: you typed "@", saw "@WarpBot AGENT" highlighted,
+        // pressed Enter, and sent the literal text "@" instead of picking what was on screen.
+        const mention = SuggestionPluginKey.getState(view.state) as
+          | { active?: boolean; query?: string }
+          | undefined;
+        if (
+          mention?.active &&
+          mentionMenuHandlesKey(event.key, mentionMatches(mention.query ?? "").length)
+        ) {
+          return false;
+        }
+
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
           sendMessage();
@@ -284,6 +336,23 @@ export function ChatPanel({
     }
 
     setSendError(null);
+
+    // BEFORE the request, not in onSuccess.
+    //
+    // onSuccess runs after the HTTP round trip, and WarpBot's answer arrives over SignalR
+    // independently — so a fast answer landed FIRST, cleared a state that was still idle, and
+    // then onSuccess switched "thinking" on with nothing left to turn it off. Ninety seconds
+    // later the user saw "WarpBot didn't answer" sitting underneath the answer.
+    const asksTheAgent = mentions.some((mention) => mention.type === "agent");
+    if (asksTheAgent) {
+      // How many answers existed at the moment of asking. Captured here, synchronously,
+      // rather than in an effect: an effect runs after the render, by which time a fast
+      // answer may already have arrived and would be counted as part of the baseline — which
+      // is a spinner that never stops.
+      answersWhenAskedRef.current = messages.filter(isAssistantMessage).length;
+      setAssistantState("thinking");
+    }
+
     sendMessageAPI(
       {
         roomId,
@@ -301,6 +370,11 @@ export function ChatPanel({
         },
         onError: () => {
           setSendError("Message could not be sent. Try again.");
+          // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
+          // seconds and then blame WarpBot for a message that never reached it.
+          if (asksTheAgent) {
+            setAssistantState("idle");
+          }
         },
       },
     );
@@ -351,26 +425,6 @@ export function ChatPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <label
-          htmlFor="chat-translate-target"
-          className="text-[11px] font-medium text-ink-subtle"
-        >
-          Translate to
-        </label>
-        <select
-          id="chat-translate-target"
-          value={selectedTargetLanguage}
-          onChange={(event) => handleTargetLanguageChange(event.target.value)}
-          className="rounded-md border border-border bg-surface-1 px-2 py-1 text-[12px] text-ink outline-none focus:border-primary"
-        >
-          {languagesInScope("chatTarget").map((language) => (
-            <option key={language.code} value={language.code}>
-              {language.name}
-            </option>
-          ))}
-        </select>
-      </div>
       <div
         ref={containerRef}
         onScroll={handleMessagesScroll}
@@ -405,22 +459,9 @@ export function ChatPanel({
         ) : null}
         <AnimatePresence initial={false}>
           {messages.map((message: ChatMessageDto) => {
-            const isMine = message.senderUserId === user?.id;
-            const isAssistant = message.messageType === "assistant";
-
-            let displayName = "";
-            if (isMine && user) {
-              displayName = user.fullName;
-            } else if (isAssistant) {
-              displayName = "WarpBot";
-            } else {
-              const senderParticipant = participants.find(
-                (p) =>
-                  p.userId === message.senderUserId ||
-                  p.displayName === message.senderDisplayName,
-              );
-              displayName = senderParticipant?.displayName || "User";
-            }
+            const isAssistant = isAssistantMessage(message);
+            const isMine = !isAssistant && message.senderUserId === user?.id;
+            const displayName = chatSenderName(message, user, participants);
 
             return (
               <motion.div
@@ -451,14 +492,24 @@ export function ChatPanel({
                       })}
                     </span>
                     {message.messageType !== "file" &&
-                    selectedTargetLanguage.toLowerCase() !==
+                    suggestedTargetLanguage.toLowerCase() !==
                       message.originalLanguage.toLowerCase() ? (
                       <button
                         type="button"
                         onClick={() => toggleTranslation(message.id)}
-                        aria-label="Translate message"
-                        title="Translate message"
-                        className="flex h-5 w-5 items-center justify-center rounded text-ink-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink group-hover:opacity-100"
+                        aria-label={`Translate into ${getLanguageName(suggestedTargetLanguage)}`}
+                        title={`Translate into ${getLanguageName(suggestedTargetLanguage)}`}
+                        aria-pressed={Boolean(translations[message.id]?.visible)}
+                        // Always visible, not revealed on hover. The header dropdown is gone,
+                        // so this is now the only way to translate anything — and a control
+                        // that appears only once the pointer is already on it cannot be found
+                        // by someone who does not know it is there. It says which language it
+                        // will use, which is what the dropdown was really for.
+                        className={`flex h-5 w-5 items-center justify-center rounded transition-colors hover:bg-surface-2 hover:text-ink ${
+                          translations[message.id]?.visible
+                            ? "bg-surface-2 text-ink"
+                            : "text-ink-subtle"
+                        }`}
                       >
                         {translations[message.id]?.loading ? (
                           <LoaderCircle className="h-3 w-3 animate-spin" />
@@ -511,7 +562,7 @@ export function ChatPanel({
                     >
                       {translations[message.id]!.text}
                       <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
-                        {getLanguageName(selectedTargetLanguage)}
+                        {getLanguageName(suggestedTargetLanguage)}
                       </span>
                     </p>
                   ) : null}
@@ -526,6 +577,28 @@ export function ChatPanel({
             );
           })}
         </AnimatePresence>
+
+        {/* The answer arrives as a WarpBot message in this same shared chat, which everyone
+            sees — but a tool-calling loop takes seconds, and with nothing here the wait was
+            indistinguishable from having been ignored. */}
+        {assistantState !== "idle" ? (
+          <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
+            {assistantState === "thinking" ? (
+              <>
+                <span className="flex gap-0.5" aria-hidden>
+                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]" />
+                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]" />
+                  <span className="size-1 animate-bounce rounded-full bg-ink-muted" />
+                </span>
+                <span>WarpBot is thinking…</span>
+              </>
+            ) : (
+              <span className="text-amber-600">
+                WarpBot didn&apos;t answer. Try mentioning it again.
+              </span>
+            )}
+          </div>
+        ) : null}
       </div>
       <div className="p-3 bg-transparent">
         {sendError ? (
@@ -545,7 +618,11 @@ export function ChatPanel({
           className="hidden"
           onChange={handleFileSelected}
         />
-        <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0">
+        {/* The placeholder is a floated pseudo-element with `h-0`, so it adds no height to the
+            line it sits on — which means a placeholder long enough to wrap put its second line
+            outside the box and the editor clipped it. It is now held to one line and
+            ellipsised, so no future wording can break the composer's shape. */}
+        <div className="flex items-end gap-2 rounded-md border border-border bg-surface-1 p-1 transition-colors focus-within:border-primary focus-within:shadow-sm [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-subtle [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:max-w-full [&_.ProseMirror_p.is-editor-empty:first-child::before]:overflow-hidden [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ellipsis [&_.ProseMirror_p.is-editor-empty:first-child::before]:whitespace-nowrap">
           <button
             type="button"
             onClick={handleFileButtonClick}

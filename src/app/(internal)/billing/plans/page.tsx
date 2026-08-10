@@ -36,9 +36,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { billingService } from "@/services/billing.service";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import type { PlanDto, PlanMutationDto } from "@/types/billing";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -55,6 +55,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { formatMoney } from "@/lib/format/currency";
 
 interface PlanFormState {
   name: string;
@@ -429,7 +430,7 @@ export default function AdminPlansPage() {
                       <span className="font-semibold text-sm">
                         {plan.price === 0
                           ? "Free"
-                          : `${plan.price.toLocaleString()} ${plan.currency}`}
+                          : formatMoney(plan.price, plan.currency)}
                       </span>
                       <div className="text-xs text-muted-foreground capitalize">
                         {plan.billingCycle}

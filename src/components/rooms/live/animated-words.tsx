@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { getAnimatedWordTokens } from "@/lib/transcript-display";
+import { getAnimatedWordTokens } from "@/lib/transcript/transcript-display";
 
 type AnimatedWordsProps = {
   text: string;

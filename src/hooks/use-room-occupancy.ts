@@ -2,8 +2,8 @@
 
 import { useMemo } from "react";
 
-import { mergeParticipants } from "@/lib/merge-participants";
-import { roomOccupancy, type RoomOccupancy } from "@/lib/room-occupancy";
+import { mergeParticipants } from "@/lib/meeting/merge-participants";
+import { roomOccupancy, type RoomOccupancy } from "@/lib/meeting/room-occupancy";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import type {
   TranslationRoomDto,

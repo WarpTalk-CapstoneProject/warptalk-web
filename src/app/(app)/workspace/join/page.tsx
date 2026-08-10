@@ -161,11 +161,13 @@ function JoinWorkspaceContent() {
       const { status, error: errorMsg } = getApiError(err);
 
       if (status === 404) {
-        toast.error("Workspace không hoạt động hoặc không tồn tại.");
+        toast.error("This workspace is inactive or no longer exists.");
       } else if (status === 403) {
-        toast.error("Không thể gửi yêu cầu: Email domain của bạn không khớp với Verified Domains của Workspace.");
+        toast.error(
+          "Request not sent: your email domain does not match this workspace's verified domains.",
+        );
       } else if (errorMsg.includes("AlreadyMember") || (status === 400 && errorMsg.includes("member"))) {
-        toast.error("Bạn đã là thành viên của Workspace này.");
+        toast.error("You are already a member of this workspace.");
       } else {
         toast.error(errorMsg || "Failed to submit request.");
       }
@@ -237,12 +239,12 @@ function JoinWorkspaceContent() {
           <div className="flex justify-center text-red-500">
             <WarningCircle size={48} weight="light" />
           </div>
-          <h2 className="text-[18px] font-semibold text-foreground">Không thể tiếp cận phòng họp</h2>
+          <h2 className="text-[18px] font-semibold text-foreground">Can’t reach this meeting</h2>
           <p className="text-[13px] text-ink-muted leading-relaxed">
-            Phòng họp hoặc Workspace không hoạt động hoặc không tồn tại.
+            This meeting or workspace is inactive or no longer exists.
           </p>
           <Button onClick={() => router.push("/")} className="w-full bg-foreground text-white">
-            Quay lại Trang chủ
+            Back to home
           </Button>
         </div>
       </main>
@@ -391,7 +393,7 @@ function JoinWorkspaceContent() {
                     <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-[6px] flex items-start gap-2.5">
                       <WarningCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                       <p className="text-[12px] text-red-500/90 leading-relaxed font-medium">
-                        Gửi yêu cầu bị vô hiệu hóa do email của bạn không khớp với tên miền của Workspace. Vui lòng liên hệ trực tiếp với ban tổ chức.
+                        Requests are disabled because your email domain does not match this workspace’s. Please contact the organiser directly.
                       </p>
                     </div>
                   ) : (
@@ -407,7 +409,7 @@ function JoinWorkspaceContent() {
                     <div className="p-3 bg-semantic-success/5 border border-semantic-success/15 rounded-[6px] flex items-start gap-2.5">
                       <CheckCircle className="w-4 h-4 text-semantic-success shrink-0 mt-0.5" />
                       <p className="text-[12px] text-semantic-success/90 font-medium">
-                        Yêu cầu gia nhập đã được gửi tới Admin. Vui lòng chờ phê duyệt.
+                        Your join request was sent to the workspace admin. Please wait for approval.
                       </p>
                     </div>
                   ) : (
@@ -463,7 +465,7 @@ function JoinWorkspaceContent() {
                 <div className="p-3 bg-semantic-success/5 border border-semantic-success/15 rounded-[6px] flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-semantic-success shrink-0" />
                   <p className="text-[12px] text-semantic-success/90 font-medium">
-                    Yêu cầu gia nhập đã được gửi thành công!
+                    Join request sent.
                   </p>
                 </div>
               ) : (

@@ -17,7 +17,7 @@ const sessionSource = readFileSync(
   "utf8",
 );
 const resolverSource = readFileSync(
-  new URL("../src/lib/participant-language-preference.ts", import.meta.url),
+  new URL("../src/lib/language/participant-language-preference.ts", import.meta.url),
   "utf8",
 );
 
@@ -25,7 +25,7 @@ const resolverSource = readFileSync(
 
 assert.match(
   sessionSource,
-  /from "@\/lib\/participant-language-preference"/,
+  /from "@\/lib\/language\/participant-language-preference"/,
   "The live meeting session must resolve languages through the shared precedence module.",
 );
 assert.match(

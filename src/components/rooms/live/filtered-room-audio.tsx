@@ -48,9 +48,10 @@ const AI_INTERPRETER_PREFIX = "ai-interpreter-";
  * TTSWorker._resolve_voice_variants / LiveKitTTSPublisher). A GUID speakerId never
  * starts with "voice-", so the two shapes can't collide.
  *
- * `voiceEnabled = false` is the "transcript only" mode: every track this listener
- * would otherwise hear — the AI interpreter dub AND any same-language raw mic — is
- * unsubscribed, so no audio plays at all. TranslationTextDto keeps arriving over
+ * `voiceEnabled = false` drops the DUBS and keeps the people. It used to unsubscribe every
+ * track including the raw microphones, so the switch produced silence rather than the room
+ * as it actually sounds — which is not a mode anyone asked for, and left "turn the dub off
+ * to hear the real voice" with no way to do it. TranslationTextDto keeps arriving over
  * SignalR regardless (that path doesn't touch LiveKit tracks), so captions are
  * unaffected — this only silences playback.
  *
@@ -68,6 +69,7 @@ export function FilteredRoomAudio({
   voicePreference,
   voiceEnabled = true,
   translationActive,
+  localUserId,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
   targetLanguageNormalized: string;
@@ -79,6 +81,8 @@ export function FilteredRoomAudio({
   voiceEnabled?: boolean;
   /** room.status === "in_progress" — false means no STT/MT/TTS pipeline is running, so this is a plain call. */
   translationActive: boolean;
+  /** This listener's own user id, so their own dub is never played back at them. */
+  localUserId?: string | null;
 }) {
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], {
     onlySubscribed: false,
@@ -123,8 +127,26 @@ export function FilteredRoomAudio({
   );
 
   const isWanted = (identity: string) => {
-    if (!voiceEnabled) return false;
+    // Voice off means "no dubs", not "no sound".
+    //
+    // This returned false for EVERY track, so turning the switch off did not hand the room
+    // back its real voices — it produced silence. The report is exact: "bật thì nghe tiếng
+    // bên người khác, tắt thì không nghe", and separately "tắt voice clone rồi mà vẫn không
+    // nghe được giọng thật". Both are this line.
+    //
+    // Off now drops the AI interpreter tracks and keeps every human microphone, which is
+    // what the switch was always supposed to mean: hear people as they actually sound.
+    if (!voiceEnabled) {
+      return !identity.startsWith(AI_INTERPRETER_PREFIX);
+    }
     if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
+      // Never your own dub. The interpreter publishes a track per (speaker, language), and
+      // a speaker who happens to have picked the same listen language as their speak
+      // language is subscribed to the bot that is dubbing THEM — so they hear a synthetic
+      // copy of what they just said, a second behind themselves. Nobody needs a translation
+      // of their own sentence into the language they said it in.
+      const dubbed = dubbedSpeakerId(identity);
+      if (localUserId && dubbed === localUserId) return false;
       // A lingering bot must not be played once translation has stopped: tts_worker only
       // sweeps idle bots from inside _get_or_create_bot, so when synthesis stops there is
       // no next creation to trigger the sweep and the bot stays in the room indefinitely.

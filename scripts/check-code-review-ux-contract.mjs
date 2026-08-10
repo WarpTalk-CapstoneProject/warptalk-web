@@ -13,10 +13,28 @@ const [setup, chat, stage, invite, adjust] = await Promise.all([
 
 assert.match(setup, /mediaGenerationRef/, "media preview must invalidate stale starts");
 assert.match(chat, /shouldAutoScrollRef/, "chat must preserve manual scroll position");
+// The target used to be state, synced to the viewer's language by an effect, and this
+// asserted the sync call. It is derived now — there is no second copy that can drift — so what
+// is pinned is the derivation itself, plus the absence of the header dropdown that offered a
+// competing answer above a thread most people never translate.
 assert.match(
   chat,
-  /setSelectedTargetLanguage\(targetLanguage\)/,
+  /const suggestedTargetLanguage = targetLanguage \|\| "en"/,
   "chat translation target must follow the viewer language",
+);
+// Matched against the markup, not the prose: the first version of this assertion searched for
+// the words "Translate to" and was tripped by the comment explaining why they were removed.
+assert.doesNotMatch(
+  chat,
+  /<select\b/,
+  "the per-message button is the only way to translate; a header dropdown duplicates it",
+);
+// Stale translations must still be dropped when the viewer changes what they listen in,
+// otherwise a re-opened message shows the old language's text under the new language's label.
+assert.match(
+  chat,
+  /previousTargetLanguageRef\.current = targetLanguage;[\s\S]{0,400}?setTranslations\(\{\}\)/,
+  "changing the viewer language must discard translations fetched under the previous one",
 );
 assert.match(stage, /layoutMode,/, "meeting stage must consume the selected layout");
 assert.match(stage, /layoutMode === "grid"/, "grid mode needs distinct behavior");

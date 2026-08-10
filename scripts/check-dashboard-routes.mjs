@@ -16,8 +16,8 @@ const privateRoutes = [
   "/acme/rooms",
   "/acme/billing",
   "/billing",
-  "/ai-chat",
-  "/room/00000000-0000-0000-0000-000000000000",
+  "/acme/ai-chat",
+  "/acme/rooms/00000000-0000-0000-0000-000000000000/live",
 ];
 
 const authenticatedRoutes = [
@@ -29,9 +29,12 @@ const authenticatedRoutes = [
   "/acme/billing",
   "/billing",
   "/billing/plans",
-  "/ai-chat",
+  "/acme/ai-chat",
+  "/acme/rooms/00000000-0000-0000-0000-000000000000/live",
+  "/acme/voice-profiles",
+  // The old address still answers: it forwards to the slugged one rather than 404ing a
+  // link somebody already has open.
   "/room/00000000-0000-0000-0000-000000000000",
-  "/voice-profiles",
 ];
 
 const authenticatedNotFoundRoutes = [

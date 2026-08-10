@@ -32,14 +32,14 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { billingService } from "@/services/billing.service";
 import { WorkspaceService } from "@/services/workspace.service";
 import type {
   GroupedCreditTransaction,
   InvoiceDto,
   UsageGroupSummary,
-  UsageSummaryDto,
+  UsageBreakdownDto,
 } from "@/types/billing";
 import {
   ArrowDownRight,
@@ -58,6 +58,7 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
+import { formatMoney } from "@/lib/format/currency";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -281,9 +282,8 @@ export default function AdminWorkspaceBillingPage({
 
   const displayPlanName = subscription?.planName || "Free Plan";
   const displayPlanPrice = subscription
-    ? subscription.price.toLocaleString("vi-VN") +
-      (subscription.price > 1000 ? "đ" : " VND")
-    : "0đ";
+    ? formatMoney(subscription.price, "VND")
+    : formatMoney(0, "VND");
 
   const usageBreakdown = report?.usageBreakdown || [];
 
@@ -588,12 +588,12 @@ export default function AdminWorkspaceBillingPage({
                     No usage data for this month.
                   </p>
                 ) : (
-                  usageBreakdown.map((usage: UsageSummaryDto) => {
+                  usageBreakdown.map((usage: UsageBreakdownDto) => {
                     const Icon = getIconForUsage(usage.usageType);
                     const name = getLabelForUsage(usage.usageType);
                     const percent = report?.totalConsumedCredits
                       ? Math.round(
-                          (usage.totalCreditsConsumed /
+                          (usage.creditsConsumed /
                             report.totalConsumedCredits) *
                             100,
                         )
@@ -617,7 +617,7 @@ export default function AdminWorkspaceBillingPage({
                             </div>
                           </div>
                           <p className="text-lg font-medium">
-                            {usage.totalCreditsConsumed.toLocaleString()} cr
+                            {usage.creditsConsumed.toLocaleString()} cr
                           </p>
                         </div>
                         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3">
@@ -637,9 +637,9 @@ export default function AdminWorkspaceBillingPage({
                       Average translation cost
                     </p>
                     <p className="text-lg font-medium mt-1">
-                      {report?.averageTranslationCostPerMinute !== undefined &&
-                      report?.averageTranslationCostPerMinute !== null
-                        ? `${report.averageTranslationCostPerMinute} cr / minute`
+                      {report?.averageTranslationCostPer100Chars !== undefined &&
+                      report?.averageTranslationCostPer100Chars !== null
+                        ? `${report.averageTranslationCostPer100Chars} cr / 100 chars`
                         : "--"}
                     </p>
                   </div>
@@ -731,15 +731,14 @@ export default function AdminWorkspaceBillingPage({
                         <SelectValue placeholder="All types">
                           {historyTypeFilter === "ALL" && "All types"}
                           {historyTypeFilter === "top_up" && "Top-Up"}
-                          {historyTypeFilter === "consumption" && "Consumption"}
-                          {historyTypeFilter === "reserve" && "Reserve"}
-                        </SelectValue>
+                          {historyTypeFilter === "consume" && "Consumption"}
+                                                  </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ALL">All types</SelectItem>
                         <SelectItem value="top_up">Top-Up</SelectItem>
-                        <SelectItem value="consumption">Consumption</SelectItem>
-                        <SelectItem value="reserve">Reserve</SelectItem>
+                        <SelectItem value="consume">Consumption</SelectItem>
+                        <SelectItem value="adjustment">Adjustment</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -881,9 +880,7 @@ export default function AdminWorkspaceBillingPage({
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                {tx.type === "reserve" ? (
-                                  <Spinner className="h-4 w-4 text-amber-500 animate-spin" />
-                                ) : tx.amount > 0 ? (
+                                {tx.amount > 0 ? (
                                   <ArrowUpRight className="h-4 w-4 text-emerald-500" />
                                 ) : (
                                   <ArrowDownRight className="h-4 w-4 text-rose-500" />
@@ -1081,11 +1078,7 @@ export default function AdminWorkspaceBillingPage({
                               {rowIndex}
                             </TableCell>
                             <TableCell className="text-xs font-mono text-ink py-3">
-                              {invoice.stripeInvoiceId
-                                ? invoice.stripeInvoiceId.startsWith("in_")
-                                  ? `INV-${invoice.stripeInvoiceId.substring(invoice.stripeInvoiceId.length - 8).toUpperCase()}`
-                                  : invoice.stripeInvoiceId
-                                : ""}
+                              {invoice.invoiceNumber}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground py-3">
                               {format(
@@ -1094,34 +1087,19 @@ export default function AdminWorkspaceBillingPage({
                               )}
                             </TableCell>
                             <TableCell className="text-right text-xs font-semibold text-ink py-3">
-                              {invoice.amount.toLocaleString("vi-VN")}
-                              {invoice.currency === "vnd"
-                                ? "đ"
-                                : ` ${invoice.currency.toUpperCase()}`}
+                              {formatMoney(invoice.total, invoice.currency)}
                             </TableCell>
                             <TableCell className="text-right text-xs pr-5 py-3 space-x-3">
-                              {invoice.hostedInvoiceUrl &&
-                              invoice.hostedInvoiceUrl.startsWith("http") ? (
-                                <a
-                                  href={invoice.hostedInvoiceUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline font-semibold"
-                                >
-                                  View Stripe Receipt
-                                </a>
-                              ) : (
-                                <button
-                                  onClick={() => setSelectedInvoice(invoice)}
-                                  className="text-primary hover:underline font-semibold cursor-pointer bg-transparent border-none p-0"
-                                >
-                                  View Details
-                                </button>
-                              )}
-                              {invoice.invoicePdfUrl &&
-                                invoice.invoicePdfUrl.startsWith("http") && (
+                              <button
+                                onClick={() => setSelectedInvoice(invoice)}
+                                className="text-primary hover:underline font-semibold cursor-pointer bg-transparent border-none p-0"
+                              >
+                                View Details
+                              </button>
+                              {invoice.pdfUrl &&
+                                invoice.pdfUrl.startsWith("http") && (
                                   <a
-                                    href={invoice.invoicePdfUrl}
+                                    href={invoice.pdfUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-primary hover:underline font-semibold"
@@ -1171,9 +1149,7 @@ export default function AdminWorkspaceBillingPage({
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Invoice Number</span>
                   <span className="font-mono font-bold text-ink uppercase tracking-wider">
-                    {selectedInvoice.stripeInvoiceId.startsWith("in_")
-                      ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}`
-                      : selectedInvoice.stripeInvoiceId}
+                    {selectedInvoice.invoiceNumber}
                   </span>
                 </div>
 
@@ -1209,10 +1185,7 @@ export default function AdminWorkspaceBillingPage({
                     </span>
                   </div>
                   <span className="text-lg font-extrabold text-ink tracking-tight">
-                    {selectedInvoice.amount.toLocaleString("vi-VN")}
-                    {selectedInvoice.currency === "vnd"
-                      ? "đ"
-                      : ` ${selectedInvoice.currency.toUpperCase()}`}
+                    {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                   </span>
                 </div>
               </div>
@@ -1289,9 +1262,7 @@ export default function AdminWorkspaceBillingPage({
             <p className="text-xs font-mono font-bold text-gray-700 mt-1.5">
               No:{" "}
               {selectedInvoice &&
-                (selectedInvoice.stripeInvoiceId.startsWith("in_")
-                  ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}`
-                  : selectedInvoice.stripeInvoiceId)}
+                selectedInvoice.invoiceNumber}
             </p>
             <p className="text-[10px] text-gray-500 mt-1">
               Date:{" "}
@@ -1357,16 +1328,10 @@ export default function AdminWorkspaceBillingPage({
                 </td>
                 <td className="py-4 px-3 text-center text-gray-700">1</td>
                 <td className="py-4 px-3 text-right text-gray-700 font-mono">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}
-                  {selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                 </td>
                 <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}
-                  {selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                 </td>
               </tr>
             )}
@@ -1379,27 +1344,19 @@ export default function AdminWorkspaceBillingPage({
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Subtotal:</span>
               <span className="font-semibold text-gray-900 font-mono">
-                {selectedInvoice &&
-                  selectedInvoice.amount.toLocaleString("vi-VN")}
-                {selectedInvoice &&
-                  (selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatMoney(selectedInvoice.total, selectedInvoice.currency)}
               </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Tax (0%):</span>
-              <span className="text-gray-900 font-mono">0đ</span>
+              <span className="text-gray-900 font-mono">
+                {formatMoney(0, selectedInvoice?.currency)}
+              </span>
             </div>
             <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
               <span className="text-gray-900">Total Paid:</span>
               <span className="text-gray-950 font-mono text-base">
-                {selectedInvoice &&
-                  selectedInvoice.amount.toLocaleString("vi-VN")}
-                {selectedInvoice &&
-                  (selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatMoney(selectedInvoice.total, selectedInvoice.currency)}
               </span>
             </div>
           </div>

@@ -10,10 +10,11 @@ import {
 } from "@/constants/realtime";
 import { WORKSPACE_KEYS } from "@/hooks/use-workspace";
 import { endDeadSession, isSessionEnded } from "@/lib/api/client";
-import { createHubConnection, isUnauthorizedHubError } from "@/lib/signalr";
+import { createHubConnection, isUnauthorizedHubError } from "@/lib/realtime/signalr";
 import { useAuthStore } from "@/stores/auth-store";
 import { usePresenceStore } from "@/stores/presence-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import type { PresenceChangedEvent } from "@/types/presence";
 import * as signalR from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
@@ -226,6 +227,23 @@ export function RealtimeNotificationProvider({
       };
     }
 
+    // The bell's live wire, and it was never connected.
+    //
+    // SIGNALR_EVENTS.NEW_NOTIFICATION has existed as a constant with no handler, and the
+    // gateway subscribed to the channel every notification passes through and forwarded only
+    // the billing ones. So a notification could be created, persisted, published and relayed
+    // and still not appear until something else happened to refetch. Both halves are fixed
+    // together; either one alone changes nothing.
+    hubConn.on(SIGNALR_EVENTS.NEW_NOTIFICATION, (payload?: { title?: string }) => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
+      syncBroadcast?.postMessage("REFRESH_NOTIFICATIONS");
+      // A toast as well as the badge: the bell is in the corner, and the whole complaint was
+      // that nothing about this feature was ever visible.
+      if (payload?.title) {
+        toast(payload.title);
+      }
+    });
+
     hubConn.on(SIGNALR_EVENTS.NOTIFICATION_READ, () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
       syncBroadcast?.postMessage("REFRESH_NOTIFICATIONS");
@@ -347,6 +365,11 @@ export function RealtimeNotificationProvider({
     );
 
     hubConn.on(SIGNALR_EVENTS.AI_SUMMARY_PROGRESS, () => {
+      // The summary and its file arrive on the room-history payload, which is what the
+      // meeting's Summary and Artifacts tabs read. Invalidating only the old AI_SUMMARIES
+      // key would leave a freshly generated summary invisible until a reload — that key
+      // belonged to the Transcripts page, and nothing reads it now.
+      queryClient.invalidateQueries({ queryKey: ["room-history"] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.AI_SUMMARIES] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SUMMARY] });
     });
@@ -380,7 +403,13 @@ export function RealtimeNotificationProvider({
           action: roomId
             ? {
                 label: "Join Now",
-                onClick: () => router.push(`/room/${roomId}`),
+                onClick: () =>
+                  router.push(
+                    liveMeetingPath(
+                      useWorkspaceStore.getState().activeWorkspaceSlug,
+                      roomId,
+                    ),
+                  ),
               }
             : undefined,
         });

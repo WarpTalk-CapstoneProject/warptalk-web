@@ -6,11 +6,11 @@ const hook = await readFile(
   "utf8",
 );
 const preferences = await readFile(
-  new URL("../src/lib/track-effects-preferences.ts", import.meta.url),
+  new URL("../src/lib/meeting/track-effects-preferences.ts", import.meta.url),
   "utf8",
 );
 const meetingJoinState = await readFile(
-  new URL("../src/lib/meeting-join-state.ts", import.meta.url),
+  new URL("../src/lib/meeting/meeting-join-state.ts", import.meta.url),
   "utf8",
 );
 const roomPage = await readFile(

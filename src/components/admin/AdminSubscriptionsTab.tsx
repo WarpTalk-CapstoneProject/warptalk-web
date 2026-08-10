@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { billingService } from "@/services/billing.service";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -64,7 +64,10 @@ function IdBadge({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const shortId = id.substring(0, 8);
+  // `id` is a workspace id, and SubscriptionDto.workspaceId is genuinely nullable on the wire —
+  // a user-scoped subscription has no workspace. Two call sites in this file guarded it and one
+  // asserted it away with `!`, which threw here on the first user-scoped row in the global list.
+  const shortId = id ? id.substring(0, 8) : "";
   const displayName = name && name.trim() !== "" ? name : shortId;
 
   return (
@@ -285,7 +288,7 @@ export function AdminSubscriptionsTab() {
                       className="block hover:opacity-80 transition-opacity"
                     >
                       <IdBadge
-                        id={sub.workspaceId!}
+                        id={sub.workspaceId ?? ""}
                         type="workspace"
                         name={sub.workspaceName}
                       />
@@ -361,7 +364,8 @@ export function AdminSubscriptionsTab() {
                               size="sm"
                               className="rounded-md"
                               onClick={() =>
-                                cancelMutation.mutate(sub.workspaceId!)
+                                sub.workspaceId &&
+                                cancelMutation.mutate(sub.workspaceId)
                               }
                             >
                               Confirm Cancel

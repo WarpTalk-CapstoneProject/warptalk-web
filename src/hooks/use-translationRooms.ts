@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { translationRoomService } from "@/services/translationRoom.service";
+import { translationRoomService } from "@/services/translation-room.service";
 import type {
   CreateTranslationRoomRequest,
   RecurrenceRequest,
@@ -25,6 +25,8 @@ export function useTranslationRooms(params?: {
   to?: string;
   page?: number;
   pageSize?: number;
+  /** Pass the active workspace on any workspace-scoped screen. See `translationRoomService.list`. */
+  workspaceId?: string;
 }) {
   return useQuery({
     queryKey: [...MEETING_KEY, params],

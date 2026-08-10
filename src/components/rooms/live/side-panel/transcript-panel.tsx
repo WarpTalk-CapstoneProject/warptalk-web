@@ -3,7 +3,7 @@
 import { useRef, useEffect, useMemo } from "react";
 import { ClosedCaptioning } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
-import { getLanguageName } from "@/lib/languages";
+import { getLanguageName } from "@/lib/language/languages";
 import {
   findSuggestionForUtterance,
   formatTranscriptTimestamp,
@@ -11,7 +11,7 @@ import {
   groupTranscriptSegments,
   type GroupedTranscriptSegment,
   type TranslationSessionBlock,
-} from "@/lib/transcript-display";
+} from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import { SuggestionStrip } from "@/components/rooms/live/side-panel/suggestion-strip";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
@@ -23,9 +23,12 @@ export function TranscriptPanel({
   segments,
   roomId,
   baseTime,
+  missedCount = 0,
 }: {
   segments: TranscriptSegmentDto[];
   roomId: string;
+  /** Lines that were already spoken when this person joined. 0 for anyone who was here. */
+  missedCount?: number;
   /** Room start time — segments' startTimeMs is elapsed ms from here, used to bucket
    * them into "Translation N" sessions. Omit to skip session labeling. */
   baseTime?: string;
@@ -56,6 +59,18 @@ export function TranscriptPanel({
 
   return (
     <div ref={containerRef} className="flex-1 space-y-1 overflow-y-auto p-3 custom-scrollbar scroll-smooth">
+      {/* Said once, at the top, rather than as a divider inside the list: consecutive lines
+          from one speaker are merged into a single utterance, so there is no reliable seam to
+          put a marker on. Someone who was here from the start sees nothing. */}
+      {missedCount > 0 ? (
+        <div className="mb-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] leading-relaxed text-ink-muted">
+          You joined after{" "}
+          <span className="font-medium text-ink">
+            {missedCount} {missedCount === 1 ? "line" : "lines"}
+          </span>{" "}
+          had already been said. They are shown above the live transcript.
+        </div>
+      ) : null}
       <AnimatePresence initial={false}>
         {blocks.map((block) => (
           <div key={block.sessionNumber} className="space-y-2">
@@ -158,9 +173,27 @@ function TranscriptBubble({
               <AnimatedWords text={segment.translatedText} />
             </p>
           ) : null}
-          <p className={`mt-2 text-[10px] font-medium ${isSelf ? "text-white/70" : "text-ink-subtle"}`}>
-            {getLanguageName(segment.originalLanguage)}
-            {segment.targetLanguage ? ` → ${getLanguageName(segment.targetLanguage)}` : ""}
+          <p className={`mt-2 flex items-center gap-1.5 text-[10px] font-medium ${isSelf ? "text-white/70" : "text-ink-subtle"}`}>
+            <span>
+              {getLanguageName(segment.originalLanguage)}
+              {segment.targetLanguage ? ` → ${getLanguageName(segment.targetLanguage)}` : ""}
+            </span>
+            {/* How sure the recogniser was. Shown only when the segment actually carries it —
+                realtime delta events do not, and printing "0%" for "not measured" would be a
+                confident lie about an uncertain line. Rounded, because a decimal place on a
+                confidence score implies a precision that is not there. */}
+            {typeof segment.confidence === "number" ? (
+              <span
+                title="How confident the speech recogniser was in this line"
+                className={
+                  isSelf
+                    ? "rounded-full bg-white/15 px-1.5 py-px tabular-nums"
+                    : "rounded-full bg-surface-2 px-1.5 py-px tabular-nums"
+                }
+              >
+                {Math.round(segment.confidence * 100)}%
+              </span>
+            ) : null}
           </p>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClosePoll, useCreatePoll, usePolls, useVotePoll } from "@/hooks/use-polls";
 import type { PollDto } from "@/types/poll";
+import { getErrorMessage } from "@/lib/api/errors";
 
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
@@ -78,7 +79,7 @@ function CreatePollForm({ roomId }: { roomId: string }) {
       toast.success("Poll launched.");
       reset();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create poll.");
+      toast.error(getErrorMessage(error, "Could not create poll."));
     }
   }
 
@@ -156,7 +157,7 @@ function PollCard({ roomId, poll, isHost }: { roomId: string; poll: PollDto; isH
     try {
       await voteMutation.mutateAsync({ pollId: poll.id, data: { optionIds } });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not submit vote.");
+      toast.error(getErrorMessage(error, "Could not submit vote."));
     }
   }
 
@@ -175,7 +176,7 @@ function PollCard({ roomId, poll, isHost }: { roomId: string; poll: PollDto; isH
       await closeMutation.mutateAsync(poll.id);
       toast.success("Poll closed.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not close poll.");
+      toast.error(getErrorMessage(error, "Could not close poll."));
     }
   }
 

@@ -22,11 +22,12 @@ import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { cn } from "@/lib/utils";
-import { formatLanguageRoute as formatRoute } from "@/lib/languages";
-import { translationRoomService } from "@/services/translationRoom.service";
-import { openArtifactDownload } from "@/lib/download-artifact";
+import { formatLanguageRoute as formatRoute } from "@/lib/language/languages";
+import { translationRoomService } from "@/services/translation-room.service";
+import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
+import { getErrorMessage } from "@/lib/api/errors";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
 
@@ -64,18 +65,23 @@ export default function HistoryPage() {
 
   const selected = rooms.find((room) => room.id === selectedId) ?? rooms[0];
 
-  useRegisterAssistantContext({
-    pageType: "history",
-    entityId: selected?.id,
-    workspaceId: selected?.workspaceId,
-    snapshot: selected
+  // Null until a meeting is actually selected — the other four call sites already guard this
+  // way. Registering "history" with no entityId made the widget offer /summarize (autoSend)
+  // for a meeting that does not exist, and rendered the chip as "History History".
+  useRegisterAssistantContext(
+    selected
       ? {
-          title: selected.title,
-          status: selected.status,
-          participantCount: String(selected.participantCount),
+          pageType: "history",
+          entityId: selected.id,
+          workspaceId: selected.workspaceId,
+          snapshot: {
+            title: selected.title,
+            status: selected.status,
+            participantCount: String(selected.participantCount),
+          },
         }
-      : undefined,
-  });
+      : null,
+  );
 
   async function downloadArtifact(artifact: RoomHistoryArtifact) {
     if (artifact.status !== "ready") {
@@ -92,7 +98,7 @@ export default function HistoryPage() {
       openArtifactDownload(data);
       if (artifact.consentRequired) await history.refetch();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not download this output.");
+      toast.error(getErrorMessage(error, "Could not download this output."));
     } finally {
       setBusyArtifactId(null);
     }

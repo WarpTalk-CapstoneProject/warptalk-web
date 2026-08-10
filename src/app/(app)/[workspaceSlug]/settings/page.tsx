@@ -13,10 +13,12 @@ import {
   Trash,
   Globe,
   Checks,
+  Warning,
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { languagesInScope } from "@/lib/languages";
+import { languagesInScope } from "@/lib/language/languages";
+import { LanguageLabel } from "@/components/language/language-label";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
 import {
   useWorkspace,
@@ -32,7 +34,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
-import { parseIntegerInRange } from "@/lib/settings-validation";
+import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
+import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 
 const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),
@@ -40,7 +43,6 @@ const settingsSchema = z.object({
   maxActiveRooms: z.number().int("Must be a whole number").min(1, "Must be at least 1 room").max(50, "Max 50 rooms"),
   artifactRetentionDays: z.number().int("Must be a whole number").min(0, "Retention must be 0 (indefinite) or positive").max(3650, "Max 3650 days"),
   invitationExpiryDays: z.number().int("Must be a whole number").min(1, "Expiry must be at least 1 day").max(365, "Max 365 days"),
-  enforceHostApprovalDefault: z.boolean(),
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
   allowedTargetLanguages: z.array(z.string()),
@@ -87,10 +89,16 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   maxActiveRooms: 5,
   artifactRetentionDays: 30,
   invitationExpiryDays: 7,
-  enforceHostApprovalDefault: true,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
-  allowedTargetLanguages: ["en", "vi", "ja"],
+  // Empty means unrestricted — every meeting-scope language is offered. It used to read
+  // ["en","vi","ja"], which is not a default so much as a policy nobody chose: a workspace
+  // that had never set one got a three-language allowlist, and Korean, French and Spanish
+  // showed as BLOCKED in the create-room picker with the reason pointing at "this
+  // workspace's language policy" and at an admin who had never touched it. Worse, the value
+  // is what this form posts, so the first save of any unrelated setting wrote the invented
+  // allowlist to the server for real.
+  allowedTargetLanguages: [],
   verifiedDomains: [],
   allowExternalCollaboration: true,
   requireVerifiedDomainForInternal: false,
@@ -122,10 +130,11 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     maxActiveRooms: settings.maxActiveRooms ?? DEFAULT_SETTINGS_FORM_DATA.maxActiveRooms,
     artifactRetentionDays: settings.artifactRetentionDays ?? DEFAULT_SETTINGS_FORM_DATA.artifactRetentionDays,
     invitationExpiryDays: settings.invitationExpiryDays ?? DEFAULT_SETTINGS_FORM_DATA.invitationExpiryDays,
-    enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
-    allowedTargetLanguages: settings.allowedTargetLanguages || ["en", "vi", "ja"],
+    // `|| []` and not `|| [...three languages]`: an absent policy means the server is not
+    // restricting anything, and substituting a list here turns "no policy" into a real one.
+    allowedTargetLanguages: settings.allowedTargetLanguages || [],
     verifiedDomains: settings.verifiedDomains || [],
     allowExternalCollaboration: settings.allowExternalCollaboration ?? DEFAULT_SETTINGS_FORM_DATA.allowExternalCollaboration,
     requireVerifiedDomainForInternal: settings.requireVerifiedDomainForInternal ?? DEFAULT_SETTINGS_FORM_DATA.requireVerifiedDomainForInternal,
@@ -256,6 +265,38 @@ export default function WorkspaceSettingsPage() {
               Only workspace Owners and Administrators can view or modify workspace configurations.
             </CardDescription>
           </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // A failed load is not a configuration. Rendering the form here would show
+  // DEFAULT_SETTINGS_FORM_DATA — "Max Active Rooms: 5" for a workspace configured to 20 —
+  // as if it were the workspace's own settings, and the first control the user touched would
+  // then save that fiction over the real document.
+  if (settingsQuery.isError || !settingsQuery.data) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Card className="max-w-md border-hairline bg-surface-1 p-6 text-center shadow-sm">
+          <CardHeader className="flex flex-col items-center gap-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <Warning className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-lg font-bold">Couldn&apos;t load workspace settings</CardTitle>
+            <CardDescription className="text-xs">
+              The current configuration could not be read, so nothing is shown here rather
+              than showing defaults that are not this workspace&apos;s. Retry, and if it keeps
+              failing check that the workspace service is reachable.
+            </CardDescription>
+          </CardHeader>
+          <button
+            type="button"
+            onClick={() => settingsQuery.refetch()}
+            disabled={settingsQuery.isFetching}
+            className="mx-auto mt-2 inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 px-4 text-xs font-semibold transition hover:bg-surface-3 disabled:opacity-60"
+          >
+            {settingsQuery.isFetching ? "Retrying…" : "Retry"}
+          </button>
         </Card>
       </div>
     );
@@ -482,12 +523,20 @@ export default function WorkspaceSettingsPage() {
                 disabled={isSubmitting || !isOwnerOrAdmin}
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select language" />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Through LanguageLabel like every other picker, rather than a bare name.
+                      It is the single place that turns a language value into display text,
+                      and it takes the bare codes this form holds as readily as the locale
+                      tags rooms carry. */}
                   {languages.map((l) => (
                     <SelectItem key={l.code} value={l.code} className="text-xs">
-                      {l.label}
+                      <LanguageLabel value={l.code} />
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -506,13 +555,31 @@ export default function WorkspaceSettingsPage() {
                 disabled={isSubmitting || !isOwnerOrAdmin}
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select timezone" />
+                  <SelectValue>
+                    {(value) =>
+                      value ? describeTimeZone(String(value)) : "Select timezone"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
+                {/* Every zone the platform knows, not four guesses about where customers are.
+                    A workspace in Singapore, Sydney or Berlin previously had no way to say so,
+                    and the nearest wrong answer shifts every meeting it books.
+
+                    The stored value is passed in because it may be spelled differently from
+                    the generated list: this platform canonicalises to Asia/Saigon and omits
+                    Asia/Ho_Chi_Minh entirely, which is precisely the value the accounts
+                    database defaults every account to. Without it the control would look
+                    empty for almost everyone and drop the setting on the next save.
+
+                    Offsets are computed from the zone and today's date rather than written
+                    beside the label — the old list said "(-5)" for New York, which is an hour
+                    wrong from March to November. */}
                 <SelectContent>
-                  <SelectItem value="UTC" className="text-xs">UTC</SelectItem>
-                  <SelectItem value="Asia/Ho_Chi_Minh" className="text-xs">Asia/Ho_Chi_Minh (+7)</SelectItem>
-                  <SelectItem value="Asia/Tokyo" className="text-xs">Asia/Tokyo (+9)</SelectItem>
-                  <SelectItem value="America/New_York" className="text-xs">America/New_York (-5)</SelectItem>
+                  {supportedTimeZones(watchAll.timezone).map((zone) => (
+                    <SelectItem key={zone} value={zone} className="text-xs">
+                      {describeTimeZone(zone)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -620,24 +687,13 @@ export default function WorkspaceSettingsPage() {
                       }`}
                     >
                       {selected && <Checks size={12} className="text-primary" />}
-                      {l.label} ({l.code.toUpperCase()})
+                      {/* Was "Vietnamese (VI)" — the code repeated the name it sat beside and
+                          told the reader nothing the flag does not. */}
+                      <LanguageLabel value={l.code} />
                     </button>
                   );
                 })}
               </div>
-            </div>
-
-            {/* Enforce Host Approval */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enforce Host Approval</span>
-                <span className="text-[11px] text-ink-muted">Require host admission for participants joining translation rooms.</span>
-              </div>
-              <Switch
-                checked={watchAll.enforceHostApprovalDefault}
-                onCheckedChange={(val) => commitTopLevel("enforceHostApprovalDefault", val)}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              />
             </div>
 
             {/* Voice Cloning */}

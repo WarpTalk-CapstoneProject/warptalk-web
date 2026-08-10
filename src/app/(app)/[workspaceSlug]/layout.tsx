@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces } from "@/hooks/use-workspace";
 import { Spinner } from "@phosphor-icons/react";
-import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
+import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
+import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -41,7 +42,10 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
       if (
         activeWorkspaceSlug !== workspaceSlug ||
         storedId !== targetWorkspace.id ||
-        storedRole !== (targetWorkspace.role || "Member") ||
+        // Both sides must be canonicalised: `storedRole` is normalised on write, while
+        // `targetWorkspace.role` still carries the API's capitalisation, so comparing them
+        // raw was unconditionally true and re-ran setActiveWorkspace on every pass.
+        storedRole !== normalizeWorkspaceRole(targetWorkspace.role || "Member") ||
         useWorkspaceStore.getState().defaultLanguage !== (targetWorkspace.defaultLanguage || "en")
       ) {
         setActiveWorkspace(
