@@ -14,6 +14,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { normalizeLanguage } from "../language-profile.ts";
+import { meetingLanguageSet } from "../languages.ts";
 
 /** Mirrors the selector: same language once, first spelling wins. */
 function dedupe(languages: string[]): string[] {
@@ -52,4 +53,43 @@ test("a clean set is left exactly as it is", () => {
 
 test("empty and malformed entries do not become a language", () => {
   assert.deepEqual(dedupe(["en", "", "   ", "vi"]), ["en", "vi"]);
+});
+
+// ── What the meetings list and the calendar block show ──────────────────────────────
+
+/**
+ * These exercise the REAL exported function, not a copy of its rule. The rule had already been
+ * hand-written twice — once in the list chip, once in the calendar block — and the two had
+ * drifted into punctuating the same room differently ("→" versus ";").
+ */
+
+test("the source is not repeated among the languages it is already in", () => {
+  // The row read "English → English · Vietnamese" because the filter that removed the source
+  // compared RAW strings, and the room stored "en" beside "en-US".
+  assert.deepEqual(meetingLanguageSet("en-US", ["en", "vi"]), ["en-US", "vi"]);
+});
+
+test("a monolingual meeting names one language", () => {
+  assert.deepEqual(meetingLanguageSet("vi", ["vi"]), ["vi"]);
+  assert.deepEqual(meetingLanguageSet("vi", []), ["vi"]);
+});
+
+test("the whole declared set survives, in the order it was declared", () => {
+  assert.deepEqual(meetingLanguageSet("en", ["vi", "ja"]), ["en", "vi", "ja"]);
+});
+
+test("a room with no source still shows its targets", () => {
+  assert.deepEqual(meetingLanguageSet(undefined, ["vi", "en"]), ["vi", "en"]);
+  assert.deepEqual(meetingLanguageSet(null, ["vi"]), ["vi"]);
+});
+
+test("a room with nothing declared shows nothing rather than inventing English", () => {
+  // The chip used to fall back to "en-US" when sourceLanguage was absent, so a room with no
+  // languages at all still flew an American flag.
+  assert.deepEqual(meetingLanguageSet(undefined, undefined), []);
+  assert.deepEqual(meetingLanguageSet("", []), []);
+});
+
+test("empty and malformed entries never become a flag", () => {
+  assert.deepEqual(meetingLanguageSet("en", ["", "   ", "vi"]), ["en", "vi"]);
 });

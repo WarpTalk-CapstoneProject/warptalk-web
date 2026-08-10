@@ -146,6 +146,34 @@ assert.match(
   "The room detail CTA must resolve its intent with the room's own approval setting.",
 );
 
+// ── The meeting-language chip: a SET, never a direction ─────────────────────
+
+// A meeting has no source language. Each participant picks their own speak and listen language
+// at join, so an arrow between two of them asserts a relationship the product does not have —
+// and the source was being listed among its own targets besides. Both surfaces that show
+// languages go through one function, because when they each spelled the rule out they drifted
+// into punctuating it differently ("→" here, ";" there).
+assert.equal(
+  (roomsList.match(/meetingLanguageSet\(/g) ?? []).length,
+  2,
+  "Both the list chip and the calendar block must read the meeting's languages from meetingLanguageSet.",
+);
+// Comments stripped first: the arrow is still NAMED in the comment explaining why it went, and
+// asserting on the raw character would make that explanation illegal to write down.
+const roomsListCode = roomsList
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+assert.doesNotMatch(
+  roomsListCode,
+  /→/,
+  "The meetings list must not draw a translation direction between languages.",
+);
+assert.doesNotMatch(
+  roomsList,
+  /targetLanguages\.filter\(/,
+  "Nothing may hand-filter the source out of the targets — raw-string comparison misses \"en\" vs \"en-US\".",
+);
+
 // ── WT-342: the create toggle must show what the server will actually store ──
 
 // Three layers, same order as TranslationRoomMapper.ResolveSettings. If this drifts, the toggle
