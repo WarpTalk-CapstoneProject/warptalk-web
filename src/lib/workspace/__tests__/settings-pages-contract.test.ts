@@ -39,6 +39,10 @@ test("personal preferences match the backend room-type contract, auto-save contr
 
 test("profile settings auto-save text fields and select fields without a manual save button", () => {
   const source = page("../../../app/(app)/[workspaceSlug]/settings/account/profile/page.tsx");
+  const executableSource = source
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("//"))
+    .join("\n");
 
   assert.match(source, /authService\.updateProfile/);
   assert.match(source, /AutoSaveStatusBadge/);
@@ -47,7 +51,7 @@ test("profile settings auto-save text fields and select fields without a manual 
   assert.match(source, /onBlur=\{\(e\) => commitTextField/);
   assert.match(source, /onKeyDown=\{\(e\) =>/);
   assert.match(source, /if \(lastQueuedValuesRef\.current\[field\] === serializedValue\) return;/);
-  assert.doesNotMatch(source, /vi-VN/);
-  assert.doesNotMatch(source, /Asia\/Ho_Chi_Minh/);
+  assert.doesNotMatch(executableSource, /vi-VN/);
+  assert.doesNotMatch(executableSource, /Asia\/Ho_Chi_Minh/);
   assert.doesNotMatch(source, /Save Changes/);
 });

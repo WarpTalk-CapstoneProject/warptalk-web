@@ -54,6 +54,7 @@ import {
   Users,
   Warning,
   Waveform,
+  Brain,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -244,6 +245,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   if (isOwnerOrAdmin) {
     // No Invitations entry: invitations and join requests are rows on Members now, because
     // "who is in this workspace" and "who is on the way in" were never two questions.
+    // What the system has indexed from this workspace's documents and meetings. Owner/Admin
+    // only, because the view crosses per-document access policies.
+    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge` });
     workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
@@ -277,6 +281,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         icon: GearSix,
         label: "Workspace settings",
         href: `/${activeWorkspaceSlug}/settings`,
+      });
+    }
+    if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
+      settingsItems.push({
+        icon: Users,
+        label: "Member roles",
+        href: `/${activeWorkspaceSlug}/settings/member-roles`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
@@ -399,11 +410,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 {role?.toLowerCase() === "owner" && (
                   <div className={cn(
                     "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                    pathname === `/${activeWorkspaceSlug}/settings/access-management` ? "bg-surface-2" : "hover:bg-surface-2"
+                    pathname === `/${activeWorkspaceSlug}/settings/member-roles` ? "bg-surface-2" : "hover:bg-surface-2"
                   )}>
-                    <Link href={`/${activeWorkspaceSlug}/settings/access-management`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <Link href={`/${activeWorkspaceSlug}/settings/member-roles`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <Users size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Manage access</span>
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Member roles</span>
                     </Link>
                   </div>
                 )}
