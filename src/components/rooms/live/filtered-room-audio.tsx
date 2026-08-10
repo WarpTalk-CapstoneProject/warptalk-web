@@ -69,6 +69,7 @@ export function FilteredRoomAudio({
   voicePreference,
   voiceEnabled = true,
   translationActive,
+  localUserId,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
   targetLanguageNormalized: string;
@@ -80,6 +81,8 @@ export function FilteredRoomAudio({
   voiceEnabled?: boolean;
   /** room.status === "in_progress" — false means no STT/MT/TTS pipeline is running, so this is a plain call. */
   translationActive: boolean;
+  /** This listener's own user id, so their own dub is never played back at them. */
+  localUserId?: string | null;
 }) {
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], {
     onlySubscribed: false,
@@ -137,6 +140,13 @@ export function FilteredRoomAudio({
       return !identity.startsWith(AI_INTERPRETER_PREFIX);
     }
     if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
+      // Never your own dub. The interpreter publishes a track per (speaker, language), and
+      // a speaker who happens to have picked the same listen language as their speak
+      // language is subscribed to the bot that is dubbing THEM — so they hear a synthetic
+      // copy of what they just said, a second behind themselves. Nobody needs a translation
+      // of their own sentence into the language they said it in.
+      const dubbed = dubbedSpeakerId(identity);
+      if (localUserId && dubbed === localUserId) return false;
       // A lingering bot must not be played once translation has stopped: tts_worker only
       // sweeps idle bots from inside _get_or_create_bot, so when synthesis stops there is
       // no next creation to trigger the sweep and the bot stays in the room indefinitely.

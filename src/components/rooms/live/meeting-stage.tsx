@@ -61,6 +61,9 @@ const GRID_TILE_SIZING = "relative h-full min-h-[180px] w-full";
 const THUMBNAIL_SIZING =
   "relative aspect-video h-[clamp(84px,12vw,132px)] w-auto shrink-0";
 
+/** Below this, "auto" lays everyone out evenly instead of featuring one person. */
+const AUTO_FEATURED_MIN_PARTICIPANTS = 5;
+
 const STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1 p-3";
 const SINGLE_PARTICIPANT_STAGE_CLASSNAME = "h-full min-h-0 w-full bg-surface-1";
 const FULLSCREEN_FEATURED_STAGE_CLASSNAME =
@@ -190,7 +193,11 @@ export function LiveKitMeetingStage({
         ? pinnedUserId || activeSpeakerIdentity || firstVisibleIdentity
         : layoutMode === "sidebar"
           ? pinnedUserId || firstVisibleIdentity
-          : layoutMode === "auto" && visibleTracks.length > 1
+          // Five is where an even grid stops being readable. Below it, everyone gets the
+          // same tile — a two- or three-person call has no "main" person, and picking one
+          // shrinks the others for nothing. At six and above the grid tiles get too small
+          // to read a face, so one large tile plus a corner strip is the better trade.
+          : layoutMode === "auto" && visibleTracks.length > AUTO_FEATURED_MIN_PARTICIPANTS
             ? pinnedUserId ||
               activeSpeakerIdentity ||
               firstRemoteIdentity ||
@@ -221,9 +228,11 @@ export function LiveKitMeetingStage({
 
   function renderThumbnail(trackRef: TrackReferenceOrPlaceholder) {
     return renderTile(trackRef, {
-      className:
-        "rounded-2xl border border-white/80 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.18)]",
-      tileClassName: "!rounded-2xl",
+      // Bordered, not shadowed, and it sits ON the corner rather than hovering near it.
+      // The drop shadow made a small tile look like it was floating a centimetre above the
+      // picture; a hairline says "this is a panel" without pretending to be lifted.
+      className: "rounded-xl border border-border bg-surface-1 shadow-none",
+      tileClassName: "!rounded-xl",
       variant: "thumbnail",
     });
   }
@@ -385,7 +394,10 @@ export function LiveKitMeetingStage({
             // WT-321(1): no height cap here. The strip is sized by the thumbnails, which now
             // carry one definite height; capping the strip below the tile height is what
             // clipped them.
-            <div className="absolute bottom-28 left-5 right-5 z-20 flex items-end gap-3 overflow-x-auto overflow-y-hidden pb-1">
+            // Bottom-right and flush to the edges. It used to sit 112px off the bottom and
+            // stretch the full width, which read as a strip adrift in the middle of the
+            // frame rather than as something docked to a corner.
+            <div className="absolute bottom-3 right-3 z-20 flex max-w-[calc(100%-1.5rem)] items-end justify-end gap-2 overflow-x-auto overflow-y-hidden">
               {thumbnailTracks.map((trackRef) => renderThumbnail(trackRef))}
             </div>
           ) : null}
