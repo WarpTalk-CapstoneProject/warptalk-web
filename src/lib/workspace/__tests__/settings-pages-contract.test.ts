@@ -20,7 +20,7 @@ test("workspace settings use queued auto-save and commit numeric values on blur 
 
 test("personal preferences match the backend room-type contract, auto-save controls, and error retry state", () => {
   const source = page(
-    "../app/(app)/[workspaceSlug]/settings/account/preferences/page.tsx",
+    "../../../app/(app)/[workspaceSlug]/settings/account/preferences/page.tsx",
   );
 
   assert.match(source, /useAutoSaveQueue/);

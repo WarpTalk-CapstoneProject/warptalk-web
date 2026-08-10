@@ -62,8 +62,8 @@ export default function SettingsPage() {
   const timezoneOptions = useMemo(() => {
     const options = getSupportedTimezoneOptions();
     // `isSameTimeZone`, not `includes`. IANA carries Links as well as Zones, and this platform
-    // canonicalises Vietnam to Asia/Saigon while the accounts database defaults every user to
-    // Asia/Ho_Chi_Minh — a raw string compare therefore prepends the stored spelling and the
+    // canonicalises Vietnam to Asia/Saigon while the accounts database may store another
+    // Vietnam timezone alias — a raw string compare therefore prepends the stored spelling and the
     // list shows the same place twice, as two options that do different things to neither.
     return options.some((option) => isSameTimeZone(option, timezone))
       ? options
