@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { billingService } from "@/services/billing.service";
 import { WorkspaceService } from "@/services/workspace.service";
 import type {
@@ -58,7 +58,7 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney } from "@/lib/format/currency";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();

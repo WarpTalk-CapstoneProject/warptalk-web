@@ -14,9 +14,9 @@ const root = path.resolve(import.meta.dirname, "..");
 const read = (relative) =>
   fs.readFileSync(path.join(root, relative), "utf8");
 
-const occupancy = read("src/lib/room-occupancy.ts");
+const occupancy = read("src/lib/meeting/room-occupancy.ts");
 const occupancyHook = read("src/hooks/use-room-occupancy.ts");
-const access = read("src/lib/translation-room-access.ts");
+const access = read("src/lib/meeting/translation-room-access.ts");
 const roomDetail = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx",
 );
@@ -24,6 +24,7 @@ const pills = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/MeetingPropertiesPills.tsx",
 );
 const roomsList = read("src/app/(app)/[workspaceSlug]/rooms/page.tsx");
+const createRoomDialog = read("src/components/rooms/create-room-dialog.tsx");
 const waitingRoom = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/waiting/page.tsx",
 );
@@ -117,8 +118,86 @@ assert.doesNotMatch(
 
 assert.match(
   access,
-  /export function shouldEnterWaitingRoom\(\s*status: TranslationRoomStatus,\s*options\?: \{ isHost\?: boolean \},\s*\): boolean \{\s*if \(options\?\.isHost\) return false;/,
+  /export function shouldEnterWaitingRoom\([\s\S]{0,200}?\): boolean \{\s*if \(options\?\.isHost\) return false;/,
   "shouldEnterWaitingRoom must short-circuit for the host.",
+);
+
+// ── WT-341: a busy host must not be able to strand the meeting ──────────────
+
+// The lobby exists to hold people for a decision the host has to make. When the meeting does
+// not require approval there is no such decision, and holding everyone for a host who may
+// never arrive is how a meeting was lost rather than merely delayed.
+assert.match(
+  access,
+  /if \(options\?\.requiresApproval === false\) return false;/,
+  "An approval-free meeting must not send anyone to the lobby.",
+);
+// Strict `=== false`, never a truthiness test: `undefined` is an older room, or a payload that
+// predates the field, and it MUST keep the host-opens-it behaviour. `!options?.requiresApproval`
+// would silently make every such room startable by anyone.
+assert.doesNotMatch(
+  access,
+  /if \(!options\?\.requiresApproval\) return false;/,
+  "A missing approval setting must fail closed, not read as approval-not-required.",
+);
+assert.match(
+  roomDetail,
+  /requiresApproval: room\.settings\?\.requiresApproval/,
+  "The room detail CTA must resolve its intent with the room's own approval setting.",
+);
+
+// ── The meeting-language chip: a SET, never a direction ─────────────────────
+
+// A meeting has no source language. Each participant picks their own speak and listen language
+// at join, so an arrow between two of them asserts a relationship the product does not have —
+// and the source was being listed among its own targets besides. Both surfaces that show
+// languages go through one function, because when they each spelled the rule out they drifted
+// into punctuating it differently ("→" here, ";" there).
+assert.equal(
+  (roomsList.match(/meetingLanguageSet\(/g) ?? []).length,
+  2,
+  "Both the list chip and the calendar block must read the meeting's languages from meetingLanguageSet.",
+);
+// Comments stripped first: the arrow is still NAMED in the comment explaining why it went, and
+// asserting on the raw character would make that explanation illegal to write down.
+const roomsListCode = roomsList
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+assert.doesNotMatch(
+  roomsListCode,
+  /→/,
+  "The meetings list must not draw a translation direction between languages.",
+);
+assert.doesNotMatch(
+  roomsList,
+  /targetLanguages\.filter\(/,
+  "Nothing may hand-filter the source out of the targets — raw-string comparison misses \"en\" vs \"en-US\".",
+);
+
+// ── The create toggle must show what the server will actually store ─────────
+
+// Same two layers, same order, as TranslationRoomMapper.ResolveSettings. If this drifts, the
+// toggle silently lies about the meeting being created — a host sees "off" and then finds nobody
+// can start the meeting.
+assert.match(
+  createRoomDialog,
+  /requiresApproval \?\? meetingTypeByLabel\(meetingTemplate\)\.defaults\.requiresApproval/,
+  "The create dialog's approval toggle must resolve explicit choice → meeting type default.",
+);
+// WT-343: host approval is a PER-MEETING decision. A workspace-wide default for it existed for
+// one release and was removed as a second place to set the same thing; nothing may reintroduce a
+// workspace layer here without the owner asking for it back.
+assert.doesNotMatch(
+  createRoomDialog,
+  /enforceHostApprovalDefault/,
+  "Host approval is per-meeting; the create dialog must not read a workspace-wide default.",
+);
+// Only an explicit choice is sent. Echoing the resolved default back would pin the value into the
+// room's settings blob and defeat the server-side resolution this mirrors.
+assert.match(
+  createRoomDialog,
+  /settings:\s*\n?\s*requiresApproval === null \? undefined : \{ requiresApproval \}/,
+  "The create dialog must send settings only when the host made an explicit choice.",
 );
 assert.match(
   access,
@@ -282,19 +361,35 @@ assert.doesNotMatch(
   /<aside[^>]*xl:overflow-y-auto/,
   "The right column must not scroll as one block; only the roster region may scroll (WT-330(8)).",
 );
-// Tracking flexes and owns the single scroll region; Actions and Meeting access are pinned.
+// Tracking flexes and owns the single scroll region; Actions stays pinned.
 assert.match(
   roomDetail,
   /title="Tracking"[\s\S]{0,400}?bodyClassName="[^"]*xl:flex-1[^"]*xl:overflow-y-auto/,
   "The Tracking panel's body must be the one bounded, flexing scroll region (WT-330(8)).",
 );
-for (const panel of ["Actions", "Meeting access"]) {
+// "Meeting access" was pinned alongside Actions and is now deleted, on the owner's call. It
+// held a hardcoded "WarpTalk Session" over the room code, and the pills row under the title
+// already shows that code AND lets you click it to copy — the panel was the same fact with
+// less to do. WT-330 had already taken its entry button; nothing unique was left to bury.
+for (const panel of ["Actions"]) {
   assert.match(
     roomDetail,
     new RegExp(`title="${panel}" className="xl:shrink-0"`),
     `The ${panel} panel must stay pinned so no invitee count can push it off screen.`,
   );
 }
+assert.doesNotMatch(
+  roomDetail,
+  /<PropertyPanel title="Meeting access"/,
+  "The Meeting access panel must not come back: the room code lives in the pills row, where it is also copyable.",
+);
+// The one fact that panel and the deleted "When" row owned between them — which day the
+// meeting actually runs — has to survive somewhere, or this was a deletion of information.
+assert.match(
+  pills,
+  /room\.scheduledAt \?\? room\.createdAt/,
+  "The date pill must show the scheduled time when there is one; createdAt alone is the day the room was made, not the day it runs.",
+);
 // A max-height on the list itself would nest a second scrollbar inside the first.
 assert.doesNotMatch(
   roomDetail,

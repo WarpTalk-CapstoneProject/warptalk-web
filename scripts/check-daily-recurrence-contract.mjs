@@ -19,7 +19,7 @@ const dialogSource = read("../src/components/rooms/create-room-dialog.tsx");
 const modalSource = read("../src/components/rooms/create/options-menu.tsx");
 const optionsSource = read("../src/components/rooms/create/options-menu.tsx");
 const typesSource = read("../src/types/translationRoom.ts");
-const serviceSource = read("../src/services/translationRoom.service.ts");
+const serviceSource = read("../src/services/translation-room.service.ts");
 const hooksSource = read("../src/hooks/use-translationRooms.ts");
 const roomsPageSource = read("../src/app/(app)/[workspaceSlug]/rooms/page.tsx");
 

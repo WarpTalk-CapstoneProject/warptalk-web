@@ -16,15 +16,19 @@ import { DeviceSelect } from "@/components/rooms/setup/device-select";
 import {
   normalizeLanguageCode,
   resolveRoomDefaultListenLanguage,
-} from "@/lib/participant-language-preference";
+} from "@/lib/language/participant-language-preference";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   useJoinTranslationRoomByCode,
   useTranslationRoom,
 } from "@/hooks/use-translationRooms";
-import { canJoinTranslationRoom } from "@/lib/translation-room-access";
-import { completeMeetingJoin } from "@/lib/meeting-join-state";
-import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
+import {
+  canJoinTranslationRoom,
+  shouldEnterWaitingRoom,
+} from "@/lib/meeting/translation-room-access";
+import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
@@ -316,6 +320,7 @@ export function SetupRoomModal() {
       completeMeetingJoin({
         storage: window.sessionStorage,
         roomId: result.room.id,
+        workspaceSlug: useWorkspaceStore.getState().activeWorkspaceSlug,
         joinState: {
           displayName,
           roomCode: room.translationRoomCode,
@@ -452,27 +457,15 @@ export function SetupRoomModal() {
                   setBackgroundBlurEnabled((current) => !current)
                 }
               />
-
-              {/* Mic Meter */}
-              {microphoneEnabled && (
-                <div className="w-1.5 h-8 bg-surface-2 rounded-full overflow-hidden flex items-end ml-1 mr-2">
-                  <div
-                    className="w-full bg-semantic-success transition-all duration-75 ease-out rounded-full"
-                    style={{ height: `${micLevel}%` }}
-                  />
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Right Side: Settings Panel (Surface 1) */}
-          <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden flex flex-col">
-            <div className="flex-1 p-5 space-y-6 overflow-y-auto custom-scrollbar">
-              {/* Devices Section */}
-              <div className="space-y-3">
-                <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">
-                  Devices
-                </h4>
+          <div className="flex flex-col justify-between gap-4">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Device Settings
+                </h3>
                 <div className="space-y-3">
                   <DeviceSelect
                     label="Camera"
@@ -514,15 +507,22 @@ export function SetupRoomModal() {
                 }
                 className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {room && !canJoinTranslationRoom(room.status)
+                {!room
+                  ? "Join Meeting"
+                  : !canJoinTranslationRoom(room.status)
                   ? "Meeting unavailable"
                   : isJoining
                   ? isHost
                     ? "Starting..."
                     : "Joining..."
-                  : isHost
-                    ? "Start Meeting"
-                    : "Join Meeting"}
+                  : shouldEnterWaitingRoom(room.status, {
+                      isHost,
+                      requiresApproval: room.settings?.requiresApproval,
+                    })
+                  ? "Enter Waiting Room"
+                  : isHost && (room.status === "scheduled" || room.status === "waiting")
+                  ? "Start Meeting"
+                  : "Join Meeting"}
               </button>
             </div>
           </div>

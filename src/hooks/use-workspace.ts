@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
+import type { WorkspaceKnowledgeQuery } from "@/types/workspace-knowledge";
 import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
@@ -18,6 +19,8 @@ export const WORKSPACE_KEYS = {
   myJoinRequests: () => ["workspaces", "join-requests", "mine"] as const,
   invitationPreview: (token: string) => ["workspaces", "invitation-preview", token] as const,
   documentLists: (workspaceId: string) => ["workspaces", "documents", workspaceId] as const,
+  knowledge: (workspaceId: string, query: WorkspaceKnowledgeQuery) =>
+    ["workspaces", "knowledge", workspaceId, query] as const,
   documents: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "documents", workspaceId, { page, pageSize, search }] as const,
   documentDetail: (workspaceId: string, docId: string) => ["workspaces", "document", workspaceId, docId] as const,
@@ -180,7 +183,7 @@ export function useApplyWorkspaceMemberRoleChange(workspaceId: string) {
       return WorkspaceService.applyMemberRoleChange(workspaceId, targetId, payload.request);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.members(workspaceId, 1, 10, "") });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
     },
   });
 }
@@ -636,5 +639,26 @@ export function useDeleteWorkspace() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },
+  });
+}
+
+// ─── Indexed knowledge ───
+
+/**
+ * One page of what the system has indexed about this workspace.
+ *
+ * `placeholderData` keeps the previous page on screen while the next one loads, so paging
+ * does not flash an empty table — the same thing an empty workspace looks like.
+ */
+export function useWorkspaceKnowledge(
+  workspaceId: string,
+  query: WorkspaceKnowledgeQuery = {},
+) {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.knowledge(workspaceId, query),
+    queryFn: () => WorkspaceService.listKnowledge(workspaceId, query),
+    enabled: !!workspaceId,
+    placeholderData: (previousData) => previousData,
+    staleTime: 30000,
   });
 }

@@ -15,10 +15,10 @@ async function source(relativePath) {
 const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle, miniDock] =
   await Promise.all([
     source("src/app/(app)/layout.tsx"),
-    source("src/app/(app)/room/[id]/page.tsx"),
+    source("src/app/(app)/[workspaceSlug]/rooms/[id]/live/page.tsx"),
     source("src/components/rooms/live/persistent-meeting-session.tsx"),
     source("src/stores/active-meeting-store.ts"),
-    source("src/lib/meeting-session-lifecycle.ts"),
+    source("src/lib/meeting/meeting-session-lifecycle.ts"),
     source("src/components/rooms/live/mini-meeting-dock.tsx"),
   ]);
 
@@ -83,15 +83,33 @@ assert.match(
   /<LiveKitRoom[\s\S]*compact \? \([\s\S]*data-mini-meeting[\s\S]*\) : \([\s\S]*data-meeting-content/,
   "full and mini views must share one mounted LiveKitRoom",
 );
+// Through liveMeetingPath, not a literal. The path is spelled once now; a second copy here
+// is how `/room/{id}` survived without a workspace slug while every route around it had one.
 assert.match(
   meetingSession,
-  /aria-label="Return to meeting"[\s\S]*router\.push\(`\/room\/\$\{roomId\}`\)/,
+  /aria-label="Return to meeting"[\s\S]*router\.push\(liveMeetingPath\(activeWorkspaceSlug, roomId\)\)/,
   "the mini meeting must provide a clear route back to the full meeting",
 );
 assert.match(
   meetingSession,
   /handleExit[\s\S]*onMeetingClosed\(\)[\s\S]*router\.push/,
   "only an explicit leave or end action should close the persistent meeting",
+);
+// The mini window's chrome, pinned where it can be undone.
+assert.match(
+  meetingSession,
+  /aria-label="Leave meeting"[\s\S]{0,400}handleExit\("leave"\)/,
+  "the mini meeting must offer a way out that does not require expanding it first",
+);
+assert.doesNotMatch(
+  meetingSession,
+  /data-mini-meeting[\s\S]{0,4000}(inset-x-0 top-0[^"]*bg-black|bottom-0 z-40[\s\S]{0,80}bg-black)/,
+  "the mini meeting must not reintroduce full-width opaque bars over the picture",
+);
+assert.match(
+  miniDock,
+  /closest\("button, a, input, textarea, select, \[role='button'\]"\)/,
+  "the dock must treat controls as controls, not as drag surfaces — that exclusion is what lets the whole window be the handle",
 );
 
 // --- Billing: a minimised tab must not hold LiveKit open forever -------------------------

@@ -20,6 +20,9 @@ The card displays:
 - Legal host actions for the current state.
 - Confirmation UI for lifecycle-changing actions.
 - Disabled action state while a mutation is running.
+- The setup-room modal keeps its primary CTA disabled until room data has loaded; while
+  that data is absent, the label falls back to `Join Meeting` instead of reading room
+  status from an unresolved payload.
 
 ## Supported States
 

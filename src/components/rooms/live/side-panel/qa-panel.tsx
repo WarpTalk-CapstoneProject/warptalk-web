@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAskQuestion, useAnswerQuestion, useQuestions, useUpvoteQuestion } from "@/hooks/use-qa";
 import { useAuthStore } from "@/stores/auth-store";
 import type { QuestionDto } from "@/types/question";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 
 export function QaPanel({ roomId, isHost }: { roomId: string; isHost: boolean }) {
   const user = useAuthStore((state) => state.user);

@@ -5,7 +5,7 @@ import path from "node:path";
 const root = path.resolve(import.meta.dirname, "..");
 const accessPolicyPath = path.join(
   root,
-  "src/lib/translation-room-access.ts",
+  "src/lib/meeting/translation-room-access.ts",
 );
 const roomDetailPath = path.join(
   root,

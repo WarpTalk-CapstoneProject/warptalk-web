@@ -11,7 +11,7 @@ import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { CheckoutSessionDto, SubscriptionDto } from "@/types/billing";
 import { CheckCircle } from "@phosphor-icons/react";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney } from "@/lib/format/currency";
 
 const REDIRECT_SECONDS = 6;
 

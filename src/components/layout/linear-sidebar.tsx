@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -24,11 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
-import {
-  useInviteWorkspaceMember,
-  useSelectWorkspace,
-  useWorkspaces,
-} from "@/hooks/use-workspace";
+import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
@@ -40,7 +35,6 @@ import {
   Check,
   CreditCard,
   Desktop,
-  EnvelopeSimple,
   FileText,
   GearSix,
   Gauge,
@@ -50,7 +44,6 @@ import {
   MagnifyingGlass,
   PaperPlaneTilt,
   Plus,
-  Scroll,
   SignOut,
   Sliders,
   SquaresFour,
@@ -59,8 +52,10 @@ import {
   Users,
   Warning,
   Waveform,
+  Brain,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -173,14 +168,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRoleName, setInviteRoleName] = useState("Member");
-  // Set once an invitation is created and the server returns its token. The plaintext is
-  // never retrievable again — the row keeps only a hash — so the dialog stays on it until
-  // the inviter dismisses it.
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [inviteLinkEmail, setInviteLinkEmail] = useState("");
-  const [inviteLinkDelivered, setInviteLinkDelivered] = useState(true);
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -204,8 +191,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
       ]
     },
-    { icon: Scroll, label: "Transcripts", href: `/${slug}/ai-summaries` },
-    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
+    // No Transcripts entry: a meeting's transcript, summary and files live on that
+    // meeting's own page, below its description.
+    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles` },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -218,7 +206,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
   const selectWorkspaceMutation = useSelectWorkspace();
-  const inviteMemberMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
 
   const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
     try {
@@ -231,53 +218,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     }
   };
 
-  const handleInviteMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const email = inviteEmail.trim();
-    if (!activeWorkspaceId || !email) return;
-
-    try {
-      const response = await inviteMemberMutation.mutateAsync({
-        email,
-        roleName: inviteRoleName,
-      });
-
-      // Delivery can fail while the invitation itself is perfectly valid — the server says
-      // so in `warning`. Reporting "Invitation sent" in that case is a lie the recipient
-      // pays for, so the two outcomes are told apart.
-      const delivered = !response?.warning;
-      const token = response?.rawToken;
-
-      if (token) {
-        // Keep the dialog open on the link. Closing it would throw away the one moment the
-        // plaintext token exists — it is never returned again, and the row stores only a hash.
-        setInviteLink(`${window.location.origin}/invitations/${token}`);
-        setInviteLinkEmail(email);
-        setInviteLinkDelivered(delivered);
-      } else {
-        // Server without the token change: behave exactly as before.
-        toast[delivered ? "success" : "warning"](
-          delivered
-            ? `Invitation sent to ${email}`
-            : `Invitation created for ${email}, but the email could not be delivered.`,
-        );
-        setInviteEmail("");
-        setInviteRoleName("Member");
-        setIsInviteModalOpen(false);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to send invitation";
-      toast.error(message);
-    }
-  };
-
-  const resetInviteDialog = () => {
-    setInviteEmail("");
-    setInviteRoleName("Member");
-    setInviteLink(null);
-    setInviteLinkEmail("");
-    setInviteLinkDelivered(true);
-  };
 
   const workspaceInitials = useMemo(() => {
     if (!activeWorkspaceName) return "WS";
@@ -295,7 +235,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   );
 
   if (isOwnerOrAdmin) {
-    workspaceNav.push({ icon: EnvelopeSimple, label: "Invitations", href: `/${slug}/invitations` });
+    // No Invitations entry: invitations and join requests are rows on Members now, because
+    // "who is in this workspace" and "who is on the way in" were never two questions.
+    // What the system has indexed from this workspace's documents and meetings. Owner/Admin
+    // only, because the view crosses per-document access policies.
+    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge` });
     workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
@@ -329,6 +273,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         icon: GearSix,
         label: "Workspace settings",
         href: `/${activeWorkspaceSlug}/settings`,
+      });
+    }
+    if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
+      settingsItems.push({
+        icon: Users,
+        label: "Member roles",
+        href: `/${activeWorkspaceSlug}/settings/member-roles`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
@@ -451,11 +402,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 {role?.toLowerCase() === "owner" && (
                   <div className={cn(
                     "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                    pathname === `/${activeWorkspaceSlug}/settings/access-management` ? "bg-surface-2" : "hover:bg-surface-2"
+                    pathname === `/${activeWorkspaceSlug}/settings/member-roles` ? "bg-surface-2" : "hover:bg-surface-2"
                   )}>
-                    <Link href={`/${activeWorkspaceSlug}/settings/access-management`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <Link href={`/${activeWorkspaceSlug}/settings/member-roles`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <Users size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Manage access</span>
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Member roles</span>
                     </Link>
                   </div>
                 )}
@@ -930,153 +881,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         </DialogContent>
       </Dialog>
 
-      {/*
-        Reset on close, not just on the Done button. Dismissing with Escape or the X would
-        otherwise leave the previous invitee's link in state, and the next person to open
-        this dialog would be shown a link addressed to someone else.
-      */}
-      <Dialog
+      <InviteMemberDialog
         open={isInviteModalOpen}
-        onOpenChange={(open) => {
-          if (!open) resetInviteDialog();
-          setIsInviteModalOpen(open);
-        }}
-      >
-        <DialogContent className="overflow-hidden p-0 sm:max-w-[520px]">
-          <div className="h-36 border-b border-border bg-[radial-gradient(circle_at_28%_18%,rgba(94,106,210,0.30),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(16,185,129,0.18),transparent_30%),linear-gradient(135deg,var(--surface-2),var(--surface-1))]">
-            <div className="flex h-full items-end p-5">
-              <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-                  <PaperPlaneTilt size={12} weight="bold" />
-                  Workspace Invite
-                </span>
-                <h3 className="mt-2 text-lg font-semibold text-foreground">
-                  Invite your team to {activeWorkspaceName || "this workspace"}
-                </h3>
-              </div>
-            </div>
-          </div>
-          {inviteLink ? (
-            <div className="space-y-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium text-foreground">
-                  Invitation created for {inviteLinkEmail}
-                </p>
-                <p className="text-xs text-ink-muted">
-                  {inviteLinkDelivered
-                    ? "We emailed them a link. You can also share it directly."
-                    : "The email could not be delivered — share this link instead."}
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="invite-link" className="text-xs font-medium">
-                  Invitation link
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="invite-link"
-                    readOnly
-                    value={inviteLink}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="bg-surface-1 font-mono text-xs"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(inviteLink);
-                        toast.success("Invitation link copied");
-                      } catch {
-                        // Clipboard access is refused outside a secure context and in some
-                        // embedded browsers. The field is selectable, so say that rather
-                        // than leaving a button that silently does nothing.
-                        toast.error("Could not copy — select the link and copy it manually");
-                      }
-                    }}
-                  >
-                    Copy
-                  </Button>
-                </div>
-                <p className="text-xs text-ink-muted">
-                  Single use, and only {inviteLinkEmail} can accept it. This link is shown
-                  once — it cannot be retrieved again after you close this dialog.
-                </p>
-              </div>
-
-              <DialogFooter className="pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    resetInviteDialog();
-                  }}
-                >
-                  Invite someone else
-                </Button>
-                <Button
-                  type="button"
-                  className="text-white"
-                  onClick={() => {
-                    resetInviteDialog();
-                    setIsInviteModalOpen(false);
-                  }}
-                >
-                  Done
-                </Button>
-              </DialogFooter>
-            </div>
-          ) : (
-          <form onSubmit={handleInviteMember} className="space-y-4 p-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="invite-email" className="text-xs font-medium">
-                Email address
-              </Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="colleague@company.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                required
-                className="bg-surface-1"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="invite-role" className="text-xs font-medium">
-                Role
-              </Label>
-              <select
-                id="invite-role"
-                value={inviteRoleName}
-                onChange={(e) => setInviteRoleName(e.target.value)}
-                className="w-full h-9 rounded-md border border-border bg-surface-1 px-3 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="Member">Member</option>
-                <option value="Admin">Admin</option>
-              </select>
-            </div>
-            <DialogFooter className="pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsInviteModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={inviteMemberMutation.isPending || !inviteEmail.trim()}
-                className="text-white"
-              >
-                {inviteMemberMutation.isPending ? "Sending..." : "Send invite"}
-              </Button>
-            </DialogFooter>
-          </form>
-          )}
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setIsInviteModalOpen}
+        workspaceId={activeWorkspaceId || ""}
+        workspaceName={activeWorkspaceName}
+        canGrantAdmin={role?.toLowerCase() === "owner"}
+      />
     </aside>
   );
 }

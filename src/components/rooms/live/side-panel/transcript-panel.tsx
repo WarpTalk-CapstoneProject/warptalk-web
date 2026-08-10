@@ -3,7 +3,7 @@
 import { useRef, useEffect, useMemo } from "react";
 import { ClosedCaptioning } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
-import { getLanguageName } from "@/lib/languages";
+import { getLanguageName } from "@/lib/language/languages";
 import {
   findSuggestionForUtterance,
   formatTranscriptTimestamp,
@@ -11,7 +11,7 @@ import {
   groupTranscriptSegments,
   type GroupedTranscriptSegment,
   type TranslationSessionBlock,
-} from "@/lib/transcript-display";
+} from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import { SuggestionStrip } from "@/components/rooms/live/side-panel/suggestion-strip";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
@@ -173,9 +173,27 @@ function TranscriptBubble({
               <AnimatedWords text={segment.translatedText} />
             </p>
           ) : null}
-          <p className={`mt-2 text-[10px] font-medium ${isSelf ? "text-white/70" : "text-ink-subtle"}`}>
-            {getLanguageName(segment.originalLanguage)}
-            {segment.targetLanguage ? ` → ${getLanguageName(segment.targetLanguage)}` : ""}
+          <p className={`mt-2 flex items-center gap-1.5 text-[10px] font-medium ${isSelf ? "text-white/70" : "text-ink-subtle"}`}>
+            <span>
+              {getLanguageName(segment.originalLanguage)}
+              {segment.targetLanguage ? ` → ${getLanguageName(segment.targetLanguage)}` : ""}
+            </span>
+            {/* How sure the recogniser was. Shown only when the segment actually carries it —
+                realtime delta events do not, and printing "0%" for "not measured" would be a
+                confident lie about an uncertain line. Rounded, because a decimal place on a
+                confidence score implies a precision that is not there. */}
+            {typeof segment.confidence === "number" ? (
+              <span
+                title="How confident the speech recogniser was in this line"
+                className={
+                  isSelf
+                    ? "rounded-full bg-white/15 px-1.5 py-px tabular-nums"
+                    : "rounded-full bg-surface-2 px-1.5 py-px tabular-nums"
+                }
+              >
+                {Math.round(segment.confidence * 100)}%
+              </span>
+            ) : null}
           </p>
         </div>
       </div>

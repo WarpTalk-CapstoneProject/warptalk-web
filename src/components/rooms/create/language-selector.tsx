@@ -2,10 +2,11 @@ import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
-import { getFlagEmoji } from "@/lib/language-flag";
-import { isLanguageAllowedByPolicy, languagesInScope } from "@/lib/languages";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { isLanguageAllowedByPolicy, languagesInScope } from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
 import { cn } from "@/lib/utils";
+import { normalizeLanguage } from "@/lib/language/language-profile";
 
 // Rooms store locale tags, so the option value is the tag; the name comes from the registry
 // rather than being spelled out again here.
@@ -41,15 +42,37 @@ export function LanguageSelector({
   /** The workspace's `allowedTargetLanguages`, as bare ISO-639-1 codes. Empty ⇒ unrestricted. */
   allowedTargetLanguages?: string[] | null;
 }) {
+  // The picker offers locale tags ("vi-VN"); the server stores bare codes, because
+  // LanguageHelper.NormalizeLanguageCode splits on the dash before saving. So a room that
+  // already had Vietnamese came back as "vi", `["en","vi"].includes("vi-VN")` was false, the
+  // row read as unselected, and clicking it appended another one — which the server then
+  // normalised to a second "vi". One click, one duplicate, five times over in the report.
+  //
+  // Comparing the way the server does is the fix. Deduping on the way in is what heals the
+  // rooms already carrying ["en","vi","vi","vi","vi","vi"]: the next save writes the clean
+  // set, and until then the pills show one flag per language instead of five.
+  const selected = languages.reduce<string[]>((unique, code) => {
+    const bare = normalizeLanguage(code);
+    return bare && !unique.some((item) => normalizeLanguage(item) === bare)
+      ? [...unique, code]
+      : unique;
+  }, []);
+
+  function isPicked(code: string) {
+    const bare = normalizeLanguage(code);
+    return selected.some((item) => normalizeLanguage(item) === bare);
+  }
+
   function toggleLanguage(code: string) {
-    if (languages.includes(code)) {
-      if (languages.length === 1) return; // Must keep at least one language
-      onLanguagesChange(languages.filter((item) => item !== code));
+    if (isPicked(code)) {
+      if (selected.length === 1) return; // Must keep at least one language
+      const bare = normalizeLanguage(code);
+      onLanguagesChange(selected.filter((item) => normalizeLanguage(item) !== bare));
     } else {
       // Belt to the disabled row's braces: a forbidden language never enters the set, even
       // if something else calls this.
       if (!isLanguageAllowedByPolicy(code, allowedTargetLanguages)) return;
-      onLanguagesChange([...languages, code]);
+      onLanguagesChange([...selected, code]);
     }
   }
 
@@ -66,14 +89,14 @@ export function LanguageSelector({
           {/* Separated by a middot, not a semicolon. A semicolon between two flags reads as a
               typo or a stray character — and the same control punctuated the gap before the
               "+" with one too, so the pill ended on a dangling mark. */}
-          {languages.map((code, i) => (
+          {selected.map((code, i) => (
             <div key={code} className="flex items-center">
               {i > 0 && <span className="text-muted-foreground/40 px-0.5 text-[13px]">·</span>}
               <div className="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full hover:bg-surface-2 transition-colors">
                 {/* Full name rather than the first two letters of it: "VI" is not a language
                     anyone recognises, and a single picked language has room to say so. Several
                     at once stay flags-only, where the label carries the name on hover. */}
-                <LanguageLabel value={code} showName={languages.length === 1} />
+                <LanguageLabel value={code} showName={selected.length === 1} />
               </div>
             </div>
           ))}
@@ -86,7 +109,7 @@ export function LanguageSelector({
             <CommandList>
               <CommandGroup heading="Meeting languages" className="text-[11px] text-ink-muted">
                 {options.map((language) => {
-                  const isSelected = languages.includes(language.code);
+                  const isSelected = isPicked(language.code);
                   // A forbidden language that is somehow already picked (an older room, or a
                   // policy tightened after the fact) stays clickable so it can be removed —
                   // disabling it there would trap the host with a set the server refuses.

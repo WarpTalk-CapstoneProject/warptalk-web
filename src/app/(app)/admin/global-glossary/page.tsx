@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
@@ -63,6 +64,11 @@ const termSchema = z.object({
 type TermFormData = z.infer<typeof termSchema>;
 
 const statusFilters = ["all", "draft", "published", "archived"] as const;
+import {
+  AdminFilterTabs,
+  AdminPage,
+  AdminPageHeader,
+} from "@/components/admin/admin-page-chrome";
 
 export default function AdminGlobalGlossaryPage() {
   const isSystemAdmin = useIsSystemAdmin();
@@ -276,67 +282,51 @@ export default function AdminGlobalGlossaryPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink max-w-6xl mx-auto w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Globe className="h-7 w-7 text-primary" weight="duotone" />
-            Global Glossary
-          </h1>
-          <p className="text-sm text-ink-muted mt-1">
-            System-wide terminology baseline applied to every workspace (unless
-            it opts out). A workspace’s own glossary term always overrides a
-            matching global term.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setIsBulkImportOpen(true)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-hairline bg-surface-1 px-3 text-xs font-semibold hover:bg-surface-2 transition"
-          >
-            <Upload className="h-4 w-4" />
-            <span>Bulk Import CSV</span>
-          </button>
-          <button
-            onClick={() => setIsCreateOpen(true)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-white hover:bg-primary-hover transition"
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Term</span>
-          </button>
-        </div>
-      </div>
+    <AdminPage>
+        <AdminPageHeader
+          eyebrow="Platform terminology"
+          eyebrowIcon={<Globe size={14} weight="fill" />}
+          title="Global Glossary"
+          description="System-wide terminology baseline applied to every workspace (unless it opts out). A workspace’s own glossary term always overrides a matching global term."
+          actions={
+            <>
+              <Button variant="outline" size="sm" onClick={() => setIsBulkImportOpen(true)}>
+                <Upload className="h-4 w-4" />
+                Bulk import CSV
+              </Button>
+              <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                New term
+              </Button>
+            </>
+          }
+        />
 
-      <Card className="border-hairline bg-surface-1 shadow-sm">
-        <CardHeader className="flex flex-row flex-wrap items-center gap-3 border-b border-hairline pb-3">
-          <div className="flex gap-1">
-            {statusFilters.map((s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setStatus(s);
-                  setPage(1);
-                }}
-                className={`h-7 px-2.5 rounded-md text-xs font-semibold capitalize transition ${
-                  status === s
-                    ? "bg-primary text-white"
-                    : "bg-surface-2 text-ink-muted hover:bg-surface-2/70"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-          <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search term or translation..."
-            className="h-7 max-w-[240px] text-xs ml-auto"
-          />
-        </CardHeader>
+        <AdminFilterTabs
+          tabs={statusFilters.map((s) => ({
+            value: s,
+            label: s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1),
+          }))}
+          value={status}
+          onChange={(value) => {
+            setStatus(value);
+            setPage(1);
+          }}
+          label="Term status"
+          trailing={
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search term or translation…"
+              className="h-7 w-[240px] text-[12px] shadow-none"
+            />
+          }
+        />
+
+      <Card className="mt-4 border-border bg-surface-1 shadow-none">
 
         <CardContent className="p-0 overflow-x-auto">
           {termsQuery.isLoading ? (
@@ -813,6 +803,6 @@ export default function AdminGlobalGlossaryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPage>
   );
 }

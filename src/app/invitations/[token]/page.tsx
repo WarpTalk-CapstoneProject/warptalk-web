@@ -16,7 +16,7 @@ import {
   useAcceptWorkspaceInvitation,
   usePreviewWorkspaceInvitation,
 } from "@/hooks/use-workspace";
-import { apiStatusEquals } from "@/lib/api-status";
+import { apiStatusEquals } from "@/lib/api/api-status";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 

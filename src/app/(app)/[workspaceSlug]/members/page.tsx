@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { toast } from "sonner";
 import {
   Users,
@@ -12,10 +9,11 @@ import {
   Spinner,
   Warning,
   Plus,
-  Check,
-  Copy,
   Download,
   SlidersHorizontal,
+  Trash,
+  CheckCircle,
+  XCircle,
 } from "@phosphor-icons/react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -27,22 +25,25 @@ import {
   useWorkspaceMembers,
   useRemoveWorkspaceMember,
   useUpdateWorkspaceMember,
-  useInviteWorkspaceMember,
+  useWorkspaceInvitations,
+  useRevokeWorkspaceInvitation,
+  useApproveJoinRequest,
+  useRejectJoinRequest,
 } from "@/hooks/use-workspace";
+import {
+  buildMemberDirectory,
+  filterMemberDirectory,
+  DIRECTORY_STATUS_LABELS,
+  type DirectoryFilter,
+  type DirectoryRow,
+} from "@/lib/workspace/member-directory";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { usePresence } from "@/hooks/use-presence";
 import { Badge } from "@/components/ui/badge";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import {
   Dialog,
   DialogContent,
@@ -52,36 +53,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const inviteSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  roleName: z.enum(["Admin", "Member"]),
-});
-
-type InviteFormData = z.infer<typeof inviteSchema>;
-
 export default function WorkspaceMembersPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
-  const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const currentRole = useWorkspaceRole();
   const currentUser = useAuthStore((s) => s.user);
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<DirectoryFilter>("all");
 
   // Modal and invitation states
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [inviteNotice, setInviteNotice] = useState<{
-    email: string;
-    previewUrl: string;
-    warning?: string | null;
-  } | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<{
     id: string;
     name: string;
   } | null>(null);
+  const [inviteToRevoke, setInviteToRevoke] = useState<{
+    id: string;
+    email: string;
+  } | null>(null);
+  const [approvalType, setApprovalType] = useState<
+    Record<string, "Internal" | "External">
+  >({});
   const [isExporting, setIsExporting] = useState(false);
 
   // TanStack Query Hooks
@@ -91,34 +85,32 @@ export default function WorkspaceMembersPage() {
     10,
     query,
   );
+  // Pending invitations and join requests are small, complete sets — one page of 100 covers
+  // any workspace this product serves, so they are not paginated alongside the members.
+  const invitationsQuery = useWorkspaceInvitations(
+    activeWorkspaceId || "",
+    1,
+    100,
+    query,
+    "outbound",
+  );
+  const joinRequestsQuery = useWorkspaceInvitations(
+    activeWorkspaceId || "",
+    1,
+    100,
+    query,
+    "join-request",
+  );
   const removeMemberMutation = useRemoveWorkspaceMember(
     activeWorkspaceId || "",
   );
   const updateMemberMutation = useUpdateWorkspaceMember(
     activeWorkspaceId || "",
   );
-  const inviteMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
+  const revokeMutation = useRevokeWorkspaceInvitation(activeWorkspaceId || "");
+  const approveJoinRequest = useApproveJoinRequest(activeWorkspaceId || "");
+  const rejectJoinRequest = useRejectJoinRequest(activeWorkspaceId || "");
 
-  // Invite form setup
-  const {
-    register: registerInvite,
-    handleSubmit: handleSubmitInvite,
-    setValue: setValueInvite,
-    control: inviteControl,
-    reset: resetInvite,
-    formState: { errors: inviteErrors },
-  } = useForm<InviteFormData>({
-    resolver: zodResolver(inviteSchema),
-    defaultValues: {
-      email: "",
-      roleName: "Member",
-    },
-  });
-
-  const selectedInviteRole = useWatch({
-    control: inviteControl,
-    name: "roleName",
-  });
 
   const membersList = membersQuery.data?.items || [];
 
@@ -133,31 +125,61 @@ export default function WorkspaceMembersPage() {
   const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
   const memberGridClass = isOwnerOrAdmin
-    ? "grid-cols-[2.5fr_100px_100px_100px_120px_110px_48px]"
+    ? "grid-cols-[2.5fr_100px_100px_100px_120px_110px_92px]"
     : "grid-cols-[2.5fr_100px_100px_100px_120px]";
 
-  const memberFilterPills = [
-    { key: "all", label: "All", role: "all", status: "all" },
-    { key: "owner", label: "Owner", role: "owner", status: "all" },
-    { key: "admin", label: "Admin", role: "admin", status: "all" },
-    { key: "member", label: "Member", role: "member", status: "all" },
-    { key: "active", label: "Active", role: "all", status: "active" },
-  ] as const;
-  const activeMemberFilter =
-    memberFilterPills.find(
-      (item) => item.role === roleFilter && item.status === statusFilter,
-    )?.key ?? "custom";
+  // Only Owners and Admins may see who has been invited or who is asking to get in — the
+  // invitation endpoints refuse everyone else, and a table of permanently failing rows is
+  // worse than no rows.
+  const pendingInvitations = isOwnerOrAdmin
+    ? (invitationsQuery.data?.items ?? [])
+    : [];
+  const pendingRequests = isOwnerOrAdmin
+    ? (joinRequestsQuery.data?.items ?? [])
+    : [];
 
-  // Client-side filtering for Role and Status
-  const filteredMembers = membersList.filter((member) => {
-    const matchesRole =
-      roleFilter === "all" ||
-      member.roleName.toLowerCase() === roleFilter.toLowerCase();
-    const matchesStatus =
-      statusFilter === "all" ||
-      member.status.toLowerCase() === statusFilter.toLowerCase();
-    return matchesRole && matchesStatus;
-  });
+  // Members paginate; the pending sets do not, so they belong on the first page only.
+  // Repeating them under every page would misreport how many people are waiting.
+  const directoryRows = buildMemberDirectory(
+    membersList,
+    page === 1 ? pendingInvitations : [],
+    page === 1 ? pendingRequests : [],
+  );
+  const filteredMembers = filterMemberDirectory(directoryRows, filter);
+
+  const invitedCount = buildMemberDirectory(
+    membersList,
+    pendingInvitations,
+    [],
+  ).filter((row) => row.status === "invited").length;
+  const requestedCount = buildMemberDirectory(
+    membersList,
+    [],
+    pendingRequests,
+  ).filter((row) => row.status === "requested").length;
+
+  const memberFilterPills: {
+    key: DirectoryFilter;
+    label: string;
+    count?: number;
+  }[] = [
+    { key: "all", label: "All" },
+    { key: "owner", label: "Owner" },
+    { key: "admin", label: "Admin" },
+    { key: "member", label: "Member" },
+    ...(isOwnerOrAdmin
+      ? ([
+          { key: "invited", label: "Invited", count: invitedCount },
+          { key: "requested", label: "Requests", count: requestedCount },
+        ] as const)
+      : []),
+  ];
+
+  // A failed invitations call must not be silent. It is a real production failure mode —
+  // the join-request listing has thrown on a missing column before — and without this the
+  // page would simply show fewer people than the workspace has, with no hint why.
+  const pendingLoadFailed =
+    isOwnerOrAdmin && (invitationsQuery.isError || joinRequestsQuery.isError);
 
   const handleExportXlsx = async () => {
     try {
@@ -171,7 +193,7 @@ export default function WorkspaceMembersPage() {
         { header: "Role", key: "roleName", width: 15 },
         { header: "Membership Type", key: "membershipType", width: 18 },
         { header: "Status", key: "status", width: 12 },
-        { header: "Joined Date", key: "joinedAt", width: 20 },
+        { header: "Date", key: "joinedAt", width: 20 },
         {
           header: "Host Meetings Permission",
           key: "canCreateMeetings",
@@ -188,17 +210,21 @@ export default function WorkspaceMembersPage() {
         fgColor: { argb: "1E293B" },
       };
 
-      filteredMembers.forEach((m) => {
+      filteredMembers.forEach((row) => {
         worksheet.addRow({
-          fullName: m.fullName || "N/A",
-          email: m.email || "N/A",
-          roleName: m.roleName || "Member",
-          membershipType: m.membershipType || "Internal",
-          status: m.status || "Active",
-          joinedAt: m.joinedAt
-            ? new Date(m.joinedAt).toLocaleDateString()
-            : "N/A",
-          canCreateMeetings: m.canCreateMeetings ? "Yes" : "No",
+          fullName: row.name || "N/A",
+          email: row.email || "N/A",
+          roleName: row.roleName || "Member",
+          membershipType: row.membershipType || "Internal",
+          status: DIRECTORY_STATUS_LABELS[row.status],
+          joinedAt: row.date ? new Date(row.date).toLocaleDateString() : "N/A",
+          // Only a joined member has this permission at all; an invitee has nothing to
+          // export, and writing "No" would read as a decision somebody made.
+          canCreateMeetings: row.member
+            ? row.member.canCreateMeetings
+              ? "Yes"
+              : "No"
+            : "—",
         });
       });
 
@@ -247,45 +273,52 @@ export default function WorkspaceMembersPage() {
     }
   };
 
-  const handleInvite = async (formData: InviteFormData) => {
+  const handleRevoke = async () => {
+    if (!inviteToRevoke) return;
     try {
-      const result = await inviteMutation.mutateAsync({
-        email: formData.email,
-        roleName: formData.roleName,
-      });
-
-      const params = new URLSearchParams({
-        invitationId: result.invitation.id,
-        workspaceId: result.invitation.workspaceId,
-        workspaceName: activeWorkspaceName || "WarpTalk Workspace",
-        workspaceSlug: activeWorkspaceSlug || "workspace",
-        email: result.invitation.email,
-        roleName: result.invitation.roleName,
-        membershipType: result.invitation.membershipType,
-      });
-      setInviteNotice({
-        email: result.invitation.email,
-        previewUrl: `${window.location.origin}/dev/email/workspace-invite?${params.toString()}`,
-        warning: result.warning,
-      });
-      setIsInviteOpen(false);
-      resetInvite();
-      toast.success(
-        result.warning
-          ? "Invitation created, but email delivery failed."
-          : "Invitation sent.",
-      );
+      await revokeMutation.mutateAsync(inviteToRevoke.id);
+      toast.success(`Invitation for ${inviteToRevoke.email} revoked.`);
+      setInviteToRevoke(null);
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(
-        error?.response?.data?.error || "Failed to create invitation",
+        error?.response?.data?.error || "Failed to revoke invitation",
       );
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Email preview URL copied.");
+  const handleApprove = async (inviteId: string, provisionalType: string) => {
+    const membershipType =
+      approvalType[inviteId] ||
+      (provisionalType.toLowerCase() === "internal" ? "Internal" : "External");
+    try {
+      const result = await approveJoinRequest.mutateAsync({
+        inviteId,
+        membershipType,
+      });
+      toast.success(
+        result.approvalEmailStatus === "Failed"
+          ? "Member approved; approval email delivery failed."
+          : "Join request approved and email sent.",
+      );
+    } catch (err) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(
+        error?.response?.data?.error || "Failed to approve join request",
+      );
+    }
+  };
+
+  const handleReject = async (invitationId: string) => {
+    try {
+      await rejectJoinRequest.mutateAsync(invitationId);
+      toast.success("Join request rejected.");
+    } catch (err) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(
+        error?.response?.data?.error || "Failed to reject join request",
+      );
+    }
   };
 
   const initials = (name: string) => {
@@ -300,23 +333,34 @@ export default function WorkspaceMembersPage() {
   return (
     <div className="flex h-full flex-col bg-surface-1 text-ink">
       {/* Filter, Search, and Action triggers - Unified horizontal design */}
-      <div className="flex shrink-0 flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+      {/* flex-wrap, because this row has to survive a narrow main. With both side
+          panels open the content area is under 500px, and the action group alone needs
+          most of that — unwrapped, the pills were allotted 14px and vanished. */}
+      <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        {/* A real minimum width, not min-w-0. Its sibling is shrink-0, so with a floor of
+            zero flexbox shrinks the pills away instead of wrapping — they were allotted
+            14px and vanished. With a floor they cannot fit, so the row wraps instead. */}
+        <div className="flex min-w-[260px] flex-1 items-center gap-2 overflow-x-auto hide-scrollbar">
           {memberFilterPills.map((item) => (
             <button
               key={item.key}
               type="button"
               onClick={() => {
-                setRoleFilter(item.role);
-                setStatusFilter(item.status);
+                setFilter(item.key);
+                setPage(1);
               }}
-              className={`flex items-center justify-center rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
-                activeMemberFilter === item.key
+              className={`flex items-center justify-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all select-none ${
+                filter === item.key
                   ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
                   : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               {item.label}
+              {item.count ? (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/10 px-1 text-[9px] font-bold text-primary">
+                  {item.count}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -328,8 +372,8 @@ export default function WorkspaceMembersPage() {
               setQuery(value);
               setPage(1);
             }}
-            placeholder="Search members..."
-            ariaLabel="Search members"
+            placeholder="Search people..."
+            ariaLabel="Search people"
             collapsedWidth={28}
             expandedWidth={220}
             className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
@@ -342,13 +386,13 @@ export default function WorkspaceMembersPage() {
             title="Member filters"
           >
             <Funnel weight="bold" size={13} />
-            {(roleFilter !== "all" || statusFilter !== "all") && (
+            {filter !== "all" && (
               <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
             )}
           </button>
           <button
             className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title={`${filteredMembers.length} members`}
+            title={`${filteredMembers.length} people`}
           >
             <SlidersHorizontal weight="bold" size={13} />
           </button>
@@ -370,14 +414,11 @@ export default function WorkspaceMembersPage() {
             </button>
 
             <button
-              onClick={() => {
-                resetInvite();
-                setIsInviteOpen(true);
-              }}
+              onClick={() => setIsInviteOpen(true)}
               className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Invite</span>
+              <span>Invite new member</span>
             </button>
             </>
           )}
@@ -386,6 +427,15 @@ export default function WorkspaceMembersPage() {
 
       {/* Members Table */}
       <div className="overflow-x-auto px-4 pb-6">
+        {pendingLoadFailed && (
+          <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-600">
+            <Warning className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Pending invitations and join requests could not be loaded, so this
+              list shows joined members only.
+            </span>
+          </div>
+        )}
         {membersQuery.isLoading ? (
           <div className="flex h-48 items-center justify-center">
             <Spinner className="h-6 w-6 animate-spin text-primary" />
@@ -393,56 +443,80 @@ export default function WorkspaceMembersPage() {
         ) : filteredMembers.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-center border border-dashed border-hairline rounded-lg bg-surface-1/10">
             <Users className="h-8 w-8 text-ink-muted" />
-            <p className="text-sm font-medium">No members found</p>
+            <p className="text-sm font-medium">
+              {filter === "invited"
+                ? "No pending invitations"
+                : filter === "requested"
+                  ? "No join requests"
+                  : "No people found"}
+            </p>
             <p className="text-xs text-ink-muted">
-              Try adjusting your search terms or filters.
+              {filter === "invited"
+                ? "Use Invite new member to send one."
+                : filter === "requested"
+                  ? "Requests to join this workspace will appear here."
+                  : "Try adjusting your search terms or filters."}
             </p>
           </div>
         ) : (
-          <div className="min-w-[750px] divide-y divide-hairline/40">
+          <div className="min-w-[1000px] divide-y divide-hairline/40">
             {/* Header row */}
             <div className={`grid ${memberGridClass} items-center gap-4 px-2 py-2 text-[11px] font-semibold uppercase text-ink-muted`}>
               <span>Name</span>
               <span>Role</span>
               <span>Membership Type</span>
               <span>Status</span>
-              <span>Joined</span>
+              <span>Date</span>
               {isOwnerOrAdmin && <><span className="text-center">Host meetings</span><span className="text-right">Actions</span></>}
             </div>
 
             {/* Data rows */}
-            {filteredMembers.map((member) => {
-              const isSelf = member.userId === currentUser?.id;
-              const memberRole = member.roleName.toLowerCase();
-              const memberStatus = member.status.toLowerCase();
+            {filteredMembers.map((row: DirectoryRow) => {
+              const member = row.member;
+              const invite = row.invitation;
+              const isSelf = !!member && member.userId === currentUser?.id;
+              const memberRole = row.roleName.toLowerCase();
+              const isExternal = row.membershipType.toLowerCase() === "external";
+              const reviewBusy =
+                approveJoinRequest.isPending || rejectJoinRequest.isPending;
 
               return (
                 <div
-                  key={member.id}
+                  key={row.key}
                   className={`grid ${memberGridClass} items-center gap-4 rounded-md px-2 py-3 transition-colors hover:bg-surface-2/40`}
                 >
                   {/* User name, email & avatar */}
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="relative h-8 w-8 shrink-0">
                       <Avatar className="h-8 w-8 border border-hairline/80">
-                        <AvatarFallback className="bg-surface-3/80 text-xs font-semibold text-ink">
-                          {initials(member.fullName)}
+                        <AvatarFallback
+                          className={`text-xs font-semibold ${
+                            member
+                              ? "bg-surface-3/80 text-ink"
+                              : "bg-surface-2 text-ink-muted"
+                          }`}
+                        >
+                          {initials(row.name)}
                         </AvatarFallback>
                       </Avatar>
-                      <AvatarPresenceDot userId={member.userId} size="md" />
+                      {/* Presence belongs to people who are in the workspace. Someone who
+                          has only been invited has no seat here to be online in. */}
+                      {member && (
+                        <AvatarPresenceDot userId={member.userId} size="md" />
+                      )}
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className="text-xs font-semibold text-ink truncate flex items-center gap-1.5">
-                        {member.fullName}
+                        {row.name}
                         {isSelf && (
                           <span className="text-[10px] px-1 py-0.2 bg-primary/10 text-primary border border-primary/20 rounded font-normal">
                             You
                           </span>
                         )}
                       </span>
-                      {member.email && (
+                      {row.email && (
                         <span className="text-[10px] text-ink-muted truncate">
-                          {member.email}
+                          {row.email}
                         </span>
                       )}
                     </div>
@@ -454,87 +528,160 @@ export default function WorkspaceMembersPage() {
                       variant="outline"
                       className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
                     >
-                      {member.membershipType.toLowerCase() === "external"
+                      {member && isExternal
                         ? "Member · External · Fixed"
-                        : member.roleName}
+                        : row.roleName}
                     </Badge>
                   </div>
 
-                  {/* Membership Type Badge */}
+                  {/* Membership Type — on a join request this is the approver's decision,
+                      so it is the control rather than a label. */}
                   <div>
-                    <Badge
-                      variant="outline"
-                      className={
-                        member.membershipType.toLowerCase() === "external"
-                          ? "rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                          : "rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
-                      }
-                    >
-                      {member.membershipType}
-                    </Badge>
+                    {row.status === "requested" && invite ? (
+                      <select
+                        value={
+                          approvalType[invite.id] ||
+                          (isExternal ? "External" : "Internal")
+                        }
+                        onChange={(event) =>
+                          setApprovalType((current) => ({
+                            ...current,
+                            [invite.id]: event.target.value as
+                              | "Internal"
+                              | "External",
+                          }))
+                        }
+                        disabled={reviewBusy}
+                        aria-label={`Access type for ${row.email}`}
+                        className="h-7 rounded-md border border-hairline bg-surface-2 px-2 text-[11px] text-ink disabled:opacity-60"
+                      >
+                        <option value="Internal">Internal</option>
+                        <option value="External">External</option>
+                      </select>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className={
+                          isExternal
+                            ? "rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                            : "rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
+                        }
+                      >
+                        {row.membershipType}
+                      </Badge>
+                    )}
                   </div>
 
-                  {/* Status from Backend */}
+                  {/* Where this person stands: joined, invited, or asking to join */}
                   <div>
                     <Badge
                       variant="outline"
                       className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${
-                        memberStatus === "active"
+                        row.status === "joined"
                           ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20"
-                          : "bg-surface-3/50 border-hairline text-ink-muted"
+                          : row.status === "invited"
+                            ? "bg-amber-500/5 text-amber-500 border-amber-500/20"
+                            : "bg-sky-500/5 text-sky-500 border-sky-500/20"
                       }`}
                     >
-                      {member.status.toLowerCase()}
+                      {DIRECTORY_STATUS_LABELS[row.status]}
                     </Badge>
                   </div>
 
-                  {/* Joined Date */}
+                  {/* Joined, invited, or requested date — whichever this row is */}
                   <span className="text-xs text-ink-muted font-medium">
-                    {new Date(member.joinedAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
+                    {row.date
+                      ? new Date(row.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                      : "—"}
                   </span>
 
-                  {/* Meeting host toggle */}
-                  <div className="flex justify-center">
-                    <Switch
-                      checked={member.canCreateMeetings}
-                      disabled={
-                        !isOwnerOrAdmin || isSelf || memberRole === "owner"
-                      }
-                      onCheckedChange={() =>
-                        handleToggleCanCreateMeetings(
-                          member.userId,
-                          member.canCreateMeetings,
-                        )
-                      }
-                    />
-                  </div>
+                  {isOwnerOrAdmin && (
+                    <>
+                      {/* Meeting host toggle */}
+                      <div className="flex justify-center">
+                        {member ? (
+                          <Switch
+                            checked={member.canCreateMeetings}
+                            disabled={isSelf || memberRole === "owner"}
+                            onCheckedChange={() =>
+                              handleToggleCanCreateMeetings(
+                                member.userId,
+                                member.canCreateMeetings,
+                              )
+                            }
+                          />
+                        ) : (
+                          // Nothing to grant until they are actually in the workspace.
+                          <span className="text-xs text-ink-muted">—</span>
+                        )}
+                      </div>
 
-                  {/* Remove button */}
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() =>
-                        setMemberToRemove({
-                          id: member.userId,
-                          name: member.fullName,
-                        })
-                      }
-                      disabled={
-                        !isOwnerOrAdmin ||
-                        isSelf ||
-                        memberRole === "owner" ||
-                        (isAdmin && memberRole === "admin")
-                      }
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
-                      title="Remove from workspace"
-                      aria-label={`Remove ${member.fullName} from workspace`}
-                    >
-                      <UserMinus className="h-4 w-4" />
-                    </button>
-                  </div>
+                      {/* What can be done about this row */}
+                      <div className="flex justify-end gap-1">
+                        {member ? (
+                          <button
+                            onClick={() =>
+                              setMemberToRemove({
+                                id: member.userId,
+                                name: row.name,
+                              })
+                            }
+                            disabled={
+                              isSelf ||
+                              memberRole === "owner" ||
+                              (isAdmin && memberRole === "admin")
+                            }
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
+                            title="Remove from workspace"
+                            aria-label={`Remove ${row.name} from workspace`}
+                          >
+                            <UserMinus className="h-4 w-4" />
+                          </button>
+                        ) : row.status === "invited" && invite ? (
+                          <button
+                            onClick={() =>
+                              setInviteToRevoke({
+                                id: invite.id,
+                                email: invite.email,
+                              })
+                            }
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
+                            title="Revoke invitation"
+                            aria-label={`Revoke the invitation for ${row.email}`}
+                          >
+                            <Trash className="h-4 w-4" />
+                          </button>
+                        ) : invite ? (
+                          <>
+                            <button
+                              onClick={() =>
+                                handleApprove(invite.id, invite.membershipType)
+                              }
+                              disabled={reviewBusy}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors disabled:opacity-40 cursor-pointer"
+                              title="Approve join request"
+                              aria-label={`Approve the join request from ${row.email}`}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleReject(invite.id)}
+                              disabled={reviewBusy}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 cursor-pointer"
+                              title="Reject join request"
+                              aria-label={`Reject the join request from ${row.email}`}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -565,155 +712,14 @@ export default function WorkspaceMembersPage() {
         )}
       </div>
 
-      {/* Invite Member Dialog */}
-      <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-        <DialogContent className="border-hairline bg-surface-1 max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-bold text-base text-foreground">
-              Invite Member
-            </DialogTitle>
-            <DialogDescription className="text-xs text-ink-muted">
-              Generate a secure join link for a new member.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form
-            onSubmit={handleSubmitInvite(handleInvite)}
-            className="flex flex-col gap-4 my-2"
-          >
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold">Email Address</label>
-              <Input
-                type="email"
-                placeholder="user@domain.com"
-                className="h-9 border-hairline focus:ring-1 focus:ring-primary focus-visible:ring-1 focus-visible:ring-primary bg-surface-2/40"
-                {...registerInvite("email")}
-                disabled={inviteMutation.isPending}
-              />
-              {inviteErrors.email && (
-                <p className="text-[11px] text-destructive mt-0.5">
-                  {inviteErrors.email.message}
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold">Workspace Role</label>
-              <Select
-                value={selectedInviteRole}
-                onValueChange={(val: string | null) => {
-                  if (val)
-                    setValueInvite("roleName", val as "Admin" | "Member");
-                }}
-              >
-                <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Member" className="text-xs">
-                    Member (Standard)
-                  </SelectItem>
-                  {isOwner && (
-                    <SelectItem value="Admin" className="text-xs">
-                      Admin (Operational Manager)
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-              {inviteErrors.roleName && (
-                <p className="text-[11px] text-destructive mt-0.5">
-                  {inviteErrors.roleName.message}
-                </p>
-              )}
-            </div>
-
-            <p className="rounded-md border border-hairline bg-surface-2 px-3 py-2 text-[11px] leading-5 text-ink-muted">
-              Internal or External access is assigned automatically from the
-              workspace&apos;s verified domains.
-            </p>
-
-            <DialogFooter className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setIsInviteOpen(false)}
-                className="h-9 px-4 rounded-md border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={inviteMutation.isPending}
-                className="h-9 px-4 rounded-md bg-primary hover:bg-primary-hover text-xs font-semibold text-white transition disabled:opacity-50 cursor-pointer"
-              >
-                {inviteMutation.isPending ? (
-                  <Spinner className="h-4 w-4 animate-spin text-white" />
-                ) : (
-                  "Invite member"
-                )}
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Generated Link Share Dialog */}
-      <Dialog
-        open={!!inviteNotice}
-        onOpenChange={(open: boolean) => !open && setInviteNotice(null)}
-      >
-        <DialogContent className="border-hairline bg-surface-1 max-w-md">
-          <DialogHeader className="flex flex-col gap-1.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary mx-auto">
-              <Check className="h-5 w-5" />
-            </div>
-            <DialogTitle className="text-center font-bold text-base text-foreground">
-              Invitation Created
-            </DialogTitle>
-            <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              The invite is bound to{" "}
-              <span className="font-semibold text-ink">
-                {inviteNotice?.email}
-              </span>
-              . A secure invitation email has been sent to that address.
-            </DialogDescription>
-          </DialogHeader>
-
-          {process.env.NODE_ENV !== "production" && inviteNotice?.previewUrl && (
-            <div className="my-4 flex gap-2">
-              <Input
-                readOnly
-                value={inviteNotice.previewUrl}
-                className="h-9 flex-1 select-all border-hairline bg-surface-2 font-mono text-xs"
-              />
-              <button
-                onClick={() =>
-                  inviteNotice.previewUrl &&
-                  copyToClipboard(inviteNotice.previewUrl)
-                }
-                className="flex h-9 items-center justify-center gap-1 rounded-md border border-hairline bg-surface-1 px-3 text-xs font-semibold transition hover:bg-surface-2"
-              >
-                <Copy className="h-4 w-4" />
-                <span>Copy</span>
-              </button>
-            </div>
-          )}
-
-          {inviteNotice?.warning && (
-            <div className="my-4 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-600">
-              {inviteNotice.warning}
-            </div>
-          )}
-
-          <DialogFooter>
-            <button
-              onClick={() => setInviteNotice(null)}
-              className="w-full h-9 rounded-md bg-primary hover:bg-primary-hover text-xs font-semibold text-white transition cursor-pointer"
-            >
-              Done
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* The same invite dialog the sidebar opens — one dialog, one behaviour. */}
+      <InviteMemberDialog
+        open={isInviteOpen}
+        onOpenChange={setIsInviteOpen}
+        workspaceId={activeWorkspaceId}
+        workspaceName={activeWorkspaceName}
+        canGrantAdmin={isOwner}
+      />
 
       {/* Remove Confirmation Dialog */}
       <Dialog
@@ -749,6 +755,50 @@ export default function WorkspaceMembersPage() {
               className="flex-1 h-9 rounded-md bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition cursor-pointer"
             >
               Remove
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke Invitation Dialog */}
+      <Dialog
+        open={!!inviteToRevoke}
+        onOpenChange={(open: boolean) => !open && setInviteToRevoke(null)}
+      >
+        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+          <DialogHeader className="flex flex-col gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive mx-auto">
+              <Warning className="h-5 w-5" />
+            </div>
+            <DialogTitle className="text-center font-bold text-base text-foreground">
+              Revoke Invitation?
+            </DialogTitle>
+            <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
+              Revoking the invitation for{" "}
+              <span className="font-semibold text-ink">
+                {inviteToRevoke?.email}
+              </span>{" "}
+              removes it entirely. They will no longer be able to accept it with
+              that email.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => setInviteToRevoke(null)}
+              className="flex-1 h-9 rounded-md border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRevoke}
+              disabled={revokeMutation.isPending}
+              className="flex-1 h-9 rounded-md bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition disabled:opacity-50 cursor-pointer"
+            >
+              {revokeMutation.isPending ? (
+                <Spinner className="h-4 w-4 animate-spin" />
+              ) : (
+                "Revoke"
+              )}
             </button>
           </DialogFooter>
         </DialogContent>

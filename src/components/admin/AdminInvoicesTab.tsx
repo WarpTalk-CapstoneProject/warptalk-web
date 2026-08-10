@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney } from "@/lib/format/currency";
 
 interface InvoiceDto {
   id: string;

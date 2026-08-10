@@ -21,15 +21,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   useKickMeetingParticipant,
+  useMuteMeetingParticipant,
   useTransferMeetingHost,
   useRejectMeetingParticipant,
 } from "@/hooks/use-meeting";
 import {
   useAdmitParticipant,
-  useUpdateParticipantAudio,
 } from "@/hooks/use-translationRooms";
 import type {
   TranslationRoomDto,
@@ -42,7 +42,7 @@ import {
   PRESENCE_LABELS,
   participantPresence,
   type ParticipantPresence,
-} from "@/lib/room-occupancy";
+} from "@/lib/meeting/room-occupancy";
 
 export function PeoplePanel({
   roomId,
@@ -160,10 +160,10 @@ function ParticipantRow({
   /** Host-only: spotlight this participant for everyone. Omit (or !isHost) to hide the control. */
   onToggleSpotlight?: (userId: string) => void;
 }) {
-  const updateAudio = useUpdateParticipantAudio(roomId);
   const admit = useAdmitParticipant(roomId);
   const reject = useRejectMeetingParticipant(roomId);
   const kickLivekit = useKickMeetingParticipant(roomId);
+  const muteParticipant = useMuteMeetingParticipant(roomId);
   const transferHost = useTransferMeetingHost(roomId);
 
   const canManage = isHost && !isRoomHost;
@@ -173,14 +173,14 @@ function ParticipantRow({
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [kickScope, setKickScope] = useState<"live" | "record">("live");
 
-  async function runAction(action: "audio" | "admit" | "reject" | "transfer") {
+  async function runAction(action: "mute" | "admit" | "reject" | "transfer") {
     try {
-      if (action === "audio") {
-        await updateAudio.mutateAsync({
-          participantId: participant.id,
-          isTranslationAudioEnabled: !audioEnabled,
-        });
-        toast.success("Participant audio route updated.");
+      if (action === "mute") {
+        // Muted at the SFU, not asked over the data channel: a request is something an
+        // unresponsive or modified client can ignore, and a host asking for silence means
+        // silence. There is no unmute here — only the speaker can turn their own mic back on.
+        await muteParticipant.mutateAsync(participant.userId);
+        toast.success(`${participant.displayName} has been muted.`);
       }
       if (action === "admit") {
         await admit.mutateAsync(participant.id);
@@ -308,16 +308,18 @@ function ParticipantRow({
                   >
                     <CheckCircle className="h-3.5 w-3.5" />
                   </button>
+                  {/* One direction only. This used to be a "Toggle audio" button that wrote
+                      isTranslationAudioEnabled — whether this person HEARS the translation —
+                      while wearing a microphone icon in the host's control cluster. The host
+                      pressed it, the participant kept talking, and the transcript kept
+                      filling. It mutes now, and says so. */}
                   <button
-                    onClick={() => runAction("audio")}
-                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted"
-                    title="Toggle audio"
+                    onClick={() => runAction("mute")}
+                    disabled={!audioEnabled || muteParticipant.isPending}
+                    className="grid h-6 w-6 place-items-center rounded-sm hover:bg-surface-2 text-ink-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                    title={audioEnabled ? "Mute microphone" : "Already muted"}
                   >
-                    {audioEnabled ? (
-                      <MicrophoneSlash className="h-3.5 w-3.5" />
-                    ) : (
-                      <Microphone className="h-3.5 w-3.5" />
-                    )}
+                    <MicrophoneSlash className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => setShowKickDialog(true)}

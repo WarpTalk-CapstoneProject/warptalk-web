@@ -1,5 +1,20 @@
 "use client";
 
+/**
+ * DO NOT DELETE, and do not "consolidate" this into /{slug}/payment/plans.
+ *
+ * Nothing in this app links here any more, which makes it look exactly like the stale
+ * duplicate it is not. Its caller is Stripe: this path is the configured cancel URL in
+ * production (deploy/production/app.compose.yml, `Stripe__CancelUrl`), and in the k3s chart
+ * and docker-compose defaults besides. Anyone who abandons a checkout lands on this page.
+ *
+ * That is also why it is unslugged and why it sits in PUBLIC_ROUTES: the person returning
+ * from Stripe may no longer have a live session, and a redirect to /login at that moment
+ * reads as "my payment broke".
+ *
+ * Changing this path means changing Stripe__CancelUrl in every deployment first.
+ */
+
 import {
   ArrowFatDown,
   ArrowFatUp,
@@ -32,12 +47,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildFeatureList, getPlanDescription } from "@/lib/utils";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney } from "@/lib/format/currency";
 
 export default function PaymentPlansPage() {
   const router = useRouter();

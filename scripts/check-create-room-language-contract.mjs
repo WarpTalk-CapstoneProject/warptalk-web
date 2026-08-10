@@ -10,7 +10,7 @@ const selectorSource = readFileSync(
   "utf8",
 );
 const registrySource = readFileSync(
-  new URL("../src/lib/languages.ts", import.meta.url),
+  new URL("../src/lib/language/languages.ts", import.meta.url),
   "utf8",
 );
 

@@ -24,7 +24,9 @@ import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
+import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -172,7 +174,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
-  const isLiveMeetingRoute = pathname.startsWith("/room/");
+  // Decides more than the header divider: it is also what tells the meeting dock to stop
+  // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
+  // window floats on top of the meeting it is a copy of.
+  const isLiveMeetingRoute = isLiveMeetingPath(pathname);
+
+  // Starts the token's refresh timer for a session that was already in place on load.
+  //
+  // From an effect, deliberately. The same call at module scope in the api client took
+  // production down with a temporal-dead-zone error, because it read the auth store while
+  // the two modules were still evaluating each other. By the time an effect runs, every
+  // module has finished — which is the only guarantee that actually holds.
+  useEffect(() => {
+    startProactiveRefresh();
+  }, []);
 
   useEffect(() => {
     const handle = requestAnimationFrame(() => setMounted(true));
@@ -342,16 +357,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     }
                   } else if (feature === "history") {
                     parts.push({ label: "History" });
-                  } else if (feature === "ai-summaries") {
-                    parts.push({ label: "Transcripts" });
                   } else if (feature === "dashboard") {
                     parts.push({ label: "Dashboard" });
                   } else if (feature === "home") {
                     parts.push({ label: "Home" });
                   } else if (feature === "members") {
                     parts.push({ label: "Members" });
-                  } else if (feature === "invitations") {
-                    parts.push({ label: "Invitations" });
                   } else if (feature === "documents") {
                     parts.push({ label: "Documents" });
                   } else if (feature === "settings") {
@@ -464,7 +475,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </main>
 
           {/* Right Sidebar (Context/Properties) */}
-          {!isAdminRoute && !pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
+          {!isAdminRoute && !isLiveMeetingRoute && !pathname.startsWith('/rooms/') && (
             <AnimatedWidthPanel
               open={rightSidebarOpen}
               width={260}

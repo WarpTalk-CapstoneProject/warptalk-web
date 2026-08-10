@@ -11,7 +11,6 @@ import {
   Keyboard,
   MagnifyingGlass,
   Plus,
-  Sparkle,
   SquaresFour,
   Users,
   VideoCamera,
@@ -25,11 +24,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Lumidot } from "lumidot";
-import { looksLikeRoomCode } from "@/lib/room-code-guess";
+import { looksLikeRoomCode } from "@/lib/meeting/room-code-guess";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useTheme } from "next-themes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 
 type QuickSearchAction = {
   title: string;
@@ -84,7 +84,7 @@ export function SearchMeetingDialog() {
   const meetings = data?.rooms || [];
 
   const handleSelect = (roomId: string) => {
-    router.push(`/room/${roomId}`);
+    router.push(liveMeetingPath(activeWorkspaceSlug, roomId));
     setSearchMeetingModalOpen(false);
   };
 
@@ -111,12 +111,6 @@ export function SearchMeetingDialog() {
       description: "Browse scheduled and live rooms",
       icon: VideoCamera,
       onSelect: () => closeAndRun(() => router.push(`/${slug}/rooms`)),
-    },
-    {
-      title: "Transcripts",
-      description: "Review transcript, summary, and artifacts",
-      icon: Sparkle,
-      onSelect: () => closeAndRun(() => router.push(`/${slug}/ai-summaries`)),
     },
     {
       title: "Documents",

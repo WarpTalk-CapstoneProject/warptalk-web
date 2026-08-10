@@ -6,6 +6,7 @@ import {
   CheckCircle,
   DotsThree,
   Repeat,
+  ShieldCheck,
 } from "@phosphor-icons/react/dist/ssr";
 
 import {
@@ -15,7 +16,7 @@ import {
   describeDailyDraftProblem,
   toLocalDateString,
   validateDailyDraft,
-} from "@/lib/daily-recurrence";
+} from "@/lib/meeting/daily-recurrence";
 
 /**
  * The scheduling menu: a one-off date, or a daily rule.
@@ -39,6 +40,8 @@ export function OptionsMenu({
   onAddScheduledAt,
   daily,
   onDailyChange,
+  requiresApproval,
+  onRequiresApprovalChange,
 }: {
   hasScheduledAt?: boolean;
   onAddScheduledAt?: () => void;
@@ -46,6 +49,9 @@ export function OptionsMenu({
   daily?: DailyRecurrenceDraft | null;
   /** null turns Daily off. The parent clears any one-off time when a rule arrives. */
   onDailyChange?: (draft: DailyRecurrenceDraft | null) => void;
+  /** WT-341: whether joiners wait in the lobby for the host. */
+  requiresApproval?: boolean;
+  onRequiresApprovalChange?: (next: boolean) => void;
 }) {
   const now = new Date();
   const isDaily = !!daily;
@@ -164,6 +170,44 @@ export function OptionsMenu({
                 ) : null}
               </div>
             )}
+          </div>
+        )}
+
+        {/* WT-341. This setting decides two things at once, and the second is the reason it is
+            here rather than buried in room settings after the fact: it gates the lobby, AND it
+            gates who may open the meeting. Leave it on and the meeting cannot start until the
+            host arrives — which is correct for an interview or a webinar, and was a trap for
+            every ordinary meeting whose host happened to be busy. */}
+        {onRequiresApprovalChange && (
+          <div className="rounded-md">
+            <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2">
+              <button
+                type="button"
+                onClick={() => onRequiresApprovalChange(!requiresApproval)}
+                aria-pressed={!!requiresApproval}
+                className="flex flex-1 cursor-pointer items-center gap-2 text-left text-[13px]"
+              >
+                <ShieldCheck weight="duotone" size={16} className="shrink-0" />
+                <span className="font-medium whitespace-nowrap text-ink">Require approval</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onRequiresApprovalChange(!requiresApproval)}
+                aria-label={
+                  requiresApproval
+                    ? "Turn off approval to join"
+                    : "Turn on approval to join"
+                }
+                className="flex shrink-0 cursor-pointer items-center"
+              >
+                {requiresApproval ? (
+                  <CheckCircle weight="fill" size={16} color="#3b82f6" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border border-border/60 transition-colors" />
+                )}
+              </button>
+            </div>
           </div>
         )}
       </PopoverContent>

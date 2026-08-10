@@ -23,11 +23,11 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
-import { getErrorMessage } from "@/lib/errors";
-import { getFlagEmoji } from "@/lib/language-flag";
-import { getLanguageName, languagesInScope } from "@/lib/languages";
-import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/track-effects-preferences";
-import { completeMeetingJoin } from "@/lib/meeting-join-state";
+import { getErrorMessage } from "@/lib/api/errors";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
+import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -293,6 +293,7 @@ function JoinMeetingContent() {
         completeMeetingJoin({
           storage: window.sessionStorage,
           roomId: result.room.id,
+          workspaceSlug: activeWorkspaceSlug,
           joinState: {
             displayName: displayName.trim(),
             roomCode: normalizedCode,
@@ -334,7 +335,6 @@ function JoinMeetingContent() {
   // endpoint behind it the error branch caught every single visit, so this screen only ever
   // rendered its own failure. Whether the code is good is now answered by the join attempt,
   // which reports the actual reason.
-
   return (
     <div className="flex flex-col items-center p-4 sm:p-8 h-full overflow-y-auto">
       {/* Top Header Navigation */}

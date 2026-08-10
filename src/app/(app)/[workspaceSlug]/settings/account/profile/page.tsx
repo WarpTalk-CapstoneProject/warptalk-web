@@ -19,9 +19,9 @@ import {
   getDefaultProfileTimezone,
   getProfileLanguageOptions,
   getSupportedTimezoneOptions,
-} from "@/lib/profile-localization";
+} from "@/lib/format/profile-localization";
 import { LanguageLabel } from "@/components/language/language-label";
-import { describeTimeZone, isSameTimeZone } from "@/lib/time-zones";
+import { describeTimeZone, isSameTimeZone } from "@/lib/format/time-zones";
 
 export default function SettingsPage() {
   const router = useRouter();

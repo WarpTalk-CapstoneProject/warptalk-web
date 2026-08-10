@@ -17,7 +17,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { languagesInScope } from "@/lib/languages";
+import { languagesInScope } from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
 import {
@@ -34,8 +34,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
-import { parseIntegerInRange } from "@/lib/settings-validation";
-import { describeTimeZone, supportedTimeZones } from "@/lib/time-zones";
+import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
+import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 
 const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),
@@ -43,7 +43,6 @@ const settingsSchema = z.object({
   maxActiveRooms: z.number().int("Must be a whole number").min(1, "Must be at least 1 room").max(50, "Max 50 rooms"),
   artifactRetentionDays: z.number().int("Must be a whole number").min(0, "Retention must be 0 (indefinite) or positive").max(3650, "Max 3650 days"),
   invitationExpiryDays: z.number().int("Must be a whole number").min(1, "Expiry must be at least 1 day").max(365, "Max 365 days"),
-  enforceHostApprovalDefault: z.boolean(),
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
   allowedTargetLanguages: z.array(z.string()),
@@ -90,7 +89,6 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   maxActiveRooms: 5,
   artifactRetentionDays: 30,
   invitationExpiryDays: 7,
-  enforceHostApprovalDefault: true,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
   // Empty means unrestricted — every meeting-scope language is offered. It used to read
@@ -132,7 +130,6 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     maxActiveRooms: settings.maxActiveRooms ?? DEFAULT_SETTINGS_FORM_DATA.maxActiveRooms,
     artifactRetentionDays: settings.artifactRetentionDays ?? DEFAULT_SETTINGS_FORM_DATA.artifactRetentionDays,
     invitationExpiryDays: settings.invitationExpiryDays ?? DEFAULT_SETTINGS_FORM_DATA.invitationExpiryDays,
-    enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
     // `|| []` and not `|| [...three languages]`: an absent policy means the server is not
@@ -697,19 +694,6 @@ export default function WorkspaceSettingsPage() {
                   );
                 })}
               </div>
-            </div>
-
-            {/* Enforce Host Approval */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enforce Host Approval</span>
-                <span className="text-[11px] text-ink-muted">Require host admission for participants joining translation rooms.</span>
-              </div>
-              <Switch
-                checked={watchAll.enforceHostApprovalDefault}
-                onCheckedChange={(val) => commitTopLevel("enforceHostApprovalDefault", val)}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              />
             </div>
 
             {/* Voice Cloning */}

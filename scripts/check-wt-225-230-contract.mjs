@@ -6,20 +6,18 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(root, file), "utf8");
 
 const [
-  transcriptPage,
-  transcriptRoute,
+  roomDetailPage,
   meetingSession,
   endpoints,
   chatPanel,
   voiceProfiles,
   packageJson,
 ] = await Promise.all([
-  read("src/app/(app)/[workspaceSlug]/ai-summaries/page.tsx"),
-  read("src/app/(app)/[workspaceSlug]/transcript/page.tsx").catch(() => ""),
+  read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
   read("src/components/rooms/live/persistent-meeting-session.tsx"),
   read("src/lib/api/endpoints.ts"),
   read("src/components/rooms/live/chat-panel.tsx"),
-  read("src/app/(app)/voice-profiles/page.tsx"),
+  read("src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx"),
   read("package.json"),
 ]);
 
@@ -31,11 +29,17 @@ const startedHandler = meetingSession.slice(
 const checks = [
   [
     "WT-225 keeps the intentional same-speaker utterance grouping",
-    transcriptPage.includes("groupSavedTranscriptSegments(state.data?.segments"),
+    roomDetailPage.includes("groupSavedTranscriptSegments("),
   ],
   [
-    "WT-225/228 canonical workspace transcript route exists",
-    transcriptRoute.includes("TranscriptsPage"),
+    // Was: a canonical /{slug}/transcript route. That route, and the workspace-wide
+    // Transcripts page behind it, are gone — a meeting's transcript, AI summary and files
+    // are three tabs on that meeting's own page, below its description. What WT-225/228
+    // actually needs is that the saved record is reachable, and it is reachable there.
+    "WT-225/228 the saved meeting record is reachable from the meeting",
+    roomDetailPage.includes("<MeetingRecordSection") &&
+      roomDetailPage.includes("<SummaryPanel") &&
+      roomDetailPage.includes("<ArtifactsPanel"),
   ],
   [
     "WT-226 translation is activated synchronously before the room refetch race",
@@ -71,8 +75,8 @@ const checks = [
   ],
   [
     "WT-228 transcript review exposes editing and finalization actions",
-    transcriptPage.includes("Finalize transcript") &&
-      transcriptPage.includes("Save correction"),
+    roomDetailPage.includes("finalizeTranscript()") &&
+      roomDetailPage.includes("Save correction"),
   ],
   [
     "WT-229 voice profiles expose only EN VI and JA",

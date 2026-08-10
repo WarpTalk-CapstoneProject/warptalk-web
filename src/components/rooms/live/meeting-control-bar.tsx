@@ -4,8 +4,8 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
-import { getFlagEmoji } from "@/lib/language-flag";
-import { getLanguageName } from "@/lib/languages";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { getLanguageName } from "@/lib/language/languages";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -699,11 +699,17 @@ function VoiceCloneRow({
 
   return (
     <>
+      {/* The value names the voice, it does not report a switch position.
+          "Voice Clone: Off" was read as "nothing will be spoken", because the row directly
+          above it is "Voice: On" and both looked like the same kind of switch. They are not:
+          Voice decides whether the dub is spoken at all, Voice Clone decides whose voice
+          speaks it. Saying "Default voice" / "My voice" answers the question people were
+          actually asking of this row. */}
       <SettingsRow
         label="Voice Clone"
         icon={<Fingerprint className="h-4 w-4" weight={enabled ? "fill" : "regular"} />}
         active={enabled}
-        value={enabled ? "On" : "Off"}
+        value={enabled ? "My voice" : "Default voice"}
         onClick={() => {
           if (enabled) {
             onToggle(false);

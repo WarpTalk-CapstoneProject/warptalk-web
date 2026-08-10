@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { Copy, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -12,8 +13,8 @@ import { BackToSetupButton } from "@/components/rooms/setup/back-to-setup-button
 import { DevicePreview } from "@/components/rooms/setup/device-preview";
 import { LanguageLabel } from "@/components/language/language-label";
 import { useDevicePreview } from "@/hooks/use-device-preview";
-import { getErrorMessage } from "@/lib/errors";
-import { roomOccupancy } from "@/lib/room-occupancy";
+import { getErrorMessage } from "@/lib/api/errors";
+import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useAdmitParticipant,
@@ -32,7 +33,10 @@ import {
  * before a meeting. The self-view now takes the space the diagnostics had.
  */
 export default function WaitingRoomPage() {
-  const { id: roomId } = useParams<{ workspaceSlug: string; id: string }>();
+  const { workspaceSlug, id: roomId } = useParams<{
+    workspaceSlug: string;
+    id: string;
+  }>();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
 
@@ -51,14 +55,14 @@ export default function WaitingRoomPage() {
     // The host is routed by startMeeting() itself; this carries everyone else in once the
     // meeting actually opens, which is the whole point of sitting in a lobby.
     if (roomStatus === "in_progress" || roomStatus === "paused") {
-      router.push(`/room/${roomId}`);
+      router.push(liveMeetingPath(workspaceSlug, roomId));
     }
-  }, [roomStatus, roomId, router]);
+  }, [roomStatus, workspaceSlug, roomId, router]);
 
   async function startMeeting() {
     try {
       await startRoom.mutateAsync(roomId);
-      router.push(`/room/${roomId}`);
+      router.push(liveMeetingPath(workspaceSlug, roomId));
     } catch (error) {
       toast.error(getErrorMessage(error, "Could not start the meeting."));
     }
@@ -136,6 +140,12 @@ export default function WaitingRoomPage() {
   const me = participants.find((participant) => participant.userId === user?.id);
   const awaitingApproval = !isHost && me?.status === "waiting";
 
+  // WT-341: an approval-free meeting is nobody's to hold. The server accepts Start from any
+  // invited participant, so a guest sitting here while the host is busy can open it themselves
+  // rather than waiting for someone who may never arrive. An approval-gated meeting is unchanged:
+  // only the host can admit the lobby, so only the host can open the room.
+  const canStartMeeting = isHost || !requiresApproval;
+
   // The room's declared coverage, stated once. Each person's own speak → listen pair is a
   // different thing and belongs on their row, not here.
   const roomLanguages = room.targetLanguages?.length
@@ -171,7 +181,7 @@ export default function WaitingRoomPage() {
           <Card>
             <CardHeader className="space-y-1.5">
               <CardTitle className="text-lg">
-                {isHost
+                {canStartMeeting
                   ? "Ready when you are"
                   : awaitingApproval
                     ? "Asking to join"
@@ -182,13 +192,15 @@ export default function WaitingRoomPage() {
                   ? requiresApproval
                     ? "Admit anyone waiting, then start the meeting."
                     : "Start when you are ready — everyone here joins automatically."
-                  : awaitingApproval
-                    ? "The host has been notified. You'll be let in once they approve."
-                    : "You'll be taken in automatically as soon as the host starts."}
+                  : canStartMeeting
+                    ? "The host hasn't started this meeting. You can open it — everyone invited will be notified."
+                    : awaitingApproval
+                      ? "The host has been notified. You'll be let in once they approve."
+                      : "You'll be taken in automatically as soon as the host starts."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {isHost ? (
+              {canStartMeeting ? (
                 <Button className="w-full" onClick={startMeeting} disabled={startRoom.isPending}>
                   {startRoom.isPending ? (
                     <Spinner weight="light" className="mr-2 h-4 w-4 animate-spin" />
