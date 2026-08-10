@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+  type ReactNode,
+} from "react";
 import {
   ArrowUp,
   ClockCounterClockwise,
@@ -11,7 +18,6 @@ import {
   Cube,
   CaretDown,
   FileText,
-  Chats,
   BookBookmark,
   VideoCamera,
   X,
@@ -30,59 +36,40 @@ import {
 } from "@/hooks/use-workspace";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import {
+  useAssistantConversations,
   useAssistantSkills,
   useCreateAssistantConversation,
+  useLoadAssistantConversation,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import type * as signalR from "@microsoft/signalr";
 import type {
+  AssistantConversationDto,
   AssistantMentionDto,
   AssistantPageContextDto,
 } from "@/types/assistant";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
+import { toast } from "sonner";
 
+/**
+ * A row in the "@" menu. Every option must map to a real backend entity: the send path
+ * only forwards mentions that carry both entityType and entityId (see sendMessage), so a
+ * decorative option would render a chip, clear like a real mention, and scope nothing.
+ * That is exactly what the old "Current meeting context"/"All Transcripts"/"Terminology"
+ * rows did — the page the widget was opened from already rides along as ambient context.
+ */
 interface AssistantContextOption {
   id: string;
   title: string;
   type: string;
   icon: ReactNode;
   description: string;
-  link: string;
   isAvatar?: boolean;
-  /** Set only for options that map to a real backend entity the assistant can look up. */
-  entityType?: AssistantMentionDto["entityType"];
-  entityId?: string;
+  entityType: AssistantMentionDto["entityType"];
+  entityId: string;
 }
-
-// Not fetchable — describes the page the widget was opened from, not workspace data.
-const STATIC_CONTEXT_OPTIONS: AssistantContextOption[] = [
-  {
-    id: "this-page",
-    title: "Current meeting context",
-    type: "This page",
-    icon: <FileText size={14} className="text-[#34c759]" />,
-    description: "",
-    link: "#",
-  },
-  {
-    id: "all-transcripts",
-    title: "All Transcripts",
-    type: "Resources",
-    icon: <Chats size={14} />,
-    description: "Search transcripts",
-    link: "/transcripts",
-  },
-  {
-    id: "terminology",
-    title: "Terminology",
-    type: "Resources",
-    icon: <BookBookmark size={14} />,
-    description: "Search terminology",
-    link: "/terminology",
-  },
-];
 
 type ChatRole = "user" | "assistant";
 
@@ -220,6 +207,36 @@ function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
   };
 }
 
+/**
+ * How long sendMessage waits for this client to actually be inside the conversation's hub
+ * group before POSTing. The hub effect only starts negotiating once conversationId lands in
+ * state, so without this wait the *first* message of every conversation is posted before the
+ * client has joined — and every streamed token for it is delivered to nobody.
+ */
+const HUB_JOIN_TIMEOUT_MS = 10_000;
+
+/**
+ * Watchdog for a turn that produces no hub traffic at all (connection never came back,
+ * worker died). A visible error beats a "Thinking..." spinner that runs until the tab is
+ * closed — this is the fallback, the re-join above is the actual fix.
+ */
+const ASSISTANT_RESPONSE_TIMEOUT_MS = 90_000;
+
+/** Matches chat-panel.tsx: within this many px of the bottom counts as "following along". */
+const AUTOSCROLL_THRESHOLD_PX = 80;
+
+function formatConversationTimestamp(value?: string | null) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function getPageContextKey(context: AssistantPageContextDto | null) {
   if (!context) return null;
   return [
@@ -246,6 +263,8 @@ export function GlobalChatbot() {
     string | null
   >(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
@@ -260,20 +279,114 @@ export function GlobalChatbot() {
   const [activeToolLabel, setActiveToolLabel] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationTitle, setConversationTitle] = useState("New chat");
 
   const createConversation = useCreateAssistantConversation();
   const sendAssistantMessage = useSendAssistantMessage();
+  const loadConversation = useLoadAssistantConversation();
   const { data: skills } = useAssistantSkills();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
+  const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
+
+  // Only fetch the conversation list while the history menu is actually open.
+  const conversationsQuery = useAssistantConversations(
+    historyMenuOpen ? activeWorkspaceId : null,
+  );
+  const visibleConversations = (conversationsQuery.data ?? []).filter(
+    (conversation) => !conversation.isArchived,
+  );
+
+  /** Conversation id this client is currently *joined to* on the hub, not merely talking about. */
+  const joinedConversationIdRef = useRef<string | null>(null);
+  const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearResponseTimeout = useCallback(() => {
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+    }
+  }, []);
+
+  const armResponseTimeout = useCallback(() => {
+    clearResponseTimeout();
+    responseTimeoutRef.current = setTimeout(() => {
+      responseTimeoutRef.current = null;
+      setIsAiTyping(false);
+      setActiveToolLabel(null);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `timeout-${Date.now()}`,
+          role: "assistant",
+          content:
+            "WarpBot didn't answer in time — the live connection may have dropped. Please send that message again.",
+          failed: true,
+        },
+      ]);
+    }, ASSISTANT_RESPONSE_TIMEOUT_MS);
+  }, [clearResponseTimeout]);
+
+  useEffect(() => clearResponseTimeout, [clearResponseTimeout]);
+
+  /**
+   * Resolves once the hub effect has confirmed JoinConversation for this id. Returns false on
+   * timeout, in which case the caller still posts — a message that maybe streams beats a
+   * message that is silently dropped, and the response watchdog covers the bad case.
+   */
+  const waitForConversationJoin = useCallback(async (convId: string) => {
+    const deadline = Date.now() + HUB_JOIN_TIMEOUT_MS;
+    while (joinedConversationIdRef.current !== convId) {
+      if (Date.now() >= deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return true;
+  }, []);
 
   const startNewConversation = () => {
+    clearResponseTimeout();
     setConversationId(null);
+    setConversationTitle("New chat");
     setMessages([]);
     setInputValue("");
     setSelectedContexts([]);
     setIsAiTyping(false);
     setActiveToolLabel(null);
     setIsMinimized(false);
+    shouldAutoScrollRef.current = true;
+  };
+
+  const openConversationFromHistory = async (
+    conversation: AssistantConversationDto,
+  ) => {
+    try {
+      const detail = await loadConversation.mutateAsync(conversation.id);
+      clearResponseTimeout();
+      setMessages(
+        detail.messages
+          .filter(
+            (message) =>
+              message.role === "user" || message.role === "assistant",
+          )
+          .map((message) => ({
+            id: message.id,
+            role: message.role as ChatRole,
+            content: message.content,
+            failed: message.status === "failed",
+          })),
+      );
+      setConversationTitle(detail.title?.trim() || "Chat history");
+      setConversationId(detail.id);
+      setIsAiTyping(false);
+      setActiveToolLabel(null);
+      setInputValue("");
+      setSelectedContexts([]);
+      setIsMinimized(false);
+      setHistoryMenuOpen(false);
+      shouldAutoScrollRef.current = true;
+      setIsOpen(true);
+    } catch {
+      toast.error("Could not open that conversation.");
+    }
   };
 
   useEffect(() => {
@@ -328,7 +441,6 @@ export function GlobalChatbot() {
       icon: (m.fullName || "?").slice(0, 1).toUpperCase(),
       isAvatar: true,
       description: m.email,
-      link: "#",
       entityType: "member",
       entityId: m.userId,
     }));
@@ -340,7 +452,6 @@ export function GlobalChatbot() {
       type: "Meetings",
       icon: <VideoCamera size={14} />,
       description: r.status,
-      link: "#",
       entityType: "room",
       entityId: r.id,
     }));
@@ -352,16 +463,10 @@ export function GlobalChatbot() {
       type: "Documents",
       icon: <FileText size={14} />,
       description: d.status,
-      link: "#",
       entityType: "document",
       entityId: d.id,
     }));
-    return [
-      ...STATIC_CONTEXT_OPTIONS,
-      ...memberOptions,
-      ...roomOptions,
-      ...documentOptions,
-    ];
+    return [...memberOptions, ...roomOptions, ...documentOptions];
   }, [memberResults, roomResults, documentResults]);
 
   // Only offer commands relevant to the page the widget was opened from — e.g. "/summarize"
@@ -426,6 +531,7 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
         setActiveToolLabel(null);
+        armResponseTimeout();
         upsertAssistantMessage(payload.messageId, (prev) => ({
           id: payload.messageId,
           role: "assistant",
@@ -444,6 +550,9 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
         setActiveToolLabel(null);
+        // Still mid-turn: re-arm rather than clear, so a stream that dies halfway through
+        // also surfaces instead of freezing under a half-written answer.
+        armResponseTimeout();
         upsertAssistantMessage(payload.messageId, (prev) => ({
           id: payload.messageId,
           role: "assistant",
@@ -458,6 +567,7 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
         setActiveToolLabel(TOOL_LABELS[payload.toolName] ?? "Looking that up…");
+        armResponseTimeout();
       },
     );
 
@@ -466,6 +576,7 @@ export function GlobalChatbot() {
       (payload: { conversationId: string }) => {
         if (payload.conversationId !== conversationId) return;
         setActiveToolLabel(null);
+        armResponseTimeout();
       },
     );
 
@@ -475,6 +586,7 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
         setActiveToolLabel(null);
+        clearResponseTimeout();
         upsertAssistantMessage(payload.id, () => ({
           id: payload.id,
           role: "assistant",
@@ -493,6 +605,7 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
         setActiveToolLabel(null);
+        clearResponseTimeout();
         upsertAssistantMessage(payload.messageId, () => ({
           id: payload.messageId,
           role: "assistant",
@@ -513,19 +626,42 @@ export function GlobalChatbot() {
       },
     );
 
+    const joinConversation = async () => {
+      await connection.invoke("JoinConversation", conversationId);
+      joinedConversationIdRef.current = conversationId;
+    };
+
+    // withAutomaticReconnect (lib/signalr.ts) brings the socket back but NOT the SignalR
+    // group membership. Without this re-join, one transport blip means every token the
+    // worker streams for this conversation is delivered to a client that is no longer in
+    // the group — the widget just sits on "Thinking..." forever.
+    connection.onreconnecting(() => {
+      joinedConversationIdRef.current = null;
+    });
+    connection.onreconnected(() => {
+      joinedConversationIdRef.current = null;
+      void joinConversation().catch(() => {
+        // Still unjoined; the response watchdog surfaces it as a real error.
+      });
+    });
+    connection.onclose(() => {
+      joinedConversationIdRef.current = null;
+    });
+
     connection
       .start()
-      .then(() => connection.invoke("JoinConversation", conversationId))
+      .then(joinConversation)
       .catch(() => {
-        // Connection failures surface as a stalled "Thinking..." indicator rather than a
-        // crash — acceptable for v1, revisit with a visible retry affordance later.
+        // joinedConversationIdRef stays null, so sendMessage's join wait times out and the
+        // response watchdog turns the stalled spinner into a visible error.
       });
 
     return () => {
-      connection.stop();
+      joinedConversationIdRef.current = null;
+      void connection.stop();
       hubConnectionRef.current = null;
     };
-  }, [conversationId]);
+  }, [conversationId, armResponseTimeout, clearResponseTimeout]);
 
   // Calculate mention/slash menu visibility based on @ or leading / characters
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -543,9 +679,11 @@ export function GlobalChatbot() {
       setMentionMenuOpen(false);
     }
 
-    // Only when "/" is the very first thing typed (Slack-style) — not mid-sentence.
+    // Only when "/" is the very first thing typed (Slack-style) — not mid-sentence — and
+    // only where this page actually has commands. Opening an empty menu on a page with no
+    // ambient context used to hijack Enter and leave the message unsendable.
     const slashMatch = textBeforeCursor.match(/^\/([\w-]*)$/);
-    if (slashMatch) {
+    if (slashMatch && availableSlashCommands.length > 0) {
       setSlashMenuOpen(true);
       setSlashQuery(slashMatch[1]);
       setSlashSelectedIndex(0);
@@ -555,23 +693,39 @@ export function GlobalChatbot() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Every branch that handles a key here must return. Falling through to the send path
+    // below runs sendMessage() in the same handler, against pre-update state — which is how
+    // picking a mention with Enter used to send the literal "@Al" with no mentions attached
+    // and leave the chip dangling for the *next* message.
     if (slashMenuOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSlashSelectedIndex((prev) =>
           Math.min(prev + 1, filteredSlashCommands.length - 1),
         );
-      } else if (e.key === "ArrowUp") {
+        return;
+      }
+      if (e.key === "ArrowUp") {
         e.preventDefault();
         setSlashSelectedIndex((prev) => Math.max(prev - 1, 0));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        if (filteredSlashCommands[slashSelectedIndex])
-          insertSlashCommand(filteredSlashCommands[slashSelectedIndex]);
         return;
       }
       if (e.key === "Escape") {
+        e.preventDefault();
         setSlashMenuOpen(false);
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const command = filteredSlashCommands[slashSelectedIndex];
+        if (command) {
+          insertSlashCommand(command);
+          return;
+        }
+        // Nothing matched what was typed — send it as ordinary text instead of swallowing
+        // the keystroke and leaving the user with no way out but Escape.
+        setSlashMenuOpen(false);
+        void sendMessage();
         return;
       }
       return;
@@ -583,31 +737,48 @@ export function GlobalChatbot() {
         setSelectedIndex((prev) =>
           Math.min(prev + 1, filteredOptions.length - 1),
         );
-      } else if (e.key === "ArrowUp") {
+        return;
+      }
+      if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((prev) => Math.max(prev - 1, 0));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        insertMention(filteredOptions[selectedIndex]);
+        return;
       }
       if (e.key === "Escape") {
+        e.preventDefault();
         setMentionMenuOpen(false);
         return;
       }
-    } else {
-      // Handle backspace when input is empty to delete the last context
-      if (
-        e.key === "Backspace" &&
-        inputValue === "" &&
-        selectedContexts.length > 0
-      ) {
-        setSelectedContexts((prev) => prev.slice(0, -1));
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        // Guard the index: with a query that matches nothing (e.g. "@zzzz") this used to
+        // call insertMention(undefined), which throws inside a setState updater and takes
+        // the whole page down through the error boundary.
+        const option = filteredOptions[selectedIndex];
+        if (option) {
+          insertMention(option);
+          return;
+        }
+        setMentionMenuOpen(false);
+        void sendMessage();
+        return;
       }
+      return;
+    }
+
+    // Handle backspace when input is empty to delete the last context
+    if (
+      e.key === "Backspace" &&
+      inputValue === "" &&
+      selectedContexts.length > 0
+    ) {
+      setSelectedContexts((prev) => prev.slice(0, -1));
+      return;
     }
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      void sendMessage();
     }
   };
 
@@ -665,6 +836,22 @@ export function GlobalChatbot() {
     }, 0);
   };
 
+  // Autoscroll, same shape as chat-panel.tsx: follow new content, but never yank a user who
+  // has deliberately scrolled up to re-read an earlier answer back down to the bottom.
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || !shouldAutoScrollRef.current) return;
+    container.scrollTop = container.scrollHeight;
+  }, [messages, isAiTyping, activeToolLabel, isOpen, isExpanded]);
+
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < AUTOSCROLL_THRESHOLD_PX;
+  };
+
   const togglePageContextVisibility = () => {
     if (!ambientPageContextKey) return;
     setDisabledPageContextKey((currentKey) =>
@@ -706,6 +893,16 @@ export function GlobalChatbot() {
         convId = conversation.id;
         setConversationId(convId);
       } catch {
+        setMessages((prev) => [
+          ...prev,
+          { id: `local-${Date.now()}`, role: "user", content },
+          {
+            id: `conv-failed-${Date.now()}`,
+            role: "assistant",
+            content: "Couldn't start a conversation with WarpBot. Please try again.",
+            failed: true,
+          },
+        ]);
         return;
       }
     }
@@ -715,8 +912,14 @@ export function GlobalChatbot() {
       { id: `local-${Date.now()}`, role: "user", content },
     ]);
     setIsAiTyping(true);
+    shouldAutoScrollRef.current = true;
+    armResponseTimeout();
 
     try {
+      // The hub effect only begins negotiating once conversationId is in state, so without
+      // this the first message of a conversation is POSTed before the client has joined the
+      // group and its whole answer streams past an unsubscribed client.
+      await waitForConversationJoin(convId);
       // Ambient page context (e.g. "user is looking at this room") rides along with every
       // message automatically — no explicit @-mention needed. It's a hint, not a hard fact:
       // .NET re-validates it against the conversation's own workspace before forwarding it.
@@ -728,7 +931,17 @@ export function GlobalChatbot() {
       });
       // The assistant's reply streams in over AssistantHub — see the connection effect above.
     } catch {
+      clearResponseTimeout();
       setIsAiTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `send-failed-${Date.now()}`,
+          role: "assistant",
+          content: "That message couldn't be sent. Please try again.",
+          failed: true,
+        },
+      ]);
     }
   };
 
@@ -757,7 +970,13 @@ export function GlobalChatbot() {
           <Popover
             open={isOpen}
             onOpenChange={(open) => {
-              if (!open && messages.length > 0) {
+              if (open) {
+                // Re-opening must NOT start a new conversation: this is the only
+                // always-visible entry point, so wiping here threw away the answer the
+                // user just asked for, with no way to get it back.
+                setIsMinimized(false);
+                shouldAutoScrollRef.current = true;
+              } else if (messages.length > 0) {
                 setIsMinimized(true);
               }
               setIsOpen(open);
@@ -765,10 +984,6 @@ export function GlobalChatbot() {
           >
             <PopoverTrigger
               aria-label="Ask WarpBot"
-              onClick={() => {
-                startNewConversation();
-                setIsOpen(true);
-              }}
               className="flex items-center h-[26px] pl-[8px] pr-[10px] rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors group text-ink"
             >
               <span
@@ -792,8 +1007,8 @@ export function GlobalChatbot() {
             >
               {/* Chat Header */}
               <div className="flex items-center justify-between h-[48px] px-4 shrink-0">
-                <span className="font-semibold text-[13px] text-ink">
-                  New chat
+                <span className="font-semibold text-[13px] text-ink truncate">
+                  {conversationTitle}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
@@ -816,11 +1031,9 @@ export function GlobalChatbot() {
                     )}
                   </button>
                   <button
-                    onClick={() => {
-                      setIsOpen(false);
-                      setIsMinimized(false);
-                      startNewConversation();
-                    }}
+                    aria-label="New chat"
+                    title="New chat"
+                    onClick={startNewConversation}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
                     <Plus size={16} className="rotate-45" />
@@ -829,15 +1042,21 @@ export function GlobalChatbot() {
               </div>
 
               {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto px-2 flex flex-col gap-4">
+              <div
+                ref={messagesContainerRef}
+                onScroll={handleMessagesScroll}
+                className="flex-1 overflow-y-auto px-2 flex flex-col gap-4"
+              >
                 {messages.length > 0 &&
                   messages.map((msg) => (
                     <div
                       key={msg.id}
                       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
+                      {/* whitespace-pre-wrap so a "## Action items" / "- item" answer keeps
+                          its line breaks instead of collapsing into one run-on line. */}
                       <div
-                        className={`max-w-[85%] text-[13px] leading-relaxed ${
+                        className={`max-w-[85%] text-[13px] leading-relaxed whitespace-pre-wrap break-words ${
                           msg.role === "user"
                             ? "bg-surface-2 text-ink rounded-[12px] px-3.5 py-2"
                             : msg.failed
@@ -950,7 +1169,8 @@ export function GlobalChatbot() {
                           ))
                         ) : (
                           <div className="px-3 py-4 text-center text-[12px] text-ink-subtle">
-                            No commands for this page
+                            No matching command — press Enter to send this as a
+                            message
                           </div>
                         )}
                       </motion.div>
@@ -1028,25 +1248,34 @@ export function GlobalChatbot() {
 
                   <div className="flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[120px] bg-transparent px-2 py-1.5 overflow-y-auto">
                     {selectedContexts.map((ctx) => (
-                      <div
+                      <span
                         key={ctx.id}
-                        className="flex items-center gap-1 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 px-1.5 py-0.5 rounded-md text-[12px] font-medium cursor-pointer transition-colors"
-                        onClick={() => {
-                          // Handle redirect or logic here
-                          console.log("Redirect to:", ctx.link);
-                        }}
+                        className="flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded-md text-[12px] font-medium"
                       >
                         {ctx.isAvatar ? (
-                          <div className="flex items-center justify-center size-3.5 rounded-full shrink-0 text-[7px] font-bold text-white bg-ink">
+                          <span className="flex items-center justify-center size-3.5 rounded-full shrink-0 text-[7px] font-bold text-white bg-ink">
                             {ctx.icon}
-                          </div>
+                          </span>
                         ) : (
                           <span className="flex items-center justify-center size-3.5 shrink-0">
                             {ctx.icon}
                           </span>
                         )}
                         {ctx.title}
-                      </div>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${ctx.title} from this message`}
+                          title={`Remove ${ctx.title}`}
+                          onClick={() =>
+                            setSelectedContexts((prev) =>
+                              prev.filter((item) => item.id !== ctx.id),
+                            )
+                          }
+                          className="ml-0.5 flex size-3.5 shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-primary/20"
+                        >
+                          <X size={9} weight="bold" />
+                        </button>
+                      </span>
                     ))}
                     <textarea
                       ref={inputRef}
@@ -1086,11 +1315,17 @@ export function GlobalChatbot() {
                         className="p-1.5 w-[260px] bg-surface-1 border border-border shadow-xl rounded-xl"
                       >
                         {skills && skills.length > 0 ? (
-                          <div className="flex flex-col">
+                          // Read-only capability list: skills are the assistant's own
+                          // tools, picked by the model mid-turn — there is nothing for a
+                          // click to do, so these rows no longer pretend to be buttons.
+                          <ul className="flex flex-col">
+                            <li className="px-2.5 pt-1 pb-1.5 text-[11px] text-ink-subtle">
+                              WarpBot uses these automatically when a question needs them.
+                            </li>
                             {skills.map((skill) => (
-                              <div
+                              <li
                                 key={skill.name}
-                                className="flex flex-col gap-0.5 px-2.5 py-1.5 rounded-md hover:bg-surface-2 transition-colors"
+                                className="flex cursor-default flex-col gap-0.5 px-2.5 py-1.5"
                               >
                                 <span className="text-[12px] font-medium text-ink">
                                   {skill.label}
@@ -1098,9 +1333,9 @@ export function GlobalChatbot() {
                                 <span className="text-[11px] text-ink-subtle">
                                   {skill.description}
                                 </span>
-                              </div>
+                              </li>
                             ))}
-                          </div>
+                          </ul>
                         ) : (
                           <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
                             Loading skills…
@@ -1131,18 +1366,14 @@ export function GlobalChatbot() {
                           <ArrowsOutSimple size={14} />
                         )}
                       </button>
-                      <button className="flex items-center justify-center size-7 rounded-md text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors">
-                        <svg
-                          width="15"
-                          height="15"
-                          viewBox="0 0 16 16"
-                          fill="currentColor"
-                        >
-                          <path d="M7.5 2C5.567 2 4 3.567 4 5.5v5a2.5 2.5 0 0 0 5 0v-4.5a1 1 0 0 0-2 0V10.5a.5.5 0 0 1-1 0v-5a1.5 1.5 0 0 1 3 0v5a3.5 3.5 0 0 1-7 0v-5A4.5 4.5 0 0 1 12 5.5v4.5a1 1 0 0 1-2 0V5.5A2.5 2.5 0 0 0 7.5 2Z" />
-                        </svg>
-                      </button>
+                      {/* The paperclip that used to sit here had no handler, no type and no
+                          label: the assistant API takes content/pageContext/mentions only,
+                          there is no attachment upload to wire it to. Removed rather than
+                          left on screen as a control that cannot succeed. */}
                       <button
-                        onClick={() => sendMessage()}
+                        type="button"
+                        aria-label="Send message"
+                        onClick={() => void sendMessage()}
                         disabled={!inputValue.trim()}
                         className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted disabled:opacity-50 disabled:bg-surface-2 disabled:text-ink-muted transition-colors ml-1"
                       >
@@ -1155,12 +1386,60 @@ export function GlobalChatbot() {
             </PopoverContent>
           </Popover>
 
-          <button
-            className="flex items-center justify-center size-[26px] rounded-[6px] text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors"
-            title="Chat history"
-          >
-            <ClockCounterClockwise weight="regular" size={14} />
-          </button>
+          {/* Chat history — previously a permanently visible button with no handler and no
+              history UI behind it at all. It now opens this workspace's past conversations
+              and reloads the selected one back into the widget. */}
+          <Popover open={historyMenuOpen} onOpenChange={setHistoryMenuOpen}>
+            <PopoverTrigger
+              aria-label="Chat history"
+              title="Chat history"
+              disabled={!activeWorkspaceId}
+              className="flex items-center justify-center size-[26px] rounded-[6px] text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors disabled:opacity-50"
+            >
+              <ClockCounterClockwise weight="regular" size={14} />
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              className="p-1.5 w-[280px] max-h-[320px] overflow-y-auto bg-surface-1 border border-border shadow-xl rounded-xl"
+            >
+              {conversationsQuery.isLoading || loadConversation.isPending ? (
+                <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
+                  Loading conversations…
+                </div>
+              ) : conversationsQuery.isError ? (
+                <div className="px-2.5 py-3 text-center text-[12px] text-red-500">
+                  Could not load chat history.
+                </div>
+              ) : visibleConversations.length === 0 ? (
+                <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
+                  No past conversations yet
+                </div>
+              ) : (
+                <div className="flex flex-col">
+                  {visibleConversations.map((conversation) => (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      onClick={() =>
+                        void openConversationFromHistory(conversation)
+                      }
+                      className="flex flex-col gap-0.5 px-2.5 py-1.5 text-left rounded-md hover:bg-surface-2 transition-colors"
+                    >
+                      <span className="truncate text-[12px] font-medium text-ink">
+                        {conversation.title?.trim() || "New chat"}
+                      </span>
+                      <span className="text-[11px] text-ink-subtle">
+                        {formatConversationTimestamp(
+                          conversation.lastMessageAt ?? conversation.createdAt,
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </>

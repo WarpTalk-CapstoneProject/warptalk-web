@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces } from "@/hooks/use-workspace";
 import { Spinner } from "@phosphor-icons/react";
-import { normalizeWorkspaceSlug } from "@/lib/workspace-slug";
-import { normalizeWorkspaceRole } from "@/lib/workspace-role";
+import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
+import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();

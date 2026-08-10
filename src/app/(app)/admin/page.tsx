@@ -14,6 +14,7 @@ import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart"
 import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { billingService } from "@/services/billing.service";
+import { AdminPage, AdminPageHeader } from "@/components/admin/admin-page-chrome";
 
 const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
@@ -29,7 +30,7 @@ function MetricCard({
   icon: React.ElementType;
 }) {
   return (
-    <article className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
+    <article className="rounded-lg border border-border bg-surface-1 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
@@ -65,28 +66,23 @@ export default function AdminOverviewPage() {
   const updatedAt = Math.max(metricsQuery.dataUpdatedAt, alertsQuery.dataUpdatedAt);
 
   return (
-    <div className="min-h-full bg-canvas text-ink">
-      <div className="mx-auto w-full max-w-[1480px] px-5 py-5 lg:px-7">
-        <header className="flex flex-col gap-4 border-b border-hairline pb-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-medium text-primary">
-              <Pulse size={14} weight="fill" />
-              Platform control center
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Overview</h1>
-            <p className="mt-1 max-w-2xl text-sm text-ink-muted">
-              Live health, credit movement, and adoption across every WarpTalk workspace.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-ink-muted">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-              <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+    <AdminPage>
+        <AdminPageHeader
+          eyebrow="Platform control center"
+          eyebrowIcon={<Pulse size={14} weight="fill" />}
+          title="Overview"
+          description="Live health, credit movement, and adoption across every WarpTalk workspace."
+          actions={
+            <span className="flex items-center gap-2 text-[11px] text-ink-muted">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+              </span>
+              Live data
+              {updatedAt > 0 ? ` · ${new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
             </span>
-            Live data
-            {updatedAt > 0 ? ` · ${new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
-          </div>
-        </header>
+          }
+        />
 
         {metricsQuery.isError ? (
           <div className="mt-5 flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -124,8 +120,8 @@ export default function AdminOverviewPage() {
 
         <section className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.75fr)]">
           <UsageChart className="min-w-0" />
-          <aside className="overflow-hidden rounded-xl border border-hairline bg-surface-1 shadow-linear">
-            <div className="flex items-center justify-between border-b border-hairline px-4 py-3.5">
+          <aside className="overflow-hidden rounded-lg border border-border bg-surface-1">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
               <div>
                 <h2 className="text-sm font-semibold">Live operations</h2>
                 <p className="mt-0.5 text-xs text-ink-muted">Credit anomalies requiring review</p>
@@ -175,7 +171,6 @@ export default function AdminOverviewPage() {
           <TopWorkspacesChart />
           <FeatureBreakdownChart />
         </section>
-      </div>
-    </div>
+    </AdminPage>
   );
 }

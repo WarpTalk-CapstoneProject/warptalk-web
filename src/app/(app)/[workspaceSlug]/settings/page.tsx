@@ -17,7 +17,8 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { languagesInScope } from "@/lib/languages";
+import { languagesInScope } from "@/lib/language/languages";
+import { LanguageLabel } from "@/components/language/language-label";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
 import {
   useWorkspace,
@@ -33,7 +34,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
-import { parseIntegerInRange } from "@/lib/settings-validation";
+import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
+import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 
 const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),
@@ -91,7 +93,14 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   enforceHostApprovalDefault: true,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
-  allowedTargetLanguages: ["en", "vi", "ja"],
+  // Empty means unrestricted — every meeting-scope language is offered. It used to read
+  // ["en","vi","ja"], which is not a default so much as a policy nobody chose: a workspace
+  // that had never set one got a three-language allowlist, and Korean, French and Spanish
+  // showed as BLOCKED in the create-room picker with the reason pointing at "this
+  // workspace's language policy" and at an admin who had never touched it. Worse, the value
+  // is what this form posts, so the first save of any unrelated setting wrote the invented
+  // allowlist to the server for real.
+  allowedTargetLanguages: [],
   verifiedDomains: [],
   allowExternalCollaboration: true,
   requireVerifiedDomainForInternal: false,
@@ -126,7 +135,9 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     enforceHostApprovalDefault: settings.enforceHostApprovalDefault ?? DEFAULT_SETTINGS_FORM_DATA.enforceHostApprovalDefault,
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
-    allowedTargetLanguages: settings.allowedTargetLanguages || ["en", "vi", "ja"],
+    // `|| []` and not `|| [...three languages]`: an absent policy means the server is not
+    // restricting anything, and substituting a list here turns "no policy" into a real one.
+    allowedTargetLanguages: settings.allowedTargetLanguages || [],
     verifiedDomains: settings.verifiedDomains || [],
     allowExternalCollaboration: settings.allowExternalCollaboration ?? DEFAULT_SETTINGS_FORM_DATA.allowExternalCollaboration,
     requireVerifiedDomainForInternal: settings.requireVerifiedDomainForInternal ?? DEFAULT_SETTINGS_FORM_DATA.requireVerifiedDomainForInternal,
@@ -515,12 +526,20 @@ export default function WorkspaceSettingsPage() {
                 disabled={isSubmitting || !isOwnerOrAdmin}
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select language" />
+                  <SelectValue>
+                    {(value) =>
+                      value ? <LanguageLabel value={String(value)} /> : "Select language"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Through LanguageLabel like every other picker, rather than a bare name.
+                      It is the single place that turns a language value into display text,
+                      and it takes the bare codes this form holds as readily as the locale
+                      tags rooms carry. */}
                   {languages.map((l) => (
                     <SelectItem key={l.code} value={l.code} className="text-xs">
-                      {l.label}
+                      <LanguageLabel value={l.code} />
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -539,13 +558,31 @@ export default function WorkspaceSettingsPage() {
                 disabled={isSubmitting || !isOwnerOrAdmin}
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select timezone" />
+                  <SelectValue>
+                    {(value) =>
+                      value ? describeTimeZone(String(value)) : "Select timezone"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
+                {/* Every zone the platform knows, not four guesses about where customers are.
+                    A workspace in Singapore, Sydney or Berlin previously had no way to say so,
+                    and the nearest wrong answer shifts every meeting it books.
+
+                    The stored value is passed in because it may be spelled differently from
+                    the generated list: this platform canonicalises to Asia/Saigon and omits
+                    Asia/Ho_Chi_Minh entirely, which is precisely the value the accounts
+                    database defaults every account to. Without it the control would look
+                    empty for almost everyone and drop the setting on the next save.
+
+                    Offsets are computed from the zone and today's date rather than written
+                    beside the label — the old list said "(-5)" for New York, which is an hour
+                    wrong from March to November. */}
                 <SelectContent>
-                  <SelectItem value="UTC" className="text-xs">UTC</SelectItem>
-                  <SelectItem value="Asia/Ho_Chi_Minh" className="text-xs">Asia/Ho_Chi_Minh (+7)</SelectItem>
-                  <SelectItem value="Asia/Tokyo" className="text-xs">Asia/Tokyo (+9)</SelectItem>
-                  <SelectItem value="America/New_York" className="text-xs">America/New_York (-5)</SelectItem>
+                  {supportedTimeZones(watchAll.timezone).map((zone) => (
+                    <SelectItem key={zone} value={zone} className="text-xs">
+                      {describeTimeZone(zone)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -653,7 +690,9 @@ export default function WorkspaceSettingsPage() {
                       }`}
                     >
                       {selected && <Checks size={12} className="text-primary" />}
-                      {l.label} ({l.code.toUpperCase()})
+                      {/* Was "Vietnamese (VI)" — the code repeated the name it sat beside and
+                          told the reader nothing the flag does not. */}
+                      <LanguageLabel value={l.code} />
                     </button>
                   );
                 })}

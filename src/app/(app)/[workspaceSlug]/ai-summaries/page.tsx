@@ -39,12 +39,12 @@ import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import {
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
-} from "@/lib/transcript-display";
-import { loadSavedTranscript } from "@/lib/transcript-history";
-import { formatLanguageRoute as formatRoute } from "@/lib/languages";
+} from "@/lib/transcript/transcript-display";
+import { loadSavedTranscript } from "@/lib/transcript/transcript-history";
+import { formatLanguageRoute as formatRoute } from "@/lib/language/languages";
 import { cn } from "@/lib/utils";
-import { translationRoomService } from "@/services/translationRoom.service";
-import { openArtifactDownload, saveBlobDownload } from "@/lib/download-artifact";
+import { translationRoomService } from "@/services/translation-room.service";
+import { openArtifactDownload, saveBlobDownload } from "@/lib/ui/download-artifact";
 import { transcriptService } from "@/services/transcript.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";

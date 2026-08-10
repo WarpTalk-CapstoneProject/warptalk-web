@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
-import { resolveRoomHost } from "@/lib/room-host";
+import { resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
@@ -204,39 +204,54 @@ function LinearRow({
         </div>
 
         <div className="flex h-[26px] w-[176px] shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+          {/* Reads "English → 🇻🇳 · 🇯🇵". It used to read "English ; 🇺🇸 ; 🇻🇳 ;" — three
+              separate faults in one chip. The separator was a semicolon, so the two branches
+              of this same control punctuated the same relationship differently (the
+              single-target branch below has always used an arrow). There was a trailing
+              separator before the "+", punctuating a gap. And the source language was listed
+              again among its own targets, because create sends `targetLanguages = languages`
+              with the source still in the set — so a room appeared to translate English into
+              English. Only the display is corrected here; what gets sent to the API is
+              unchanged, since the backend may well want the source in that list. */}
           <LanguageLabel value={room.sourceLanguage || "en-US"} />
-          {room.targetLanguages.length > 1 ? (
-            <>
-              <span className="text-muted-foreground/40 font-bold px-1 text-[13px]">
-                ;
-              </span>
-              <div className="flex items-center">
-                {room.targetLanguages.map((t, i) => (
-                  <div key={t} className="flex items-center">
-                    {i > 0 && (
-                      <span className="text-muted-foreground/40 font-bold text-[13px] px-1">
-                        ;
-                      </span>
-                    )}
-                    <LanguageLabel value={t} showName={false} />
-                  </div>
-                ))}
+          {(() => {
+            const source = room.sourceLanguage || "en-US";
+            const targets = room.targetLanguages.filter((t) => t !== source);
+
+            // Everything the room translates into is the source itself — there is no second
+            // language to point an arrow at, so the source chip alone is the honest answer.
+            if (targets.length === 0) return null;
+
+            if (targets.length === 1) {
+              return (
+                <>
+                  <span className="text-border mx-0.5 font-bold">→</span>
+                  <LanguageLabel value={targets[0]} />
+                </>
+              );
+            }
+
+            return (
+              <>
+                <span className="text-border mx-0.5 font-bold">→</span>
                 <div className="flex items-center">
-                  <span className="text-muted-foreground/40 font-bold text-[13px] px-1">
-                    ;
-                  </span>
+                  {targets.map((t, i) => (
+                    <div key={t} className="flex items-center">
+                      {i > 0 && (
+                        <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
+                          ·
+                        </span>
+                      )}
+                      <LanguageLabel value={t} showName={false} />
+                    </div>
+                  ))}
                   <div className="flex items-center justify-center px-1">
                     <Plus weight="bold" size={12} className="text-ink-muted" />
                   </div>
                 </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <span className="text-border mx-0.5 font-bold">→</span>
-              <LanguageLabel value={room.targetLanguages[0]} />
-            </>
-          )}
+              </>
+            );
+          })()}
         </div>
 
         {/* WT-321(3): the bare "0/100" was read as an error code, a progress bar, anything but
@@ -511,9 +526,14 @@ export default function MeetingsPageLinear() {
     "active" | "scheduled" | "history" | "all"
   >("active");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // workspaceId is what lets the server answer this question for a workspace Owner/Admin at all:
+  // without it the list falls back to host-or-participant-or-invitee and an Admin sees an empty
+  // page for a workspace that has meetings in it. It also stops this workspace-scoped screen from
+  // listing another workspace's rooms.
   const roomList = useTranslationRooms({
     pageSize: 100,
     status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
+    workspaceId: activeWorkspaceId ?? undefined,
   });
   const setCreateRoomModalOpen = useUIStore(
     (state) => state.setCreateRoomModalOpen,

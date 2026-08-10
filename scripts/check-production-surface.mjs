@@ -4,8 +4,8 @@ const proxy = fs.readFileSync("src/proxy.ts", "utf8");
 const createRoom = fs.readFileSync("src/components/rooms/create-room-dialog.tsx", "utf8");
 const optionsMenu = fs.readFileSync("src/components/rooms/create/options-menu.tsx", "utf8");
 const mockArtifactsPage = "src/app/(app)/workspace/artifacts/page.tsx";
-const assistantPage = fs.readFileSync("src/app/(app)/ai-chat/page.tsx", "utf8");
-const feedbackPage = fs.readFileSync("src/app/(app)/feedback/page.tsx", "utf8");
+const assistantPage = fs.readFileSync("src/app/(app)/[workspaceSlug]/ai-chat/page.tsx", "utf8");
+const feedbackPage = fs.readFileSync("src/app/(app)/[workspaceSlug]/feedback/page.tsx", "utf8");
 const artifactsPage = fs.readFileSync(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/artifacts/page.tsx",
   "utf8",
@@ -19,7 +19,7 @@ const endedPage = fs.readFileSync(
   "utf8",
 );
 const voiceProfilesPage = fs.readFileSync(
-  "src/app/(app)/voice-profiles/page.tsx",
+  "src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx",
   "utf8",
 );
 

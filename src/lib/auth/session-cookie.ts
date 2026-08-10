@@ -121,6 +121,31 @@ export function buildAccessTokenCookie(
   return `${ACCESS_TOKEN_COOKIE}=${accessToken}; path=/${lifetime}${cookieSuffix()}`;
 }
 
+/**
+ * Leaves a note saying which code path tore the session down.
+ *
+ * Three places clear session cookies — sign-out, rehydrate-with-nothing-to-refresh-with,
+ * and an access token that arrived already expired — and from the outside all three look
+ * identical: cookies gone, bounced to /login. Three separate attempts at this bug were
+ * reasoned from source because there was no way to tell them apart afterwards.
+ *
+ * sessionStorage, not a log line: it survives the redirect to /login, which console output
+ * does not, and it dies with the tab so it cannot accumulate.
+ */
+export const SESSION_TEARDOWN_KEY = "warptalk.session.teardown";
+
+export function recordSessionTeardown(reason: string) {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(
+      SESSION_TEARDOWN_KEY,
+      JSON.stringify({ reason, at: new Date().toISOString() }),
+    );
+  } catch {
+    // A full or blocked sessionStorage must never be the thing that breaks sign-out.
+  }
+}
+
 function writeCookie(value: string) {
   if (typeof document === "undefined") return;
   document.cookie = value;
@@ -134,7 +159,15 @@ export function setAccessTokenCookie(accessToken: string, expiresAt: string | nu
   const cookie = buildAccessTokenCookie(accessToken, expiresAt);
 
   if (cookie === null) {
-    clearSessionCookies();
+    // Only the access token. This used to call clearSessionCookies(), which took the
+    // seven-day marker with it — and the marker is the whole reason an expired access
+    // token is survivable: middleware reads it as "there is still a refresh token worth
+    // redeeming". Killing it here turned a token that had merely aged out into a full
+    // sign-out, which is exactly the "every 7-day session becomes a 30-minute one" this
+    // module's own header says it exists to prevent. clearAccessTokenCookie is documented
+    // three lines down as "leaving the session marker alone"; that is the one to call.
+    recordSessionTeardown("expired-access-token-on-arrival");
+    clearAccessTokenCookie();
     return;
   }
 

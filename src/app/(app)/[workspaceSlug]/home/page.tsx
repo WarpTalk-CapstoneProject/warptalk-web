@@ -11,7 +11,6 @@ import {
   Keyboard,
   MagnifyingGlass,
   Plus,
-  Sparkle,
   Users,
   VideoCamera,
 } from "@phosphor-icons/react";
@@ -126,12 +125,6 @@ export default function WorkspaceHomePage() {
       description: "Return to conversations already captured.",
       icon: ClockCounterClockwise,
       href: `/${slug}/history`,
-    },
-    {
-      title: "Transcripts",
-      description: "Read the transcript, AI summary, and artifacts.",
-      icon: Sparkle,
-      href: `/${slug}/ai-summaries`,
     },
     {
       title: "Documents",

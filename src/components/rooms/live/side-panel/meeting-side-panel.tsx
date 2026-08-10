@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { ChatPanel } from "@/components/rooms/live/chat-panel";
+import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 import type {
   TranslationRoomDto,
@@ -22,6 +25,7 @@ export function MeetingSidePanel({
   participantsError,
   activeCount,
   segments,
+  missedCount,
   onCopyText,
   joinLink,
   chatTargetLanguage,
@@ -39,6 +43,8 @@ export function MeetingSidePanel({
   participantsError: boolean;
   activeCount: number;
   segments: TranscriptSegmentDto[];
+  /** Lines already spoken when this person joined; passed through to the transcript. */
+  missedCount?: number;
   onCopyText: (value: string, label: string) => void;
   joinLink: string;
   /** Viewer's own listen language — passed to ChatPanel for on-click translation. */
@@ -63,6 +69,23 @@ export function MeetingSidePanel({
   //  - below lg: an overlay drawer pinned to the right. top-3/bottom-24 (96px) keeps it clear of
   //    the bottom dock (min-h-12 = 48px, plus the main's p-3), so the control bar and the exit
   //    control stay fully visible and clickable, and the left part of the stage stays on screen.
+  // How many chat messages have arrived since this panel last showed the Chat tab.
+  //
+  // The tab said nothing when a message came in, so a conversation happening in the panel
+  // you were not looking at was invisible until you happened to click. The count is derived
+  // from the store rather than from a subscription: while Chat is open there is by
+  // definition nothing unread, so the mark simply follows the message list.
+  const chatMessages = useTranslationRoomStore((state) => state.chatMessages);
+  const [seenChatCount, setSeenChatCount] = useState(chatMessages.length);
+
+  useEffect(() => {
+    if (mode === "chat") {
+      setSeenChatCount(chatMessages.length);
+    }
+  }, [mode, chatMessages.length]);
+
+  const unreadChatCount = mode === "chat" ? 0 : Math.max(0, chatMessages.length - seenChatCount);
+
   return (
     <aside
       data-meeting-side-panel
@@ -78,6 +101,7 @@ export function MeetingSidePanel({
           <TabButton
             active={mode === "chat"}
             label="Chat"
+            badge={unreadChatCount || undefined}
             onClick={() => onModeChange("chat")}
           />
           <TabButton
@@ -90,7 +114,7 @@ export function MeetingSidePanel({
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
           {mode === "transcript" ? (
-            <TranscriptPanel segments={segments} roomId={roomId} baseTime={room.startedAt} />
+            <TranscriptPanel segments={segments} roomId={roomId} baseTime={room.startedAt} missedCount={missedCount} />
           ) : null}
           {mode === "chat" ? (
             <ChatPanel roomId={roomId} targetLanguage={chatTargetLanguage} />

@@ -31,8 +31,19 @@ export const authService = {
     return apiClient.post<AuthResponse>(API.auth.refresh, { refreshToken });
   },
 
-  logout(data: LogoutRequest) {
-    return apiClient.post<void>(API.auth.logout, data);
+  /**
+   * Revoke the refresh token server-side.
+   *
+   * The endpoint is `[Authorize]`, and this is called while the session is
+   * being torn down, so the departing access token has to be handed over
+   * explicitly — by the time the request interceptor would look one up, the
+   * store is already empty. /auth/logout is exempt from interceptor management
+   * in lib/api/client.ts precisely so this header survives.
+   */
+  logout(data: LogoutRequest, accessToken?: string | null) {
+    return apiClient.post<void>(API.auth.logout, data, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    });
   },
 
   getProfile() {

@@ -2,21 +2,10 @@
 
 import { useMemberPresence } from "@/hooks/use-presence";
 import { cn } from "@/lib/utils";
-import type { PresenceState } from "@/types/presence";
-
-const LABELS: Record<PresenceState, string> = {
-  Online: "Online",
-  InMeeting: "In a meeting",
-  Offline: "Offline",
-};
-
-const DOT_CLASSES: Record<PresenceState, string> = {
-  Online: "bg-emerald-500",
-  // Filled ring rather than a third colour: "in a meeting" is a kind of online, and reading it
-  // as a distinct shade of green at 8px is hopeless.
-  InMeeting: "bg-emerald-500 ring-2 ring-inset ring-surface-1",
-  Offline: "bg-transparent border border-ink-subtle/50",
-};
+import {
+  PRESENCE_DOT_CLASSES,
+  PRESENCE_LABELS,
+} from "@/components/presence/presence-appearance";
 
 const SIZES = {
   sm: "h-2 w-2",
@@ -44,12 +33,12 @@ export function PresenceDot({
   return (
     <span
       role="img"
-      aria-label={LABELS[state]}
-      title={LABELS[state]}
+      aria-label={PRESENCE_LABELS[state]}
+      title={PRESENCE_LABELS[state]}
       className={cn(
         "block shrink-0 rounded-full",
         SIZES[size],
-        DOT_CLASSES[state],
+        PRESENCE_DOT_CLASSES[state],
         className,
       )}
     />
@@ -82,6 +71,6 @@ export function PresenceLabel({ userId }: { userId: string | null | undefined })
   if (!state) return null;
 
   return (
-    <span className="text-[11px] text-ink-subtle">{LABELS[state]}</span>
+    <span className="text-[11px] text-ink-subtle">{PRESENCE_LABELS[state]}</span>
   );
 }

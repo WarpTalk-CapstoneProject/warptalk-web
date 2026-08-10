@@ -6,7 +6,7 @@
 // no identity. `logout()` cleared the auth state, the cookies, the active workspace and the
 // presence map, and nothing else.
 //
-// `src/lib/session-scoped-state.test.ts` proves the reset actually empties a real query
+// `src/lib/auth/__tests__/session-scoped-state.test.ts` proves the reset actually empties a real query
 // client and the real stores. What that test cannot see is *wiring*: whether the auth store
 // still calls it, whether the provider still hands the query client over, and whether a
 // newly added store was ever added to the reset. Those are the assertions here, and they are
@@ -21,7 +21,7 @@ import path from "node:path";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => readFile(path.join(root, rel), "utf8");
 
-const sessionScopedState = await read("src/lib/session-scoped-state.ts");
+const sessionScopedState = await read("src/lib/auth/session-scoped-state.ts");
 const authStore = await read("src/stores/auth-store.ts");
 const providers = await read("src/app/providers.tsx");
 const workspacePage = await read("src/app/(app)/workspace/page.tsx");
@@ -115,8 +115,11 @@ checks.push([
 // hooks/use-auth.ts is the only caller that ever cleared the query cache, and nothing in the
 // app calls it — which is exactly how the leak survived having a fix already written for it.
 // So the reset has to live in the store, and no call site may hand-roll its own teardown.
+// topbar.tsx was on this list and has been deleted. It was never rendered by any layout —
+// no file imported it — so its sign-out was unreachable and this entry was asserting about
+// a screen no user could ever see. Its search, the part that was worth keeping, now lives in
+// components/layout/header-search.tsx, which has no sign-out of its own.
 const LOGOUT_CALL_SITES = [
-  "src/components/layout/topbar.tsx",
   "src/components/layout/linear-sidebar.tsx",
   "src/app/invitations/[token]/page.tsx",
 ];

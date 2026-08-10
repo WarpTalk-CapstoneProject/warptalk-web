@@ -11,6 +11,7 @@ import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { CheckoutSessionDto, SubscriptionDto } from "@/types/billing";
 import { CheckCircle } from "@phosphor-icons/react";
+import { formatMoney } from "@/lib/format/currency";
 
 const REDIRECT_SECONDS = 6;
 
@@ -93,7 +94,7 @@ function SuccessContent() {
   const amountPaid = currency === "VND" ? rawAmount : rawAmount / 100;
   const formattedAmount =
     currency === "VND"
-      ? `${amountPaid.toLocaleString("vi-VN")}đ`
+      ? formatMoney(amountPaid, "VND")
       : `$${amountPaid.toFixed(2)}`;
 
   const transactionId = session?.paymentIntentId || session?.id || null;

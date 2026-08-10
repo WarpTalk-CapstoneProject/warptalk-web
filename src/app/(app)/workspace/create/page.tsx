@@ -15,7 +15,7 @@ import {
   getDomainFromEmail,
   isPublicEmailDomain,
   slugPreviewFromName,
-} from "@/features/workspace/lib/email-domain";
+} from "@/lib/workspace/email-domain";
 import { useCreateWorkspace, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";

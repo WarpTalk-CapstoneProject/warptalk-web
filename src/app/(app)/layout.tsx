@@ -19,10 +19,15 @@ import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
+import { HeaderSearch } from "@/components/layout/header-search";
+import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 
+import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { getErrorStatus } from "@/lib/api/retry-policy";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
@@ -115,13 +120,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const logout = useAuthStore((state) => state.logout);
   const activeMeetingRoomId = useActiveMeetingStore(
     (state) => state.activeRoomId,
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
   const [mounted, setMounted] = useState(false);
   
-  const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
+  // `isError` and `refetch` were not read. The gate below spun on `!activeWorkspaceId`, and a
+  // failed workspaces query leaves that null forever — so any failure here painted a spinner
+  // with no message, no retry and no way out, indistinguishable from a slow network. It is the
+  // first request the shell makes, so it is also the one most likely to meet a cold gateway.
+  const {
+    data: workspacesData,
+    isLoading: workspacesLoading,
+    isError: workspacesFailed,
+    error: workspacesError,
+    refetch: refetchWorkspaces,
+  } = useWorkspaces(1, 100);
   const selectWorkspace = useSelectWorkspace();
 
   const roomId = (() => {
@@ -145,7 +161,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
-  const isLiveMeetingRoute = pathname.startsWith("/room/");
+  // Decides more than the header divider: it is also what tells the meeting dock to stop
+  // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
+  // window floats on top of the meeting it is a copy of.
+  const isLiveMeetingRoute = isLiveMeetingPath(pathname);
+
+  // Starts the token's refresh timer for a session that was already in place on load.
+  //
+  // From an effect, deliberately. The same call at module scope in the api client took
+  // production down with a temporal-dead-zone error, because it read the auth store while
+  // the two modules were still evaluating each other. By the time an effect runs, every
+  // module has finished — which is the only guarantee that actually holds.
+  useEffect(() => {
+    startProactiveRefresh();
+  }, []);
 
   useEffect(() => {
     const handle = requestAnimationFrame(() => setMounted(true));
@@ -199,6 +228,42 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // Checked before the spinner, because a failure and a slow load are the same picture and
+  // only one of them ends. Retry rather than reload: the session is fine, one request was not.
+  if (!isAdminRoute && workspacesFailed) {
+    return (
+      <div className="flex h-dvh w-screen items-center justify-center bg-canvas p-6">
+        <div className="max-w-sm space-y-4 text-center">
+          <h1 className="text-base font-semibold text-ink">Could not load your workspaces</h1>
+          <p className="text-sm leading-relaxed text-ink-muted">
+            {getErrorStatus(workspacesError) === null
+              ? "The server could not be reached. Check your connection and try again."
+              : "The server refused that request. Trying again may work; if it does not, sign out and back in."}
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => void refetchWorkspaces()}
+              className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas transition-opacity hover:opacity-90"
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                router.replace("/login");
+              }}
+              className="rounded-md border border-border px-3 py-1.5 text-[13px] text-ink-muted transition-colors hover:text-ink"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAdminRoute && (!activeWorkspaceId || workspacesLoading)) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
@@ -224,7 +289,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Top bar */}
         <header
           className={cn(
-            "h-[46px] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 shrink-0",
+            // Three columns since the search sits between the breadcrumb and the icons.
+            // This was two, and adding a third child silently wrapped the icon cluster onto a
+            // second grid row inside a 44px-tall header — the notification bell, theme toggle,
+            // help and the right-panel toggle all vanished. Nothing failed: not typecheck, not
+            // lint, not the build. Only looking at it showed anything was wrong.
+            //
+            // The middle column is capped rather than 1fr so the search does not stretch across
+            // a wide window, and minmax(0,…) on the outer two lets a long breadcrumb truncate
+            // instead of pushing the icons off the edge.
+            "h-[44px] grid grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] items-center gap-3 px-4 shrink-0",
             !isLiveMeetingRoute && "border-b border-border",
           )}
         >
@@ -265,16 +339,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     }
                   } else if (feature === "history") {
                     parts.push({ label: "History" });
-                  } else if (feature === "ai-summaries") {
-                    parts.push({ label: "Transcripts" });
                   } else if (feature === "dashboard") {
                     parts.push({ label: "Dashboard" });
                   } else if (feature === "home") {
                     parts.push({ label: "Home" });
                   } else if (feature === "members") {
                     parts.push({ label: "Members" });
-                  } else if (feature === "invitations") {
-                    parts.push({ label: "Invitations" });
                   } else if (feature === "documents") {
                     parts.push({ label: "Documents" });
                   } else if (feature === "settings") {
@@ -329,6 +399,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             })()}
           </div>
 
+          {/*
+            Search sits between the breadcrumb and the icon cluster, which is where it was
+            designed to go — the Topbar that owned it was simply never mounted, so the header
+            has been running without it. min-w-0 so the breadcrumb, not the search box, is
+            what gives up space on a narrow window.
+          */}
+          <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
+            <HeaderSearch />
+          </div>
+
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
             <NotificationPopover />
             <ThemeToggleButton />
@@ -347,25 +427,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}
             {activeMeetingRoomId ? (
-              <div
-                className={cn(
-                  isLiveMeetingRoute && "absolute inset-0 z-30",
-                  !isLiveMeetingRoute &&
-                    "fixed bottom-[72px] right-5 z-[70] h-[220px] w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[20px] border border-white/70 bg-surface-1 shadow-[0_24px_70px_rgba(15,23,42,0.28)] ring-1 ring-black/5",
-                )}
-              >
+              // One wrapper for both presentations, never a ternary between two of them: the
+              // session must stay MOUNTED as the route changes, or navigating out of the room
+              // tears down the LiveKit connection this whole arrangement exists to preserve.
+              // The dock owns the floating position now — it used to be pinned to the
+              // bottom-right, which is exactly where the chat launcher and the toasts live.
+              <MiniMeetingDock floating={!isLiveMeetingRoute}>
                 <PersistentMeetingSession
                   key={activeMeetingRoomId}
                   roomId={activeMeetingRoomId}
                   compact={!isLiveMeetingRoute}
                   onMeetingClosed={closeMeeting}
                 />
-              </div>
+              </MiniMeetingDock>
             ) : null}
           </main>
 
           {/* Right Sidebar (Context/Properties) */}
-          {!isAdminRoute && !pathname.startsWith('/room/') && !pathname.startsWith('/rooms/') && (
+          {!isAdminRoute && !isLiveMeetingRoute && !pathname.startsWith('/rooms/') && (
             <AnimatedWidthPanel
               open={rightSidebarOpen}
               width={260}

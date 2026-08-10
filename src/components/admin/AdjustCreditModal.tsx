@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { billingService } from "@/services/billing.service";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage } from "@/lib/api/errors";
 
 const MAX_CREDIT_ADJUSTMENT = 1_000_000;
 

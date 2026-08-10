@@ -69,11 +69,12 @@ import type {
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { useParams } from "next/navigation";
 import AdminBillingPage from "@/app/(internal)/billing/page";
+import { formatMoney } from "@/lib/format/currency";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -543,7 +544,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   const displayPlanName = subscription?.planName || "No Active Plan";
   const displayPlanPrice = subscription?.price
-    ? `${subscription.price.toLocaleString("vi-VN")}đ`
+    ? formatMoney(subscription.price, "VND")
     : "--";
 
   // The three queries below own every number on this surface. If any of them failed we must not
@@ -1281,14 +1282,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                               {rowIndex}
                             </TableCell>
                             <TableCell className="text-xs font-mono text-ink py-3">
-                              {(() => {
-                                if (!invoice.stripeInvoiceId) return "";
-                                const rawId = invoice.stripeInvoiceId;
-                                const suffix = rawId
-                                  .substring(Math.max(0, rawId.length - 8))
-                                  .toUpperCase();
-                                return `INV-${suffix}`;
-                              })()}
+                              {invoice.invoiceNumber}
                             </TableCell>
                             <TableCell className="text-xs text-ink-muted py-3">
                               {format(
@@ -1297,34 +1291,19 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                               )}
                             </TableCell>
                             <TableCell className="text-right text-xs font-semibold text-ink py-3">
-                              {invoice.amount.toLocaleString("vi-VN")}
-                              {invoice.currency?.toLowerCase() === "vnd"
-                                ? "đ"
-                                : ` ${invoice.currency?.toUpperCase()}`}
+                              {formatMoney(invoice.total, invoice.currency)}
                             </TableCell>
                             <TableCell className="text-right text-xs pr-5 py-3 space-x-3">
-                              {invoice.hostedInvoiceUrl &&
-                              invoice.hostedInvoiceUrl.startsWith("http") ? (
-                                <a
-                                  href={invoice.hostedInvoiceUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline font-semibold"
-                                >
-                                  View Receipt
-                                </a>
-                              ) : (
-                                <button
-                                  onClick={() => setSelectedInvoice(invoice)}
-                                  className="text-primary hover:underline font-semibold cursor-pointer bg-transparent border-none p-0"
-                                >
-                                  View Details
-                                </button>
-                              )}
-                              {invoice.invoicePdfUrl &&
-                                invoice.invoicePdfUrl.startsWith("http") && (
+                              <button
+                                onClick={() => setSelectedInvoice(invoice)}
+                                className="text-primary hover:underline font-semibold cursor-pointer bg-transparent border-none p-0"
+                              >
+                                View Details
+                              </button>
+                              {invoice.pdfUrl &&
+                                invoice.pdfUrl.startsWith("http") && (
                                   <a
-                                    href={invoice.invoicePdfUrl}
+                                    href={invoice.pdfUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-primary hover:underline font-semibold"
@@ -1454,13 +1433,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Invoice Number</span>
                   <span className="font-mono font-bold text-ink uppercase tracking-wider">
-                    {(() => {
-                      const rawId = selectedInvoice.stripeInvoiceId || "";
-                      const suffix = rawId
-                        .substring(Math.max(0, rawId.length - 8))
-                        .toUpperCase();
-                      return `INV-${suffix}`;
-                    })()}
+                    {selectedInvoice.invoiceNumber}
                   </span>
                 </div>
 
@@ -1496,10 +1469,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                     </span>
                   </div>
                   <span className="text-lg font-extrabold text-ink tracking-tight">
-                    {selectedInvoice.amount.toLocaleString("vi-VN")}
-                    {selectedInvoice.currency?.toLowerCase() === "vnd"
-                      ? "đ"
-                      : ` ${selectedInvoice.currency?.toUpperCase()}`}
+                    {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                   </span>
                 </div>
               </div>
@@ -1575,14 +1545,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             </h2>
             <p className="text-xs font-mono font-bold text-gray-700 mt-1.5">
               No:{" "}
-              {(() => {
-                if (!selectedInvoice) return "";
-                const rawId = selectedInvoice.stripeInvoiceId || "";
-                const suffix = rawId
-                  .substring(Math.max(0, rawId.length - 8))
-                  .toUpperCase();
-                return `INV-${suffix}`;
-              })()}
+              {selectedInvoice?.invoiceNumber ?? ""}
             </p>
             <p className="text-[10px] text-gray-500 mt-1">
               Date:{" "}
@@ -1648,16 +1611,10 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                 </td>
                 <td className="py-4 px-3 text-center text-gray-700">1</td>
                 <td className="py-4 px-3 text-right text-gray-700 font-mono">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}
-                  {selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                 </td>
                 <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
-                  {selectedInvoice.amount.toLocaleString("vi-VN")}
-                  {selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`}
+                  {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                 </td>
               </tr>
             )}
@@ -1670,27 +1627,19 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Subtotal:</span>
               <span className="font-semibold text-gray-900 font-mono">
-                {selectedInvoice &&
-                  selectedInvoice.amount.toLocaleString("vi-VN")}
-                {selectedInvoice &&
-                  (selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatMoney(selectedInvoice.total, selectedInvoice.currency)}
               </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Tax (0%):</span>
-              <span className="text-gray-900 font-mono">0đ</span>
+              <span className="text-gray-900 font-mono">
+                {formatMoney(0, selectedInvoice?.currency)}
+              </span>
             </div>
             <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
               <span className="text-gray-900">Total Paid:</span>
               <span className="text-gray-950 font-mono text-base">
-                {selectedInvoice &&
-                  selectedInvoice.amount.toLocaleString("vi-VN")}
-                {selectedInvoice &&
-                  (selectedInvoice.currency === "vnd"
-                    ? "đ"
-                    : ` ${selectedInvoice.currency.toUpperCase()}`)}
+                {selectedInvoice && formatMoney(selectedInvoice.total, selectedInvoice.currency)}
               </span>
             </div>
           </div>

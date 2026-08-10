@@ -1,5 +1,5 @@
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { normalizeWorkspaceRole, type WorkspaceRole } from "@/lib/workspace-role";
+import { normalizeWorkspaceRole, type WorkspaceRole } from "@/lib/workspace/workspace-role";
 
 export type { WorkspaceRole };
 

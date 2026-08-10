@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AutoSaveQueue } from "@/lib/auto-save-queue";
+import { AutoSaveQueue } from "@/lib/ui/auto-save-queue";
 
-export type { AutoSaveStatus } from "@/lib/auto-save-queue";
-import type { AutoSaveStatus } from "@/lib/auto-save-queue";
+export type { AutoSaveStatus } from "@/lib/ui/auto-save-queue";
+import type { AutoSaveStatus } from "@/lib/ui/auto-save-queue";
 
 type UseAutoSaveQueueOptions<T> = {
   save: (payload: T) => Promise<unknown>;

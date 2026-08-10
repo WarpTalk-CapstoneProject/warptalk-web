@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -25,11 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsDesktopRuntime } from "@/hooks/use-is-desktop-runtime";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
-import {
-  useInviteWorkspaceMember,
-  useSelectWorkspace,
-  useWorkspaces,
-} from "@/hooks/use-workspace";
+import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
@@ -41,7 +36,6 @@ import {
   Check,
   CreditCard,
   Desktop,
-  EnvelopeSimple,
   FileText,
   GearSix,
   Gauge,
@@ -52,7 +46,6 @@ import {
   Monitor,
   PaperPlaneTilt,
   Plus,
-  Scroll,
   SignOut,
   Sliders,
   SquaresFour,
@@ -63,6 +56,7 @@ import {
   Waveform,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -181,8 +175,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRoleName, setInviteRoleName] = useState("Member");
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -206,8 +198,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
       ]
     },
-    { icon: Scroll, label: "Transcripts", href: `/${slug}/ai-summaries` },
-    { icon: Waveform, label: "Voice Profiles", href: "/voice-profiles" },
+    // No Transcripts entry: a meeting's transcript, summary and files live on that
+    // meeting's own page, below its description.
+    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles` },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -220,7 +213,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
   const selectWorkspaceMutation = useSelectWorkspace();
-  const inviteMemberMutation = useInviteWorkspaceMember(activeWorkspaceId || "");
 
   const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
     try {
@@ -233,25 +225,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     }
   };
 
-  const handleInviteMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const email = inviteEmail.trim();
-    if (!activeWorkspaceId || !email) return;
-
-    try {
-      await inviteMemberMutation.mutateAsync({
-        email,
-        roleName: inviteRoleName,
-      });
-      toast.success(`Invitation sent to ${email}`);
-      setInviteEmail("");
-      setInviteRoleName("Member");
-      setIsInviteModalOpen(false);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to send invitation";
-      toast.error(message);
-    }
-  };
 
   const workspaceInitials = useMemo(() => {
     if (!activeWorkspaceName) return "WS";
@@ -269,7 +242,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   );
 
   if (isOwnerOrAdmin) {
-    workspaceNav.push({ icon: EnvelopeSimple, label: "Invitations", href: `/${slug}/invitations` });
+    // No Invitations entry: invitations and join requests are rows on Members now, because
+    // "who is in this workspace" and "who is on the way in" were never two questions.
     workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
@@ -923,69 +897,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
-        <DialogContent className="overflow-hidden p-0 sm:max-w-[520px]">
-          <div className="h-36 border-b border-border bg-[radial-gradient(circle_at_28%_18%,rgba(94,106,210,0.30),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(16,185,129,0.18),transparent_30%),linear-gradient(135deg,var(--surface-2),var(--surface-1))]">
-            <div className="flex h-full items-end p-5">
-              <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-                  <PaperPlaneTilt size={12} weight="bold" />
-                  Workspace Invite
-                </span>
-                <h3 className="mt-2 text-lg font-semibold text-foreground">
-                  Invite your team to {activeWorkspaceName || "this workspace"}
-                </h3>
-              </div>
-            </div>
-          </div>
-          <form onSubmit={handleInviteMember} className="space-y-4 p-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="invite-email" className="text-xs font-medium">
-                Email address
-              </Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="colleague@company.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                required
-                className="bg-surface-1"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="invite-role" className="text-xs font-medium">
-                Role
-              </Label>
-              <select
-                id="invite-role"
-                value={inviteRoleName}
-                onChange={(e) => setInviteRoleName(e.target.value)}
-                className="w-full h-9 rounded-md border border-border bg-surface-1 px-3 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="Member">Member</option>
-                <option value="Admin">Admin</option>
-              </select>
-            </div>
-            <DialogFooter className="pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsInviteModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={inviteMemberMutation.isPending || !inviteEmail.trim()}
-                className="text-white"
-              >
-                {inviteMemberMutation.isPending ? "Sending..." : "Send invite"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <InviteMemberDialog
+        open={isInviteModalOpen}
+        onOpenChange={setIsInviteModalOpen}
+        workspaceId={activeWorkspaceId || ""}
+        workspaceName={activeWorkspaceName}
+        canGrantAdmin={role?.toLowerCase() === "owner"}
+      />
     </aside>
   );
 }

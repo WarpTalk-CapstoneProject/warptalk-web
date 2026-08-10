@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useStartBreakouts } from "@/hooks/use-breakouts";
 import type { TranslationRoomParticipantDto } from "@/types/translationRoom";
+import { getErrorMessage } from "@/lib/api/errors";
 
 interface GroupDraft {
   label: string;
@@ -102,7 +103,7 @@ export function BreakoutSetupModal({
       onOpenChange(false);
       onStarted?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not start breakout rooms.");
+      toast.error(getErrorMessage(error, "Could not start breakout rooms."));
     }
   }
 

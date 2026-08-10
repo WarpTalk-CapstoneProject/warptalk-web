@@ -1,5 +1,20 @@
 "use client";
 
+/**
+ * DO NOT DELETE, and do not "consolidate" this into /{slug}/payment/plans.
+ *
+ * Nothing in this app links here any more, which makes it look exactly like the stale
+ * duplicate it is not. Its caller is Stripe: this path is the configured cancel URL in
+ * production (deploy/production/app.compose.yml, `Stripe__CancelUrl`), and in the k3s chart
+ * and docker-compose defaults besides. Anyone who abandons a checkout lands on this page.
+ *
+ * That is also why it is unslugged and why it sits in PUBLIC_ROUTES: the person returning
+ * from Stripe may no longer have a live session, and a redirect to /login at that moment
+ * reads as "my payment broke".
+ *
+ * Changing this path means changing Stripe__CancelUrl in every deployment first.
+ */
+
 import {
   ArrowFatDown,
   ArrowFatUp,
@@ -32,11 +47,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createHubConnection } from "@/lib/signalr";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildFeatureList, getPlanDescription } from "@/lib/utils";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
+import { formatMoney } from "@/lib/format/currency";
 
 export default function PaymentPlansPage() {
   const router = useRouter();
@@ -293,7 +309,7 @@ export default function PaymentPlansPage() {
                     <span className="text-4xl font-semibold tracking-tight">
                       {plan.price === 0
                         ? "Free"
-                        : `${plan.price.toLocaleString()}${plan.currency === "VND" ? "đ" : ` ${plan.currency}`}`}
+                        : formatMoney(plan.price, plan.currency)}
                     </span>
                     <span className="text-sm text-muted-foreground mb-1">
                       /month
@@ -427,7 +443,7 @@ export default function PaymentPlansPage() {
             {
               credits: "10,000",
               creditsNum: 10000,
-              price: "90.000đ",
+              price: "90,000 VND",
               priceNum: 90000,
               perCredit: "9 VND/credit",
               discount: "Save 10%",
@@ -436,7 +452,7 @@ export default function PaymentPlansPage() {
             {
               credits: "25,000",
               creditsNum: 25000,
-              price: "212.500đ",
+              price: "212,500 VND",
               priceNum: 212500,
               perCredit: "8.5 VND/credit",
               discount: "Save 15%",
@@ -445,7 +461,7 @@ export default function PaymentPlansPage() {
             {
               credits: "50,000",
               creditsNum: 50000,
-              price: "400.000đ",
+              price: "400,000 VND",
               priceNum: 400000,
               perCredit: "8 VND/credit",
               discount: "Save 20%",
