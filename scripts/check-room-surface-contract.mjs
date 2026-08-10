@@ -24,6 +24,7 @@ const pills = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/MeetingPropertiesPills.tsx",
 );
 const roomsList = read("src/app/(app)/[workspaceSlug]/rooms/page.tsx");
+const createRoomDialog = read("src/components/rooms/create-room-dialog.tsx");
 const waitingRoom = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/waiting/page.tsx",
 );
@@ -143,6 +144,60 @@ assert.match(
   roomDetail,
   /requiresApproval: room\.settings\?\.requiresApproval/,
   "The room detail CTA must resolve its intent with the room's own approval setting.",
+);
+
+// ── The meeting-language chip: a SET, never a direction ─────────────────────
+
+// A meeting has no source language. Each participant picks their own speak and listen language
+// at join, so an arrow between two of them asserts a relationship the product does not have —
+// and the source was being listed among its own targets besides. Both surfaces that show
+// languages go through one function, because when they each spelled the rule out they drifted
+// into punctuating it differently ("→" here, ";" there).
+assert.equal(
+  (roomsList.match(/meetingLanguageSet\(/g) ?? []).length,
+  2,
+  "Both the list chip and the calendar block must read the meeting's languages from meetingLanguageSet.",
+);
+// Comments stripped first: the arrow is still NAMED in the comment explaining why it went, and
+// asserting on the raw character would make that explanation illegal to write down.
+const roomsListCode = roomsList
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+assert.doesNotMatch(
+  roomsListCode,
+  /→/,
+  "The meetings list must not draw a translation direction between languages.",
+);
+assert.doesNotMatch(
+  roomsList,
+  /targetLanguages\.filter\(/,
+  "Nothing may hand-filter the source out of the targets — raw-string comparison misses \"en\" vs \"en-US\".",
+);
+
+// ── The create toggle must show what the server will actually store ─────────
+
+// Same two layers, same order, as TranslationRoomMapper.ResolveSettings. If this drifts, the
+// toggle silently lies about the meeting being created — a host sees "off" and then finds nobody
+// can start the meeting.
+assert.match(
+  createRoomDialog,
+  /requiresApproval \?\? meetingTypeByLabel\(meetingTemplate\)\.defaults\.requiresApproval/,
+  "The create dialog's approval toggle must resolve explicit choice → meeting type default.",
+);
+// WT-343: host approval is a PER-MEETING decision. A workspace-wide default for it existed for
+// one release and was removed as a second place to set the same thing; nothing may reintroduce a
+// workspace layer here without the owner asking for it back.
+assert.doesNotMatch(
+  createRoomDialog,
+  /enforceHostApprovalDefault/,
+  "Host approval is per-meeting; the create dialog must not read a workspace-wide default.",
+);
+// Only an explicit choice is sent. Echoing the resolved default back would pin the value into the
+// room's settings blob and defeat the server-side resolution this mirrors.
+assert.match(
+  createRoomDialog,
+  /settings:\s*\n?\s*requiresApproval === null \? undefined : \{ requiresApproval \}/,
+  "The create dialog must send settings only when the host made an explicit choice.",
 );
 assert.match(
   access,

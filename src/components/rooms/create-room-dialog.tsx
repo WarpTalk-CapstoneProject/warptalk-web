@@ -181,11 +181,13 @@ export function CreateRoomDialog() {
   // Deliberately not sent any more: the meeting type decides the seat count server-side
   // (a Virtual Appointment is 1:1, a Live Event is not), and a hardcoded 100 here would
   // override every one of those.
-  // WT-341: what the toggle shows. Until the host touches it, it mirrors the meeting type's own
-  // default — the exact value the server would seed if nothing were sent — so the control tells
-  // the truth about the meeting instead of showing an invented "off" beside a room that will
-  // require approval. Picking a different type re-seeds it; an explicit choice survives the
-  // switch, because it was a choice.
+  // What the toggle shows. Until the host touches it, it mirrors the meeting type's own default
+  // — the exact value the server would seed if nothing were sent — so the control tells the truth
+  // about the meeting rather than showing an invented "off" beside a Webinar that will require
+  // approval. Picking a different type re-seeds; an explicit choice survives the switch.
+  //
+  // WT-343: a workspace-wide default sat between these two for one release. Host approval is a
+  // per-meeting decision and a second place to set it was one place too many.
   const effectiveRequiresApproval =
     requiresApproval ?? meetingTypeByLabel(meetingTemplate).defaults.requiresApproval;
 

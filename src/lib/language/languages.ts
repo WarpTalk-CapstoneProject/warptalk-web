@@ -234,6 +234,35 @@ export function normalizeLanguageCode(value?: string) {
 }
 
 /**
+ * The languages a meeting is held in: its declared set, in the order it was declared, each
+ * language once.
+ *
+ * A room stores a (sourceLanguage, targetLanguages) pair, but that pair does NOT describe a
+ * translation direction — every participant picks their own speak and listen language at join,
+ * so there is no meeting-wide source. The pair is just how the set reaches the database, and
+ * create sends `targetLanguages = languages` with the source still inside it.
+ *
+ * Deduped on the NORMALISED code rather than the raw string. That is the whole reason this
+ * exists as a function: a room can hold "en" beside "en-US", and every hand-written
+ * `targets.filter(t => t !== source)` let the same language through twice and drew two
+ * identical flags. This rule was spelled out separately in the rooms list and the calendar
+ * block, and the two had already drifted apart in how they punctuated it.
+ */
+export function meetingLanguageSet(
+  sourceLanguage?: string | null,
+  targetLanguages?: readonly (string | null | undefined)[] | null,
+): string[] {
+  return [sourceLanguage, ...(targetLanguages ?? [])]
+    .filter((value): value is string => Boolean(value))
+    .reduce<string[]>((unique, value) => {
+      const code = normalizeLanguageCode(value);
+      return code && !unique.some((item) => normalizeLanguageCode(item) === code)
+        ? [...unique, value]
+        : unique;
+    }, []);
+}
+
+/**
  * What a person should read. Never returns a bare code for a language we know; for one we do
  * not, the raw value is still more honest than inventing a name.
  */
