@@ -66,8 +66,18 @@ test("a live room is joined directly, by host and guest alike", () => {
   }
 });
 
-// ── WT-341: a busy host must not be able to strand the meeting ──────────────────
+test("a participant active in the meeting sees Return to meeting", () => {
+  const intent = resolveRoomEntryIntent({
+    status: "in_progress",
+    isHost: false,
+    statusLabel: "In Progress",
+    isActiveInMeeting: true,
+  });
+  assert.equal(intent.mode, "join");
+  assert.equal(intent.label, "Return to meeting");
+});
 
+// WT-341: a busy host must not be able to strand the meeting.
 test("WT-341: a guest may open a meeting that does not require approval", () => {
   // The deadlock: this used to be `mode: "lobby"` for every non-host, which meant a host who
   // was busy made the meeting unstartable by anyone, for as long as they stayed busy.

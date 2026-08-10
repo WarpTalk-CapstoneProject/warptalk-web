@@ -111,6 +111,7 @@ import {
   buildGoogleCalendarUrl,
   translationRoomService,
 } from "@/services/translation-room.service";
+import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { UserDto } from "@/types/auth";
@@ -254,6 +255,8 @@ export default function RoomInformationPage() {
 
   const isEnded = room.status === "ended";
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
+  const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
+  const isActiveInMeeting = activeRoomId === room.id;
   // WT-273: the CTA is one decision, taken with the viewer's host identity in hand. It used to
   // be derived from room.status alone, three lines above where `isHost` was computed, so the
   // host was offered the lobby CTA and told to wait for himself.
@@ -262,6 +265,7 @@ export default function RoomInformationPage() {
     isHost,
     statusLabel: statusLabels[room.status],
     scheduledAtLabel: room.scheduledAt ? formatDateTime(room.scheduledAt) : null,
+    isActiveInMeeting,
     // WT-341: a meeting that does not require the host's approval can be opened by anyone
     // invited to it, so a busy host no longer blocks it. Undefined stays host-only.
     requiresApproval: room.settings?.requiresApproval,

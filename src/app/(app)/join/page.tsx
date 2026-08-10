@@ -335,7 +335,6 @@ function JoinMeetingContent() {
   // endpoint behind it the error branch caught every single visit, so this screen only ever
   // rendered its own failure. Whether the code is good is now answered by the join attempt,
   // which reports the actual reason.
-
   return (
     <div className="flex flex-col items-center p-4 sm:p-8 h-full overflow-y-auto">
       {/* Top Header Navigation */}
