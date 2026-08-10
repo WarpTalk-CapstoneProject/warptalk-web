@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ElementType, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowRight,
   CalendarBlank,
@@ -22,6 +22,13 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useMyMeetings } from "@/hooks/use-my-meetings";
 import {
@@ -29,30 +36,15 @@ import {
   artifactStatusLabel,
   canDownloadArtifact,
 } from "@/lib/meeting/meeting-artifacts";
-import { cn } from "@/lib/utils";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
+import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MyMeetingItem } from "@/types/myMeetings";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
-
-/**
- * WT-333 — My Meetings (UC 25).
- *
- * An AGENDA, not a calendar grid. The month grid on the Rooms > Scheduled tab is right for its job:
- * upcoming bookings are sparse, and the question there is "when am I free". This page answers a
- * different question — "what happened, and what is coming" — over a range that reaches back as far
- * as the user has been in the workspace. In a grid, a meeting three weeks ago costs a click per day
- * to find and its artifacts do not fit in a cell. Days with nothing in them are not rendered at all
- * here, which is the whole advantage: the list is exactly as long as the user's history is dense.
- *
- * Past and upcoming share one scroll deliberately. Every row carries an action either way — an
- * upcoming row offers Join, a finished one offers its transcript and summary — so the mixed list
- * has no dead half.
- */
 
 type TimeFilter = "all" | "upcoming" | "past" | "with_outputs";
 
@@ -62,10 +54,8 @@ const timeFilters: Array<{ value: TimeFilter; label: string }> = [
   { value: "past", label: "Attended" },
   { value: "with_outputs", label: "With outputs" },
 ];
+const EMPTY_MEETINGS: MyMeetingItem[] = [];
 
-/** Midnight of the given date, for comparing days without comparing times. Mirrors the helper of
- * the same name in the Rooms page — both must agree, or a 23:30 meeting files under a different
- * day on each screen. */
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
@@ -76,6 +66,7 @@ function dayKey(iso: string) {
 
 export default function MyMeetingsPage() {
   const params = useParams();
+  const router = useRouter();
   const workspaceSlug = params?.workspaceSlug as string;
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const viewerUserId = useAuthStore((state) => state.user?.id ?? null);
@@ -83,47 +74,40 @@ export default function MyMeetingsPage() {
   const [monthAnchor, setMonthAnchor] = useState(() => new Date());
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TimeFilter>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [dialogMeetingId, setDialogMeetingId] = useState<string | null>(null);
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
 
   const meetings = useMyMeetings(activeWorkspaceId, monthAnchor, query);
+  const allMeetings = meetings.data?.meetings ?? EMPTY_MEETINGS;
 
   const visible = useMemo(() => {
-    const all = meetings.data?.meetings ?? [];
-    return all.filter((meeting) => {
+    return allMeetings.filter((meeting) => {
       if (filter === "upcoming") return meeting.timeState !== "past";
       if (filter === "past") return meeting.timeState === "past";
       if (filter === "with_outputs") return meeting.artifacts.length > 0;
       return true;
     });
-  }, [filter, meetings.data?.meetings]);
+  }, [allMeetings, filter]);
 
-  // Newest first, matching the order the server paged in. Re-sorted rather than trusted because the
-  // filter above can leave the array sparse and a later status change can move a row's occursAt.
   const groups = useMemo(() => groupByDay(visible), [visible]);
 
   const daysWithMeetings = useMemo(
-    () => (meetings.data?.meetings ?? []).map((meeting) => new Date(meeting.occursAt)),
-    [meetings.data?.meetings],
+    () => allMeetings.map((meeting) => new Date(meeting.occursAt)),
+    [allMeetings],
   );
 
   const counts = useMemo(() => {
-    const all = meetings.data?.meetings ?? [];
     return {
-      upcoming: all.filter((meeting) => meeting.timeState !== "past").length,
-      past: all.filter((meeting) => meeting.timeState === "past").length,
+      upcoming: allMeetings.filter((meeting) => meeting.timeState !== "past").length,
+      past: allMeetings.filter((meeting) => meeting.timeState === "past").length,
     };
-  }, [meetings.data?.meetings]);
+  }, [allMeetings]);
 
-  const selected = visible.find((meeting) => meeting.id === selectedId) ?? visible[0];
+  const dialogMeeting = allMeetings.find((meeting) => meeting.id === dialogMeetingId) ?? null;
 
   const dayRefs = useRef(new Map<string, HTMLDivElement>());
-  const scrollBody = useRef<HTMLDivElement>(null);
   const todayRef = useRef<HTMLDivElement>(null);
 
-  // The anchor that makes a two-directional timeline readable: it opens at today, so the past is
-  // above and the future below, rather than opening at whichever end the sort happened to produce.
-  // Runs once per loaded month — re-anchoring on every render would fight the user's own scrolling.
   const anchoredMonth = useRef<string | null>(null);
   const monthLabel = `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`;
   useEffect(() => {
@@ -138,8 +122,6 @@ export default function MyMeetingsPage() {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    // A day the user picked that holds nothing is not a dead end: say so rather than doing nothing,
-    // which reads as a broken control.
     toast.info("No meetings on that day.");
   }
 
@@ -165,7 +147,7 @@ export default function MyMeetingsPage() {
   }
 
   const todayKey = String(startOfDay(new Date()));
-  const truncated = (meetings.data?.total ?? 0) > (meetings.data?.meetings.length ?? 0);
+  const truncated = (meetings.data?.total ?? 0) > allMeetings.length;
 
   return (
     <main className="flex h-full flex-col bg-canvas text-ink">
@@ -176,9 +158,10 @@ export default function MyMeetingsPage() {
           </div>
           <h1 className="text-[30px] font-semibold leading-none">My meetings</h1>
           <p className="mt-2 text-[13px] text-ink-muted">
-            Meetings you host, joined, or were invited to in this workspace.
+            Upcoming meetings you host or are invited to, plus past meetings you actually joined.
           </p>
         </div>
+
         <div className="relative w-full lg:w-[360px]">
           <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
           <Input
@@ -214,31 +197,29 @@ export default function MyMeetingsPage() {
                 <CaretRight size={13} />
               </button>
             </div>
+
             <div className="rounded-xl border border-border bg-surface-1 p-1">
               <Calendar
                 mode="single"
                 month={monthAnchor}
                 onMonthChange={setMonthAnchor}
-                // Selecting a day SCROLLS the agenda to it rather than filtering down to it. A
-                // filter would leave an empty day looking identical to an empty month, which is the
-                // dead end WT-251/WT-232 had to patch around on the grid.
                 onSelect={(date) => date && scrollToDay(date)}
                 className="w-full"
                 modifiers={{ hasMeeting: daysWithMeetings }}
                 modifiersClassNames={{
                   hasMeeting:
-                    "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary",
+                    "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-primary",
                 }}
               />
             </div>
           </div>
 
           <dl className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-border bg-surface-1 px-3 py-2">
+            <div className="rounded-lg border border-sky-500/15 bg-sky-500/[0.05] px-3 py-2">
               <dt className="text-[10px] text-ink-subtle">Upcoming</dt>
               <dd className="mt-0.5 text-[16px] font-semibold tabular-nums">{counts.upcoming}</dd>
             </div>
-            <div className="rounded-lg border border-border bg-surface-1 px-3 py-2">
+            <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.05] px-3 py-2">
               <dt className="text-[10px] text-ink-subtle">Attended</dt>
               <dd className="mt-0.5 text-[16px] font-semibold tabular-nums">{counts.past}</dd>
             </div>
@@ -266,13 +247,13 @@ export default function MyMeetingsPage() {
 
           {truncated ? (
             <p className="text-[10px] leading-4 text-ink-subtle">
-              Showing {meetings.data?.meetings.length} of {meetings.data?.total} meetings this month.
-              Narrow the search to see the rest.
+              Showing {allMeetings.length} of {meetings.data?.total} meetings this month. Narrow the
+              search to see the rest.
             </p>
           ) : null}
         </aside>
 
-        <div ref={scrollBody} className="min-w-0 flex-1 overflow-y-auto">
+        <div className="min-w-0 flex-1 overflow-y-auto">
           {meetings.isLoading ? (
             <LoadingState />
           ) : meetings.isError ? (
@@ -313,17 +294,15 @@ export default function MyMeetingsPage() {
                     </div>
                   </div>
 
-                  <div className="mb-4">
+                  <div className="mb-4 space-y-2">
                     {group.meetings.map((meeting) => (
                       <AgendaRow
                         key={meeting.id}
                         meeting={meeting}
                         workspaceSlug={workspaceSlug}
                         viewerUserId={viewerUserId}
-                        selected={selected?.id === meeting.id}
-                        busyArtifactId={busyArtifactId}
-                        onSelect={() => setSelectedId(meeting.id)}
-                        onDownload={downloadArtifact}
+                        onOpenPast={() => setDialogMeetingId(meeting.id)}
+                        onNavigate={() => router.push(`/${workspaceSlug}/rooms/${meeting.id}`)}
                       />
                     ))}
                   </div>
@@ -332,16 +311,18 @@ export default function MyMeetingsPage() {
             </div>
           )}
         </div>
-
-        {selected ? (
-          <MeetingDetail
-            meeting={selected}
-            workspaceSlug={workspaceSlug}
-            busyArtifactId={busyArtifactId}
-            onDownload={downloadArtifact}
-          />
-        ) : null}
       </div>
+
+      <PastMeetingDialog
+        meeting={dialogMeeting}
+        workspaceSlug={workspaceSlug}
+        busyArtifactId={busyArtifactId}
+        open={Boolean(dialogMeeting)}
+        onOpenChange={(open) => {
+          if (!open) setDialogMeetingId(null);
+        }}
+        onDownload={downloadArtifact}
+      />
     </main>
   );
 }
@@ -350,33 +331,41 @@ function AgendaRow({
   meeting,
   workspaceSlug,
   viewerUserId,
-  selected,
-  busyArtifactId,
-  onSelect,
-  onDownload,
+  onOpenPast,
+  onNavigate,
 }: {
   meeting: MyMeetingItem;
   workspaceSlug: string;
   viewerUserId: string | null;
-  selected: boolean;
-  busyArtifactId: string | null;
-  onSelect: () => void;
-  onDownload: (artifact: RoomHistoryArtifact) => void;
+  onOpenPast: () => void;
+  onNavigate: () => void;
 }) {
+  const isPast = meeting.timeState === "past";
+  const stateLabel =
+    meeting.timeState === "live"
+      ? "Live now"
+      : meeting.timeState === "upcoming"
+        ? "Upcoming"
+        : "Past";
+
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onSelect}
+      onClick={() => {
+        if (isPast) onOpenPast();
+        else onNavigate();
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onSelect();
+          if (isPast) onOpenPast();
+          else onNavigate();
         }
       }}
       className={cn(
-        "flex cursor-pointer gap-3 rounded-lg px-2 py-2.5 outline-none transition-colors hover:bg-surface-2/55 focus-visible:ring-2 focus-visible:ring-ring/30",
-        selected && "bg-surface-2",
+        "flex cursor-pointer gap-3 rounded-xl border px-3 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30",
+        rowToneClass(meeting),
       )}
     >
       <div className="w-[52px] shrink-0 pt-0.5 text-right">
@@ -386,12 +375,10 @@ function AgendaRow({
         </div>
       </div>
 
-      {/* The spine carries the state at a glance, so the row does not need a status word competing
-          with the title for the eye. */}
       <span className={cn("mt-1 w-0.5 shrink-0 self-stretch rounded-full", spineClass(meeting))} />
 
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span
             className={cn(
               "truncate text-[13px] font-medium text-ink",
@@ -400,57 +387,69 @@ function AgendaRow({
           >
             {meeting.title}
           </span>
+
           {meeting.isHost ? (
             <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-muted">
               Host
             </span>
           ) : null}
-          {meeting.timeState === "live" ? (
-            <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-primary">
-              Live
-            </span>
-          ) : null}
+
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase",
+              stateBadgeClass(meeting),
+            )}
+          >
+            {meeting.timeState === "live" ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-2 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
+                  <span className="relative inline-flex size-2 rounded-full bg-rose-500" />
+                </span>
+                {stateLabel}
+              </span>
+            ) : (
+              stateLabel
+            )}
+          </span>
         </div>
 
-        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[10px] text-ink-subtle">
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2 text-[10px] text-ink-subtle">
           <span className="truncate">{meeting.translationRoomCode}</span>
-          <span>·</span>
+          <span>&middot;</span>
           <span className="truncate">{meeting.hostName}</span>
-          <span>·</span>
+          <span>&middot;</span>
           <span className="truncate">
             {formatLanguageRoute(meeting.sourceLanguage, meeting.targetLanguages)}
           </span>
         </div>
 
-        {/* Where an upcoming row shows what it offers, a finished one shows what it left behind.
-            Neither half of the timeline gets a row with nothing to act on. */}
-        {meeting.timeState === "past" ? (
-          meeting.artifacts.length ? (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {meeting.artifacts.map((artifact) => (
-                <button
-                  key={artifact.id}
-                  type="button"
-                  disabled={busyArtifactId === artifact.id}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onDownload(artifact);
-                  }}
-                  className="flex items-center gap-1.5 rounded border border-border bg-surface-1 px-2 py-1 text-[10px] text-ink-muted transition-colors hover:border-ink/30 hover:text-ink disabled:opacity-50"
-                >
-                  <ArtifactIcon artifact={artifact} />
-                  {artifactLabel(artifact.type)} · {artifactStatusLabel(artifact)}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-1.5 text-[10px] text-ink-subtle">No outputs retained.</p>
-          )
+        {isPast ? (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <span className="rounded border border-emerald-500/15 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700">
+              {meeting.artifacts.length ? `${meeting.artifacts.length} artifacts` : "No artifacts"}
+            </span>
+            <span className="text-[10px] text-ink-subtle">Open popup for room info and outputs.</span>
+            {meeting.artifacts.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {meeting.artifacts.slice(0, 2).map((artifact) => (
+                  <span
+                    key={artifact.id}
+                    className="flex items-center gap-1.5 rounded border border-border bg-surface-1 px-2 py-1 text-[10px] text-ink-muted"
+                  >
+                    <ArtifactIcon artifact={artifact} />
+                    {artifactLabel(artifact.type)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : (
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <span className="rounded border border-border px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-muted">
               {meetingAudienceLabel(meeting, viewerUserId)}
             </span>
+
             <Link
               href={`/${workspaceSlug}/rooms/${meeting.id}`}
               onClick={(event) => event.stopPropagation()}
@@ -471,98 +470,112 @@ function AgendaRow({
   );
 }
 
-function MeetingDetail({
+function PastMeetingDialog({
   meeting,
   workspaceSlug,
   busyArtifactId,
+  open,
+  onOpenChange,
   onDownload,
 }: {
-  meeting: MyMeetingItem;
+  meeting: MyMeetingItem | null;
   workspaceSlug: string;
   busyArtifactId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onDownload: (artifact: RoomHistoryArtifact) => void;
 }) {
+  if (!meeting) return null;
+
   return (
-    <aside className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-border bg-canvas/35 p-5 xl:block">
-      <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle">
-        <span className={cn("size-1.5 rounded-full", spineClass(meeting))} />
-        {meeting.status.replace("_", " ")}
-      </div>
-      <h2 className="mt-3 text-[18px] font-semibold leading-6">{meeting.title}</h2>
-      {meeting.description ? (
-        <p className="mt-2 text-[12px] leading-5 text-ink-muted">{meeting.description}</p>
-      ) : null}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[620px] gap-0 p-0">
+        <DialogHeader className="border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            Past meeting
+          </div>
+          <DialogTitle className="mt-2 text-[20px] font-semibold leading-6">{meeting.title}</DialogTitle>
+          <DialogDescription className="mt-2 text-[12px] leading-5 text-ink-muted">
+            {meeting.description || "Quick access to the room summary and retained artifacts."}
+          </DialogDescription>
+        </DialogHeader>
 
-      <dl className="mt-5 grid grid-cols-2 border-y border-border py-4">
-        <Detail icon={CalendarBlank} label="When" value={formatDateTime(meeting.occursAt)} />
-        <Detail icon={Clock} label="Duration" value={formatDuration(meeting.durationSeconds)} />
-        <Detail icon={Users} label="Participants" value={String(meeting.participantCount)} />
-        <Detail
-          icon={Translate}
-          label="Route"
-          value={formatLanguageRoute(meeting.sourceLanguage, meeting.targetLanguages)}
-        />
-      </dl>
+        <div className="px-5 py-4">
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-b border-border pb-4">
+            <Detail icon={CalendarBlank} label="When" value={formatDateTime(meeting.occursAt)} />
+            <Detail icon={Clock} label="Duration" value={formatDuration(meeting.durationSeconds)} />
+            <Detail icon={Users} label="Participants" value={String(meeting.participantCount)} />
+            <Detail
+              icon={Translate}
+              label="Route"
+              value={formatLanguageRoute(meeting.sourceLanguage, meeting.targetLanguages)}
+            />
+          </dl>
 
-      <div className="mt-5 flex items-center justify-between">
-        <h3 className="text-[11px] font-semibold">Outputs</h3>
-        <span className="text-[10px] text-ink-subtle">{meeting.artifacts.length}</span>
-      </div>
-      <ul className="mt-2 divide-y divide-border border-y border-border">
-        {meeting.artifacts.length ? (
-          meeting.artifacts.map((artifact) => (
-            <li key={artifact.id} className="py-3">
-              <button
-                type="button"
-                disabled={busyArtifactId === artifact.id || !canDownloadArtifact(artifact)}
-                onClick={() => onDownload(artifact)}
-                className="group flex w-full items-center gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-1">
-                  <ArtifactIcon artifact={artifact} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[11px] font-medium">
-                    {artifact.title || artifactLabel(artifact.type)}
-                  </span>
-                  <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                    {artifact.format || artifactLabel(artifact.type)} · {artifactStatusLabel(artifact)}
-                  </span>
-                </span>
-                {busyArtifactId === artifact.id ? (
-                  <SpinnerGap size={12} className="animate-spin text-ink-subtle" />
-                ) : canDownloadArtifact(artifact) ? (
-                  <DownloadSimple size={12} className="text-ink-subtle transition-colors group-hover:text-ink" />
-                ) : null}
-              </button>
-            </li>
-          ))
-        ) : (
-          <li className="py-6 text-center text-[11px] text-ink-muted">
-            {meeting.timeState === "past"
-              ? "No outputs retained for this meeting."
-              : "Outputs appear here after the meeting ends."}
-          </li>
-        )}
-      </ul>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] text-ink-subtle">
+            <span className="rounded-full border border-border px-2 py-1">{meeting.translationRoomCode}</span>
+            <span>Hosted by {meeting.hostName}</span>
+          </div>
 
-      <Link
-        href={`/${workspaceSlug}/rooms/${meeting.id}`}
-        className="mt-5 flex h-8 w-full items-center justify-center rounded-md border border-border bg-surface-1 text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
-      >
-        Open meeting
-      </Link>
-    </aside>
+          <div className="mt-5 flex items-center justify-between">
+            <h3 className="text-[11px] font-semibold">Artifacts</h3>
+            <span className="text-[10px] text-ink-subtle">{meeting.artifacts.length}</span>
+          </div>
+
+          <ul className="mt-2 divide-y divide-border rounded-xl border border-border bg-surface-1/70">
+            {meeting.artifacts.length ? (
+              meeting.artifacts.map((artifact) => (
+                <li key={artifact.id} className="px-3 py-3">
+                  <button
+                    type="button"
+                    disabled={busyArtifactId === artifact.id || !canDownloadArtifact(artifact)}
+                    onClick={() => onDownload(artifact)}
+                    className="group flex w-full items-center gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-canvas">
+                      <ArtifactIcon artifact={artifact} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[11px] font-medium">
+                        {artifact.title || artifactLabel(artifact.type)}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] text-ink-subtle">
+                        {artifactStatusLabel(artifact)}
+                        {artifact.format ? ` · ${artifact.format.toUpperCase()}` : ""}
+                        {artifact.createdAt ? ` · ${formatCompactDateTime(artifact.createdAt)}` : ""}
+                      </span>
+                    </span>
+                    {busyArtifactId === artifact.id ? (
+                      <SpinnerGap size={12} className="animate-spin text-ink-subtle" />
+                    ) : canDownloadArtifact(artifact) ? (
+                      <DownloadSimple
+                        size={12}
+                        className="text-ink-subtle transition-colors group-hover:text-ink"
+                      />
+                    ) : null}
+                  </button>
+                </li>
+              ))
+            ) : (
+              <li className="px-3 py-6 text-center text-[11px] text-ink-muted">
+                No outputs retained for this meeting.
+              </li>
+            )}
+          </ul>
+
+          <Link
+            href={`/${workspaceSlug}/rooms/${meeting.id}`}
+            className="mt-4 flex h-9 w-full items-center justify-center rounded-md border border-border bg-canvas text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
+          >
+            Open meeting
+          </Link>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-/**
- * "3 weeks with no meetings" between two clusters.
- *
- * An agenda hides empty days, which is what makes it short — but it also means a jump from March to
- * May looks identical to a page that failed to load the middle. Naming the gap is what keeps the
- * omission legible as an omission.
- */
 function GapNotice({ previous, current }: { previous?: string; current: string }) {
   if (!previous) return null;
 
@@ -584,7 +597,7 @@ function Detail({
   label,
   value,
 }: {
-  icon: React.ElementType;
+  icon: ElementType;
   label: string;
   value: string;
 }) {
@@ -602,9 +615,15 @@ function Detail({
 }
 
 function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
-  if (artifact.status === "processing") return <SpinnerGap size={12} className="animate-spin text-ink-muted" />;
-  if (["failed", "missing", "expired"].includes(artifact.status)) return <WarningCircle size={12} className="text-ink-muted" />;
-  if (artifact.consentRequired) return <DownloadSimple size={12} className="text-ink-muted" />;
+  if (artifact.status === "processing") {
+    return <SpinnerGap size={12} className="animate-spin text-ink-muted" />;
+  }
+  if (["failed", "missing", "expired"].includes(artifact.status)) {
+    return <WarningCircle size={12} className="text-ink-muted" />;
+  }
+  if (artifact.consentRequired) {
+    return <DownloadSimple size={12} className="text-ink-muted" />;
+  }
   return <CheckCircle size={12} className="text-primary" />;
 }
 
@@ -645,7 +664,7 @@ function EmptyState({ hasQuery }: { hasQuery: boolean }) {
         <p className="mt-1 text-[11px] text-ink-muted">
           {hasQuery
             ? "Try a different title, code, or description."
-            : "Meetings you host, join, or are invited to appear here."}
+            : "Upcoming invites and attended meetings appear here."}
         </p>
       </div>
     </div>
@@ -668,12 +687,8 @@ function groupByDay(meetings: MyMeetingItem[]): DayGroup[] {
     .map(([key, items]) => ({
       key,
       date: new Date(Number(key)),
-      meetings: items.sort(
-        (a, b) => Date.parse(a.occursAt) - Date.parse(b.occursAt),
-      ),
+      meetings: items.sort((a, b) => Date.parse(a.occursAt) - Date.parse(b.occursAt)),
     }))
-    // Days descending — newest first, matching the order the server paged in — but the meetings
-    // WITHIN a day ascend, because a day reads as a schedule from morning to evening.
     .sort((a, b) => Number(b.key) - Number(a.key));
 }
 
@@ -681,10 +696,7 @@ function addMonths(date: Date, delta: number) {
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
 
-function meetingAudienceLabel(
-  meeting: MyMeetingItem,
-  viewerUserId: string | null,
-) {
+function meetingAudienceLabel(meeting: MyMeetingItem, viewerUserId: string | null) {
   if (meeting.isHost) return "Host";
   if (viewerUserId && meeting.participants.some((participant) => participant.userId === viewerUserId)) {
     return "Going";
@@ -693,21 +705,48 @@ function meetingAudienceLabel(
 }
 
 function spineClass(meeting: MyMeetingItem) {
-  if (meeting.timeState === "live") return "bg-primary animate-pulse";
-  if (meeting.timeState === "upcoming") return "bg-ink-subtle/40";
+  if (meeting.timeState === "live") return "bg-rose-500 motion-safe:animate-pulse";
+  if (meeting.timeState === "upcoming") return "bg-sky-500/70";
   if (meeting.status === "cancelled") return "bg-ink-subtle/30";
   return "bg-emerald-500";
 }
 
+function rowToneClass(meeting: MyMeetingItem) {
+  if (meeting.timeState === "live") {
+    return "border-rose-500/20 bg-rose-500/[0.06] hover:border-rose-500/35 hover:bg-rose-500/[0.1]";
+  }
+  if (meeting.timeState === "upcoming") {
+    return "border-sky-500/15 bg-sky-500/[0.04] hover:border-sky-500/30 hover:bg-sky-500/[0.08]";
+  }
+  return "border-emerald-500/15 bg-emerald-500/[0.04] hover:border-emerald-500/30 hover:bg-emerald-500/[0.08]";
+}
+
+function stateBadgeClass(meeting: MyMeetingItem) {
+  if (meeting.timeState === "live") return "bg-rose-500/10 text-rose-700";
+  if (meeting.timeState === "upcoming") return "bg-sky-500/10 text-sky-700";
+  return "bg-emerald-500/10 text-emerald-700";
+}
+
 function formatTime(value: string) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function formatDateTime(value: string) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatCompactDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown time";
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
@@ -721,7 +760,7 @@ function formatDayHeading(date: Date) {
 }
 
 function formatDuration(seconds: number | null) {
-  if (seconds === null) return "—";
+  if (seconds === null) return "-";
   if (!seconds) return "0m";
   const minutes = Math.floor(seconds / 60);
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
