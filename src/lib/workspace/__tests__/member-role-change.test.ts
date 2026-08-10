@@ -60,14 +60,14 @@ test("preview must belong to the selected user and role and carry a token", () =
 });
 
 test("retries for one reviewed change reuse the same idempotency and correlation IDs", () => {
-  const generatedIds = ["idempotency-1", "correlation-1"];
+  const generatedIds = ["id-1", "trace-1"];
   const intent = createMemberRoleChangeIntent(preview(), () => generatedIds.shift()!);
 
   const firstAttempt = buildMemberRoleChangeRequest(intent, "Admin");
   const retry = buildMemberRoleChangeRequest(intent, "Admin");
 
   assert.deepEqual(retry, firstAttempt);
-  assert.equal(firstAttempt.idempotencyKey, "idempotency-1");
-  assert.equal(firstAttempt.correlationId, "correlation-1");
+  assert.equal(firstAttempt.idempotencyKey, "id-1");
+  assert.equal(firstAttempt.correlationId, "trace-1");
   assert.equal(generatedIds.length, 0);
 });
