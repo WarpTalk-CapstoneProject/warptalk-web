@@ -140,6 +140,12 @@ export default function WaitingRoomPage() {
   const me = participants.find((participant) => participant.userId === user?.id);
   const awaitingApproval = !isHost && me?.status === "waiting";
 
+  // WT-341: an approval-free meeting is nobody's to hold. The server accepts Start from any
+  // invited participant, so a guest sitting here while the host is busy can open it themselves
+  // rather than waiting for someone who may never arrive. An approval-gated meeting is unchanged:
+  // only the host can admit the lobby, so only the host can open the room.
+  const canStartMeeting = isHost || !requiresApproval;
+
   // The room's declared coverage, stated once. Each person's own speak → listen pair is a
   // different thing and belongs on their row, not here.
   const roomLanguages = room.targetLanguages?.length
@@ -175,7 +181,7 @@ export default function WaitingRoomPage() {
           <Card>
             <CardHeader className="space-y-1.5">
               <CardTitle className="text-lg">
-                {isHost
+                {canStartMeeting
                   ? "Ready when you are"
                   : awaitingApproval
                     ? "Asking to join"
@@ -186,13 +192,15 @@ export default function WaitingRoomPage() {
                   ? requiresApproval
                     ? "Admit anyone waiting, then start the meeting."
                     : "Start when you are ready — everyone here joins automatically."
-                  : awaitingApproval
-                    ? "The host has been notified. You'll be let in once they approve."
-                    : "You'll be taken in automatically as soon as the host starts."}
+                  : canStartMeeting
+                    ? "The host hasn't started this meeting. You can open it — everyone invited will be notified."
+                    : awaitingApproval
+                      ? "The host has been notified. You'll be let in once they approve."
+                      : "You'll be taken in automatically as soon as the host starts."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {isHost ? (
+              {canStartMeeting ? (
                 <Button className="w-full" onClick={startMeeting} disabled={startRoom.isPending}>
                   {startRoom.isPending ? (
                     <Spinner weight="light" className="mr-2 h-4 w-4 animate-spin" />
