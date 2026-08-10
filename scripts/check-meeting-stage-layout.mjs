@@ -77,10 +77,18 @@ assert.match(
   /const firstRemoteIdentity = visibleTracks\.find\([\s\S]*participant\.identity !== localIdentity/,
   "auto layout must prefer a remote participant when nobody is active or pinned",
 );
+// The threshold moved from 2 to 5 on the owner's call. Below five, an even grid is the
+// better answer: a two- or three-person call has no "main" person, and picking one shrinks
+// everyone else for nothing. Above it the grid tiles get too small to read a face.
 assert.match(
   meetingStage,
-  /layoutMode === "auto" && visibleTracks\.length > 1[\s\S]*pinnedUserId \|\|[\s\S]*activeSpeakerIdentity \|\|[\s\S]*firstRemoteIdentity \|\|[\s\S]*firstVisibleIdentity/,
-  "auto layout must create a featured stage for meetings with at least two participants",
+  /layoutMode === "auto" && visibleTracks\.length > AUTO_FEATURED_MIN_PARTICIPANTS[\s\S]*pinnedUserId \|\|[\s\S]*activeSpeakerIdentity \|\|[\s\S]*firstRemoteIdentity \|\|[\s\S]*firstVisibleIdentity/,
+  "auto layout must create a featured stage once a meeting outgrows an even grid",
+);
+assert.match(
+  meetingStage,
+  /const AUTO_FEATURED_MIN_PARTICIPANTS = 5/,
+  "the grid/featured threshold must stay a named number, not a literal buried in a ternary",
 );
 assert.match(
   meetingStage,

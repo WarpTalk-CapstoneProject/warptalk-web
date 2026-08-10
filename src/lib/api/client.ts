@@ -5,7 +5,11 @@ import {
   chooseNewestAccessToken,
   isAccessTokenExpiring,
 } from "@/lib/api/token-lifecycle";
-import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
+import {
+  recordSessionTeardown,
+  resolveAccessTokenExpiryMs,
+  setAccessTokenCookie,
+} from "@/lib/auth/session-cookie";
 
 /**
  * Client-side Axios instance with token interceptors.
@@ -243,6 +247,13 @@ async function requestNewAccessToken(failedAccessToken?: string | null): Promise
 
     const refreshToken = getRefreshToken();
     if (!refreshToken) {
+      // The reason production saw ZERO /auth/refresh requests while users were being logged
+      // out: the request is never made, because there is nothing to send. Which of the two
+      // stores was empty is the fact that three rounds of reading this code could not
+      // establish, so it is recorded rather than deduced.
+      recordSessionTeardown(
+        `refresh-token-missing(store=${useAuthStore.getState().refreshToken ? "yes" : "no"},persisted=${getPersistedAuthState()?.refreshToken ? "yes" : "no"})`,
+      );
       throw new MissingRefreshTokenError();
     }
 
@@ -334,7 +345,15 @@ useAuthStore.subscribe((state, previousState) => {
   if (state.accessToken && state.accessToken !== previousState.accessToken) {
     sessionEnded = false;
   }
+  if (state.accessToken !== previousState.accessToken) {
+    scheduleProactiveRefresh(state.accessToken);
+  }
 });
+
+// A reload lands here with a token already in the store, and no change event will follow it.
+if (typeof window !== "undefined") {
+  scheduleProactiveRefresh(getAccessToken());
+}
 
 /**
  * Drop the dead session and send the user to sign in again.
@@ -353,9 +372,46 @@ export function endDeadSession() {
   sessionEnded = true;
 
   useAuthStore.getState().logout();
+  // AFTER logout, deliberately. logout() writes "user-sign-out", which is what it is when a
+  // person clicks it and a lie when the client decides the session is dead. Last write wins,
+  // so the breadcrumb ends up saying which of the two actually happened.
+  recordSessionTeardown("client-declared-session-dead");
   if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
     window.location.href = "/login";
   }
+}
+
+/**
+ * Refresh before the token dies, instead of waiting for a request to notice it is dead.
+ *
+ * The 30-minute logout was not mysterious once this was missing: refresh only ever ran from
+ * the request interceptor, and a user sitting in a meeting makes almost no REST calls — the
+ * meeting runs on SignalR and LiveKit. So the access token quietly aged out, and the first
+ * request after that had to refresh, redirect, or fail. Exactly thirty minutes, every time,
+ * which is what was reported.
+ *
+ * Two minutes of margin, and never sooner than ten seconds from now: a token that is already
+ * past due must not spin this into a tight loop.
+ */
+let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleProactiveRefresh(accessToken: string | null) {
+  if (proactiveRefreshTimer !== null) {
+    clearTimeout(proactiveRefreshTimer);
+    proactiveRefreshTimer = null;
+  }
+  if (typeof window === "undefined" || !accessToken) return;
+
+  const expiryMs = resolveAccessTokenExpiryMs(accessToken, null);
+  if (expiryMs === null) return;
+
+  const delay = Math.max(10_000, expiryMs - Date.now() - 120_000);
+  proactiveRefreshTimer = setTimeout(() => {
+    proactiveRefreshTimer = null;
+    // Failures are the request interceptor's problem, not this timer's: it must not end a
+    // session on its own, or a laptop waking from sleep would sign the user out.
+    void getUsableAccessToken().catch(() => {});
+  }, delay);
 }
 
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {

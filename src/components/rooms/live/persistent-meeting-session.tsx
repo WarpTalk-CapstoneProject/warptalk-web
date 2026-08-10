@@ -1000,13 +1000,20 @@ export function PersistentMeetingSession({
     });
   }
 
-  // Transcript-only mode: this listener wants captions but no audio at all (neither
-  // the AI dub nor a same-language original mic) — see FilteredRoomAudio's
-  // voiceEnabled prop. Purely a client-side track-subscription choice, so it's free to
-  // flip live in-meeting just like listenLanguage/voicePreference, and persists the
-  // same way (join-preview sessionStorage) so it survives a refresh.
+  // Off unless this listener has asked for it.
+  //
+  // It defaulted ON, so every join started synthesising into the room before anyone had
+  // chosen anything — and because the dub takes a moment to come up, what you actually
+  // experienced was silence, then a stranger's voice arriving unannounced. Turning a
+  // synthetic voice on in someone's ears is a choice they should make, not one they should
+  // have to undo.
+  //
+  // The saved preference still wins, so a listener who turned it on keeps it on across
+  // refreshes and rejoins — the default only governs someone who has never said.
+  //
+  // Voice off now means "hear the real voices", not "hear nothing": see FilteredRoomAudio.
   const [voiceEnabled, setVoiceEnabledState] = useState<boolean>(
-    savedJoinConfig.voiceEnabled ?? true,
+    savedJoinConfig.voiceEnabled ?? false,
   );
 
   function handleChangeVoiceEnabled(enabled: boolean) {
@@ -1957,6 +1964,7 @@ export function PersistentMeetingSession({
           voicePreference={voicePreference}
           voiceEnabled={voiceEnabled}
           translationActive={warptalkStarted}
+          localUserId={user?.id}
         />
         <TrackProcessorsController
           noiseSuppressionEnabled={noiseSuppressionEnabled}
@@ -2146,7 +2154,11 @@ export function PersistentMeetingSession({
                   is how it worked before WT-246 added a button for it. */}
               <div className="relative min-h-0 w-full flex-1">
                 {isRecording ? (
-                  <div className="absolute right-16 top-4 z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                  // Beside the timer, not floating between the pin and the signal meter.
+                  // Recording state and elapsed time are the same kind of fact — "what is
+                  // happening to this meeting right now" — and they belong together, in the
+                  // corner the eye already goes to for the clock.
+                  <div className="absolute left-4 top-[52px] z-30 flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                     REC
                   </div>

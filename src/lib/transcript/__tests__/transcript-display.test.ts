@@ -244,3 +244,29 @@ test("a control marker is not swallowed into the line before it", () => {
   assert.equal(grouped.length, 1);
   assert.ok(!grouped[0].originalText.includes("MEETING_END"), grouped[0].originalText);
 });
+
+test("a participant whose display name is their own id is not a name", () => {
+  // After a sign-out and sign-in the roster can come back holding the user id as the display
+  // name, and this branch trusted it absolutely — so a transcript attributed lines to
+  // "019f0d00-0de0-7000-9000-000000000003". The supplied-name branch had guarded against
+  // exactly this for its own input all along.
+  const speakerId = "019f0d00-0de0-7000-9000-000000000003";
+  assert.equal(
+    resolveTranscriptSpeakerName(
+      { speakerId, speakerName: null } as never,
+      [{ userId: speakerId, displayName: speakerId }],
+    ),
+    "Speaker",
+  );
+});
+
+test("a real display name still wins", () => {
+  const speakerId = "019f0d00-0de0-7000-9000-000000000003";
+  assert.equal(
+    resolveTranscriptSpeakerName(
+      { speakerId, speakerName: null } as never,
+      [{ userId: speakerId, displayName: "Huỳnh Ngọc Kỳ" }],
+    ),
+    "Huỳnh Ngọc Kỳ",
+  );
+});
