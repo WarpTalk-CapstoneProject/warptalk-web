@@ -181,13 +181,22 @@ export function CreateRoomDialog() {
   // Deliberately not sent any more: the meeting type decides the seat count server-side
   // (a Virtual Appointment is 1:1, a Live Event is not), and a hardcoded 100 here would
   // override every one of those.
-  // WT-341: what the toggle shows. Until the host touches it, it mirrors the meeting type's own
-  // default — the exact value the server would seed if nothing were sent — so the control tells
-  // the truth about the meeting instead of showing an invented "off" beside a room that will
-  // require approval. Picking a different type re-seeds it; an explicit choice survives the
-  // switch, because it was a choice.
+  // What the toggle shows. Until the host touches it, it must mirror EXACTLY what the server
+  // would resolve if nothing were sent — otherwise the control lies about the meeting being
+  // created. That resolution is three layers deep, and this repeats it in the same order
+  // TranslationRoomMapper.ResolveSettings uses:
+  //
+  //   explicit choice  →  workspace EnforceHostApprovalDefault  →  meeting type default
+  //
+  // WT-342 added the middle layer. It is the reason this cannot just read the meeting type: a
+  // workspace whose admin turned host approval on gets it, and the host sees that on the toggle
+  // before clicking Create rather than discovering it when nobody can start the meeting.
+  // `undefined` while the settings query is in flight correctly falls through to the type.
+  // Picking a different type re-seeds; an explicit choice survives the switch, because it was one.
   const effectiveRequiresApproval =
-    requiresApproval ?? meetingTypeByLabel(meetingTemplate).defaults.requiresApproval;
+    requiresApproval ??
+    workspaceSettings?.enforceHostApprovalDefault ??
+    meetingTypeByLabel(meetingTemplate).defaults.requiresApproval;
 
   const validation = {
     title: title.trim().length > 0,
