@@ -52,6 +52,7 @@ import {
   Users,
   Warning,
   Waveform,
+  Brain,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -236,6 +237,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   if (isOwnerOrAdmin) {
     // No Invitations entry: invitations and join requests are rows on Members now, because
     // "who is in this workspace" and "who is on the way in" were never two questions.
+    // What the system has indexed from this workspace's documents and meetings. Owner/Admin
+    // only, because the view crosses per-document access policies.
+    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge` });
     workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });

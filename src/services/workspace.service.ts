@@ -2,6 +2,10 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 import type {
+  WorkspaceKnowledgePageDto,
+  WorkspaceKnowledgeQuery,
+} from "@/types/workspace-knowledge";
+import type {
   WorkspaceDto,
   CreateWorkspaceRequest,
   WorkspaceSettingsDto,
@@ -231,6 +235,22 @@ export const WorkspaceService = {
     const { data } = await apiClient.get<PagedResult<WorkspaceDocumentDto>>(API.workspaces.documents(workspaceId), {
       params: { page, pageSize, search },
     });
+    return data;
+  },
+
+  /**
+   * One page of indexed chunks for this workspace. Cursor-based, because the vector store
+   * pages by continuation token — an offset API on top of it would rescan from the start
+   * every page and silently skip or repeat rows when the collection changes mid-listing.
+   */
+  async listKnowledge(
+    workspaceId: string,
+    query: WorkspaceKnowledgeQuery = {},
+  ): Promise<WorkspaceKnowledgePageDto> {
+    const { data } = await apiClient.get<WorkspaceKnowledgePageDto>(
+      API.workspaces.knowledge(workspaceId),
+      { params: query },
+    );
     return data;
   },
 
