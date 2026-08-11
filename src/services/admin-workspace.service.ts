@@ -6,6 +6,10 @@ import type {
   AdminWorkspaceDirectoryQuery,
   AdminWorkspaceSummaryDto,
 } from "@/types/admin-workspace";
+import type {
+  WorkspaceKnowledgePageDto,
+  WorkspaceKnowledgeQuery,
+} from "@/types/workspace-knowledge";
 
 /**
  * System-admin workspace directory. Every call is platform-wide and gated server-side by the
@@ -41,6 +45,22 @@ export const adminWorkspaceService = {
     const { data } = await apiClient.post<AdminWorkspaceDetailDto>(
       API.adminWorkspaces.reactivate(workspaceId),
       { reason },
+    );
+    return data;
+  },
+
+  /**
+   * What the assistant can retrieve for this workspace. The response shape is the member-scoped
+   * one (`WorkspaceKnowledgePageDto`) because both surfaces read the same index through the same
+   * service method server-side; only the authorization in front of it differs.
+   */
+  listKnowledge: async (
+    workspaceId: string,
+    query: WorkspaceKnowledgeQuery = {},
+  ): Promise<WorkspaceKnowledgePageDto> => {
+    const { data } = await apiClient.get<WorkspaceKnowledgePageDto>(
+      API.adminWorkspaces.knowledge(workspaceId),
+      { params: query },
     );
     return data;
   },
