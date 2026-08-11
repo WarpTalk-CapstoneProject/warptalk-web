@@ -275,6 +275,14 @@ export const translationRoomService = {
   resume(id: string) {
     return apiClient.post<void>(API.translationRooms.resume(id));
   },
+  /**
+   * Ends the room's translation session and leaves the room IN_PROGRESS, so transcription
+   * carries on. `pause` moves the room to PAUSED, which the AI workers read as "ignore this
+   * room's microphone" — that stops the transcript too, and is a different thing to ask for.
+   */
+  stopTranslation(id: string) {
+    return apiClient.post<void>(API.translationRooms.stopTranslation(id));
+  },
 
   end(id: string) {
     return apiClient.post<void>(API.translationRooms.end(id));

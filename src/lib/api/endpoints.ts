@@ -38,7 +38,10 @@ export const API = {
     leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
     start: (id: string) => `/translation-rooms/${id}/start`,
     pause: (id: string) => `/translation-rooms/${id}/pause`,
+    /** Start Translation. `/start` only opens the room — see ResumeTranslationRoomAsync. */
     resume: (id: string) => `/translation-rooms/${id}/resume`,
+    /** Stop Translation and leave the meeting (and its transcript) running. Not `/pause`. */
+    stopTranslation: (id: string) => `/translation-rooms/${id}/translation/stop`,
     end: (id: string) => `/translation-rooms/${id}/end`,
     cancel: (id: string) => `/translation-rooms/${id}/cancel`,
     artifacts: (id: string) => `/translation-rooms/${id}/artifacts`,

@@ -42,9 +42,14 @@ const checks = [
       roomDetailPage.includes("<ArtifactsPanel"),
   ],
   [
-    "WT-226 translation is activated synchronously before the room refetch race",
-    startedHandler.indexOf("translationActiveRef.current = true") >= 0 &&
-      startedHandler.indexOf("translationActiveRef.current = true") <
+    // The gate this opens is now named for what it actually governs: the room being LIVE,
+    // which is what transcript broadcasts follow. Translation has its own signal (an ACTIVE
+    // TranslationRoomSession) and is not what TranslationRoomStarted announces. The race WT-226
+    // is about is unchanged — the first STT result can beat the REST refetch, so the flag must
+    // be set before it.
+    "WT-226 the live gate is opened synchronously before the room refetch race",
+    startedHandler.indexOf("meetingLiveRef.current = true") >= 0 &&
+      startedHandler.indexOf("meetingLiveRef.current = true") <
         startedHandler.indexOf("refetchRoom"),
   ],
   [
