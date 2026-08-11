@@ -2,7 +2,6 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import {
   Dialog,
@@ -42,8 +41,9 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
 import { StatusPanel } from "./StatusPanel";
 
 function formatTimeShort(value?: string) {
@@ -266,229 +266,6 @@ function LinearRow({
   );
 }
 
-function DailyTimeline({
-  date,
-  rooms,
-}: {
-  date: Date;
-  rooms: TranslationRoomDto[];
-}) {
-  const params = useParams();
-  const workspaceSlug = params?.workspaceSlug as string;
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const user = useAuthStore((state) => state.user);
-  const startHour = 0;
-  const endHour = 24;
-  const hours = Array.from(
-    { length: endHour - startHour },
-    (_, i) => i + startHour,
-  );
-  const hourHeight = 64; // pixels per hour
-  const minuteHeight = hourHeight / 60; // pixels per minute
-
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Scroll to current time on initial load
-  useEffect(() => {
-    if (scrollRef.current) {
-      const isToday = date.toDateString() === new Date().toDateString();
-      if (isToday) {
-        const currentTop =
-          (currentTime.getHours() * 60 + currentTime.getMinutes()) *
-          minuteHeight;
-        scrollRef.current.scrollTop = Math.max(0, currentTop - 200);
-      } else {
-        scrollRef.current.scrollTop = 8 * hourHeight; // default 8 AM
-      }
-    }
-  }, [date]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isToday = date.toDateString() === new Date().toDateString();
-  const currentTop =
-    (currentTime.getHours() * 60 + currentTime.getMinutes()) * minuteHeight;
-
-  return (
-    <div
-      className="flex-1 overflow-y-auto relative bg-surface-1"
-      ref={scrollRef}
-    >
-      <div
-        className="flex relative"
-        style={{ minHeight: `${24 * hourHeight}px` }}
-      >
-        {/* Time column */}
-        <div className="w-16 shrink-0 border-r border-border/50 flex flex-col relative z-10 bg-surface-1">
-          {hours.map((hour) => (
-            <div
-              key={hour}
-              className="relative w-full"
-              style={{ height: hourHeight }}
-            >
-              <span className="absolute -top-2 right-2 text-[10px] text-muted-foreground tabular-nums select-none font-medium">
-                {hour === 0
-                  ? "12 AM"
-                  : hour < 12
-                    ? `${hour} AM`
-                    : hour === 12
-                      ? "12 PM"
-                      : `${hour - 12} PM`}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Timeline grid */}
-        <div className="flex-1 relative">
-          {/* Horizontal lines */}
-          {hours.map((hour) => (
-            <div
-              key={hour}
-              className="absolute w-full border-t border-border/40 pointer-events-none"
-              style={{ top: hour * hourHeight, height: hourHeight }}
-            />
-          ))}
-
-          {/* Current time indicator */}
-          {isToday && (
-            <div
-              className="absolute w-full border-t-[1.5px] border-red-500 z-20 pointer-events-none flex items-center"
-              style={{ top: currentTop }}
-            >
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-[5px] absolute shadow-sm" />
-            </div>
-          )}
-
-          {/* Events */}
-          <div className="absolute inset-0 right-4">
-            {(() => {
-              const validRooms = rooms.filter((r) => r.scheduledAt);
-              // Sort by start time
-              validRooms.sort(
-                (a, b) =>
-                  new Date(a.scheduledAt!).getTime() -
-                  new Date(b.scheduledAt!).getTime(),
-              );
-
-              // Calculate columns for overlapping events
-              const columns: TranslationRoomDto[][] = [];
-              const layouts = new Map<string, { column: number }>();
-
-              validRooms.forEach((room) => {
-                const start = new Date(room.scheduledAt!).getTime();
-
-                let placed = false;
-                for (let i = 0; i < columns.length; i++) {
-                  const col = columns[i];
-                  const lastEvent = col[col.length - 1];
-                  const lastEnd =
-                    new Date(lastEvent.scheduledAt!).getTime() +
-                    (lastEvent.durationSeconds ?? 3600) * 1000;
-                  if (lastEnd <= start) {
-                    col.push(room);
-                    layouts.set(room.id, { column: i });
-                    placed = true;
-                    break;
-                  }
-                }
-                if (!placed) {
-                  columns.push([room]);
-                  layouts.set(room.id, { column: columns.length - 1 });
-                }
-              });
-
-              const totalColumns = Math.max(1, columns.length);
-
-              return validRooms.map((room) => {
-                const scheduledDate = new Date(room.scheduledAt!);
-                const eventHour = scheduledDate.getHours();
-                const eventMinute = scheduledDate.getMinutes();
-                const durationMinutes = (room.durationSeconds ?? 3600) / 60;
-
-                const top = (eventHour * 60 + eventMinute) * minuteHeight;
-                const height = Math.max(durationMinutes * minuteHeight, 24); // Minimum height
-
-                const colIndex = layouts.get(room.id)?.column || 0;
-                const leftPercent = (colIndex / totalColumns) * 100;
-                const widthPercent = 100 / totalColumns;
-
-                return (
-                  <Link
-                    key={room.id}
-                    href={`/${workspaceSlug}/rooms/${room.id}`}
-                    className="absolute rounded-[12px] border border-primary/20 bg-primary/10 hover:bg-primary/20 transition-all p-2 overflow-hidden flex flex-col group shadow-sm hover:shadow-md z-10"
-                    style={{
-                      top,
-                      height,
-                      left: `calc(0.5rem + ${leftPercent}%)`,
-                      width: `calc(${widthPercent}% - 0.5rem)`,
-                    }}
-                  >
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="font-semibold text-primary text-[12px] leading-tight truncate">
-                          {room.title}
-                        </span>
-                        {room.seriesId && <RepeatBadge compact />}
-                        {user?.id && room.hostId !== user.id && (
-                          <span className="shrink-0 rounded bg-amber-500/10 px-1 py-0.5 text-[8px] font-medium text-amber-600 border border-amber-500/20">
-                            Invited
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-primary/70 font-medium shrink-0">
-                        {scheduledDate.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}{" "}
-                        -
-                        {new Date(
-                          scheduledDate.getTime() + durationMinutes * 60000,
-                        ).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    {height >= 40 && (
-                      <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">
-                        {/* Same set, same punctuation as the list chip. This block used to
-                            switch between "→" and ";" on the target count, so the two
-                            surfaces described the same room differently — and it repeated the
-                            source among its own targets for exactly the same reason. */}
-                        <span className="inline-flex items-center gap-1">
-                          {meetingLanguageSet(
-                            room.sourceLanguage,
-                            room.targetLanguages,
-                          ).map((language, index) => (
-                            <span key={language} className="inline-flex items-center gap-1">
-                              {index > 0 ? (
-                                <span className="text-primary/40">·</span>
-                              ) : null}
-                              <LanguageLabel value={language} showName={false} />
-                            </span>
-                          ))}
-                        </span>
-                        <span>•</span>
-                        <span className="font-mono">
-                          {room.translationRoomCode}
-                        </span>
-                      </div>
-                    )}
-                  </Link>
-                );
-              });
-            })()}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 import { useUIStore } from "@/stores/ui-store";
 
@@ -515,10 +292,15 @@ export default function MeetingsPageLinear() {
     router.push(`/join?code=${encodeURIComponent(trimmed)}`);
   }
   const [isGroupOpen, setIsGroupOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<
-    "active" | "scheduled" | "history" | "all"
-  >("active");
+  const [activeTab, setActiveTab] = useState<"active" | "history" | "all">(
+    "active",
+  );
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [today] = useState<Date>(() => new Date());
+  // Null means "no day chosen", which is not the same as "today": the tab's own filter runs
+  // untouched until somebody actually picks a day off the strip. Picking the selected day again
+  // clears it, so there is always a way back out of a day without hunting for today.
+  const [dayFilter, setDayFilter] = useState<Date | null>(null);
   // workspaceId is what lets the server answer this question for a workspace Owner/Admin at all:
   // without it the list falls back to host-or-participant-or-invitee and an Admin sees an empty
   // page for a workspace that has meetings in it. It also stops this workspace-scoped screen from
@@ -539,14 +321,6 @@ export default function MeetingsPageLinear() {
   // WT-251/WT-232: the calendar gave no hint which days hold anything, and it opens on today,
   // so a meeting booked for any other day was invisible in this tab — findable only under
   // "All". Marking the days that have meetings is what makes the tab navigable at all.
-  const daysWithMeetings = useMemo(
-    () =>
-      rooms
-        .filter((room) => room.scheduledAt)
-        .map((room) => new Date(room.scheduledAt as string))
-        .sort((a, b) => a.getTime() - b.getTime()),
-    [rooms],
-  );
 
   // The next day after the one being viewed that actually holds something, so an empty day can
   // point somewhere instead of being a dead end.
@@ -554,10 +328,6 @@ export default function MeetingsPageLinear() {
   // Measured against the selected day rather than against the clock: reading the current time
   // during render is impure, and "next after where you are" is the more useful answer anyway —
   // it works the same whether the user has paged backwards or forwards.
-  const selectedDayKey = startOfDay(selectedDate);
-  const nextUpcoming = daysWithMeetings.find(
-    (date) => startOfDay(date) > selectedDayKey,
-  );
 
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -597,13 +367,12 @@ export default function MeetingsPageLinear() {
                   new Date(r.scheduledAt) >= twoHoursAgo)))),
       );
     }
-    if (activeTab === "scheduled") {
-      // WT-247: keyed off the day a room was scheduled for, not off its current status. The
-      // old filter also required status === "scheduled", so a meeting vanished from its own
-      // day in the calendar the moment it started. What belongs on a day is what was booked
-      // for it; the row already renders whatever state it has now.
+    // A day off the strip narrows whichever tab is open. It replaced the Scheduled TAB, and
+    // WT-247's reasoning still holds: what belongs to a day is what was BOOKED for it, not what
+    // its status happens to be now — the row renders its own state.
+    if (dayFilter) {
       return rooms.filter(
-        (r) => matchesSearch(r) && isScheduledOn(r, selectedDate),
+        (r) => matchesSearch(r) && isScheduledOn(r, dayFilter),
       );
     }
     if (activeTab === "history")
@@ -615,14 +384,14 @@ export default function MeetingsPageLinear() {
             r.status === "timeout"),
       );
     return rooms.filter(matchesSearch);
-  }, [rooms, activeTab, selectedDate, searchQuery]);
+  }, [rooms, activeTab, dayFilter, searchQuery]);
 
   return (
     <div className="flex flex-col h-full bg-surface-1">
       {/* View Tabs & Actions */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
-          {(["active", "scheduled", "history", "all"] as const).map((tab) => (
+          {(["active", "history", "all"] as const).map((tab) => (
             <div
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -680,57 +449,34 @@ export default function MeetingsPageLinear() {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {activeTab === "scheduled" && (
-          <div className="w-[300px] border-r border-border flex flex-col items-center py-6 px-4 overflow-y-auto bg-canvas/30 shrink-0">
-            <div className="w-full bg-surface-1 rounded-xl border border-border shadow-sm p-1">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
-                className="w-full"
-                modifiers={{ hasMeeting: daysWithMeetings }}
-                modifiersClassNames={{
-                  hasMeeting:
-                    "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary",
-                }}
-              />
-            </div>
-            <div className="mt-6 text-[13px] text-muted-foreground w-full px-1">
-              <p className="font-semibold text-foreground mb-1.5 flex items-center gap-2">
-                <CalendarIcon size={16} weight="duotone" />
-                {selectedDate.toLocaleDateString(undefined, {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
-              <p className="leading-relaxed">
-                {filteredRooms.length === 0
-                  ? "You have no meetings scheduled for this day."
-                  : `You have ${filteredRooms.length} meeting${filteredRooms.length === 1 ? "" : "s"} scheduled for this day.`}
-              </p>
-              {filteredRooms.length === 0 && nextUpcoming ? (
-                <button
-                  type="button"
-                  onClick={() => setSelectedDate(nextUpcoming)}
-                  className="mt-2 text-[13px] font-medium text-primary hover:text-primary-hover"
-                >
-                  Go to next meeting —{" "}
-                  {nextUpcoming.toLocaleDateString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </button>
-              ) : null}
-            </div>
-          </div>
-        )}
+      {/* Replaces the Scheduled tab. A permanent strip says which days have anything on them
+          without costing a click, which a tab could never do — and it is the same component the
+          home panel renders, so the two cannot disagree about which days are marked. */}
+      <div className="flex items-center gap-3 border-b border-border/40 px-4 pb-3 shrink-0">
+        <MeetingDayStrip
+          rooms={rooms}
+          selectedDate={selectedDate}
+          today={today}
+          onSelectDate={(day) => {
+            setSelectedDate(day);
+            setDayFilter((current) =>
+              current && startOfDay(current) === startOfDay(day) ? null : day,
+            );
+          }}
+        />
+        {dayFilter ? (
+          <button
+            type="button"
+            onClick={() => setDayFilter(null)}
+            className="text-[12px] font-medium text-primary hover:text-primary-hover"
+          >
+            Clear day
+          </button>
+        ) : null}
+      </div>
 
-        {activeTab === "scheduled" ? (
-          <DailyTimeline date={selectedDate} rooms={filteredRooms} />
-        ) : (
+      <div className="flex-1 flex overflow-hidden">
+        {(
           <div className="flex-1 overflow-y-auto">
             {/* Group Header */}
             <div

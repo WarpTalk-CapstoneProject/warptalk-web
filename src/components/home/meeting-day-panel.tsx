@@ -2,31 +2,18 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  CaretLeft,
-  CaretRight,
-  Plus,
-  VideoCamera,
-} from "@phosphor-icons/react";
+import { Plus, VideoCamera } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
 import { LanguageLabel } from "@/components/language/language-label";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { meetingLanguageSet } from "@/lib/language/languages";
-import {
-  daysWithMeetings,
-  isSameDay,
-  meetingsOn,
-  shiftWeeks,
-  startOfDay,
-  weekOf,
-} from "@/lib/meeting/meeting-day";
-import { cn } from "@/lib/utils";
+import { isSameDay, meetingsOn } from "@/lib/meeting/meeting-day";
+import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 
-const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "short" });
 const LONG_DATE = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
   month: "short",
@@ -34,63 +21,6 @@ const LONG_DATE = new Intl.DateTimeFormat("en-US", {
 });
 const TIME = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
 
-function DayChip({
-  day,
-  isSelected,
-  isToday,
-  hasMeetings,
-  onSelect,
-}: {
-  day: Date;
-  isSelected: boolean;
-  isToday: boolean;
-  hasMeetings: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={isSelected}
-      aria-label={LONG_DATE.format(day)}
-      className={cn(
-        "flex w-11 shrink-0 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors",
-        isSelected ? "bg-primary/12" : "hover:bg-surface-2",
-      )}
-    >
-      <span
-        className={cn(
-          "text-[10px] font-medium uppercase tracking-wide",
-          isSelected ? "text-primary" : "text-ink-muted",
-        )}
-      >
-        {WEEKDAY.format(day)}
-      </span>
-      <span
-        className={cn(
-          "grid size-7 place-items-center rounded-full text-[13px] tabular-nums transition-colors",
-          isSelected
-            ? "bg-primary font-semibold text-on-primary"
-            : isToday
-              ? "font-semibold text-primary"
-              : "text-ink",
-        )}
-      >
-        {day.getDate()}
-      </span>
-      {/* WT-251, carried forward: the meetings calendar gave no hint which days held anything
-          and opened on today, so a meeting booked for any other day was effectively invisible.
-          A strip without these dots would repeat that exactly. */}
-      <span
-        aria-hidden
-        className={cn(
-          "size-1 rounded-full transition-colors",
-          hasMeetings ? (isSelected ? "bg-primary" : "bg-ink-muted/50") : "bg-transparent",
-        )}
-      />
-    </button>
-  );
-}
 
 function MeetingRow({ room, workspaceSlug }: { room: TranslationRoomDto; workspaceSlug: string }) {
   const languages = meetingLanguageSet(room.sourceLanguage, room.targetLanguages);
@@ -144,8 +74,6 @@ export function MeetingDayPanel() {
   });
 
   const rooms = useMemo(() => roomList.data?.rooms ?? [], [roomList.data?.rooms]);
-  const week = useMemo(() => weekOf(selectedDate), [selectedDate]);
-  const marked = useMemo(() => daysWithMeetings(rooms), [rooms]);
   const dayMeetings = useMemo(() => meetingsOn(rooms, selectedDate), [rooms, selectedDate]);
 
   const slug = activeWorkspaceSlug || "workspace";
@@ -160,36 +88,14 @@ export function MeetingDayPanel() {
           {LONG_DATE.format(selectedDate)}
         </h2>
 
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setSelectedDate(shiftWeeks(selectedDate, -1))}
-            aria-label="Previous week"
-            className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <CaretLeft size={14} weight="bold" />
-          </button>
-
-          {week.map((day) => (
-            <DayChip
-              key={day.toISOString()}
-              day={day}
-              isSelected={isSameDay(day, selectedDate)}
-              isToday={isSameDay(day, today)}
-              hasMeetings={marked.has(startOfDay(day))}
-              onSelect={() => setSelectedDate(day)}
-            />
-          ))}
-
-          <button
-            type="button"
-            onClick={() => setSelectedDate(shiftWeeks(selectedDate, 1))}
-            aria-label="Next week"
-            className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <CaretRight size={14} weight="bold" />
-          </button>
-        </div>
+        {/* The same strip the meetings list shows, so the two cannot disagree about which day
+            has meetings — see MeetingDayStrip for why it is shared rather than copied. */}
+        <MeetingDayStrip
+          rooms={rooms}
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          today={today}
+        />
       </header>
 
       <div className="mt-3">

@@ -43,6 +43,35 @@ const PersistentMeetingSession = dynamic(
   { ssr: false },
 );
 
+/**
+ * Whether the sidebar should be showing its icon-only rail YET.
+ *
+ * LinearSidebar renders two different trees — a rail and a full sidebar — and React swaps them
+ * the instant the flag changes, while AnimatedWidthPanel spends 420ms tweening the width. The two
+ * halves were never connected, so closing read as: every label vanishes at once, and only then
+ * does the panel slide shut.
+ *
+ * Opening swaps immediately — the labels should be arriving as the panel widens. Closing holds
+ * the full tree for a beat so the labels are carried out by the narrowing panel (which is
+ * overflow-hidden, so they are clipped away rather than deleted) and only then becomes the rail.
+ * The delay is deliberately shorter than the width tween: the swap lands while the panel is
+ * still moving, so it is never a visible step on a sidebar that has already stopped.
+ */
+function useRailSwapDelay(open: boolean, delayMs: number) {
+  const [collapsed, setCollapsed] = useState(!open);
+
+  useEffect(() => {
+    if (open) {
+      setCollapsed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setCollapsed(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [open, delayMs]);
+
+  return collapsed;
+}
+
 function AnimatedWidthPanel({
   open,
   width,
@@ -119,6 +148,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     leftSidebarOpen,
     toggleLeftSidebar,
   } = useUIStore();
+  // 160ms against the panel's 420ms width tween — see useRailSwapDelay.
+  const railCollapsed = useRailSwapDelay(leftSidebarOpen, 160);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
@@ -298,7 +329,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         collapsedWidth={64}
         side="left"
       >
-        <LinearSidebar collapsed={!leftSidebarOpen} />
+        <LinearSidebar collapsed={railCollapsed} />
       </AnimatedWidthPanel>
       {/* Main Column */}
       <div className="relative flex flex-col flex-1 overflow-hidden min-w-0">
