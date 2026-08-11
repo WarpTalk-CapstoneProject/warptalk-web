@@ -14,12 +14,20 @@ export interface VoiceProfileDto {
    * voice id, which is exactly what TranslationRoomHub.SetVoicePreference expects.
    */
   providerVoiceId?: string | null;
+  consentStatus?: string | null;
+  consentTextVersion?: string | null;
+  consentGrantedAt?: string | null;
 }
 
 export interface CreateVoiceProfileRequest {
   displayName: string;
   language: string;
   sample?: File | null;
+  ownVoiceConfirmed: boolean;
+  aiUseConfirmed: boolean;
+  syntheticVoiceAcknowledged: boolean;
+  noImpersonationConfirmed: boolean;
+  retentionAcknowledged: boolean;
 }
 
 /** One selectable voice from the provider's public library. */
