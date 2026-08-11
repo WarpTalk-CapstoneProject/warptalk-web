@@ -534,6 +534,7 @@ export default function VoiceProfilesPage() {
                       nextHighlighted={nextHighlighted}
                       onToggleSelected={() => toggleProfileSelection(profile.id)}
                       onHoverChange={(hovered) => setHoveredProfileId(hovered ? profile.id : null)}
+                      onEditProfile={() => openCreateDialog(profile)}
                     />
                   );
                 })}
@@ -626,7 +627,9 @@ export default function VoiceProfilesPage() {
                   onValueChange={(value) => setSelectedOwnerId(value ?? "")}
                 >
                   <SelectTrigger className="h-10 w-full">
-                    <SelectValue placeholder="Select member..." />
+                    <span className="min-w-0 truncate text-left">
+                      {selectedOwner?.name ?? "Select member..."}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {voiceOwnerOptions.map((owner) => (
@@ -648,9 +651,7 @@ export default function VoiceProfilesPage() {
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
                     {getInitials(selectedOwner?.name ?? currentUserName)}
                   </span>
-                  <span className="min-w-0 truncate">
-                    {selectedOwner?.name ?? currentUserName} - {selectedOwner?.role ?? roleLabel}
-                  </span>
+                  <span className="min-w-0 truncate">{selectedOwner?.name ?? currentUserName}</span>
                 </div>
               )}
             </div>
@@ -697,7 +698,7 @@ export default function VoiceProfilesPage() {
               <Label htmlFor="sample">Reference voice sample</Label>
               <div className="grid min-w-0 gap-3 rounded-lg border border-border bg-canvas p-3">
                 <p className="text-xs leading-5 text-ink-muted">
-                  Read: "WarpTalk helps my team understand every conversation clearly." Use one speaker in a quiet room.
+                  Read: &quot;WarpTalk helps my team understand every conversation clearly.&quot; Use one speaker in a quiet room.
                 </p>
                 <input
                   id="sample"
@@ -768,6 +769,7 @@ function VoiceProfileRow({
   nextHighlighted,
   onToggleSelected,
   onHoverChange,
+  onEditProfile,
 }: {
   profile: VoiceProfileDto;
   userName: string;
@@ -779,6 +781,7 @@ function VoiceProfileRow({
   nextHighlighted: boolean;
   onToggleSelected: () => void;
   onHoverChange: (hovered: boolean) => void;
+  onEditProfile: () => void;
 }) {
   const language = getLanguageMeta(profile.language);
   const healthLabel = profile.hasSample ? "Ready" : "Needs sample";
@@ -828,7 +831,16 @@ function VoiceProfileRow({
           {selected ? <Check size={10} weight="bold" /> : null}
         </button>
       </div>
-      <div className="flex min-w-0 items-center gap-2">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onEditProfile();
+        }}
+        className="flex min-w-0 items-center gap-2 rounded-[6px] text-left transition-colors hover:bg-surface-3/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        aria-label={`Edit ${profileName}`}
+        title={`Edit ${profileName}`}
+      >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">
           {getInitials(profileName)}
         </span>
@@ -836,7 +848,7 @@ function VoiceProfileRow({
           <p className="truncate font-medium text-ink">{profileName}</p>
           <p className="truncate text-[10px] text-ink-muted">{providerLabel}</p>
         </div>
-      </div>
+      </button>
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[8px] font-semibold text-primary">
           {getInitials(userName)}

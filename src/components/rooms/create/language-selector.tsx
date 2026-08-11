@@ -24,11 +24,10 @@ const languageOptions = languagesInScope("meeting").map((language) => ({
  *
  * WT-271: the list is the "meeting" scope narrowed by the workspace's `allowedTargetLanguages`
  * policy. Languages the policy forbids are shown DISABLED with the reason attached rather
- * than dropped: a host who has run Korean meetings before would otherwise watch Korean
- * silently vanish and conclude the product broke, with nothing pointing at the workspace
- * setting or at the admin who owns it. The list also stays the same length in every
- * workspace, so "where did it go" never has to be asked. Hiding would have been fewer lines
- * and no more honest.
+ * than dropped: a host can see whether Vietnamese, English or Japanese is unavailable because
+ * of the workspace setting instead of guessing why the picker refuses it. The list also stays
+ * the same length in every workspace, so "where did it go" never has to be asked. Hiding
+ * would have been fewer lines and no more honest.
  *
  * A policy that is empty or absent means unrestricted — see `isLanguageAllowedByPolicy`.
  */

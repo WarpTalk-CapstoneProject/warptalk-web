@@ -235,6 +235,27 @@
   }
 }
 
+.login-auth-page {
+  color-scheme: light;
+}
+
+.login-auth-field {
+  background-color: #ffffff;
+  color: #000000;
+  caret-color: #000000;
+}
+
+.login-auth-field:-webkit-autofill,
+.login-auth-field:-webkit-autofill:hover,
+.login-auth-field:-webkit-autofill:focus,
+.login-auth-field:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: #000000;
+  caret-color: #000000;
+  transition: background-color 9999s ease-out;
+}
+
 .liquid-glass {
   background: rgba(0,0,0,0.4);
   background-blend-mode: luminosity;

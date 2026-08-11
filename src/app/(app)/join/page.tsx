@@ -34,9 +34,8 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toast } from "sonner";
 
-// Was a hardcoded three — English, Vietnamese, Japanese — while a meeting can be created in
-// six. A room declaring Korean, French or Spanish could not be joined in the language it was
-// created for, because this screen simply never offered it.
+// Meeting join languages follow the same project-scoped registry as room creation, so the
+// pre-join picker stays aligned with whatever languages meetings are allowed to declare.
 const languages = languagesInScope("meeting").map((language) => ({
   value: language.locale,
   label: language.name,

@@ -35,7 +35,6 @@ import {
   CaretLeft,
   Check,
   CreditCard,
-  Desktop,
   FileText,
   GearSix,
   Gauge,
@@ -46,11 +45,9 @@ import {
   Monitor,
   PaperPlaneTilt,
   Plus,
-  SignOut,
   Sliders,
   SquaresFour,
   User,
-  UserPlus,
   Users,
   Warning,
   Waveform,
@@ -493,7 +490,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       {/* Workspace Selector Dropdown */}
       <div
         className={cn(
-          "flex h-[48px] shrink-0 items-center",
+          "flex h-[58px] shrink-0 items-center",
           collapsed ? "justify-center px-2" : "justify-between px-3",
         )}
       >

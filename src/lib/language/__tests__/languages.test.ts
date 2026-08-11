@@ -59,10 +59,14 @@ test("Korean specifically resolves, in both shapes", () => {
 
 test("scopes decide what a picker offers", () => {
   const meeting = languagesInScope("meeting").map((language) => language.code);
-  assert.deepEqual(meeting, ["vi", "en", "ja", "ko", "fr", "es"]);
+  assert.deepEqual(meeting, ["vi", "en", "ja"]);
 
-  // Chinese is known so stored data renders, but is deliberately not a meeting language.
+  // Other known languages still render cleanly for stored data and non-meeting surfaces, but
+  // they are deliberately not offered when creating/configuring meetings.
   assert.ok(!meeting.includes("zh"));
+  assert.ok(!meeting.includes("ko"));
+  assert.ok(!meeting.includes("fr"));
+  assert.ok(!meeting.includes("es"));
   assert.equal(getLanguageName("zh-CN"), "Chinese");
 
   assert.deepEqual(
@@ -94,7 +98,7 @@ test("an empty workspace policy means unrestricted, not forbidden", () => {
   for (const policy of [[], undefined, null]) {
     assert.deepEqual(
       meetingLanguagesForPolicy(policy).map((language) => language.code),
-      ["vi", "en", "ja", "ko", "fr", "es"],
+      ["vi", "en", "ja"],
     );
     assert.equal(isLanguageAllowedByPolicy("ko", policy), true);
     assert.equal(isLanguageAllowedByPolicy("ko-KR", policy), true);
