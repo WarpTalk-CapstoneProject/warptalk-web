@@ -39,7 +39,13 @@ const checks = [
   ["live room never starts translation on its own", !livePage.includes("autoStartTriggeredRef") && !livePage.includes("startRoom.mutate(room.id")],
   ["translation controls follow persisted room lifecycle", livePage.includes('room?.status === "in_progress"') && livePage.includes('room.status === "paused"')],
   ["stop translation pauses the backend pipeline", livePage.includes("usePauseTranslationRoom") && livePage.includes("pauseRoom.mutate")],
-  ["resume translation resumes the backend pipeline", livePage.includes("useResumeTranslationRoom") && livePage.includes('room.status === "paused" ? resumeRoom : startRoom')],
+  [
+    "resume translation resumes the backend pipeline",
+    livePage.includes("useResumeTranslationRoom")
+      && livePage.includes('room.status === "paused" || room.status === "in_progress"')
+      && livePage.includes("? resumeRoom")
+      && livePage.includes(": startRoom"),
+  ],
   ["starting translation opens the transcript side panel", livePage.includes("setRightSidebarOpen(true)") && livePage.includes('setSidePanelMode("transcript")')],
   ["pre-start and paused rooms reject transcript broadcasts", livePage.includes("translationActiveRef.current") && livePage.includes("if (!translationActiveRef.current) return;")],
 ];
