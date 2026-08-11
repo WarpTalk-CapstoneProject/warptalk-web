@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus,
-  SignIn,
-  Spinner,
-  EnvelopeSimple,
   ArrowRight,
   CheckCircle,
   Clock,
+  EnvelopeSimple,
+  MagnifyingGlass,
+  Plus,
+  SignIn,
+  Spinner,
   XCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
@@ -22,12 +23,14 @@ import {
 } from "@/lib/workspace/email-domain";
 import {
   useAcceptWorkspaceInvitationById,
-  usePendingWorkspaceInvitations,
-  useWorkspaces,
-  useSelectWorkspace,
   useMyJoinRequests,
+  usePendingWorkspaceInvitations,
+  useSelectWorkspace,
+  useWorkspaces,
 } from "@/hooks/use-workspace";
-import type { WorkspaceInvitationDto } from "@/types/workspace";
+import type { WorkspaceDto, WorkspaceInvitationDto } from "@/types/workspace";
+
+const EMPTY_WORKSPACES: WorkspaceDto[] = [];
 
 export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
@@ -35,8 +38,6 @@ export default function WorkspaceOnboardingGatePage() {
   const logout = useAuthStore((state) => state.logout);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  // Same helper the create form uses, so the two screens cannot drift on what counts as a
-  // public domain. Only affects what this screen says; the server does the refusing.
   const publicDomainLabel = extractEmailDomain(user?.email);
   const cannotCreateWorkspace = isPublicEmailDomain(publicDomainLabel);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
@@ -47,39 +48,29 @@ export default function WorkspaceOnboardingGatePage() {
   const { data: joinRequestsData, isLoading: joinRequestsLoading, refetch: refetchJoinRequests } = useMyJoinRequests();
   const pendingInvitations = useMemo(() => pendingInvitationsData ?? [], [pendingInvitationsData]);
   const joinRequests = useMemo(() => joinRequestsData ?? [], [joinRequestsData]);
+  const workspaces = workspacesData?.items ?? EMPTY_WORKSPACES;
   const selectWorkspace = useSelectWorkspace();
   const acceptInvitation = useAcceptWorkspaceInvitationById();
+  const [workspaceSearch, setWorkspaceSearch] = useState("");
 
-  // Every sign-in lands here first, and for an account that already has a workspace this
-  // page is a waypoint it passes through, not a destination. The redirect that moves it on
-  // lives in an effect, and effects run after the browser has painted — so the frame between
-  // "the workspace list arrived" and "the navigation committed" used to paint "Set up your
-  // workspace" and a Create workspace button at every single sign-in.
-  //
-  // Answering it during render is the fix. The condition below is the same one the effect
-  // acts on, evaluated one phase earlier, so the interstitial is never handed over to the
-  // onboarding surface for an account that is on its way somewhere else.
-  //
-  // Note this is not a blanket "wait a bit". An account with no workspaces and no pending
-  // invitations fails this test on the first render after the list resolves, and reaches the
-  // create page exactly as promptly as before.
-  // Read once, at mount, and not on every render. `activeWorkspaceId` is what the redirect
-  // below sets, so a live read would flip this condition false the instant the redirect
-  // starts — while router.replace() is still in flight — and simply move the flash from
-  // before the navigation to during it. Sampling it at mount answers the question this
-  // actually asks, which is why the account came to this page: with nothing selected it is
-  // passing through; with a workspace already active it came here to choose another, and
-  // then the chooser is the correct thing to show.
-  //
-  // The (app) layout gates its children behind a mounted flag, so this component's first
-  // render is a client render with the persisted workspace store already rehydrated.
+  const filteredWorkspaces = useMemo(() => {
+    const query = workspaceSearch.trim().toLowerCase();
+    if (!query) return workspaces;
+
+    return workspaces.filter((workspace) =>
+      [workspace.name, workspace.slug, workspace.role, workspace.membershipType]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [workspaceSearch, workspaces]);
+
   const [arrivedWithoutActiveWorkspace] = useState(() => !activeWorkspaceId);
 
   const willAutoOpenWorkspace =
     isAuthenticated &&
     arrivedWithoutActiveWorkspace &&
     pendingInvitations.length === 0 &&
-    (workspacesData?.items?.length ?? 0) > 0;
+    workspaces.length > 0;
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
@@ -91,8 +82,8 @@ export default function WorkspaceOnboardingGatePage() {
         return;
       }
 
-      if (workspacesData?.items && workspacesData.items.length > 0) {
-        const firstWs = workspacesData.items[0];
+      if (workspaces.length > 0) {
+        const firstWs = workspaces[0];
         const defaultLanguage =
           "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
             ? firstWs.defaultLanguage
@@ -104,12 +95,22 @@ export default function WorkspaceOnboardingGatePage() {
           firstWs.slug,
           firstWs.role || "Member",
           firstWs.membershipType || "Internal",
-          defaultLanguage
+          defaultLanguage,
         );
         router.replace(`/${firstWs.slug}/home`);
       }
     }
-  }, [isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, pendingInvitations, pendingInvitationsLoading, selectWorkspace, setActiveWorkspace, router]);
+  }, [
+    isAuthenticated,
+    activeWorkspaceId,
+    workspaces,
+    workspacesLoading,
+    pendingInvitations,
+    pendingInvitationsLoading,
+    selectWorkspace,
+    setActiveWorkspace,
+    router,
+  ]);
 
   async function handleAcceptInvitation(invitationId: string) {
     await acceptInvitation.mutateAsync(invitationId);
@@ -117,7 +118,7 @@ export default function WorkspaceOnboardingGatePage() {
 
   async function handleOpenWorkspace(workspaceId: string, workspaceSlug?: string | null) {
     if (!workspaceSlug) return;
-    const workspace = workspacesData?.items.find((item) => item.id === workspaceId);
+    const workspace = workspaces.find((item) => item.id === workspaceId);
     await selectWorkspace.mutateAsync(workspaceId);
     setActiveWorkspace(
       workspaceId,
@@ -125,7 +126,7 @@ export default function WorkspaceOnboardingGatePage() {
       workspaceSlug,
       workspace?.role || "Member",
       workspace?.membershipType || "Internal",
-      workspace?.defaultLanguage || "en"
+      workspace?.defaultLanguage || "en",
     );
     await refetchWorkspaces();
     router.push(`/${workspaceSlug}/home`);
@@ -146,224 +147,270 @@ export default function WorkspaceOnboardingGatePage() {
   }
 
   return (
-    <main className="flex h-dvh flex-col bg-canvas select-none font-sans antialiased text-ink">
-      {/* Top Header info */}
-      <header className="flex h-14 items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-2">
-          <Image
-            src="/assets/logos/warptalk-sidebar-logo.png"
-            alt="WarpTalk"
-            width={100}
-            height={24}
-            className="object-contain mix-blend-multiply opacity-80"
-            style={{ width: "auto", height: 24 }}
-            priority
-          />
-        </div>
-        {/* Signed in as, and a way back out.
-            This screen showed the email as plain text. Someone who signed in with the wrong
-            account — or whose domain already belongs to a workspace they cannot create over —
-            had no exit from it: no sign-out, no navigation, and every action on the page
-            refused them. The only escape was clearing site data. */}
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] font-medium text-ink-muted">{user?.email}</span>
+    <main className="flex h-dvh flex-col overflow-hidden bg-canvas font-sans text-ink antialiased">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/60 px-5">
+        <Image
+          src="/assets/logos/warptalk-sidebar-logo.png"
+          alt="WarpTalk"
+          width={100}
+          height={24}
+          className="object-contain opacity-80"
+          style={{ width: "auto", height: 24 }}
+          priority
+        />
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="hidden max-w-[260px] truncate text-[12px] font-medium text-ink-muted sm:block">
+            {user?.email}
+          </span>
           <button
             type="button"
             onClick={() => {
               logout();
               router.replace("/login");
             }}
-            className="rounded-md border border-border px-2 py-1 text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            className="h-8 rounded-full border border-border px-3 text-[12px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
           >
             Sign out
           </button>
         </div>
       </header>
 
-      {/* Main Container centered */}
-      <div className="flex flex-1 flex-col items-center justify-center px-4 pb-20">
-        <div className="w-full max-w-[640px] text-center">
-          <h1 className="text-[32px] font-semibold tracking-tight text-foreground text-balance">
-            Set up your workspace
-          </h1>
-          <p className="mt-2 text-[14px] text-ink-muted text-pretty">
-            Choose how you want to start working in WarpTalk.
-          </p>
-
-          {pendingInvitations.length > 0 && (
-            <div className="mt-8 rounded-lg border border-border bg-surface-1 text-left shadow-sm">
-              <div className="border-b border-border px-5 py-4">
-                <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
-                  <EnvelopeSimple size={18} />
-                  Pending invitations
-                </div>
-                <p className="mt-1 text-[12px] text-ink-muted">
-                  These invitations match {user?.email}. Accept one to join its workspace.
+      <div className="flex min-h-0 flex-1 justify-center px-4 py-5">
+        <div className="flex min-h-0 w-full max-w-[920px] flex-col gap-4">
+          <section className="shrink-0">
+            <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-ink-subtle">
+              WarpTalk Workspace
+            </p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="text-[28px] font-semibold tracking-tight text-foreground">
+                  Choose your workspace
+                </h1>
+                <p className="mt-1 max-w-xl text-[13px] leading-5 text-ink-muted">
+                  Join an existing organization, create a new one, or open a workspace you already belong to.
                 </p>
               </div>
-              <div className="divide-y divide-border">
-                {pendingInvitations.map((invitation) => (
-                  <div key={invitation.id} className="flex items-center justify-between gap-4 px-5 py-4">
-                    <div className="min-w-0">
-                      <div className="truncate text-[14px] font-medium text-foreground">
-                        {invitation.email}
-                      </div>
-                      <div className="mt-1 text-[12px] text-ink-muted">
-                        {invitation.roleName} - {invitation.membershipType} - expires {new Date(invitation.expiresAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAcceptInvitation(invitation.id)}
-                      disabled={acceptInvitation.isPending}
-                      className="h-9 shrink-0 rounded-md bg-primary px-3 text-[12px] font-semibold text-white transition hover:bg-primary-hover disabled:opacity-50"
-                    >
-                      {acceptInvitation.isPending ? "Accepting..." : "Accept"}
-                    </button>
-                  </div>
-                ))}
-              </div>
+              {workspaces.length > 0 ? (
+                <span className="w-fit rounded-full border border-border bg-surface-1 px-3 py-1 text-[12px] font-medium text-ink-muted">
+                  {workspaces.length} workspace{workspaces.length === 1 ? "" : "s"}
+                </span>
+              ) : null}
             </div>
-          )}
+          </section>
 
-          {workspacesData?.items && workspacesData.items.length > 0 && (
-            <div className="mt-8 rounded-lg border border-border bg-surface-1 text-left shadow-sm">
-              <div className="border-b border-border px-5 py-4">
-                <div className="text-[15px] font-semibold text-foreground">Your workspaces</div>
-                <p className="mt-1 text-[12px] text-ink-muted">Choose a workspace to continue. Pending Join Requests do not block access to these workspaces.</p>
-              </div>
-              <div className="divide-y divide-border">
-                {workspacesData.items.map((workspace) => (
-                  <button
-                    key={workspace.id}
-                    type="button"
-                    onClick={() => handleOpenWorkspace(workspace.id, workspace.slug)}
-                    className="flex w-full items-center justify-between px-5 py-3 text-left transition hover:bg-surface-2/60"
-                  >
-                    <span>
-                      <span className="block text-[13px] font-medium text-foreground">{workspace.name}</span>
-                      <span className="mt-0.5 block text-[11px] text-ink-muted">{workspace.role} · {workspace.membershipType}</span>
-                    </span>
-                    <ArrowRight size={15} className="text-ink-muted" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {joinRequests.length > 0 && (
-            <div className="mt-8 rounded-lg border border-border bg-surface-1 text-left shadow-sm">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                <div>
-                  <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
-                    <Clock size={18} />
-                    Join requests
-                  </div>
-                  <p className="mt-1 text-[12px] text-ink-muted">
-                    Each request is tracked independently. Your active workspace stays available while another request is reviewed.
-                  </p>
-                </div>
-                <button type="button" onClick={() => refetchJoinRequests()} className="text-[11px] font-semibold text-primary hover:underline">
-                  Refresh
-                </button>
-              </div>
-              <div className="divide-y divide-border">
-                {joinRequests.map((request: WorkspaceInvitationDto) => {
-                  const status = request.status.toUpperCase();
-                  const isApproved = status === "ACCEPTED";
-                  const isRejected = status === "REJECTED";
-                  return (
-                    <div key={request.id} className="flex items-center justify-between gap-4 px-5 py-4">
-                      <div className="flex min-w-0 items-start gap-3">
-                        {isApproved ? <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-600" /> : isRejected ? <XCircle size={18} className="mt-0.5 shrink-0 text-destructive" /> : <Clock size={18} className="mt-0.5 shrink-0 text-amber-600" />}
-                        <div className="min-w-0">
-                          <div className="truncate text-[14px] font-medium text-foreground">{request.workspaceName || request.workspaceSlug || "Workspace"}</div>
-                          <div className="mt-1 text-[12px] text-ink-muted">
-                            {isApproved ? "Approved" : isRejected ? "Rejected" : "Waiting for Owner/Admin approval"} · {request.membershipType} provisional
-                          </div>
-                        </div>
-                      </div>
-                      {isApproved && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenWorkspace(request.workspaceId, request.workspaceSlug)}
-                          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[11px] font-semibold text-white hover:bg-primary-hover"
-                        >
-                          Open workspace <ArrowRight size={13} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Join Workspace */}
+          <section className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => router.push("/workspace/join")}
-              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all hover:bg-surface-2 hover:border-hairline-strong shadow-sm hover:shadow-md cursor-pointer h-[160px]"
+              className="group flex min-h-[116px] items-center gap-4 rounded-lg border border-border bg-surface-1 p-4 text-left shadow-sm transition-colors hover:border-hairline-strong hover:bg-surface-2"
             >
-              <div className="flex size-9 items-center justify-center rounded-[6px] border border-border bg-surface-2 text-ink group-hover:bg-surface-3 transition-colors">
-                <SignIn weight="duotone" size={18} />
-              </div>
-              <div>
-                <span className="block text-[15px] font-semibold text-foreground">
-                  Join workspace
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-ink transition-colors group-hover:bg-surface-3">
+                <SignIn weight="duotone" size={19} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-semibold text-foreground">Join workspace</span>
+                <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
+                  Enter a workspace URL, slug, or room invitation.
                 </span>
-                <span className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty">
-                  Enter a workspace URL or slug.
-                </span>
-              </div>
+              </span>
             </button>
 
-            {/*
-              Create Workspace — unavailable on a public email domain.
-
-              The server refuses this unconditionally (WorkspaceService.CreateWorkspaceAsync):
-              founding a workspace claims a domain, and a public domain cannot be claimed by
-              anyone. Presenting the two cards as equals meant a Gmail user picked Create,
-              filled in a form, and only then learned it was never going to work — while the
-              path that IS open to them sat beside it looking no more relevant.
-
-              Stated here rather than enforced here: this is the reason shown to the user, not
-              the check. The server remains the authority.
-            */}
             <button
               type="button"
               onClick={() => router.push("/workspace/create")}
               disabled={cannotCreateWorkspace}
               aria-describedby={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
-              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all shadow-sm h-[160px] enabled:hover:bg-surface-2 enabled:hover:border-hairline-strong enabled:hover:shadow-md enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+              className="group flex min-h-[116px] items-center gap-4 rounded-lg border border-border bg-surface-1 p-4 text-left shadow-sm transition-colors enabled:hover:border-hairline-strong enabled:hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <div
+              <span
                 className={
                   cannotCreateWorkspace
-                    ? "flex size-9 items-center justify-center rounded-[6px] border border-border bg-surface-2 text-ink-muted"
-                    : "flex size-9 items-center justify-center rounded-[6px] bg-primary text-white"
+                    ? "flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-ink-muted"
+                    : "flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-white"
                 }
               >
-                <Plus weight="bold" size={18} />
-              </div>
-              <div>
-                <span className="block text-[15px] font-semibold text-foreground">
-                  Create workspace
-                </span>
+                <Plus weight="bold" size={19} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-semibold text-foreground">Create workspace</span>
                 <span
                   id={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
-                  className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty"
+                  className="mt-1 block text-[12px] leading-5 text-ink-muted"
                 >
                   {cannotCreateWorkspace
-                    ? `Needs a work email — ${publicDomainLabel} addresses can join an existing workspace by invitation.`
-                    : "Create a new workspace for your organization."}
+                    ? `Needs a work email. ${publicDomainLabel} addresses can join by invitation.`
+                    : "Start a workspace for your organization."}
                 </span>
-              </div>
+              </span>
             </button>
-          </div>
+          </section>
+
+          {(pendingInvitations.length > 0 || joinRequests.length > 0) && (
+            <section className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
+              {pendingInvitations.length > 0 && (
+                <div className="overflow-hidden rounded-lg border border-border bg-surface-1 shadow-sm">
+                  <div className="border-b border-border px-4 py-3">
+                    <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                      <EnvelopeSimple size={16} />
+                      Pending invitations
+                    </div>
+                    <p className="mt-1 truncate text-[11px] text-ink-muted">
+                      Invitations for {user?.email}
+                    </p>
+                  </div>
+                  <div className="max-h-[176px] overflow-y-auto divide-y divide-border">
+                    {pendingInvitations.map((invitation) => (
+                      <div key={invitation.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-medium text-foreground">
+                            {invitation.email}
+                          </div>
+                          <div className="mt-0.5 truncate text-[11px] text-ink-muted">
+                            {invitation.roleName} - {invitation.membershipType} - expires{" "}
+                            {new Date(invitation.expiresAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptInvitation(invitation.id)}
+                          disabled={acceptInvitation.isPending}
+                          className="h-8 shrink-0 rounded-full bg-primary px-3 text-[11px] font-semibold text-white transition hover:bg-primary-hover disabled:opacity-50"
+                        >
+                          {acceptInvitation.isPending ? "Accepting..." : "Accept"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {joinRequests.length > 0 && (
+                <div className="overflow-hidden rounded-lg border border-border bg-surface-1 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                    <div>
+                      <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                        <Clock size={16} />
+                        Join requests
+                      </div>
+                      <p className="mt-1 text-[11px] text-ink-muted">Tracked independently.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => refetchJoinRequests()}
+                      className="text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                  <div className="max-h-[176px] overflow-y-auto divide-y divide-border">
+                    {joinRequests.map((request: WorkspaceInvitationDto) => {
+                      const status = request.status.toUpperCase();
+                      const isApproved = status === "ACCEPTED";
+                      const isRejected = status === "REJECTED";
+                      return (
+                        <div key={request.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                          <div className="flex min-w-0 items-start gap-2.5">
+                            {isApproved ? (
+                              <CheckCircle size={16} className="mt-0.5 shrink-0 text-emerald-600" />
+                            ) : isRejected ? (
+                              <XCircle size={16} className="mt-0.5 shrink-0 text-destructive" />
+                            ) : (
+                              <Clock size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                            )}
+                            <div className="min-w-0">
+                              <div className="truncate text-[13px] font-medium text-foreground">
+                                {request.workspaceName || request.workspaceSlug || "Workspace"}
+                              </div>
+                              <div className="mt-0.5 truncate text-[11px] text-ink-muted">
+                                {isApproved ? "Approved" : isRejected ? "Rejected" : "Waiting for approval"} -{" "}
+                                {request.membershipType} provisional
+                              </div>
+                            </div>
+                          </div>
+                          {isApproved && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenWorkspace(request.workspaceId, request.workspaceSlug)}
+                              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 text-[11px] font-semibold text-white hover:bg-primary-hover"
+                            >
+                              Open <ArrowRight size={12} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-surface-1 text-left shadow-sm">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-[14px] font-semibold text-foreground">Your workspaces</div>
+                <p className="mt-0.5 text-[11px] text-ink-muted">
+                  Select a workspace to continue. The list scrolls safely when it grows.
+                </p>
+              </div>
+              <label className="flex h-8 w-full items-center gap-2 rounded-full border border-border bg-surface-2 px-3 text-[12px] text-ink-muted sm:w-[260px]">
+                <MagnifyingGlass size={14} />
+                <input
+                  value={workspaceSearch}
+                  onChange={(event) => setWorkspaceSearch(event.target.value)}
+                  placeholder="Search workspaces"
+                  className="min-w-0 flex-1 bg-transparent text-[12px] text-ink outline-none placeholder:text-ink-muted"
+                />
+              </label>
+            </div>
+
+            {workspaces.length === 0 ? (
+              <div className="flex min-h-[220px] flex-1 flex-col items-center justify-center px-6 text-center">
+                <p className="text-[14px] font-semibold text-foreground">No workspaces yet</p>
+                <p className="mt-1 max-w-sm text-[12px] leading-5 text-ink-muted">
+                  Join an existing workspace or create one with a business email.
+                </p>
+              </div>
+            ) : filteredWorkspaces.length === 0 ? (
+              <div className="flex min-h-[220px] flex-1 flex-col items-center justify-center px-6 text-center">
+                <p className="text-[14px] font-semibold text-foreground">No matching workspaces</p>
+                <p className="mt-1 text-[12px] text-ink-muted">Try another workspace name, slug, role, or type.</p>
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {filteredWorkspaces.map((workspace) => (
+                  <button
+                    key={workspace.id}
+                    type="button"
+                    onClick={() => handleOpenWorkspace(workspace.id, workspace.slug)}
+                    className="group grid w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-surface-2"
+                  >
+                    <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-[11px] font-semibold text-primary">
+                      {getWorkspaceInitials(workspace.name)}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold text-foreground">
+                        {workspace.name}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-ink-muted">
+                        /{workspace.slug} - {workspace.role || "Member"} - {workspace.membershipType || "Internal"}
+                      </span>
+                    </span>
+                    <ArrowRight size={15} className="text-ink-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </div>
     </main>
   );
+}
+
+function getWorkspaceInitials(name: string | null | undefined) {
+  const words = (name || "Workspace").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "W";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
 }

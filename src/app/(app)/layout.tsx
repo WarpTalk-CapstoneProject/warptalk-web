@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
@@ -320,7 +320,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 if (firstSeg === "voice-profiles") {
                   parts.push({ label: "Voice Profiles" });
                 } else if (firstSeg === "join") {
-                  parts.push({ label: "Join Translation Room" });
+                  parts.push({ label: "Join" });
                 } else if (firstSeg === "room") {
                   parts.push({ label: "Meetings", href: `/${activeWorkspaceSlug || "workspace"}/rooms` });
                   const rId = segments[1];
@@ -343,6 +343,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     parts.push({ label: "Dashboard" });
                   } else if (feature === "home") {
                     parts.push({ label: "Home" });
+                  } else if (feature === "voice-profiles") {
+                    parts.push({ label: "Voice Profiles" });
                   } else if (feature === "members") {
                     parts.push({ label: "Members" });
                   } else if (feature === "documents") {

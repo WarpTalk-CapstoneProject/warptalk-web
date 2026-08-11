@@ -13,6 +13,7 @@ import {
   ArrowCounterClockwise,
   Brain,
   CaretDown,
+  CaretUp,
   Eye,
   FileCode,
   FileCsv,
@@ -23,7 +24,6 @@ import {
   Funnel,
   Info,
   List,
-  Lock,
   ShieldWarning,
   SlidersHorizontal,
   Sparkle,
@@ -31,7 +31,6 @@ import {
   SquaresFour,
   Trash,
   Upload,
-  Warning,
 } from "@phosphor-icons/react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -53,7 +52,6 @@ import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
-  useApproveWorkspaceDocument,
   useArchiveWorkspaceDocument,
   useDeleteWorkspaceDocument,
   useRestoreWorkspaceDocument,
@@ -66,6 +64,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { DocumentActor } from "@/components/documents/document-actor";
 import { DocumentDeleteDialog } from "@/components/documents/document-delete-dialog";
+import type { WorkspaceDocumentDto, WorkspaceMemberDto } from "@/types/workspace";
 
 const uploadSchema = z.object({
   name: z.string().min(2, "Document name must be at least 2 characters"),
@@ -80,6 +79,13 @@ type UploadFormData = z.infer<typeof uploadSchema>;
 type FilterCategory =
   "all" | "pending" | "ai" | "admin" | "sensitive" | "archived";
 type ViewMode = "list" | "grid";
+type SortDirection = "asc" | "desc";
+type DocumentSortKey =
+  | "name"
+  | "classification"
+  | "people"
+  | "modified"
+  | "size";
 
 const DOCUMENT_FILTER_WIDTH_CLASS: Record<FilterCategory, string> = {
   all: "w-[58px]",
@@ -91,7 +97,18 @@ const DOCUMENT_FILTER_WIDTH_CLASS: Record<FilterCategory, string> = {
 };
 
 const DOCUMENT_GRID_CLASS =
-  "grid-cols-[28px_minmax(320px,1.8fr)_170px_190px_116px_92px_96px]";
+  "grid-cols-[12px_minmax(320px,1.8fr)_170px_190px_116px_92px_96px]";
+
+const DOCUMENT_SORT_COLUMNS: Array<{
+  key: DocumentSortKey;
+  label: string;
+}> = [
+  { key: "name", label: "Name" },
+  { key: "classification", label: "Classification" },
+  { key: "people", label: "People" },
+  { key: "modified", label: "Modified" },
+  { key: "size", label: "Size" },
+];
 
 export default function WorkspaceDocumentsPage() {
   const router = useRouter();
@@ -104,6 +121,8 @@ export default function WorkspaceDocumentsPage() {
   const [page, setPage] = useState(1);
   const [activeCategory, setActiveCategory] = useState<FilterCategory>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [sortKey, setSortKey] = useState<DocumentSortKey>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -359,6 +378,20 @@ export default function WorkspaceDocumentsPage() {
     }
     return true; // "all"
   });
+  const sortedDocs = [...filteredDocs].sort((first, second) => {
+    const result = compareDocuments(first, second, sortKey, workspaceMembers);
+    return sortDirection === "asc" ? result : -result;
+  });
+
+  function handleSort(nextSortKey: DocumentSortKey) {
+    if (sortKey === nextSortKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(nextSortKey);
+    setSortDirection("asc");
+  }
 
   return (
     <div className="flex h-full flex-col bg-surface-1 pb-12 text-ink">
@@ -522,15 +555,19 @@ export default function WorkspaceDocumentsPage() {
           <div className="min-w-[1040px]">
             <div className={`grid ${DOCUMENT_GRID_CLASS} items-center gap-4 px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
               <span />
-              <span className="w-fit rounded-full bg-surface-2 px-2 py-1 font-semibold text-foreground">Name</span>
-              <span>Classification</span>
-              <span>People</span>
-              <span>Modified</span>
-              <span>Size</span>
+              {DOCUMENT_SORT_COLUMNS.map((column) => (
+                <SortableColumnHeader
+                  key={column.key}
+                  label={column.label}
+                  active={sortKey === column.key}
+                  direction={sortDirection}
+                  onClick={() => handleSort(column.key)}
+                />
+              ))}
               <span className="text-right">Actions</span>
             </div>
             <div className="space-y-0">
-              {filteredDocs.map((doc) => {
+              {sortedDocs.map((doc) => {
                 const isDocOwner =
                   doc.uploadedBy === currentUser?.id ||
                   doc.ownerId === currentUser?.id;
@@ -688,7 +725,7 @@ export default function WorkspaceDocumentsPage() {
       ) : (
         /* Grid Card View */
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredDocs.map((doc) => (
+          {sortedDocs.map((doc) => (
             <Card
               key={doc.id}
               onClick={() =>
@@ -1002,4 +1039,129 @@ export default function WorkspaceDocumentsPage() {
       />
     </div>
   );
+}
+
+function SortableColumnHeader({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  direction: SortDirection;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-fit rounded-full py-1 text-left transition-colors ${
+        active
+          ? "-ml-2 bg-surface-2 px-2 font-semibold text-foreground"
+          : "px-0 text-ink-muted hover:text-ink"
+      }`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          direction === "asc" ? (
+            <CaretUp size={10} weight="bold" />
+          ) : (
+            <CaretDown size={10} weight="bold" />
+          )
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+function compareDocuments(
+  first: WorkspaceDocumentDto,
+  second: WorkspaceDocumentDto,
+  sortKey: DocumentSortKey,
+  members: WorkspaceMemberDto[],
+) {
+  if (sortKey === "name") return compareText(first.name, second.name);
+  if (sortKey === "classification") {
+    return compareText(
+      getDocumentClassificationLabel(first),
+      getDocumentClassificationLabel(second),
+    );
+  }
+  if (sortKey === "people") {
+    return compareText(
+      getDocumentPeopleLabel(first, members),
+      getDocumentPeopleLabel(second, members),
+    );
+  }
+  if (sortKey === "modified") {
+    return compareNullableDate(
+      first.updatedAt || first.createdAt,
+      second.updatedAt || second.createdAt,
+    );
+  }
+
+  return first.sizeBytes - second.sizeBytes;
+}
+
+function getDocumentClassificationLabel(doc: WorkspaceDocumentDto) {
+  const status = doc.status?.toLowerCase() ?? "";
+  const ingestionStatus = doc.ingestionStatus?.toLowerCase() ?? "";
+
+  if (
+    status === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
+    status.includes("pending")
+  ) {
+    return "Pending Approval";
+  }
+  if (!doc.isAiAllowed) return "Administrative";
+  if (ingestionStatus === WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED) {
+    return "AI Ready";
+  }
+  if (ingestionStatus === WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED) {
+    return "AI Failed";
+  }
+  if (
+    ingestionStatus === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING ||
+    ingestionStatus === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING
+  ) {
+    return "Processing AI";
+  }
+  return "AI Context";
+}
+
+function getDocumentPeopleLabel(
+  doc: WorkspaceDocumentDto,
+  members: WorkspaceMemberDto[],
+) {
+  const uploader = findDocumentMember(members, doc.uploadedBy);
+  const approver = findDocumentMember(members, doc.approvedBy);
+  return [uploader, approver]
+    .map((member) => member?.fullName || member?.email)
+    .filter(Boolean)
+    .join(" ");
+}
+
+function findDocumentMember(
+  members: WorkspaceMemberDto[],
+  memberId: string | null | undefined,
+) {
+  if (!memberId) return null;
+  return (
+    members.find(
+      (member) => member.userId === memberId || member.id === memberId,
+    ) ?? null
+  );
+}
+
+function compareNullableDate(first: string | null, second: string | null) {
+  if (!first && !second) return 0;
+  if (!first) return 1;
+  if (!second) return -1;
+  return new Date(first).getTime() - new Date(second).getTime();
+}
+
+function compareText(first: string, second: string) {
+  return first.localeCompare(second, undefined, { sensitivity: "base" });
 }

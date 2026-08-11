@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import {
   ArrowClockwise,
   Brain,
+  CaretDown,
+  CaretUp,
   FileText,
   Funnel,
   Microphone,
@@ -24,6 +26,8 @@ import type {
 } from "@/types/workspace-knowledge";
 
 type SourceTab = "all" | "document" | "transcript";
+type SortDirection = "asc" | "desc";
+type KnowledgeSortKey = "source" | "fact" | "text" | "state";
 
 const SOURCE_TABS: Array<{ value: SourceTab; label: string }> = [
   { value: "all", label: "Everything" },
@@ -57,6 +61,16 @@ const FACT_FILTER_WIDTH_CLASS: Record<FactCategory | "all", string> = {
 
 const KNOWLEDGE_GRID_CLASS =
   "grid-cols-[minmax(240px,1.05fr)_minmax(280px,1.2fr)_minmax(360px,1.6fr)_120px]";
+
+const KNOWLEDGE_SORT_COLUMNS: Array<{
+  key: KnowledgeSortKey;
+  label: string;
+}> = [
+  { key: "source", label: "Source" },
+  { key: "fact", label: "Fact" },
+  { key: "text", label: "Indexed text" },
+  { key: "state", label: "State" },
+];
 
 /** Cursors for pages already visited, so Back does not have to re-scroll from the start. */
 type CursorStack = (string | null)[];
@@ -109,6 +123,8 @@ export default function WorkspaceKnowledgePage() {
   const [factCategory, setFactCategory] = useState<FactCategory | null>(null);
   const [cursorStack, setCursorStack] = useState<CursorStack>([null]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<KnowledgeSortKey>("source");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const cursor = cursorStack[cursorStack.length - 1];
 
@@ -149,7 +165,23 @@ export default function WorkspaceKnowledgePage() {
         .some((value) => value!.toLowerCase().includes(normalizedSearch)),
     );
   }, [items, normalizedSearch]);
+  const sortedVisibleItems = useMemo(() => {
+    return [...visibleItems].sort((first, second) => {
+      const result = compareKnowledgeChunks(first, second, sortKey);
+      return sortDirection === "asc" ? result : -result;
+    });
+  }, [sortDirection, sortKey, visibleItems]);
   const hasFacts = items.some((chunk) => chunk.fact);
+
+  function handleSort(nextSortKey: KnowledgeSortKey) {
+    if (sortKey === nextSortKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(nextSortKey);
+    setSortDirection("asc");
+  }
 
   if (!isOwnerOrAdmin) {
     return (
@@ -259,10 +291,15 @@ export default function WorkspaceKnowledgePage() {
             <div
               className={`grid ${KNOWLEDGE_GRID_CLASS} px-2 py-0.5 text-[11px] font-medium text-ink-muted`}
             >
-              <ColumnLabel active>Source</ColumnLabel>
-              <ColumnLabel>Fact</ColumnLabel>
-              <ColumnLabel>Indexed text</ColumnLabel>
-              <ColumnLabel>State</ColumnLabel>
+              {KNOWLEDGE_SORT_COLUMNS.map((column) => (
+                <SortableColumnHeader
+                  key={column.key}
+                  label={column.label}
+                  active={sortKey === column.key}
+                  direction={sortDirection}
+                  onClick={() => handleSort(column.key)}
+                />
+              ))}
             </div>
 
             {isError ? (
@@ -289,7 +326,7 @@ export default function WorkspaceKnowledgePage() {
               />
             ) : (
               <div className="space-y-0">
-                {visibleItems.map((chunk) => (
+                {sortedVisibleItems.map((chunk) => (
                   <KnowledgeRow key={chunk.chunkId} chunk={chunk} />
                 ))}
               </div>
@@ -406,24 +443,39 @@ function FilterPill({
   );
 }
 
-function ColumnLabel({
-  active = false,
-  children,
+function SortableColumnHeader({
+  label,
+  active,
+  direction,
+  onClick,
 }: {
-  active?: boolean;
-  children: ReactNode;
+  label: string;
+  active: boolean;
+  direction: SortDirection;
+  onClick: () => void;
 }) {
   return (
-    <span
+    <button
+      type="button"
+      onClick={onClick}
       className={cn(
         "w-fit rounded-full py-1 text-left transition-colors",
         active
           ? "-ml-2 bg-surface-2 px-2 font-semibold text-foreground"
-          : "px-0 text-ink-muted",
+          : "px-0 text-ink-muted hover:text-ink",
       )}
     >
-      {children}
-    </span>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          direction === "asc" ? (
+            <CaretUp size={10} weight="bold" />
+          ) : (
+            <CaretDown size={10} weight="bold" />
+          )
+        ) : null}
+      </span>
+    </button>
   );
 }
 
@@ -448,6 +500,37 @@ function KnowledgeNotice({
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
+}
+
+function compareKnowledgeChunks(
+  first: WorkspaceKnowledgeChunkDto,
+  second: WorkspaceKnowledgeChunkDto,
+  sortKey: KnowledgeSortKey,
+) {
+  if (sortKey === "source") {
+    return compareText(getKnowledgeSourceLabel(first), getKnowledgeSourceLabel(second));
+  }
+  if (sortKey === "fact") {
+    return compareText(first.fact ?? "", second.fact ?? "");
+  }
+  if (sortKey === "text") {
+    return compareText(first.text ?? "", second.text ?? "");
+  }
+  return compareText(
+    first.retentionState || (first.aiRetrieval ? "Ready" : "Limited"),
+    second.retentionState || (second.aiRetrieval ? "Ready" : "Limited"),
+  );
+}
+
+function getKnowledgeSourceLabel(chunk: WorkspaceKnowledgeChunkDto) {
+  if (chunk.sourceType === "transcript") {
+    return chunk.speakerName || "Meeting transcript";
+  }
+  return chunk.documentName || "Document";
+}
+
+function compareText(first: string, second: string) {
+  return first.localeCompare(second, undefined, { sensitivity: "base" });
 }
 
 function toTitleCase(value: string) {

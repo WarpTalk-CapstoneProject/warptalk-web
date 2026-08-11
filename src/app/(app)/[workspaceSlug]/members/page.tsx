@@ -13,6 +13,8 @@ import {
   SlidersHorizontal,
   Trash,
   CheckCircle,
+  CaretDown,
+  CaretUp,
   XCircle,
 } from "@phosphor-icons/react";
 import ExcelJS from "exceljs";
@@ -63,10 +65,33 @@ const MEMBER_FILTER_WIDTH_CLASS: Record<string, string> = {
 };
 
 const MEMBER_GRID_CLASS =
-  "grid-cols-[28px_minmax(280px,1.85fr)_100px_116px_92px_112px_108px_64px]";
+  "grid-cols-[16px_minmax(280px,1.85fr)_100px_116px_92px_112px_108px_64px]";
 
 const MEMBER_GRID_CLASS_READONLY =
-  "grid-cols-[28px_minmax(280px,1.85fr)_100px_116px_92px_112px]";
+  "grid-cols-[16px_minmax(280px,1.85fr)_100px_116px_92px_112px]";
+
+type SortDirection = "asc" | "desc";
+type MemberSortKey =
+  | "name"
+  | "role"
+  | "membershipType"
+  | "status"
+  | "date"
+  | "hostMeetings";
+
+const MEMBER_SORT_COLUMNS: Array<{
+  key: MemberSortKey;
+  label: string;
+  ownerOnly?: boolean;
+  align?: "center" | "right";
+}> = [
+  { key: "name", label: "Name" },
+  { key: "role", label: "Role" },
+  { key: "membershipType", label: "Membership Type" },
+  { key: "status", label: "Status" },
+  { key: "date", label: "Date" },
+  { key: "hostMeetings", label: "Host meetings", ownerOnly: true, align: "center" },
+];
 
 export default function WorkspaceMembersPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -77,6 +102,8 @@ export default function WorkspaceMembersPage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<DirectoryFilter>("all");
+  const [sortKey, setSortKey] = useState<MemberSortKey>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   // Modal and invitation states
   const [isInviteOpen, setIsInviteOpen] = useState(false);
@@ -161,6 +188,10 @@ export default function WorkspaceMembersPage() {
     page === 1 ? pendingRequests : [],
   );
   const filteredMembers = filterMemberDirectory(directoryRows, filter);
+  const sortedMembers = [...filteredMembers].sort((first, second) => {
+    const result = compareMemberRows(first, second, sortKey);
+    return sortDirection === "asc" ? result : -result;
+  });
 
   const invitedCount = buildMemberDirectory(
     membersList,
@@ -257,6 +288,16 @@ export default function WorkspaceMembersPage() {
       setIsExporting(false);
     }
   };
+
+  function handleSort(nextSortKey: MemberSortKey) {
+    if (sortKey === nextSortKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(nextSortKey);
+    setSortDirection("asc");
+  }
 
   const handleToggleCanCreateMeetings = async (
     userId: string,
@@ -366,8 +407,8 @@ export default function WorkspaceMembersPage() {
               }}
               className={`flex h-[26px] ${MEMBER_FILTER_WIDTH_CLASS[item.key] ?? "w-[86px]"} items-center justify-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
                 filter === item.key
-                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
+                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
               }`}
             >
               {item.label}
@@ -478,16 +519,21 @@ export default function WorkspaceMembersPage() {
             {/* Header row */}
             <div className={`grid ${memberGridClass} items-center gap-3 px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
               <div />
-              <span>Name</span>
-              <span>Role</span>
-              <span>Membership Type</span>
-              <span>Status</span>
-              <span>Date</span>
-              {isOwnerOrAdmin && <><span className="text-center">Host meetings</span><span className="text-right">Actions</span></>}
+              {MEMBER_SORT_COLUMNS.filter((column) => !column.ownerOnly || isOwnerOrAdmin).map((column) => (
+                <SortableColumnHeader
+                  key={column.key}
+                  label={column.label}
+                  active={sortKey === column.key}
+                  direction={sortDirection}
+                  align={column.align}
+                  onClick={() => handleSort(column.key)}
+                />
+              ))}
+              {isOwnerOrAdmin && <span className="text-right">Actions</span>}
             </div>
 
             {/* Data rows */}
-            {filteredMembers.map((row: DirectoryRow) => {
+            {sortedMembers.map((row: DirectoryRow) => {
               const member = row.member;
               const invite = row.invitation;
               const isSelf = !!member && member.userId === currentUser?.id;
@@ -823,4 +869,82 @@ export default function WorkspaceMembersPage() {
       </Dialog>
     </div>
   );
+}
+
+function SortableColumnHeader({
+  label,
+  active,
+  direction,
+  align,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  direction: SortDirection;
+  align?: "center" | "right";
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-fit rounded-full py-1 text-left transition-colors ${
+        align === "center" ? "justify-self-center text-center" : ""
+      } ${align === "right" ? "justify-self-end pr-2 text-right" : ""} ${
+        active
+          ? align
+            ? "bg-surface-2 px-2 font-semibold text-foreground"
+            : "-ml-2 bg-surface-2 px-2 font-semibold text-foreground"
+          : "px-0 text-ink-muted hover:text-ink"
+      }`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          direction === "asc" ? (
+            <CaretUp size={10} weight="bold" />
+          ) : (
+            <CaretDown size={10} weight="bold" />
+          )
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+function compareMemberRows(
+  first: DirectoryRow,
+  second: DirectoryRow,
+  sortKey: MemberSortKey,
+) {
+  if (sortKey === "name") return compareText(first.name, second.name);
+  if (sortKey === "role") return compareText(first.roleName, second.roleName);
+  if (sortKey === "membershipType") {
+    return compareText(first.membershipType, second.membershipType);
+  }
+  if (sortKey === "status") {
+    return compareText(
+      DIRECTORY_STATUS_LABELS[first.status],
+      DIRECTORY_STATUS_LABELS[second.status],
+    );
+  }
+  if (sortKey === "date") {
+    return compareNullableDate(first.date, second.date);
+  }
+
+  return compareText(
+    first.member?.canCreateMeetings ? "yes" : "no",
+    second.member?.canCreateMeetings ? "yes" : "no",
+  );
+}
+
+function compareNullableDate(first: string | null, second: string | null) {
+  if (!first && !second) return 0;
+  if (!first) return 1;
+  if (!second) return -1;
+  return new Date(first).getTime() - new Date(second).getTime();
+}
+
+function compareText(first: string, second: string) {
+  return first.localeCompare(second, undefined, { sensitivity: "base" });
 }

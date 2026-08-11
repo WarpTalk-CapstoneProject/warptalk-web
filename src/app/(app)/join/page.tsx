@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  ArrowRight,
   Microphone,
   MicrophoneSlash,
   SpeakerHigh,
@@ -40,6 +41,11 @@ const languages = languagesInScope("meeting").map((language) => ({
   value: language.locale,
   label: language.name,
 }));
+
+function getLanguageBadge(locale: string) {
+  const [, region] = locale.split(/[-_]/);
+  return (region || locale.slice(0, 2)).toUpperCase();
+}
 
 type SinkVideoElement = HTMLVideoElement & {
   setSinkId?: (sinkId: string) => Promise<void>;
@@ -336,38 +342,23 @@ function JoinMeetingContent() {
   // rendered its own failure. Whether the code is good is now answered by the join attempt,
   // which reports the actual reason.
   return (
-    <div className="flex flex-col items-center p-4 sm:p-8 h-full overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-col items-center overflow-hidden px-4 py-3 sm:px-5">
       {/* Top Header Navigation */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="w-full max-w-[960px] flex items-center justify-between mb-4 mt-4"
+        className="mb-3 flex w-full items-center justify-start"
       >
         <button
           onClick={() =>
             router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`)
           }
-          className="flex items-center gap-2 text-[13px] text-ink-muted hover:text-ink transition-colors"
+          className="flex items-center gap-1.5 text-[12px] text-ink-muted transition-colors hover:text-ink"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-3.5 w-3.5" />
           Back to Meetings
         </button>
-      </motion.div>
-
-      {/* Title */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
-        className="w-full max-w-[960px] space-y-1 mb-6"
-      >
-        <h1 className="text-[24px] font-semibold tracking-tight text-foreground">
-          Join Translation Room
-        </h1>
-        <p className="text-[14px] text-ink-muted tracking-[-0.05px]">
-          Enter the meeting code and configure your devices.
-        </p>
       </motion.div>
 
       {/* Main Container */}
@@ -381,10 +372,10 @@ function JoinMeetingContent() {
           stiffness: 200,
           damping: 20,
         }}
-        className="w-full max-w-[960px] grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch pb-12"
+        className="grid min-h-0 w-full max-w-[1200px] flex-1 grid-cols-1 items-stretch gap-4 pb-2 md:grid-cols-[minmax(0,1fr)_minmax(340px,440px)]"
       >
         {/* Left Side: Video Preview Panel (Surface 1) */}
-        <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden relative flex flex-col h-full min-h-[460px]">
+        <div className="relative flex min-h-[360px] w-full flex-col overflow-hidden rounded-[8px] border border-border bg-surface-1 shadow-linear md:min-h-0">
           {cameraEnabled ? (
             <video
               ref={videoRef}
@@ -396,8 +387,8 @@ function JoinMeetingContent() {
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-canvas">
               <div className="flex flex-col items-center gap-3 text-ink-muted">
-                <VideoCameraSlash className="w-12 h-12" weight="light" />
-                <span className="text-[14px] font-medium">Camera is off</span>
+                <VideoCameraSlash className="h-10 w-10" weight="light" />
+                <span className="text-[13px] font-medium">Camera is off</span>
               </div>
             </div>
           )}
@@ -409,35 +400,35 @@ function JoinMeetingContent() {
           )}
 
           {/* Quick Toggles Overlay */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-surface-1/80 backdrop-blur-xl border border-border p-1.5 rounded-[12px]">
+          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-[12px] border border-border bg-surface-1/80 p-1.5 backdrop-blur-xl">
             <button
               onClick={() => setMicrophoneEnabled(!microphoneEnabled)}
               className={cn(
-                "w-10 h-10 rounded-[8px] flex items-center justify-center transition-colors text-[14px]",
+                "flex h-9 w-9 items-center justify-center rounded-[8px] text-[13px] transition-colors",
                 microphoneEnabled
                   ? "bg-surface-2 text-ink hover:bg-surface-3"
                   : "bg-red-500/10 text-red-500 hover:bg-red-500/20",
               )}
             >
               {microphoneEnabled ? (
-                <Microphone className="w-4 h-4" />
+                <Microphone className="h-4 w-4" />
               ) : (
-                <MicrophoneSlash className="w-4 h-4" />
+                <MicrophoneSlash className="h-4 w-4" />
               )}
             </button>
             <button
               onClick={() => setCameraEnabled(!cameraEnabled)}
               className={cn(
-                "w-10 h-10 rounded-[8px] flex items-center justify-center transition-colors text-[14px]",
+                "flex h-9 w-9 items-center justify-center rounded-[8px] text-[13px] transition-colors",
                 cameraEnabled
                   ? "bg-surface-2 text-ink hover:bg-surface-3"
                   : "bg-red-500/10 text-red-500 hover:bg-red-500/20",
               )}
             >
               {cameraEnabled ? (
-                <VideoCamera className="w-4 h-4" />
+                <VideoCamera className="h-4 w-4" />
               ) : (
-                <VideoCameraSlash className="w-4 h-4" />
+                <VideoCameraSlash className="h-4 w-4" />
               )}
             </button>
 
@@ -467,11 +458,11 @@ function JoinMeetingContent() {
         </div>
 
         {/* Right Side: Settings Panel (Surface 1) */}
-        <div className="w-full bg-surface-1 border border-border rounded-[8px] shadow-linear overflow-hidden flex flex-col h-full min-h-[460px]">
-          <div className="flex-1 p-6 space-y-8 overflow-y-auto custom-scrollbar">
+        <div className="flex min-h-[360px] w-full flex-col overflow-hidden rounded-[8px] border border-border bg-surface-1 shadow-linear md:min-h-0">
+          <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto p-4">
             {/* Room Code Section */}
-            <div className="space-y-4">
-              <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[112px_minmax(0,1fr)]">
+              <h4 className="text-[12px] font-medium leading-[34px] tracking-[0.3px] text-ink">
                 Meeting Code
               </h4>
               <Input
@@ -479,25 +470,28 @@ function JoinMeetingContent() {
                 onChange={(event) => setRoomCode(event.target.value)}
                 placeholder="e.g. abc-defg-hij"
                 autoFocus={!roomCode}
-                className="h-[36px] text-[13px] font-mono"
+                className="h-[34px] rounded-[12px] border-border bg-canvas text-[12px] font-mono"
               />
             </div>
 
             {/* Join Details Section */}
-            <div className="space-y-4">
-              <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[112px_minmax(0,1fr)]">
+              <h4 className="text-[12px] font-medium leading-[34px] tracking-[0.3px] text-ink">
                 Language Routing
               </h4>
-              <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
+              <div className="grid h-[34px] w-full select-none grid-cols-[minmax(0,1fr)_16px_minmax(0,1fr)] items-center gap-1 overflow-hidden rounded-[12px] border border-[#e2e3e7] bg-transparent p-1 text-[12px] dark:border-[#25272b]">
                 <Select
                   value={speakLanguage}
                   onValueChange={(val) => val && setSpeakLanguage(val)}
                 >
-                  <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
-                    <span className="leading-none text-[14px]">
-                      {getFlagEmoji(speakLanguage)}
+                  <SelectTrigger
+                    size="sm"
+                    className="!flex !h-[26px] !w-full !min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-[8px] border border-[#d5d6dc] bg-[#ececf0] !px-2 !py-0 text-[12px] text-[#08090a] shadow-none hover:bg-[#e2e3e7] focus:ring-0 dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white dark:hover:bg-[#333438] [&>svg]:hidden"
+                  >
+                    <span className="w-5 shrink-0 text-center text-[10px] font-semibold leading-none tracking-[0.02em] text-current">
+                      {getLanguageBadge(speakLanguage)}
                     </span>
-                    <span className="font-medium text-ink">
+                    <span className="min-w-0 truncate font-semibold text-current">
                       {getLanguageName(speakLanguage)}
                     </span>
                   </SelectTrigger>
@@ -519,19 +513,22 @@ function JoinMeetingContent() {
                   </SelectContent>
                 </Select>
 
-                <span className="text-muted-foreground/40 font-bold px-1 text-[11px]">
-                  →
+                <span className="flex h-full items-center justify-center text-muted-foreground/45">
+                  <ArrowRight className="h-3 w-3" />
                 </span>
 
                 <Select
                   value={listenLanguage}
                   onValueChange={(val) => val && setListenLanguage(val)}
                 >
-                  <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
-                    <span className="leading-none text-[14px]">
-                      {getFlagEmoji(listenLanguage)}
+                  <SelectTrigger
+                    size="sm"
+                    className="!flex !h-[26px] !w-full !min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-[8px] border border-[#d5d6dc] bg-[#ececf0] !px-2 !py-0 text-[12px] text-[#08090a] shadow-none hover:bg-[#e2e3e7] focus:ring-0 dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white dark:hover:bg-[#333438] [&>svg]:hidden"
+                  >
+                    <span className="w-5 shrink-0 text-center text-[10px] font-semibold leading-none tracking-[0.02em] text-current">
+                      {getLanguageBadge(listenLanguage)}
                     </span>
-                    <span className="font-medium text-ink">
+                    <span className="min-w-0 truncate font-semibold text-current">
                       {getLanguageName(listenLanguage)}
                     </span>
                   </SelectTrigger>
@@ -556,54 +553,56 @@ function JoinMeetingContent() {
             </div>
 
             {/* Audio Output Section */}
-            <div className="space-y-4">
-              <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">
+            <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-[112px_minmax(0,1fr)]">
+              <h4 className="pt-[7px] text-[12px] font-medium tracking-[0.3px] text-ink">
                 Audio Output
               </h4>
-              <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
-                <button
-                  type="button"
-                  onClick={() => setVoiceEnabled(true)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-[3px] rounded-full font-medium transition-colors",
-                    voiceEnabled
-                      ? "bg-surface-2 text-ink"
-                      : "text-ink-muted hover:bg-surface-2",
-                  )}
-                >
-                  <SpeakerHigh className="w-3.5 h-3.5" />
-                  Voice + Text
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVoiceEnabled(false)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-[3px] rounded-full font-medium transition-colors",
-                    !voiceEnabled
-                      ? "bg-surface-2 text-ink"
-                      : "text-ink-muted hover:bg-surface-2",
-                  )}
-                >
-                  <SpeakerSlash className="w-3.5 h-3.5" />
-                  Text only
-                </button>
+              <div className="space-y-1.5">
+                <div className="grid h-[34px] w-full select-none grid-cols-2 items-center gap-1 rounded-[12px] border border-[#e2e3e7] bg-transparent p-1 text-[12px] dark:border-[#25272b]">
+                  <button
+                    type="button"
+                    onClick={() => setVoiceEnabled(true)}
+                    className={cn(
+                      "flex h-full min-w-0 items-center justify-center gap-1.5 rounded-[9px] px-2 py-0 font-medium transition-colors",
+                      voiceEnabled
+                        ? "border border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                        : "border border-transparent text-[#6b7280] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:text-[#9fa0a5] dark:hover:bg-[#232524] dark:hover:text-white",
+                    )}
+                  >
+                    <SpeakerHigh className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Voice + Text</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVoiceEnabled(false)}
+                    className={cn(
+                      "flex h-full min-w-0 items-center justify-center gap-1.5 rounded-[9px] px-2 py-0 font-medium transition-colors",
+                      !voiceEnabled
+                        ? "border border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
+                        : "border border-transparent text-[#6b7280] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:text-[#9fa0a5] dark:hover:bg-[#232524] dark:hover:text-white",
+                    )}
+                  >
+                    <SpeakerSlash className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Text only</span>
+                  </button>
+                </div>
+                <p className="text-[11px] leading-4 text-ink-muted">
+                  {voiceEnabled
+                    ? "You'll hear the AI interpreter and see the transcript."
+                    : "You'll only see the live transcript — no AI voice will play."}
+                </p>
               </div>
-              <p className="text-[12px] text-ink-muted">
-                {voiceEnabled
-                  ? "You'll hear the AI interpreter and see the transcript."
-                  : "You'll only see the live transcript — no AI voice will play."}
-              </p>
             </div>
 
             {/* Devices Section */}
-            <div className="space-y-4">
-              <h4 className="text-[13px] font-medium text-ink tracking-[0.4px]">
+            <div className="space-y-2 border-t border-border/60 pt-3">
+              <h4 className="text-[12px] font-medium tracking-[0.3px] text-ink">
                 Devices
               </h4>
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <DeviceSelect
                   label="Camera"
-                  icon={<VideoCamera className="w-4 h-4 text-ink-muted" />}
+                  icon={<VideoCamera className="h-3.5 w-3.5 text-ink-muted" />}
                   value={selectedCameraId}
                   onChange={setSelectedCameraId}
                   devices={cameraDevices}
@@ -611,7 +610,7 @@ function JoinMeetingContent() {
                 />
                 <DeviceSelect
                   label="Microphone"
-                  icon={<Microphone className="w-4 h-4 text-ink-muted" />}
+                  icon={<Microphone className="h-3.5 w-3.5 text-ink-muted" />}
                   value={selectedMicrophoneId}
                   onChange={setSelectedMicrophoneId}
                   devices={microphoneDevices}
@@ -619,7 +618,7 @@ function JoinMeetingContent() {
                 />
                 <DeviceSelect
                   label="Speaker"
-                  icon={<SpeakerHigh className="w-4 h-4 text-ink-muted" />}
+                  icon={<SpeakerHigh className="h-3.5 w-3.5 text-ink-muted" />}
                   value={selectedSpeakerId}
                   onChange={setSelectedSpeakerId}
                   devices={speakerDevices}
@@ -629,11 +628,11 @@ function JoinMeetingContent() {
             </div>
           </div>
 
-          <div className="p-6 border-t border-border bg-surface-1">
+          <div className="border-t border-border bg-surface-1 p-4">
             <Button
               onClick={handleJoin}
               disabled={!canJoin || joinMutation.isPending}
-              className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[32px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm"
+              className="flex h-[34px] w-full items-center justify-center rounded-[6px] bg-primary px-4 text-[12px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:!bg-surface-3 disabled:!text-ink-muted disabled:!opacity-100"
             >
               {joinMutation.isPending ? "Joining..." : "Join Meeting"}
             </Button>
@@ -677,21 +676,21 @@ function DeviceSelect({
   }
 
   return (
-    <div className="space-y-1.5">
-      <label className="text-[12px] font-medium flex items-center gap-1.5 text-ink-muted">
+    <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[112px_minmax(0,1fr)]">
+      <label className="flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
         {icon} {label}
       </label>
       <Select
         value={validValue}
         onValueChange={(val) => onChange(val === "default" ? "" : (val ?? ""))}
       >
-        <SelectTrigger className="h-[32px] bg-canvas border border-border text-ink text-[13px] rounded-[6px] w-full truncate focus:ring-2 focus:ring-ring/50 focus:border-ring">
+        <SelectTrigger className="h-[30px] w-full truncate rounded-[12px] border border-border bg-canvas text-[12px] text-ink focus:border-ring focus:ring-2 focus:ring-ring/50">
           {displayValue}
         </SelectTrigger>
         <SelectContent className="bg-surface-1 border-border text-ink rounded-[6px]">
           <SelectItem
             value="default"
-            className="focus:bg-surface-2 focus:text-ink text-[13px]"
+            className="text-[12px] focus:bg-surface-2 focus:text-ink"
           >
             {fallback}
           </SelectItem>
@@ -706,7 +705,7 @@ function DeviceSelect({
               <SelectItem
                 key={deviceId}
                 value={deviceId}
-                className="focus:bg-surface-2 focus:text-ink text-[13px] truncate"
+                className="truncate text-[12px] focus:bg-surface-2 focus:text-ink"
               >
                 {deviceName}
               </SelectItem>
