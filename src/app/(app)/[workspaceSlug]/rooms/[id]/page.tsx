@@ -163,6 +163,11 @@ export default function RoomInformationPage() {
   const startRoomMutation = useStartTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
   const user = useAuthStore((state) => state.user);
+  // Read ABOVE the `if (!room)` guard below, and it has to stay there. React counts hooks
+  // per render: while the room query is still loading this component returns early, so a
+  // hook placed after that guard runs on the second render and not the first. React sees
+  // the count grow and throws error #310 ("Rendered more hooks than during the previous
+  // render"), which is a blank error page rather than a degraded one.
   const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
 
   const transcriptQuery = useTranscriptByRoom(roomId);

@@ -80,7 +80,8 @@
     "test:auto-recording": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/auto-recording.test.ts",
     "test:mention-menu": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/mention-menu.test.ts",
     "test:chat-sender": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/chat-sender.test.ts",
-    "test:meeting-record": "node scripts/check-meeting-record-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-artifacts.test.ts src/lib/meeting/__tests__/meeting-summary.test.ts"
+    "test:meeting-record": "node scripts/check-meeting-record-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-artifacts.test.ts src/lib/meeting/__tests__/meeting-summary.test.ts",
+    "test:hooks-early-return": "node scripts/check-hooks-before-early-return.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
