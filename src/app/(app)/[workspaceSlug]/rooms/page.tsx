@@ -2,7 +2,6 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import {
   Dialog,
@@ -22,6 +21,9 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import { LanguageLabel } from "@/components/language/language-label";
 import { meetingLanguageSet } from "@/lib/language/languages";
+// The home day panel needs the same two answers; they live in one place so the two surfaces
+// cannot drift the way the language chip did.
+import { isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -39,8 +41,9 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
 import { StatusPanel } from "./StatusPanel";
 
 function formatTimeShort(value?: string) {
@@ -51,22 +54,6 @@ function formatTimeShort(value?: string) {
   }).format(new Date(value));
 }
 
-/** Midnight of the given date as a timestamp, for comparing days without comparing times. */
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
-
-/**
- * Whether this room was booked for the given calendar day.
- *
- * Status is deliberately not part of the question (WT-247): a meeting that has started, or
- * already ended, still belongs on the day it was scheduled for. Rooms with no scheduledAt are
- * instant meetings and belong to no day at all.
- */
-function isScheduledOn(room: TranslationRoomDto, day: Date) {
-  if (!room.scheduledAt) return false;
-  return new Date(room.scheduledAt).toDateString() === day.toDateString();
-}
 
 /**
  * WT-327: marks a room that is one occurrence of a recurring booking.
@@ -147,7 +134,10 @@ function LinearRow({
   return (
     <Link
       href={`/${workspaceSlug}/rooms/${room.id}`}
-      className="flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
+      // @container, not a viewport breakpoint: what squeezes this row is the Properties panel
+      // opening beside it, which takes 260px away while the window stays exactly the same size.
+      // A `lg:` rule cannot see that and would keep every chip at a width the row no longer has.
+      className="@container flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
     >
       <div className="flex items-center w-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground">
         {isCurrentUserHost && (
@@ -170,10 +160,14 @@ function LinearRow({
         <StatusIcon status={room.status} />
       </div>
 
-      <div className="w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
+      <div className="hidden @[560px]:block w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
         {room.translationRoomCode}
       </div>
-      <div className="flex-1 min-w-0 pr-4 flex items-center gap-2">
+      {/* overflow-hidden, not just min-w-0. min-w-0 lets this column shrink to nothing, which is
+          what has to happen when the Properties panel opens — but the badges after the title are
+          shrink-0, so with nothing clipping them they simply drew on top of the status column.
+          The title truncates first and the badges clip only once there is genuinely no room. */}
+      <div className="flex-1 min-w-0 overflow-hidden pr-4 flex items-center gap-2">
         <span className="text-foreground font-medium truncate block">
           {room.title}
         </span>
@@ -188,50 +182,62 @@ function LinearRow({
       {/* WT-321(4): every cell in this trailing group is a fixed-width column. It used to be a
           row of shrink-wrapped pills, so each one started wherever the pill before it happened
           to end — a longer host name or a third target language shifted the occupancy and date
-          columns sideways, and no two rows lined up. Widths here, not content-derived widths. */}
+          columns sideways, and no two rows lined up. Widths here, not content-derived widths.
+
+          The CELL is what holds that width; the pill inside it is not. Making the pill fill the
+          column drew a border around the reservation rather than around the content, so a
+          two-flag room and a fourteen-character name both rendered as the same wide capsule
+          with the meaning huddled in the middle of it. The pill hugs what it contains and is
+          capped at the column, so the columns still line up and nothing can overflow them. */}
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
         <div className="flex w-[104px] shrink-0 items-center">
           <StatusPanel status={room.status} />
         </div>
 
-        <div className="flex h-[26px] w-[164px] shrink-0 items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <Avatar className="size-5 shrink-0 rounded-full">
-            <AvatarImage src={hostAvatar} alt={hostName} />
-            <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
-              {hostName.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
+        <div className="hidden @[700px]:flex w-[164px] shrink-0 items-center">
+          <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <Avatar className="size-5 shrink-0 rounded-full">
+              <AvatarImage src={hostAvatar} alt={hostName} />
+              <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
+                {hostName.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
+          </div>
         </div>
 
-        <div className="flex h-[26px] w-[176px] shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
+        <div className="flex w-[176px] shrink-0 items-center">
+          <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
 
-              It used to read "English → 🇻🇳 · 🇯🇵", which asserted a relationship the product
-              does not have: every participant picks their own speak and listen language, so
-              there is no meeting-wide source and no direction to point an arrow at. A room
-              only ever declares a SET. The named source was the loudest thing in the chip and
-              it was the one part that meant nothing.
+                It used to read "English → 🇻🇳 · 🇯🇵", which asserted a relationship the product
+                does not have: every participant picks their own speak and listen language, so
+                there is no meeting-wide source and no direction to point an arrow at. A room
+                only ever declares a SET. The named source was the loudest thing in the chip and
+                it was the one part that meant nothing.
 
-              The trailing "+" is gone too. It was a permanent icon, not an overflow count —
-              it sat after every multi-language room whether or not anything had been hidden,
-              so it punctuated a gap that was never there.
+                The trailing "+" is gone too. It was a permanent icon, not an overflow count —
+                it sat after every multi-language room whether or not anything had been hidden,
+                so it punctuated a gap that was never there.
 
-              Flags only, no names: the chip is 176px and two language names do not fit.
-              LanguageLabel keeps the name as the title and aria-label, so the flag is not the
-              only thing carrying the meaning. */}
-          {meetingLanguageSet(room.sourceLanguage, room.targetLanguages).map(
-            (language, index) => (
-              <div key={language} className="flex items-center">
-                {index > 0 && (
-                  <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
-                    ·
-                  </span>
-                )}
-                <LanguageLabel value={language} showName={false} />
-              </div>
-            ),
-          )}
+                Flags only, no names: the column is 176px and two language names do not fit.
+                LanguageLabel keeps the name as the title and aria-label, so the flag is not the
+                only thing carrying the meaning. A room can declare any number of languages —
+                nothing client-side caps the set — so the pill is capped at the column and clips
+                rather than pushing the occupancy and date columns out of line. */}
+            {meetingLanguageSet(room.sourceLanguage, room.targetLanguages).map(
+              (language, index) => (
+                <div key={language} className="flex items-center">
+                  {index > 0 && (
+                    <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
+                      ·
+                    </span>
+                  )}
+                  <LanguageLabel value={language} showName={false} />
+                </div>
+              ),
+            )}
+          </div>
         </div>
 
         {/* WT-321(3): the bare "0/100" was read as an error code, a progress bar, anything but
@@ -239,7 +245,7 @@ function LinearRow({
             seats-taken over the meeting type's seat cap (WT-274) — it just says so now. A
             people icon and a title are the whole fix; the number itself was never wrong. */}
         <div
-          className="flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+          className="hidden @[820px]:flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
           title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
         >
           <Users size={13} weight="regular" aria-hidden />
@@ -249,7 +255,7 @@ function LinearRow({
           </span>
         </div>
 
-        <div className="flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="hidden @[900px]:flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums">
             {formatTimeShort(room.scheduledAt ?? room.createdAt)}
@@ -260,229 +266,6 @@ function LinearRow({
   );
 }
 
-function DailyTimeline({
-  date,
-  rooms,
-}: {
-  date: Date;
-  rooms: TranslationRoomDto[];
-}) {
-  const params = useParams();
-  const workspaceSlug = params?.workspaceSlug as string;
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const user = useAuthStore((state) => state.user);
-  const startHour = 0;
-  const endHour = 24;
-  const hours = Array.from(
-    { length: endHour - startHour },
-    (_, i) => i + startHour,
-  );
-  const hourHeight = 64; // pixels per hour
-  const minuteHeight = hourHeight / 60; // pixels per minute
-
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Scroll to current time on initial load
-  useEffect(() => {
-    if (scrollRef.current) {
-      const isToday = date.toDateString() === new Date().toDateString();
-      if (isToday) {
-        const currentTop =
-          (currentTime.getHours() * 60 + currentTime.getMinutes()) *
-          minuteHeight;
-        scrollRef.current.scrollTop = Math.max(0, currentTop - 200);
-      } else {
-        scrollRef.current.scrollTop = 8 * hourHeight; // default 8 AM
-      }
-    }
-  }, [date]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isToday = date.toDateString() === new Date().toDateString();
-  const currentTop =
-    (currentTime.getHours() * 60 + currentTime.getMinutes()) * minuteHeight;
-
-  return (
-    <div
-      className="flex-1 overflow-y-auto relative bg-surface-1"
-      ref={scrollRef}
-    >
-      <div
-        className="flex relative"
-        style={{ minHeight: `${24 * hourHeight}px` }}
-      >
-        {/* Time column */}
-        <div className="w-16 shrink-0 border-r border-border/50 flex flex-col relative z-10 bg-surface-1">
-          {hours.map((hour) => (
-            <div
-              key={hour}
-              className="relative w-full"
-              style={{ height: hourHeight }}
-            >
-              <span className="absolute -top-2 right-2 text-[10px] text-muted-foreground tabular-nums select-none font-medium">
-                {hour === 0
-                  ? "12 AM"
-                  : hour < 12
-                    ? `${hour} AM`
-                    : hour === 12
-                      ? "12 PM"
-                      : `${hour - 12} PM`}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Timeline grid */}
-        <div className="flex-1 relative">
-          {/* Horizontal lines */}
-          {hours.map((hour) => (
-            <div
-              key={hour}
-              className="absolute w-full border-t border-border/40 pointer-events-none"
-              style={{ top: hour * hourHeight, height: hourHeight }}
-            />
-          ))}
-
-          {/* Current time indicator */}
-          {isToday && (
-            <div
-              className="absolute w-full border-t-[1.5px] border-red-500 z-20 pointer-events-none flex items-center"
-              style={{ top: currentTop }}
-            >
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-[5px] absolute shadow-sm" />
-            </div>
-          )}
-
-          {/* Events */}
-          <div className="absolute inset-0 right-4">
-            {(() => {
-              const validRooms = rooms.filter((r) => r.scheduledAt);
-              // Sort by start time
-              validRooms.sort(
-                (a, b) =>
-                  new Date(a.scheduledAt!).getTime() -
-                  new Date(b.scheduledAt!).getTime(),
-              );
-
-              // Calculate columns for overlapping events
-              const columns: TranslationRoomDto[][] = [];
-              const layouts = new Map<string, { column: number }>();
-
-              validRooms.forEach((room) => {
-                const start = new Date(room.scheduledAt!).getTime();
-
-                let placed = false;
-                for (let i = 0; i < columns.length; i++) {
-                  const col = columns[i];
-                  const lastEvent = col[col.length - 1];
-                  const lastEnd =
-                    new Date(lastEvent.scheduledAt!).getTime() +
-                    (lastEvent.durationSeconds ?? 3600) * 1000;
-                  if (lastEnd <= start) {
-                    col.push(room);
-                    layouts.set(room.id, { column: i });
-                    placed = true;
-                    break;
-                  }
-                }
-                if (!placed) {
-                  columns.push([room]);
-                  layouts.set(room.id, { column: columns.length - 1 });
-                }
-              });
-
-              const totalColumns = Math.max(1, columns.length);
-
-              return validRooms.map((room) => {
-                const scheduledDate = new Date(room.scheduledAt!);
-                const eventHour = scheduledDate.getHours();
-                const eventMinute = scheduledDate.getMinutes();
-                const durationMinutes = (room.durationSeconds ?? 3600) / 60;
-
-                const top = (eventHour * 60 + eventMinute) * minuteHeight;
-                const height = Math.max(durationMinutes * minuteHeight, 24); // Minimum height
-
-                const colIndex = layouts.get(room.id)?.column || 0;
-                const leftPercent = (colIndex / totalColumns) * 100;
-                const widthPercent = 100 / totalColumns;
-
-                return (
-                  <Link
-                    key={room.id}
-                    href={`/${workspaceSlug}/rooms/${room.id}`}
-                    className="absolute rounded-[12px] border border-primary/20 bg-primary/10 hover:bg-primary/20 transition-all p-2 overflow-hidden flex flex-col group shadow-sm hover:shadow-md z-10"
-                    style={{
-                      top,
-                      height,
-                      left: `calc(0.5rem + ${leftPercent}%)`,
-                      width: `calc(${widthPercent}% - 0.5rem)`,
-                    }}
-                  >
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="font-semibold text-primary text-[12px] leading-tight truncate">
-                          {room.title}
-                        </span>
-                        {room.seriesId && <RepeatBadge compact />}
-                        {user?.id && room.hostId !== user.id && (
-                          <span className="shrink-0 rounded bg-amber-500/10 px-1 py-0.5 text-[8px] font-medium text-amber-600 border border-amber-500/20">
-                            Invited
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-primary/70 font-medium shrink-0">
-                        {scheduledDate.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}{" "}
-                        -
-                        {new Date(
-                          scheduledDate.getTime() + durationMinutes * 60000,
-                        ).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    {height >= 40 && (
-                      <div className="flex items-center gap-2 mt-1 text-[11px] text-primary/80 truncate">
-                        {/* Same set, same punctuation as the list chip. This block used to
-                            switch between "→" and ";" on the target count, so the two
-                            surfaces described the same room differently — and it repeated the
-                            source among its own targets for exactly the same reason. */}
-                        <span className="inline-flex items-center gap-1">
-                          {meetingLanguageSet(
-                            room.sourceLanguage,
-                            room.targetLanguages,
-                          ).map((language, index) => (
-                            <span key={language} className="inline-flex items-center gap-1">
-                              {index > 0 ? (
-                                <span className="text-primary/40">·</span>
-                              ) : null}
-                              <LanguageLabel value={language} showName={false} />
-                            </span>
-                          ))}
-                        </span>
-                        <span>•</span>
-                        <span className="font-mono">
-                          {room.translationRoomCode}
-                        </span>
-                      </div>
-                    )}
-                  </Link>
-                );
-              });
-            })()}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 import { useUIStore } from "@/stores/ui-store";
 
@@ -509,10 +292,15 @@ export default function MeetingsPageLinear() {
     router.push(`/join?code=${encodeURIComponent(trimmed)}`);
   }
   const [isGroupOpen, setIsGroupOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<
-    "active" | "scheduled" | "history" | "all"
-  >("active");
+  const [activeTab, setActiveTab] = useState<"active" | "history" | "all">(
+    "active",
+  );
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [today] = useState<Date>(() => new Date());
+  // Null means "no day chosen", which is not the same as "today": the tab's own filter runs
+  // untouched until somebody actually picks a day off the strip. Picking the selected day again
+  // clears it, so there is always a way back out of a day without hunting for today.
+  const [dayFilter, setDayFilter] = useState<Date | null>(null);
   // workspaceId is what lets the server answer this question for a workspace Owner/Admin at all:
   // without it the list falls back to host-or-participant-or-invitee and an Admin sees an empty
   // page for a workspace that has meetings in it. It also stops this workspace-scoped screen from
@@ -533,14 +321,6 @@ export default function MeetingsPageLinear() {
   // WT-251/WT-232: the calendar gave no hint which days hold anything, and it opens on today,
   // so a meeting booked for any other day was invisible in this tab — findable only under
   // "All". Marking the days that have meetings is what makes the tab navigable at all.
-  const daysWithMeetings = useMemo(
-    () =>
-      rooms
-        .filter((room) => room.scheduledAt)
-        .map((room) => new Date(room.scheduledAt as string))
-        .sort((a, b) => a.getTime() - b.getTime()),
-    [rooms],
-  );
 
   // The next day after the one being viewed that actually holds something, so an empty day can
   // point somewhere instead of being a dead end.
@@ -548,10 +328,6 @@ export default function MeetingsPageLinear() {
   // Measured against the selected day rather than against the clock: reading the current time
   // during render is impure, and "next after where you are" is the more useful answer anyway —
   // it works the same whether the user has paged backwards or forwards.
-  const selectedDayKey = startOfDay(selectedDate);
-  const nextUpcoming = daysWithMeetings.find(
-    (date) => startOfDay(date) > selectedDayKey,
-  );
 
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -573,6 +349,13 @@ export default function MeetingsPageLinear() {
     if (activeTab === "active") {
       const now = new Date();
       const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60000);
+      // A scheduled room needs a window on BOTH sides. The check used to be "starts within the
+      // next fifteen minutes" with no lower bound, so `scheduledAt <= now + 15min` was also true
+      // for every meeting whose time had already passed — a room booked for last week sat in
+      // Active forever, which is most of what made the tab meaningless. Two hours of grace after
+      // the hour keeps a meeting that is running late; older than that it was never started, and
+      // it belongs to its own day under Scheduled, not here.
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60000);
       return rooms.filter(
         (r) =>
           matchesSearch(r) &&
@@ -580,16 +363,16 @@ export default function MeetingsPageLinear() {
             r.status === "waiting" ||
             (r.status === "scheduled" &&
               (!r.scheduledAt ||
-                new Date(r.scheduledAt) <= fifteenMinsFromNow))),
+                (new Date(r.scheduledAt) <= fifteenMinsFromNow &&
+                  new Date(r.scheduledAt) >= twoHoursAgo)))),
       );
     }
-    if (activeTab === "scheduled") {
-      // WT-247: keyed off the day a room was scheduled for, not off its current status. The
-      // old filter also required status === "scheduled", so a meeting vanished from its own
-      // day in the calendar the moment it started. What belongs on a day is what was booked
-      // for it; the row already renders whatever state it has now.
+    // A day off the strip narrows whichever tab is open. It replaced the Scheduled TAB, and
+    // WT-247's reasoning still holds: what belongs to a day is what was BOOKED for it, not what
+    // its status happens to be now — the row renders its own state.
+    if (dayFilter) {
       return rooms.filter(
-        (r) => matchesSearch(r) && isScheduledOn(r, selectedDate),
+        (r) => matchesSearch(r) && isScheduledOn(r, dayFilter),
       );
     }
     if (activeTab === "history")
@@ -601,14 +384,14 @@ export default function MeetingsPageLinear() {
             r.status === "timeout"),
       );
     return rooms.filter(matchesSearch);
-  }, [rooms, activeTab, selectedDate, searchQuery]);
+  }, [rooms, activeTab, dayFilter, searchQuery]);
 
   return (
     <div className="flex flex-col h-full bg-surface-1">
       {/* View Tabs & Actions */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
-          {(["active", "scheduled", "history", "all"] as const).map((tab) => (
+          {(["active", "history", "all"] as const).map((tab) => (
             <div
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -666,57 +449,34 @@ export default function MeetingsPageLinear() {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {activeTab === "scheduled" && (
-          <div className="w-[300px] border-r border-border flex flex-col items-center py-6 px-4 overflow-y-auto bg-canvas/30 shrink-0">
-            <div className="w-full bg-surface-1 rounded-xl border border-border shadow-sm p-1">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
-                className="w-full"
-                modifiers={{ hasMeeting: daysWithMeetings }}
-                modifiersClassNames={{
-                  hasMeeting:
-                    "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary",
-                }}
-              />
-            </div>
-            <div className="mt-6 text-[13px] text-muted-foreground w-full px-1">
-              <p className="font-semibold text-foreground mb-1.5 flex items-center gap-2">
-                <CalendarIcon size={16} weight="duotone" />
-                {selectedDate.toLocaleDateString(undefined, {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
-              <p className="leading-relaxed">
-                {filteredRooms.length === 0
-                  ? "You have no meetings scheduled for this day."
-                  : `You have ${filteredRooms.length} meeting${filteredRooms.length === 1 ? "" : "s"} scheduled for this day.`}
-              </p>
-              {filteredRooms.length === 0 && nextUpcoming ? (
-                <button
-                  type="button"
-                  onClick={() => setSelectedDate(nextUpcoming)}
-                  className="mt-2 text-[13px] font-medium text-primary hover:text-primary-hover"
-                >
-                  Go to next meeting —{" "}
-                  {nextUpcoming.toLocaleDateString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </button>
-              ) : null}
-            </div>
-          </div>
-        )}
+      {/* Replaces the Scheduled tab. A permanent strip says which days have anything on them
+          without costing a click, which a tab could never do — and it is the same component the
+          home panel renders, so the two cannot disagree about which days are marked. */}
+      <div className="flex items-center gap-3 border-b border-border/40 px-4 pb-3 shrink-0">
+        <MeetingDayStrip
+          rooms={rooms}
+          selectedDate={selectedDate}
+          today={today}
+          onSelectDate={(day) => {
+            setSelectedDate(day);
+            setDayFilter((current) =>
+              current && startOfDay(current) === startOfDay(day) ? null : day,
+            );
+          }}
+        />
+        {dayFilter ? (
+          <button
+            type="button"
+            onClick={() => setDayFilter(null)}
+            className="text-[12px] font-medium text-primary hover:text-primary-hover"
+          >
+            Clear day
+          </button>
+        ) : null}
+      </div>
 
-        {activeTab === "scheduled" ? (
-          <DailyTimeline date={selectedDate} rooms={filteredRooms} />
-        ) : (
+      <div className="flex-1 flex overflow-hidden">
+        {(
           <div className="flex-1 overflow-y-auto">
             {/* Group Header */}
             <div
