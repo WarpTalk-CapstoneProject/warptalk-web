@@ -22,6 +22,9 @@ import type {
   RoomPreflightResponse,
   RecurrenceRequest,
   RecurrenceSummaryResponse,
+  SeriesDetail,
+  UpdateSeriesRequest,
+  UpdateSeriesResult,
 } from "@/types/translationRoom";
 
 type BackendRoom = Omit<TranslationRoomDto, "status" | "translationRoomType" | "targetLanguages"> & {
@@ -158,9 +161,33 @@ export const translationRoomService = {
     return { ...response, data: normalized };
   },
 
+  /**
+   * WT-327: the booking, its rule, and every occurrence the caller may see.
+   *
+   * Occurrences come back as ordinary rooms and are normalised as such — the series view renders
+   * each one with the same status vocabulary the meetings list uses, so a skipped Tuesday reads
+   * as "Cancelled" there exactly as it does anywhere else.
+   */
   async getSeries(seriesId: string) {
-    const response = await apiClient.get<RecurrenceSummaryResponse>(
+    const response = await apiClient.get<SeriesDetail & { occurrences: BackendRoom[] }>(
       API.translationRoomSeries.get(seriesId),
+    );
+
+    const normalized: SeriesDetail = {
+      ...response.data,
+      occurrences: response.data.occurrences.map((room) => normalizeRoom(room)),
+    };
+    return normalized;
+  },
+
+  /**
+   * WT-327: edit the BOOKING. The server applies it to the template and to every occurrence still
+   * ahead — meetings that already started keep what they ran with.
+   */
+  async updateSeries(seriesId: string, data: UpdateSeriesRequest) {
+    const response = await apiClient.patch<UpdateSeriesResult>(
+      API.translationRoomSeries.update(seriesId),
+      data,
     );
     return response.data;
   },
@@ -192,6 +219,14 @@ export const translationRoomService = {
      * workspace's meetings.
      */
     workspaceId?: string;
+    /**
+     * WT-327: collapse a repeating booking's occurrences into the ONE meeting the user booked.
+     *
+     * Send it from the meetings list, where a daily standup is one answer to "what meetings do I
+     * have?", not fourteen. Do NOT send it from the home day panel, where the occurrence IS the
+     * meeting and collapsing would empty every day but one.
+     */
+    groupBySeries?: boolean;
   }) {
     const response = await apiClient.get<TranslationRoomListResponse>(API.translationRooms.list, { params });
     return {

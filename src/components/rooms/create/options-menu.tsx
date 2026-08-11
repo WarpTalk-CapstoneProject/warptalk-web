@@ -14,9 +14,12 @@ import {
   type DailyRecurrenceDraft,
   defaultEndDate,
   describeDailyDraftProblem,
+  firstOccurrenceDate,
   toLocalDateString,
   validateDailyDraft,
 } from "@/lib/meeting/daily-recurrence";
+import { WEEKDAY_OPTIONS, isoWeekdayOf } from "@/lib/meeting/recurrence";
+import type { RecurrenceType } from "@/types/translationRoom";
 
 /**
  * The scheduling menu: a one-off date, or a daily rule.
@@ -56,6 +59,7 @@ export function OptionsMenu({
   const now = new Date();
   const isDaily = !!daily;
   const problem = daily ? validateDailyDraft(daily, now) : null;
+  const cadence: RecurrenceType = daily?.type ?? "DAILY";
 
   function toggleDaily() {
     if (!onDailyChange) return;
@@ -69,6 +73,50 @@ export function OptionsMenu({
       time: DEFAULT_DAILY_TIME,
       endDate: defaultEndDate(DEFAULT_DAILY_TIME, now),
     });
+  }
+
+  /**
+   * Switching cadence rewrites the rule's shape, and only the fields that belong to the new one
+   * survive. Carrying stale weekdays into a MONTHLY rule would send the server a field it refuses
+   * outright — and refusing rather than ignoring it is deliberate on both sides, because a rule
+   * the host can see but the server discards is the dead-switch failure this control replaced.
+   */
+  function changeCadence(next: RecurrenceType) {
+    if (!daily || !onDailyChange) return;
+
+    const firstDate = firstOccurrenceDate(daily.time, now);
+
+    onDailyChange({
+      time: daily.time,
+      endDate: daily.endDate,
+      type: next,
+      // Seeded from the start date so the panel opens on a rule that is already valid and already
+      // visible, rather than on an empty selection the host has to guess the meaning of.
+      byWeekdays: next === "WEEKLY" ? [isoWeekdayOf(firstDate)] : undefined,
+      byMonthDay: next === "MONTHLY" ? firstDate.getDate() : undefined,
+    });
+  }
+
+  function toggleWeekday(weekday: number) {
+    if (!daily || !onDailyChange) return;
+
+    const current = daily.byWeekdays ?? [];
+    const next = current.includes(weekday)
+      ? current.filter((day) => day !== weekday)
+      : [...current, weekday].sort((a, b) => a - b);
+
+    // Never down to nothing: an empty list means "the start date's weekday" to the server, so a
+    // host who unticked their last day would get a rule they did not choose and cannot see.
+    onDailyChange({ ...daily, byWeekdays: next.length > 0 ? next : current });
+  }
+
+  function changeMonthDay(value: string) {
+    if (!daily || !onDailyChange) return;
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+
+    onDailyChange({ ...daily, byMonthDay: Math.min(31, Math.max(1, Math.trunc(parsed))) });
   }
 
   function changeTime(next: string) {
@@ -112,7 +160,7 @@ export function OptionsMenu({
                 className="flex flex-1 cursor-pointer items-center gap-2 text-left text-[13px]"
               >
                 <Repeat weight="duotone" size={16} className="shrink-0" />
-                <span className="font-medium whitespace-nowrap text-ink">Daily</span>
+                <span className="font-medium whitespace-nowrap text-ink">Repeat</span>
               </button>
 
               {/* Beside the label, not behind a button that opens somewhere else. */}
@@ -146,6 +194,90 @@ export function OptionsMenu({
                 and how much that adds up to. */}
             {isDaily && (
               <div className="mt-0.5 flex flex-col gap-1.5 rounded-md bg-surface-1/60 px-2 py-2">
+                {/* How often, before until-when: the cadence changes what the rest of this panel
+                    even asks for, so it has to be the first thing decided. */}
+                <div className="flex items-center gap-1">
+                  {(["DAILY", "WEEKLY", "MONTHLY"] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      data-testid={`recurrence-type-${type.toLowerCase()}`}
+                      aria-pressed={cadence === type}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        changeCadence(type);
+                      }}
+                      className={`flex-1 cursor-pointer rounded-md border px-1.5 py-1 text-[11px] font-medium capitalize transition-colors ${
+                        cadence === type
+                          ? "border-transparent bg-ink text-canvas"
+                          : "border-border/60 bg-canvas text-ink-muted hover:text-ink"
+                      }`}
+                    >
+                      {type.toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+
+                {/* WEEKLY: which days. Nothing selected is not an empty rule — the server reads it
+                    as "the weekday the series starts on" — but leaving the host with no selected
+                    chip would make a real rule look like an unfinished one, so turning WEEKLY on
+                    seeds the start date's own weekday. */}
+                {cadence === "WEEKLY" && (
+                  <div className="flex items-center gap-0.5" data-testid="recurrence-weekdays">
+                    {WEEKDAY_OPTIONS.map((option) => {
+                      const selected = (daily.byWeekdays ?? []).includes(option.value);
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          aria-pressed={selected}
+                          aria-label={option.full}
+                          title={option.full}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleWeekday(option.value);
+                          }}
+                          className={`h-6 flex-1 cursor-pointer rounded border text-[10px] font-medium transition-colors ${
+                            selected
+                              ? "border-transparent bg-primary/15 text-primary"
+                              : "border-border/60 bg-canvas text-ink-muted hover:text-ink"
+                          }`}
+                        >
+                          {option.short.charAt(0)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* MONTHLY: which date. A month with fewer days simply has no meeting that month,
+                    which is what the line under it says — clamping the 31st to the 28th would move
+                    the meeting to a different day in every short month. */}
+                {cadence === "MONTHLY" && (
+                  <label className="flex items-center gap-2">
+                    <span className="flex-1 text-[12px] text-ink-muted">Day of month</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={31}
+                      data-testid="recurrence-month-day-input"
+                      aria-label="Day of the month"
+                      value={daily.byMonthDay ?? ""}
+                      placeholder="1–31"
+                      onChange={(e) => changeMonthDay(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-7 w-[124px] rounded-md border border-border/60 bg-canvas px-1.5 text-[12px] tabular-nums text-ink focus:ring-1 focus:ring-ink/20 focus:outline-none"
+                    />
+                  </label>
+                )}
+
+                {cadence === "MONTHLY" && (daily.byMonthDay ?? 0) > 28 && (
+                  <p className="text-[11px] leading-snug text-ink-muted">
+                    Months without a {daily.byMonthDay}
+                    {(daily.byMonthDay ?? 0) === 31 ? "st" : "th"} are skipped.
+                  </p>
+                )}
+
                 <label className="flex items-center gap-2">
                   <span className="flex-1 text-[12px] text-ink-muted">Repeat until</span>
                   <input

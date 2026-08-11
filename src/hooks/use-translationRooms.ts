@@ -28,13 +28,24 @@ export function useTranslationRooms(params?: {
   pageSize?: number;
   /** Pass the active workspace on any workspace-scoped screen. See `translationRoomService.list`. */
   workspaceId?: string;
+  /**
+   * WT-327: one row per repeating BOOKING instead of one per occurrence. See
+   * `translationRoomService.list` for which screens should ask for it — the day panel and the day
+   * strip must not, because they are asking about a date, and a booking has no single date.
+   */
+  groupBySeries?: boolean;
+  /** Off for a query a screen keeps mounted but is not currently showing. */
+  enabled?: boolean;
 }) {
+  const { enabled = true, ...listParams } = params ?? {};
+
   return useQuery({
-    queryKey: [...MEETING_KEY, params],
+    queryKey: [...MEETING_KEY, listParams],
     queryFn: async () => {
-      const { data } = await translationRoomService.list(params);
+      const { data } = await translationRoomService.list(listParams);
       return data;
     },
+    enabled,
   });
 }
 

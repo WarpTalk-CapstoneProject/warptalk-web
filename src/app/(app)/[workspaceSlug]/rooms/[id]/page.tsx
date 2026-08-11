@@ -36,8 +36,12 @@ import {
   Star,
   StopCircle,
   Strikethrough,
+  Repeat,
   Underline as UnderlineIcon,
 } from "lucide-react";
+// Aliased: this file already imports Tiptap's `Link` extension, and the editor's Link and the
+// router's Link are two very different things to have under one name.
+import NextLink from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   useCallback,
@@ -378,6 +382,19 @@ export default function RoomInformationPage() {
                       </button>
                     ) : null}
                   </div>
+                  {/* WT-327: an occurrence is an ordinary meeting, and this page treats it as
+                      one — but the person looking at it may have arrived expecting the whole
+                      repeating booking. One line back to it, so "where are the other dates?"
+                      has an answer on the page that raised the question. */}
+                  {room.seriesId ? (
+                    <NextLink
+                      href={`/${workspaceSlug}/series/${room.seriesId}`}
+                      className="flex w-fit items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-[12px] font-medium text-primary transition-colors hover:bg-primary/15"
+                    >
+                      <Repeat size={12} aria-hidden />
+                      One of a repeating meeting — see the whole schedule
+                    </NextLink>
+                  ) : null}
                   <MeetingPropertiesPills
                     room={room}
                     apiParticipants={apiParticipants}
