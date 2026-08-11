@@ -18,7 +18,11 @@ import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { TranslationRoomDto } from "@/types/translationRoom";
+import type { SeriesListSummary, TranslationRoomDto } from "@/types/translationRoom";
+import {
+  describeRecurrenceWithTime,
+  recurrenceBadgeLabel,
+} from "@/lib/meeting/recurrence";
 import { LanguageLabel } from "@/components/language/language-label";
 import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
@@ -65,11 +69,27 @@ const ROOM_FILTER_WIDTH_CLASS = {
 /**
  * WT-327: marks a room that is one occurrence of a recurring booking.
  */
-function RepeatBadge({ compact = false }: { compact?: boolean }) {
+function RepeatBadge({
+  compact = false,
+  series,
+}: {
+  compact?: boolean;
+  /**
+   * The booking behind this row, when the list was grouped. Without it the badge can only say
+   * that the meeting repeats — which is all this row knows on an ungrouped list, and saying
+   * "Daily" there was a guess that happened to be right while DAILY was the only cadence.
+   */
+  series?: SeriesListSummary | null;
+}) {
+  const label = series ? recurrenceBadgeLabel(series.type) : "Repeats";
+  const description = series
+    ? describeRecurrenceWithTime(series)
+    : "Part of a repeating schedule";
+
   return (
     <span
       data-testid="recurring-room-badge"
-      title="Part of a daily repeating schedule"
+      title={description}
       className={
         compact
           ? "shrink-0 inline-flex items-center gap-0.5 rounded bg-primary/10 px-1 py-0.5 text-[8px] font-medium text-primary border border-primary/20"
@@ -77,8 +97,8 @@ function RepeatBadge({ compact = false }: { compact?: boolean }) {
       }
     >
       <Repeat weight="bold" size={compact ? 8 : 10} aria-hidden />
-      Daily
-      <span className="sr-only">This meeting repeats daily</span>
+      {label}
+      <span className="sr-only">{description}</span>
     </span>
   );
 }
@@ -131,9 +151,16 @@ function LinearRow({
     user,
   );
 
+  // WT-327: a grouped row IS the booking, so it opens the booking. Following it to one occurrence
+  // would land the user on a single Tuesday and leave them to work out that the other thirteen
+  // exist — which is the shape of the bug this replaced.
+  const href = room.series
+    ? `/${workspaceSlug}/series/${room.series.seriesId}`
+    : `/${workspaceSlug}/rooms/${room.id}`;
+
   return (
     <Link
-      href={`/${workspaceSlug}/rooms/${room.id}`}
+      href={href}
       // @container, not a viewport breakpoint: what squeezes this row is the Properties panel
       // opening beside it, which takes 260px away while the window stays exactly the same size.
       // A `lg:` rule cannot see that and would keep every chip at a width the row no longer has.
@@ -171,7 +198,15 @@ function LinearRow({
         <span className="text-foreground font-medium truncate block">
           {room.title}
         </span>
-        {room.seriesId && <RepeatBadge />}
+        {room.seriesId && <RepeatBadge series={room.series} />}
+        {room.series && room.series.occurrenceCount > 1 && (
+          <span
+            className="hidden @[560px]:inline shrink-0 text-[11px] text-muted-foreground"
+            title={`${room.series.occurrenceCount} meetings in this schedule`}
+          >
+            {room.series.occurrenceCount} meetings
+          </span>
+        )}
         {user?.id && room.hostId !== user.id && (
           <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-500/20">
             Invited
@@ -310,6 +345,22 @@ export default function MeetingsPageLinear() {
     status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
     workspaceId: activeWorkspaceId ?? undefined,
   });
+
+  // WT-327: the same meetings, asked for as BOOKINGS — a daily standup collapses to the one
+  // meeting the user booked, carrying its rule and how many occurrences it stands for.
+  //
+  // A second query rather than a replacement, because the two answers are both needed on this
+  // page and neither can be derived from the other. The day strip has to mark every day that
+  // holds a meeting, and a collapsed row knows only its own date; the list wants one row, and an
+  // ungrouped payload has no rule to render. React Query caches both, and the grouped one is only
+  // fetched by the tabs that show it.
+  const groupedList = useTranslationRooms({
+    pageSize: 100,
+    status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
+    workspaceId: activeWorkspaceId ?? undefined,
+    groupBySeries: true,
+    enabled: activeTab !== "active",
+  });
   const setCreateRoomModalOpen = useUIStore(
     (state) => state.setCreateRoomModalOpen,
   );
@@ -328,6 +379,17 @@ export default function MeetingsPageLinear() {
   // Measured against the selected day rather than against the clock: reading the current time
   // during render is impure, and "next after where you are" is the more useful answer anyway —
   // it works the same whether the user has paged backwards or forwards.
+
+  /**
+   * WT-327: which of the two answers this view is showing.
+   *
+   * Grouped when the question is "what meetings do I have?" — the booking is the answer, and
+   * fourteen rows for one standup was the defect. Ungrouped when the question is about a moment:
+   * the Active tab is "what is live or starting now", and a day off the strip is "what is on
+   * Thursday". Neither of those has a booking as an answer; both have a meeting.
+   */
+  const isGroupedView = activeTab !== "active" && !dayFilter;
+  const rowSource = isGroupedView ? (groupedList.data?.rooms ?? []) : rooms;
 
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -376,15 +438,15 @@ export default function MeetingsPageLinear() {
       );
     }
     if (activeTab === "history")
-      return rooms.filter(
+      return rowSource.filter(
         (r) =>
           matchesSearch(r) &&
           (r.status === "ended" ||
             r.status === "cancelled" ||
             r.status === "timeout"),
       );
-    return rooms.filter(matchesSearch);
-  }, [rooms, activeTab, dayFilter, searchQuery]);
+    return rowSource.filter(matchesSearch);
+  }, [rooms, rowSource, activeTab, dayFilter, searchQuery]);
 
   return (
     <div className="flex flex-col h-full bg-surface-1">

@@ -9,7 +9,17 @@
  * end date, and enforces the maximum span. Everything here exists so the host can SEE what they
  * are about to create before they press the button, which is the difference between this control
  * and the dead switch it replaces.
+ *
+ * Named for DAILY because that was the only cadence when it was written. It now covers all three;
+ * the file keeps its name so the change stayed a diff about behaviour rather than a rename across
+ * every import of it.
  */
+
+// Relative, with the extension, and a type-only import for the rest: these tests run under
+// `node --experimental-strip-types`, which has no bundler and cannot resolve the "@/" alias at
+// runtime. A value imported through the alias here would pass typecheck and fail every test.
+import { describeRecurrenceSentence } from "./recurrence.ts";
+import type { RecurrenceType } from "@/types/translationRoom";
 
 /** Mirrors the backend's RecurrenceLimits.DefaultDurationDays. */
 export const DEFAULT_DAILY_DURATION_DAYS = 30;
@@ -25,6 +35,16 @@ export interface DailyRecurrenceDraft {
   time: string;
   /** "yyyy-MM-dd", inclusive. */
   endDate: string;
+  /**
+   * Which cadence this draft is. Optional and defaulting to DAILY so every existing caller and
+   * every existing test keeps its meaning: this module was daily-only when it was written, and
+   * the daily answers below must not change now that it is not.
+   */
+  type?: RecurrenceType;
+  /** WEEKLY only: ISO weekdays, Monday 1 … Sunday 7. Empty falls back to the start date's weekday. */
+  byWeekdays?: number[];
+  /** MONTHLY only: 1–31. Absent falls back to the start date's own day. */
+  byMonthDay?: number;
 }
 
 /**
@@ -97,18 +117,88 @@ export function defaultEndDate(time: string, now: Date): string {
   return toLocalDateString(start);
 }
 
-/** How many meetings this draft will produce, inclusive of both ends. 0 when the draft is unusable. */
-export function occurrenceCount(draft: DailyRecurrenceDraft, now: Date): number {
-  if (!isValidTime(draft.time)) return 0;
+/**
+ * Every date this draft will produce, in order.
+ *
+ * Mirrors RecurrenceScheduleCalculator on the server, including the one rule that surprises
+ * people: a MONTHLY draft SKIPS a month too short for its day, so "the 31st" has no February.
+ * The server is still the authority — this exists so the host can see what they are about to
+ * create, and a preview that quietly disagreed with the result would be worse than no preview.
+ */
+export function occurrenceDates(draft: DailyRecurrenceDraft, now: Date): Date[] {
+  if (!isValidTime(draft.time)) return [];
+
   const end = parseLocalDate(draft.endDate);
-  if (!end) return 0;
+  if (!end) return [];
+  end.setHours(0, 0, 0, 0);
 
   const start = firstOccurrenceDate(draft.time, now);
   start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
+  if (end.getTime() < start.getTime()) return [];
 
-  const days = Math.floor((end.getTime() - start.getTime()) / 86_400_000);
-  return days < 0 ? 0 : days + 1;
+  const dates: Date[] = [];
+  const type = draft.type ?? "DAILY";
+  // Well past any span the server accepts (365 days), so a malformed draft cannot spin here.
+  const guard = MAX_DAILY_DURATION_DAYS + 2;
+
+  if (type === "WEEKLY") {
+    const weekdays = normalizeWeekdays(draft.byWeekdays) ?? [isoWeekday(start)];
+    // Anchored on the Monday of the start's week, matching the server: the fortnight boundary
+    // must not depend on which of the chosen days the series happens to begin on.
+    const weekStart = new Date(start);
+    weekStart.setDate(weekStart.getDate() - (isoWeekday(start) - 1));
+
+    for (let week = 0; week < guard && weekStart.getTime() <= end.getTime(); week += 1) {
+      for (const weekday of weekdays) {
+        const date = new Date(weekStart);
+        date.setDate(date.getDate() + (weekday - 1));
+        if (date.getTime() < start.getTime() || date.getTime() > end.getTime()) continue;
+        dates.push(date);
+      }
+      weekStart.setDate(weekStart.getDate() + 7);
+    }
+
+    return dates;
+  }
+
+  if (type === "MONTHLY") {
+    const dayOfMonth = draft.byMonthDay ?? start.getDate();
+    const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+
+    for (let month = 0; month < guard && monthStart.getTime() <= end.getTime(); month += 1) {
+      const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+      if (dayOfMonth <= daysInMonth) {
+        const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), dayOfMonth);
+        if (date.getTime() >= start.getTime() && date.getTime() <= end.getTime()) dates.push(date);
+      }
+      monthStart.setMonth(monthStart.getMonth() + 1);
+    }
+
+    return dates;
+  }
+
+  for (const date = new Date(start); date.getTime() <= end.getTime(); date.setDate(date.getDate() + 1)) {
+    dates.push(new Date(date));
+    if (dates.length > guard) break;
+  }
+
+  return dates;
+}
+
+/** ISO weekday (Monday 1 … Sunday 7), which `getDay()` numbers differently. */
+function isoWeekday(date: Date): number {
+  return ((date.getDay() + 6) % 7) + 1;
+}
+
+function normalizeWeekdays(weekdays?: number[]): number[] | null {
+  if (!weekdays || weekdays.length === 0) return null;
+  const valid = [...new Set(weekdays.filter((day) => day >= 1 && day <= 7))].sort((a, b) => a - b);
+  return valid.length > 0 ? valid : null;
+}
+
+/** How many meetings this draft will produce, inclusive of both ends. 0 when the draft is unusable. */
+export function occurrenceCount(draft: DailyRecurrenceDraft, now: Date): number {
+  return occurrenceDates(draft, now).length;
 }
 
 export type DailyDraftProblem =
@@ -148,16 +238,26 @@ export function describeDailyDraftProblem(problem: DailyDraftProblem): string {
   }
 }
 
-/** "Every day at 08:00 · 30 meetings · 7 Aug – 5 Sep" — what the host is about to create. */
+/**
+ * "Weekly on Mon, Wed at 08:00 · 8 meetings · Aug 10 – Sep 2" — what the host is about to create.
+ *
+ * The range is the FIRST and LAST dates the rule actually produces, not the draft's own end date.
+ * A monthly booking ending on the 30th whose last meeting is the 15th must not claim a meeting on
+ * the 30th, and that gap is exactly where a preview loses the host's trust.
+ */
 export function describeDailySchedule(draft: DailyRecurrenceDraft, now: Date): string {
-  const count = occurrenceCount(draft, now);
-  if (count <= 0) return "";
+  const dates = occurrenceDates(draft, now);
+  if (dates.length === 0) return "";
 
-  const start = firstOccurrenceDate(draft.time, now);
-  const end = parseLocalDate(draft.endDate);
   const format = (date: Date) =>
     new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
 
-  const range = end ? `${format(start)} – ${format(end)}` : format(start);
-  return `Every day at ${draft.time} · ${count} meeting${count === 1 ? "" : "s"} · ${range}`;
+  const range =
+    dates.length > 1 ? `${format(dates[0])} – ${format(dates[dates.length - 1])}` : format(dates[0]);
+
+  return `${describeRecurrenceSentence({
+    type: draft.type ?? "DAILY",
+    byWeekdays: draft.byWeekdays,
+    byMonthDay: draft.byMonthDay,
+  })} at ${draft.time} · ${dates.length} meeting${dates.length === 1 ? "" : "s"} · ${range}`;
 }
