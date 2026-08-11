@@ -15,7 +15,13 @@
 
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Brain, FileText, Microphone } from "@phosphor-icons/react/dist/ssr";
+import {
+  Brain,
+  BookOpen,
+  Buildings,
+  FileText,
+  Sparkle,
+} from "@phosphor-icons/react/dist/ssr";
 
 import {
   AdminFilterTabs,
@@ -27,53 +33,60 @@ import { Button } from "@/components/ui/button";
 import { useWorkspaceKnowledge } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { FACT_CATEGORIES } from "@/types/workspace-knowledge";
-import type { WorkspaceKnowledgeChunkDto } from "@/types/workspace-knowledge";
+import type {
+  KnowledgeSourceType,
+  WorkspaceKnowledgeChunkDto,
+} from "@/types/workspace-knowledge";
 
-type SourceTab = "all" | "document" | "transcript";
+type SourceTab = "all" | KnowledgeSourceType;
 
+/**
+ * The "Meetings" tab is meeting SUMMARIES, not raw transcript lines — segments are still
+ * indexed and still searchable by WarpBot, they are simply not what a person means by "what
+ * does this workspace know".
+ *
+ * No "Workspace" tab yet: the API accepts `workspace_context`, but nothing writes it. A
+ * workspace has a name, a slug, and a settings object of toggles — no prose describing what
+ * it is — so the tab would be permanently empty until a workspace description exists to
+ * index. An empty tab reads as a broken feature, so it is absent rather than dead.
+ */
 const SOURCE_TABS = [
   { value: "all", label: "Everything" },
   { value: "document", label: "Documents" },
-  { value: "transcript", label: "Meetings" },
+  { value: "meeting_summary", label: "Meetings" },
+  { value: "glossary", label: "Glossary" },
 ] as const;
 
 /** Cursors for pages already visited, so Back does not have to re-scroll from the start. */
 type CursorStack = (string | null)[];
 
-function formatOffset(startMs: number | null): string | null {
-  if (startMs == null) return null;
-  const totalSeconds = Math.floor(startMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
+const SOURCE_PRESENTATION: Record<
+  string,
+  { icon: typeof FileText; fallback: string }
+> = {
+  document: { icon: FileText, fallback: "Document" },
+  meeting_summary: { icon: Sparkle, fallback: "Meeting summary" },
+  glossary: { icon: BookOpen, fallback: "Glossary term" },
+  workspace_context: { icon: Buildings, fallback: "Workspace context" },
+};
 
 function SourceCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
-  if (chunk.sourceType === "transcript") {
-    const offset = formatOffset(chunk.startMs);
-    return (
-      <div className="flex items-start gap-2 min-w-0">
-        <Microphone size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
-        <div className="min-w-0">
-          <div className="truncate text-[12px] text-ink">
-            {chunk.speakerName || "Meeting transcript"}
-          </div>
-          {offset ? (
-            <div className="text-[10px] tabular-nums text-ink-subtle">at {offset}</div>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
+  // An unknown source type is rendered as itself rather than hidden or mislabelled: a
+  // producer this page has not been taught about is a real row, and showing its raw type is
+  // more honest — and more debuggable — than calling it a document.
+  const presentation = SOURCE_PRESENTATION[chunk.sourceType] ?? {
+    icon: Brain,
+    fallback: chunk.sourceType,
+  };
+  const Icon = presentation.icon;
+  const name = chunk.sourceTitle || chunk.documentName || presentation.fallback;
 
   return (
     <div className="flex items-start gap-2 min-w-0">
-      <FileText size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+      <Icon size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
       <div className="min-w-0">
-        <div className="truncate text-[12px] text-ink">
-          {chunk.documentName || "Document"}
-        </div>
-        {chunk.chunkIndex != null ? (
+        <div className="truncate text-[12px] text-ink">{name}</div>
+        {chunk.sourceType === "document" && chunk.chunkIndex != null ? (
           <div className="text-[10px] tabular-nums text-ink-subtle">
             chunk {chunk.chunkIndex}
           </div>
@@ -143,7 +156,7 @@ export default function WorkspaceKnowledgePage() {
         eyebrow="Workspace knowledge"
         eyebrowIcon={<Brain size={13} weight="bold" />}
         title="Knowledge"
-        description="Everything WarpTalk has indexed from this workspace's documents and meetings — the text that was embedded, and the fact drawn from it."
+        description="The durable knowledge WarpTalk holds for this workspace — uploaded documents, meeting summaries and glossary terms, with the fact drawn from each. Raw transcript lines stay searchable by WarpBot but are not listed here."
         actions={
           <Button
             variant="outline"
@@ -211,7 +224,7 @@ export default function WorkspaceKnowledgePage() {
           <div className="px-5 py-12 text-center">
             <p className="text-[13px] text-ink">Nothing indexed yet.</p>
             <p className="mt-1 text-[12px] text-ink-muted">
-              Upload a document or hold a meeting with transcription on, and what the system
+              Upload a document or finish a meeting so it gets a summary, and what the system
               keeps will appear here.
             </p>
           </div>
@@ -278,10 +291,11 @@ export default function WorkspaceKnowledgePage() {
 
       {items.length > 0 && !hasFacts ? (
         // Say why the column is empty rather than letting an owner conclude extraction is
-        // broken. Everything indexed before the fact extractor shipped has none.
+        // broken. Facts are extracted at index time, so anything stored before the extractor
+        // shipped has none, and a workspace that has turned off external AI never will.
         <p className="mt-3 text-[11px] text-ink-subtle">
-          These rows were indexed before facts were extracted. Re-upload a document to see
-          facts for it.
+          No facts on these rows. They were indexed before fact extraction, or this workspace
+          has external AI processing turned off — re-upload a document to extract facts for it.
         </p>
       ) : null}
 
