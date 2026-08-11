@@ -153,11 +153,14 @@ assert.match(
 // and the source was being listed among its own targets besides. Both surfaces that show
 // languages go through one function, because when they each spelled the rule out they drifted
 // into punctuating it differently ("→" here, ";" there).
-assert.equal(
+// Was: two call sites, the list chip and the calendar block. The Scheduled tab's calendar and
+// day timeline are gone — a permanent day strip replaced them — so there is one consumer now.
+// What the assertion is actually for is that nothing derives a meeting's languages by hand.
+assert.strictEqual(
   (roomsList.match(/meetingLanguageSet\(/g) ?? []).length,
-  2,
-  "Both the list chip and the calendar block must read the meeting's languages from meetingLanguageSet.",
-);
+  1,
+  "The list chip must read the meeting's languages from meetingLanguageSet, never by hand.",
+)
 // Comments stripped first: the arrow is still NAMED in the comment explaining why it went, and
 // asserting on the raw character would make that explanation illegal to write down.
 const roomsListCode = roomsList

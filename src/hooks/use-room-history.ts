@@ -1,10 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
-import { roomHistoryService } from "@/services/room-history.service";
+import { roomHistoryService, ROOM_HISTORY_PAGE_SIZE } from "@/services/room-history.service";
+import { shouldPollRoomHistory } from "@/lib/meeting/room-history-mapping";
 import type { RoomArtifactStatus, RoomHistoryLoadState } from "@/types/roomHistory";
+
+/**
+ * How often to re-ask while something is still being produced. The summary artifact lands
+ * roughly 40s after a meeting ends, so a 10s poll surfaces it without a manual reload while
+ * staying cheap. Stops as soon as nothing is generating — see shouldPollRoomHistory.
+ */
+const POLL_INTERVAL_MS = 10_000;
 
 type RoomHistoryOptions = {
   state?: Exclude<RoomHistoryLoadState, "loading">;
   artifactStatus?: RoomArtifactStatus;
+  /** 1-based. */
+  page?: number;
+  pageSize?: number;
+  status?: "ended" | "cancelled";
+  search?: string;
 };
 
 /**
@@ -18,13 +31,18 @@ function roomHistoryQuery(workspaceId: string | null, options?: RoomHistoryOptio
   return {
     // Kept on one line and workspace-first on purpose: check-transcript-workspace-isolation
     // reads this shape, and the shape is the guarantee — one workspace's history can never
-    // be served from another's cache entry.
-    queryKey: ["room-history", workspaceId, options?.state ?? "ready", options?.artifactStatus ?? "all"] as const,
+    // be served from another's cache entry. The paging and filter terms are appended AFTER
+    // the workspace for the same reason: they narrow a workspace's cache entry, never cross it.
+    queryKey: ["room-history", workspaceId, options?.state ?? "ready", options?.artifactStatus ?? "all", options?.status ?? "all", options?.search?.trim() ?? "", options?.page ?? 1, options?.pageSize ?? ROOM_HISTORY_PAGE_SIZE] as const,
     queryFn: () =>
       roomHistoryService.listEndedRooms({
         workspaceId: workspaceId!,
         state: options?.state,
         artifactStatus: options?.artifactStatus,
+        page: options?.page,
+        pageSize: options?.pageSize,
+        status: options?.status,
+        search: options?.search,
       }),
   };
 }
@@ -33,6 +51,11 @@ export function useRoomHistory(workspaceId: string | null, options?: RoomHistory
   return useQuery({
     ...roomHistoryQuery(workspaceId, options),
     enabled: Boolean(workspaceId),
+    // A meeting's summary and recording are produced after it ends, so the first load of the
+    // archive routinely shows work in progress. Without this the page sat on "generating"
+    // until somebody reloaded, which reads as broken rather than as pending.
+    refetchInterval: (query) =>
+      shouldPollRoomHistory(query.state.data?.rooms ?? []) ? POLL_INTERVAL_MS : false,
   });
 }
 

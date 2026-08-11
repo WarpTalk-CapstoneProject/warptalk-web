@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { MeetingDayPanel } from "@/components/home/meeting-day-panel";
 
 type QuickAction = {
   title: string;
@@ -166,7 +167,12 @@ export default function WorkspaceHomePage() {
   return (
     <div className="min-h-full bg-surface-1 px-4 py-5 text-ink sm:px-5 lg:px-6">
       <div className="mx-auto flex w-full max-w-[1220px] flex-col gap-3 pb-8">
-        <div>
+        {/* First, because it is the only thing here that answers a question rather than
+            offering a destination: "what am I in today?". The shortcut grid below used to be
+            the whole page, so the answer took a click to reach. */}
+        <MeetingDayPanel />
+
+        <div className="mt-2">
           <h2 className="text-[15px] font-semibold text-ink">Quick jumps</h2>
           <p className="mt-1 text-[12px] text-ink-muted">Shortcuts styled from the WarpTalk token system.</p>
         </div>

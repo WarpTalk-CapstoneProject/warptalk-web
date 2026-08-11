@@ -146,11 +146,16 @@ assert.match(
   /room\.seriesId && <RepeatBadge/,
   "The meetings list must mark an occurrence of a repeating booking.",
 );
+// Was: the day timeline's compact RepeatBadge. That timeline is gone with the Scheduled tab —
+// browsing days is a permanent strip above the ordinary list now, so a repeating occurrence is
+// marked by the list row's own badge, asserted just above. The question the host came to answer
+// ("is tomorrow's 8am there?") is still answered on the day they pick; it is simply the same row
+// that answers it.
 assert.match(
   roomsPageSource,
-  /room\.seriesId && <RepeatBadge compact/,
-  "The day timeline must mark an occurrence of a repeating booking too — it is the surface a host checks 'is tomorrow's 8am there?' on.",
-);
+  /<MeetingDayStrip/,
+  "Days are browsed from the strip now, so the meetings list must render it.",
+)
 
 // ── Stopping a series is possible at all ────────────────────────────────────
 

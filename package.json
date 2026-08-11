@@ -54,6 +54,7 @@
     "test:notification-center": "node scripts/check-notification-center-contract.mjs",
     "test:admin-portal": "node scripts/check-admin-portal-contract.mjs",
     "test:admin-workspaces": "node scripts/check-admin-workspaces-contract.mjs",
+    "test:admin-knowledge": "node scripts/check-admin-knowledge-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/knowledge/__tests__/knowledge-view.test.ts",
     "test:pinned-participant": "node scripts/check-pinned-participant-contract.mjs",
     "test:languages": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/languages.test.ts",
     "test:room-occupancy": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/room-occupancy.test.ts",
@@ -77,13 +78,15 @@
     "test:single-refresher": "node scripts/check-single-token-refresher-contract.mjs",
     "test:no-module-side-effects": "node scripts/check-no-module-side-effects.mjs",
     "test:language-profile": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/language-profile.test.ts",
+    "test:meeting-day": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-day.test.ts",
     "test:meeting-language-set": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/meeting-language-set.test.ts",
     "test:workspace-routes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/workspace-routes.test.ts",
     "test:auto-recording": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/auto-recording.test.ts",
     "test:mention-menu": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/mention-menu.test.ts",
     "test:chat-sender": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/chat-sender.test.ts",
     "test:meeting-record": "node scripts/check-meeting-record-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-artifacts.test.ts src/lib/meeting/__tests__/meeting-summary.test.ts",
-    "test:hooks-early-return": "node scripts/check-hooks-before-early-return.mjs"
+    "test:hooks-early-return": "node scripts/check-hooks-before-early-return.mjs",
+    "test:room-history-mapping": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/room-history-mapping.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

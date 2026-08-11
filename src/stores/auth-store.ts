@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type { UserDto } from "@/types/auth";
 import {
   clearSessionCookies,
+  hasRedeemableSession,
   isLiveAccessToken,
   recordSessionTeardown,
 } from "@/lib/auth/session-cookie";
@@ -14,7 +15,7 @@ import {
 const AUTH_STORAGE_KEY = "warptalk-auth";
 
 /**
- * Tell the server the refresh token is spent.
+ * Tell the server the session is over.
  *
  * Nothing in the app did this. `authService.logout()` had exactly one caller,
  * `useLogout()` in hooks/use-auth.ts, and that hook had no callers at all —
@@ -23,19 +24,23 @@ const AUTH_STORAGE_KEY = "warptalk-auth";
  * seven days: signing out cleared the browser and left the credential fully
  * redeemable by anyone who had a copy of it.
  *
+ * The token itself is no longer passed, because this side can no longer read
+ * it: it lives in the HttpOnly `warptalk_refresh` cookie. The request carries
+ * the cookie instead, and the server falls back to it when the body is empty.
+ * The previous version guarded on a JS-readable refresh token being present,
+ * which after that move was never true — so this had silently gone back to
+ * never revoking anything.
+ *
  * Best effort, and deliberately so. A failed revoke must never keep the user
  * signed in — the local teardown runs regardless, and the request is dispatched
  * before it. The import is dynamic to keep the axios client out of this
  * module's import cycle (lib/api/client.ts imports this store).
  */
-function revokeRefreshTokenOnServer(
-  refreshToken: string | null,
-  accessToken: string | null,
-) {
-  if (typeof window === "undefined" || !refreshToken) return;
+function revokeSessionOnServer(accessToken: string | null) {
+  if (typeof window === "undefined") return;
 
   void import("@/services/auth.service")
-    .then(({ authService }) => authService.logout({ refreshToken }, accessToken))
+    .then(({ authService }) => authService.logout(accessToken))
     .catch(() => {
       // Swallowed on purpose. The server may be unreachable, the access token
       // may already have expired, or the token may already be revoked. None of
@@ -46,12 +51,11 @@ function revokeRefreshTokenOnServer(
 interface AuthState {
   user: UserDto | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
- 
+
   setUser: (user: UserDto) => void;
-  setTokens: (accessToken: string, refreshToken: string) => void;
-  login: (user: UserDto, accessToken: string, refreshToken: string) => void;
+  setTokens: (accessToken: string) => void;
+  login: (user: UserDto, accessToken: string) => void;
   logout: () => void;
   updateUser: (updates: Partial<UserDto>) => void;
 }
@@ -68,13 +72,11 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
- 
+
       setUser: (user) => set({ user }),
-      setTokens: (accessToken, refreshToken) =>
-        set({ accessToken, refreshToken }),
-      login: (user, accessToken, refreshToken) => {
+      setTokens: (accessToken) => set({ accessToken }),
+      login: (user, accessToken) => {
         // Before the new identity is installed, not after. Anything still cached at this
         // point was fetched as somebody else, and this is the last instant at which nothing
         // is subscribed to it yet.
@@ -85,16 +87,14 @@ export const useAuthStore = create<AuthState>()(
         // an unredeemable refresh token, a sign-out in another tab, a hard refresh — are
         // exactly the paths that leave no previous user id to compare against.
         resetSessionScopedStateOnLogin();
-        set({ user, accessToken, refreshToken, isAuthenticated: true });
+        set({ user, accessToken, isAuthenticated: true });
       },
       logout: () => {
-        // Before anything is cleared, while both credentials still exist: tell
-        // the server the refresh token is spent. Fire-and-forget — the teardown
-        // below runs whether or not this succeeds, because a sign-out that can
-        // fail is not a sign-out.
+        // Before anything is cleared, while the cookies are still in the jar: tell the server
+        // the session is spent. Fire-and-forget — the teardown below runs whether or not this
+        // succeeds, because a sign-out that can fail is not a sign-out.
         if (!replayingRemoteSignOut) {
-          const { accessToken, refreshToken } = get();
-          revokeRefreshTokenOnServer(refreshToken, accessToken);
+          revokeSessionOnServer(get().accessToken);
         }
 
         recordSessionTeardown(
@@ -108,7 +108,6 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           accessToken: null,
-          refreshToken: null,
           isAuthenticated: false,
         });
         // The auth state is only the smallest part of what identifies the departing account.
@@ -126,7 +125,6 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
       // localStorage outlives the tokens in it. A persisted `isAuthenticated: true` around a
@@ -136,18 +134,25 @@ export const useAuthStore = create<AuthState>()(
       // An expired access token on its own is not a dead session — the refresh token
       // outlives it by days and the client redeems it silently — so this only discards state
       // when there is nothing left to refresh with.
+      //
+      // "Nothing left" is the session marker, not a stored refresh token. The refresh token
+      // moved into an HttpOnly cookie that this side cannot read, so the old
+      // `state.refreshToken` test could only ever be false: closing the browser for half an
+      // hour and coming back was enough to wipe a session the server was still perfectly
+      // willing to renew, and clearSessionCookies() cannot even reach the HttpOnly cookie it
+      // was throwing away. The marker is written beside it with the same lifetime for exactly
+      // this question. Passing null keeps the access token out of it — here an expired access
+      // token is the case being judged, so it cannot also be the evidence.
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        if (isLiveAccessToken(state.accessToken) || state.refreshToken) return;
+        if (isLiveAccessToken(state.accessToken) || hasRedeemableSession(null)) return;
         if (!state.user && !state.accessToken && !state.isAuthenticated) return;
 
-        // The one that has never been observed firing and is the prime suspect: it means
-        // localStorage came back with no live access token AND no refresh token at all.
+        // No live access token AND no session marker.
         recordSessionTeardown("rehydrate-nothing-to-refresh-with");
         clearSessionCookies();
         state.user = null;
         state.accessToken = null;
-        state.refreshToken = null;
         state.isAuthenticated = false;
         resetSessionScopedStateOnLogout();
       },
@@ -166,9 +171,9 @@ function isSignedOutSnapshot(rawValue: string | null) {
 
   try {
     const parsed = JSON.parse(rawValue) as {
-      state?: { accessToken?: unknown; refreshToken?: unknown };
+      state?: { accessToken?: unknown };
     };
-    return !parsed.state?.accessToken && !parsed.state?.refreshToken;
+    return !parsed.state?.accessToken;
   } catch {
     // Unparseable persisted state is not evidence of a sign-out, and guessing
     // wrong here would sign a working tab out for no reason.
@@ -198,8 +203,8 @@ if (typeof window !== "undefined") {
     if (event.key !== null && event.key !== AUTH_STORAGE_KEY) return;
     if (!isSignedOutSnapshot(event.newValue)) return;
 
-    const { accessToken, refreshToken, isAuthenticated } = useAuthStore.getState();
-    if (!accessToken && !refreshToken && !isAuthenticated) return;
+    const { accessToken, isAuthenticated } = useAuthStore.getState();
+    if (!accessToken && !isAuthenticated) return;
 
     replayingRemoteSignOut = true;
     try {
