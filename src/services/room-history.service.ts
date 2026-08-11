@@ -1,6 +1,12 @@
 import { translationRoomService } from "@/services/translation-room.service";
 import { calculateMeetingDurationSeconds } from "@/lib/meeting/meeting-duration";
 import type { EndedRoomHistoryItem, RoomArtifactStatus, RoomHistoryResponse, TranslationRoomSummaryArtifact } from "@/types/roomHistory";
+import {
+  resolveArtifactStatus,
+  resolveHistoryStatus,
+  resolveMeetingDurationSeconds,
+  resolveRetention,
+} from "@/lib/meeting/room-history-mapping";
 import type { TranslationRoomArtifactDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
 import { parseMeetingSummaryContent } from "@/types/meetingSummary";
 
@@ -80,7 +86,6 @@ function buildSummaryArtifact(
 function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryItem {
   const room = item.room;
   const artifacts = item.artifacts.map(mapArtifact);
-  const firstExpiry = artifacts.find((artifact) => artifact.expiresAt)?.expiresAt;
   const summaryArtifact = artifacts.find((artifact) => artifact.type === "summary_export");
   const summary = buildSummaryArtifact(room.id, summaryArtifact);
 
@@ -92,13 +97,17 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
     title: room.title,
     description: room.description,
     translationRoomCode: room.translationRoomCode,
-    status: room.status === "cancelled" ? "cancelled" : "ended",
+    status: resolveHistoryStatus(room.status),
     startedAt: room.startedAt ?? room.createdAt,
     endedAt: room.endedAt ?? room.startedAt ?? room.createdAt,
-    durationSeconds: calculateMeetingDurationSeconds(
-      room.createdAt,
-      room.endedAt ?? room.createdAt,
-    ),
+    // createdAt is when the ROW was inserted. The demo-prep checklist has the team
+    // pre-creating meetings the night before, so measuring from it reported ~14h for a
+    // twenty-minute call — wrong by exactly the amount that is most visible.
+    durationSeconds: resolveMeetingDurationSeconds({
+      durationSeconds: room.durationSeconds,
+      startedAt: room.startedAt,
+      endedAt: room.endedAt,
+    }),
     sourceLanguage: room.sourceLanguage ?? "en",
     targetLanguages: room.targetLanguages,
     participants: item.participants.map((participant) => ({
@@ -113,13 +122,11 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
     participantCount: room.participantCount ?? item.participants.length,
     summary,
     artifacts,
-    retention: {
-      policyName: "Workspace retention",
-      expiresAt: firstExpiry ?? room.endedAt ?? room.createdAt,
-      transcriptRetentionDays: 30,
-      recordingRetentionDays: 7,
-      deleteAfterExpiry: true,
-    },
+    // Nothing in warptalk-backend writes an artifact retention date and there is no purge
+    // job, so the old block was three invented numbers and a "policy name" no policy backed.
+    // Worse, expiresAt fell back to the meeting's own end time, which rendered "Retention
+    // ends <the moment it ended>" for every meeting ever held.
+    retention: resolveRetention(artifacts),
     consent: {
       recording: artifacts.some((artifact) => artifact.consentRequired) ? "granted" : "not_required",
       transcript: "not_required",
@@ -128,27 +135,58 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
   };
 }
 
+/**
+ * Deliberately still the old 100 until the history page grows a pager.
+ *
+ * The plumbing below now forwards page/pageSize and surfaces the server's total, but no
+ * screen drives it yet. Dropping this to a screenful first would shrink the archive from
+ * 100 meetings to 20 with no way to reach the rest — a worse cap than the one being fixed.
+ * The pager change lowers it.
+ */
+export const ROOM_HISTORY_PAGE_SIZE = 100;
+
 export const roomHistoryService = {
   async listEndedRooms(options: {
     workspaceId: string;
     state?: "ready" | "empty" | "permission_denied" | "error";
     artifactStatus?: RoomArtifactStatus;
+    /** 1-based. */
+    page?: number;
+    pageSize?: number;
+    /** Server-side status filter; omit for both ENDED and CANCELLED. */
+    status?: "ended" | "cancelled";
+    /** Server-side search over the whole archive, not just the loaded page. */
+    search?: string;
   }): Promise<RoomHistoryResponse> {
+    const page = options.page && options.page > 0 ? Math.floor(options.page) : 1;
+    const pageSize = options.pageSize ?? ROOM_HISTORY_PAGE_SIZE;
+
     if (options?.state && options.state !== "ready") {
-      return { rooms: [] };
+      return { rooms: [], total: 0, page, pageSize };
     }
 
+    // pageSize used to be a hardcoded 100 with no page, which is not "no pagination" — it is
+    // a silent cap. A workspace with more than a hundred ended meetings simply could not
+    // reach the rest of its own archive, and nothing on screen said so.
     const { data } = await translationRoomService.history({
       workspaceId: options.workspaceId,
-      status: "ENDED,CANCELLED",
-      pageSize: 100,
+      status: options.status ? options.status.toUpperCase() : "ENDED,CANCELLED",
+      search: options.search?.trim() || undefined,
+      page,
+      pageSize,
     });
     const rooms = data.rooms.map(mapHistoryItem);
 
+    // `artifactStatus` is a client-side refinement of the page the server returned, so it
+    // cannot be reflected in `total` — the pager reports the server's count, which is the
+    // honest number for the current server-side filters.
     return {
       rooms: options?.artifactStatus
         ? rooms.filter((room) => room.artifacts.some((artifact) => artifact.status === options.artifactStatus))
         : rooms,
+      total: data.total ?? rooms.length,
+      page,
+      pageSize,
     };
   },
 };
