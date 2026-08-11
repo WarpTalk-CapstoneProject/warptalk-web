@@ -16,7 +16,8 @@ import type {
 
 const MEETING_KEY = ["translationRooms"] as const;
 const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
-const sessionsKey = (roomId: string) => [...MEETING_KEY, roomId, "sessions"] as const;
+/** Exported so a room-wide Start/Stop broadcast can refresh it without re-spelling the key. */
+export const sessionsKey = (roomId: string) => [...MEETING_KEY, roomId, "sessions"] as const;
 
 export function useTranslationRooms(params?: {
   status?: string;
@@ -158,6 +159,23 @@ export function usePauseTranslationRoom() {
         current ? { ...current, status: "paused" } : current,
       );
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+      queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
+    },
+  });
+}
+
+/**
+ * Stop Translation. The room stays live — only the translation session ends — so the transcript
+ * keeps arriving and the room's own query data is deliberately left alone. What changes is the
+ * session list, which is where "is translation running" is read from.
+ */
+export function useStopTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await translationRoomService.stopTranslation(id);
+    },
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
     },
   });
