@@ -16,13 +16,16 @@ import { toast } from "sonner";
 
 import { WorkspaceLifecycleDialog } from "@/components/admin/WorkspaceLifecycleDialog";
 import { WorkspaceStatusBadge } from "@/components/admin/WorkspaceStatusBadge";
+import { KnowledgeTable } from "@/components/knowledge/knowledge-table";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useAdminWorkspaceDetail,
+  useAdminWorkspaceKnowledge,
   useReactivateAdminWorkspace,
   useSuspendAdminWorkspace,
 } from "@/hooks/use-admin-workspaces";
+import { useKnowledgeFilters } from "@/hooks/use-knowledge-filters";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type { AdminWorkspaceDetailDto } from "@/types/admin-workspace";
@@ -211,6 +214,41 @@ function AuditTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
   );
 }
 
+/**
+ * What WarpTalk has indexed for this workspace, read as a platform admin.
+ *
+ * Not a PendingApiTab: unlike members, usage and billing, this one has a real backend
+ * (`GET /admin/workspaces/{id}/knowledge`), which reads the same index as the workspace's own
+ * Knowledge page through the same service method — only the authorization in front differs, so
+ * an admin sees exactly what an Owner would see, without being a member of the tenant.
+ *
+ * A tab panel unmounts while it is not selected, so opening the workspace does not fetch the
+ * index; the request happens when someone actually asks for it.
+ */
+function KnowledgeTab({ workspaceId }: { workspaceId: string }) {
+  const filters = useKnowledgeFilters();
+  const knowledgeQuery = useAdminWorkspaceKnowledge(workspaceId, filters.query);
+
+  return (
+    <div>
+      <p className="mb-1 max-w-3xl text-xs leading-5 text-ink-muted">
+        Documents, meeting summaries and glossary terms this workspace has indexed, with the fact
+        drawn from each. This is what the assistant can retrieve for its members. Raw transcript
+        lines stay indexed for WarpBot but are not listed here.
+      </p>
+      <KnowledgeTable
+        filters={filters}
+        data={knowledgeQuery.data}
+        isLoading={knowledgeQuery.isLoading}
+        isError={knowledgeQuery.isError}
+        isFetching={knowledgeQuery.isFetching}
+        onRetry={() => void knowledgeQuery.refetch()}
+        emptyHint="This workspace has not uploaded a document or completed a meeting that produced a summary. Nothing here means nothing stored — not a failed read."
+      />
+    </div>
+  );
+}
+
 export default function AdminWorkspaceDetailPage() {
   const params = useParams();
   const workspaceId = typeof params?.workspaceId === "string" ? params.workspaceId : undefined;
@@ -366,6 +404,7 @@ export default function AdminWorkspaceDetailPage() {
             <Tabs defaultValue="overview" className="mt-4">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
                 <TabsTrigger value="members">Members</TabsTrigger>
                 <TabsTrigger value="usage">Usage</TabsTrigger>
                 <TabsTrigger value="billing">Billing</TabsTrigger>
@@ -374,6 +413,10 @@ export default function AdminWorkspaceDetailPage() {
 
               <TabsContent value="overview" className="mt-4">
                 <OverviewTab workspace={workspace} />
+              </TabsContent>
+
+              <TabsContent value="knowledge" className="mt-4">
+                <KnowledgeTab workspaceId={workspace.id} />
               </TabsContent>
 
               <TabsContent value="members" className="mt-4">
