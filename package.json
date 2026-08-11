@@ -75,6 +75,7 @@
     "test:single-refresher": "node scripts/check-single-token-refresher-contract.mjs",
     "test:no-module-side-effects": "node scripts/check-no-module-side-effects.mjs",
     "test:language-profile": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/language-profile.test.ts",
+    "test:meeting-day": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-day.test.ts",
     "test:meeting-language-set": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/meeting-language-set.test.ts",
     "test:workspace-routes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/workspace-routes.test.ts",
     "test:auto-recording": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/auto-recording.test.ts",
