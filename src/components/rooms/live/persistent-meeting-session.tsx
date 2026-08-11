@@ -1703,7 +1703,10 @@ export function PersistentMeetingSession({
 
   function handleStartWarptalk() {
     if (!room?.id) return;
-    const mutation = room.status === "paused" ? resumeRoom : startRoom;
+    const mutation =
+      room.status === "paused" || room.status === "in_progress"
+        ? resumeRoom
+        : startRoom;
     mutation.mutate(room.id, {
       onSuccess: () => {
         setSidePanelMode("transcript");
