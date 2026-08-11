@@ -11,7 +11,8 @@ This document maintains the state, changes, and logic for the Login Page.
 ## Latest Changes
 
 - 2026-07-30: Landing Get Started now uses `/login?callbackUrl=%2Fworkspace` as the canonical guest entry point. When an `access_token` cookie and a valid `active_workspace_slug` cookie are present, landing skips login and opens `/<workspaceSlug>/home`. `/login` still accepts the legacy `redirect` parameter for existing callers, but new landing CTAs should use `callbackUrl`.
-- 2026-08-11: `/login` uses a white, centered auth layout over the animated halftone background. The email and password inputs now use `login-auth-field`, and `globals.css` scopes a `:-webkit-autofill` override so filled values stay black on an opaque white field instead of Chromium's dim blue-gray autofill surface.
+- 2026-08-11: `/login` uses a white, centered auth layout over the animated halftone background. The email and password inputs now use `login-auth-field`, and `globals.css` scopes both base field and autofill overrides so filled values stay black on an opaque white field instead of Chromium/Edge's dim blue-gray autofill surface.
+- 2026-08-11: Hardened the autofill fix after Edge still showed the saved email with a gray autofill surface. The CSS now forces the base field background/text with `!important`, covers both `:-webkit-autofill` and `:autofill`, and `scripts/check-login-autofill-contract.mjs` pins the contract.
 - The login page uses the WarpTalk header logo, a centered "Log in or sign up" heading, Google login, an `Or` divider, rounded email/password fields, a black primary action, account creation link, and terms/privacy footer.
 - Removed the previous dark two-column auth shell from this route.
 - The route owns its white page background directly, so it is isolated from the app-level theme class applied by `next-themes`.
@@ -33,13 +34,14 @@ This document maintains the state, changes, and logic for the Login Page.
 ## Known Limitations
 
 - Keep-me-logged-in remains presentational.
-- The root provider can apply a dark class from the system theme, so login-specific inputs force `color-scheme: light` and override Chromium autofill colors locally.
+- The root provider can apply a dark class from the system theme, and Chromium/Edge can apply internal autofill painting. Login-specific inputs force `color-scheme: light`, opaque white backgrounds, black text fill, and a white inset autofill shadow locally.
 
 ## Testing Checklist
 
 - [x] Run ESLint.
 - [x] Confirm `/login` responds locally.
 - [x] Verify login field CSS forces light color scheme and white Chromium autofill surface.
+- [x] Run `npm run test:login-autofill`.
 - [ ] Open `/login` on desktop and verify the white halftone layout visually.
 - [ ] Open `/login` below `lg` width and verify the form remains usable.
 - [ ] Submit invalid values to confirm validation messages render cleanly.

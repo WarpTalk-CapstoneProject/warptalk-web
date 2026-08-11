@@ -23,7 +23,7 @@ This document tracks the shadcn conversion for dashboard-adjacent internal pages
 - `/ai-chat` now renders a shadcn assistant workspace with prompt chips, conversation cards, and a chat input preview.
 - `/terminology` now exists as a shadcn/glass preview page for glossary terms and language consistency workflows.
 - Host sidebar sign out clears local auth state and redirects to `/login`.
-- `/workspace` now renders inside a shadcn-style workspace shell with usage metrics, quota table, and department activity cards.
+- `/workspace` is the onboarding gateway for selecting, joining, or, when eligible, creating a workspace. Create is locked once the user already has an Internal workspace membership.
 - `/admin` now renders inside a shadcn-style admin shell with platform metrics, service health tabs, and audit events.
 - `/dev-test` remains a development-only diagnostics lab and is blocked with
   HTTP 404 by `src/proxy.ts` in production.
@@ -39,8 +39,10 @@ This document tracks the shadcn conversion for dashboard-adjacent internal pages
 - `src/app/(app)/layout.tsx`
 - `src/app/globals.css`
 - `src/components/layout/host-sidebar.tsx`
-- `src/app/workspace/page.tsx`
-- `src/app/workspace/layout.tsx`
+- `src/app/(app)/workspace/page.tsx`
+- `src/app/(app)/workspace/create/page.tsx`
+- `src/app/(app)/workspace/join/page.tsx`
+- `src/lib/workspace/workspace-membership.ts`
 - `src/app/admin/page.tsx`
 - `src/app/admin/layout.tsx`
 - `src/app/(app)/dev-test/page.tsx`
@@ -74,7 +76,7 @@ Not adopted:
 - [ ] `/ai-summaries` renders with summary cards and metrics.
 - [ ] `/ai-chat` accepts local input and appends preview messages.
 - [ ] Sidebar Sign out redirects to `/login`.
-- [ ] `/workspace` renders with its workspace sidebar and active dashboard item.
+- [ ] `/workspace` renders the onboarding gateway and locks Create for users with an existing Internal workspace membership.
 - [ ] `/admin` renders with its admin sidebar and active dashboard item.
 - [ ] `/dev-test` can add and clear preview logs.
 - [ ] Command search includes dashboard, rooms, create room, history, AI pages, terminology, feedback, workspace, admin, and dev test.

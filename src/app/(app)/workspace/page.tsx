@@ -22,6 +22,10 @@ import {
   isPublicEmailDomain,
 } from "@/lib/workspace/email-domain";
 import {
+  getPrimaryInternalWorkspace,
+  isInternalWorkspaceMembership,
+} from "@/lib/workspace/workspace-membership";
+import {
   useAcceptWorkspaceInvitationById,
   useMyJoinRequests,
   usePendingWorkspaceInvitations,
@@ -39,7 +43,7 @@ export default function WorkspaceOnboardingGatePage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const publicDomainLabel = extractEmailDomain(user?.email);
-  const cannotCreateWorkspace = isPublicEmailDomain(publicDomainLabel);
+  const hasPublicEmailDomain = isPublicEmailDomain(publicDomainLabel);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
@@ -49,6 +53,20 @@ export default function WorkspaceOnboardingGatePage() {
   const pendingInvitations = useMemo(() => pendingInvitationsData ?? [], [pendingInvitationsData]);
   const joinRequests = useMemo(() => joinRequestsData ?? [], [joinRequestsData]);
   const workspaces = workspacesData?.items ?? EMPTY_WORKSPACES;
+  const primaryInternalWorkspace = getPrimaryInternalWorkspace(workspaces);
+  const hasPrimaryInternalWorkspace = Boolean(primaryInternalWorkspace);
+  const isCreateWorkspaceLocked = hasPrimaryInternalWorkspace || hasPublicEmailDomain;
+  const createWorkspaceReason = hasPrimaryInternalWorkspace
+    ? `You already have one internal workspace membership in ${primaryInternalWorkspace?.name || "a workspace"}. Open it, or join another workspace by request or invitation.`
+    : hasPublicEmailDomain
+      ? `Needs a work email. ${publicDomainLabel} addresses can join by invitation.`
+      : "Start a workspace for your organization.";
+  const createWorkspaceTitle = hasPrimaryInternalWorkspace
+    ? "Workspace creation locked"
+    : "Create workspace";
+  const joinWorkspaceTitle = hasPrimaryInternalWorkspace
+    ? "Join another workspace"
+    : "Join workspace";
   const selectWorkspace = useSelectWorkspace();
   const acceptInvitation = useAcceptWorkspaceInvitationById();
   const [workspaceSearch, setWorkspaceSearch] = useState("");
@@ -184,10 +202,12 @@ export default function WorkspaceOnboardingGatePage() {
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h1 className="text-[28px] font-semibold tracking-tight text-foreground">
-                  Choose your workspace
+                  {hasPrimaryInternalWorkspace ? "Continue to your workspace" : "Choose your workspace"}
                 </h1>
                 <p className="mt-1 max-w-xl text-[13px] leading-5 text-ink-muted">
-                  Join an existing organization, create a new one, or open a workspace you already belong to.
+                  {hasPrimaryInternalWorkspace
+                    ? "Your account can hold one internal workspace membership. Open your current workspace, or join another workspace by request or invitation."
+                    : "Join an existing organization, create a new one, or open a workspace you already belong to."}
                 </p>
               </div>
               {workspaces.length > 0 ? (
@@ -208,9 +228,11 @@ export default function WorkspaceOnboardingGatePage() {
                 <SignIn weight="duotone" size={19} />
               </span>
               <span className="min-w-0">
-                <span className="block text-[15px] font-semibold text-foreground">Join workspace</span>
+                <span className="block text-[15px] font-semibold text-foreground">{joinWorkspaceTitle}</span>
                 <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
-                  Enter a workspace URL, slug, or room invitation.
+                  {hasPrimaryInternalWorkspace
+                    ? "Use an invitation, workspace URL, slug, or room link."
+                    : "Enter a workspace URL, slug, or room invitation."}
                 </span>
               </span>
             </button>
@@ -218,13 +240,13 @@ export default function WorkspaceOnboardingGatePage() {
             <button
               type="button"
               onClick={() => router.push("/workspace/create")}
-              disabled={cannotCreateWorkspace}
-              aria-describedby={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
+              disabled={isCreateWorkspaceLocked}
+              aria-describedby={isCreateWorkspaceLocked ? "create-workspace-reason" : undefined}
               className="group flex min-h-[116px] items-center gap-4 rounded-lg border border-border bg-surface-1 p-4 text-left shadow-sm transition-colors enabled:hover:border-hairline-strong enabled:hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span
                 className={
-                  cannotCreateWorkspace
+                  isCreateWorkspaceLocked
                     ? "flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-ink-muted"
                     : "flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-white"
                 }
@@ -232,14 +254,12 @@ export default function WorkspaceOnboardingGatePage() {
                 <Plus weight="bold" size={19} />
               </span>
               <span className="min-w-0">
-                <span className="block text-[15px] font-semibold text-foreground">Create workspace</span>
+                <span className="block text-[15px] font-semibold text-foreground">{createWorkspaceTitle}</span>
                 <span
-                  id={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
+                  id={isCreateWorkspaceLocked ? "create-workspace-reason" : undefined}
                   className="mt-1 block text-[12px] leading-5 text-ink-muted"
                 >
-                  {cannotCreateWorkspace
-                    ? `Needs a work email. ${publicDomainLabel} addresses can join by invitation.`
-                    : "Start a workspace for your organization."}
+                  {createWorkspaceReason}
                 </span>
               </span>
             </button>
@@ -394,6 +414,7 @@ export default function WorkspaceOnboardingGatePage() {
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-ink-muted">
                         /{workspace.slug} - {workspace.role || "Member"} - {workspace.membershipType || "Internal"}
+                        {isInternalWorkspaceMembership(workspace) ? " - Primary membership" : ""}
                       </span>
                     </span>
                     <ArrowRight size={15} className="text-ink-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />

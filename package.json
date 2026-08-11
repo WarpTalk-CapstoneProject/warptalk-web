@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test:contracts": "node scripts/run-contracts.mjs",
     "test:auth-hygiene": "node scripts/check-auth-console-hygiene.mjs",
+    "test:login-autofill": "node scripts/check-login-autofill-contract.mjs",
+    "test:workspace-gateway": "node scripts/check-workspace-gateway-contract.mjs",
     "test:api-status": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/api/__tests__/api-status.test.ts",
     "test:english-ui": "node scripts/check-english-ui.mjs",
     "test:currency": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/format/__tests__/currency.test.ts",
