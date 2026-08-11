@@ -43,6 +43,7 @@ import {
   type DailyRecurrenceDraft,
   detectTimeZone,
 } from "@/lib/meeting/daily-recurrence";
+import { describeRecurrenceSentence } from "@/lib/meeting/recurrence";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
 import { LanguageSelector } from "./create/language-selector";
 import { PillButton } from "./create/pill-button";
@@ -320,21 +321,31 @@ export function CreateRoomDialog() {
           // occurrence's time, so `scheduledAt` is deliberately not sent alongside it — the
           // server refuses a request carrying both rather than silently discarding one, which
           // is the failure mode this whole change exists to remove.
+          //
+          // `type` is read from the draft for the same reason. Hardcoding DAILY was correct while
+          // it was the only cadence the server would materialise; now it would book a different
+          // rule than the panel shows — the same failure with a different name.
           const result = await createRecurringRoomMutation.mutateAsync({
             ...common,
             workspaceId: activeWorkspaceId,
             recurrence: {
-              type: "DAILY",
+              type: dailyRecurrence.type ?? "DAILY",
               startTimeLocal: dailyRecurrence.time,
               // The browser's zone, not a hardcoded one: "8am" means 8am where the host is.
               timeZone: detectTimeZone(),
               endDateLocal: dailyRecurrence.endDate,
+              // Each is sent only for the cadence it belongs to: the server refuses a weekday list
+              // on a monthly rule rather than ignoring it.
+              byWeekdays:
+                dailyRecurrence.type === "WEEKLY" ? dailyRecurrence.byWeekdays : undefined,
+              byMonthDay:
+                dailyRecurrence.type === "MONTHLY" ? dailyRecurrence.byMonthDay : undefined,
             },
           });
           setCreatedRoomId(result.firstOccurrence.id);
           setCreatedRoomCode(result.firstOccurrence.translationRoomCode);
           toast.success(
-            `Daily meeting scheduled at ${dailyRecurrence.time} — ${result.totalOccurrenceCount} meetings.`,
+            `${describeRecurrenceSentence(result.series)} at ${dailyRecurrence.time} — ${result.totalOccurrenceCount} meetings.`,
           );
           return;
         }

@@ -58,6 +58,7 @@ export const API = {
   // translationRooms.create with a `recurrence` block; these two are about the series itself.
   translationRoomSeries: {
     get: (id: string) => `/translation-room-series/${id}`,
+    update: (id: string) => `/translation-room-series/${id}`,
     cancel: (id: string) => `/translation-room-series/${id}/cancel`,
   },
   roomArtifacts: {

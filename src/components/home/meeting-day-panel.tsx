@@ -28,7 +28,7 @@ function MeetingRow({ room, workspaceSlug }: { room: TranslationRoomDto; workspa
   return (
     <Link
       href={`/${workspaceSlug}/rooms/${room.id}`}
-      className="flex items-center gap-3 rounded-xl border border-border/60 bg-surface-1 px-3 py-2.5 transition-colors hover:border-border hover:bg-surface-2"
+      className="flex shrink-0 items-center gap-3 rounded-xl border border-border/60 bg-surface-1 px-3 py-2.5 transition-colors hover:border-border hover:bg-surface-2"
     >
       <span className="w-[68px] shrink-0 text-[12px] font-medium tabular-nums text-ink">
         {TIME.format(new Date(room.scheduledAt as string))}
@@ -98,23 +98,26 @@ export function MeetingDayPanel() {
         />
       </header>
 
-      <div className="mt-3">
+      {/* One fixed height for every state. 176px is the empty state's own natural height, kept as
+          the measure so the panel never changes size: loading, one meeting and five meetings all
+          occupy the same box, and switching days can no longer resize the card and shove the
+          shortcuts below it around. Past three rows the list scrolls inside instead of growing. */}
+      <div className="mt-3 h-[176px]">
         {roomList.isPending ? (
-          // Three placeholder rows rather than a spinner: the panel keeps its height, so the
-          // shortcuts below it do not jump when the list lands.
-          <div className="flex flex-col gap-2" aria-hidden>
+          // Placeholder rows rather than a spinner, clipped to the box like the real list.
+          <div className="flex h-full flex-col gap-2 overflow-hidden" aria-hidden>
             {[0, 1, 2].map((row) => (
-              <div key={row} className="h-[42px] animate-pulse rounded-xl bg-surface-2" />
+              <div key={row} className="h-[42px] shrink-0 animate-pulse rounded-xl bg-surface-2" />
             ))}
           </div>
         ) : dayMeetings.length > 0 ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex h-full flex-col gap-2 overflow-y-auto pr-1">
             {dayMeetings.map((room) => (
               <MeetingRow key={room.id} room={room} workspaceSlug={slug} />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 px-4 py-7 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 px-4 text-center">
             <VideoCamera size={22} weight="duotone" className="text-ink-muted" />
             <div>
               <p className="text-[13px] font-medium text-ink">
