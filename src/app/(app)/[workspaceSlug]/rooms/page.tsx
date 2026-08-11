@@ -134,7 +134,10 @@ function LinearRow({
   return (
     <Link
       href={`/${workspaceSlug}/rooms/${room.id}`}
-      className="flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
+      // @container, not a viewport breakpoint: what squeezes this row is the Properties panel
+      // opening beside it, which takes 260px away while the window stays exactly the same size.
+      // A `lg:` rule cannot see that and would keep every chip at a width the row no longer has.
+      className="@container flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
     >
       <div className="flex items-center w-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground">
         {isCurrentUserHost && (
@@ -157,10 +160,14 @@ function LinearRow({
         <StatusIcon status={room.status} />
       </div>
 
-      <div className="w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
+      <div className="hidden @[560px]:block w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
         {room.translationRoomCode}
       </div>
-      <div className="flex-1 min-w-0 pr-4 flex items-center gap-2">
+      {/* overflow-hidden, not just min-w-0. min-w-0 lets this column shrink to nothing, which is
+          what has to happen when the Properties panel opens — but the badges after the title are
+          shrink-0, so with nothing clipping them they simply drew on top of the status column.
+          The title truncates first and the badges clip only once there is genuinely no room. */}
+      <div className="flex-1 min-w-0 overflow-hidden pr-4 flex items-center gap-2">
         <span className="text-foreground font-medium truncate block">
           {room.title}
         </span>
@@ -175,50 +182,62 @@ function LinearRow({
       {/* WT-321(4): every cell in this trailing group is a fixed-width column. It used to be a
           row of shrink-wrapped pills, so each one started wherever the pill before it happened
           to end — a longer host name or a third target language shifted the occupancy and date
-          columns sideways, and no two rows lined up. Widths here, not content-derived widths. */}
+          columns sideways, and no two rows lined up. Widths here, not content-derived widths.
+
+          The CELL is what holds that width; the pill inside it is not. Making the pill fill the
+          column drew a border around the reservation rather than around the content, so a
+          two-flag room and a fourteen-character name both rendered as the same wide capsule
+          with the meaning huddled in the middle of it. The pill hugs what it contains and is
+          capped at the column, so the columns still line up and nothing can overflow them. */}
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
         <div className="flex w-[104px] shrink-0 items-center">
           <StatusPanel status={room.status} />
         </div>
 
-        <div className="flex h-[26px] w-[164px] shrink-0 items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <Avatar className="size-5 shrink-0 rounded-full">
-            <AvatarImage src={hostAvatar} alt={hostName} />
-            <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
-              {hostName.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
+        <div className="hidden @[700px]:flex w-[164px] shrink-0 items-center">
+          <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <Avatar className="size-5 shrink-0 rounded-full">
+              <AvatarImage src={hostAvatar} alt={hostName} />
+              <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
+                {hostName.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
+          </div>
         </div>
 
-        <div className="flex h-[26px] w-[176px] shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
+        <div className="flex w-[176px] shrink-0 items-center">
+          <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
 
-              It used to read "English → 🇻🇳 · 🇯🇵", which asserted a relationship the product
-              does not have: every participant picks their own speak and listen language, so
-              there is no meeting-wide source and no direction to point an arrow at. A room
-              only ever declares a SET. The named source was the loudest thing in the chip and
-              it was the one part that meant nothing.
+                It used to read "English → 🇻🇳 · 🇯🇵", which asserted a relationship the product
+                does not have: every participant picks their own speak and listen language, so
+                there is no meeting-wide source and no direction to point an arrow at. A room
+                only ever declares a SET. The named source was the loudest thing in the chip and
+                it was the one part that meant nothing.
 
-              The trailing "+" is gone too. It was a permanent icon, not an overflow count —
-              it sat after every multi-language room whether or not anything had been hidden,
-              so it punctuated a gap that was never there.
+                The trailing "+" is gone too. It was a permanent icon, not an overflow count —
+                it sat after every multi-language room whether or not anything had been hidden,
+                so it punctuated a gap that was never there.
 
-              Flags only, no names: the chip is 176px and two language names do not fit.
-              LanguageLabel keeps the name as the title and aria-label, so the flag is not the
-              only thing carrying the meaning. */}
-          {meetingLanguageSet(room.sourceLanguage, room.targetLanguages).map(
-            (language, index) => (
-              <div key={language} className="flex items-center">
-                {index > 0 && (
-                  <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
-                    ·
-                  </span>
-                )}
-                <LanguageLabel value={language} showName={false} />
-              </div>
-            ),
-          )}
+                Flags only, no names: the column is 176px and two language names do not fit.
+                LanguageLabel keeps the name as the title and aria-label, so the flag is not the
+                only thing carrying the meaning. A room can declare any number of languages —
+                nothing client-side caps the set — so the pill is capped at the column and clips
+                rather than pushing the occupancy and date columns out of line. */}
+            {meetingLanguageSet(room.sourceLanguage, room.targetLanguages).map(
+              (language, index) => (
+                <div key={language} className="flex items-center">
+                  {index > 0 && (
+                    <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
+                      ·
+                    </span>
+                  )}
+                  <LanguageLabel value={language} showName={false} />
+                </div>
+              ),
+            )}
+          </div>
         </div>
 
         {/* WT-321(3): the bare "0/100" was read as an error code, a progress bar, anything but
@@ -226,7 +245,7 @@ function LinearRow({
             seats-taken over the meeting type's seat cap (WT-274) — it just says so now. A
             people icon and a title are the whole fix; the number itself was never wrong. */}
         <div
-          className="flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+          className="hidden @[820px]:flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
           title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
         >
           <Users size={13} weight="regular" aria-hidden />
@@ -236,7 +255,7 @@ function LinearRow({
           </span>
         </div>
 
-        <div className="flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="hidden @[900px]:flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums">
             {formatTimeShort(room.scheduledAt ?? room.createdAt)}
@@ -560,6 +579,13 @@ export default function MeetingsPageLinear() {
     if (activeTab === "active") {
       const now = new Date();
       const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60000);
+      // A scheduled room needs a window on BOTH sides. The check used to be "starts within the
+      // next fifteen minutes" with no lower bound, so `scheduledAt <= now + 15min` was also true
+      // for every meeting whose time had already passed — a room booked for last week sat in
+      // Active forever, which is most of what made the tab meaningless. Two hours of grace after
+      // the hour keeps a meeting that is running late; older than that it was never started, and
+      // it belongs to its own day under Scheduled, not here.
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60000);
       return rooms.filter(
         (r) =>
           matchesSearch(r) &&
@@ -567,7 +593,8 @@ export default function MeetingsPageLinear() {
             r.status === "waiting" ||
             (r.status === "scheduled" &&
               (!r.scheduledAt ||
-                new Date(r.scheduledAt) <= fifteenMinsFromNow))),
+                (new Date(r.scheduledAt) <= fifteenMinsFromNow &&
+                  new Date(r.scheduledAt) >= twoHoursAgo)))),
       );
     }
     if (activeTab === "scheduled") {
