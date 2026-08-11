@@ -10,6 +10,12 @@ const sidePanel = await readFile(
   "utf8",
 );
 
+// The transcript panel's own props, so a host gate cannot be added to it without failing a check.
+const transcriptPanelStart = sidePanel.indexOf("<TranscriptPanel");
+const transcriptPanelCall = transcriptPanelStart < 0
+  ? ""
+  : sidePanel.slice(transcriptPanelStart, sidePanel.indexOf("/>", transcriptPanelStart));
+
 const checks = [
   ["user chips open a popover profile dropdown", page.includes("function UserChip(") && page.includes("<PopoverContent")],
   ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes("Room notes") && page.includes("useEditor(")],
@@ -37,11 +43,31 @@ const checks = [
   // the control bar's Start Translation, both of which call the same endpoint deliberately.
   // Do not re-add auto-start to fix a display problem — fix the display.
   ["live room never starts translation on its own", !livePage.includes("autoStartTriggeredRef") && !livePage.includes("startRoom.mutate(room.id")],
-  ["translation controls follow persisted room lifecycle", livePage.includes('room?.status === "in_progress"') && livePage.includes('room.status === "paused"')],
-  ["stop translation pauses the backend pipeline", livePage.includes("usePauseTranslationRoom") && livePage.includes("pauseRoom.mutate")],
-  ["resume translation resumes the backend pipeline", livePage.includes("useResumeTranslationRoom") && livePage.includes('room.status === "paused" ? resumeRoom : startRoom')],
+  // Transcription and translation are SEPARATE features, and the live session must not read one
+  // flag for both. `status === "in_progress"` means the ROOM is open — since WT-339 that
+  // deliberately does not start translation — so it answers "is this meeting live?" and nothing
+  // more. Reading it as "translation is running" showed Stop from the moment a meeting opened:
+  // the host was never offered Start, no TranslationRoomSession was ever created, the audio
+  // routes never left READY, and translation could not begin at all.
+  ["transcription follows the room being open, not translation", livePage.includes('const meetingLive = room?.status === "in_progress"') && livePage.includes("meetingLiveRef.current")],
+  ["translation running is read from an active session, not room status", livePage.includes("useTranslationRoomSessions") && livePage.includes('session.status === "ACTIVE"') && livePage.includes("warptalkStarted={translationStarted}")],
+  // Stop must end the translation SESSION, not pause the room. Pausing sets the room to PAUSED,
+  // which the AI workers read as "ignore this room's microphone" — so the old Stop took the
+  // transcript down with the translation and there was no way back to transcript-only.
+  ["stop translation ends the session and leaves the meeting running", livePage.includes("useStopTranslation") && livePage.includes("stopTranslation.mutate(room.id") && !livePage.includes("pauseRoom.mutate")],
+  // /resume is the ONLY path that opens a TranslationRoomSession, which is what lets the routes
+  // go from READY to BROADCASTING. Sending an already-live room to /start instead — what
+  // `room.status === "paused" ? resumeRoom : startRoom` did — started nothing and said it had.
+  ["start translation goes through resume, the only path that opens a session", livePage.includes("resumeRoom.mutateAsync(room.id)") && !livePage.includes('room.status === "paused" ? resumeRoom : startRoom')],
   ["starting translation opens the transcript side panel", livePage.includes("setRightSidebarOpen(true)") && livePage.includes('setSidePanelMode("transcript")')],
-  ["pre-start and paused rooms reject transcript broadcasts", livePage.includes("translationActiveRef.current") && livePage.includes("if (!translationActiveRef.current) return;")],
+  ["paused rooms reject transcript broadcasts", livePage.includes("if (!meetingLiveRef.current) return;")],
+  // The transcript belongs to everyone in the room, and the backend agrees — TranscriptReadAccess
+  // is host OR participant. Starting and stopping TRANSLATION is host-only because it spends a
+  // billed pipeline; the transcript panel and the caption lane must not pick up a host gate by
+  // association with it.
+  ["the live transcript panel is not host-gated", transcriptPanelCall.length > 0 && !transcriptPanelCall.includes("isHost")],
+  ["captions follow the meeting, not the viewer's role", livePage.includes("enabled={meetingLive && subtitlesEnabled}")],
+  ["only starting and stopping translation is host-only", livePage.includes("onStartWarptalk={isRoomHost ? handleStartWarptalk : undefined}") && livePage.includes("onStopWarptalk={isRoomHost ? handleStopWarptalk : undefined}")],
 ];
 
 const failures = checks.filter(([, passed]) => !passed);

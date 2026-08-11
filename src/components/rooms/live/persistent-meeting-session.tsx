@@ -32,13 +32,15 @@ import {
 } from "@/hooks/use-meeting";
 import {
   useStartTranslationRoom,
-  usePauseTranslationRoom,
   useResumeTranslationRoom,
+  useStopTranslation,
+  sessionsKey,
   useEndTranslationRoom,
   useLeaveTranslationRoom,
   useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
+  useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { useAuthStore } from "@/stores/auth-store";
@@ -202,8 +204,8 @@ export function PersistentMeetingSession({
   );
   const refetchParticipants = participantsQuery.refetch;
   const startRoom = useStartTranslationRoom();
-  const pauseRoom = usePauseTranslationRoom();
   const resumeRoom = useResumeTranslationRoom();
+  const stopTranslation = useStopTranslation();
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
@@ -357,11 +359,27 @@ export function PersistentMeetingSession({
   );
 
   const room = roomQuery.data;
-  const warptalkStarted = room?.status === "in_progress";
-  const translationActiveRef = useRef(warptalkStarted);
+  // The room is OPEN — somebody took the meeting live. This is what TRANSCRIPTION follows and
+  // the only thing it follows: a live meeting is transcribed whether or not anyone has started
+  // translation.
+  const meetingLive = room?.status === "in_progress";
+  const meetingLiveRef = useRef(meetingLive);
   useEffect(() => {
-    translationActiveRef.current = warptalkStarted;
-  }, [warptalkStarted]);
+    meetingLiveRef.current = meetingLive;
+  }, [meetingLive]);
+  // Translation is running exactly while the room has an ACTIVE translation session — the row
+  // Start Translation opens and Stop closes.
+  //
+  // This used to be `status === "in_progress"` as well, i.e. the same flag as above, and that is
+  // the defect. Opening a room has not started translation since WT-339, so from the moment a
+  // meeting went live the control bar already showed Stop: the host was never offered Start, the
+  // backend never opened a session, the audio routes never left READY, and translation could not
+  // begin at all. One flag for two features also made "transcript only" impossible to express —
+  // there was no state in which the meeting was live and translation was not.
+  const translationSessionsQuery = useTranslationRoomSessions(roomId, meetingLive);
+  const translationStarted = (translationSessionsQuery.data ?? []).some(
+    (session) => session.status === "ACTIVE",
+  );
   const refetchRoom = roomQuery.refetch;
   // Memoized so the identity is stable across renders where the query result has not
   // changed — the language-resolution memos below key off it.
@@ -1203,13 +1221,26 @@ export function PersistentMeetingSession({
         // The first STT result can arrive before the REST refetch below resolves. Flip the
         // live gate synchronously so a participant who joined before the host does not drop
         // those first transcript/translation events.
-        translationActiveRef.current = true;
+        meetingLiveRef.current = true;
         setLiveState(state);
+        // Start Translation is room-wide, so every client — not just the host's — has to learn
+        // that a translation session is now open. This is the same fact the session poll would
+        // notice seconds later; asking now is what makes the switch land at the same moment for
+        // everyone, including FilteredRoomAudio's choice of dub over raw microphone.
+        void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
         void refetchRoom().then(() => {
           retryMeetingConnectionRef.current();
         });
       },
     );
+    // Stop Translation, room-wide. The meeting is NOT over and the transcript keeps arriving —
+    // deliberately nothing here touches meetingLiveRef. Only the answer to "is translation
+    // running" changes, and that is read from the session list, so re-read it: for the host it
+    // turns the button back into Start, and for everyone it releases FilteredRoomAudio's
+    // preference for an interpreter dub that has stopped being produced.
+    connection.on("TranslationStopped", () => {
+      void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
+    });
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
       addLiveParticipant(participant);
       void refetchParticipants();
@@ -1221,7 +1252,7 @@ export function PersistentMeetingSession({
     connection.on(
       "TranscriptSegmentReceived",
       (segment: TranscriptSegmentDto) => {
-        if (!translationActiveRef.current) return;
+        if (!meetingLiveRef.current) return;
         addTranscriptSegment({
           ...segment,
           speakerName: resolveTranscriptSpeakerName(
@@ -1234,7 +1265,7 @@ export function PersistentMeetingSession({
     connection.on(
       "TranslationTextReceived",
       (translation: TranslationTextDto) => {
-        if (!translationActiveRef.current) return;
+        if (!meetingLiveRef.current) return;
         // Only render the translation into MY chosen listen language — the gateway fans
         // out every participant's target language to the whole room group, so without this
         // check the transcript panel mixes in every other listener's language too.
@@ -1250,7 +1281,7 @@ export function PersistentMeetingSession({
     connection.on("AiSuggestionReceived", (suggestion: AiSuggestionDto) => {
       // Same gate the transcript handlers use: a suggestion belongs to a live segment, so
       // it has nothing to attach to once translation has stopped.
-      if (!translationActiveRef.current) return;
+      if (!meetingLiveRef.current) return;
       addSuggestion(suggestion);
     });
     connection.on("TranslationRoomEnded", () => {
@@ -1701,30 +1732,48 @@ export function PersistentMeetingSession({
     else if (!next) toast.success("Screen sharing stopped.");
   }
 
-  function handleStartWarptalk() {
+  // Opening the ROOM and starting TRANSLATION are two different acts since WT-339, and this
+  // button is the second one.
+  //
+  // It used to send an already-live room to /start (`room.status === "paused" ? resumeRoom :
+  // startRoom`), which since WT-339 is the endpoint that deliberately does NOT start
+  // translation: it takes the routes to READY and stops, because it no longer opens a
+  // TranslationRoomSession. So pressing Start Translation in a live meeting did nothing
+  // whatsoever — no session, no BROADCASTING routes, no translation — and reported success.
+  // /resume is the only path that opens a session, and it accepts IN_PROGRESS precisely so it
+  // can serve as Start.
+  //
+  // A room that is not open yet is still opened first. That is normally the lobby's job
+  // (WT-232), but this button is reachable without going through it, and failing with "invalid
+  // state" would be a worse answer than doing the obvious thing.
+  async function handleStartWarptalk() {
     if (!room?.id) return;
-    const mutation = room.status === "paused" ? resumeRoom : startRoom;
-    mutation.mutate(room.id, {
-      onSuccess: () => {
-        setSidePanelMode("transcript");
-        setRightSidebarOpen(true);
-        toast.success("WarpTalk realtime translation started.");
-      },
-      onError: (error) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to start translation.",
-        );
-      },
-    });
+    try {
+      if (room.status !== "in_progress" && room.status !== "paused") {
+        await startRoom.mutateAsync(room.id);
+      }
+      await resumeRoom.mutateAsync(room.id);
+      setSidePanelMode("transcript");
+      setRightSidebarOpen(true);
+      toast.success("WarpTalk realtime translation started.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to start translation.",
+      );
+    }
   }
 
+  // Stops TRANSLATION. The meeting keeps running and so does the transcript.
+  //
+  // This used to pause the ROOM, which the AI workers read as "ignore this room's microphone" —
+  // so stopping translation also stopped transcription, and a room that had once translated
+  // could never get back to transcript-only. Pausing the whole meeting is still a real thing to
+  // want; it is simply not what this button says.
   function handleStopWarptalk() {
     if (!room?.id) return;
-    pauseRoom.mutate(room.id, {
+    stopTranslation.mutate(room.id, {
       onSuccess: () => {
-        toast.success("WarpTalk realtime translation stopped.");
+        toast.success("Translation stopped. The transcript keeps running.");
       },
       onError: (error) => {
         toast.error(
@@ -1963,7 +2012,10 @@ export function PersistentMeetingSession({
           speakerLanguageByUserId={speakerLanguageByUserId}
           voicePreference={voicePreference}
           voiceEnabled={voiceEnabled}
-          translationActive={warptalkStarted}
+          // The language routing exists to prefer a dub over the original, so it must follow
+          // the dub. Passing "the room is open" here is what this component's own doc warns
+          // against — it muted mismatched speakers for a pipeline that had not been started.
+          translationActive={translationStarted}
           localUserId={user?.id}
         />
         <TrackProcessorsController
@@ -2043,7 +2095,9 @@ export function PersistentMeetingSession({
             {subtitlesEnabled ? (
               <div className="absolute inset-x-2 bottom-16 z-30 h-14 overflow-hidden">
                 <LiveSubtitleOverlay
-                  enabled={warptalkStarted && subtitlesEnabled}
+                  // Captions are the TRANSCRIPT in the caption lane (carrying the translation
+                  // when there is one), so they follow the meeting being live, not translation.
+                  enabled={meetingLive && subtitlesEnabled}
                 />
               </div>
             ) : null}
@@ -2188,7 +2242,9 @@ export function PersistentMeetingSession({
                 className="relative flex h-[72px] shrink-0 items-center justify-center overflow-hidden"
               >
                 <LiveSubtitleOverlay
-                  enabled={warptalkStarted && subtitlesEnabled}
+                  // Captions are the TRANSCRIPT in the caption lane (carrying the translation
+                  // when there is one), so they follow the meeting being live, not translation.
+                  enabled={meetingLive && subtitlesEnabled}
                 />
               </div>
             ) : null}
@@ -2210,7 +2266,7 @@ export function PersistentMeetingSession({
                     roomCode={room.translationRoomCode}
                     joinLink={joinLink}
                     isHost={isHost}
-                    warptalkStarted={warptalkStarted}
+                    warptalkStarted={translationStarted}
                     subtitlesEnabled={subtitlesEnabled}
                     listenLanguage={targetLanguage}
                     availableListenLanguages={availableListenLanguages}
@@ -2232,8 +2288,13 @@ export function PersistentMeetingSession({
                     onToggleBackgroundBlur={handleToggleBackgroundBlur}
                     onToggleScreenShare={handleToggleScreenShare}
                     onLayoutChange={setMeetingLayout}
-                    onStartWarptalk={handleStartWarptalk}
-                    onStopWarptalk={handleStopWarptalk}
+                    // isRoomHost, not isHost: /resume and /pause both reject a caller whose id is
+                    // not the room's HostId, so a workspace admin — host-like everywhere else in
+                    // this bar — would press Start and get "Unauthorized". The control bar's own
+                    // prop doc is "omit to hide the control", so this hides it rather than
+                    // offering a button that cannot work.
+                    onStartWarptalk={isRoomHost ? handleStartWarptalk : undefined}
+                    onStopWarptalk={isRoomHost ? handleStopWarptalk : undefined}
                     onToggleSubtitles={() =>
                       setSubtitlesEnabled((current) => !current)
                     }

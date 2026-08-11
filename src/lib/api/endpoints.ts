@@ -38,7 +38,10 @@ export const API = {
     leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
     start: (id: string) => `/translation-rooms/${id}/start`,
     pause: (id: string) => `/translation-rooms/${id}/pause`,
+    /** Start Translation. `/start` only opens the room — see ResumeTranslationRoomAsync. */
     resume: (id: string) => `/translation-rooms/${id}/resume`,
+    /** Stop Translation and leave the meeting (and its transcript) running. Not `/pause`. */
+    stopTranslation: (id: string) => `/translation-rooms/${id}/translation/stop`,
     end: (id: string) => `/translation-rooms/${id}/end`,
     cancel: (id: string) => `/translation-rooms/${id}/cancel`,
     artifacts: (id: string) => `/translation-rooms/${id}/artifacts`,
@@ -164,6 +167,10 @@ export const API = {
     detail: (id: string) => `/admin/workspaces/${id}`,
     suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
     reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
+    // Separate from `workspaces.knowledge` on purpose: same page shape, different
+    // authorization. This one is gated by the platform "admin" role and reads a workspace
+    // the caller is not a member of.
+    knowledge: (id: string) => `/admin/workspaces/${id}/knowledge`,
   },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",
