@@ -14,31 +14,34 @@ import {
   Brain,
   CaretDown,
   CaretUp,
+  Check,
+  Checks,
   Eye,
   FileCode,
   FileCsv,
   FileDoc,
   FileImage,
   FilePdf,
-  FileText,
   Funnel,
   Info,
   List,
-  ShieldWarning,
+  PaperPlaneTilt,
   SlidersHorizontal,
-  Sparkle,
   Spinner,
   SquaresFour,
   Trash,
   Upload,
+  X,
 } from "@phosphor-icons/react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import gsap from "gsap";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
@@ -83,7 +86,8 @@ type SortDirection = "asc" | "desc";
 type DocumentSortKey =
   | "name"
   | "classification"
-  | "people"
+  | "uploader"
+  | "approver"
   | "modified"
   | "size";
 
@@ -97,7 +101,7 @@ const DOCUMENT_FILTER_WIDTH_CLASS: Record<FilterCategory, string> = {
 };
 
 const DOCUMENT_GRID_CLASS =
-  "grid-cols-[12px_minmax(320px,1.8fr)_170px_190px_116px_92px_96px]";
+  "grid-cols-[28px_minmax(320px,1.8fr)_170px_140px_140px_116px_92px_96px]";
 
 const DOCUMENT_SORT_COLUMNS: Array<{
   key: DocumentSortKey;
@@ -105,7 +109,8 @@ const DOCUMENT_SORT_COLUMNS: Array<{
 }> = [
   { key: "name", label: "Name" },
   { key: "classification", label: "Classification" },
-  { key: "people", label: "People" },
+  { key: "uploader", label: "Uploader" },
+  { key: "approver", label: "Approver" },
   { key: "modified", label: "Modified" },
   { key: "size", label: "Size" },
 ];
@@ -131,6 +136,9 @@ export default function WorkspaceDocumentsPage() {
     id: string;
     name: string;
   } | null>(null);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [hoveredDocumentId, setHoveredDocumentId] = useState<string | null>(null);
+  const selectionActionRef = useRef<HTMLDivElement | null>(null);
 
   // TanStack Query list
   const documentsQuery = useWorkspaceDocuments(
@@ -164,23 +172,120 @@ export default function WorkspaceDocumentsPage() {
     },
   });
   const isAiAllowed = useWatch({ control, name: "isAiAllowed" });
+  const canApproveDocuments = Boolean(workspaceQuery.data?.canApproveDocuments);
+
+  // Filter raw documents list based on Category Pills
+  const rawDocsList = documentsQuery.data?.items || [];
+  const pendingCount = rawDocsList.filter(
+    (doc) =>
+      doc.status?.toLowerCase() ===
+        WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
+      doc.status?.toLowerCase().includes("pending"),
+  ).length;
+  const archivedCount = rawDocsList.filter(
+    (doc) => doc.status?.toLowerCase() === "archived",
+  ).length;
+
+  const filteredDocs = rawDocsList.filter((doc) => {
+    const isArchived = doc.status?.toLowerCase() === "archived";
+    if (activeCategory === "archived") {
+      return isArchived;
+    }
+    // Filter out archived documents from all other category views
+    if (isArchived) return false;
+
+    if (activeCategory === "pending") {
+      return (
+        doc.status?.toLowerCase() ===
+          WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
+        doc.status?.toLowerCase().includes("pending")
+      );
+    }
+    if (activeCategory === "ai") {
+      return doc.isAiAllowed;
+    }
+    if (activeCategory === "admin") {
+      return !doc.isAiAllowed;
+    }
+    if (activeCategory === "sensitive") {
+      return (
+        doc.confidentialityLevel ===
+        WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED
+      );
+    }
+    return true; // "all"
+  });
+  const sortedDocs = [...filteredDocs].sort((first, second) => {
+    const result = compareDocuments(first, second, sortKey, workspaceMembers);
+    return sortDirection === "asc" ? result : -result;
+  });
+  const selectedDocuments = rawDocsList.filter((doc) =>
+    selectedDocumentIds.includes(doc.id),
+  );
+  const visibleDocumentIds = sortedDocs.map((doc) => doc.id);
+  const allVisibleDocumentsSelected =
+    visibleDocumentIds.length > 0 &&
+    visibleDocumentIds.every((id) => selectedDocumentIds.includes(id));
+  const hasSelectedDocuments = selectedDocuments.length > 0;
+  const selectedManageableDocuments = selectedDocuments.filter((doc) =>
+    canManageDocument(doc, canApproveDocuments, currentUser?.id),
+  );
+  const selectedArchivedDocuments = selectedManageableDocuments.filter(isArchivedDocument);
+  const selectedArchiveTargets = selectedManageableDocuments.filter(
+    (doc) => !isArchivedDocument(doc),
+  );
+  const selectedRestoreTargets =
+    selectedArchiveTargets.length === 0 ? selectedArchivedDocuments : [];
+  const selectionArchiveLabel =
+    selectedRestoreTargets.length > 0 ? "Restore selected documents" : "Archive selected documents";
 
   useRegisterAssistantContext(
     activeWorkspaceId
       ? {
           pageType: "documents",
+          entityId:
+            selectedDocumentIds.length > 0
+              ? selectedDocumentIds.join(",")
+              : "documents",
           workspaceId: activeWorkspaceId,
           snapshot: {
             query,
             count: String(documentsQuery.data?.items?.length ?? 0),
+            selectedCount: String(selectedDocuments.length),
+            selectedDocuments: formatSelectedDocumentNames(selectedDocuments),
           },
         }
       : null,
   );
 
-  if (!activeWorkspaceId) return null;
+  useEffect(() => {
+    if (!hasSelectedDocuments || !selectionActionRef.current) return;
 
-  const canApproveDocuments = Boolean(workspaceQuery.data?.canApproveDocuments);
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        selectionActionRef.current,
+        {
+          autoAlpha: 0,
+          y: 14,
+          scale: 0.96,
+          filter: "blur(6px)",
+          transformOrigin: "50% 100%",
+        },
+        {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          filter: "blur(0px)",
+          duration: 0.34,
+          ease: "power3.out",
+        },
+      );
+    }, selectionActionRef);
+
+    return () => ctx.revert();
+  }, [hasSelectedDocuments]);
+
+  if (!activeWorkspaceId) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -296,6 +401,93 @@ export default function WorkspaceDocumentsPage() {
     }
   };
 
+  function toggleDocumentSelection(docId: string) {
+    setSelectedDocumentIds((current) =>
+      current.includes(docId)
+        ? current.filter((id) => id !== docId)
+        : [...current, docId],
+    );
+  }
+
+  function toggleSelectAllVisibleDocuments() {
+    setSelectedDocumentIds((current) => {
+      if (allVisibleDocumentsSelected) {
+        return current.filter((id) => !visibleDocumentIds.includes(id));
+      }
+
+      return Array.from(new Set([...current, ...visibleDocumentIds]));
+    });
+  }
+
+  function handleAskAiAboutSelection() {
+    if (selectedDocuments.length === 0) return;
+
+    const prompt =
+      selectedDocuments.length === 1
+        ? `Review this workspace document: ${selectedDocuments[0].name}. Include its classification, AI-readiness, and any risk that needs attention.`
+        : `Review these ${selectedDocuments.length} selected workspace documents. Summarize their classifications, AI-readiness, and any items that need attention.`;
+
+    window.dispatchEvent(
+      new CustomEvent("warptalk:open-assistant", { detail: { prompt } }),
+    );
+    toast.success("Selected documents attached to WarpBot.");
+  }
+
+  async function handleArchiveSelectedDocuments() {
+    const targets = selectedRestoreTargets.length > 0 ? selectedRestoreTargets : selectedArchiveTargets;
+    if (targets.length === 0) {
+      toast.error("You can only archive or restore documents you manage.");
+      return;
+    }
+
+    try {
+      for (const doc of targets) {
+        if (selectedRestoreTargets.length > 0) {
+          await restoreMutation.mutateAsync(doc.id);
+        } else {
+          await archiveMutation.mutateAsync(doc.id);
+        }
+      }
+      setSelectedDocumentIds((current) =>
+        current.filter((id) => !targets.some((doc) => doc.id === id)),
+      );
+      toast.success(
+        selectedRestoreTargets.length > 0
+          ? "Selected documents restored."
+          : "Selected documents archived.",
+      );
+    } catch {
+      toast.error(
+        selectedRestoreTargets.length > 0
+          ? "Failed to restore selected documents."
+          : "Failed to archive selected documents.",
+      );
+    }
+  }
+
+  async function handleDeleteSelectedDocuments() {
+    if (selectedManageableDocuments.length === 0) {
+      toast.error("You can only delete documents you manage.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete ${selectedManageableDocuments.length} selected document${selectedManageableDocuments.length === 1 ? "" : "s"} permanently?`,
+    );
+    if (!confirmed) return;
+
+    try {
+      for (const doc of selectedManageableDocuments) {
+        await deleteMutation.mutateAsync(doc.id);
+      }
+      setSelectedDocumentIds((current) =>
+        current.filter((id) => !selectedManageableDocuments.some((doc) => doc.id === id)),
+      );
+      toast.success("Selected documents deleted.");
+    } catch {
+      toast.error("Failed to delete selected documents.");
+    }
+  }
+
   const formatBytes = (bytes: number) => {
     if (!bytes || bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -337,52 +529,6 @@ export default function WorkspaceDocumentsPage() {
     return <FileDoc className="h-6 w-6 text-primary shrink-0" />;
   };
 
-  // Filter raw documents list based on Category Pills
-  const rawDocsList = documentsQuery.data?.items || [];
-  const pendingCount = rawDocsList.filter(
-    (doc) =>
-      doc.status?.toLowerCase() ===
-        WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
-      doc.status?.toLowerCase().includes("pending"),
-  ).length;
-  const archivedCount = rawDocsList.filter(
-    (doc) => doc.status?.toLowerCase() === "archived",
-  ).length;
-
-  const filteredDocs = rawDocsList.filter((doc) => {
-    const isArchived = doc.status?.toLowerCase() === "archived";
-    if (activeCategory === "archived") {
-      return isArchived;
-    }
-    // Filter out archived documents from all other category views
-    if (isArchived) return false;
-
-    if (activeCategory === "pending") {
-      return (
-        doc.status?.toLowerCase() ===
-          WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
-        doc.status?.toLowerCase().includes("pending")
-      );
-    }
-    if (activeCategory === "ai") {
-      return doc.isAiAllowed;
-    }
-    if (activeCategory === "admin") {
-      return !doc.isAiAllowed;
-    }
-    if (activeCategory === "sensitive") {
-      return (
-        doc.confidentialityLevel ===
-        WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED
-      );
-    }
-    return true; // "all"
-  });
-  const sortedDocs = [...filteredDocs].sort((first, second) => {
-    const result = compareDocuments(first, second, sortKey, workspaceMembers);
-    return sortDirection === "asc" ? result : -result;
-  });
-
   function handleSort(nextSortKey: DocumentSortKey) {
     if (sortKey === nextSortKey) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
@@ -394,7 +540,8 @@ export default function WorkspaceDocumentsPage() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-surface-1 pb-12 text-ink">
+    <div className="flex h-full flex-col bg-surface-1 text-ink">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
       {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
       {/* ─── Pill Category Filters & View Toggle Bar ─── */}
       <div className="flex shrink-0 items-center justify-between gap-4 px-2 pb-1.5 pt-2">
@@ -544,17 +691,16 @@ export default function WorkspaceDocumentsPage() {
       </div>
 
       {/* ─── Document Content: List View vs Grid View ─── */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-2">
       {documentsQuery.isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <Spinner className="h-7 w-7 animate-spin text-primary" />
         </div>
       ) : viewMode === "list" ? (
         /* List View */
-        <div className="overflow-x-auto">
+        <section className="mt-0.2 min-h-full overflow-x-auto px-2">
           <div className="min-w-[1040px]">
-            <div className={`grid ${DOCUMENT_GRID_CLASS} items-center gap-4 px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
-              <span />
+            <div className={`grid ${DOCUMENT_GRID_CLASS} px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
+              <div />
               {DOCUMENT_SORT_COLUMNS.map((column) => (
                 <SortableColumnHeader
                   key={column.key}
@@ -567,31 +713,85 @@ export default function WorkspaceDocumentsPage() {
               <span className="text-right">Actions</span>
             </div>
             <div className="space-y-0">
-              {sortedDocs.map((doc) => {
+              {sortedDocs.map((doc, index) => {
                 const isDocOwner =
                   doc.uploadedBy === currentUser?.id ||
                   doc.ownerId === currentUser?.id;
                 const canManageDoc = canApproveDocuments || isDocOwner;
+                const selected = selectedDocumentIds.includes(doc.id);
+                const previousDocument = index > 0 ? sortedDocs[index - 1] : null;
+                const nextDocument = index < sortedDocs.length - 1 ? sortedDocs[index + 1] : null;
+                const previousHighlighted =
+                  Boolean(previousDocument) &&
+                  (selectedDocumentIds.includes(previousDocument!.id) ||
+                    hoveredDocumentId === previousDocument!.id);
+                const nextHighlighted =
+                  Boolean(nextDocument) &&
+                  (selectedDocumentIds.includes(nextDocument!.id) ||
+                    hoveredDocumentId === nextDocument!.id);
+                const highlighted = selected || hoveredDocumentId === doc.id;
+                const rowBlockShape = getConnectedRowBlockShape(
+                  highlighted,
+                  previousHighlighted,
+                  nextHighlighted,
+                );
+                const rowStateClass = selected
+                  ? hoveredDocumentId === doc.id
+                    ? `${rowBlockShape} bg-primary/25 text-ink shadow-[inset_3px_0_0_hsl(var(--primary)/0.65)]`
+                    : `${rowBlockShape} bg-primary/15 text-ink hover:!bg-primary/25 hover:!shadow-[inset_3px_0_0_hsl(var(--primary)/0.65)]`
+                  : hoveredDocumentId === doc.id
+                    ? `${rowBlockShape} bg-surface-2 text-ink shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`
+                    : "rounded-[7px] hover:!bg-surface-2 hover:!shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]";
 
                 return (
                   <div
                     key={doc.id}
                     role="button"
                     tabIndex={0}
-                    className={`group grid min-h-[36px] ${DOCUMENT_GRID_CLASS} cursor-pointer items-center gap-4 rounded-[7px] px-2 py-1 text-[11px] transition-none hover:bg-surface-2 hover:shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`}
-                    onClick={() =>
-                      router.push(`/${workspaceSlug}/documents/${doc.id}`)
-                    }
+                    className={`group grid min-h-[36px] ${DOCUMENT_GRID_CLASS} cursor-pointer items-center px-2 py-1 text-[11px] transition-none ${rowStateClass}`}
+                    onPointerEnter={() => setHoveredDocumentId(doc.id)}
+                    onPointerLeave={() => setHoveredDocumentId(null)}
+                    onFocus={() => setHoveredDocumentId(doc.id)}
+                    onBlur={() => setHoveredDocumentId(null)}
+                    onClick={() => toggleDocumentSelection(doc.id)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        router.push(`/${workspaceSlug}/documents/${doc.id}`);
+                        toggleDocumentSelection(doc.id);
                       }
                     }}
                   >
-                    <div aria-hidden="true" />
+                    <div>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleDocumentSelection(doc.id);
+                        }}
+                        tabIndex={selected || hoveredDocumentId === doc.id ? 0 : -1}
+                        className={`flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border transition-none ${
+                          selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                        } ${
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-surface-1/70 hover:border-primary/70"
+                        }`}
+                        aria-label={`${selected ? "Unselect" : "Select"} ${doc.name}`}
+                      >
+                        {selected ? <Check size={10} weight="bold" /> : null}
+                      </button>
+                    </div>
 
-                    <div className="flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        router.push(`/${workspaceSlug}/documents/${doc.id}`);
+                      }}
+                      className="flex min-w-0 items-center gap-2 rounded-[6px] text-left transition-colors hover:bg-surface-3/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                      aria-label={`Open ${doc.name}`}
+                      title={`Open ${doc.name}`}
+                    >
                       {getFileIcon(doc.fileExtension)}
                       <div className="flex min-w-0 flex-col">
                         <span className="truncate font-medium text-ink transition-colors group-hover:text-primary">
@@ -601,67 +801,24 @@ export default function WorkspaceDocumentsPage() {
                           {doc.fileName}
                         </span>
                       </div>
-                    </div>
+                    </button>
 
                     <div onClick={(event) => event.stopPropagation()}>
-                      {doc.status?.toLowerCase() ===
-                        WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
-                      doc.status?.toLowerCase().includes("pending") ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-1.5 py-0 text-[9px] font-semibold text-amber-600">
-                          <Info className="h-3 w-3 text-amber-500" />
-                          <span>Pending Approval</span>
-                        </span>
-                      ) : !doc.isAiAllowed ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-1/70 px-1.5 py-0 text-[9px] font-semibold text-ink-muted">
-                          <FileText className="h-3 w-3" />
-                          <span>Administrative</span>
-                        </span>
-                      ) : doc.ingestionStatus?.toLowerCase() ===
-                        WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0 text-[9px] font-semibold text-emerald-600">
-                          <Sparkle className="h-3 w-3 text-emerald-500" />
-                          <span>AI Ready</span>
-                        </span>
-                      ) : doc.ingestionStatus?.toLowerCase() ===
-                        WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-destructive/20 bg-destructive/10 px-1.5 py-0 text-[9px] font-semibold text-destructive">
-                          <ShieldWarning className="h-3 w-3" />
-                          <span>AI Failed</span>
-                        </span>
-                      ) : doc.ingestionStatus?.toLowerCase() ===
-                          WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING ||
-                        doc.ingestionStatus?.toLowerCase() ===
-                          WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-1.5 py-0 text-[9px] font-semibold text-amber-500">
-                          <span>Processing AI</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[9px] font-semibold text-primary">
-                          <Brain className="h-3 w-3" />
-                          <span>AI Context</span>
-                        </span>
-                      )}
+                      <DocumentClassificationBadge doc={doc} />
                     </div>
 
-                    {/* `workspaceMembers` replaced the old `workspaceMembersQuery` on development.
-                        The id fallback is theirs too: some rows carry a membership id where others
-                        carry a user id, and matching only one leaves the avatar blank. */}
-                    <div className="flex min-w-0 items-center gap-3">
-                      <DocumentActor
-                        label="Uploader"
-                        member={workspaceMembers.find(
-                          (member) =>
-                            member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
-                        )}
-                      />
-                      <DocumentActor
-                        label="Approver"
-                        member={workspaceMembers.find(
-                          (member) =>
-                            member.userId === doc.approvedBy || member.id === doc.approvedBy,
-                        )}
-                      />
-                    </div>
+                    {/* Some rows carry a membership id while others carry a user id. */}
+                    <DocumentActor
+                      label="Uploader"
+                      showLabel={false}
+                      member={findDocumentMember(workspaceMembers, doc.uploadedBy) ?? undefined}
+                    />
+
+                    <DocumentActor
+                      label="Approver"
+                      showLabel={false}
+                      member={findDocumentMember(workspaceMembers, doc.approvedBy) ?? undefined}
+                    />
 
                     <span className="text-[11px] font-medium text-ink-muted">
                       {formatDate(doc.updatedAt || doc.createdAt)}
@@ -721,10 +878,11 @@ export default function WorkspaceDocumentsPage() {
               })}
             </div>
           </div>
-        </div>
+        </section>
       ) : (
         /* Grid Card View */
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <section className="min-h-full px-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {sortedDocs.map((doc) => (
             <Card
               key={doc.id}
@@ -737,47 +895,7 @@ export default function WorkspaceDocumentsPage() {
                 <div className="p-2 rounded-lg bg-surface-2 group-hover:bg-surface-3 transition-colors">
                   {getFileIcon(doc.fileExtension)}
                 </div>
-                {!doc.isAiAllowed ? (
-                  <span
-                    className="p-1 text-ink-muted bg-surface-3 rounded-full"
-                    title="Administrative"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                  </span>
-                ) : doc.ingestionStatus?.toLowerCase() ===
-                  WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
-                  <span
-                    className="p-1 text-emerald-500 bg-emerald-500/10 rounded-full"
-                    title="AI Ready"
-                  >
-                    <Sparkle className="h-3.5 w-3.5 text-emerald-500" />
-                  </span>
-                ) : doc.ingestionStatus?.toLowerCase() ===
-                  WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
-                  <span
-                    className="p-1 text-destructive bg-destructive/10 rounded-full"
-                    title="AI Ingestion Failed"
-                  >
-                    <ShieldWarning className="h-3.5 w-3.5" />
-                  </span>
-                ) : doc.ingestionStatus?.toLowerCase() ===
-                    WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING ||
-                  doc.ingestionStatus?.toLowerCase() ===
-                    WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
-                  <span
-                    className="p-1 text-amber-500 bg-amber-500/10 rounded-full"
-                    title="Processing AI..."
-                  >
-                    <Spinner className="h-3.5 w-3.5 animate-spin" />
-                  </span>
-                ) : (
-                  <span
-                    className="p-1 text-primary bg-primary/10 rounded-full"
-                    title="AI Context"
-                  >
-                    <Brain className="h-3.5 w-3.5" />
-                  </span>
-                )}
+                <DocumentClassificationBadge doc={doc} compact />
               </CardHeader>
 
               <CardContent className="p-4 pt-1 flex flex-col gap-2">
@@ -797,23 +915,86 @@ export default function WorkspaceDocumentsPage() {
                 <div className="flex items-center gap-3 pt-1">
                   <DocumentActor
                     label="Uploader"
-                    member={workspaceMembers.find(
-                      (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
-                    )}
+                    member={findDocumentMember(workspaceMembers, doc.uploadedBy) ?? undefined}
                   />
                   <DocumentActor
                     label="Approver"
-                    member={workspaceMembers.find(
-                      (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
-                    )}
+                    member={findDocumentMember(workspaceMembers, doc.approvedBy) ?? undefined}
                   />
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+        </section>
       )}
-      </div>
+
+      {hasSelectedDocuments ? (
+        <div className="pointer-events-none sticky bottom-5 z-10 flex justify-center">
+          <div
+            ref={selectionActionRef}
+            className="pointer-events-auto flex h-10 w-[344px] items-center justify-center gap-1.5 rounded-full border border-border/60 bg-surface-2/95 px-2.5 text-[11px] font-medium text-ink shadow-xl shadow-black/10 backdrop-blur will-change-transform"
+          >
+            <span className="w-[74px] shrink-0 text-center">
+              {selectedDocuments.length} selected
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-[96px] shrink-0 rounded-full px-2 text-[11px]"
+              onClick={toggleSelectAllVisibleDocuments}
+            >
+              <Checks size={12} />
+              {allVisibleDocumentsSelected ? "Unselect all" : "Select all"}
+            </Button>
+            <button
+              type="button"
+              onClick={handleAskAiAboutSelection}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+              aria-label="Ask AI about selected documents"
+              title="Ask AI"
+            >
+              <PaperPlaneTilt size={12} weight="bold" />
+            </button>
+            <button
+              type="button"
+              onClick={handleArchiveSelectedDocuments}
+              disabled={
+                archiveMutation.isPending ||
+                restoreMutation.isPending ||
+                (selectedArchiveTargets.length === 0 && selectedRestoreTargets.length === 0)
+              }
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-amber-500/10 hover:text-amber-500 disabled:pointer-events-none disabled:opacity-50"
+              aria-label={selectionArchiveLabel}
+              title={selectedRestoreTargets.length > 0 ? "Restore" : "Archive"}
+            >
+              {selectedRestoreTargets.length > 0 ? (
+                <ArrowCounterClockwise size={12} weight="bold" />
+              ) : (
+                <Archive size={12} weight="bold" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteSelectedDocuments}
+              disabled={deleteMutation.isPending || selectedManageableDocuments.length === 0}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
+              aria-label="Delete selected documents"
+              title="Delete"
+            >
+              <Trash size={12} weight="bold" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDocumentIds([])}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+              aria-label="Clear selected documents"
+            >
+              <X size={13} weight="bold" />
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* ─── Pagination ─── */}
       {documentsQuery.data && documentsQuery.data.total > 20 && (
@@ -837,6 +1018,7 @@ export default function WorkspaceDocumentsPage() {
           </button>
         </div>
       )}
+      </div>
 
       {/* ─── Upload Modal ("New" Document Upload Modal) ─── */}
       <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
@@ -1041,6 +1223,25 @@ export default function WorkspaceDocumentsPage() {
   );
 }
 
+function DocumentClassificationBadge({
+  doc,
+  compact = false,
+}: {
+  doc: WorkspaceDocumentDto;
+  compact?: boolean;
+}) {
+  const meta = getDocumentClassificationMeta(doc);
+
+  return (
+    <span
+      className={`inline-flex max-w-full items-center truncate text-[11px] font-medium text-ink-muted ${compact ? "text-right text-[10px]" : ""}`}
+      title={meta.label}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
 function SortableColumnHeader({
   label,
   active,
@@ -1089,10 +1290,16 @@ function compareDocuments(
       getDocumentClassificationLabel(second),
     );
   }
-  if (sortKey === "people") {
+  if (sortKey === "uploader") {
     return compareText(
-      getDocumentPeopleLabel(first, members),
-      getDocumentPeopleLabel(second, members),
+      getDocumentActorLabel(first.uploadedBy, members),
+      getDocumentActorLabel(second.uploadedBy, members),
+    );
+  }
+  if (sortKey === "approver") {
+    return compareText(
+      getDocumentActorLabel(first.approvedBy, members),
+      getDocumentActorLabel(second.approvedBy, members),
     );
   }
   if (sortKey === "modified") {
@@ -1106,6 +1313,10 @@ function compareDocuments(
 }
 
 function getDocumentClassificationLabel(doc: WorkspaceDocumentDto) {
+  return getDocumentClassificationMeta(doc).label;
+}
+
+function getDocumentClassificationMeta(doc: WorkspaceDocumentDto) {
   const status = doc.status?.toLowerCase() ?? "";
   const ingestionStatus = doc.ingestionStatus?.toLowerCase() ?? "";
 
@@ -1113,34 +1324,52 @@ function getDocumentClassificationLabel(doc: WorkspaceDocumentDto) {
     status === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
     status.includes("pending")
   ) {
-    return "Pending Approval";
+    return {
+      label: "Pending Approval",
+    };
   }
-  if (!doc.isAiAllowed) return "Administrative";
+  if (
+    doc.confidentialityLevel ===
+    WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.RESTRICTED
+  ) {
+    return {
+      label: "Restricted",
+    };
+  }
+  if (!doc.isAiAllowed) {
+    return {
+      label: "Administrative",
+    };
+  }
   if (ingestionStatus === WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED) {
-    return "AI Ready";
+    return {
+      label: "AI Ready",
+    };
   }
   if (ingestionStatus === WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED) {
-    return "AI Failed";
+    return {
+      label: "AI Failed",
+    };
   }
   if (
     ingestionStatus === WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING ||
     ingestionStatus === WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING
   ) {
-    return "Processing AI";
+    return {
+      label: "Processing AI",
+    };
   }
-  return "AI Context";
+  return {
+    label: "AI Context",
+  };
 }
 
-function getDocumentPeopleLabel(
-  doc: WorkspaceDocumentDto,
+function getDocumentActorLabel(
+  memberId: string | null | undefined,
   members: WorkspaceMemberDto[],
 ) {
-  const uploader = findDocumentMember(members, doc.uploadedBy);
-  const approver = findDocumentMember(members, doc.approvedBy);
-  return [uploader, approver]
-    .map((member) => member?.fullName || member?.email)
-    .filter(Boolean)
-    .join(" ");
+  const member = findDocumentMember(members, memberId);
+  return member?.fullName || member?.email || "";
 }
 
 function findDocumentMember(
@@ -1164,4 +1393,35 @@ function compareNullableDate(first: string | null, second: string | null) {
 
 function compareText(first: string, second: string) {
   return first.localeCompare(second, undefined, { sensitivity: "base" });
+}
+
+function canManageDocument(
+  doc: WorkspaceDocumentDto,
+  canApproveDocuments: boolean,
+  userId: string | null | undefined,
+) {
+  return canApproveDocuments || doc.uploadedBy === userId || doc.ownerId === userId;
+}
+
+function isArchivedDocument(doc: WorkspaceDocumentDto) {
+  return doc.status?.toLowerCase() === "archived";
+}
+
+function formatSelectedDocumentNames(documents: WorkspaceDocumentDto[]) {
+  if (documents.length === 0) return "None";
+  const names = documents.slice(0, 5).map((doc) => doc.name);
+  const suffix = documents.length > names.length ? ` +${documents.length - names.length} more` : "";
+  return `${names.join(", ")}${suffix}`;
+}
+
+function getConnectedRowBlockShape(
+  highlighted: boolean,
+  previousHighlighted: boolean,
+  nextHighlighted: boolean,
+) {
+  if (!highlighted) return "rounded-[7px]";
+  if (previousHighlighted && nextHighlighted) return "rounded-none";
+  if (previousHighlighted) return "rounded-b-[7px] rounded-t-none";
+  if (nextHighlighted) return "rounded-b-none rounded-t-[7px]";
+  return "rounded-[7px]";
 }
