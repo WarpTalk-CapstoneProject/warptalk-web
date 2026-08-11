@@ -134,7 +134,10 @@ function LinearRow({
   return (
     <Link
       href={`/${workspaceSlug}/rooms/${room.id}`}
-      className="flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
+      // @container, not a viewport breakpoint: what squeezes this row is the Properties panel
+      // opening beside it, which takes 260px away while the window stays exactly the same size.
+      // A `lg:` rule cannot see that and would keep every chip at a width the row no longer has.
+      className="@container flex items-center min-h-[44px] py-1 text-[13px] hover:bg-accent/50 border-b border-border/40 px-4 group cursor-pointer transition-colors"
     >
       <div className="flex items-center w-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground">
         {isCurrentUserHost && (
@@ -157,10 +160,14 @@ function LinearRow({
         <StatusIcon status={room.status} />
       </div>
 
-      <div className="w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
+      <div className="hidden @[560px]:block w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
         {room.translationRoomCode}
       </div>
-      <div className="flex-1 min-w-0 pr-4 flex items-center gap-2">
+      {/* overflow-hidden, not just min-w-0. min-w-0 lets this column shrink to nothing, which is
+          what has to happen when the Properties panel opens — but the badges after the title are
+          shrink-0, so with nothing clipping them they simply drew on top of the status column.
+          The title truncates first and the badges clip only once there is genuinely no room. */}
+      <div className="flex-1 min-w-0 overflow-hidden pr-4 flex items-center gap-2">
         <span className="text-foreground font-medium truncate block">
           {room.title}
         </span>
@@ -187,7 +194,7 @@ function LinearRow({
           <StatusPanel status={room.status} />
         </div>
 
-        <div className="flex w-[164px] shrink-0 items-center">
+        <div className="hidden @[700px]:flex w-[164px] shrink-0 items-center">
           <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
             <Avatar className="size-5 shrink-0 rounded-full">
               <AvatarImage src={hostAvatar} alt={hostName} />
@@ -238,7 +245,7 @@ function LinearRow({
             seats-taken over the meeting type's seat cap (WT-274) — it just says so now. A
             people icon and a title are the whole fix; the number itself was never wrong. */}
         <div
-          className="flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+          className="hidden @[820px]:flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
           title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
         >
           <Users size={13} weight="regular" aria-hidden />
@@ -248,7 +255,7 @@ function LinearRow({
           </span>
         </div>
 
-        <div className="flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="hidden @[900px]:flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums">
             {formatTimeShort(room.scheduledAt ?? room.createdAt)}
@@ -572,6 +579,13 @@ export default function MeetingsPageLinear() {
     if (activeTab === "active") {
       const now = new Date();
       const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60000);
+      // A scheduled room needs a window on BOTH sides. The check used to be "starts within the
+      // next fifteen minutes" with no lower bound, so `scheduledAt <= now + 15min` was also true
+      // for every meeting whose time had already passed — a room booked for last week sat in
+      // Active forever, which is most of what made the tab meaningless. Two hours of grace after
+      // the hour keeps a meeting that is running late; older than that it was never started, and
+      // it belongs to its own day under Scheduled, not here.
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60000);
       return rooms.filter(
         (r) =>
           matchesSearch(r) &&
@@ -579,7 +593,8 @@ export default function MeetingsPageLinear() {
             r.status === "waiting" ||
             (r.status === "scheduled" &&
               (!r.scheduledAt ||
-                new Date(r.scheduledAt) <= fifteenMinsFromNow))),
+                (new Date(r.scheduledAt) <= fifteenMinsFromNow &&
+                  new Date(r.scheduledAt) >= twoHoursAgo)))),
       );
     }
     if (activeTab === "scheduled") {
