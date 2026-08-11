@@ -85,9 +85,9 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, {
           idToken,
         });
-        const { user, accessToken, refreshToken, expiresAt } = res.data;
+        const { user, accessToken, expiresAt } = res.data;
 
-        login(user, accessToken, refreshToken);
+        login(user, accessToken);
         setAccessTokenCookie(accessToken, expiresAt);
 
         const isAdmin = user.roles?.some(
@@ -261,9 +261,9 @@ function LoginContent() {
         email: data.email,
         password: data.password,
       });
-      const { user, accessToken, refreshToken, expiresAt } = res.data;
+      const { user, accessToken, expiresAt } = res.data;
 
-      login(user, accessToken, refreshToken);
+      login(user, accessToken);
       setAccessTokenCookie(accessToken, expiresAt);
 
       const isAdmin = user.roles?.some(
