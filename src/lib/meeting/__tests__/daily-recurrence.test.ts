@@ -9,6 +9,7 @@ import {
   firstOccurrenceDate,
   isValidTime,
   occurrenceCount,
+  occurrenceDates,
   parseLocalDate,
   toLocalDateString,
   validateDailyDraft,
@@ -102,4 +103,76 @@ test("the summary states the hour, the count and the range", () => {
 
 test("the summary is empty rather than misleading when the draft produces nothing", () => {
   assert.equal(describeDailySchedule({ time: "08:00", endDate: "2026-08-01" }, tenAmOn6Aug), "");
+});
+
+// ── WEEKLY / MONTHLY drafts ────────────────────────────────────────────────
+//
+// The preview has to agree with what the server will actually create. These pin the two rules
+// most likely to drift apart from RecurrenceScheduleCalculator: which week a fortnight is
+// anchored on, and what a monthly rule does in a month too short for its day.
+
+test("a weekly draft only produces the weekdays it names", () => {
+  // 2026-08-10 is a Monday; the draft starts on the 7th (a Friday).
+  const dates = occurrenceDates(
+    { type: "WEEKLY", time: "08:00", endDate: "2026-08-23", byWeekdays: [3, 1] },
+    tenAmOn6Aug,
+  );
+
+  assert.deepEqual(
+    dates.map(toLocalDateString),
+    ["2026-08-10", "2026-08-12", "2026-08-17", "2026-08-19"],
+  );
+});
+
+test("a weekly draft with no weekdays repeats the start date's own weekday", () => {
+  const dates = occurrenceDates(
+    { type: "WEEKLY", time: "08:00", endDate: "2026-08-28" },
+    tenAmOn6Aug,
+  );
+
+  // Starts Friday 7 Aug, so: every Friday.
+  assert.deepEqual(
+    dates.map(toLocalDateString),
+    ["2026-08-07", "2026-08-14", "2026-08-21", "2026-08-28"],
+  );
+});
+
+test("a monthly draft skips a month too short for its day rather than clamping", () => {
+  const dates = occurrenceDates(
+    { type: "MONTHLY", time: "08:00", endDate: "2027-04-30", byMonthDay: 31 },
+    new Date(2026, 11, 30, 10, 0, 0),
+  );
+
+  // No February and no April: neither has a 31st, and clamping would silently move the meeting.
+  assert.deepEqual(
+    dates.map(toLocalDateString),
+    ["2026-12-31", "2027-01-31", "2027-03-31"],
+  );
+});
+
+test("a monthly day earlier than the start date begins the following month", () => {
+  const dates = occurrenceDates(
+    { type: "MONTHLY", time: "08:00", endDate: "2026-11-30", byMonthDay: 1 },
+    tenAmOn6Aug,
+  );
+
+  assert.deepEqual(dates.map(toLocalDateString), ["2026-09-01", "2026-10-01", "2026-11-01"]);
+});
+
+test("the summary names the cadence it will actually run at", () => {
+  const weekly = describeDailySchedule(
+    { type: "WEEKLY", time: "08:00", endDate: "2026-08-23", byWeekdays: [1, 3] },
+    tenAmOn6Aug,
+  );
+  assert.match(weekly, /Every week on Mon, Wed at 08:00/);
+  assert.match(weekly, /4 meetings/);
+
+  const monthly = describeDailySchedule(
+    { type: "MONTHLY", time: "08:00", endDate: "2026-11-30", byMonthDay: 1 },
+    tenAmOn6Aug,
+  );
+  assert.match(monthly, /Every month on the 1st at 08:00/);
+  // The range is the dates the rule produces, not the draft's end date — the last meeting is
+  // 1 Nov, and claiming 30 Nov would be a preview the result does not match.
+  assert.match(monthly, /Sep 1 – Nov 1/);
 });
