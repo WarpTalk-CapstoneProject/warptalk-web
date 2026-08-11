@@ -17,9 +17,15 @@ export interface UserDto {
   roles: string[];
 }
 
+/**
+ * No `refreshToken`. The server stopped sending one in the body when the session moved into
+ * HttpOnly cookies; the field stayed declared here for a while and was therefore a lie the
+ * compiler enforced — every `const { refreshToken } = res.data` type-checked and every one of
+ * them was `undefined` at runtime, which is how the client ended up unable to refresh at all.
+ * The refresh token is in the `warptalk_refresh` cookie and is not readable from JS by design.
+ */
 export interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
   expiresAt: string; // ISO DateTime
   user: UserDto;
 }
@@ -41,13 +47,9 @@ export interface GoogleLoginRequest {
   idToken: string;
 }
 
-export interface RefreshTokenRequest {
-  refreshToken: string;
-}
-
-export interface LogoutRequest {
-  refreshToken: string;
-}
+// No RefreshTokenRequest / LogoutRequest. Both carried a refresh token this side can no longer
+// read, and both endpoints take it from the HttpOnly cookie instead — the request bodies are
+// empty now. The server's DTOs already had the field nullable for exactly this.
 
 export interface UpdateProfileRequest {
   fullName?: string;
