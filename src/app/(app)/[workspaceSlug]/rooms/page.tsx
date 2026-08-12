@@ -223,11 +223,11 @@ function LinearRow({
           with the meaning huddled in the middle of it. The pill hugs what it contains and is
           capped at the column, so the columns still line up and nothing can overflow them. */}
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
-        <div className="flex w-[104px] shrink-0 items-center">
+        <div className="flex shrink-0 items-center">
           <StatusPanel status={room.status} />
         </div>
 
-        <div className="hidden @[700px]:flex w-[164px] shrink-0 items-center">
+        <div className="hidden @[700px]:flex shrink-0 items-center">
           <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
             <Avatar className="size-5 shrink-0 rounded-full">
               <AvatarImage src={hostAvatar} alt={hostName} />
@@ -239,7 +239,7 @@ function LinearRow({
           </div>
         </div>
 
-        <div className="flex w-[176px] shrink-0 items-center">
+        <div className="flex shrink-0 items-center">
           <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
             {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
 
@@ -278,7 +278,7 @@ function LinearRow({
             seats-taken over the meeting type's seat cap (WT-274) — it just says so now. A
             people icon and a title are the whole fix; the number itself was never wrong. */}
         <div
-          className="hidden @[820px]:flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+          className="hidden @[820px]:flex h-[26px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
           title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
         >
           <Users size={13} weight="regular" aria-hidden />
@@ -288,7 +288,7 @@ function LinearRow({
           </span>
         </div>
 
-        <div className="hidden @[900px]:flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="hidden @[900px]:flex h-[26px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums">
             {formatTimeShort(room.scheduledAt ?? room.createdAt)}
@@ -387,7 +387,10 @@ export default function MeetingsPageLinear() {
    * Thursday". Neither of those has a booking as an answer; both have a meeting.
    */
   const isGroupedView = activeTab !== "active" && !dayFilter;
-  const rowSource = isGroupedView ? (groupedList.data?.rooms ?? []) : rooms;
+  const rowSource = useMemo(
+    () => (isGroupedView ? (groupedList.data?.rooms ?? []) : rooms),
+    [isGroupedView, groupedList.data?.rooms, rooms],
+  );
 
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -405,6 +408,16 @@ export default function MeetingsPageLinear() {
         .filter((value): value is string => Boolean(value))
         .some((value) => value.toLowerCase().includes(normalizedQuery));
     };
+
+    // A day picked off the strip wins over the tab, in EVERY tab.
+    //
+    // This used to sit after the Active branch, which returned first — so on Active, the tab the
+    // page opens on, clicking a day did nothing at all and the strip was decoration. Picking a
+    // date is the more specific question ("what is on Tuesday?") and the tab is the general one;
+    // the specific one has to be answered.
+    if (dayFilter) {
+      return rooms.filter((r) => matchesSearch(r) && isScheduledOn(r, dayFilter));
+    }
 
     if (activeTab === "active") {
       const now = new Date();
@@ -425,14 +438,6 @@ export default function MeetingsPageLinear() {
               (!r.scheduledAt ||
                 (new Date(r.scheduledAt) <= fifteenMinsFromNow &&
                   new Date(r.scheduledAt) >= twoHoursAgo)))),
-      );
-    }
-    // A day off the strip narrows whichever tab is open. It replaced the Scheduled TAB, and
-    // WT-247's reasoning still holds: what belongs to a day is what was BOOKED for it, not what
-    // its status happens to be now — the row renders its own state.
-    if (dayFilter) {
-      return rooms.filter(
-        (r) => matchesSearch(r) && isScheduledOn(r, dayFilter),
       );
     }
     if (activeTab === "history")
