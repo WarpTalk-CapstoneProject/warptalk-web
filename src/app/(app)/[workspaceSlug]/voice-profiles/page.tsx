@@ -334,7 +334,7 @@ export default function VoiceProfilesPage() {
 
         {/* No section title and no sentence explaining what a voice profile is: the page is
             called Voice Profiles in the sidebar and the top bar, the toolbar above already offers
-            "Create profile", and the empty state says the rest at the moment it is needed.
+            the setup action, and the empty state says the rest at the moment it is needed.
 
             Colours come from the palette rather than `bg-white` and `bg-neutral-950`, which were
             invisible in dark mode and were the loudest thing on the page in light. */}
@@ -362,7 +362,7 @@ export default function VoiceProfilesPage() {
                   onClick={() => setIsCreateOpen(true)}
                   icon={<Plus size={13} weight="bold" />}
                 >
-                  Create profile
+                  Add voice profile
                 </WorkspacePrimaryButton>
               }
             />
@@ -576,7 +576,7 @@ function VoiceProfileRow({
 }
 
 function voiceConsentLabel(profile: VoiceProfileDto) {
-  const status = profile.consentStatus?.toLowerCase();
-  if (status === "granted") return "Consent active";
+  const status = profile.consentStatus?.trim().toUpperCase();
+  if (status === "GRANTED") return "Consent active";
   return "Needs consent";
 }
