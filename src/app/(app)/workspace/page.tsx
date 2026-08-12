@@ -170,8 +170,8 @@ export default function WorkspaceOnboardingGatePage() {
         <Image
           src="/assets/logos/warptalk-sidebar-logo.png"
           alt="WarpTalk"
-          width={100}
-          height={24}
+          width={806}
+          height={200}
           className="object-contain opacity-80"
           style={{ width: "auto", height: 24 }}
           priority
