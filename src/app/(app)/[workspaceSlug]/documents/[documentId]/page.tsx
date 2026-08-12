@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Check,
   Download,
-  FileText,
   ShieldWarning,
   Spinner,
   X,
@@ -13,7 +12,6 @@ import { useParams, useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -34,6 +32,7 @@ import { downloadBlob } from "@/lib/ui/download-blob";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 import { DocumentAccessPolicyPanel } from "./components/DocumentAccessPolicyPanel";
+import { DocumentPreview } from "./components/DocumentPreview";
 import { DocumentMetadataCard } from "./components/DocumentMetadataCard";
 
 interface PageProps {
@@ -259,65 +258,21 @@ export default function DocumentDetailPage({ params }: PageProps) {
 
       {/* Main Grid: Original File Card vs Right (Properties Sidebar) */}
       <div className="grid gap-6 lg:grid-cols-[1fr_360px] items-start">
-        {/* Central panel - original file */}
+        {/* Central panel — the document itself.
+            It used to be a card containing a second card containing the file's NAME, size,
+            format badge and a Download button: everything about the file except the file. The
+            page asks you to approve a document, so the document is what belongs here, flat, with
+            no chrome between the reader and the text. The name and format live in the properties
+            panel to the right, which already lists them. */}
         <div className="flex flex-col gap-6 min-w-0">
-          <Card className="border-hairline bg-surface-1 rounded-xl shadow-sm overflow-hidden">
-            <CardHeader className="border-b border-hairline px-5 py-4 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <CardTitle className="text-sm font-semibold">
-                  Original File
-                </CardTitle>
-              </div>
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 border-hairline bg-surface-2 uppercase font-mono text-ink-muted"
-              >
-                {doc.fileExtension.replace(".", "") || "DOC"}
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="relative rounded-xl border border-hairline bg-surface-2 p-6 flex flex-col gap-6">
-                {/* Header row: File info + Download button */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
-                      <FileText className="h-6 w-6" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-base text-ink truncate">
-                        {doc.fileName}
-                      </span>
-                      <span className="text-xs text-ink-muted mt-0.5">
-                        {formatBytes(doc.sizeBytes)} •{" "}
-                        {doc.fileExtension.replace(".", "").toUpperCase() ||
-                          "DOC"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleDownload}
-                    disabled={downloadMutation.isPending}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-white transition hover:bg-primary-hover disabled:opacity-50 cursor-pointer shrink-0 shadow-sm"
-                  >
-                    {downloadMutation.isPending ? (
-                      <Spinner className="h-4 w-4 animate-spin text-white" />
-                    ) : (
-                      <Download className="h-4 w-4" />
-                    )}
-                    <span>Download File</span>
-                  </button>
-                </div>
-
-                {/* The "Document Status" and "AI Ingestion Status" pair that used to sit here is
-                    gone: the properties panel on the right already lists Status and Ingestion, so
-                    this card restated both of them in bigger type a few hundred pixels away. Two
-                    places showing the same field is two places to disagree while one of them
-                    refetches. The panel keeps them; this card is about the file. */}
-              </div>
-            </CardContent>
-          </Card>
+          <DocumentPreview
+            workspaceId={activeWorkspaceId}
+            documentId={doc.id}
+            fileName={doc.fileName}
+            fileExtension={doc.fileExtension}
+            sizeBytes={doc.sizeBytes}
+            onDownload={handleDownload}
+          />
         </div>
 
         {/* Right Sidebar: Properties & Access Policies */}
