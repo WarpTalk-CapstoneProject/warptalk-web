@@ -20,6 +20,7 @@ import {
   FileText,
   Sparkle,
 } from "@phosphor-icons/react/dist/ssr";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 
 import { AdminFilterTabs, AdminPanel } from "@/components/admin/admin-page-chrome";
 import { Button } from "@/components/ui/button";
@@ -98,33 +99,23 @@ export function KnowledgeTable({
         trailing={items.length ? `${items.length} on this page` : undefined}
       />
 
-      <div className="flex flex-wrap items-center gap-1 py-3">
-        <button
-          type="button"
+      <FilterChipGroup label="Filter facts by category" className="py-3">
+        <FilterChip
+          selected={factCategory === null}
           onClick={() => filters.setFactCategory(null)}
-          className={`h-6 rounded-md px-2.5 text-[11px] font-medium transition-colors ${
-            factCategory === null
-              ? "bg-surface-2 text-ink"
-              : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-          }`}
         >
           All facts
-        </button>
+        </FilterChip>
         {FACT_CATEGORIES.map((category) => (
-          <button
+          <FilterChip
             key={category}
-            type="button"
+            selected={factCategory === category}
             onClick={() => filters.setFactCategory(category)}
-            className={`h-6 rounded-md px-2.5 text-[11px] font-medium capitalize transition-colors ${
-              factCategory === category
-                ? "bg-surface-2 text-ink"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-            }`}
           >
             {category}
-          </button>
+          </FilterChip>
         ))}
-      </div>
+      </FilterChipGroup>
 
       <AdminPanel>
         {isError ? (

@@ -23,7 +23,9 @@ import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
+import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
@@ -205,6 +207,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isSystemAdmin = useIsSystemAdmin();
   // Decides more than the header divider: it is also what tells the meeting dock to stop
   // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
   // window floats on top of the meeting it is a copy of.
@@ -254,11 +257,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           membershipType,
           defaultLanguage
         );
+      } else if (isSystemAdmin) {
+        // A platform admin with no workspace of their own is not a new user who has yet to make
+        // one — they administer the platform the workspaces live in. Sending them to
+        // /workspace made the master account look like it had signed up by mistake, and the
+        // only way on was to create a workspace nobody wanted. The admin portal is their home.
+        router.replace("/admin");
       } else {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, isSystemAdmin, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
 
   if (!mounted || !isAuthenticated) {
     return (
@@ -514,13 +523,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               className="bg-surface-1"
             >
               <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
+              {/* Members, not "Properties".
+                  The panel used to be a header over the sentence "Select an item to view its
+                  properties and actions" — and nothing in the app ever published an item for it
+                  to describe, so that sentence was the whole feature. 260px had been reserved
+                  for something that never arrived.
+
+                  Properties is meant to return here for a selected item; it is not built in this
+                  change because there is still no selection to read. Adding a store nothing
+                  writes to would be the same placeholder again, one layer deeper. */}
               <div className="flex items-center px-4 h-[38px] border-b border-border">
-                <span className="text-[12px] font-medium text-ink">Properties</span>
+                <span className="text-[12px] font-medium text-ink">Members</span>
               </div>
               <div className="flex-1 p-4 overflow-y-auto">
-                <div className="text-[12px] text-ink-muted">
-                  Select an item to view its properties and actions.
-                </div>
+                <WorkspaceMembersPanel
+                  workspaceId={activeWorkspaceId}
+                  workspaceSlug={activeWorkspaceSlug}
+                />
               </div>
             </aside>
             </AnimatedWidthPanel>
