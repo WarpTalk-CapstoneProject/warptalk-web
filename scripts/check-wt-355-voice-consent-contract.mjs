@@ -25,7 +25,7 @@ const checks = [
   ["WT-355 page renders consent agreement section", page.includes("Voice consent agreement")],
   ["WT-355 page uses Agree & save voice profile CTA", page.includes("Agree & save voice profile")],
   ["WT-355 page uses Complete consent to continue helper", page.includes("Complete consent to continue")],
-  ["WT-355 page keeps revoke out of the current upload-consent scope", !page.includes("revoke this voice profile")],
+  ["WT-355 page uses delete-profile retention acknowledgement", page.includes("I understand I can delete this voice profile later.")],
   ["WT-355 page imports Checkbox component", page.includes("@/components/ui/checkbox")],
   [
     "WT-355 service appends every consent field to FormData",
