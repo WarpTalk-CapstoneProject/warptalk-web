@@ -24,6 +24,7 @@ import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
@@ -205,6 +206,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isSystemAdmin = useIsSystemAdmin();
   // Decides more than the header divider: it is also what tells the meeting dock to stop
   // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
   // window floats on top of the meeting it is a copy of.
@@ -254,11 +256,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           membershipType,
           defaultLanguage
         );
+      } else if (isSystemAdmin) {
+        // A platform admin with no workspace of their own is not a new user who has yet to make
+        // one — they administer the platform the workspaces live in. Sending them to
+        // /workspace made the master account look like it had signed up by mistake, and the
+        // only way on was to create a workspace nobody wanted. The admin portal is their home.
+        router.replace("/admin");
       } else {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, isSystemAdmin, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
 
   if (!mounted || !isAuthenticated) {
     return (
