@@ -332,6 +332,11 @@ export function PersistentMeetingSession({
   const removeLiveParticipant = useTranslationRoomStore(
     (state) => state.removeParticipant,
   );
+  // WT-354: the roster the hub hands a joiner on arrival. Without it the live list could only
+  // ever contain people who joined AFTER this client did.
+  const setLiveParticipants = useTranslationRoomStore(
+    (state) => state.setParticipants,
+  );
   const raisedHands = useTranslationRoomStore((state) => state.raisedHands);
   const setHandRaisedInStore = useTranslationRoomStore(
     (state) => state.setHandRaised,
@@ -463,6 +468,14 @@ export function PersistentMeetingSession({
       mainMeetingSessionRef.current = meetingSession;
     }
   }, [meetingSession, breakoutState.active]);
+  // WT-357: the session as it is right now, for handlers registered once on the hub connection.
+  // Distinct from mainMeetingSessionRef above, which deliberately freezes at the MAIN room's
+  // session while a breakout is active — a handler asking "do I already hold a live session"
+  // must be told about the session it actually holds.
+  const currentMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
+  useEffect(() => {
+    currentMeetingSessionRef.current = meetingSession;
+  }, [meetingSession]);
   const endBreakoutsMutation = useEndBreakouts(roomId);
 
   // WT-08: application-level reconnect state — the hub connection itself already
@@ -1235,6 +1248,22 @@ export function PersistentMeetingSession({
         // everyone, including FilteredRoomAudio's choice of dub over raw microphone.
         void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
         void refetchRoom().then(() => {
+          // WT-357: only a client that does NOT already hold a live media session may re-join
+          // here. retryMeetingConnection begins with setMeetingSession(null), which drops
+          // `hasToken` and therefore <LiveKitRoom connect> — useLiveKitRoom then runs
+          // room.disconnect(), stopping the camera and microphone tracks this participant is
+          // publishing. That is what the report describes as "pressing Start Translation turns
+          // the camera and mic off and the UI hitches": the devices were not toggled, the whole
+          // media connection was torn down and rebuilt, for everyone in the room at once,
+          // because the gateway broadcasts TranslationRoomStarted room-wide.
+          //
+          // The call still earns its place for the clients it was written for: somebody sitting
+          // in the lobby holds an empty token (JoinMeetingResponse.IsWaitingRoom), and the room
+          // starting is exactly when they need a real one. Everyone else already has one — a
+          // translation session opening changes nothing about a LiveKit grant — and learns the
+          // news from setLiveState, the sessions invalidation and the room refetch above.
+          const session = currentMeetingSessionRef.current;
+          if (session?.token && !session.isWaitingRoom) return;
           retryMeetingConnectionRef.current();
         });
       },
@@ -1246,6 +1275,17 @@ export function PersistentMeetingSession({
     // preference for an interpreter dub that has stopped being produced.
     connection.on("TranslationStopped", () => {
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
+    });
+    // WT-354: who was already here. The hub sends this to the caller alone, once, immediately
+    // after JoinTranslationRoom — every other participant event describes a CHANGE, so without a
+    // starting point the live roster of a late joiner began empty and no later event could fill
+    // it in. A host joining a meeting in progress saw a People panel containing only themselves.
+    //
+    // Replaces rather than merges: this IS the room as the server sees it, and anything already
+    // in the store for this room predates the connection that just opened.
+    connection.on("ParticipantRoster", (roster: ParticipantInfoDto[]) => {
+      setLiveParticipants(roster);
+      void refetchParticipants();
     });
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
       addLiveParticipant(participant);
@@ -1582,6 +1622,7 @@ export function PersistentMeetingSession({
     refetchParticipants,
     refetchRoom,
     removeLiveParticipant,
+    setLiveParticipants,
     resetLiveRoom,
     displayName,
     roomId,
