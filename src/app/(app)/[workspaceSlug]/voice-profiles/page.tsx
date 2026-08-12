@@ -37,6 +37,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
+import {
+  WorkspaceEmptyState,
+  WorkspacePrimaryButton,
+} from "@/components/workspace/page-chrome";
 import { useCreateVoiceProfile, useDeleteVoiceProfile, useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { getErrorMessage } from "@/lib/api/errors";
 import { analyzeVoiceSample } from "@/lib/voice/voice-sample-quality";
@@ -328,63 +332,59 @@ export default function VoiceProfilesPage() {
 
         <LibraryVoicePicker profiles={profileList} />
 
-        <section className="mx-4 space-y-4 py-4 pb-6">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-[18px] font-semibold text-ink">Your voice profiles</h2>
-              <p className="text-[13px] leading-5 text-ink-muted">
-                Attach a short reference sample so WarpTalk can personalize your future room audio.
-              </p>
-            </div>
-            <Badge variant="outline" className="w-fit rounded-full bg-white px-3 py-1 text-[12px] text-ink-muted">
+        {/* No section title and no sentence explaining what a voice profile is: the page is
+            called Voice Profiles in the sidebar and the top bar, the toolbar above already offers
+            "Create profile", and the empty state says the rest at the moment it is needed.
+
+            Colours come from the palette rather than `bg-white` and `bg-neutral-950`, which were
+            invisible in dark mode and were the loudest thing on the page in light. */}
+        <section className="mx-4 space-y-3 py-4 pb-6">
+          <div className="flex items-center justify-end">
+            <Badge
+              variant="outline"
+              className="w-fit rounded-full bg-canvas px-3 py-1 text-[12px] text-ink-muted"
+            >
               {readyCount}/{profileList.length} sample ready
             </Badge>
           </div>
 
-          <div className="divide-y divide-border rounded-[16px] border border-border bg-white">
-            {isLoading && (
-              <div className="px-5 py-6 text-[14px] text-ink-muted">Loading voice profiles...</div>
-            )}
-
-            {!isLoading && profileList.length === 0 && (
-              <div className="grid gap-4 px-5 py-8 md:grid-cols-[1fr_auto] md:items-center">
-                <div className="flex items-start gap-4">
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-neutral-950 text-white">
-                    <Waveform size={20} weight="bold" />
-                  </span>
-                  <div>
-                    <p className="text-[15px] font-semibold text-ink">No voice profiles yet</p>
-                    <p className="mt-1 max-w-2xl text-[13px] leading-5 text-ink-muted">
-                      Add your first voice profile and attach a reference sample when you are ready.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  className="h-9 w-fit rounded-full bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+          {isLoading ? (
+            <div className="rounded-[14px] border border-border bg-canvas px-5 py-6 text-[13px] text-ink-muted">
+              Loading voice profiles...
+            </div>
+          ) : profileList.length === 0 ? (
+            <WorkspaceEmptyState
+              icon={<Waveform size={28} weight="duotone" />}
+              title="No voice profiles yet"
+              description="Create one and attach a short reference sample, and WarpTalk can speak your translations in your own voice."
+              action={
+                <WorkspacePrimaryButton
                   onClick={() => setIsCreateOpen(true)}
+                  icon={<Plus size={13} weight="bold" />}
                 >
-                  <Plus size={15} weight="bold" />
-                  Add voice profile
-                </Button>
-              </div>
-            )}
-
-            {!isLoading && profileList.length > 0 && filteredProfiles.length === 0 && (
-              <div className="px-5 py-8 text-center text-[14px] text-ink-muted">
-                No voice profile matches the current search and language filter.
-              </div>
-            )}
-
-            {filteredProfiles.map((profile, index) => (
-              <VoiceProfileRow
-                key={profile.id}
-                profile={profile}
-                index={index}
-                onDelete={handleDelete}
-                disabled={deleteMutation.isPending}
-              />
-            ))}
-          </div>
+                  Create profile
+                </WorkspacePrimaryButton>
+              }
+            />
+          ) : filteredProfiles.length === 0 ? (
+            <WorkspaceEmptyState
+              icon={<Waveform size={28} weight="duotone" />}
+              title="No voice profile matches these filters"
+              description="Try a different language or clear the search."
+            />
+          ) : (
+            <div className="divide-y divide-border rounded-[14px] border border-border bg-canvas">
+              {filteredProfiles.map((profile, index) => (
+                <VoiceProfileRow
+                  key={profile.id}
+                  profile={profile}
+                  index={index}
+                  onDelete={handleDelete}
+                  disabled={deleteMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
         </section>
       </div>
 

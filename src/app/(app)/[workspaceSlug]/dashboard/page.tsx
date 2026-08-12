@@ -1,49 +1,96 @@
 "use client";
 
+/**
+ * Workspace overview: what this workspace is spending and holding.
+ *
+ * Rebuilt on the workspace chrome. It used to open with a 28px bold title, a duotone sparkle and
+ * a sentence explaining what a dashboard is — three pieces of furniture above four numbers, on a
+ * page whose name is already in the sidebar. The numbers are the page.
+ *
+ * The tiles are one shape, not four variations of shadcn's Card with different inner spacing:
+ * label, value, and one line of context. Anything that cannot fill all three does not get a tile.
+ */
+
 import { useQuery } from "@tanstack/react-query";
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useWorkspaceRole } from "@/hooks/use-workspace-role";
-import { useWorkspaceMembers, useWorkspaceDocuments } from "@/hooks/use-workspace";
-import { useTranslationRooms } from "@/hooks/use-translationRooms";
-import { billingService } from "@/services/billing.service";
-import { UsageChart } from "@/components/admin/UsageChart";
-import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import {
-  Users,
-  FileText,
-  VideoCamera,
-  CreditCard,
-  ArrowUpRight,
-  Sparkle,
-  Spinner
-} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import type { ReactNode } from "react";
+import {
+  ArrowUpRight,
+  CreditCard,
+  FileText,
+  Spinner,
+  Users,
+  VideoCamera,
+} from "@phosphor-icons/react/dist/ssr";
+
+import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
+import { UsageChart } from "@/components/admin/UsageChart";
+import {
+  WorkspaceBody,
+  WorkspaceEmptyState,
+  WorkspacePage,
+  WorkspaceSection,
+  WorkspaceToolbar,
+} from "@/components/workspace/page-chrome";
+import { useTranslationRooms } from "@/hooks/use-translationRooms";
+import { useWorkspaceDocuments, useWorkspaceMembers } from "@/hooks/use-workspace";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { billingService } from "@/services/billing.service";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+
+/** One number, one label, one line of context. The same box four times. */
+function StatTile({
+  label,
+  icon,
+  isLoading,
+  value,
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  isLoading: boolean;
+  value: ReactNode;
+  /** The context line under the value. */
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-[14px] border border-border bg-canvas p-4 shadow-linear">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] font-medium text-ink-muted">{label}</span>
+        <span className="text-ink-muted">{icon}</span>
+      </div>
+      {isLoading ? (
+        <div className="mt-3 flex h-[44px] items-center">
+          <Spinner className="h-4 w-4 animate-spin text-ink-muted" />
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-col gap-1.5">
+          <div className="text-[24px] font-semibold leading-none tracking-tight text-ink">
+            {value}
+          </div>
+          <div className="text-[12px] text-ink-muted">{children}</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function WorkspaceAdminDashboardPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const role = useWorkspaceRole();
 
   const isOwnerOrAdmin = role === "owner" || role === "admin";
 
-  // Fetch metrics and stats (React hooks at the top level)
   const { data: members, isLoading: isLoadingMembers } = useWorkspaceMembers(
     activeWorkspaceId || "",
     1,
-    100
+    100,
   );
   const { data: documents, isLoading: isLoadingDocuments } = useWorkspaceDocuments(
     activeWorkspaceId || "",
     1,
-    100
+    100,
   );
   // Same reason as the Meetings list: without workspaceId the server cannot widen this to a
   // workspace Owner/Admin, and the Meetings tile read 0 for an Admin while the Owner saw 3.
@@ -52,7 +99,6 @@ export default function WorkspaceAdminDashboardPage() {
     workspaceId: activeWorkspaceId ?? undefined,
   });
 
-  // Query workspace credit balance
   const { data: credits, isLoading: isLoadingCredits } = useQuery({
     queryKey: ["workspace-credits", activeWorkspaceId],
     queryFn: () => billingService.getWorkspaceCredits(activeWorkspaceId!),
@@ -61,182 +107,127 @@ export default function WorkspaceAdminDashboardPage() {
 
   if (!isOwnerOrAdmin) {
     return (
-      <div className="flex h-full items-center justify-center p-6 bg-canvas text-ink">
-        <div className="max-w-md text-center space-y-4">
-          <h1 className="text-xl font-bold tracking-tight text-ink">
-            Access Denied
-          </h1>
-          <p className="text-ink-muted text-sm">
-            This dashboard is only visible to workspace owners and admins.
-          </p>
-        </div>
-      </div>
+      <WorkspacePage>
+        <WorkspaceBody className="pt-6">
+          <WorkspaceEmptyState
+            icon={<CreditCard size={28} weight="duotone" />}
+            title="Only an Owner or Admin can see this dashboard"
+            description="It reports workspace-wide spend and resources, so it is limited to the people who manage them."
+          />
+        </WorkspaceBody>
+      </WorkspacePage>
     );
   }
 
   const totalMembers = members?.total ?? members?.items?.length ?? 0;
   const totalDocuments = documents?.total ?? documents?.items?.length ?? 0;
   const totalRooms = roomsData?.rooms?.length ?? roomsData?.total ?? 0;
-  const activeRooms = roomsData?.rooms?.filter((r) => r.status === "in_progress").length ?? 0;
+  const activeRooms =
+    roomsData?.rooms?.filter((r) => r.status === "in_progress").length ?? 0;
 
   const currentCredits = credits?.currentCredits ?? 0;
   const totalCredits = credits?.totalCredits ?? 1000;
   const creditUsagePercent = Math.min(
     100,
-    Math.round(((totalCredits - currentCredits) / totalCredits) * 100) || 0
+    Math.round(((totalCredits - currentCredits) / totalCredits) * 100) || 0,
   );
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 lg:p-10 scrollbar-hide bg-canvas text-ink">
-      <div className="max-w-7xl mx-auto space-y-8 w-full">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="text-[28px] font-bold tracking-tight text-ink flex items-center gap-2">
-              <Sparkle className="text-primary w-7 h-7" weight="duotone" />
-              {activeWorkspaceName} Dashboard
-            </h1>
-            <p className="text-ink-muted text-[13px]">
-              Overview of workspace metrics, credit consumption, and resources.
-            </p>
-          </div>
+    <WorkspacePage>
+      <WorkspaceToolbar
+        actions={
+          <Link
+            href={`/${activeWorkspaceSlug}/billing`}
+            className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2"
+          >
+            Billing
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        }
+      />
+
+      <WorkspaceBody className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="Credit balance"
+            icon={<CreditCard className="h-4 w-4" />}
+            isLoading={isLoadingCredits}
+            value={currentCredits.toLocaleString()}
+          >
+            <div className="flex flex-col gap-1.5">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${100 - creditUsagePercent}%` }}
+                />
+              </div>
+              <span>
+                {100 - creditUsagePercent}% of {totalCredits.toLocaleString()} remaining
+              </span>
+            </div>
+          </StatTile>
+
+          <StatTile
+            label="Meetings"
+            icon={<VideoCamera className="h-4 w-4" />}
+            isLoading={isLoadingRooms}
+            value={totalRooms}
+          >
+            <span className="flex items-center gap-1.5">
+              {activeRooms > 0 ? (
+                <span className="flex h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+              ) : null}
+              {activeRooms} currently in progress
+            </span>
+          </StatTile>
+
+          <StatTile
+            label="Documents"
+            icon={<FileText className="h-4 w-4" />}
+            isLoading={isLoadingDocuments}
+            value={totalDocuments}
+          >
+            Reference material in the knowledge base
+          </StatTile>
+
+          <StatTile
+            label="Team members"
+            icon={<Users className="h-4 w-4" />}
+            isLoading={isLoadingMembers}
+            value={totalMembers}
+          >
+            Active accounts in this workspace
+          </StatTile>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Credits Balance */}
-          <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-[13px] font-medium text-ink-muted">Credit Balance</CardTitle>
-              <CreditCard className="w-4 h-4 text-ink-muted" />
-            </CardHeader>
-            <CardContent>
-              {isLoadingCredits ? (
-                <div className="flex h-9 items-center"><Spinner className="w-5 h-5 animate-spin text-ink-muted" /></div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-bold tracking-tight text-ink">{currentCredits.toLocaleString()}</span>
-                    <span className="text-[11px] text-ink-muted">/ {totalCredits.toLocaleString()} credits</span>
-                  </div>
-                  <div className="w-full bg-surface-2 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-primary h-full transition-all duration-300"
-                      style={{ width: `${100 - creditUsagePercent}%` }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-ink-muted">
-                    {100 - creditUsagePercent}% of monthly credits remaining.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <div className="grid gap-4 xl:grid-cols-3">
+          <WorkspaceSection
+            className="xl:col-span-2"
+            title="Usage"
+            description="Credits consumed against top-ups over the current year."
+            actions={
+              <Link
+                href={`/${activeWorkspaceSlug}/billing`}
+                className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline"
+              >
+                View details
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            }
+          >
+            {activeWorkspaceId && <UsageChart workspaceId={activeWorkspaceId} />}
+          </WorkspaceSection>
 
-          {/* Active Meetings */}
-          <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-[13px] font-medium text-ink-muted">Meetings</CardTitle>
-              <VideoCamera className="w-4 h-4 text-ink-muted" />
-            </CardHeader>
-            <CardContent>
-              {isLoadingRooms ? (
-                <div className="flex h-9 items-center"><Spinner className="w-5 h-5 animate-spin text-ink-muted" /></div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-2xl font-bold tracking-tight text-ink">{totalRooms}</div>
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span className="text-ink-muted">{activeRooms} currently in progress</span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Total Documents */}
-          <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-[13px] font-medium text-ink-muted">Documents</CardTitle>
-              <FileText className="w-4 h-4 text-ink-muted" />
-            </CardHeader>
-            <CardContent>
-              {isLoadingDocuments ? (
-                <div className="flex h-9 items-center"><Spinner className="w-5 h-5 animate-spin text-ink-muted" /></div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-2xl font-bold tracking-tight text-ink">{totalDocuments}</div>
-                  <p className="text-[11px] text-ink-muted">
-                    Reference materials and files in knowledge base.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Workspace Members */}
-          <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-[13px] font-medium text-ink-muted">Team Members</CardTitle>
-              <Users className="w-4 h-4 text-ink-muted" />
-            </CardHeader>
-            <CardContent>
-              {isLoadingMembers ? (
-                <div className="flex h-9 items-center"><Spinner className="w-5 h-5 animate-spin text-ink-muted" /></div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-2xl font-bold tracking-tight text-ink">{totalMembers}</div>
-                  <p className="text-[11px] text-ink-muted">
-                    Active accounts inside this workspace.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <WorkspaceSection
+            title="By feature"
+            description="Where the credits went."
+          >
+            <div className="flex min-h-[280px] flex-col justify-center">
+              {activeWorkspaceId && <FeatureBreakdownChart workspaceId={activeWorkspaceId} />}
+            </div>
+          </WorkspaceSection>
         </div>
-
-        {/* Charts Section */}
-        <div className="grid gap-6 md:grid-cols-3">
-          {/* Main Usage Chart (Span 2) */}
-          <div className="md:col-span-2">
-            <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold flex items-center justify-between">
-                  <span>Usage Statistics</span>
-                  <Link
-                    href={`/${activeWorkspaceSlug}/billing`}
-                    className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
-                  >
-                    View details
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </Link>
-                </CardTitle>
-                <CardDescription className="text-xs text-ink-muted">
-                  Credits consumed vs top-up volume over the current year.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-2">
-                {activeWorkspaceId && <UsageChart workspaceId={activeWorkspaceId} />}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Breakdown Chart (Span 1) */}
-          <div>
-            <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl h-full">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">Features Allocation</CardTitle>
-                <CardDescription className="text-xs text-ink-muted">
-                  Credit distribution by system feature.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-2 flex flex-col justify-center min-h-[300px]">
-                {activeWorkspaceId && <FeatureBreakdownChart workspaceId={activeWorkspaceId} />}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    </div>
+      </WorkspaceBody>
+    </WorkspacePage>
   );
 }
