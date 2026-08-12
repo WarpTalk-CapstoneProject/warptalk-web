@@ -1,30 +1,39 @@
 "use client";
 
 /**
- * Workspace overview: what this workspace is spending and holding.
+ * What this workspace needs its owner to do, and what is about to happen in it.
  *
- * Rebuilt on the workspace chrome. It used to open with a 28px bold title, a duotone sparkle and
- * a sentence explaining what a dashboard is — three pieces of furniture above four numbers, on a
- * page whose name is already in the sidebar. The numbers are the page.
+ * WHY IT IS NOT FOUR NUMBERS ANY MORE
+ *   It was: Credit balance 0, Meetings 9, Documents 2, Team members 6 — over a chart reading
+ *   "Failed to load chart data" and a panel reading "No consumption recorded for this period".
+ *   Every one of those is true and none of them is a reason to open the page. "Documents 2" does
+ *   not say that one of them has been waiting for approval since the first of August, and that is
+ *   the only fact on the page anybody could act on.
  *
- * The tiles are one shape, not four variations of shadcn's Card with different inner spacing:
- * label, value, and one line of context. Anything that cannot fill all three does not get a tile.
+ *   So the page answers two questions instead of counting things:
+ *     1. What is waiting for me?   — approvals, and a balance about to run out
+ *     2. What is coming up?        — the meetings this workspace is about to run
+ *
+ *   The counts survive as one quiet line at the bottom, because "how big is this workspace" is a
+ *   fair question, just not the page's headline. The usage charts are gone with the tiles: a
+ *   workspace with no subscription has no consumption to chart, so both panels were permanently
+ *   showing their own failure states — which is worse than not being there.
  */
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
+  CheckCircle,
   CreditCard,
   FileText,
   Spinner,
   Users,
   VideoCamera,
+  Warning,
 } from "@phosphor-icons/react/dist/ssr";
 
-import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
-import { UsageChart } from "@/components/admin/UsageChart";
 import {
   WorkspaceBody,
   WorkspaceEmptyState,
@@ -32,48 +41,18 @@ import {
   WorkspaceSection,
   WorkspaceToolbar,
 } from "@/components/workspace/page-chrome";
+import { WORKSPACE_DOCUMENT_STATUS } from "@/constants/workspace-document";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceDocuments, useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
-/** One number, one label, one line of context. The same box four times. */
-function StatTile({
-  label,
-  icon,
-  isLoading,
-  value,
-  children,
-}: {
-  label: string;
-  icon: ReactNode;
-  isLoading: boolean;
-  value: ReactNode;
-  /** The context line under the value. */
-  children: ReactNode;
-}) {
-  return (
-    <div className="rounded-[14px] border border-border bg-canvas p-4 shadow-linear">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-medium text-ink-muted">{label}</span>
-        <span className="text-ink-muted">{icon}</span>
-      </div>
-      {isLoading ? (
-        <div className="mt-3 flex h-[44px] items-center">
-          <Spinner className="h-4 w-4 animate-spin text-ink-muted" />
-        </div>
-      ) : (
-        <div className="mt-3 flex flex-col gap-1.5">
-          <div className="text-[24px] font-semibold leading-none tracking-tight text-ink">
-            {value}
-          </div>
-          <div className="text-[12px] text-ink-muted">{children}</div>
-        </div>
-      )}
-    </div>
-  );
-}
+/** Below this, a balance is a thing to act on rather than a thing to know. */
+const LOW_CREDIT_PERCENT = 15;
+
+/** How many rows a "what is coming up" list can carry before it stops being a summary. */
+const UPCOMING_LIMIT = 5;
 
 export default function WorkspaceAdminDashboardPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -81,6 +60,11 @@ export default function WorkspaceAdminDashboardPage() {
   const role = useWorkspaceRole();
 
   const isOwnerOrAdmin = role === "owner" || role === "admin";
+
+  // Read once, at mount. Reading the clock during render is impure — the same render would
+  // produce a different list depending on when React happened to run it — and "coming up" only
+  // has to be right for the visit, not tick over while the tab sits open.
+  const [now] = useState(() => Date.now());
 
   const { data: members, isLoading: isLoadingMembers } = useWorkspaceMembers(
     activeWorkspaceId || "",
@@ -103,6 +87,9 @@ export default function WorkspaceAdminDashboardPage() {
     queryKey: ["workspace-credits", activeWorkspaceId],
     queryFn: () => billingService.getWorkspaceCredits(activeWorkspaceId!),
     enabled: Boolean(activeWorkspaceId && isOwnerOrAdmin),
+    // A workspace with no plan answers this with an error. That is an account state, not a
+    // fault, and the section below simply does not draw when there is nothing to draw.
+    retry: 1,
   });
 
   if (!isOwnerOrAdmin) {
@@ -119,18 +106,40 @@ export default function WorkspaceAdminDashboardPage() {
     );
   }
 
-  const totalMembers = members?.total ?? members?.items?.length ?? 0;
-  const totalDocuments = documents?.total ?? documents?.items?.length ?? 0;
-  const totalRooms = roomsData?.rooms?.length ?? roomsData?.total ?? 0;
-  const activeRooms =
-    roomsData?.rooms?.filter((r) => r.status === "in_progress").length ?? 0;
-
-  const currentCredits = credits?.currentCredits ?? 0;
-  const totalCredits = credits?.totalCredits ?? 1000;
-  const creditUsagePercent = Math.min(
-    100,
-    Math.round(((totalCredits - currentCredits) / totalCredits) * 100) || 0,
+  const allDocuments = documents?.items ?? [];
+  const pendingDocuments = allDocuments.filter((doc) =>
+    doc.status?.toLowerCase().includes(WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL),
   );
+
+  const rooms = roomsData?.rooms ?? [];
+  const upcoming = rooms
+    .filter(
+      (room) =>
+        room.status === "in_progress" ||
+        room.status === "waiting" ||
+        (room.status === "scheduled" &&
+          room.scheduledAt &&
+          new Date(room.scheduledAt).getTime() >= now),
+    )
+    .sort((a, b) => {
+      // Running first — it is happening whether or not it was booked earliest.
+      const liveRank = (status: string) => (status === "in_progress" ? 0 : 1);
+      if (liveRank(a.status) !== liveRank(b.status)) return liveRank(a.status) - liveRank(b.status);
+      return (
+        new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime()
+      );
+    })
+    .slice(0, UPCOMING_LIMIT);
+
+  const totalCredits = credits?.totalCredits ?? 0;
+  const currentCredits = Math.max(0, credits?.currentCredits ?? 0);
+  const creditPercent =
+    totalCredits > 0 ? Math.round((currentCredits / totalCredits) * 100) : null;
+  const creditIsLow = creditPercent !== null && creditPercent <= LOW_CREDIT_PERCENT;
+
+  const isLoadingAttention = isLoadingDocuments || isLoadingCredits;
+  const nothingNeedsYou =
+    !isLoadingAttention && pendingDocuments.length === 0 && !creditIsLow;
 
   return (
     <WorkspacePage>
@@ -146,88 +155,174 @@ export default function WorkspaceAdminDashboardPage() {
         }
       />
 
-      <WorkspaceBody className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatTile
-            label="Credit balance"
-            icon={<CreditCard className="h-4 w-4" />}
-            isLoading={isLoadingCredits}
-            value={currentCredits.toLocaleString()}
-          >
-            <div className="flex flex-col gap-1.5">
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-                <div
-                  className="h-full bg-primary transition-all duration-300"
-                  style={{ width: `${100 - creditUsagePercent}%` }}
+      <WorkspaceBody className="flex flex-col gap-5">
+        <WorkspaceSection title="Needs you">
+          {isLoadingAttention ? (
+            <RowSpinner />
+          ) : nothingNeedsYou ? (
+            <div className="flex items-center gap-2 rounded-[14px] border border-border bg-canvas px-4 py-3.5 text-[13px] text-ink-muted">
+              <CheckCircle className="h-4 w-4 text-emerald-500" />
+              Nothing is waiting on you.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {pendingDocuments.length > 0 ? (
+                <ActionRow
+                  icon={<FileText className="h-4 w-4" />}
+                  href={`/${activeWorkspaceSlug}/documents`}
+                  title={`${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} waiting for approval`}
+                  detail={pendingDocuments
+                    .slice(0, 3)
+                    .map((doc) => doc.name)
+                    .join(" · ")}
                 />
-              </div>
-              <span>
-                {100 - creditUsagePercent}% of {totalCredits.toLocaleString()} remaining
-              </span>
-            </div>
-          </StatTile>
-
-          <StatTile
-            label="Meetings"
-            icon={<VideoCamera className="h-4 w-4" />}
-            isLoading={isLoadingRooms}
-            value={totalRooms}
-          >
-            <span className="flex items-center gap-1.5">
-              {activeRooms > 0 ? (
-                <span className="flex h-2 w-2 animate-pulse rounded-full bg-blue-500" />
               ) : null}
-              {activeRooms} currently in progress
-            </span>
-          </StatTile>
 
-          <StatTile
-            label="Documents"
-            icon={<FileText className="h-4 w-4" />}
-            isLoading={isLoadingDocuments}
-            value={totalDocuments}
-          >
-            Reference material in the knowledge base
-          </StatTile>
-
-          <StatTile
-            label="Team members"
-            icon={<Users className="h-4 w-4" />}
-            isLoading={isLoadingMembers}
-            value={totalMembers}
-          >
-            Active accounts in this workspace
-          </StatTile>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-3">
-          <WorkspaceSection
-            className="xl:col-span-2"
-            title="Usage"
-            description="Credits consumed against top-ups over the current year."
-            actions={
-              <Link
-                href={`/${activeWorkspaceSlug}/billing`}
-                className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline"
-              >
-                View details
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            }
-          >
-            {activeWorkspaceId && <UsageChart workspaceId={activeWorkspaceId} />}
-          </WorkspaceSection>
-
-          <WorkspaceSection
-            title="By feature"
-            description="Where the credits went."
-          >
-            <div className="flex min-h-[280px] flex-col justify-center">
-              {activeWorkspaceId && <FeatureBreakdownChart workspaceId={activeWorkspaceId} />}
+              {creditIsLow ? (
+                <ActionRow
+                  icon={<Warning className="h-4 w-4 text-destructive" />}
+                  href={`/${activeWorkspaceSlug}/billing`}
+                  title={`Credits are at ${creditPercent}%`}
+                  detail={`${currentCredits.toLocaleString()} of ${totalCredits.toLocaleString()} left — meetings stop translating when this runs out.`}
+                />
+              ) : null}
             </div>
-          </WorkspaceSection>
-        </div>
+          )}
+        </WorkspaceSection>
+
+        <WorkspaceSection title="Coming up">
+          {isLoadingRooms ? (
+            <RowSpinner />
+          ) : upcoming.length === 0 ? (
+            <div className="rounded-[14px] border border-border bg-canvas px-4 py-3.5 text-[13px] text-ink-muted">
+              No meetings scheduled.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {upcoming.map((room) => (
+                <ActionRow
+                  key={room.id}
+                  icon={<VideoCamera className="h-4 w-4" />}
+                  href={`/${activeWorkspaceSlug}/rooms/${room.id}`}
+                  title={room.title || room.translationRoomCode}
+                  detail={
+                    room.status === "in_progress"
+                      ? "Running now"
+                      : room.scheduledAt
+                        ? new Intl.DateTimeFormat("en-US", {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          }).format(new Date(room.scheduledAt))
+                        : "No time set"
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </WorkspaceSection>
+
+        {/* The counts, kept because "how big is this workspace" is a fair question — just not the
+            one the page opens with. One line, not four tiles. */}
+        <WorkspaceSection title="This workspace">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[14px] border border-border bg-canvas px-4 py-3.5 text-[13px]">
+            <CountLink
+              href={`/${activeWorkspaceSlug}/members`}
+              icon={<Users className="h-4 w-4" />}
+              isLoading={isLoadingMembers}
+              value={members?.total ?? members?.items?.length ?? 0}
+              label="members"
+            />
+            <CountLink
+              href={`/${activeWorkspaceSlug}/documents`}
+              icon={<FileText className="h-4 w-4" />}
+              isLoading={isLoadingDocuments}
+              value={documents?.total ?? allDocuments.length}
+              label="documents"
+            />
+            <CountLink
+              href={`/${activeWorkspaceSlug}/rooms`}
+              icon={<VideoCamera className="h-4 w-4" />}
+              isLoading={isLoadingRooms}
+              value={roomsData?.total ?? rooms.length}
+              label="meetings"
+            />
+            {creditPercent !== null ? (
+              <CountLink
+                href={`/${activeWorkspaceSlug}/billing`}
+                icon={<CreditCard className="h-4 w-4" />}
+                isLoading={isLoadingCredits}
+                value={currentCredits}
+                label="credits left"
+              />
+            ) : null}
+          </div>
+        </WorkspaceSection>
       </WorkspaceBody>
     </WorkspacePage>
+  );
+}
+
+function RowSpinner() {
+  return (
+    <div className="flex items-center gap-2 rounded-[14px] border border-border bg-canvas px-4 py-3.5 text-[13px] text-ink-muted">
+      <Spinner className="h-4 w-4 animate-spin" />
+      Loading…
+    </div>
+  );
+}
+
+/** A thing to do, and the one line that says why. The whole row is the link. */
+function ActionRow({
+  icon,
+  href,
+  title,
+  detail,
+}: {
+  icon: ReactNode;
+  href: string;
+  title: string;
+  detail?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-[14px] border border-border bg-canvas px-4 py-3 transition-colors hover:bg-surface-2"
+    >
+      <span className="shrink-0 text-ink-muted">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-ink">{title}</span>
+        {detail ? (
+          <span className="block truncate text-[12px] text-ink-muted">{detail}</span>
+        ) : null}
+      </span>
+      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ink-subtle" />
+    </Link>
+  );
+}
+
+function CountLink({
+  href,
+  icon,
+  isLoading,
+  value,
+  label,
+}: {
+  href: string;
+  icon: ReactNode;
+  isLoading: boolean;
+  value: number;
+  label: string;
+}) {
+  return (
+    <Link href={href} className="flex items-center gap-1.5 text-ink-muted transition-colors hover:text-ink">
+      {icon}
+      <span className="font-medium tabular-nums text-ink">
+        {isLoading ? "—" : value.toLocaleString()}
+      </span>
+      {label}
+    </Link>
   );
 }
