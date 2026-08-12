@@ -196,26 +196,30 @@ export default function DocumentDetailPage({ params }: PageProps) {
           <ArrowLeft className="h-3.5 w-3.5" />
           <span>Back to Library</span>
         </button>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-1">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-ink break-all">
-              {doc.name}
-            </h1>
-            <p className="text-[11px] text-ink-muted mt-1 font-mono">
-              ID: {doc.id}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+        {/* An 18px title, not 24px bold, and the raw UUID is gone: "ID: abb02cc4-6593-…" under the
+            name was the second-largest thing on the page and is not something anyone reads — the
+            properties panel carries the identifiers.
+
+            Three filled buttons in three different colours (green, pink, indigo) read as three
+            equally urgent decisions. Only one action is primary here — Approve when a decision is
+            pending, otherwise Download — and the rest are outlined pills, the same shapes the
+            meetings and members toolbars use. */}
+        <div className="mt-1 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <h1 className="min-w-0 truncate text-[18px] font-semibold tracking-tight text-ink">
+            {doc.name}
+          </h1>
+
+          <div className="flex shrink-0 items-center gap-2">
             {canApproveDocuments && isPendingApproval && (
-              <div className="flex items-center gap-2 mr-1">
+              <>
                 <button
                   onClick={() => handleApprove(true)}
                   disabled={approveMutation.isPending}
-                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white px-3.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
-                  title="Approve Document"
+                  className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90 disabled:opacity-50"
+                  title="Approve document"
                 >
                   {approveMutation.isPending ? (
-                    <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
+                    <Spinner className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Check className="h-3.5 w-3.5" />
                   )}
@@ -224,25 +228,26 @@ export default function DocumentDetailPage({ params }: PageProps) {
                 <button
                   onClick={() => handleApprove(false)}
                   disabled={approveMutation.isPending}
-                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-xs font-semibold text-destructive px-3.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
-                  title="Reject Document"
+                  className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-destructive/30 bg-surface-1 px-3 text-[13px] font-medium text-destructive shadow-sm transition hover:bg-destructive/10 disabled:opacity-50"
+                  title="Reject document"
                 >
-                  {approveMutation.isPending ? (
-                    <Spinner className="h-3.5 w-3.5 animate-spin text-destructive" />
-                  ) : (
-                    <X className="h-3.5 w-3.5" />
-                  )}
+                  <X className="h-3.5 w-3.5" />
                   <span>Reject</span>
                 </button>
-              </div>
+                <div className="mx-1 h-4 w-[1px] bg-border" />
+              </>
             )}
             <button
               onClick={handleDownload}
               disabled={downloadMutation.isPending}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover text-xs font-semibold text-white px-3.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
+              className={
+                canApproveDocuments && isPendingApproval
+                  ? "inline-flex h-[28px] items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50"
+                  : "inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90 disabled:opacity-50"
+              }
             >
               {downloadMutation.isPending ? (
-                <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
+                <Spinner className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
@@ -305,49 +310,11 @@ export default function DocumentDetailPage({ params }: PageProps) {
                   </button>
                 </div>
 
-                {/* Status Monitoring Bar */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-hairline">
-                  <div className="flex items-center justify-between bg-surface-1 border border-hairline rounded-lg px-3.5 py-2.5">
-                    <span className="text-xs font-semibold text-ink-muted">
-                      Document Status
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] font-mono uppercase rounded px-2 py-0.5 font-semibold ${
-                        doc.status?.toLowerCase() === "public" ||
-                        doc.status?.toLowerCase() === "active"
-                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                          : doc.status?.toLowerCase().includes("pending")
-                            ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                            : doc.status?.toLowerCase() === "rejected"
-                              ? "bg-destructive/10 text-destructive border-destructive/20"
-                              : "bg-surface-3 border-hairline text-ink-muted"
-                      }`}
-                    >
-                      {doc.status}
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-surface-1 border border-hairline rounded-lg px-3.5 py-2.5">
-                    <span className="text-xs font-semibold text-ink-muted">
-                      AI Ingestion Status
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] font-mono uppercase rounded px-2 py-0.5 font-semibold ${
-                        doc.ingestionStatus?.toLowerCase() === "completed"
-                          ? "bg-primary/10 text-primary border-primary/20"
-                          : doc.ingestionStatus?.toLowerCase() === "processing"
-                            ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
-                            : doc.ingestionStatus?.toLowerCase() === "failed"
-                              ? "bg-destructive/10 text-destructive border-destructive/20"
-                              : "bg-surface-3 border-hairline text-ink-muted"
-                      }`}
-                    >
-                      {doc.ingestionStatus || "Pending"}
-                    </Badge>
-                  </div>
-                </div>
+                {/* The "Document Status" and "AI Ingestion Status" pair that used to sit here is
+                    gone: the properties panel on the right already lists Status and Ingestion, so
+                    this card restated both of them in bigger type a few hundred pixels away. Two
+                    places showing the same field is two places to disagree while one of them
+                    refetches. The panel keeps them; this card is about the file. */}
               </div>
             </CardContent>
           </Card>

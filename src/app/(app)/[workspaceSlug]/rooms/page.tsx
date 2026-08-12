@@ -151,12 +151,10 @@ function LinearRow({
     user,
   );
 
-  // WT-327: a grouped row IS the booking, so it opens the booking. Following it to one occurrence
-  // would land the user on a single Tuesday and leave them to work out that the other thirteen
-  // exist — which is the shape of the bug this replaced.
-  const href = room.series
-    ? `/${workspaceSlug}/series/${room.series.seriesId}`
-    : `/${workspaceSlug}/rooms/${room.id}`;
+  // WT-327: a grouped row opens the meeting it stands for — the one live now, or the next due,
+  // which is what the server picked as the row's representative. There is no separate booking
+  // page: the booking has one code and one next date, and both belong on the meeting itself.
+  const href = `/${workspaceSlug}/rooms/${room.id}`;
 
   return (
     <Link

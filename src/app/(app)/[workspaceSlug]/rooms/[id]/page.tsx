@@ -41,7 +41,6 @@ import {
 } from "lucide-react";
 // Aliased: this file already imports Tiptap's `Link` extension, and the editor's Link and the
 // router's Link are two very different things to have under one name.
-import NextLink from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   useCallback,
@@ -128,6 +127,7 @@ import type {
   TranslationRoomStatus,
 } from "@/types/translationRoom";
 import type { WorkspaceMemberDto } from "@/types/workspace";
+import { RoomRecurrenceLine } from "@/components/rooms/room-recurrence-line";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 
 type UserIdentity = {
@@ -382,18 +382,17 @@ export default function RoomInformationPage() {
                       </button>
                     ) : null}
                   </div>
-                  {/* WT-327: an occurrence is an ordinary meeting, and this page treats it as
-                      one — but the person looking at it may have arrived expecting the whole
-                      repeating booking. One line back to it, so "where are the other dates?"
-                      has an answer on the page that raised the question. */}
+                  {/* WT-327: the repeat rule lives on the meeting, because the meeting is the
+                      only thing there is. There is no separate booking page to send anyone to —
+                      the booking has one code and one next date, and this page already shows the
+                      code. Host-only "Stop repeating" sits here for the same reason: deleting the
+                      page it used to live on must not delete the ability. */}
                   {room.seriesId ? (
-                    <NextLink
-                      href={`/${workspaceSlug}/series/${room.seriesId}`}
-                      className="flex w-fit items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-[12px] font-medium text-primary transition-colors hover:bg-primary/15"
-                    >
-                      <Repeat size={12} aria-hidden />
-                      One of a repeating meeting — see the whole schedule
-                    </NextLink>
+                    <RoomRecurrenceLine
+                      seriesId={room.seriesId}
+                      isHost={canEditRoom}
+                      workspaceSlug={workspaceSlug}
+                    />
                   ) : null}
                   <MeetingPropertiesPills
                     room={room}

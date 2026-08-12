@@ -304,59 +304,53 @@ export default function WorkspacePlansPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col pb-12 pt-4 px-4 lg:px-8 w-full max-w-[1600px] mx-auto">
-      {/* Back to Billing Link */}
-      <div className="w-full flex justify-start mb-4">
-        <Link
-          href={`/${slug}/billing`}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink transition duration-150 cursor-pointer"
-        >
-          <CaretLeft className="h-4 w-4" />
-          <span>Back to Billing</span>
-        </Link>
-      </div>
+    /* This was a marketing landing page living inside the product: a 5xl centred headline, a
+       "Pricing & Subscriptions" badge above it, and a lead paragraph — the visual language of a
+       website's /pricing, rendered inside a workspace the user has already signed into and paid
+       attention to. It is a settings screen. It gets the settings chrome: the same toolbar row
+       every other workspace page has, with the one real choice (monthly or yearly) in it. */
+    <div className="flex h-full min-h-0 flex-col bg-surface-1 text-ink">
+      <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex min-w-[260px] flex-1 items-center gap-3">
+          <Link
+            href={`/${slug}/billing`}
+            className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
+          >
+            <CaretLeft className="h-3.5 w-3.5" />
+            <span>Billing</span>
+          </Link>
+          <span className="truncate text-[13px] text-ink-muted">
+            {subscription?.status === "active"
+              ? `Currently on ${subscription.planName}.`
+              : "No active plan on this workspace."}
+          </span>
+        </div>
 
-      <div className="text-center max-w-2xl mx-auto mb-10 mt-2">
-        <Badge
-          variant="secondary"
-          className="mb-4 bg-surface-2 text-primary border border-hairline hover:bg-surface-2"
-        >
-          Pricing &amp; Subscriptions
-        </Badge>
-        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink mb-4">
-          Choose the right plan for your team
-        </h1>
-        <p className="text-lg text-muted-foreground">
-          {subscription?.status === "active"
-            ? `You are currently on the ${subscription.planName} plan.`
-            : "Upgrade your workspace to unlock advanced AI capabilities, real-time translation, and more credits."}
-        </p>
-        <div className="mt-8 flex justify-center">
+        <div className="flex shrink-0 items-center gap-2 pl-4">
           <Tabs
             value={billingInterval}
-            onValueChange={(val) =>
-              setBillingInterval(val as "monthly" | "yearly")
-            }
+            onValueChange={(val) => setBillingInterval(val as "monthly" | "yearly")}
             className="w-fit"
           >
-            <TabsList className="bg-surface-2 p-1 rounded-full border border-hairline">
+            <TabsList className="h-[28px] rounded-full border border-border/60 bg-surface-2 p-0.5">
               <TabsTrigger
                 value="monthly"
-                className="rounded-full text-sm px-6 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+                className="h-[24px] rounded-full px-3 text-[12px] data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
                 Monthly
               </TabsTrigger>
               <TabsTrigger
                 value="yearly"
-                className="rounded-full text-sm px-6 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+                className="h-[24px] rounded-full px-3 text-[12px] data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
-                Yearly (Save up to 21%)
+                Yearly · save 21%
               </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
 
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-8">
       <div
         className={`grid grid-cols-1 gap-6 lg:gap-8 w-full mx-auto justify-center ${
           activePlans.length === 1
@@ -406,57 +400,53 @@ export default function WorkspacePlansPage() {
             }
 
             return (
+              /* Palette tokens, not #7F1DFF and text-gray-900. The hardcoded pair meant the card
+                 rendered near-black text on near-black in dark mode, and its accent was a purple
+                 that appears nowhere else in the app. */
               <Card
                 key={plan.id}
-                className={`relative flex flex-col h-full overflow-hidden rounded-3xl transition-all duration-300 border bg-white p-8 ${
+                className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-canvas p-5 shadow-linear transition-colors ${
                   isCurrent
-                    ? "border-[2.5px] border-[#7F1DFF] shadow-[0_8px_30px_rgb(127,29,255,0.06)]"
+                    ? "border-primary"
                     : isFeatured
-                      ? "border-[2.5px] border-[#7F1DFF]/40 shadow-sm"
-                      : "border-gray-200 shadow-sm hover:border-gray-300"
+                      ? "border-primary/40"
+                      : "border-border hover:border-border/80"
                 }`}
               >
-                <CardHeader className="p-0 pb-6 flex flex-col items-start text-left">
-                  <div className="flex justify-between items-center w-full gap-2 mb-3">
-                    <CardTitle className="text-2xl font-extrabold tracking-tight text-gray-900">
+                <CardHeader className="flex flex-col items-start p-0 pb-4 text-left">
+                  <div className="mb-2 flex w-full items-center justify-between gap-2">
+                    <CardTitle className="text-[15px] font-semibold tracking-tight text-ink">
                       {plan.name}
                     </CardTitle>
 
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex shrink-0 gap-2">
                       {isCurrent && (
-                        <Badge className="bg-[#7F1DFF]/10 text-[#7F1DFF] border-none rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider">
-                          ACTIVE
+                        <Badge className="rounded-full border-none bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          Current plan
                         </Badge>
                       )}
                       {!isCurrent && isFeatured && (
-                        <Badge className="bg-[#7F1DFF]/10 text-[#7F1DFF] border-none rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider">
-                          MOST POPULAR
+                        <Badge className="rounded-full border-none bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          Most popular
                         </Badge>
                       )}
                     </div>
                   </div>
 
-                  <p className="text-[13px] text-gray-500 leading-relaxed min-h-[38px] font-normal">
+                  <p className="min-h-[34px] text-[12px] leading-relaxed text-ink-muted">
                     {plan.description}
                   </p>
 
-                  <div className="mt-5 flex flex-col items-start w-full">
+                  <div className="mt-4 flex w-full flex-col items-start">
                     <div className="flex items-baseline whitespace-nowrap">
-                      <span className="text-4xl font-extrabold tracking-tight text-gray-900">
-                        {displayPrice > 0
-                          ? formatMoney(displayPrice, "VND")
-                          : "Free"}
+                      <span className="text-[24px] font-semibold tracking-tight text-ink">
+                        {displayPrice > 0 ? formatMoney(displayPrice, "VND") : "Free"}
                       </span>
-                      <span className="text-sm font-medium text-gray-500 ml-1">
-                        /mo
-                      </span>
+                      <span className="ml-1 text-[12px] text-ink-muted">/mo</span>
                     </div>
 
-                    <p className="text-[11px] text-gray-500 font-semibold mt-2">
-                      Pause or cancel anytime.
-                    </p>
-                    <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
-                      24/7 dedicated support.
+                    <p className="mt-1.5 text-[11px] text-ink-muted">
+                      Pause or cancel anytime · 24/7 support
                     </p>
                   </div>
                 </CardHeader>
@@ -582,7 +572,7 @@ export default function WorkspacePlansPage() {
         )}
       </div>
 
-      <div className="mt-20 w-full max-w-3xl mx-auto px-4 pb-12">
+      <div className="mt-8 w-full max-w-3xl">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-3">
             <div className="flex size-8 rounded-full bg-primary/10 items-center justify-center">
@@ -776,6 +766,7 @@ export default function WorkspacePlansPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
       </div>
       {/* Cancel Subscription confirmation dialog */}
       <Dialog
