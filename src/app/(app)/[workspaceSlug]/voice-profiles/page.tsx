@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { ListDisplayPopover } from "@/components/ui/list-display-popover";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +73,7 @@ const MAX_PROFILE_NAME_LENGTH = 100;
 type VoiceProfileFilter = "active" | "ready" | "missing" | "all";
 type VoiceProfileSortKey = "name" | "member" | "health" | "language" | "status";
 type SortDirection = "asc" | "desc";
+type VoiceProfileDisplayProperty = "member" | "health" | "language" | "status";
 
 const VOICE_PROFILE_FILTERS: Array<{ value: VoiceProfileFilter; label: string }> = [
   { value: "active", label: "Active" },
@@ -99,8 +101,33 @@ const VOICE_PROFILE_SORT_COLUMNS: Array<{
     { key: "status", label: "Status" },
   ];
 
-const VOICE_PROFILE_GRID_CLASS =
-  "grid-cols-[28px_minmax(320px,1.6fr)_220px_150px_130px_120px]";
+const VOICE_PROFILE_DISPLAY_PROPERTIES: Array<{
+  key: VoiceProfileDisplayProperty;
+  label: string;
+}> = [
+  { key: "member", label: "Member" },
+  { key: "health", label: "Health" },
+  { key: "language", label: "Language" },
+  { key: "status", label: "Status" },
+];
+
+const DEFAULT_VOICE_PROFILE_DISPLAY_PROPERTIES =
+  VOICE_PROFILE_DISPLAY_PROPERTIES.map((property) => property.key);
+
+function getVoiceProfileGridTemplate(
+  visibleProperties: VoiceProfileDisplayProperty[],
+) {
+  return [
+    "28px",
+    "minmax(320px,1.6fr)",
+    visibleProperties.includes("member") ? "220px" : null,
+    visibleProperties.includes("health") ? "150px" : null,
+    visibleProperties.includes("language") ? "130px" : null,
+    visibleProperties.includes("status") ? "120px" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 type VoiceProfileOwnerOption = {
   id: string;
@@ -133,6 +160,9 @@ export default function VoiceProfilesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortKey, setSortKey] = useState<VoiceProfileSortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [visibleDisplayProperties, setVisibleDisplayProperties] = useState<
+    VoiceProfileDisplayProperty[]
+  >(DEFAULT_VOICE_PROFILE_DISPLAY_PROPERTIES);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -181,6 +211,21 @@ export default function VoiceProfilesPage() {
     [profileList, selectedProfileIds]
   );
   const filteredProfileIds = useMemo(() => filteredProfileList.map((profile) => profile.id), [filteredProfileList]);
+  const voiceProfileGridTemplate = useMemo(
+    () => getVoiceProfileGridTemplate(visibleDisplayProperties),
+    [visibleDisplayProperties],
+  );
+  const visibleSortColumns = useMemo(
+    () =>
+      VOICE_PROFILE_SORT_COLUMNS.filter(
+        (column) =>
+          column.key === "name" ||
+          visibleDisplayProperties.includes(
+            column.key as VoiceProfileDisplayProperty,
+          ),
+      ),
+    [visibleDisplayProperties],
+  );
   const allVisibleProfilesSelected =
     filteredProfileIds.length > 0 && filteredProfileIds.every((id) => selectedProfileIds.includes(id));
   const hasSelectedProfiles = selectedProfiles.length > 0;
@@ -236,6 +281,18 @@ export default function VoiceProfilesPage() {
       }
 
       return Array.from(new Set([...current, ...filteredProfileIds]));
+    });
+  }
+
+  function toggleDisplayProperty(property: string) {
+    setVisibleDisplayProperties((current) => {
+      const typedProperty = property as VoiceProfileDisplayProperty;
+      if (current.includes(typedProperty)) {
+        if (sortKey === typedProperty) setSortKey("name");
+        return current.filter((item) => item !== typedProperty);
+      }
+
+      return [...current, typedProperty];
     });
   }
 
@@ -459,13 +516,32 @@ export default function VoiceProfilesPage() {
                 <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
               )}
             </button>
-            <button
-              type="button"
-              className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-              title={`${filteredProfileList.length} profiles`}
-            >
-              <SlidersHorizontal weight="bold" size={13} />
-            </button>
+            <ListDisplayPopover
+              trigger={<SlidersHorizontal weight="bold" size={13} />}
+              triggerClassName="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              triggerTitle={`${filteredProfileList.length} profiles`}
+              ordering={sortKey}
+              orderingOptions={VOICE_PROFILE_SORT_COLUMNS.map((column) => ({
+                value: column.key,
+                label: column.label,
+                disabled:
+                  column.key !== "name" &&
+                  !visibleDisplayProperties.includes(
+                    column.key as VoiceProfileDisplayProperty,
+                  ),
+              }))}
+              onOrderingChange={(value) => setSortKey(value as VoiceProfileSortKey)}
+              direction={sortDirection}
+              onDirectionChange={setSortDirection}
+              properties={VOICE_PROFILE_DISPLAY_PROPERTIES}
+              visibleProperties={visibleDisplayProperties}
+              onToggleProperty={toggleDisplayProperty}
+              onReset={() => {
+                setSortKey("name");
+                setSortDirection("asc");
+                setVisibleDisplayProperties(DEFAULT_VOICE_PROFILE_DISPLAY_PROPERTIES);
+              }}
+            />
             <div className="mx-1 h-4 w-[1px] bg-border" />
             <button
               type="button"
@@ -480,9 +556,12 @@ export default function VoiceProfilesPage() {
 
         <section className="mt-0.2 min-h-full overflow-x-auto px-2">
           <div className="min-w-[1040px]">
-            <div className={`grid ${VOICE_PROFILE_GRID_CLASS} px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
+            <div
+              className="grid px-2 py-0.5 text-[11px] font-medium text-ink-muted"
+              style={{ gridTemplateColumns: voiceProfileGridTemplate }}
+            >
               <div />
-              {VOICE_PROFILE_SORT_COLUMNS.map((column) => (
+              {visibleSortColumns.map((column) => (
                 <SortableColumnHeader
                   key={column.key}
                   label={column.label}
@@ -501,12 +580,16 @@ export default function VoiceProfilesPage() {
                 userName={currentUserName}
                 title="No voice profiles yet"
                 description="Upload a short reference sample to create a voice clone profile."
+                visibleProperties={visibleDisplayProperties}
+                gridTemplateColumns={voiceProfileGridTemplate}
               />
             ) : filteredProfileList.length === 0 ? (
               <VoiceProfileEmptyRow
                 userName={currentUserName}
                 title="No matching voice profiles"
                 description="Try another filter or search term."
+                visibleProperties={visibleDisplayProperties}
+                gridTemplateColumns={voiceProfileGridTemplate}
               />
             ) : (
               <div className="space-y-0">
@@ -535,6 +618,8 @@ export default function VoiceProfilesPage() {
                       onToggleSelected={() => toggleProfileSelection(profile.id)}
                       onHoverChange={(hovered) => setHoveredProfileId(hovered ? profile.id : null)}
                       onEditProfile={() => openCreateDialog(profile)}
+                      visibleProperties={visibleDisplayProperties}
+                      gridTemplateColumns={voiceProfileGridTemplate}
                     />
                   );
                 })}
@@ -770,6 +855,8 @@ function VoiceProfileRow({
   onToggleSelected,
   onHoverChange,
   onEditProfile,
+  visibleProperties,
+  gridTemplateColumns,
 }: {
   profile: VoiceProfileDto;
   userName: string;
@@ -782,6 +869,8 @@ function VoiceProfileRow({
   onToggleSelected: () => void;
   onHoverChange: (hovered: boolean) => void;
   onEditProfile: () => void;
+  visibleProperties: VoiceProfileDisplayProperty[];
+  gridTemplateColumns: string;
 }) {
   const language = getLanguageMeta(profile.language);
   const healthLabel = profile.hasSample ? "Ready" : "Needs sample";
@@ -812,7 +901,8 @@ function VoiceProfileRow({
           onToggleSelected();
         }
       }}
-      className={`group relative grid min-h-[36px] ${VOICE_PROFILE_GRID_CLASS} cursor-pointer items-center px-2 py-1 text-[11px] transition-none ${rowStateClass}`}
+      className={`group relative grid min-h-[36px] cursor-pointer items-center px-2 py-1 text-[11px] transition-none ${rowStateClass}`}
+      style={{ gridTemplateColumns }}
     >
       <div>
         <button
@@ -849,38 +939,46 @@ function VoiceProfileRow({
           <p className="truncate text-[10px] text-ink-muted">{providerLabel}</p>
         </div>
       </button>
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[8px] font-semibold text-primary">
-          {getInitials(userName)}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate font-medium text-ink">{userName}</p>
-          <p className="truncate text-[10px] text-ink-muted">
-            {userEmail} - {roleLabel}
-          </p>
+      {visibleProperties.includes("member") && (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[8px] font-semibold text-primary">
+            {getInitials(userName)}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-ink">{userName}</p>
+            <p className="truncate text-[10px] text-ink-muted">
+              {userEmail} - {roleLabel}
+            </p>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-1.5 text-ink-muted">
-        <span
-          className={`h-3 w-3 rounded-full border border-dashed ${profile.hasSample ? "border-emerald-500/60 bg-emerald-500/10" : "border-amber-500/70 bg-transparent"
-            }`}
-        />
-        <span className={profile.hasSample ? "text-emerald-600" : "text-ink-muted"}>{healthLabel}</span>
-      </div>
-      <div>
-        <Badge variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px]">
-          {language.short}
-        </Badge>
-      </div>
-      <div>
-        <Badge
-          variant="outline"
-          className={`rounded-full px-1.5 py-0 text-[9px] capitalize ${profile.isActive ? "bg-emerald-500/10 text-emerald-600" : "bg-surface-1/70 text-ink-muted"
-            }`}
-        >
-          {profile.isActive ? "Active" : profile.status}
-        </Badge>
-      </div>
+      )}
+      {visibleProperties.includes("health") && (
+        <div className="flex items-center gap-1.5 text-ink-muted">
+          <span
+            className={`h-3 w-3 rounded-full border border-dashed ${profile.hasSample ? "border-emerald-500/60 bg-emerald-500/10" : "border-amber-500/70 bg-transparent"
+              }`}
+          />
+          <span className={profile.hasSample ? "text-emerald-600" : "text-ink-muted"}>{healthLabel}</span>
+        </div>
+      )}
+      {visibleProperties.includes("language") && (
+        <div>
+          <Badge variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px]">
+            {language.short}
+          </Badge>
+        </div>
+      )}
+      {visibleProperties.includes("status") && (
+        <div>
+          <Badge
+            variant="outline"
+            className={`rounded-full px-1.5 py-0 text-[9px] capitalize ${profile.isActive ? "bg-emerald-500/10 text-emerald-600" : "bg-surface-1/70 text-ink-muted"
+              }`}
+          >
+            {profile.isActive ? "Active" : profile.status}
+          </Badge>
+        </div>
+      )}
     </div>
   );
 }
@@ -922,13 +1020,20 @@ function VoiceProfileEmptyRow({
   userName,
   title,
   description,
+  visibleProperties,
+  gridTemplateColumns,
 }: {
   userName: string;
   title: string;
   description: string;
+  visibleProperties: VoiceProfileDisplayProperty[];
+  gridTemplateColumns: string;
 }) {
   return (
-    <div className={`grid min-h-[36px] ${VOICE_PROFILE_GRID_CLASS} items-center rounded-[7px] px-2 py-1 text-[11px] transition-colors hover:bg-surface-2`}>
+    <div
+      className="grid min-h-[36px] items-center rounded-[7px] px-2 py-1 text-[11px] transition-colors hover:bg-surface-2"
+      style={{ gridTemplateColumns }}
+    >
       <div />
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">
@@ -939,31 +1044,39 @@ function VoiceProfileEmptyRow({
           <p className="truncate text-[10px] text-ink-muted">{description}</p>
         </div>
       </div>
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[8px] font-semibold text-primary">
-          {getInitials(userName)}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate font-medium text-ink">{userName}</p>
-          <p className="truncate text-[10px] text-ink-muted">Signed-in user</p>
+      {visibleProperties.includes("member") && (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[8px] font-semibold text-primary">
+            {getInitials(userName)}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-ink">{userName}</p>
+            <p className="truncate text-[10px] text-ink-muted">Signed-in user</p>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-1.5 text-ink-muted">
-        <span className="h-3 w-3 rounded-full border border-dashed border-amber-500/70" />
-        <span>Needs sample</span>
-      </div>
-      <div className="flex items-center gap-1">
-        {LANGUAGE_OPTIONS.map((option) => (
-          <Badge key={option.value} variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px]">
-            {option.short}
+      )}
+      {visibleProperties.includes("health") && (
+        <div className="flex items-center gap-1.5 text-ink-muted">
+          <span className="h-3 w-3 rounded-full border border-dashed border-amber-500/70" />
+          <span>Needs sample</span>
+        </div>
+      )}
+      {visibleProperties.includes("language") && (
+        <div className="flex items-center gap-1">
+          {LANGUAGE_OPTIONS.map((option) => (
+            <Badge key={option.value} variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px]">
+              {option.short}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {visibleProperties.includes("status") && (
+        <div>
+          <Badge variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px] text-ink-muted">
+            Not created
           </Badge>
-        ))}
-      </div>
-      <div>
-        <Badge variant="outline" className="rounded-full bg-surface-1/70 px-1.5 py-0 text-[9px] text-ink-muted">
-          Not created
-        </Badge>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

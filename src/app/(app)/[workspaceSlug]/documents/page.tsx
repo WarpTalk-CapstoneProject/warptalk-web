@@ -34,7 +34,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import gsap from "gsap";
 import { toast } from "sonner";
@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/dialog";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Input } from "@/components/ui/input";
+import { ListDisplayPopover } from "@/components/ui/list-display-popover";
 import { Switch } from "@/components/ui/switch";
 import {
   useArchiveWorkspaceDocument,
@@ -90,6 +91,13 @@ type DocumentSortKey =
   | "approver"
   | "modified"
   | "size";
+type DocumentDisplayProperty =
+  | "classification"
+  | "uploader"
+  | "approver"
+  | "modified"
+  | "size"
+  | "actions";
 
 const DOCUMENT_FILTER_WIDTH_CLASS: Record<FilterCategory, string> = {
   all: "w-[58px]",
@@ -99,9 +107,6 @@ const DOCUMENT_FILTER_WIDTH_CLASS: Record<FilterCategory, string> = {
   sensitive: "w-[104px]",
   archived: "w-[104px]",
 };
-
-const DOCUMENT_GRID_CLASS =
-  "grid-cols-[28px_minmax(320px,1.8fr)_170px_140px_140px_116px_92px_96px]";
 
 const DOCUMENT_SORT_COLUMNS: Array<{
   key: DocumentSortKey;
@@ -114,6 +119,38 @@ const DOCUMENT_SORT_COLUMNS: Array<{
   { key: "modified", label: "Modified" },
   { key: "size", label: "Size" },
 ];
+
+const DOCUMENT_DISPLAY_PROPERTIES: Array<{
+  key: DocumentDisplayProperty;
+  label: string;
+}> = [
+  { key: "classification", label: "Classification" },
+  { key: "uploader", label: "Uploader" },
+  { key: "approver", label: "Approver" },
+  { key: "modified", label: "Modified" },
+  { key: "size", label: "Size" },
+  { key: "actions", label: "Actions" },
+];
+
+const DEFAULT_DOCUMENT_DISPLAY_PROPERTIES =
+  DOCUMENT_DISPLAY_PROPERTIES.map((property) => property.key);
+
+function getDocumentGridTemplate(
+  visibleProperties: DocumentDisplayProperty[],
+) {
+  return [
+    "28px",
+    "minmax(320px,1.8fr)",
+    visibleProperties.includes("classification") ? "170px" : null,
+    visibleProperties.includes("uploader") ? "140px" : null,
+    visibleProperties.includes("approver") ? "140px" : null,
+    visibleProperties.includes("modified") ? "116px" : null,
+    visibleProperties.includes("size") ? "92px" : null,
+    visibleProperties.includes("actions") ? "96px" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 export default function WorkspaceDocumentsPage() {
   const router = useRouter();
@@ -128,6 +165,9 @@ export default function WorkspaceDocumentsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortKey, setSortKey] = useState<DocumentSortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [visibleDisplayProperties, setVisibleDisplayProperties] = useState<
+    DocumentDisplayProperty[]
+  >(DEFAULT_DOCUMENT_DISPLAY_PROPERTIES);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -219,6 +259,21 @@ export default function WorkspaceDocumentsPage() {
     const result = compareDocuments(first, second, sortKey, workspaceMembers);
     return sortDirection === "asc" ? result : -result;
   });
+  const documentGridTemplate = useMemo(
+    () => getDocumentGridTemplate(visibleDisplayProperties),
+    [visibleDisplayProperties],
+  );
+  const visibleSortColumns = useMemo(
+    () =>
+      DOCUMENT_SORT_COLUMNS.filter(
+        (column) =>
+          column.key === "name" ||
+          visibleDisplayProperties.includes(
+            column.key as DocumentDisplayProperty,
+          ),
+      ),
+    [visibleDisplayProperties],
+  );
   const selectedDocuments = rawDocsList.filter((doc) =>
     selectedDocumentIds.includes(doc.id),
   );
@@ -416,6 +471,18 @@ export default function WorkspaceDocumentsPage() {
       }
 
       return Array.from(new Set([...current, ...visibleDocumentIds]));
+    });
+  }
+
+  function toggleDisplayProperty(property: string) {
+    setVisibleDisplayProperties((current) => {
+      const typedProperty = property as DocumentDisplayProperty;
+      if (current.includes(typedProperty)) {
+        if (sortKey === typedProperty) setSortKey("name");
+        return current.filter((item) => item !== typedProperty);
+      }
+
+      return [...current, typedProperty];
     });
   }
 
@@ -648,12 +715,32 @@ export default function WorkspaceDocumentsPage() {
             )}
           </button>
 
-          <button
-            className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title="Display options"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-          </button>
+          <ListDisplayPopover
+            trigger={<SlidersHorizontal className="h-3.5 w-3.5" />}
+            triggerClassName="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            triggerTitle="Display options"
+            ordering={sortKey}
+            orderingOptions={DOCUMENT_SORT_COLUMNS.map((column) => ({
+              value: column.key,
+              label: column.label,
+              disabled:
+                column.key !== "name" &&
+                !visibleDisplayProperties.includes(
+                  column.key as DocumentDisplayProperty,
+                ),
+            }))}
+            onOrderingChange={(value) => setSortKey(value as DocumentSortKey)}
+            direction={sortDirection}
+            onDirectionChange={setSortDirection}
+            properties={DOCUMENT_DISPLAY_PROPERTIES}
+            visibleProperties={visibleDisplayProperties}
+            onToggleProperty={toggleDisplayProperty}
+            onReset={() => {
+              setSortKey("name");
+              setSortDirection("asc");
+              setVisibleDisplayProperties(DEFAULT_DOCUMENT_DISPLAY_PROPERTIES);
+            }}
+          />
 
           <div className="h-4 w-px bg-hairline/50 mx-1" />
 
@@ -699,9 +786,12 @@ export default function WorkspaceDocumentsPage() {
         /* List View */
         <section className="mt-0.2 min-h-full overflow-x-auto px-2">
           <div className="min-w-[1040px]">
-            <div className={`grid ${DOCUMENT_GRID_CLASS} px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
+            <div
+              className="grid px-2 py-0.5 text-[11px] font-medium text-ink-muted"
+              style={{ gridTemplateColumns: documentGridTemplate }}
+            >
               <div />
-              {DOCUMENT_SORT_COLUMNS.map((column) => (
+              {visibleSortColumns.map((column) => (
                 <SortableColumnHeader
                   key={column.key}
                   label={column.label}
@@ -710,7 +800,9 @@ export default function WorkspaceDocumentsPage() {
                   onClick={() => handleSort(column.key)}
                 />
               ))}
-              <span className="text-right">Actions</span>
+              {visibleDisplayProperties.includes("actions") && (
+                <span className="text-right">Actions</span>
+              )}
             </div>
             <div className="space-y-0">
               {sortedDocs.map((doc, index) => {
@@ -748,7 +840,8 @@ export default function WorkspaceDocumentsPage() {
                     key={doc.id}
                     role="button"
                     tabIndex={0}
-                    className={`group grid min-h-[36px] ${DOCUMENT_GRID_CLASS} cursor-pointer items-center px-2 py-1 text-[11px] transition-none ${rowStateClass}`}
+                    className={`group grid min-h-[36px] cursor-pointer items-center px-2 py-1 text-[11px] transition-none ${rowStateClass}`}
+                    style={{ gridTemplateColumns: documentGridTemplate }}
                     onPointerEnter={() => setHoveredDocumentId(doc.id)}
                     onPointerLeave={() => setHoveredDocumentId(null)}
                     onFocus={() => setHoveredDocumentId(doc.id)}
@@ -803,31 +896,42 @@ export default function WorkspaceDocumentsPage() {
                       </div>
                     </button>
 
+                    {visibleDisplayProperties.includes("classification") && (
                     <div onClick={(event) => event.stopPropagation()}>
                       <DocumentClassificationBadge doc={doc} />
                     </div>
+                    )}
 
                     {/* Some rows carry a membership id while others carry a user id. */}
+                    {visibleDisplayProperties.includes("uploader") && (
                     <DocumentActor
                       label="Uploader"
                       showLabel={false}
                       member={findDocumentMember(workspaceMembers, doc.uploadedBy) ?? undefined}
                     />
+                    )}
 
+                    {visibleDisplayProperties.includes("approver") && (
                     <DocumentActor
                       label="Approver"
                       showLabel={false}
                       member={findDocumentMember(workspaceMembers, doc.approvedBy) ?? undefined}
                     />
+                    )}
 
+                    {visibleDisplayProperties.includes("modified") && (
                     <span className="text-[11px] font-medium text-ink-muted">
                       {formatDate(doc.updatedAt || doc.createdAt)}
                     </span>
+                    )}
 
+                    {visibleDisplayProperties.includes("size") && (
                     <span className="font-mono text-[11px] text-ink-muted">
                       {formatBytes(doc.sizeBytes)}
                     </span>
+                    )}
 
+                    {visibleDisplayProperties.includes("actions") && (
                     <div
                       className="flex items-center justify-end gap-1"
                       onClick={(event) => event.stopPropagation()}
@@ -873,6 +977,7 @@ export default function WorkspaceDocumentsPage() {
                         </button>
                       )}
                     </div>
+                    )}
                   </div>
                 );
               })}

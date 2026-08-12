@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { ListDisplayPopover } from "@/components/ui/list-display-popover";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,7 @@ import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { UserDto } from "@/types/auth";
 import type { SeriesListSummary, TranslationRoomDto } from "@/types/translationRoom";
 import {
   describeRecurrenceWithTime,
@@ -62,6 +64,58 @@ function formatTimeShort(value?: string) {
   }).format(new Date(value));
 }
 
+function sortRooms(
+  rooms: TranslationRoomDto[],
+  sortKey: RoomSortKey,
+  direction: SortDirection,
+  members: WorkspaceMemberDto[],
+  user?: UserDto | null,
+) {
+  return [...rooms].sort((first, second) => {
+    const result = compareRooms(first, second, sortKey, members, user);
+    return direction === "asc" ? result : -result;
+  });
+}
+
+function compareRooms(
+  first: TranslationRoomDto,
+  second: TranslationRoomDto,
+  sortKey: RoomSortKey,
+  members: WorkspaceMemberDto[],
+  user?: UserDto | null,
+) {
+  if (sortKey === "status") {
+    return compareText(first.status, second.status);
+  }
+  if (sortKey === "host") {
+    return compareText(
+      resolveRoomHost(first, members, user ?? null).name,
+      resolveRoomHost(second, members, user ?? null).name,
+    );
+  }
+  if (sortKey === "date") {
+    return (
+      getRoomDateValue(first.scheduledAt ?? first.createdAt) -
+      getRoomDateValue(second.scheduledAt ?? second.createdAt)
+    );
+  }
+  if (sortKey === "code") {
+    return compareText(first.translationRoomCode, second.translationRoomCode);
+  }
+  return compareText(first.title, second.title);
+}
+
+function getRoomDateValue(value?: string) {
+  return value ? new Date(value).getTime() : 0;
+}
+
+function compareText(first?: string | null, second?: string | null) {
+  return (first ?? "").localeCompare(second ?? "", undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
+
 
 const ROOM_FILTER_WIDTH_CLASS = {
   active: "w-[90px]",
@@ -69,6 +123,39 @@ const ROOM_FILTER_WIDTH_CLASS = {
   history: "w-[96px]",
   all: "w-[58px]",
 } as const;
+
+type RoomSortKey = "title" | "status" | "host" | "date" | "code";
+type SortDirection = "asc" | "desc";
+type RoomDisplayProperty =
+  | "code"
+  | "status"
+  | "host"
+  | "languages"
+  | "occupancy"
+  | "date";
+
+const ROOM_SORT_COLUMNS: Array<{ key: RoomSortKey; label: string }> = [
+  { key: "title", label: "Title" },
+  { key: "status", label: "Status" },
+  { key: "host", label: "Host" },
+  { key: "date", label: "Date" },
+  { key: "code", label: "Room code" },
+];
+
+const ROOM_DISPLAY_PROPERTIES: Array<{
+  key: RoomDisplayProperty;
+  label: string;
+}> = [
+  { key: "code", label: "Room code" },
+  { key: "status", label: "Status" },
+  { key: "host", label: "Host" },
+  { key: "languages", label: "Languages" },
+  { key: "occupancy", label: "Seats" },
+  { key: "date", label: "Date" },
+];
+
+const DEFAULT_ROOM_DISPLAY_PROPERTIES =
+  ROOM_DISPLAY_PROPERTIES.map((property) => property.key);
 
 /**
  * WT-327: marks a room that is one occurrence of a recurring booking.
@@ -136,9 +223,11 @@ function StatusIcon({ status }: { status: string }) {
 function LinearRow({
   room,
   members,
+  visibleProperties,
 }: {
   room: TranslationRoomDto;
   members: WorkspaceMemberDto[];
+  visibleProperties: RoomDisplayProperty[];
 }) {
   const params = useParams();
   const workspaceSlug = params?.workspaceSlug as string;
@@ -187,13 +276,17 @@ function LinearRow({
         )}
       </div>
 
+      {visibleProperties.includes("status") && (
       <div className="flex items-center w-8 shrink-0">
         <StatusIcon status={room.status} />
       </div>
+      )}
 
+      {visibleProperties.includes("code") && (
       <div className="hidden @[560px]:block w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
         {room.translationRoomCode}
       </div>
+      )}
       {/* overflow-hidden, not just min-w-0. min-w-0 lets this column shrink to nothing, which is
           what has to happen when the Properties panel opens — but the badges after the title are
           shrink-0, so with nothing clipping them they simply drew on top of the status column.
@@ -229,10 +322,13 @@ function LinearRow({
           with the meaning huddled in the middle of it. The pill hugs what it contains and is
           capped at the column, so the columns still line up and nothing can overflow them. */}
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
+        {visibleProperties.includes("status") && (
         <div className="flex w-[104px] shrink-0 items-center">
           <StatusPanel status={room.status} />
         </div>
+        )}
 
+        {visibleProperties.includes("host") && (
         <div className="hidden @[700px]:flex w-[164px] shrink-0 items-center">
           <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
             <Avatar className="size-5 shrink-0 rounded-full">
@@ -244,7 +340,9 @@ function LinearRow({
             <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
           </div>
         </div>
+        )}
 
+        {visibleProperties.includes("languages") && (
         <div className="flex w-[176px] shrink-0 items-center">
           <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
             {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
@@ -278,11 +376,13 @@ function LinearRow({
             )}
           </div>
         </div>
+        )}
 
         {/* WT-321(3): the bare "0/100" was read as an error code, a progress bar, anything but
             what it is. It is unchanged in meaning — `useRoomOccupancy` still returns
             seats-taken over the meeting type's seat cap (WT-274) — it just says so now. A
             people icon and a title are the whole fix; the number itself was never wrong. */}
+        {visibleProperties.includes("occupancy") && (
         <div
           className="hidden @[820px]:flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
           title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
@@ -293,13 +393,16 @@ function LinearRow({
             participants in the room, out of {occupancy.capacity} seats
           </span>
         </div>
+        )}
 
+        {visibleProperties.includes("date") && (
         <div className="hidden @[900px]:flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums">
             {formatTimeShort(room.scheduledAt ?? room.createdAt)}
           </span>
         </div>
+        )}
       </div>
     </Link>
   );
@@ -321,10 +424,19 @@ export default function MeetingsPageLinear() {
     1,
     100,
   );
-  const members = membersQuery.data?.items ?? [];
+  const members = useMemo(
+    () => membersQuery.data?.items ?? [],
+    [membersQuery.data?.items],
+  );
+  const user = useAuthStore((state) => state.user);
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<RoomSortKey>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [visibleDisplayProperties, setVisibleDisplayProperties] = useState<
+    RoomDisplayProperty[]
+  >(DEFAULT_ROOM_DISPLAY_PROPERTIES);
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -431,7 +543,8 @@ export default function MeetingsPageLinear() {
       // the hour keeps a meeting that is running late; older than that it was never started, and
       // it belongs to its own day under Scheduled, not here.
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60000);
-      return rooms.filter(
+      return sortRooms(
+        rooms.filter(
         (r) =>
           matchesSearch(r) &&
           (r.status === "in_progress" ||
@@ -440,26 +553,61 @@ export default function MeetingsPageLinear() {
               (!r.scheduledAt ||
                 (new Date(r.scheduledAt) <= fifteenMinsFromNow &&
                   new Date(r.scheduledAt) >= twoHoursAgo)))),
+        ),
+        sortKey,
+        sortDirection,
+        members,
+        user,
       );
     }
     // A day off the strip narrows whichever tab is open. It replaced the Scheduled TAB, and
     // WT-247's reasoning still holds: what belongs to a day is what was BOOKED for it, not what
     // its status happens to be now — the row renders its own state.
     if (dayFilter) {
-      return rooms.filter(
-        (r) => matchesSearch(r) && isScheduledOn(r, dayFilter),
+      return sortRooms(
+        rooms.filter(
+          (r) => matchesSearch(r) && isScheduledOn(r, dayFilter),
+        ),
+        sortKey,
+        sortDirection,
+        members,
+        user,
       );
     }
     if (activeTab === "history")
-      return rowSource.filter(
-        (r) =>
-          matchesSearch(r) &&
-          (r.status === "ended" ||
-            r.status === "cancelled" ||
-            r.status === "timeout"),
+      return sortRooms(
+        rowSource.filter(
+          (r) =>
+            matchesSearch(r) &&
+            (r.status === "ended" ||
+              r.status === "cancelled" ||
+              r.status === "timeout"),
+        ),
+        sortKey,
+        sortDirection,
+        members,
+        user,
       );
-    return rowSource.filter(matchesSearch);
-  }, [rooms, rowSource, activeTab, dayFilter, searchQuery]);
+    return sortRooms(
+      rowSource.filter(matchesSearch),
+      sortKey,
+      sortDirection,
+      members,
+      user,
+    );
+  }, [rooms, rowSource, activeTab, dayFilter, searchQuery, sortDirection, sortKey, members, user]);
+
+  function toggleDisplayProperty(property: string) {
+    setVisibleDisplayProperties((current) => {
+      const typedProperty = property as RoomDisplayProperty;
+      if (current.includes(typedProperty)) {
+        if (sortKey === property) setSortKey("title");
+        return current.filter((item) => item !== typedProperty);
+      }
+
+      return [...current, typedProperty];
+    });
+  }
 
   return (
     <div className="flex flex-col h-full bg-surface-1">
@@ -500,12 +648,36 @@ export default function MeetingsPageLinear() {
           >
             <Funnel weight="bold" size={13} />
           </button>
-          <button
-            className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm"
-            title="Display Options"
-          >
-            <SlidersHorizontal weight="bold" size={13} />
-          </button>
+          <ListDisplayPopover
+            trigger={<SlidersHorizontal weight="bold" size={13} />}
+            triggerClassName="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm"
+            triggerTitle="Display Options"
+            ordering={sortKey}
+            orderingOptions={ROOM_SORT_COLUMNS.map((column) => ({
+              value: column.key,
+              label: column.label,
+              disabled:
+                column.key !== "title" &&
+                !visibleDisplayProperties.includes(
+                  column.key === "date"
+                    ? "date"
+                    : column.key === "code"
+                      ? "code"
+                      : (column.key as RoomDisplayProperty),
+                ),
+            }))}
+            onOrderingChange={(value) => setSortKey(value as RoomSortKey)}
+            direction={sortDirection}
+            onDirectionChange={setSortDirection}
+            properties={ROOM_DISPLAY_PROPERTIES}
+            visibleProperties={visibleDisplayProperties}
+            onToggleProperty={toggleDisplayProperty}
+            onReset={() => {
+              setSortKey("date");
+              setSortDirection("asc");
+              setVisibleDisplayProperties(DEFAULT_ROOM_DISPLAY_PROPERTIES);
+            }}
+          />
 
           <div className="h-4 w-[1px] bg-border mx-1" />
 
@@ -578,7 +750,12 @@ export default function MeetingsPageLinear() {
               <div className="flex flex-col pb-8">
                 {filteredRooms.length > 0 ? (
                   filteredRooms.map((room) => (
-                    <LinearRow key={room.id} room={room} members={members} />
+                    <LinearRow
+                      key={room.id}
+                      room={room}
+                      members={members}
+                      visibleProperties={visibleDisplayProperties}
+                    />
                   ))
                 ) : (
                   <div className="px-6 py-12 text-[13px] text-muted-foreground flex flex-col items-center justify-center">

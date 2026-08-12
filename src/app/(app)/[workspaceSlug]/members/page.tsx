@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Users,
@@ -43,6 +43,7 @@ import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { usePresence } from "@/hooks/use-presence";
 import { Badge } from "@/components/ui/badge";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { ListDisplayPopover } from "@/components/ui/list-display-popover";
 import { Switch } from "@/components/ui/switch";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import {
@@ -64,12 +65,6 @@ const MEMBER_FILTER_WIDTH_CLASS: Record<string, string> = {
   requested: "w-[104px]",
 };
 
-const MEMBER_GRID_CLASS =
-  "grid-cols-[16px_minmax(280px,1.85fr)_100px_116px_92px_112px_108px_64px]";
-
-const MEMBER_GRID_CLASS_READONLY =
-  "grid-cols-[16px_minmax(280px,1.85fr)_100px_116px_92px_112px]";
-
 type SortDirection = "asc" | "desc";
 type MemberSortKey =
   | "name"
@@ -78,6 +73,13 @@ type MemberSortKey =
   | "status"
   | "date"
   | "hostMeetings";
+type MemberDisplayProperty =
+  | "role"
+  | "membershipType"
+  | "status"
+  | "date"
+  | "hostMeetings"
+  | "actions";
 
 const MEMBER_SORT_COLUMNS: Array<{
   key: MemberSortKey;
@@ -93,6 +95,42 @@ const MEMBER_SORT_COLUMNS: Array<{
   { key: "hostMeetings", label: "Host meetings", ownerOnly: true, align: "center" },
 ];
 
+const MEMBER_DISPLAY_PROPERTIES: Array<{
+  key: MemberDisplayProperty;
+  label: string;
+  ownerOnly?: boolean;
+}> = [
+  { key: "role", label: "Role" },
+  { key: "membershipType", label: "Membership Type" },
+  { key: "status", label: "Status" },
+  { key: "date", label: "Date" },
+  { key: "hostMeetings", label: "Host meetings", ownerOnly: true },
+  { key: "actions", label: "Actions", ownerOnly: true },
+];
+
+const DEFAULT_MEMBER_DISPLAY_PROPERTIES =
+  MEMBER_DISPLAY_PROPERTIES.map((property) => property.key);
+
+function getMemberGridTemplate(
+  visibleProperties: MemberDisplayProperty[],
+  isOwnerOrAdmin: boolean,
+) {
+  return [
+    "16px",
+    "minmax(280px,1.85fr)",
+    visibleProperties.includes("role") ? "100px" : null,
+    visibleProperties.includes("membershipType") ? "116px" : null,
+    visibleProperties.includes("status") ? "92px" : null,
+    visibleProperties.includes("date") ? "112px" : null,
+    isOwnerOrAdmin && visibleProperties.includes("hostMeetings")
+      ? "108px"
+      : null,
+    isOwnerOrAdmin && visibleProperties.includes("actions") ? "64px" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 export default function WorkspaceMembersPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
@@ -104,6 +142,9 @@ export default function WorkspaceMembersPage() {
   const [filter, setFilter] = useState<DirectoryFilter>("all");
   const [sortKey, setSortKey] = useState<MemberSortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [visibleDisplayProperties, setVisibleDisplayProperties] = useState<
+    MemberDisplayProperty[]
+  >(DEFAULT_MEMBER_DISPLAY_PROPERTIES);
 
   // Modal and invitation states
   const [isInviteOpen, setIsInviteOpen] = useState(false);
@@ -161,14 +202,34 @@ export default function WorkspaceMembersPage() {
   // changes hook order between renders.
   usePresence(membersList.map((member) => member.userId));
 
-  if (!activeWorkspaceId) return null;
-
   const isOwner = currentRole === "owner";
   const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
-  const memberGridClass = isOwnerOrAdmin
-    ? MEMBER_GRID_CLASS
-    : MEMBER_GRID_CLASS_READONLY;
+  const memberDisplayProperties = useMemo(
+    () =>
+      MEMBER_DISPLAY_PROPERTIES.filter(
+        (property) => !property.ownerOnly || isOwnerOrAdmin,
+      ),
+    [isOwnerOrAdmin],
+  );
+  const memberGridTemplate = useMemo(
+    () => getMemberGridTemplate(visibleDisplayProperties, isOwnerOrAdmin),
+    [isOwnerOrAdmin, visibleDisplayProperties],
+  );
+  const visibleSortColumns = useMemo(
+    () =>
+      MEMBER_SORT_COLUMNS.filter(
+        (column) =>
+          (!column.ownerOnly || isOwnerOrAdmin) &&
+          (column.key === "name" ||
+            visibleDisplayProperties.includes(
+              column.key as MemberDisplayProperty,
+            )),
+      ),
+    [isOwnerOrAdmin, visibleDisplayProperties],
+  );
+
+  if (!activeWorkspaceId) return null;
 
   // Only Owners and Admins may see who has been invited or who is asking to get in — the
   // invitation endpoints refuse everyone else, and a table of permanently failing rows is
@@ -192,6 +253,18 @@ export default function WorkspaceMembersPage() {
     const result = compareMemberRows(first, second, sortKey);
     return sortDirection === "asc" ? result : -result;
   });
+
+  function toggleDisplayProperty(property: string) {
+    setVisibleDisplayProperties((current) => {
+      const typedProperty = property as MemberDisplayProperty;
+      if (current.includes(typedProperty)) {
+        if (sortKey === typedProperty) setSortKey("name");
+        return current.filter((item) => item !== typedProperty);
+      }
+
+      return [...current, typedProperty];
+    });
+  }
 
   const invitedCount = buildMemberDirectory(
     membersList,
@@ -446,12 +519,34 @@ export default function WorkspaceMembersPage() {
               <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
             )}
           </button>
-          <button
-            className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title={`${filteredMembers.length} people`}
-          >
-            <SlidersHorizontal weight="bold" size={13} />
-          </button>
+          <ListDisplayPopover
+            trigger={<SlidersHorizontal weight="bold" size={13} />}
+            triggerClassName="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+            triggerTitle={`${filteredMembers.length} people`}
+            ordering={sortKey}
+            orderingOptions={MEMBER_SORT_COLUMNS.filter(
+              (column) => !column.ownerOnly || isOwnerOrAdmin,
+            ).map((column) => ({
+              value: column.key,
+              label: column.label,
+              disabled:
+                column.key !== "name" &&
+                !visibleDisplayProperties.includes(
+                  column.key as MemberDisplayProperty,
+                ),
+            }))}
+            onOrderingChange={(value) => setSortKey(value as MemberSortKey)}
+            direction={sortDirection}
+            onDirectionChange={setSortDirection}
+            properties={memberDisplayProperties}
+            visibleProperties={visibleDisplayProperties}
+            onToggleProperty={toggleDisplayProperty}
+            onReset={() => {
+              setSortKey("name");
+              setSortDirection("asc");
+              setVisibleDisplayProperties(DEFAULT_MEMBER_DISPLAY_PROPERTIES);
+            }}
+          />
 
           {isOwnerOrAdmin && (
             <>
@@ -517,9 +612,12 @@ export default function WorkspaceMembersPage() {
         ) : (
           <div className="min-w-[1000px]">
             {/* Header row */}
-            <div className={`grid ${memberGridClass} items-center gap-3 px-2 py-0.5 text-[11px] font-medium text-ink-muted`}>
+            <div
+              className="grid items-center gap-3 px-2 py-0.5 text-[11px] font-medium text-ink-muted"
+              style={{ gridTemplateColumns: memberGridTemplate }}
+            >
               <div />
-              {MEMBER_SORT_COLUMNS.filter((column) => !column.ownerOnly || isOwnerOrAdmin).map((column) => (
+              {visibleSortColumns.map((column) => (
                 <SortableColumnHeader
                   key={column.key}
                   label={column.label}
@@ -529,7 +627,9 @@ export default function WorkspaceMembersPage() {
                   onClick={() => handleSort(column.key)}
                 />
               ))}
-              {isOwnerOrAdmin && <span className="text-right">Actions</span>}
+              {isOwnerOrAdmin && visibleDisplayProperties.includes("actions") && (
+                <span className="text-right">Actions</span>
+              )}
             </div>
 
             {/* Data rows */}
@@ -545,7 +645,8 @@ export default function WorkspaceMembersPage() {
               return (
                 <div
                   key={row.key}
-                  className={`group grid min-h-[36px] ${memberGridClass} items-center gap-3 rounded-[7px] px-2 py-1 text-[11px] transition-none hover:bg-surface-2 hover:shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`}
+                  className="group grid min-h-[36px] items-center gap-3 rounded-[7px] px-2 py-1 text-[11px] transition-none hover:bg-surface-2 hover:shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]"
+                  style={{ gridTemplateColumns: memberGridTemplate }}
                 >
                   <div aria-hidden="true" />
 
@@ -587,6 +688,7 @@ export default function WorkspaceMembersPage() {
                   </div>
 
                   {/* Role Badge */}
+                  {visibleDisplayProperties.includes("role") && (
                   <div>
                     <Badge
                       variant="outline"
@@ -597,9 +699,11 @@ export default function WorkspaceMembersPage() {
                         : row.roleName}
                     </Badge>
                   </div>
+                  )}
 
                   {/* Membership Type — on a join request this is the approver's decision,
                       so it is the control rather than a label. */}
+                  {visibleDisplayProperties.includes("membershipType") && (
                   <div>
                     {row.status === "requested" && invite ? (
                       <select
@@ -635,8 +739,10 @@ export default function WorkspaceMembersPage() {
                       </Badge>
                     )}
                   </div>
+                  )}
 
                   {/* Where this person stands: joined, invited, or asking to join */}
+                  {visibleDisplayProperties.includes("status") && (
                   <div>
                     <Badge
                       variant="outline"
@@ -651,8 +757,10 @@ export default function WorkspaceMembersPage() {
                       {DIRECTORY_STATUS_LABELS[row.status]}
                     </Badge>
                   </div>
+                  )}
 
                   {/* Joined, invited, or requested date — whichever this row is */}
+                  {visibleDisplayProperties.includes("date") && (
                   <span className="text-xs text-ink-muted font-medium">
                     {row.date
                       ? new Date(row.date).toLocaleDateString("en-US", {
@@ -662,10 +770,12 @@ export default function WorkspaceMembersPage() {
                         })
                       : "—"}
                   </span>
+                  )}
 
                   {isOwnerOrAdmin && (
                     <>
                       {/* Meeting host toggle */}
+                      {visibleDisplayProperties.includes("hostMeetings") && (
                       <div className="flex justify-center">
                         {member ? (
                           <Switch
@@ -683,8 +793,10 @@ export default function WorkspaceMembersPage() {
                           <span className="text-xs text-ink-muted">—</span>
                         )}
                       </div>
+                      )}
 
                       {/* What can be done about this row */}
+                      {visibleDisplayProperties.includes("actions") && (
                       <div className="flex justify-end gap-1">
                         {member ? (
                           <button
@@ -744,6 +856,7 @@ export default function WorkspaceMembersPage() {
                           </>
                         ) : null}
                       </div>
+                      )}
                     </>
                   )}
                 </div>
