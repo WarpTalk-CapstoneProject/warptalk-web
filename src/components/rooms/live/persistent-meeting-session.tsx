@@ -52,6 +52,7 @@ import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
+import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
@@ -470,9 +471,14 @@ export function PersistentMeetingSession({
   const [isSignalRReconnecting, setIsSignalRReconnecting] = useState(false);
   const [isLiveKitReconnecting, setIsLiveKitReconnecting] = useState(false);
   const isReconnecting = isSignalRReconnecting || isLiveKitReconnecting;
-  const participants = liveParticipants.length
+  const mergedParticipants = liveParticipants.length
     ? mergeParticipants(apiParticipants, liveParticipants)
     : apiParticipants;
+  // WT-358: the People panel prints role verbatim from the API list, and the live presence
+  // payload carries no role — so without this a Transfer Host left the old host labelled Host
+  // until the page was reloaded. The server has written both rows by now, so a later refetch
+  // agrees with this rather than reverting it.
+  const participants = applyLiveHostRole(mergedParticipants, liveHostUserId);
   const participantsRef = useRef(participants);
   useEffect(() => {
     participantsRef.current = participants;
