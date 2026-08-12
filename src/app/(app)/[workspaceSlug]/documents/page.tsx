@@ -527,15 +527,18 @@ export default function WorkspaceDocumentsPage() {
         <div className="w-full overflow-x-auto rounded-xl border border-hairline/30 bg-surface-1/40 shadow-sm">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-hairline/20 bg-surface-2/50 text-ink-muted font-semibold">
-                <th className="py-3 px-4 font-semibold">Name</th>
-                <th className="py-3 px-4 font-semibold">Uploaded By</th>
-                <th className="py-3 px-4 font-semibold">Approved By</th>
-                <th className="py-3 px-4 font-semibold">Classification / AI</th>
-                <th className="py-3 px-4 font-semibold">People</th>
-                <th className="py-3 px-4 font-semibold">Last Modified</th>
-                <th className="py-3 px-4 font-semibold">Size</th>
-                <th className="py-3 px-4 font-semibold text-right">Actions</th>
+              {/* One column per fact. There used to be a "People" column here as well, rendering
+                  the same uploader and the same approver a second time under their own labels —
+                  three columns carrying two facts, and the widest thing in the row was the
+                  repetition. */}
+              <tr className="border-b border-hairline/40 text-[11px] font-medium tracking-wide text-ink-muted uppercase">
+                <th className="px-4 py-2.5 font-medium">Name</th>
+                <th className="px-4 py-2.5 font-medium">Uploaded by</th>
+                <th className="px-4 py-2.5 font-medium">Approved by</th>
+                <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-2.5 font-medium">Modified</th>
+                <th className="px-4 py-2.5 font-medium">Size</th>
+                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline/20">
@@ -650,23 +653,6 @@ export default function WorkspaceDocumentsPage() {
                           <span>AI Context</span>
                         </span>
                       )}
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <DocumentActor
-                          label="Uploader"
-                          member={workspaceMembers.find(
-                            (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
-                          )}
-                        />
-                        <DocumentActor
-                          label="Approver"
-                          member={workspaceMembers.find(
-                            (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
-                          )}
-                        />
-                      </div>
                     </td>
 
                     {/* Last Modified Date */}
