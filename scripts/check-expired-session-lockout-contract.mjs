@@ -110,6 +110,12 @@ checks.push([
   "route access survives an expired access token via the session marker",
   proxy.includes("SESSION_MARKER_COOKIE") && proxy.includes("hasSession"),
 ]);
+checks.push([
+  "workspace-scoped routes do not render a 404 before the client can refresh",
+  proxy.includes("isWorkspaceScopedRoute") &&
+    proxy.includes("WORKSPACE_GATEWAY_PATH") &&
+    /!hasLiveAccessToken && hasSession && isWorkspaceScopedRoute\(pathname\)/.test(proxy),
+]);
 
 // ── Nothing stale survives to mislead the next load ───────────────────────────
 checks.push([

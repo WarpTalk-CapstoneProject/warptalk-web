@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
+import {
+  normalizeWorkspaceSlug,
+  WORKSPACE_GATEWAY_PATH,
+} from "@/lib/workspace/workspace-slug";
 import {
   ACCESS_TOKEN_COOKIE,
   SESSION_MARKER_COOKIE,
@@ -36,6 +39,13 @@ const DEVELOPMENT_ONLY_PREFIXES = [
   "/test-meeting",
   "/workspace/artifacts",
 ];
+
+function isWorkspaceScopedRoute(pathname: string) {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length < 2) return false;
+
+  return normalizeWorkspaceSlug(segments[0]) !== null;
+}
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -76,6 +86,12 @@ export function proxy(request: NextRequest) {
     }
     return response;
   };
+
+  if (!hasLiveAccessToken && hasSession && isWorkspaceScopedRoute(pathname)) {
+    const workspaceUrl = new URL(WORKSPACE_GATEWAY_PATH, request.url);
+    workspaceUrl.searchParams.set("redirect", pathname);
+    return withCleanup(NextResponse.redirect(workspaceUrl));
+  }
 
   // Bouncing a signed-in user off the login page requires a *live* token. With a dead one
   // the user gets the login page they asked for — the one place that can repair the
