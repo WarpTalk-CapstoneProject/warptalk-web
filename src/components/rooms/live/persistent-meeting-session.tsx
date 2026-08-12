@@ -332,6 +332,11 @@ export function PersistentMeetingSession({
   const removeLiveParticipant = useTranslationRoomStore(
     (state) => state.removeParticipant,
   );
+  // WT-354: the roster the hub hands a joiner on arrival. Without it the live list could only
+  // ever contain people who joined AFTER this client did.
+  const setLiveParticipants = useTranslationRoomStore(
+    (state) => state.setParticipants,
+  );
   const raisedHands = useTranslationRoomStore((state) => state.raisedHands);
   const setHandRaisedInStore = useTranslationRoomStore(
     (state) => state.setHandRaised,
@@ -1247,6 +1252,17 @@ export function PersistentMeetingSession({
     connection.on("TranslationStopped", () => {
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
+    // WT-354: who was already here. The hub sends this to the caller alone, once, immediately
+    // after JoinTranslationRoom — every other participant event describes a CHANGE, so without a
+    // starting point the live roster of a late joiner began empty and no later event could fill
+    // it in. A host joining a meeting in progress saw a People panel containing only themselves.
+    //
+    // Replaces rather than merges: this IS the room as the server sees it, and anything already
+    // in the store for this room predates the connection that just opened.
+    connection.on("ParticipantRoster", (roster: ParticipantInfoDto[]) => {
+      setLiveParticipants(roster);
+      void refetchParticipants();
+    });
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
       addLiveParticipant(participant);
       void refetchParticipants();
@@ -1582,6 +1598,7 @@ export function PersistentMeetingSession({
     refetchParticipants,
     refetchRoom,
     removeLiveParticipant,
+    setLiveParticipants,
     resetLiveRoom,
     displayName,
     roomId,
