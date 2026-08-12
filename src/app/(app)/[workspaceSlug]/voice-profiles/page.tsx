@@ -1288,7 +1288,7 @@ function toTitleCase(value: string) {
 }
 
 function voiceConsentLabel(profile: VoiceProfileDto) {
-  const status = profile.consentStatus?.toLowerCase();
-  if (status === "granted") return "Consent active";
+  const status = profile.consentStatus?.trim().toUpperCase();
+  if (status === "GRANTED") return "Consent active";
   return "Needs consent";
 }

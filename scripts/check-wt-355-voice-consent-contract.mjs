@@ -21,6 +21,7 @@ const consentFields = [
 
 const checks = [
   ["WT-355 page uses Add voice profile entry copy", page.includes("Add voice profile")],
+  ["WT-355 page no longer uses Create profile copy", !page.includes("Create profile")],
   ["WT-355 page uses Set up voice profile modal title", page.includes("Set up voice profile")],
   ["WT-355 page renders consent agreement section", page.includes("Voice consent agreement")],
   ["WT-355 page uses Agree & save voice profile CTA", page.includes("Agree & save voice profile")],
