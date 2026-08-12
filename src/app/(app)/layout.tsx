@@ -23,6 +23,7 @@ import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
+import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { startProactiveRefresh } from "@/lib/api/client";
@@ -522,13 +523,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               className="bg-surface-1"
             >
               <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
+              {/* Members, not "Properties".
+                  The panel used to be a header over the sentence "Select an item to view its
+                  properties and actions" — and nothing in the app ever published an item for it
+                  to describe, so that sentence was the whole feature. 260px had been reserved
+                  for something that never arrived.
+
+                  Properties is meant to return here for a selected item; it is not built in this
+                  change because there is still no selection to read. Adding a store nothing
+                  writes to would be the same placeholder again, one layer deeper. */}
               <div className="flex items-center px-4 h-[38px] border-b border-border">
-                <span className="text-[12px] font-medium text-ink">Properties</span>
+                <span className="text-[12px] font-medium text-ink">Members</span>
               </div>
               <div className="flex-1 p-4 overflow-y-auto">
-                <div className="text-[12px] text-ink-muted">
-                  Select an item to view its properties and actions.
-                </div>
+                <WorkspaceMembersPanel
+                  workspaceId={activeWorkspaceId}
+                  workspaceSlug={activeWorkspaceSlug}
+                />
               </div>
             </aside>
             </AnimatedWidthPanel>
