@@ -23,7 +23,6 @@ import { MeetingDayPanel } from "@/components/home/meeting-day-panel";
 
 type QuickAction = {
   title: string;
-  description: string;
   icon: React.ElementType;
   href?: string;
   onClick?: () => void;
@@ -39,7 +38,10 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
       transition={{ duration: 0.24, delay: index * 0.025 }}
       whileTap={{ y: 2 }}
       className={cn(
-        "group flex h-full min-h-[92px] items-start gap-3 rounded-[12px] border p-3 text-left transition-all",
+        // Title only, so the row is a set of destinations rather than a wall of sentences —
+        // "Meetings / Review scheduled, live, and past rooms." spent two lines telling a user
+        // what the word Meetings already told them. The card shrinks with the text it lost.
+        "group flex h-full min-h-[56px] items-center gap-3 rounded-[12px] border p-3 text-left transition-all",
         action.featured
           ? "border-primary bg-primary text-on-primary shadow-[0_12px_26px_rgba(94,106,210,0.24)] hover:bg-primary-hover"
           : "border-border bg-surface-1 shadow-linear hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2",
@@ -59,9 +61,6 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
       <span className="min-w-0">
         <span className={cn("block text-[13px] font-semibold leading-5", action.featured ? "text-white" : "text-ink")}>
           {action.title}
-        </span>
-        <span className={cn("mt-1 block text-[12px] leading-5", action.featured ? "text-white/72" : "text-ink-muted")}>
-          {action.description}
         </span>
       </span>
     </motion.div>
@@ -98,44 +97,37 @@ export default function WorkspaceHomePage() {
   const quickActions: QuickAction[] = [
     {
       title: "Create room",
-      description: "Open a live translation space for your team.",
       icon: Plus,
       onClick: () => setCreateRoomModalOpen(true),
       featured: true,
     },
     {
       title: "Find meeting",
-      description: "Search rooms, notes, and saved transcripts.",
       icon: MagnifyingGlass,
       onClick: () => setSearchMeetingModalOpen(true),
     },
     {
       title: "Join by code",
-      description: "Enter an invite code from another host.",
       icon: Keyboard,
       href: "/join",
     },
     {
       title: "Meetings",
-      description: "Review scheduled, live, and past rooms.",
       icon: VideoCamera,
       href: `/${slug}/rooms`,
     },
     {
       title: "History",
-      description: "Return to conversations already captured.",
       icon: ClockCounterClockwise,
       href: `/${slug}/history`,
     },
     {
       title: "Documents",
-      description: "Manage vocabulary and reference material.",
       icon: FileText,
       href: `/${slug}/documents`,
     },
     {
       title: "Members",
-      description: "Invite teammates and review workspace roles.",
       icon: Users,
       href: `/${slug}/members`,
     },
@@ -145,19 +137,16 @@ export default function WorkspaceHomePage() {
     quickActions.push(
       {
         title: "Billing",
-        description: "Manage plan, seats, and workspace invoices.",
         icon: CreditCard,
         href: `/${slug}/billing`,
       },
       {
         title: "Dashboard",
-        description: "Track usage, activity, and workspace health.",
         icon: ChartBar,
         href: `/${slug}/dashboard`,
       },
       {
         title: "Settings",
-        description: "Control workspace profile and access rules.",
         icon: GearSix,
         href: `/${slug}/settings`,
       }
@@ -174,7 +163,6 @@ export default function WorkspaceHomePage() {
 
         <div className="mt-2">
           <h2 className="text-[15px] font-semibold text-ink">Quick jumps</h2>
-          <p className="mt-1 text-[12px] text-ink-muted">Shortcuts styled from the WarpTalk token system.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
