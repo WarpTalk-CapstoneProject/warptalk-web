@@ -744,11 +744,30 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     );
   }
 
-  if (!isCoreLoading && hasNoSubscription) {
+  // Decide nothing until the three queries that own every number on this page have settled.
+  //
+  // This used to be two `!isCoreLoading &&` guards with the full layout as the fall-through, so
+  // WHILE loading both guards were false and the billing management page rendered — balance,
+  // usage, invoices, the lot — and was then replaced by "No active subscription" the moment the
+  // queries answered. A workspace with no plan therefore watched its billing page load and then
+  // un-load, which reads as the app changing its mind rather than as an answer.
+  //
+  // The comment above the guards had the reason right and applied it only to the error branch:
+  // falling through paints a fabricated balance of 0. Loading paints the same fabrication, and
+  // then takes it away.
+  if (isCoreLoading) {
+    return (
+      <div className="flex h-[60vh] w-full items-center justify-center bg-surface-1">
+        <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+      </div>
+    );
+  }
+
+  if (hasNoSubscription) {
     return <BillingNoSubscriptionState workspaceSlug={workspaceSlug} />;
   }
 
-  if (!isCoreLoading && hardError) {
+  if (hardError) {
     return (
       <BillingErrorState
         message={getBillingErrorMessage(hardError)}

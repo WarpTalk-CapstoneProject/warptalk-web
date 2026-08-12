@@ -21,7 +21,9 @@ import { NotificationPopover } from "@/components/notifications/notification-pop
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
+import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
@@ -147,9 +149,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   } = useUIStore();
   // 160ms against the panel's 420ms width tween — see useRailSwapDelay.
   const railCollapsed = useRailSwapDelay(leftSidebarOpen, 160);
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
-  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
+  const setActiveWorkspace = useWorkspaceStore(
+    (state) => state.setActiveWorkspace,
+  );
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const logout = useAuthStore((state) => state.logout);
   const activeMeetingRoomId = useActiveMeetingStore(
@@ -157,7 +165,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
   const [mounted, setMounted] = useState(false);
-  
+
   // `isError` and `refetch` were not read. The gate below spun on `!activeWorkspaceId`, and a
   // failed workspaces query leaves that null forever — so any failure here painted a spinner
   // with no message, no retry and no way out, indistinguishable from a slow network. It is the
@@ -172,12 +180,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const selectWorkspace = useSelectWorkspace();
 
   const roomId = (() => {
-    const segments = pathname.split('/').filter(Boolean);
-    if (segments.length >= 3 && segments[1] === 'rooms') {
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length >= 3 && segments[1] === "rooms") {
       const id = segments[2];
       if (/^[0-9a-fA-F-]{36}$/.test(id)) return id;
     }
-    if (segments.length >= 2 && segments[0] === 'room') {
+    if (segments.length >= 2 && segments[0] === "room") {
       const id = segments[1];
       if (/^[0-9a-fA-F-]{36}$/.test(id)) return id;
     }
@@ -185,13 +193,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   })();
 
   const roomQuery = useTranslationRoom(roomId ?? "");
-  const roomTitle = roomId && roomQuery?.data ? roomQuery.data.title : undefined;
+  const roomTitle =
+    roomId && roomQuery?.data ? roomQuery.data.title : undefined;
 
   const isOnboardingRoute =
     pathname === "/workspace" ||
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isSystemAdmin = useIsSystemAdmin();
   // Decides more than the header divider: it is also what tells the meeting dock to stop
   // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
   // window floats on top of the meeting it is a copy of.
@@ -219,17 +229,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [mounted, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!mounted || !isAuthenticated || isOnboardingRoute || isAdminRoute || workspacesLoading) return;
+    if (
+      !mounted ||
+      !isAuthenticated ||
+      isOnboardingRoute ||
+      isAdminRoute ||
+      workspacesLoading
+    )
+      return;
 
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
         const membershipType =
-          "membershipType" in firstWs && typeof firstWs.membershipType === "string"
+          "membershipType" in firstWs &&
+          typeof firstWs.membershipType === "string"
             ? firstWs.membershipType
             : "Internal";
         const defaultLanguage =
-          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
+          "defaultLanguage" in firstWs &&
+          typeof firstWs.defaultLanguage === "string"
             ? firstWs.defaultLanguage
             : "en";
         selectWorkspace.mutate(firstWs.id);
@@ -239,13 +258,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           firstWs.slug,
           firstWs.role || "Member",
           membershipType,
-          defaultLanguage
+          defaultLanguage,
         );
+      } else if (isSystemAdmin) {
+        // A platform admin with no workspace of their own is not a new user who has yet to make
+        // one — they administer the platform the workspaces live in. Sending them to
+        // /workspace made the master account look like it had signed up by mistake, and the
+        // only way on was to create a workspace nobody wanted. The admin portal is their home.
+        router.replace("/admin");
       } else {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+  }, [
+    activeWorkspaceId,
+    workspacesData,
+    workspacesLoading,
+    isOnboardingRoute,
+    isAdminRoute,
+    isSystemAdmin,
+    selectWorkspace,
+    setActiveWorkspace,
+    router,
+    mounted,
+    isAuthenticated,
+  ]);
 
   if (!mounted || !isAuthenticated) {
     return (
@@ -265,7 +302,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas p-6">
         <div className="max-w-sm space-y-4 text-center">
-          <h1 className="text-base font-semibold text-ink">Could not load your workspaces</h1>
+          <h1 className="text-base font-semibold text-ink">
+            Could not load your workspaces
+          </h1>
           <p className="text-sm leading-relaxed text-ink-muted">
             {getErrorStatus(workspacesError) === null
               ? "The server could not be reached. Check your connection and try again."
@@ -318,187 +357,222 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main content box */}
         <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-surface-1 shadow-sm">
           {/* Top bar */}
-        <header
-          className={cn(
-            // Three columns since the search sits between the breadcrumb and the icons.
-            // This was two, and adding a third child silently wrapped the icon cluster onto a
-            // second grid row inside a 44px-tall header — the notification bell, theme toggle,
-            // help and the right-panel toggle all vanished. Nothing failed: not typecheck, not
-            // lint, not the build. Only looking at it showed anything was wrong.
-            //
-            // The middle column is capped rather than 1fr so the search does not stretch across
-            // a wide window, and minmax(0,…) on the outer two lets a long breadcrumb truncate
-            // instead of pushing the icons off the edge.
-            "h-[44px] grid grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] items-center gap-3 px-4 shrink-0",
-            !isLiveMeetingRoute && "border-b border-border",
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-muted">
-            <button
-              onClick={toggleLeftSidebar}
-              className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
-              title={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-              aria-label={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-            >
-              <SidebarSimple size={13} weight="bold" />
-            </button>
-            {(() => {
-              const parts: { label: string; href?: string }[] = [];
-              const segments = pathname.split('/').filter(Boolean);
+          <header
+            className={cn(
+              // Three columns since the search sits between the breadcrumb and the icons.
+              // This was two, and adding a third child silently wrapped the icon cluster onto a
+              // second grid row inside a 44px-tall header — the notification bell, theme toggle,
+              // help and the right-panel toggle all vanished. Nothing failed: not typecheck, not
+              // lint, not the build. Only looking at it showed anything was wrong.
+              //
+              // The middle column is capped rather than 1fr so the search does not stretch across
+              // a wide window, and minmax(0,…) on the outer two lets a long breadcrumb truncate
+              // instead of pushing the icons off the edge.
+              "h-[44px] grid grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] items-center gap-3 px-4 shrink-0",
+              !isLiveMeetingRoute && "border-b border-border",
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-muted">
+              <button
+                onClick={toggleLeftSidebar}
+                className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
+                title={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                aria-label={
+                  leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"
+                }
+              >
+                <SidebarSimple size={13} weight="bold" />
+              </button>
+              {(() => {
+                const parts: { label: string; href?: string }[] = [];
+                const segments = pathname.split("/").filter(Boolean);
 
-              if (segments.length >= 1) {
-                const firstSeg = segments[0];
-                if (firstSeg === "voice-profiles") {
-                  parts.push({ label: "Voice Profiles" });
-                } else if (firstSeg === "join") {
-                  parts.push({ label: "Join" });
-                } else if (firstSeg === "room") {
-                  parts.push({ label: "Meetings", href: `/${activeWorkspaceSlug || "workspace"}/rooms` });
-                  const rId = segments[1];
-                  if (rId) {
-                    parts.push({ label: roomTitle || "Loading..." });
-                  }
-                } else if (segments.length >= 2) {
-                  const slug = firstSeg;
-                  const feature = segments[1];
-
-                  if (feature === "rooms") {
-                    parts.push({ label: "Meetings", href: `/${slug}/rooms` });
-                    const sub = segments[2];
-                    if (sub) {
+                if (segments.length >= 1) {
+                  const firstSeg = segments[0];
+                  if (firstSeg === "voice-profiles") {
+                    parts.push({ label: "Voice Profiles" });
+                  } else if (firstSeg === "join") {
+                    parts.push({ label: "Join" });
+                  } else if (firstSeg === "room") {
+                    parts.push({
+                      label: "Meetings",
+                      href: `/${activeWorkspaceSlug || "workspace"}/rooms`,
+                    });
+                    const rId = segments[1];
+                    if (rId) {
                       parts.push({ label: roomTitle || "Loading..." });
                     }
-                  } else if (feature === "history") {
-                    parts.push({ label: "History" });
-                  } else if (feature === "dashboard") {
-                    parts.push({ label: "Dashboard" });
-                  } else if (feature === "home") {
-                    parts.push({ label: "Home" });
-                  } else if (feature === "voice-profiles") {
-                    parts.push({ label: "Voice Profiles" });
-                  } else if (feature === "members") {
-                    parts.push({ label: "Members" });
-                  } else if (feature === "documents") {
-                    parts.push({ label: "Documents" });
-                  } else if (feature === "settings") {
-                    const sub = segments[2];
-                    if (sub === "account") {
-                      parts.push({ label: "Settings", href: `/${slug}/settings` });
-                      const leaf = segments[3];
-                      if (leaf === "profile") {
-                        parts.push({ label: "Profile" });
-                      } else if (leaf === "preferences") {
-                        parts.push({ label: "Preferences" });
+                  } else if (segments.length >= 2) {
+                    const slug = firstSeg;
+                    const feature = segments[1];
+
+                    if (feature === "rooms") {
+                      parts.push({ label: "Meetings", href: `/${slug}/rooms` });
+                      const sub = segments[2];
+                      if (sub) {
+                        parts.push({ label: roomTitle || "Loading..." });
+                      }
+                    } else if (feature === "history") {
+                      parts.push({ label: "History" });
+                    } else if (feature === "dashboard") {
+                      parts.push({ label: "Dashboard" });
+                    } else if (feature === "home") {
+                      parts.push({ label: "Home" });
+                    } else if (feature === "voice-profiles") {
+                      parts.push({ label: "Voice Profiles" });
+                    } else if (feature === "members") {
+                      parts.push({ label: "Members" });
+                    } else if (feature === "documents") {
+                      parts.push({ label: "Documents" });
+                    } else if (feature === "settings") {
+                      const sub = segments[2];
+                      if (sub === "account") {
+                        parts.push({
+                          label: "Settings",
+                          href: `/${slug}/settings`,
+                        });
+                        const leaf = segments[3];
+                        if (leaf === "profile") {
+                          parts.push({ label: "Profile" });
+                        } else if (leaf === "preferences") {
+                          parts.push({ label: "Preferences" });
+                        } else {
+                          parts.push({ label: leaf || "Account" });
+                        }
                       } else {
-                        parts.push({ label: leaf || "Account" });
+                        parts.push({ label: "Settings" });
+                      }
+                    } else if (feature === "billing") {
+                      parts.push({ label: "Billing" });
+                    } else if (feature === "payment") {
+                      parts.push({ label: "Payment" });
+                      const sub = segments[2];
+                      if (sub) {
+                        parts.push({ label: sub === "plans" ? "Plans" : sub });
                       }
                     } else {
-                      parts.push({ label: "Settings" });
-                    }
-                  } else if (feature === "billing") {
-                    parts.push({ label: "Billing" });
-                  } else if (feature === "payment") {
-                    parts.push({ label: "Payment" });
-                    const sub = segments[2];
-                    if (sub) {
-                      parts.push({ label: sub === "plans" ? "Plans" : sub });
+                      parts.push({ label: feature });
                     }
                   } else {
-                    parts.push({ label: feature });
+                    parts.push({ label: "Workspace" });
                   }
                 } else {
                   parts.push({ label: "Workspace" });
                 }
-              } else {
-                parts.push({ label: "Workspace" });
-              }
 
-              return parts.map((part, index) => {
-                return (
-                  <span key={index} className="flex items-center gap-1.5">
-                    {part.href && index < parts.length - 1 ? (
-                      <Link href={part.href} className="hover:text-ink cursor-pointer transition-colors">
-                        {part.label}
-                      </Link>
-                    ) : (
-                      <span className={index === parts.length - 1 ? "text-ink font-medium max-w-[300px] truncate" : "hover:text-ink cursor-pointer transition-colors capitalize"}>
-                        {part.label}
-                      </span>
-                    )}
-                    {index < parts.length - 1 && <span className="text-ink-muted/40">/</span>}
-                  </span>
-                );
-              });
-            })()}
-          </div>
+                return parts.map((part, index) => {
+                  return (
+                    <span key={index} className="flex items-center gap-1.5">
+                      {part.href && index < parts.length - 1 ? (
+                        <Link
+                          href={part.href}
+                          className="hover:text-ink cursor-pointer transition-colors"
+                        >
+                          {part.label}
+                        </Link>
+                      ) : (
+                        <span
+                          className={
+                            index === parts.length - 1
+                              ? "text-ink font-medium max-w-[300px] truncate"
+                              : "hover:text-ink cursor-pointer transition-colors capitalize"
+                          }
+                        >
+                          {part.label}
+                        </span>
+                      )}
+                      {index < parts.length - 1 && (
+                        <span className="text-ink-muted/40">/</span>
+                      )}
+                    </span>
+                  );
+                });
+              })()}
+            </div>
 
-          {/*
+            {/*
             Search sits between the breadcrumb and the icon cluster, which is where it was
             designed to go — the Topbar that owned it was simply never mounted, so the header
             has been running without it. min-w-0 so the breadcrumb, not the search box, is
             what gives up space on a narrow window.
           */}
-          <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
-            <HeaderSearch />
+            <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
+              <HeaderSearch />
+            </div>
+
+            <div className="flex items-center justify-end gap-1.5 text-ink-muted">
+              <NotificationPopover />
+              <ThemeToggleButton />
+              <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors">
+                <Question size={12} weight="bold" />
+              </button>
+              <div className="w-[1px] h-3.5 bg-border mx-1" />
+              <button
+                onClick={toggleRightSidebar}
+                className="flex size-6 items-center justify-center rounded-[6px] border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
+              >
+                <SidebarSimple size={13} weight="bold" />
+              </button>
+            </div>
+          </header>
+
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            <main className="relative min-h-0 flex-1 overflow-y-auto">
+              {children}
+              {activeMeetingRoomId ? (
+                // One wrapper for both presentations, never a ternary between two of them: the
+                // session must stay MOUNTED as the route changes, or navigating out of the room
+                // tears down the LiveKit connection this whole arrangement exists to preserve.
+                // The dock owns the floating position now — it used to be pinned to the
+                // bottom-right, which is exactly where the chat launcher and the toasts live.
+                <MiniMeetingDock floating={!isLiveMeetingRoute}>
+                  <PersistentMeetingSession
+                    key={activeMeetingRoomId}
+                    roomId={activeMeetingRoomId}
+                    compact={!isLiveMeetingRoute}
+                    onMeetingClosed={closeMeeting}
+                  />
+                </MiniMeetingDock>
+              ) : null}
+            </main>
+
+            {/* Right Sidebar (Context/Properties) */}
+            {!isAdminRoute &&
+              !isLiveMeetingRoute &&
+              !pathname.startsWith("/rooms/") && (
+                <AnimatedWidthPanel
+                  open={rightSidebarOpen}
+                  width={260}
+                  side="right"
+                  className="bg-surface-1"
+                >
+                  <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
+                    {/* Members, not "Properties".
+                  The panel used to be a header over the sentence "Select an item to view its
+                  properties and actions" — and nothing in the app ever published an item for it
+                  to describe, so that sentence was the whole feature. 260px had been reserved
+                  for something that never arrived.
+
+                  Properties is meant to return here for a selected item; it is not built in this
+                  change because there is still no selection to read. Adding a store nothing
+                  writes to would be the same placeholder again, one layer deeper. */}
+                    <div className="flex items-center px-4 h-[38px] border-b border-border">
+                      <span className="text-[12px] font-medium text-ink">
+                        Members
+                      </span>
+                    </div>
+                    <div className="flex-1 p-4 overflow-y-auto">
+                      <WorkspaceMembersPanel
+                        workspaceId={activeWorkspaceId}
+                        workspaceSlug={activeWorkspaceSlug}
+                      />
+                    </div>
+                  </aside>
+                </AnimatedWidthPanel>
+              )}
           </div>
-
-          <div className="flex items-center justify-end gap-1.5 text-ink-muted">
-            <NotificationPopover />
-            <ThemeToggleButton />
-            <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
-            <div className="w-[1px] h-3.5 bg-border mx-1" />
-            <button
-              onClick={toggleRightSidebar}
-              className="flex size-6 items-center justify-center rounded-[6px] border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
-            >
-              <SidebarSimple size={13} weight="bold" />
-            </button>
-          </div>
-        </header>
-
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          <main className="relative min-h-0 flex-1 overflow-y-auto">
-            {children}
-            {activeMeetingRoomId ? (
-              // One wrapper for both presentations, never a ternary between two of them: the
-              // session must stay MOUNTED as the route changes, or navigating out of the room
-              // tears down the LiveKit connection this whole arrangement exists to preserve.
-              // The dock owns the floating position now — it used to be pinned to the
-              // bottom-right, which is exactly where the chat launcher and the toasts live.
-              <MiniMeetingDock floating={!isLiveMeetingRoute}>
-                <PersistentMeetingSession
-                  key={activeMeetingRoomId}
-                  roomId={activeMeetingRoomId}
-                  compact={!isLiveMeetingRoute}
-                  onMeetingClosed={closeMeeting}
-                />
-              </MiniMeetingDock>
-            ) : null}
-          </main>
-
-          {/* Right Sidebar (Context/Properties) */}
-          {!isAdminRoute && !isLiveMeetingRoute && !pathname.startsWith('/rooms/') && (
-            <AnimatedWidthPanel
-              open={rightSidebarOpen}
-              width={260}
-              side="right"
-              className="bg-surface-1"
-            >
-              <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
-              <div className="flex items-center px-4 h-[38px] border-b border-border">
-                <span className="text-[12px] font-medium text-ink">Properties</span>
-              </div>
-              <div className="flex-1 p-4 overflow-y-auto">
-                <div className="text-[12px] text-ink-muted">
-                  Select an item to view its properties and actions.
-                </div>
-              </div>
-            </aside>
-            </AnimatedWidthPanel>
-          )}
         </div>
-        </div>
-        
+
         {/* Global Chatbot outside main content box */}
         <div className="shrink-0 mr-1.5">
           <GlobalChatbot />

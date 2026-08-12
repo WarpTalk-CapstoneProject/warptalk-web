@@ -13,7 +13,6 @@ import { useParams, useRouter } from "next/navigation";
 import { use, useEffect, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -21,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { WORKSPACE_DOCUMENT_STATUS } from "@/constants/workspace-document";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useDocumentAccessPolicy } from "@/hooks/use-document-access-policy";
@@ -83,7 +83,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const canApproveDocuments = Boolean(workspaceQuery.data?.canApproveDocuments);
   const isPendingApproval = Boolean(
     doc?.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
-      doc?.status?.toLowerCase().includes("pending"),
+    doc?.status?.toLowerCase().includes("pending"),
   );
 
   useRegisterAssistantContext(

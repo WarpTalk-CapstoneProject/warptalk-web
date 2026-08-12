@@ -54,6 +54,7 @@ import {
   Brain,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { AccountMenuDialog } from "@/components/layout/account-menu-dialog";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -173,6 +174,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -437,7 +439,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         {user && (
           <div className="p-3 mt-auto shrink-0">
             <div
-              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
+              onClick={() => setAccountMenuOpen(true)}
               className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
             >
               <Avatar className="size-8 rounded-lg border border-border/50">
@@ -802,13 +804,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       {user && (
         <div className="mt-auto shrink-0 p-3">
           <div
-            onClick={() =>
-              router.push(
-                activeWorkspaceSlug
-                  ? `/${activeWorkspaceSlug}/settings/account/profile`
-                  : "/workspace",
-              )
-            }
+            onClick={() => setAccountMenuOpen(true)}
             title={collapsed ? user.fullName || "Profile" : undefined}
             aria-label={collapsed ? user.fullName || "Profile" : undefined}
             className={cn(
@@ -904,6 +900,19 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {user ? (
+        <AccountMenuDialog
+          open={accountMenuOpen}
+          onOpenChange={setAccountMenuOpen}
+          user={user}
+          workspaceId={activeWorkspaceId}
+          workspaceSlug={activeWorkspaceSlug}
+          role={role}
+          membershipType={membershipType}
+          onSignOut={logout}
+        />
+      ) : null}
 
       <InviteMemberDialog
         open={isInviteModalOpen}

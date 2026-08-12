@@ -6,6 +6,7 @@ import {
   WORKSPACE_DOCUMENT_SOURCE_TYPE,
   WORKSPACE_DOCUMENT_STATUS,
 } from "@/constants/workspace-document";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -68,7 +69,10 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { DocumentActor } from "@/components/documents/document-actor";
 import { DocumentDeleteDialog } from "@/components/documents/document-delete-dialog";
-import type { WorkspaceDocumentDto, WorkspaceMemberDto } from "@/types/workspace";
+import type {
+  WorkspaceDocumentDto,
+  WorkspaceMemberDto,
+} from "@/types/workspace";
 
 const uploadSchema = z.object({
   name: z.string().min(2, "Document name must be at least 2 characters"),
@@ -85,28 +89,9 @@ type FilterCategory =
 type ViewMode = "list" | "grid";
 type SortDirection = "asc" | "desc";
 type DocumentSortKey =
-  | "name"
-  | "classification"
-  | "uploader"
-  | "approver"
-  | "modified"
-  | "size";
+  "name" | "classification" | "uploader" | "approver" | "modified" | "size";
 type DocumentDisplayProperty =
-  | "classification"
-  | "uploader"
-  | "approver"
-  | "modified"
-  | "size"
-  | "actions";
-
-const DOCUMENT_FILTER_WIDTH_CLASS: Record<FilterCategory, string> = {
-  all: "w-[58px]",
-  pending: "w-[142px]",
-  ai: "w-[104px]",
-  admin: "w-[122px]",
-  sensitive: "w-[104px]",
-  archived: "w-[104px]",
-};
+  "classification" | "uploader" | "approver" | "modified" | "size" | "actions";
 
 const DOCUMENT_SORT_COLUMNS: Array<{
   key: DocumentSortKey;
@@ -132,12 +117,11 @@ const DOCUMENT_DISPLAY_PROPERTIES: Array<{
   { key: "actions", label: "Actions" },
 ];
 
-const DEFAULT_DOCUMENT_DISPLAY_PROPERTIES =
-  DOCUMENT_DISPLAY_PROPERTIES.map((property) => property.key);
+const DEFAULT_DOCUMENT_DISPLAY_PROPERTIES = DOCUMENT_DISPLAY_PROPERTIES.map(
+  (property) => property.key,
+);
 
-function getDocumentGridTemplate(
-  visibleProperties: DocumentDisplayProperty[],
-) {
+function getDocumentGridTemplate(visibleProperties: DocumentDisplayProperty[]) {
   return [
     "28px",
     "minmax(320px,1.8fr)",
@@ -177,7 +161,9 @@ export default function WorkspaceDocumentsPage() {
     name: string;
   } | null>(null);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
-  const [hoveredDocumentId, setHoveredDocumentId] = useState<string | null>(null);
+  const [hoveredDocumentId, setHoveredDocumentId] = useState<string | null>(
+    null,
+  );
   const selectionActionRef = useRef<HTMLDivElement | null>(null);
 
   // TanStack Query list
@@ -285,14 +271,17 @@ export default function WorkspaceDocumentsPage() {
   const selectedManageableDocuments = selectedDocuments.filter((doc) =>
     canManageDocument(doc, canApproveDocuments, currentUser?.id),
   );
-  const selectedArchivedDocuments = selectedManageableDocuments.filter(isArchivedDocument);
+  const selectedArchivedDocuments =
+    selectedManageableDocuments.filter(isArchivedDocument);
   const selectedArchiveTargets = selectedManageableDocuments.filter(
     (doc) => !isArchivedDocument(doc),
   );
   const selectedRestoreTargets =
     selectedArchiveTargets.length === 0 ? selectedArchivedDocuments : [];
   const selectionArchiveLabel =
-    selectedRestoreTargets.length > 0 ? "Restore selected documents" : "Archive selected documents";
+    selectedRestoreTargets.length > 0
+      ? "Restore selected documents"
+      : "Archive selected documents";
 
   useRegisterAssistantContext(
     activeWorkspaceId
@@ -501,7 +490,10 @@ export default function WorkspaceDocumentsPage() {
   }
 
   async function handleArchiveSelectedDocuments() {
-    const targets = selectedRestoreTargets.length > 0 ? selectedRestoreTargets : selectedArchiveTargets;
+    const targets =
+      selectedRestoreTargets.length > 0
+        ? selectedRestoreTargets
+        : selectedArchiveTargets;
     if (targets.length === 0) {
       toast.error("You can only archive or restore documents you manage.");
       return;
@@ -547,7 +539,9 @@ export default function WorkspaceDocumentsPage() {
         await deleteMutation.mutateAsync(doc.id);
       }
       setSelectedDocumentIds((current) =>
-        current.filter((id) => !selectedManageableDocuments.some((doc) => doc.id === id)),
+        current.filter(
+          (id) => !selectedManageableDocuments.some((doc) => doc.id === id),
+        ),
       );
       toast.success("Selected documents deleted.");
     } catch {
@@ -609,520 +603,532 @@ export default function WorkspaceDocumentsPage() {
   return (
     <div className="flex h-full flex-col bg-surface-1 text-ink">
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-      {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
-      {/* ─── Pill Category Filters & View Toggle Bar ─── */}
-      <div className="flex shrink-0 items-center justify-between gap-4 px-2 pb-1.5 pt-2">
-        {/* Left Side: Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveCategory("all")}
-            className={`flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.all} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
-              activeCategory === "all"
-                ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-                : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
-            }`}
-          >
-            All
-          </button>
-          {canApproveDocuments && (
-            <button
-              onClick={() => setActiveCategory("pending")}
-              className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.pending} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
-                activeCategory === "pending"
-                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
-              }`}
+        {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
+        {/* ─── Pill Category Filters & View Toggle Bar ─── */}
+        <div className="flex shrink-0 items-center justify-between gap-4 py-3">
+          {/* Left Side: Category Pills.
+            One FilterChip per category, same control Meetings and Knowledge render. The leading
+            icons are gone on purpose: they were only on five of the six chips, in five different
+            colours, so a row of filters read as a row of unrelated actions. A count is the one
+            thing worth carrying beside a label, and FilterChip has a slot for it. */}
+          <FilterChipGroup label="Filter documents by category">
+            <FilterChip
+              selected={activeCategory === "all"}
+              onClick={() => setActiveCategory("all")}
             >
-              <span>Pending Approval</span>
-              {pendingCount > 0 && (
-                <span className="ml-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white px-1">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-          )}
-          <button
-            onClick={() => setActiveCategory("ai")}
-            className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.ai} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
-              activeCategory === "ai"
-                ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-                : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
-            }`}
-          >
-            <span>AI Context</span>
-          </button>
-          <button
-            onClick={() => setActiveCategory("admin")}
-            className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.admin} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
-              activeCategory === "admin"
-                ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-                : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
-            }`}
-          >
-            <span>Administrative</span>
-          </button>
-          <button
-            onClick={() => setActiveCategory("sensitive")}
-            className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.sensitive} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
-              activeCategory === "sensitive"
-                ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-                : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
-            }`}
-          >
-            <span>Restricted</span>
-          </button>
-          {archivedCount > 0 && (
-            <button
-              onClick={() => setActiveCategory("archived")}
-              className={`inline-flex h-[26px] ${DOCUMENT_FILTER_WIDTH_CLASS.archived} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
-                activeCategory === "archived"
-                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
-              }`}
-            >
-              <span>Archived</span>
-              <span className="ml-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-600 px-1">
-                {archivedCount}
-              </span>
-            </button>
-          )}
-        </div>
-
-        {/* Right Side: Action Icons (Filter & Grid/List Toggle) */}
-        <div className="flex items-center gap-2 shrink-0">
-          <ExpandingSearchDock
-            value={query}
-            onValueChange={(value) => {
-              setQuery(value);
-              setPage(1);
-            }}
-            placeholder="Search documents..."
-            ariaLabel="Search documents"
-            collapsedWidth={28}
-            expandedWidth={220}
-            className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
-            iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
-            clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
-            inputClassName="h-[26px] text-[12px]"
-          />
-          <button
-            className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title="Filter options"
-          >
-            <Funnel className="h-3.5 w-3.5" />
-            {activeCategory !== "all" && (
-              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+              All
+            </FilterChip>
+            {canApproveDocuments && (
+              <FilterChip
+                selected={activeCategory === "pending"}
+                onClick={() => setActiveCategory("pending")}
+                badge={pendingCount > 0 ? pendingCount : undefined}
+              >
+                Pending Approval
+              </FilterChip>
             )}
-          </button>
-
-          <ListDisplayPopover
-            trigger={<SlidersHorizontal className="h-3.5 w-3.5" />}
-            triggerClassName="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            triggerTitle="Display options"
-            ordering={sortKey}
-            orderingOptions={DOCUMENT_SORT_COLUMNS.map((column) => ({
-              value: column.key,
-              label: column.label,
-              disabled:
-                column.key !== "name" &&
-                !visibleDisplayProperties.includes(
-                  column.key as DocumentDisplayProperty,
-                ),
-            }))}
-            onOrderingChange={(value) => setSortKey(value as DocumentSortKey)}
-            direction={sortDirection}
-            onDirectionChange={setSortDirection}
-            properties={DOCUMENT_DISPLAY_PROPERTIES}
-            visibleProperties={visibleDisplayProperties}
-            onToggleProperty={toggleDisplayProperty}
-            onReset={() => {
-              setSortKey("name");
-              setSortDirection("asc");
-              setVisibleDisplayProperties(DEFAULT_DOCUMENT_DISPLAY_PROPERTIES);
-            }}
-          />
-
-          <div className="h-4 w-px bg-hairline/50 mx-1" />
-
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
-          >
-            <span>New</span>
-            <CaretDown className="h-3.5 w-3.5" />
-          </button>
-
-          <button
-            onClick={() => setViewMode("grid")}
-            className={`inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 transition-colors ${
-              viewMode === "grid"
-                ? "bg-surface-3 text-ink shadow-sm"
-                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-            }`}
-            title="Grid View"
-          >
-            <SquaresFour className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={`inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 transition-colors ${
-              viewMode === "list"
-                ? "bg-surface-3 text-ink shadow-sm"
-                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-            }`}
-            title="List View"
-          >
-            <List className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* ─── Document Content: List View vs Grid View ─── */}
-      {documentsQuery.isLoading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Spinner className="h-7 w-7 animate-spin text-primary" />
-        </div>
-      ) : viewMode === "list" ? (
-        /* List View */
-        <section className="mt-0.2 min-h-full overflow-x-auto px-2">
-          <div className="min-w-[1040px]">
-            <div
-              className="grid px-2 py-0.5 text-[11px] font-medium text-ink-muted"
-              style={{ gridTemplateColumns: documentGridTemplate }}
+            <FilterChip
+              selected={activeCategory === "ai"}
+              onClick={() => setActiveCategory("ai")}
             >
-              <div />
-              {visibleSortColumns.map((column) => (
-                <SortableColumnHeader
-                  key={column.key}
-                  label={column.label}
-                  active={sortKey === column.key}
-                  direction={sortDirection}
-                  onClick={() => handleSort(column.key)}
-                />
-              ))}
-              {visibleDisplayProperties.includes("actions") && (
-                <span className="text-right">Actions</span>
-              )}
-            </div>
-            <div className="space-y-0">
-              {sortedDocs.map((doc, index) => {
-                const isDocOwner =
-                  doc.uploadedBy === currentUser?.id ||
-                  doc.ownerId === currentUser?.id;
-                const canManageDoc = canApproveDocuments || isDocOwner;
-                const selected = selectedDocumentIds.includes(doc.id);
-                const previousDocument = index > 0 ? sortedDocs[index - 1] : null;
-                const nextDocument = index < sortedDocs.length - 1 ? sortedDocs[index + 1] : null;
-                const previousHighlighted =
-                  Boolean(previousDocument) &&
-                  (selectedDocumentIds.includes(previousDocument!.id) ||
-                    hoveredDocumentId === previousDocument!.id);
-                const nextHighlighted =
-                  Boolean(nextDocument) &&
-                  (selectedDocumentIds.includes(nextDocument!.id) ||
-                    hoveredDocumentId === nextDocument!.id);
-                const highlighted = selected || hoveredDocumentId === doc.id;
-                const rowBlockShape = getConnectedRowBlockShape(
-                  highlighted,
-                  previousHighlighted,
-                  nextHighlighted,
-                );
-                const rowStateClass = selected
-                  ? hoveredDocumentId === doc.id
-                    ? `${rowBlockShape} bg-primary/25 text-ink shadow-[inset_3px_0_0_hsl(var(--primary)/0.65)]`
-                    : `${rowBlockShape} bg-primary/15 text-ink hover:!bg-primary/25 hover:!shadow-[inset_3px_0_0_hsl(var(--primary)/0.65)]`
-                  : hoveredDocumentId === doc.id
-                    ? `${rowBlockShape} bg-surface-2 text-ink shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`
-                    : "rounded-[7px] hover:!bg-surface-2 hover:!shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]";
+              AI Context
+            </FilterChip>
+            <FilterChip
+              selected={activeCategory === "admin"}
+              onClick={() => setActiveCategory("admin")}
+            >
+              Administrative
+            </FilterChip>
+            <FilterChip
+              selected={activeCategory === "sensitive"}
+              onClick={() => setActiveCategory("sensitive")}
+            >
+              Restricted
+            </FilterChip>
+            {archivedCount > 0 && (
+              <FilterChip
+                selected={activeCategory === "archived"}
+                onClick={() => setActiveCategory("archived")}
+                badge={archivedCount}
+              >
+                Archived
+              </FilterChip>
+            )}
+          </FilterChipGroup>
 
-                return (
-                  <div
-                    key={doc.id}
-                    role="button"
-                    tabIndex={0}
-                    className={`group grid min-h-[36px] cursor-pointer items-center px-2 py-1 text-[11px] transition-none ${rowStateClass}`}
-                    style={{ gridTemplateColumns: documentGridTemplate }}
-                    onPointerEnter={() => setHoveredDocumentId(doc.id)}
-                    onPointerLeave={() => setHoveredDocumentId(null)}
-                    onFocus={() => setHoveredDocumentId(doc.id)}
-                    onBlur={() => setHoveredDocumentId(null)}
-                    onClick={() => toggleDocumentSelection(doc.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        toggleDocumentSelection(doc.id);
-                      }
-                    }}
-                  >
-                    <div>
+          {/* Right Side: Action Icons (Filter & Grid/List Toggle) */}
+          <div className="flex items-center gap-2 shrink-0">
+            <ExpandingSearchDock
+              value={query}
+              onValueChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
+              placeholder="Search documents..."
+              ariaLabel="Search documents"
+              collapsedWidth={28}
+              expandedWidth={220}
+              className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
+              iconButtonClassName="ml-0 size-[26px] hover:bg-surface-3"
+              clearButtonClassName="mr-0.5 size-5 hover:bg-surface-3"
+              inputClassName="h-[26px] text-[12px]"
+            />
+            <button
+              className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              title="Filter options"
+            >
+              <Funnel className="h-3.5 w-3.5" />
+              {activeCategory !== "all" && (
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary" />
+              )}
+            </button>
+
+            <ListDisplayPopover
+              trigger={<SlidersHorizontal className="h-3.5 w-3.5" />}
+              triggerClassName="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
+              triggerTitle="Display options"
+              ordering={sortKey}
+              orderingOptions={DOCUMENT_SORT_COLUMNS.map((column) => ({
+                value: column.key,
+                label: column.label,
+                disabled:
+                  column.key !== "name" &&
+                  !visibleDisplayProperties.includes(
+                    column.key as DocumentDisplayProperty,
+                  ),
+              }))}
+              onOrderingChange={(value) => setSortKey(value as DocumentSortKey)}
+              direction={sortDirection}
+              onDirectionChange={setSortDirection}
+              properties={DOCUMENT_DISPLAY_PROPERTIES}
+              visibleProperties={visibleDisplayProperties}
+              onToggleProperty={toggleDisplayProperty}
+              onReset={() => {
+                setSortKey("name");
+                setSortDirection("asc");
+                setVisibleDisplayProperties(
+                  DEFAULT_DOCUMENT_DISPLAY_PROPERTIES,
+                );
+              }}
+            />
+
+            <div className="h-4 w-px bg-hairline/50 mx-1" />
+
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
+            >
+              <span>New</span>
+              <CaretDown className="h-3.5 w-3.5" />
+            </button>
+
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 transition-colors ${
+                viewMode === "grid"
+                  ? "bg-surface-3 text-ink shadow-sm"
+                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              }`}
+              title="Grid View"
+            >
+              <SquaresFour className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 transition-colors ${
+                viewMode === "list"
+                  ? "bg-surface-3 text-ink shadow-sm"
+                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              }`}
+              title="List View"
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* ─── Document Content: List View vs Grid View ─── */}
+        {documentsQuery.isLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <Spinner className="h-7 w-7 animate-spin text-primary" />
+          </div>
+        ) : viewMode === "list" ? (
+          /* List View */
+          <section className="mt-0.2 min-h-full overflow-x-auto px-2">
+            <div className="min-w-[1040px]">
+              <div
+                className="grid px-2 py-0.5 text-[11px] font-medium text-ink-muted"
+                style={{ gridTemplateColumns: documentGridTemplate }}
+              >
+                <div />
+                {visibleSortColumns.map((column) => (
+                  <SortableColumnHeader
+                    key={column.key}
+                    label={column.label}
+                    active={sortKey === column.key}
+                    direction={sortDirection}
+                    onClick={() => handleSort(column.key)}
+                  />
+                ))}
+                {visibleDisplayProperties.includes("actions") && (
+                  <span className="text-right">Actions</span>
+                )}
+              </div>
+              <div className="space-y-0">
+                {sortedDocs.map((doc, index) => {
+                  const isDocOwner =
+                    doc.uploadedBy === currentUser?.id ||
+                    doc.ownerId === currentUser?.id;
+                  const canManageDoc = canApproveDocuments || isDocOwner;
+                  const selected = selectedDocumentIds.includes(doc.id);
+                  const previousDocument =
+                    index > 0 ? sortedDocs[index - 1] : null;
+                  const nextDocument =
+                    index < sortedDocs.length - 1
+                      ? sortedDocs[index + 1]
+                      : null;
+                  const previousHighlighted =
+                    Boolean(previousDocument) &&
+                    (selectedDocumentIds.includes(previousDocument!.id) ||
+                      hoveredDocumentId === previousDocument!.id);
+                  const nextHighlighted =
+                    Boolean(nextDocument) &&
+                    (selectedDocumentIds.includes(nextDocument!.id) ||
+                      hoveredDocumentId === nextDocument!.id);
+                  const highlighted = selected || hoveredDocumentId === doc.id;
+                  const rowBlockShape = getConnectedRowBlockShape(
+                    highlighted,
+                    previousHighlighted,
+                    nextHighlighted,
+                  );
+                  const rowStateClass = selected
+                    ? hoveredDocumentId === doc.id
+                      ? `${rowBlockShape} bg-primary/25 text-ink shadow-[inset_3px_0_0_hsl(var(--primary)/0.65)]`
+                      : `${rowBlockShape} bg-primary/15 text-ink hover:!bg-primary/25 hover:!shadow-[inset_3px_0_0_hsl(var(--primary)/0.65)]`
+                    : hoveredDocumentId === doc.id
+                      ? `${rowBlockShape} bg-surface-2 text-ink shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]`
+                      : "rounded-[7px] hover:!bg-surface-2 hover:!shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)]";
+
+                  return (
+                    <div
+                      key={doc.id}
+                      role="button"
+                      tabIndex={0}
+                      className={`group grid min-h-[36px] cursor-pointer items-center px-2 py-1 text-[11px] transition-none ${rowStateClass}`}
+                      style={{ gridTemplateColumns: documentGridTemplate }}
+                      onPointerEnter={() => setHoveredDocumentId(doc.id)}
+                      onPointerLeave={() => setHoveredDocumentId(null)}
+                      onFocus={() => setHoveredDocumentId(doc.id)}
+                      onBlur={() => setHoveredDocumentId(null)}
+                      onClick={() => toggleDocumentSelection(doc.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleDocumentSelection(doc.id);
+                        }
+                      }}
+                    >
+                      <div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleDocumentSelection(doc.id);
+                          }}
+                          tabIndex={
+                            selected || hoveredDocumentId === doc.id ? 0 : -1
+                          }
+                          className={`flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border transition-none ${
+                            selected
+                              ? "opacity-100"
+                              : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                          } ${
+                            selected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-surface-1/70 hover:border-primary/70"
+                          }`}
+                          aria-label={`${selected ? "Unselect" : "Select"} ${doc.name}`}
+                        >
+                          {selected ? <Check size={10} weight="bold" /> : null}
+                        </button>
+                      </div>
+
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          toggleDocumentSelection(doc.id);
+                          router.push(`/${workspaceSlug}/documents/${doc.id}`);
                         }}
-                        tabIndex={selected || hoveredDocumentId === doc.id ? 0 : -1}
-                        className={`flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border transition-none ${
-                          selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                        } ${
-                          selected
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-surface-1/70 hover:border-primary/70"
-                        }`}
-                        aria-label={`${selected ? "Unselect" : "Select"} ${doc.name}`}
+                        className="flex min-w-0 items-center gap-2 rounded-[6px] text-left transition-colors hover:bg-surface-3/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        aria-label={`Open ${doc.name}`}
+                        title={`Open ${doc.name}`}
                       >
-                        {selected ? <Check size={10} weight="bold" /> : null}
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        router.push(`/${workspaceSlug}/documents/${doc.id}`);
-                      }}
-                      className="flex min-w-0 items-center gap-2 rounded-[6px] text-left transition-colors hover:bg-surface-3/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                      aria-label={`Open ${doc.name}`}
-                      title={`Open ${doc.name}`}
-                    >
-                      {getFileIcon(doc.fileExtension)}
-                      <div className="flex min-w-0 flex-col">
-                        <span className="truncate font-medium text-ink transition-colors group-hover:text-primary">
-                          {doc.name}
-                        </span>
-                        <span className="truncate font-mono text-[10px] text-ink-muted">
-                          {doc.fileName}
-                        </span>
-                      </div>
-                    </button>
-
-                    {visibleDisplayProperties.includes("classification") && (
-                    <div onClick={(event) => event.stopPropagation()}>
-                      <DocumentClassificationBadge doc={doc} />
-                    </div>
-                    )}
-
-                    {/* Some rows carry a membership id while others carry a user id. */}
-                    {visibleDisplayProperties.includes("uploader") && (
-                    <DocumentActor
-                      label="Uploader"
-                      showLabel={false}
-                      member={findDocumentMember(workspaceMembers, doc.uploadedBy) ?? undefined}
-                    />
-                    )}
-
-                    {visibleDisplayProperties.includes("approver") && (
-                    <DocumentActor
-                      label="Approver"
-                      showLabel={false}
-                      member={findDocumentMember(workspaceMembers, doc.approvedBy) ?? undefined}
-                    />
-                    )}
-
-                    {visibleDisplayProperties.includes("modified") && (
-                    <span className="text-[11px] font-medium text-ink-muted">
-                      {formatDate(doc.updatedAt || doc.createdAt)}
-                    </span>
-                    )}
-
-                    {visibleDisplayProperties.includes("size") && (
-                    <span className="font-mono text-[11px] text-ink-muted">
-                      {formatBytes(doc.sizeBytes)}
-                    </span>
-                    )}
-
-                    {visibleDisplayProperties.includes("actions") && (
-                    <div
-                      className="flex items-center justify-end gap-1"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <button
-                        onClick={() =>
-                          router.push(`/${workspaceSlug}/documents/${doc.id}`)
-                        }
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
-                        title="View Details"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
+                        {getFileIcon(doc.fileExtension)}
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate font-medium text-ink transition-colors group-hover:text-primary">
+                            {doc.name}
+                          </span>
+                          <span className="truncate font-mono text-[10px] text-ink-muted">
+                            {doc.fileName}
+                          </span>
+                        </div>
                       </button>
 
-                      {canManageDoc &&
-                        (doc.status?.toLowerCase() === "archived" ? (
-                          <button
-                            onClick={() => handleRestore(doc.id)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-primary/10 hover:text-primary"
-                            title="Restore Document"
-                          >
-                            <ArrowCounterClockwise className="h-3.5 w-3.5" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleArchive(doc.id)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-amber-500/10 hover:text-amber-500"
-                            title="Archive Document"
-                          >
-                            <Archive className="h-3.5 w-3.5" />
-                          </button>
-                        ))}
+                      {visibleDisplayProperties.includes("classification") && (
+                        <div onClick={(event) => event.stopPropagation()}>
+                          <DocumentClassificationBadge doc={doc} />
+                        </div>
+                      )}
 
-                      {canManageDoc && (
-                        <button
-                          onClick={() =>
-                            setDocToDelete({ id: doc.id, name: doc.name })
+                      {/* Some rows carry a membership id while others carry a user id. */}
+                      {visibleDisplayProperties.includes("uploader") && (
+                        <DocumentActor
+                          label="Uploader"
+                          showLabel={false}
+                          member={
+                            findDocumentMember(
+                              workspaceMembers,
+                              doc.uploadedBy,
+                            ) ?? undefined
                           }
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
-                          title="Delete Permanently"
+                        />
+                      )}
+
+                      {visibleDisplayProperties.includes("approver") && (
+                        <DocumentActor
+                          label="Approver"
+                          showLabel={false}
+                          member={
+                            findDocumentMember(
+                              workspaceMembers,
+                              doc.approvedBy,
+                            ) ?? undefined
+                          }
+                        />
+                      )}
+
+                      {visibleDisplayProperties.includes("modified") && (
+                        <span className="text-[11px] font-medium text-ink-muted">
+                          {formatDate(doc.updatedAt || doc.createdAt)}
+                        </span>
+                      )}
+
+                      {visibleDisplayProperties.includes("size") && (
+                        <span className="font-mono text-[11px] text-ink-muted">
+                          {formatBytes(doc.sizeBytes)}
+                        </span>
+                      )}
+
+                      {visibleDisplayProperties.includes("actions") && (
+                        <div
+                          className="flex items-center justify-end gap-1"
+                          onClick={(event) => event.stopPropagation()}
                         >
-                          <Trash className="h-3.5 w-3.5" />
-                        </button>
+                          <button
+                            onClick={() =>
+                              router.push(
+                                `/${workspaceSlug}/documents/${doc.id}`,
+                              )
+                            }
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+                            title="View Details"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+
+                          {canManageDoc &&
+                            (doc.status?.toLowerCase() === "archived" ? (
+                              <button
+                                onClick={() => handleRestore(doc.id)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-primary/10 hover:text-primary"
+                                title="Restore Document"
+                              >
+                                <ArrowCounterClockwise className="h-3.5 w-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleArchive(doc.id)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-amber-500/10 hover:text-amber-500"
+                                title="Archive Document"
+                              >
+                                <Archive className="h-3.5 w-3.5" />
+                              </button>
+                            ))}
+
+                          {canManageDoc && (
+                            <button
+                              onClick={() =>
+                                setDocToDelete({ id: doc.id, name: doc.name })
+                              }
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
+                              title="Delete Permanently"
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        ) : (
+          /* Grid Card View */
+          <section className="min-h-full px-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {sortedDocs.map((doc) => (
+                <Card
+                  key={doc.id}
+                  onClick={() =>
+                    router.push(`/${workspaceSlug}/documents/${doc.id}`)
+                  }
+                  className="border-hairline/30 bg-surface-1/50 hover:bg-surface-2/40 transition-all cursor-pointer rounded-xl group shadow-sm flex flex-col justify-between"
+                >
+                  <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between space-y-0">
+                    <div className="p-2 rounded-lg bg-surface-2 group-hover:bg-surface-3 transition-colors">
+                      {getFileIcon(doc.fileExtension)}
+                    </div>
+                    <DocumentClassificationBadge doc={doc} compact />
+                  </CardHeader>
+
+                  <CardContent className="p-4 pt-1 flex flex-col gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <h3 className="font-semibold text-xs text-ink group-hover:text-primary transition-colors line-clamp-2">
+                        {doc.name}
+                      </h3>
+                      <span className="text-[10px] text-ink-muted truncate font-mono">
+                        {doc.fileName}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-ink-muted pt-2 border-t border-hairline/20 mt-1">
+                      <span>{formatDate(doc.updatedAt || doc.createdAt)}</span>
+                      <span>{formatBytes(doc.sizeBytes)}</span>
+                    </div>
+                    <div className="flex items-center gap-3 pt-1">
+                      <DocumentActor
+                        label="Uploader"
+                        member={
+                          findDocumentMember(
+                            workspaceMembers,
+                            doc.uploadedBy,
+                          ) ?? undefined
+                        }
+                      />
+                      <DocumentActor
+                        label="Approver"
+                        member={
+                          findDocumentMember(
+                            workspaceMembers,
+                            doc.approvedBy,
+                          ) ?? undefined
+                        }
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {hasSelectedDocuments ? (
+          <div className="pointer-events-none sticky bottom-5 z-10 flex justify-center">
+            <div
+              ref={selectionActionRef}
+              className="pointer-events-auto flex h-10 w-[344px] items-center justify-center gap-1.5 rounded-full border border-border/60 bg-surface-2/95 px-2.5 text-[11px] font-medium text-ink shadow-xl shadow-black/10 backdrop-blur will-change-transform"
+            >
+              <span className="w-[74px] shrink-0 text-center">
+                {selectedDocuments.length} selected
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-[96px] shrink-0 rounded-full px-2 text-[11px]"
+                onClick={toggleSelectAllVisibleDocuments}
+              >
+                <Checks size={12} />
+                {allVisibleDocumentsSelected ? "Unselect all" : "Select all"}
+              </Button>
+              <button
+                type="button"
+                onClick={handleAskAiAboutSelection}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+                aria-label="Ask AI about selected documents"
+                title="Ask AI"
+              >
+                <PaperPlaneTilt size={12} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={handleArchiveSelectedDocuments}
+                disabled={
+                  archiveMutation.isPending ||
+                  restoreMutation.isPending ||
+                  (selectedArchiveTargets.length === 0 &&
+                    selectedRestoreTargets.length === 0)
+                }
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-amber-500/10 hover:text-amber-500 disabled:pointer-events-none disabled:opacity-50"
+                aria-label={selectionArchiveLabel}
+                title={
+                  selectedRestoreTargets.length > 0 ? "Restore" : "Archive"
+                }
+              >
+                {selectedRestoreTargets.length > 0 ? (
+                  <ArrowCounterClockwise size={12} weight="bold" />
+                ) : (
+                  <Archive size={12} weight="bold" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelectedDocuments}
+                disabled={
+                  deleteMutation.isPending ||
+                  selectedManageableDocuments.length === 0
+                }
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
+                aria-label="Delete selected documents"
+                title="Delete"
+              >
+                <Trash size={12} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDocumentIds([])}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+                aria-label="Clear selected documents"
+              >
+                <X size={13} weight="bold" />
+              </button>
             </div>
           </div>
-        </section>
-      ) : (
-        /* Grid Card View */
-        <section className="min-h-full px-2">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {sortedDocs.map((doc) => (
-            <Card
-              key={doc.id}
-              onClick={() =>
-                router.push(`/${workspaceSlug}/documents/${doc.id}`)
-              }
-              className="border-hairline/30 bg-surface-1/50 hover:bg-surface-2/40 transition-all cursor-pointer rounded-xl group shadow-sm flex flex-col justify-between"
+        ) : null}
+
+        {/* ─── Pagination ─── */}
+        {documentsQuery.data && documentsQuery.data.total > 20 && (
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 text-xs border border-hairline rounded-lg hover:bg-surface-2 disabled:opacity-45 font-medium"
             >
-              <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between space-y-0">
-                <div className="p-2 rounded-lg bg-surface-2 group-hover:bg-surface-3 transition-colors">
-                  {getFileIcon(doc.fileExtension)}
-                </div>
-                <DocumentClassificationBadge doc={doc} compact />
-              </CardHeader>
-
-              <CardContent className="p-4 pt-1 flex flex-col gap-2">
-                <div className="flex flex-col gap-0.5">
-                  <h3 className="font-semibold text-xs text-ink group-hover:text-primary transition-colors line-clamp-2">
-                    {doc.name}
-                  </h3>
-                  <span className="text-[10px] text-ink-muted truncate font-mono">
-                    {doc.fileName}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-[10px] text-ink-muted pt-2 border-t border-hairline/20 mt-1">
-                  <span>{formatDate(doc.updatedAt || doc.createdAt)}</span>
-                  <span>{formatBytes(doc.sizeBytes)}</span>
-                </div>
-                <div className="flex items-center gap-3 pt-1">
-                  <DocumentActor
-                    label="Uploader"
-                    member={findDocumentMember(workspaceMembers, doc.uploadedBy) ?? undefined}
-                  />
-                  <DocumentActor
-                    label="Approver"
-                    member={findDocumentMember(workspaceMembers, doc.approvedBy) ?? undefined}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        </section>
-      )}
-
-      {hasSelectedDocuments ? (
-        <div className="pointer-events-none sticky bottom-5 z-10 flex justify-center">
-          <div
-            ref={selectionActionRef}
-            className="pointer-events-auto flex h-10 w-[344px] items-center justify-center gap-1.5 rounded-full border border-border/60 bg-surface-2/95 px-2.5 text-[11px] font-medium text-ink shadow-xl shadow-black/10 backdrop-blur will-change-transform"
-          >
-            <span className="w-[74px] shrink-0 text-center">
-              {selectedDocuments.length} selected
+              Previous
+            </button>
+            <span className="text-xs text-ink-muted font-medium">
+              Page {page}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 w-[96px] shrink-0 rounded-full px-2 text-[11px]"
-              onClick={toggleSelectAllVisibleDocuments}
-            >
-              <Checks size={12} />
-              {allVisibleDocumentsSelected ? "Unselect all" : "Select all"}
-            </Button>
             <button
-              type="button"
-              onClick={handleAskAiAboutSelection}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
-              aria-label="Ask AI about selected documents"
-              title="Ask AI"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={filteredDocs.length < 20}
+              className="px-3 py-1.5 text-xs border border-hairline rounded-lg hover:bg-surface-2 disabled:opacity-45 font-medium"
             >
-              <PaperPlaneTilt size={12} weight="bold" />
-            </button>
-            <button
-              type="button"
-              onClick={handleArchiveSelectedDocuments}
-              disabled={
-                archiveMutation.isPending ||
-                restoreMutation.isPending ||
-                (selectedArchiveTargets.length === 0 && selectedRestoreTargets.length === 0)
-              }
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-amber-500/10 hover:text-amber-500 disabled:pointer-events-none disabled:opacity-50"
-              aria-label={selectionArchiveLabel}
-              title={selectedRestoreTargets.length > 0 ? "Restore" : "Archive"}
-            >
-              {selectedRestoreTargets.length > 0 ? (
-                <ArrowCounterClockwise size={12} weight="bold" />
-              ) : (
-                <Archive size={12} weight="bold" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteSelectedDocuments}
-              disabled={deleteMutation.isPending || selectedManageableDocuments.length === 0}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-ink-muted transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
-              aria-label="Delete selected documents"
-              title="Delete"
-            >
-              <Trash size={12} weight="bold" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedDocumentIds([])}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
-              aria-label="Clear selected documents"
-            >
-              <X size={13} weight="bold" />
+              Next
             </button>
           </div>
-        </div>
-      ) : null}
-
-      {/* ─── Pagination ─── */}
-      {documentsQuery.data && documentsQuery.data.total > 20 && (
-        <div className="flex items-center justify-end gap-2 pt-2">
-          <button
-            onClick={() => setPage((p) => Math.max(p - 1, 1))}
-            disabled={page === 1}
-            className="px-3 py-1.5 text-xs border border-hairline rounded-lg hover:bg-surface-2 disabled:opacity-45 font-medium"
-          >
-            Previous
-          </button>
-          <span className="text-xs text-ink-muted font-medium">
-            Page {page}
-          </span>
-          <button
-            onClick={() => setPage((p) => p + 1)}
-            disabled={filteredDocs.length < 20}
-            className="px-3 py-1.5 text-xs border border-hairline rounded-lg hover:bg-surface-2 disabled:opacity-45 font-medium"
-          >
-            Next
-          </button>
-        </div>
-      )}
+        )}
       </div>
 
       {/* ─── Upload Modal ("New" Document Upload Modal) ─── */}
@@ -1505,7 +1511,9 @@ function canManageDocument(
   canApproveDocuments: boolean,
   userId: string | null | undefined,
 ) {
-  return canApproveDocuments || doc.uploadedBy === userId || doc.ownerId === userId;
+  return (
+    canApproveDocuments || doc.uploadedBy === userId || doc.ownerId === userId
+  );
 }
 
 function isArchivedDocument(doc: WorkspaceDocumentDto) {
@@ -1515,7 +1523,10 @@ function isArchivedDocument(doc: WorkspaceDocumentDto) {
 function formatSelectedDocumentNames(documents: WorkspaceDocumentDto[]) {
   if (documents.length === 0) return "None";
   const names = documents.slice(0, 5).map((doc) => doc.name);
-  const suffix = documents.length > names.length ? ` +${documents.length - names.length} more` : "";
+  const suffix =
+    documents.length > names.length
+      ? ` +${documents.length - names.length} more`
+      : "";
   return `${names.join(", ")}${suffix}`;
 }
 
