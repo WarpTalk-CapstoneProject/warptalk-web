@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
+import { VoiceConsentCard } from "@/components/voice/voice-consent-card";
 import {
   WorkspaceEmptyState,
   WorkspacePrimaryButton,
@@ -296,6 +297,10 @@ export default function VoiceProfilesPage() {
             </Button>
           </div>
         </section>
+
+        {/* First on the page, above the profiles it authorises: a profile cannot legitimately
+            exist without this permission, so the permission is what a reader should meet first. */}
+        <VoiceConsentCard />
 
         <section className="mx-4 grid gap-3 border-y border-border py-4 sm:grid-cols-3">
           <Metric icon={<Microphone size={16} weight="bold" />} label="Profiles" value={String(profileList.length)} />
