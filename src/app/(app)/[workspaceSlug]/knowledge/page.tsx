@@ -3,25 +3,12 @@
 /**
  * What the system has indexed about this workspace.
  *
- * The reference for this screen was Mem0's memory table, but only for *what* it shows — a row
- * per stored piece with the extracted fact readable at a glance.
- *
- * The chrome is the WORKSPACE chrome (WorkspacePage / WorkspaceToolbar), not the admin portal's.
- * It used to be the latter, which is why this page arrived wearing a 30px "Knowledge" title under
- * a breadcrumb already reading "knowledge", a paragraph of documentation, and a panel floating on
- * a grey wash while Meetings and Members next door open straight onto their content on white. The
- * listing is the page; the toolbar is the only furniture it gets.
- *
- * Owner/Admin only, and the API enforces that independently — this page hiding itself is a
- * courtesy, not the control.
- *
- * The listing itself is `KnowledgeTable`, shared with the admin portal's Knowledge tab, and is
- * deliberately untouched here: it owns its own source and fact-category tabs, and the admin tab
- * renders the same component. This page owns only the chrome around it and the member-scoped query.
+ * The listing is the page; the toolbar is the only furniture it gets. Owner/Admin only, and the
+ * API enforces that independently.
  */
 
-import { useParams } from "next/navigation";
 import { ArrowClockwise, Brain } from "@phosphor-icons/react/dist/ssr";
+import { useParams } from "next/navigation";
 
 import { KnowledgeTable } from "@/components/knowledge/knowledge-table";
 import {
@@ -29,7 +16,6 @@ import {
   WorkspaceEmptyState,
   WorkspacePage,
   WorkspaceSecondaryButton,
-  WorkspaceToolbar,
 } from "@/components/workspace/page-chrome";
 import { useKnowledgeFilters } from "@/hooks/use-knowledge-filters";
 import { useWorkspaceKnowledge } from "@/hooks/use-workspace";
@@ -65,19 +51,7 @@ export default function WorkspaceKnowledgePage() {
 
   return (
     <WorkspacePage>
-      <WorkspaceToolbar
-        actions={
-          <WorkspaceSecondaryButton
-            onClick={() => refetch()}
-            disabled={isFetching}
-            icon={<ArrowClockwise size={13} weight="bold" />}
-          >
-            {isFetching ? "Refreshing…" : "Refresh"}
-          </WorkspaceSecondaryButton>
-        }
-      />
-
-      <WorkspaceBody>
+      <WorkspaceBody className="px-0">
         <KnowledgeTable
           filters={filters}
           data={data}
@@ -86,6 +60,15 @@ export default function WorkspaceKnowledgePage() {
           isFetching={isFetching}
           onRetry={() => refetch()}
           emptyHint="Upload a document or finish a meeting so it gets a summary, and what the system keeps will appear here."
+          toolbarActions={
+            <WorkspaceSecondaryButton
+              onClick={() => refetch()}
+              disabled={isFetching}
+              icon={<ArrowClockwise size={13} weight="bold" />}
+            >
+              {isFetching ? "Refreshing..." : "Refresh"}
+            </WorkspaceSecondaryButton>
+          }
         />
       </WorkspaceBody>
 

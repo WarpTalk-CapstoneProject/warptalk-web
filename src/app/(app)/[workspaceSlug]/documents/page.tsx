@@ -121,6 +121,15 @@ const DEFAULT_DOCUMENT_DISPLAY_PROPERTIES = DOCUMENT_DISPLAY_PROPERTIES.map(
   (property) => property.key,
 );
 
+const DOCUMENT_FILTER_WIDTH_CLASS: Record<FilterCategory, string> = {
+  all: "w-[58px]",
+  pending: "w-[146px]",
+  ai: "w-[104px]",
+  admin: "w-[126px]",
+  sensitive: "w-[104px]",
+  archived: "w-[92px]",
+};
+
 function getDocumentGridTemplate(visibleProperties: DocumentDisplayProperty[]) {
   return [
     "28px",
@@ -605,15 +614,19 @@ export default function WorkspaceDocumentsPage() {
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
         {/* ─── Pill Category Filters & View Toggle Bar ─── */}
-        <div className="flex shrink-0 items-center justify-between gap-4 py-3">
+        <div className="flex shrink-0 flex-col gap-2 px-2 pb-1.5 pt-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           {/* Left Side: Category Pills.
             One FilterChip per category, same control Meetings and Knowledge render. The leading
             icons are gone on purpose: they were only on five of the six chips, in five different
             colours, so a row of filters read as a row of unrelated actions. A count is the one
             thing worth carrying beside a label, and FilterChip has a slot for it. */}
-          <FilterChipGroup label="Filter documents by category">
+          <FilterChipGroup
+            label="Filter documents by category"
+            className="min-w-[260px] flex-1"
+          >
             <FilterChip
               selected={activeCategory === "all"}
+              className={DOCUMENT_FILTER_WIDTH_CLASS.all}
               onClick={() => setActiveCategory("all")}
             >
               All
@@ -621,6 +634,7 @@ export default function WorkspaceDocumentsPage() {
             {canApproveDocuments && (
               <FilterChip
                 selected={activeCategory === "pending"}
+                className={DOCUMENT_FILTER_WIDTH_CLASS.pending}
                 onClick={() => setActiveCategory("pending")}
                 badge={pendingCount > 0 ? pendingCount : undefined}
               >
@@ -629,18 +643,21 @@ export default function WorkspaceDocumentsPage() {
             )}
             <FilterChip
               selected={activeCategory === "ai"}
+              className={DOCUMENT_FILTER_WIDTH_CLASS.ai}
               onClick={() => setActiveCategory("ai")}
             >
               AI Context
             </FilterChip>
             <FilterChip
               selected={activeCategory === "admin"}
+              className={DOCUMENT_FILTER_WIDTH_CLASS.admin}
               onClick={() => setActiveCategory("admin")}
             >
               Administrative
             </FilterChip>
             <FilterChip
               selected={activeCategory === "sensitive"}
+              className={DOCUMENT_FILTER_WIDTH_CLASS.sensitive}
               onClick={() => setActiveCategory("sensitive")}
             >
               Restricted
@@ -648,6 +665,7 @@ export default function WorkspaceDocumentsPage() {
             {archivedCount > 0 && (
               <FilterChip
                 selected={activeCategory === "archived"}
+                className={DOCUMENT_FILTER_WIDTH_CLASS.archived}
                 onClick={() => setActiveCategory("archived")}
                 badge={archivedCount}
               >

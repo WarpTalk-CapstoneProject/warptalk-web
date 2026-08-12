@@ -777,7 +777,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-surface-1 px-4 pb-6 text-ink">
+    <div className="flex h-full flex-col bg-surface-1 px-2 pb-6 text-ink">
       {/* Header section with styling consistent with members and documents */}
       <div className="flex shrink-0 flex-col gap-2 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">

@@ -149,6 +149,12 @@ const DEFAULT_ROOM_DISPLAY_PROPERTIES = ROOM_DISPLAY_PROPERTIES.map(
   (property) => property.key,
 );
 
+const ROOM_FILTER_WIDTH_CLASS: Record<"active" | "history" | "all", string> = {
+  active: "w-[78px]",
+  history: "w-[78px]",
+  all: "w-[58px]",
+};
+
 /**
  * WT-327: marks a room that is one occurrence of a recurring booking.
  */
@@ -609,7 +615,7 @@ export default function MeetingsPageLinear() {
   return (
     <div className="flex flex-col h-full bg-surface-1">
       {/* View Tabs & Actions */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+      <section className="flex shrink-0 flex-col gap-2 px-2 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
         {/* The chip style this page defined now lives in FilterChip, so Knowledge, Documents and
             the admin pages render the same control instead of four near-copies of it. */}
         <FilterChipGroup label="Filter meetings">
@@ -617,6 +623,7 @@ export default function MeetingsPageLinear() {
             <FilterChip
               key={tab}
               selected={activeTab === tab}
+              className={ROOM_FILTER_WIDTH_CLASS[tab]}
               onClick={() => {
                 setActiveTab(tab);
                 // Leaving a day selected while moving to All would silently narrow the one tab
@@ -698,14 +705,14 @@ export default function MeetingsPageLinear() {
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Replaces the Scheduled tab. A permanent strip says which days have anything on them
           without costing a click, which a tab could never do — and it is the same component the
           home panel renders, so the two cannot disagree about which days are marked. */}
       {/* Hidden on All — see isAllView. */}
       <div
-        className={`items-center gap-3 border-b border-border/40 px-4 pb-3 shrink-0 ${isAllView ? "hidden" : "flex"}`}
+        className={`items-center gap-3 border-b border-border/40 px-2 pb-2 shrink-0 ${isAllView ? "hidden" : "flex"}`}
       >
         <MeetingDayStrip
           rooms={rooms}
