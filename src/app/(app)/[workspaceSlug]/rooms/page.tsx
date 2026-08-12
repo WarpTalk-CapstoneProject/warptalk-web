@@ -28,6 +28,10 @@ import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
 // cannot drift the way the language chip did.
 import { isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
+import {
+  isMeetingSummarySeedWorkspaceSlug,
+  withMeetingSummarySeedRooms,
+} from "@/lib/meeting/meeting-summary-seed";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -306,6 +310,9 @@ import { useUIStore } from "@/stores/ui-store";
 
 export default function MeetingsPageLinear() {
   const router = useRouter();
+  const params = useParams();
+  const workspaceSlug = params?.workspaceSlug as string | undefined;
+  const shouldShowSummarySeed = isMeetingSummarySeedWorkspaceSlug(workspaceSlug);
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
@@ -366,8 +373,14 @@ export default function MeetingsPageLinear() {
   );
 
   const rooms = useMemo(() => {
-    return roomList.data?.rooms ?? [];
-  }, [roomList.data?.rooms]);
+    const source = roomList.data?.rooms ?? [];
+    return shouldShowSummarySeed ? withMeetingSummarySeedRooms(source) : source;
+  }, [roomList.data?.rooms, shouldShowSummarySeed]);
+
+  const groupedRooms = useMemo(() => {
+    const source = groupedList.data?.rooms ?? [];
+    return shouldShowSummarySeed ? withMeetingSummarySeedRooms(source) : source;
+  }, [groupedList.data?.rooms, shouldShowSummarySeed]);
 
   // WT-251/WT-232: the calendar gave no hint which days hold anything, and it opens on today,
   // so a meeting booked for any other day was invisible in this tab — findable only under
@@ -389,7 +402,7 @@ export default function MeetingsPageLinear() {
    * Thursday". Neither of those has a booking as an answer; both have a meeting.
    */
   const isGroupedView = activeTab !== "active" && !dayFilter;
-  const rowSource = isGroupedView ? (groupedList.data?.rooms ?? []) : rooms;
+  const rowSource = isGroupedView ? groupedRooms : rooms;
 
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();

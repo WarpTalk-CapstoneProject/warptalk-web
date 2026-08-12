@@ -42,7 +42,7 @@ import {
 // Aliased: this file already imports Tiptap's `Link` extension, and the editor's Link and the
 // router's Link are two very different things to have under one name.
 import NextLink from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -157,7 +157,9 @@ export default function RoomInformationPage() {
   const params = useParams<{ workspaceSlug: string; id: string }>();
   const workspaceSlug = params.workspaceSlug;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const roomId = params.id;
+  const previewSummaryLoading = searchParams.get("summaryPreview") === "loading";
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   const roomQuery = useTranslationRoom(roomId);
@@ -465,6 +467,7 @@ export default function RoomInformationPage() {
             {isEnded || transcriptSegments.length > 0 ? (
               <MeetingRecordSection
                 endedRecord={endedRecordQuery.data ?? null}
+                previewSummaryLoading={previewSummaryLoading}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
                 transcript={
@@ -476,7 +479,9 @@ export default function RoomInformationPage() {
                       room.createdAt
                     }
                     roomId={room.id}
+                    participants={apiParticipants}
                     currentUserId={user?.id}
+                    currentUserName={user?.fullName || user?.email}
                     isEnded={isEnded}
                     onCopy={handleCopy}
                     transcriptId={transcriptQuery.data?.id}
@@ -650,17 +655,19 @@ function MeetingRecordSection({
   transcript,
   transcriptCount,
   endedRecord,
+  previewSummaryLoading,
   onRecordChanged,
   onJumpToMoment,
 }: {
   transcript: React.ReactNode;
   transcriptCount: number;
   endedRecord: EndedRoomHistoryItem | null;
+  previewSummaryLoading?: boolean;
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
 }) {
   const [tab, setTab] = useState<"transcript" | "summary" | "artifacts">(
-    "transcript",
+    () => (previewSummaryLoading ? "summary" : "transcript"),
   );
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
@@ -731,6 +738,7 @@ function MeetingRecordSection({
           room={endedRecord}
           busyArtifactId={busyArtifactId}
           onDownload={downloadArtifact}
+          forceGenerating={previewSummaryLoading}
           // Checking a claim means leaving the summary, so the tab switches with it —
           // scrolling the transcript while the reader is still looking at the summary
           // would look like the button did nothing.
@@ -786,7 +794,9 @@ function MeetingTranscriptArtifact({
   segments,
   baseTime,
   roomId,
+  participants,
   currentUserId,
+  currentUserName,
   isEnded,
   onCopy,
   transcriptId,
@@ -798,7 +808,9 @@ function MeetingTranscriptArtifact({
   segments: TranscriptSegmentDto[];
   baseTime?: string;
   roomId: string;
+  participants: TranslationRoomParticipantDto[];
   currentUserId?: string;
+  currentUserName?: string;
   isEnded: boolean;
   onCopy: (text: string, label: string) => void;
   /** Needed to correct or finalize; omit and the section stays read-only. */
@@ -890,6 +902,36 @@ function MeetingTranscriptArtifact({
     return stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  const normalizedCurrentUserId = currentUserId?.trim().toLowerCase();
+  const normalizedCurrentUserName = normalizeTranscriptIdentity(currentUserName);
+  const participantById = new Map(participants.map((participant) => [participant.id, participant]));
+
+  function isCurrentViewerSegment(segment: TranscriptSegmentDto) {
+    const speakerParticipant = segment.speakerParticipantId
+      ? participantById.get(segment.speakerParticipantId)
+      : undefined;
+
+    if (
+      normalizedCurrentUserId &&
+      (
+        speakerParticipant?.userId.trim().toLowerCase() === normalizedCurrentUserId ||
+        segment.speakerParticipantId?.trim().toLowerCase() === normalizedCurrentUserId
+      )
+    ) {
+      return true;
+    }
+
+    const speakerNames = [
+      speakerParticipant?.displayName,
+      segment.speakerName,
+    ].map(normalizeTranscriptIdentity);
+
+    return Boolean(
+      normalizedCurrentUserName &&
+        speakerNames.some((name) => name && name === normalizedCurrentUserName),
+    );
+  }
+
   return (
     /* The heading and the section frame belong to MeetingRecordSection now — this is the
        Transcript tab, not a section of its own. The action row stays: copy, download and
@@ -958,14 +1000,15 @@ function MeetingTranscriptArtifact({
            into this comment either: check-room-surface-contract matches the file's text,
            not its markup, and the word alone fails it. Containing the scroll would stop
            the page at the end of the transcript, which is the trap that ticket removed. */
-        <div className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4">
-          {blocks.map((block) => (
-            <div key={block.sessionNumber} className="space-y-2">
+        <div className="max-h-[min(60vh,560px)] overflow-hidden rounded-xl border border-border bg-surface-1">
+          <div className="max-h-[min(60vh,560px)] space-y-3 overflow-y-auto p-4 pr-3">
+            {blocks.map((block) => (
+              <div key={block.sessionNumber} className="space-y-2">
               {showSessionLabels ? (
                 <TranscriptSessionDivider sessionNumber={block.sessionNumber} session={block.session} />
               ) : null}
               {block.segments.map((segment) => {
-                const isSelf = Boolean(currentUserId) && segment.speakerParticipantId === currentUserId;
+                const isSelf = isCurrentViewerSegment(segment);
                 return (
                   <div
                     key={segment.id}
@@ -980,7 +1023,7 @@ function MeetingTranscriptArtifact({
                   >
                     <div className={`flex max-w-[75%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
                       <div className={`flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground ${isSelf ? "flex-row-reverse" : ""}`}>
-                        <span className="font-semibold text-ink">
+                        <span className="font-semibold text-foreground">
                           {isSelf ? "You" : segment.speakerName || "Unknown speaker"}
                         </span>
                         <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
@@ -1014,13 +1057,11 @@ function MeetingTranscriptArtifact({
                         </div>
                       ) : (
                       <div
-                        className={`group/line relative rounded-2xl px-3 py-2 ${canCorrect ? "pr-9" : ""} ${
-                          isSelf
-                            ? "rounded-tr-sm bg-primary"
-                            : "rounded-tl-sm border border-border bg-white"
+                        className={`group/line relative rounded-2xl border border-border bg-white px-3 py-2 shadow-sm ${canCorrect ? "pr-9" : ""} ${
+                          isSelf ? "rounded-tr-sm" : "rounded-tl-sm"
                         }`}
                       >
-                        <p className={`text-[13px] leading-6 ${isSelf ? "text-white" : "text-ink-subtle"}`}>
+                        <p className="text-[13px] leading-6 text-black">
                           {segment.originalText}
                         </p>
                         {canCorrect ? (
@@ -1032,9 +1073,7 @@ function MeetingTranscriptArtifact({
                               setEditingSegmentId(segment.id);
                               setDraftText(segment.originalText);
                             }}
-                            className={`absolute right-1 top-1 grid size-7 place-items-center rounded-md opacity-60 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 ${
-                              isSelf ? "text-white hover:bg-white/20" : "hover:bg-surface-2"
-                            }`}
+                            className="absolute right-1 top-1 grid size-7 place-items-center rounded-md text-neutral-500 opacity-60 transition-opacity hover:bg-neutral-100 group-hover/line:opacity-100 focus-visible:opacity-100"
                           >
                             <Pencil className="size-3.5" />
                           </button>
@@ -1045,8 +1084,9 @@ function MeetingTranscriptArtifact({
                   </div>
                 );
               })}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1077,6 +1117,10 @@ function TranscriptSessionDivider({
       <div className="h-px flex-1 bg-border" />
     </div>
   );
+}
+
+function normalizeTranscriptIdentity(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
 }
 
 function assembleTranscriptText(blocks: TranslationSessionBlock<TranscriptSegmentDto>[]): string {

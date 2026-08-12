@@ -2,6 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import {
+  getMeetingSummarySeedParticipants,
+  getMeetingSummarySeedRoom,
+  isMeetingSummarySeedRoomId,
+} from "@/lib/meeting/meeting-summary-seed";
 import type {
   CreateTranslationRoomRequest,
   RecurrenceRequest,
@@ -59,6 +64,8 @@ export function useTranslationRoom(id: string, refetchInterval?: number) {
   return useQuery({
     queryKey: [...MEETING_KEY, id],
     queryFn: async () => {
+      const seedRoom = getMeetingSummarySeedRoom(id);
+      if (seedRoom) return seedRoom;
       const { data } = await translationRoomService.get(id);
       return data;
     },
@@ -215,11 +222,12 @@ export function useTranslationRoomSessions(roomId: string, enabled = true) {
   return useQuery({
     queryKey: sessionsKey(roomId),
     queryFn: async () => {
+      if (isMeetingSummarySeedRoomId(roomId)) return [];
       const { data } = await translationRoomService.sessions(roomId);
       return data;
     },
     enabled: Boolean(roomId) && enabled,
-    refetchInterval: enabled ? 5000 : false,
+    refetchInterval: enabled && !isMeetingSummarySeedRoomId(roomId) ? 5000 : false,
   });
 }
 
@@ -275,11 +283,13 @@ export function useTranslationRoomParticipants(roomId: string, enabled = true) {
   return useQuery({
     queryKey: [...MEETING_KEY, roomId, "participants"],
     queryFn: async () => {
+      const seedParticipants = getMeetingSummarySeedParticipants(roomId);
+      if (seedParticipants) return seedParticipants;
       const { data } = await translationRoomService.participants(roomId);
       return data;
     },
     enabled: Boolean(roomId) && enabled,
-    refetchInterval: 3000,
+    refetchInterval: isMeetingSummarySeedRoomId(roomId) ? false : 3000,
   });
 }
 
@@ -287,6 +297,7 @@ export function useTranslationRoomInvitations(roomId: string) {
   return useQuery({
     queryKey: [...MEETING_KEY, roomId, "invitations"],
     queryFn: async () => {
+      if (isMeetingSummarySeedRoomId(roomId)) return [];
       const { data } = await translationRoomService.invitations(roomId);
       return data;
     },

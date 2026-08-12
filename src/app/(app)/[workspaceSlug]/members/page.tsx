@@ -17,7 +17,6 @@ import {
   CaretUp,
   XCircle,
 } from "@phosphor-icons/react";
-import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -54,6 +53,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { createExcelWorkbook } from "@/lib/export/create-excel-workbook";
 
 const MEMBER_FILTER_WIDTH_CLASS: Record<string, string> = {
   all: "w-[58px]",
@@ -230,7 +230,7 @@ export default function WorkspaceMembersPage() {
   const handleExportXlsx = async () => {
     try {
       setIsExporting(true);
-      const workbook = new ExcelJS.Workbook();
+      const workbook = await createExcelWorkbook();
       const worksheet = workbook.addWorksheet("Members");
 
       worksheet.columns = [

@@ -1,20 +1,27 @@
 # Rooms Page Documentation
 
-This document tracks the host Rooms overview at `/rooms`.
+This document tracks the workspace Rooms overview at `/:workspaceSlug/rooms`.
 
 ## Current Behavior
 
-- `/rooms` now uses the shadcn dashboard treatment from the provided template: muted background from the shared app shell, page header actions, metric cards, tabs, search, and a table-first room inventory.
-- The page uses `useTranslationRooms()` when backend data exists and falls back to domain-specific preview rooms when the project is running without a backend.
+- `/:workspaceSlug/rooms` uses the shared workspace shell with compact status tabs, search, day strip, grouped history rows, and a linear room inventory.
+- The page uses `useTranslationRooms()` for backend data and appends the frontend-only meeting-summary seed room when the slug is `fpt-sep490-su26`.
+- The seed room is `summary-seed-room-fpt-sep490-su26`; it opens the normal room detail page with seeded participants, transcript segments, structured AI summary content, and retained artifacts.
+- The room detail Summary tab uses a GSAP-driven gray skeleton shimmer while the AI summary is still generating or being rewritten.
+- The room detail Transcript tab renders the current viewer's lines on the right, keeps transcript bubble text black for readability in light/dark modes, and keeps the scroll area inside the transcript frame.
 - Users can filter rooms locally by status tabs and search by title/code/language.
-- Create and join actions link to `/rooms/create` and `/join`.
+- Create opens the shared create-room modal, and Join routes to `/join?code=...`.
 
 ## Files Affected
 
-- `src/app/(app)/rooms/page.tsx`
-- `src/app/(app)/layout.tsx`
-- `src/components/layout/host-sidebar.tsx`
-- `src/components/layout/topbar.tsx`
+- `src/app/(app)/[workspaceSlug]/rooms/page.tsx`
+- `src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx`
+- `src/lib/meeting/meeting-summary-seed.ts`
+- `src/components/rooms/meeting-record-panels.tsx`
+- `src/hooks/use-translationRooms.ts`
+- `src/hooks/use-transcripts.ts`
+- `src/services/room-history.service.ts`
+- `src/services/translation-room.service.ts`
 
 ## Template Mapping
 
@@ -32,14 +39,15 @@ Not adopted:
 
 ## Known Limitations
 
-- Filtering is local state until backend list/filter endpoints are finalized.
-- Preview data is shown when the room API has no usable records.
-- Table actions currently route to existing pages rather than mutating backend state.
+- The summary seed is intentionally frontend-only and scoped by workspace slug; it does not create backend/database records.
+- Summary regeneration and artifact downloads are mocked only for the seed IDs. Real rooms still use backend endpoints.
 
 ## Testing Checklist
 
-- [ ] `/rooms` renders in the shadcn host shell.
+- [ ] `/:workspaceSlug/rooms` renders in the workspace shell.
+- [ ] `/fpt-sep490-su26/rooms` includes `Seed: AI Summary Review - SEP490 Sprint Sync`.
+- [ ] Opening the seed room renders transcript, Summary, and Artifacts tabs without backend seed data.
 - [ ] Status tabs filter the visible table rows.
 - [ ] Search filters by title, room code, or language.
-- [ ] Create Room opens `/rooms/create`.
-- [ ] Join opens `/join`.
+- [ ] Create opens the create-room modal.
+- [ ] Join opens `/join?code=...`.

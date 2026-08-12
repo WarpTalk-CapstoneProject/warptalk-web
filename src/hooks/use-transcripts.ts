@@ -2,6 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { transcriptService } from "@/services/transcript.service";
+import {
+  getMeetingSummarySeedTranscriptByRoom,
+  getMeetingSummarySeedTranscriptSegments,
+} from "@/lib/meeting/meeting-summary-seed";
 import type { CreateCorrectionRequest, CreateTranscriptExportRequest, CreateTranscriptRequest } from "@/types/transcript";
 
 const TRANSCRIPT_KEY = ["transcripts"] as const;
@@ -22,6 +26,8 @@ export function useTranscriptByRoom(translationRoomId?: string) {
   return useQuery({
     queryKey: [...TRANSCRIPT_KEY, "by-room", translationRoomId],
     queryFn: async () => {
+      const seedTranscript = getMeetingSummarySeedTranscriptByRoom(translationRoomId);
+      if (seedTranscript) return seedTranscript;
       const { data } = await transcriptService.getByRoom(translationRoomId!);
       return data;
     },
@@ -34,6 +40,8 @@ export function useTranscriptSegments(transcriptId?: string) {
   return useQuery({
     queryKey: [...TRANSCRIPT_KEY, transcriptId, "segments"],
     queryFn: async () => {
+      const seedSegments = getMeetingSummarySeedTranscriptSegments(transcriptId);
+      if (seedSegments) return seedSegments;
       const { data } = await transcriptService.segments(transcriptId!, { take: 200 });
       return data;
     },

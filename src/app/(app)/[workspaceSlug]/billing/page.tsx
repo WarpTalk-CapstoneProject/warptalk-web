@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useEffect, useState, useMemo } from "react";
-import ExcelJS from "exceljs";
+import type { Borders, CellValue } from "exceljs";
 import { saveAs } from "file-saver";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +75,7 @@ import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart"
 import { useParams } from "next/navigation";
 import AdminBillingPage from "@/app/(internal)/billing/page";
 import { formatMoney } from "@/lib/format/currency";
+import { createExcelWorkbook } from "@/lib/export/create-excel-workbook";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -401,7 +402,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const confirmExportUsage = async () => {
     if (!historyPage?.items) return;
     try {
-      const workbook = new ExcelJS.Workbook();
+      const workbook = await createExcelWorkbook();
       const worksheet = workbook.addWorksheet("Wallet Statement");
 
       worksheet.columns = [
@@ -441,7 +442,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
       const headerRowIndex = currentRowOffset + 1;
       const headerRow = worksheet.getRow(headerRowIndex);
-      const headerRowValues: ExcelJS.CellValue[] = [
+      const headerRowValues: CellValue[] = [
         "Transaction ID",
         "Type",
         "Date",
@@ -458,7 +459,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
       };
       headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
-      const borderStyle: Partial<ExcelJS.Borders> = {
+      const borderStyle: Partial<Borders> = {
         top: { style: "thin", color: { argb: "FFCBD5E1" } },
         left: { style: "thin", color: { argb: "FFCBD5E1" } },
         bottom: { style: "thin", color: { argb: "FFCBD5E1" } },
