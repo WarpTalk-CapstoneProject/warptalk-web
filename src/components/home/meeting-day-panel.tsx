@@ -10,7 +10,7 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { meetingLanguageSet } from "@/lib/language/languages";
 import { isSameDay, meetingsOn } from "@/lib/meeting/meeting-day";
 import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
-import { Silk } from "@/components/visuals/silk";
+import { Beams } from "@/components/visuals/beams";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
@@ -165,12 +165,15 @@ export function MeetingDayPanel() {
       aria-label="Meetings by day"
       className="relative isolate overflow-hidden rounded-[14px] border border-border bg-black p-3 shadow-linear sm:p-4"
     >
-      <Silk
-        color="#999999"
-        speed={5}
-        scale={1}
-        noiseIntensity={1.5}
-        rotation={0}
+      <Beams
+        beamNumber={12}
+        beamWidth={2.4}
+        beamHeight={22}
+        lightColor="#ffffff"
+        speed={2}
+        noiseIntensity={1.75}
+        scale={0.3}
+        rotation={30}
         className="pointer-events-none absolute inset-0 -z-20"
       />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-black/20" />
@@ -187,7 +190,7 @@ export function MeetingDayPanel() {
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
           today={today}
-          className="[&_button]:text-white/70 [&_button:hover]:bg-white/10 [&_button:hover]:text-white [&_[aria-pressed=true]]:bg-white/15 [&_[aria-pressed=true]>span:first-child]:text-white/70"
+          tone="inverse"
         />
       </header>
 

@@ -61,12 +61,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
+import { WorkspaceService } from "@/services/workspace.service";
 import type {
+  CreditTransactionDto,
   GroupedCreditTransaction,
   UsageGroupSummary,
   UsageBreakdownDto,
   InvoiceDto,
 } from "@/types/billing";
+import type { WorkspaceMemberDto } from "@/types/workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
@@ -85,7 +88,11 @@ const BILLING_FILTER_WIDTH_CLASS: Record<string, string> = {
   overview: "w-[154px]",
   history: "w-[168px]",
   invoices: "w-[134px]",
+  payroll: "w-[96px]",
 };
+
+const ESTIMATED_VND_PER_CREDIT = 10;
+const TOKEN_PROXY_PER_CREDIT = 100;
 
 /**
  * The billing API answers "this workspace has no plan" with an explicit error code rather than an
@@ -150,6 +157,34 @@ function getUnitSuffixForUsage(usageType: string): string {
   if (t === "text_to_speech") return "cr/min";
   if (t === "voice_cloning") return "cr/min";
   return "cr";
+}
+
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function getTransactionUsageType(tx: CreditTransactionDto) {
+  const source = (tx.referenceType || tx.description || "AI usage")
+    .replace(/usage_record/gi, "AI usage")
+    .replace(/_/g, " ")
+    .trim();
+
+  if (!source) return "AI usage";
+  if (source.toLowerCase().includes("translation")) return "translation";
+  if (source.toLowerCase().includes("summary")) return "summary";
+  if (source.toLowerCase().includes("chat")) return "chat";
+  if (source.toLowerCase().includes("text to speech")) return "text_to_speech";
+  if (source.toLowerCase().includes("voice")) return "voice_cloning";
+  return source;
+}
+
+function resolveMemberName(member?: WorkspaceMemberDto, fallback?: string | null) {
+  return member?.fullName || fallback || "Workspace account";
 }
 
 export default function WorkspaceBillingPage() {
@@ -320,6 +355,13 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     retry: 1,
   });
 
+  const { data: membersPage, isLoading: isMembersLoading } = useQuery({
+    queryKey: ["workspace-members", workspaceId, "billing-spend"],
+    queryFn: () => WorkspaceService.listMembers(workspaceId, 1, 200),
+    enabled: !!workspaceId,
+    retry: 1,
+  });
+
   const groupedHistoryItems = useMemo(() => {
     if (!historyPage?.items) return [];
     const groups: GroupedCreditTransaction[] = [];
@@ -395,6 +437,115 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const netChange = totalTopUp - totalConsumed;
 
   const usageBreakdown = report?.usageBreakdown ?? [];
+  const workspaceMembers = useMemo(
+    () => membersPage?.items ?? [],
+    [membersPage?.items],
+  );
+  const memberByUserId = useMemo(() => {
+    const map = new Map<string, WorkspaceMemberDto>();
+    workspaceMembers.forEach((member) => {
+      map.set(member.userId, member);
+    });
+    return map;
+  }, [workspaceMembers]);
+
+  const consumedTransactions = useMemo(
+    () =>
+      (historyPage?.items ?? []).filter(
+        (tx) => tx.type === "consume" && tx.amount < 0,
+      ),
+    [historyPage],
+  );
+
+  const memberSpendRows = useMemo(() => {
+    const rows = new Map<
+      string,
+      {
+        userId: string;
+        name: string;
+        email: string;
+        role: string;
+        credits: number;
+        transactions: number;
+        lastActivity: string | null;
+        featureCredits: Map<string, number>;
+      }
+    >();
+
+    workspaceMembers.forEach((member) => {
+      rows.set(member.userId, {
+        userId: member.userId,
+        name: resolveMemberName(member),
+        email: member.email,
+        role: member.roleName,
+        credits: 0,
+        transactions: 0,
+        lastActivity: null,
+        featureCredits: new Map(),
+      });
+    });
+
+    consumedTransactions.forEach((tx) => {
+      const userId = tx.userId || "workspace-account";
+      const member = memberByUserId.get(userId);
+      const row =
+        rows.get(userId) ??
+        {
+          userId,
+          name: resolveMemberName(member, tx.userName),
+          email: member?.email ?? "Unresolved billing user",
+          role: member?.roleName ?? "system",
+          credits: 0,
+          transactions: 0,
+          lastActivity: null,
+          featureCredits: new Map<string, number>(),
+        };
+
+      const credits = Math.abs(tx.amount);
+      const usageType = getTransactionUsageType(tx);
+      row.credits += credits;
+      row.transactions += 1;
+      row.lastActivity =
+        !row.lastActivity || new Date(tx.createdAt) > new Date(row.lastActivity)
+          ? tx.createdAt
+          : row.lastActivity;
+      row.featureCredits.set(
+        usageType,
+        (row.featureCredits.get(usageType) ?? 0) + credits,
+      );
+      rows.set(userId, row);
+    });
+
+    return Array.from(rows.values())
+      .map((row) => {
+        const featureBreakdown = Array.from(row.featureCredits.entries())
+          .map(([usageType, credits]) => ({
+            usageType,
+            label: getLabelForUsage(usageType),
+            credits,
+          }))
+          .sort((a, b) => b.credits - a.credits);
+
+        return {
+          ...row,
+          estimatedTokens: row.credits * TOKEN_PROXY_PER_CREDIT,
+          estimatedCost: row.credits * ESTIMATED_VND_PER_CREDIT,
+          topFeature: featureBreakdown[0],
+          featureBreakdown,
+        };
+      })
+      .sort((a, b) => b.credits - a.credits || a.name.localeCompare(b.name));
+  }, [consumedTransactions, memberByUserId, workspaceMembers]);
+
+  const memberSpendTotalCredits = memberSpendRows.reduce(
+    (sum, row) => sum + row.credits,
+    0,
+  );
+  const memberSpendTotalCost =
+    memberSpendTotalCredits * ESTIMATED_VND_PER_CREDIT;
+  const memberSpendTotalTokens =
+    memberSpendTotalCredits * TOKEN_PROXY_PER_CREDIT;
+  const topSpender = memberSpendRows.find((row) => row.credits > 0);
 
   const handleOpenExport = () => {
     setIsExportOpen(true);
@@ -615,6 +766,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             { value: "overview", label: "Overview & Usage" },
             { value: "history", label: "Transaction History" },
             { value: "invoices", label: "Billing History" },
+            { value: "payroll", label: "Payroll" },
           ].map((item) => (
             <button
               key={item.value}
@@ -707,11 +859,13 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   : "No active plan. Upgrade to unlock advanced AI capabilities."}
             </p>
           </div>
-          <Link href={`/${workspaceSlug}/payment/plans`} className="shrink-0">
-            <span className="inline-flex h-[28px] items-center rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2">
-              {subscription ? "Change plan" : "Upgrade plan"}
-            </span>
-          </Link>
+          {!subscription && (
+            <Link href={`/${workspaceSlug}/payment/plans`} className="shrink-0">
+              <span className="inline-flex h-[28px] items-center rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2">
+                Upgrade plan
+              </span>
+            </Link>
+          )}
         </div>
       </section>
 
@@ -1313,6 +1467,298 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                     )}
                   </TableBody>
                 </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payroll" className="mt-6 space-y-4 outline-none">
+          <section className="grid gap-4 lg:grid-cols-3">
+            <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
+              <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+                <div>
+                  <CardDescription className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                    Workspace member spend
+                  </CardDescription>
+                  <CardTitle className="mt-3 text-2xl font-semibold tracking-tight">
+                    {memberSpendTotalCredits.toLocaleString()} cr
+                  </CardTitle>
+                </div>
+                <Badge className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink-muted hover:bg-surface-2">
+                  Current month
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm font-semibold text-ink">
+                  {formatMoney(memberSpendTotalCost, "VND")}
+                </p>
+                <p className="mt-2 text-[12px] text-ink-muted">
+                  Estimated from consumed credits at{" "}
+                  {ESTIMATED_VND_PER_CREDIT.toLocaleString()} VND per credit.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
+              <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+                <div>
+                  <CardDescription className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                    Token usage proxy
+                  </CardDescription>
+                  <CardTitle className="mt-3 text-2xl font-semibold tracking-tight">
+                    {memberSpendTotalTokens.toLocaleString()}
+                  </CardTitle>
+                </div>
+                <Badge className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink-muted hover:bg-surface-2">
+                  Est.
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm font-semibold text-ink">
+                  {TOKEN_PROXY_PER_CREDIT.toLocaleString()} token proxy / credit
+                </p>
+                <p className="mt-2 text-[12px] text-ink-muted">
+                  Backend exposes credits and usage units today; raw provider
+                  tokens are not exposed on this API yet.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
+              <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+                <div>
+                  <CardDescription className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                    Highest spender
+                  </CardDescription>
+                  <CardTitle className="mt-3 truncate text-2xl font-semibold tracking-tight">
+                    {topSpender?.name ?? "No usage yet"}
+                  </CardTitle>
+                </div>
+                <Badge className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink-muted hover:bg-surface-2">
+                  Member
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm font-semibold text-ink">
+                  {(topSpender?.credits ?? 0).toLocaleString()} cr
+                </p>
+                <p className="mt-2 text-[12px] text-ink-muted">
+                  {topSpender?.topFeature
+                    ? `Mostly spent on ${topSpender.topFeature.label}.`
+                    : "No member has consumed billable credits this month."}
+                </p>
+              </CardContent>
+            </Card>
+          </section>
+
+          <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
+            <CardHeader className="flex flex-col gap-4 border-b border-hairline/20 px-5 pt-5 pb-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold">
+                  Member spend attribution
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-muted">
+                  Owner pays the workspace bill; this view attributes AI,
+                  translation, summary, and voice credit usage back to each
+                  member.
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {["This month", "All members", "Credits"].map((period, index) => (
+                  <button
+                    key={period}
+                    type="button"
+                    className={`inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold transition ${
+                      index === 0
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
+                    }`}
+                  >
+                    {period}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleOpenExport}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 text-xs font-semibold text-ink transition hover:bg-surface-2"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="grid gap-4 border-b border-hairline/20 px-5 py-4 lg:grid-cols-[1fr_360px]">
+                <div className="rounded-lg border border-hairline/40 bg-surface-2/40 p-4">
+                  <p className="text-[12px] font-semibold text-ink">
+                    What this measures
+                  </p>
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-ink-muted">
+                    Billing records are settled in credits. Member attribution
+                    uses credit transactions with `userId`; unresolved records
+                    remain under the workspace account until the backend exposes
+                    a dedicated per-member usage endpoint.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-hairline/40 bg-surface-2/40 p-4">
+                  <p className="text-[12px] font-semibold text-ink">
+                    Spend by feature
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {usageBreakdown.length === 0 ? (
+                      <p className="text-[12px] text-ink-muted">
+                        No feature usage recorded this month.
+                      </p>
+                    ) : (
+                      usageBreakdown.slice(0, 4).map((usage) => {
+                        const percent =
+                          memberSpendTotalCredits > 0
+                            ? Math.round(
+                                (usage.creditsConsumed /
+                                  memberSpendTotalCredits) *
+                                  100,
+                              )
+                            : 0;
+                        return (
+                          <div key={usage.usageType}>
+                            <div className="flex items-center justify-between gap-3 text-[12px]">
+                              <span className="truncate font-medium text-ink-muted">
+                                {getLabelForUsage(usage.usageType)}
+                              </span>
+                              <span className="font-semibold text-ink">
+                                {usage.creditsConsumed.toLocaleString()} cr
+                              </span>
+                            </div>
+                            <div className="mt-1 h-1.5 rounded-full bg-surface-3">
+                              <div
+                                className="h-full rounded-full bg-foreground"
+                                style={{ width: `${Math.min(percent, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-surface-2/80">
+                    <TableRow className="border-hairline/35 hover:bg-transparent">
+                      <TableHead className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider pl-5 py-2.5">
+                        Member
+                      </TableHead>
+                      <TableHead className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">
+                        Role
+                      </TableHead>
+                      <TableHead className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">
+                        Spent On
+                      </TableHead>
+                      <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">
+                        Credits
+                      </TableHead>
+                      <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">
+                        Token Proxy
+                      </TableHead>
+                      <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider pr-5 py-2.5">
+                        Est. Cost
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-hairline/20">
+                    {isHistoryLoading || isMembersLoading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={6}
+                          className="py-8 text-center text-xs text-ink-muted"
+                        >
+                          <Spinner className="mr-2 inline h-4 w-4 animate-spin text-primary" />
+                          Loading member spend...
+                        </TableCell>
+                      </TableRow>
+                    ) : memberSpendRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={6}
+                          className="py-8 text-center text-xs text-ink-muted"
+                        >
+                          No workspace members found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      memberSpendRows.map((member) => (
+                        <TableRow
+                          key={member.userId}
+                          className="border-hairline/15 hover:bg-surface-2/20"
+                        >
+                          <TableCell className="pl-5 py-3">
+                            <div className="flex min-w-[220px] items-center gap-3">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-hairline bg-surface-2 text-[11px] font-semibold text-ink">
+                                {getInitials(member.name) || "WA"}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-ink">
+                                  {member.name}
+                                </p>
+                                <p className="truncate text-[11px] text-ink-muted">
+                                  {member.email}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Badge
+                              variant="outline"
+                              className="rounded-full border-border bg-surface-2 px-2 py-0.5 text-[10px] font-medium capitalize text-ink-muted"
+                            >
+                              {member.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="min-w-[180px]">
+                              <p className="text-xs font-medium text-ink">
+                                {member.topFeature?.label ?? "No paid usage"}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-ink-muted">
+                                {member.transactions > 0
+                                  ? `${member.transactions} billable events`
+                                  : "No billable events this month"}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 text-right text-xs font-semibold text-ink">
+                            {member.credits.toLocaleString()} cr
+                          </TableCell>
+                          <TableCell className="py-3 text-right text-xs font-mono text-ink-muted">
+                            {member.estimatedTokens.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="py-3 pr-5 text-right">
+                            <p className="text-xs font-semibold text-ink">
+                              {formatMoney(member.estimatedCost, "VND")}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-ink-muted">
+                              {member.lastActivity
+                                ? format(new Date(member.lastActivity), "MMM dd HH:mm")
+                                : "No activity"}
+                            </p>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-hairline/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-ink-muted">
+                  Showing {memberSpendRows.length} workspace members. Owner pays
+                  centrally; this table shows attributed usage.
+                </p>
+                <p className="text-xs font-semibold text-ink">
+                  {formatMoney(memberSpendTotalCost, "VND")} estimated
+                </p>
               </div>
             </CardContent>
           </Card>

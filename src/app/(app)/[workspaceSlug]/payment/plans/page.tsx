@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -31,14 +30,20 @@ import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import {
   ArrowRight,
   CaretLeft,
+  CheckCircle,
+  CreditCard,
+  DotsThree,
   Lightning,
   Lock,
+  Plus,
+  ShieldCheck,
+  Wallet,
   X,
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
 
@@ -50,6 +55,69 @@ function getTopUpRate(credits: number) {
   if (credits >= 10000) return { rate: 9, discount: 10 };
   return { rate: 10, discount: 0 };
 }
+
+function isFreePlan(plan: PlanDto) {
+  const value = `${plan.name} ${plan.slug} ${plan.tier}`.toLowerCase();
+  return value.includes("free") || plan.price === 0;
+}
+
+function isEnterprisePlan(plan: PlanDto) {
+  const value = `${plan.name} ${plan.slug} ${plan.tier}`.toLowerCase();
+  return value.includes("enterprise");
+}
+
+function parsePlanFeatures(plan: PlanDto) {
+  try {
+    const parsed = JSON.parse(plan.features || "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (feature): feature is string => typeof feature === "string",
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function getPlanFeatureList(plan: PlanDto) {
+  const parsedFeatures = parsePlanFeatures(plan);
+  if (parsedFeatures.length) return parsedFeatures.slice(0, 6);
+
+  return [
+    `${plan.creditsPerCycle?.toLocaleString()} credits per cycle`,
+    `${plan.maxParticipants || "Limited"} workspace members`,
+    `${plan.maxLanguages || "Limited"} translation languages`,
+    plan.aiAssistantEnabled ? "AI assistant included" : "Basic AI access",
+    plan.voiceCloneEnabled ? "Voice profiles enabled" : "No voice profiles",
+    plan.glossaryEnabled ? "Workspace glossary included" : "No glossary",
+  ];
+}
+
+function getPlanDescription(plan: PlanDto) {
+  if (plan.description) return plan.description;
+  return isEnterprisePlan(plan)
+    ? "Advanced workspace AI, translation, voice, and governance features for teams."
+    : "Basic workspace access for getting started with meetings and collaboration.";
+}
+
+const LINKED_PAYMENT_CARDS = [
+  {
+    id: "primary-card",
+    brand: "Visa",
+    last4: "4242",
+    holder: "Alice Smith",
+    expiry: "12/28",
+    status: "Primary",
+  },
+  {
+    id: "backup-card",
+    brand: "Mastercard",
+    last4: "1188",
+    holder: "Workspace backup",
+    expiry: "09/27",
+    status: "Backup",
+  },
+];
 
 export default function WorkspacePlansPage() {
   const router = useRouter();
@@ -83,15 +151,27 @@ export default function WorkspacePlansPage() {
   const [pendingPlanSlug, setPendingPlanSlug] = useState("");
   const [pendingPlanName, setPendingPlanName] = useState("");
   const [topUpCredits, setTopUpCredits] = useState<number>(0);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   // Fetch plans from backend
   const { data: plansData = [], isLoading: loadingPlans } = useQuery({
     queryKey: ["plans"],
     queryFn: () => billingService.getPlans(),
   });
 
-  const activePlans = plansData
-    .filter((p) => p.isActive !== false)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const activePlans = useMemo(
+    () =>
+      plansData
+        .filter((p) => p.isActive !== false)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    [plansData],
+  );
+  const comparisonPlans = useMemo(
+    () =>
+      [activePlans.find(isFreePlan), activePlans.find(isEnterprisePlan)].filter(
+        (plan): plan is PlanDto => Boolean(plan),
+      ),
+    [activePlans],
+  );
 
   useEffect(() => {
     if (!isAuthenticated || !user) router.push("/login");
@@ -138,6 +218,11 @@ export default function WorkspacePlansPage() {
   const activePlanTierIndex = activePlanId
     ? activePlans.findIndex((p) => p.id === activePlanId)
     : -1;
+  const selectedPlan =
+    comparisonPlans.find((plan) => plan.id === selectedPlanId) ??
+    comparisonPlans.find((plan) => plan.id === activePlanId) ??
+    comparisonPlans[0] ??
+    null;
 
   const pendingPlanTierIndex = pendingPlanSlug
     ? activePlans.findIndex((p) => p.slug === pendingPlanSlug)
@@ -275,6 +360,23 @@ export default function WorkspacePlansPage() {
 
   const { rate, discount } = getTopUpRate(topUpCredits);
   const topUpTotal = topUpCredits * rate;
+  const selectedPlanAction = selectedPlan ? getPlanAction(selectedPlan) : null;
+  const selectedPlanIsCurrent = selectedPlanAction?.variant === "current";
+  const selectedPlanIsEnterprise = selectedPlan
+    ? isEnterprisePlan(selectedPlan)
+    : false;
+  const selectedPlanPrice = selectedPlan?.price ?? 0;
+  const selectedPlanDisplayPrice =
+    billingInterval === "yearly"
+      ? Math.round(selectedPlanPrice * 0.79)
+      : selectedPlanPrice;
+  const selectedPlanCheckoutTotal =
+    billingInterval === "yearly"
+      ? Math.round(selectedPlanPrice * 12 * 0.79)
+      : selectedPlanPrice;
+  const selectedPlanFeatures = selectedPlan
+    ? getPlanFeatureList(selectedPlan)
+    : [];
 
   if (!isRoleLoaded) {
     return (
@@ -304,11 +406,6 @@ export default function WorkspacePlansPage() {
   }
 
   return (
-    /* This was a marketing landing page living inside the product: a 5xl centred headline, a
-       "Pricing & Subscriptions" badge above it, and a lead paragraph — the visual language of a
-       website's /pricing, rendered inside a workspace the user has already signed into and paid
-       attention to. It is a settings screen. It gets the settings chrome: the same toolbar row
-       every other workspace page has, with the one real choice (monthly or yearly) in it. */
     <div className="flex h-full min-h-0 flex-col bg-surface-1 text-ink">
       <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-[260px] flex-1 items-center gap-3">
@@ -329,7 +426,9 @@ export default function WorkspacePlansPage() {
         <div className="flex shrink-0 items-center gap-2 pl-4">
           <Tabs
             value={billingInterval}
-            onValueChange={(val) => setBillingInterval(val as "monthly" | "yearly")}
+            onValueChange={(val) =>
+              setBillingInterval(val as "monthly" | "yearly")
+            }
             className="w-fit"
           >
             <TabsList className="h-[28px] rounded-full border border-border/60 bg-surface-2 p-0.5">
@@ -343,7 +442,7 @@ export default function WorkspacePlansPage() {
                 value="yearly"
                 className="h-[24px] rounded-full px-3 text-[12px] data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
-                Yearly · save 21%
+                Yearly - save 21%
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -351,251 +450,352 @@ export default function WorkspacePlansPage() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-8">
-      <div
-        className={`grid grid-cols-1 gap-6 lg:gap-8 w-full mx-auto justify-center ${
-          activePlans.length === 1
-            ? "max-w-[380px] md:grid-cols-1"
-            : activePlans.length === 2
-              ? "max-w-[780px] md:grid-cols-2"
-              : activePlans.length === 3
-                ? "max-w-[1150px] md:grid-cols-3"
-                : "max-w-[1400px] md:grid-cols-2 lg:grid-cols-4"
-        }`}
-      >
-        {loadingPlans ? (
-          <div className="col-span-1 md:col-span-3 flex w-full items-center justify-center p-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <section className="mx-auto w-full max-w-6xl">
+          <div className="mb-4 flex flex-col gap-1">
+            <h1 className="text-xl font-semibold tracking-tight text-ink">
+              Plan & linked cards
+            </h1>
+            <p className="text-[13px] text-ink-muted">
+              Review the workspace plan, connected payment cards, and credit
+              balance actions in one place.
+            </p>
           </div>
-        ) : (
-          activePlans.map((plan, index) => {
-            const action = getPlanAction(plan);
-            const isCurrent = action.variant === "current";
-            const isFeatured = index === 0; // Highlight the first plan or based on some custom logic
 
-            const monthlyPrice = plan.price;
-            let yearlyPrice = plan.price;
-            if (plan.billingCycle?.toLowerCase() === "yearly") {
-              // Assuming the plan's price is already the yearly price, but we display monthly equivalent
-              yearlyPrice = plan.price;
-            } else {
-              // Calculate yearly discount equivalent
-              yearlyPrice = Math.round(plan.price * 0.79); // 21% off
-            }
-
-            const displayPrice =
-              billingInterval === "yearly" ? yearlyPrice : monthlyPrice;
-            const displayTotal =
-              billingInterval === "yearly"
-                ? monthlyPrice * 12 * 0.79
-                : monthlyPrice;
-
-            let parsedFeatures: string[] = [];
-            try {
-              parsedFeatures = JSON.parse(plan.features || "[]");
-              if (!Array.isArray(parsedFeatures)) {
-                parsedFeatures = [];
-              }
-            } catch {
-              parsedFeatures = [];
-            }
-
-            return (
-              /* Palette tokens, not #7F1DFF and text-gray-900. The hardcoded pair meant the card
-                 rendered near-black text on near-black in dark mode, and its accent was a purple
-                 that appears nowhere else in the app. */
-              <Card
-                key={plan.id}
-                className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-canvas p-5 shadow-linear transition-colors ${
-                  isCurrent
-                    ? "border-primary"
-                    : isFeatured
-                      ? "border-primary/40"
-                      : "border-border hover:border-border/80"
-                }`}
-              >
-                <CardHeader className="flex flex-col items-start p-0 pb-4 text-left">
-                  <div className="mb-2 flex w-full items-center justify-between gap-2">
-                    <CardTitle className="text-[15px] font-semibold tracking-tight text-ink">
-                      {plan.name}
-                    </CardTitle>
-
-                    <div className="flex shrink-0 gap-2">
-                      {isCurrent && (
-                        <Badge className="rounded-full border-none bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                          Current plan
-                        </Badge>
-                      )}
-                      {!isCurrent && isFeatured && (
-                        <Badge className="rounded-full border-none bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                          Most popular
-                        </Badge>
-                      )}
+          {loadingPlans ? (
+            <div className="flex w-full items-center justify-center rounded-[18px] border border-border bg-canvas p-14 shadow-linear">
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+            </div>
+          ) : !selectedPlan ? (
+            <Card className="rounded-[18px] border-border bg-canvas shadow-linear">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">
+                  No active plans found
+                </CardTitle>
+                <CardDescription>
+                  The billing service did not return active Free or Enterprise
+                  plans for this workspace.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+              <Card className="relative overflow-hidden rounded-[22px] border-border bg-canvas shadow-linear">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_10%,rgba(255,255,255,0.2),transparent_22%),radial-gradient(circle_at_78%_0%,rgba(255,255,255,0.12),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.02)_42%,rgba(0,0,0,0.16))] dark:bg-[radial-gradient(circle_at_18%_10%,rgba(255,255,255,0.12),transparent_22%),radial-gradient(circle_at_78%_0%,rgba(255,255,255,0.08),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_42%,rgba(0,0,0,0.34))]" />
+                <CardHeader className="relative flex flex-row items-start justify-between gap-4 p-5">
+                  <div className="min-w-0">
+                    <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface-1/80 text-ink shadow-sm backdrop-blur">
+                      <Wallet className="h-5 w-5" />
                     </div>
+                    <CardDescription className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
+                      Selected workspace plan
+                    </CardDescription>
+                    <CardTitle className="mt-2 truncate text-2xl font-semibold tracking-tight text-ink">
+                      {selectedPlan.name}
+                    </CardTitle>
                   </div>
 
-                  <p className="min-h-[34px] text-[12px] leading-relaxed text-ink-muted">
-                    {plan.description}
-                  </p>
-
-                  <div className="mt-4 flex w-full flex-col items-start">
-                    <div className="flex items-baseline whitespace-nowrap">
-                      <span className="text-[24px] font-semibold tracking-tight text-ink">
-                        {displayPrice > 0 ? formatMoney(displayPrice, "VND") : "Free"}
-                      </span>
-                      <span className="ml-1 text-[12px] text-ink-muted">/mo</span>
-                    </div>
-
-                    <p className="mt-1.5 text-[11px] text-ink-muted">
-                      Pause or cancel anytime · 24/7 support
-                    </p>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    {selectedPlanIsCurrent && (
+                      <Badge className="rounded-full border border-border bg-surface-1 px-2.5 py-1 text-[11px] font-medium text-ink shadow-none hover:bg-surface-1">
+                        Current
+                      </Badge>
+                    )}
+                    <Badge className="rounded-full border border-border bg-surface-1/70 px-2.5 py-1 text-[11px] font-medium text-ink-muted shadow-none hover:bg-surface-1/70">
+                      {billingInterval === "yearly" ? "Yearly" : "Monthly"}
+                    </Badge>
                   </div>
                 </CardHeader>
 
-                <CardContent className="flex-1 p-0 pb-6">
-                  {/* Styled action button inside content wrapper matching reference */}
-                  <div className="mb-6">
-                    {!isCurrent && (
-                      <button
-                        type="button"
-                        disabled={action.disabled || isProcessing}
-                        onClick={() => {
-                          handleCheckout(
-                            displayTotal,
-                            "Subscription",
-                            plan.slug,
-                            billingInterval,
-                          );
-                        }}
-                        className={`inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                          action.variant === "upgrade" ||
-                          action.variant === "get-started"
-                            ? "bg-[#7F1DFF] hover:bg-[#6c17db] text-white shadow-sm"
-                            : "bg-[#00E58F] hover:bg-[#00cf81] text-gray-900 shadow-sm"
-                        }`}
-                      >
-                        {isProcessing ? "Processing..." : "Get Started"}
-                      </button>
+                <CardContent className="relative space-y-5 px-5 pb-5">
+                  <div>
+                    <div className="flex items-end gap-2">
+                      <span className="text-4xl font-semibold tracking-tight text-ink">
+                        {selectedPlanDisplayPrice > 0
+                          ? formatMoney(selectedPlanDisplayPrice, "VND")
+                          : "Free"}
+                      </span>
+                      <span className="pb-1.5 text-[13px] text-ink-muted">
+                        /mo
+                      </span>
+                    </div>
+                    <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-ink-muted">
+                      {getPlanDescription(selectedPlan)}
+                    </p>
+                    {billingInterval === "yearly" && selectedPlanPrice > 0 && (
+                      <p className="mt-2 text-[12px] font-medium text-ink-muted">
+                        Billed yearly:{" "}
+                        {formatMoney(selectedPlanCheckoutTotal, "VND")}
+                      </p>
                     )}
-                    {isCurrent && subscription?.status === "active" && (
-                      <button
-                        type="button"
-                        disabled={isCancelling}
-                        onClick={() => setShowCancelDialog(true)}
-                        className="inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all border border-gray-300 hover:border-red-300 hover:bg-red-50 hover:text-red-600 bg-white text-gray-600 cursor-pointer disabled:opacity-50"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancel Subscription
-                      </button>
-                    )}
-                    {isCurrent && subscription?.status === "cancelled" && (
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all border border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancelled (Ends soon)
-                      </button>
-                    )}
+                    {selectedPlanIsCurrent &&
+                      subscription?.currentPeriodEnd && (
+                        <p className="mt-2 text-[12px] font-medium text-ink-muted">
+                          Renews on{" "}
+                          {new Date(
+                            subscription.currentPeriodEnd,
+                          ).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      )}
                   </div>
 
-                  <ul className="space-y-3">
-                    {parsedFeatures.map((feature: string, i: number) => (
-                      <li
-                        key={i}
-                        className="flex items-start gap-2.5 text-[13px]"
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      {
+                        label: "Credits",
+                        value: selectedPlan.creditsPerCycle?.toLocaleString(),
+                      },
+                      {
+                        label: "Members",
+                        value: selectedPlan.maxParticipants || "Limited",
+                      },
+                      {
+                        label: "Languages",
+                        value: selectedPlan.maxLanguages || "Limited",
+                      },
+                      {
+                        label: "Voice",
+                        value: selectedPlan.voiceCloneEnabled
+                          ? "Enabled"
+                          : "Basic",
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-2xl border border-border bg-surface-1/70 p-3 backdrop-blur"
                       >
-                        <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
-                          ✓
-                        </span>
-                        <span className="text-gray-700 font-medium">
+                        <p className="text-[11px] text-ink-muted">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 truncate text-[13px] font-semibold text-ink">
+                          {item.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-surface-1/70 p-2 backdrop-blur">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {comparisonPlans.map((plan) => {
+                        const isSelected = plan.id === selectedPlan.id;
+                        const isCurrent = plan.id === activePlanId;
+
+                        return (
+                          <button
+                            key={plan.id}
+                            type="button"
+                            onClick={() => setSelectedPlanId(plan.id)}
+                            className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left transition ${
+                              isSelected
+                                ? "border-ink bg-ink text-canvas"
+                                : "border-transparent bg-transparent text-ink hover:bg-surface-2"
+                            }`}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-[13px] font-semibold">
+                                {plan.name}
+                              </span>
+                              <span
+                                className={`block text-[11px] ${
+                                  isSelected
+                                    ? "text-canvas/70"
+                                    : "text-ink-muted"
+                                }`}
+                              >
+                                {isCurrent ? "Current plan" : "Available plan"}
+                              </span>
+                            </span>
+                            {isSelected && (
+                              <CheckCircle
+                                className="h-4 w-4 shrink-0"
+                                weight="fill"
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {selectedPlanFeatures.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedPlanFeatures.slice(0, 4).map((feature) => (
+                        <span
+                          key={feature}
+                          className="rounded-full border border-border bg-surface-1/70 px-3 py-1 text-[11px] font-medium text-ink-muted"
+                        >
                           {feature}
                         </span>
-                      </li>
-                    ))}
-                    {!parsedFeatures.length && (
-                      <>
-                        <li className="flex items-start gap-2.5 text-[13px]">
-                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
-                            ✓
-                          </span>
-                          <span className="text-gray-700 font-medium">
-                            {plan.creditsPerCycle?.toLocaleString()} credits per
-                            cycle
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-2.5 text-[13px]">
-                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
-                            ✓
-                          </span>
-                          <span className="text-gray-700 font-medium">
-                            {plan.voiceCloneEnabled
-                              ? "Voice Cloning Enabled"
-                              : "No Voice Cloning"}
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-2.5 text-[13px]">
-                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
-                            ✓
-                          </span>
-                          <span className="text-gray-700 font-medium">
-                            Web access for up to {plan.maxParticipants} members
-                          </span>
-                        </li>
-                      </>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {!selectedPlanIsCurrent && selectedPlanAction && (
+                      <button
+                        type="button"
+                        disabled={selectedPlanAction.disabled || isProcessing}
+                        onClick={() =>
+                          handleCheckout(
+                            selectedPlanCheckoutTotal,
+                            "Subscription",
+                            selectedPlan.slug,
+                            billingInterval,
+                          )
+                        }
+                        className={`inline-flex h-11 flex-1 items-center justify-center rounded-full px-4 text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          selectedPlanIsEnterprise
+                            ? "bg-ink text-canvas hover:opacity-90"
+                            : "border border-border bg-surface-1 text-ink hover:bg-surface-2"
+                        }`}
+                      >
+                        {isProcessing
+                          ? "Processing..."
+                          : selectedPlanAction.label}
+                      </button>
                     )}
-                  </ul>
+
+                    {selectedPlanIsCurrent &&
+                      subscription?.status === "active" &&
+                      selectedPlan.price > 0 && (
+                        <button
+                          type="button"
+                          disabled={isCancelling}
+                          onClick={() => setShowCancelDialog(true)}
+                          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-border bg-surface-1 px-4 text-[13px] font-semibold text-ink transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          Cancel Subscription
+                        </button>
+                      )}
+
+                    {selectedPlanIsCurrent &&
+                      (subscription?.status !== "active" ||
+                        selectedPlan.price === 0) && (
+                        <button
+                          type="button"
+                          disabled
+                          className="inline-flex h-11 flex-1 items-center justify-center rounded-full border border-border bg-surface-2 px-4 text-[13px] font-semibold text-ink-muted"
+                        >
+                          Current Plan
+                        </button>
+                      )}
+                  </div>
                 </CardContent>
-
-                <CardFooter className="p-0 mt-auto flex flex-col gap-2">
-                  {isCurrent && subscription?.currentPeriodEnd && (
-                    <p className="text-[11px] text-gray-400 font-medium text-center w-full">
-                      Renews on{" "}
-                      {new Date(
-                        subscription.currentPeriodEnd,
-                      ).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
-                  )}
-                  {billingInterval === "yearly" && (
-                    <p className="text-[11px] text-[#7F1DFF] font-semibold text-center w-full">
-                      Billed yearly: {formatMoney(displayTotal, "VND")}
-                    </p>
-                  )}
-                </CardFooter>
               </Card>
-            );
-          })
-        )}
-      </div>
 
-      <div className="mt-8 w-full max-w-3xl">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <div className="flex size-8 rounded-full bg-primary/10 items-center justify-center">
-              <Lightning className="h-4 w-4 text-primary" weight="fill" />
+              <Card className="rounded-[22px] border-border bg-canvas shadow-linear">
+                <CardHeader className="flex flex-row items-start justify-between gap-4 p-5">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-ink">
+                      Linked cards
+                    </CardTitle>
+                    <CardDescription className="mt-1 text-[12px]">
+                      Cards available for subscription renewal and credit
+                      top-up.
+                    </CardDescription>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-1 text-ink transition hover:bg-surface-2"
+                    aria-label="Add payment card"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </CardHeader>
+
+                <CardContent className="space-y-3 px-5 pb-5">
+                  {LINKED_PAYMENT_CARDS.map((card) => (
+                    <div
+                      key={card.id}
+                      className="relative overflow-hidden rounded-2xl border border-border bg-surface-1 p-4 shadow-sm"
+                    >
+                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.18),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_44%,rgba(0,0,0,0.08))]" />
+                      <div className="relative flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-canvas text-ink">
+                            <CreditCard className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-ink">
+                              {card.brand} ending {card.last4}
+                            </p>
+                            <p className="truncate text-[12px] text-ink-muted">
+                              {card.holder}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-2 hover:text-ink"
+                          aria-label={`${card.brand} card options`}
+                        >
+                          <DotsThree className="h-5 w-5" weight="bold" />
+                        </button>
+                      </div>
+
+                      <div className="relative mt-5 flex items-end justify-between gap-4">
+                        <div>
+                          <p className="font-mono text-[17px] font-semibold tracking-[0.22em] text-ink">
+                            **** **** **** {card.last4}
+                          </p>
+                          <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+                            Expires {card.expiry}
+                          </p>
+                        </div>
+                        <Badge className="rounded-full border border-border bg-canvas px-2.5 py-1 text-[11px] font-medium text-ink shadow-none hover:bg-canvas">
+                          {card.status}
+                        </Badge>
+                      </div>
+
+                      <div className="relative mt-4 flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Secured by Stripe billing
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
             </div>
-            <h2 className="text-3xl font-bold tracking-tight text-ink">
-              Need more credits?
-            </h2>
-          </div>
-          <p className="text-base text-muted-foreground">
-            Enter the number of credits you want. Volume discounts apply
-            automatically.
-          </p>
-        </div>
+          )}
+        </section>
+        <section className="mx-auto mt-6 w-full max-w-6xl">
+          <Card className="relative overflow-hidden rounded-[22px] border-border bg-canvas shadow-linear">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_0%,rgba(255,255,255,0.18),transparent_24%),radial-gradient(circle_at_90%_8%,rgba(255,255,255,0.1),transparent_26%),linear-gradient(135deg,rgba(255,255,255,0.1),rgba(255,255,255,0.02)_46%,rgba(0,0,0,0.18))] dark:bg-[radial-gradient(circle_at_8%_0%,rgba(255,255,255,0.1),transparent_24%),radial-gradient(circle_at_90%_8%,rgba(255,255,255,0.08),transparent_26%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015)_46%,rgba(0,0,0,0.34))]" />
+            <CardHeader className="relative flex flex-col gap-3 p-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface-1/80 text-ink shadow-sm backdrop-blur">
+                  <Lightning className="h-5 w-5" weight="fill" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-semibold text-ink">
+                    Top up credits
+                  </CardTitle>
+                  <CardDescription className="mt-1 text-[12px]">
+                    Add workspace credits with automatic volume discounts.
+                  </CardDescription>
+                </div>
+              </div>
 
-        <Card className="rounded-2xl border-2 border-hairline bg-surface-1 shadow-md overflow-hidden">
-          <CardContent className="p-8">
-            <div className="flex flex-col gap-8">
-              <div>
-                <label className="text-base font-semibold text-ink mb-3 block">
+              {topUpCredits > 0 && (
+                <div className="rounded-2xl border border-border bg-surface-1/70 px-4 py-3 text-right backdrop-blur">
+                  <p className="text-[11px] text-ink-muted">Estimated total</p>
+                  <p className="mt-1 text-lg font-semibold tracking-tight text-ink">
+                    {formatMoney(topUpTotal, "VND")}
+                  </p>
+                </div>
+              )}
+            </CardHeader>
+
+            <CardContent className="relative space-y-5 px-5 pb-5">
+              <div className="rounded-2xl border border-border bg-surface-1/70 p-4 backdrop-blur">
+                <label className="mb-3 block text-[13px] font-semibold text-ink">
                   How many credits do you need?
                 </label>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <div className="relative flex-1">
                     <input
                       type="number"
@@ -608,15 +808,15 @@ export default function WorkspacePlansPage() {
                         )
                       }
                       placeholder="e.g. 10000"
-                      className="w-full h-14 rounded-xl border-2 border-hairline bg-surface-1 px-5 text-xl font-medium text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
+                      className="h-14 w-full rounded-2xl border border-border bg-canvas px-5 text-xl font-semibold text-ink placeholder:text-ink-muted/45 transition focus:border-ink/40 focus:outline-none focus:ring-4 focus:ring-ink/5"
                     />
                   </div>
-                  <span className="text-base font-medium text-ink-muted shrink-0">
+                  <span className="shrink-0 px-1 text-[13px] font-medium text-ink-muted">
                     credits
                   </span>
                 </div>
 
-                <div className="flex gap-2.5 mt-4 flex-wrap">
+                <div className="mt-4 flex flex-wrap gap-2.5">
                   {[
                     { label: "10k", value: 10000 },
                     { label: "25k", value: 25000 },
@@ -627,7 +827,11 @@ export default function WorkspacePlansPage() {
                       key={preset.value}
                       type="button"
                       onClick={() => setTopUpCredits(preset.value)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all cursor-pointer ${topUpCredits === preset.value ? "bg-primary/10 text-primary border-primary shadow-sm" : "bg-surface-1 text-ink-muted border-hairline hover:border-ink-muted/30 hover:text-ink"}`}
+                      className={`rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
+                        topUpCredits === preset.value
+                          ? "border-ink bg-ink text-canvas"
+                          : "border-border bg-canvas text-ink-muted hover:bg-surface-2 hover:text-ink"
+                      }`}
                     >
                       {preset.label} credits
                     </button>
@@ -635,110 +839,110 @@ export default function WorkspacePlansPage() {
                 </div>
               </div>
 
-              {/* Volume Discounts */}
-              <div className="bg-surface-2/50 rounded-xl p-5 border border-hairline">
-                <p className="text-sm font-semibold text-ink mb-3">
-                  Volume discount tiers:
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits > 0 && topUpCredits < 10000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits > 0 && topUpCredits < 10000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      &lt; 10k
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      10 VND/cr
-                    </span>
+              <div className="rounded-2xl border border-border bg-surface-1/70 p-4 backdrop-blur">
+                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-[13px] font-semibold text-ink">
+                      Volume discount tiers
+                    </p>
+                    <p className="text-[12px] text-ink-muted">
+                      Higher credit packs reduce the price per credit.
+                    </p>
                   </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 10000 && topUpCredits < 25000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 10000 && topUpCredits < 25000 ? "text-primary" : "text-ink-muted"}`}
+                  {discount > 0 && (
+                    <Badge className="w-fit rounded-full border border-border bg-canvas px-2.5 py-1 text-[11px] font-medium text-ink shadow-none hover:bg-canvas">
+                      Save {discount}%
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {[
+                    {
+                      label: "< 10k",
+                      rateText: "10 VND/cr",
+                      active: topUpCredits > 0 && topUpCredits < 10000,
+                    },
+                    {
+                      label: "10k+",
+                      rateText: "9 VND/cr",
+                      discountText: "10%",
+                      active: topUpCredits >= 10000 && topUpCredits < 25000,
+                    },
+                    {
+                      label: "25k+",
+                      rateText: "8.5 VND/cr",
+                      discountText: "15%",
+                      active: topUpCredits >= 25000 && topUpCredits < 50000,
+                    },
+                    {
+                      label: "50k+",
+                      rateText: "8 VND/cr",
+                      discountText: "20%",
+                      active: topUpCredits >= 50000,
+                    },
+                  ].map((tier) => (
+                    <div
+                      key={tier.label}
+                      className={`rounded-2xl border p-3 transition ${
+                        tier.active
+                          ? "border-ink bg-ink text-canvas"
+                          : "border-border bg-canvas text-ink"
+                      }`}
                     >
-                      10k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      9 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (10%)
-                      </span>
-                    </span>
-                  </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 25000 && topUpCredits < 50000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 25000 && topUpCredits < 50000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      25k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      8.5 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (15%)
-                      </span>
-                    </span>
-                  </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 50000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 50000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      50k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      8 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (20%)
-                      </span>
-                    </span>
-                  </div>
+                      <p
+                        className={`text-[12px] font-semibold ${
+                          tier.active ? "text-canvas/70" : "text-ink-muted"
+                        }`}
+                      >
+                        {tier.label}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-baseline gap-1.5">
+                        <span className="text-[13px] font-semibold">
+                          {tier.rateText}
+                        </span>
+                        {tier.discountText && (
+                          <span
+                            className={`text-[11px] font-semibold ${
+                              tier.active ? "text-canvas/70" : "text-ink-muted"
+                            }`}
+                          >
+                            ({tier.discountText})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               {topUpCredits > 0 && (
-                <div className="rounded-xl bg-surface-2 border border-hairline p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink-muted">
-                      Rate applied
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {discount > 0 && (
-                        <Badge className="bg-semantic-success/20 hover:bg-semantic-success/20 text-semantic-success border-none text-xs px-2 py-0.5 rounded-full font-bold shadow-none">
-                          Save {discount}%
-                        </Badge>
-                      )}
-                      <span className="text-sm font-semibold text-ink">
-                        {rate} VND / credit
-                      </span>
-                    </div>
+                <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border bg-surface-1/70 p-4 backdrop-blur sm:grid-cols-3">
+                  <div>
+                    <p className="text-[11px] text-ink-muted">Rate applied</p>
+                    <p className="mt-1 text-[13px] font-semibold text-ink">
+                      {rate} VND / credit
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink-muted">
-                      Credits to add
-                    </span>
-                    <span className="text-sm font-semibold text-ink">
+                  <div>
+                    <p className="text-[11px] text-ink-muted">Credits to add</p>
+                    <p className="mt-1 text-[13px] font-semibold text-ink">
                       {topUpCredits.toLocaleString()} credits
-                    </span>
+                    </p>
                   </div>
-                  <div className="border-t border-hairline pt-3 mt-1 flex items-center justify-between">
-                    <span className="text-base font-bold text-ink">Total</span>
-                    <span className="text-2xl font-bold text-ink tracking-tight">
+                  <div className="sm:text-right">
+                    <p className="text-[11px] text-ink-muted">Total</p>
+                    <p className="mt-1 text-lg font-semibold tracking-tight text-ink">
                       {formatMoney(topUpTotal, "VND")}
-                    </span>
+                    </p>
                   </div>
                 </div>
               )}
 
               {topUpCredits > 0 && topUpCredits < 1500 && (
-                <p className="text-xs font-semibold text-rose-500 mt-2 bg-rose-500/10 p-3 rounded-lg">
-                  ⚠️ Minimum top-up amount is 1,500 credits (equivalent to
-                  15,000 VND Stripe transaction limit).
+                <p className="rounded-2xl border border-border bg-surface-1/70 p-3 text-[12px] font-medium text-ink-muted backdrop-blur">
+                  Minimum top-up amount is 1,500 credits, equivalent to the
+                  15,000 VND Stripe transaction limit.
                 </p>
               )}
 
@@ -748,7 +952,7 @@ export default function WorkspacePlansPage() {
                 onClick={() =>
                   handleCheckout(topUpTotal, "CreditTopUp", "", "")
                 }
-                className="inline-flex items-center justify-center w-full rounded-xl h-14 text-base font-semibold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 bg-primary hover:bg-primary-hover text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full bg-ink px-4 text-[13px] font-semibold text-canvas shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {isProcessing ? (
                   "Processing..."
@@ -757,16 +961,15 @@ export default function WorkspacePlansPage() {
                     <span>
                       Complete Top Up of {topUpCredits.toLocaleString()} credits
                     </span>
-                    <ArrowRight className="ml-2 h-5 w-5" />
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </>
                 ) : (
                   "Enter credit amount above (Min 1,500)"
                 )}
               </button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </section>
       </div>
       {/* Cancel Subscription confirmation dialog */}
       <Dialog
@@ -837,9 +1040,9 @@ export default function WorkspacePlansPage() {
           </div>
 
           <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1">
-            <p>• Credits already used this cycle will not be refunded.</p>
-            <p>• You can re-subscribe at any time.</p>
-            <p>• Active rooms and history will not be deleted.</p>
+            <p>- Credits already used this cycle will not be refunded.</p>
+            <p>- You can re-subscribe at any time.</p>
+            <p>- Active rooms and history will not be deleted.</p>
           </div>
 
           <DialogFooter className="flex gap-2 flex-row justify-end">

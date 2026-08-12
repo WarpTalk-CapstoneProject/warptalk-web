@@ -26,13 +26,17 @@ function DayChip({
   isToday,
   hasMeetings,
   onSelect,
+  tone = "default",
 }: {
   day: Date;
   isSelected: boolean;
   isToday: boolean;
   hasMeetings: boolean;
   onSelect: () => void;
+  tone?: "default" | "inverse";
 }) {
+  const isInverse = tone === "inverse";
+
   return (
     <button
       type="button"
@@ -41,10 +45,21 @@ function DayChip({
       aria-label={LONG_DATE.format(day)}
       className={cn(
         "flex w-11 shrink-0 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors",
-        isSelected ? "bg-primary/12" : "hover:bg-surface-2",
+        isSelected
+          ? isInverse
+            ? "bg-white/15"
+            : "bg-primary/12"
+          : isInverse
+            ? "hover:bg-white/10"
+            : "hover:bg-surface-2",
       )}
     >
-      <span className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">
+      <span
+        className={cn(
+          "text-[10px] font-medium uppercase tracking-wide",
+          isInverse ? "text-white/70" : "text-ink-muted",
+        )}
+      >
         {WEEKDAY.format(day)}
       </span>
       <span
@@ -53,8 +68,12 @@ function DayChip({
           isSelected
             ? "bg-primary text-primary-foreground font-semibold"
             : isToday
-              ? "font-semibold text-primary"
-              : "text-ink",
+              ? isInverse
+                ? "font-semibold text-white"
+                : "font-semibold text-primary"
+              : isInverse
+                ? "text-white/90"
+                : "text-ink",
         )}
       >
         {day.getDate()}
@@ -65,7 +84,11 @@ function DayChip({
         aria-hidden
         className={cn(
           "h-1 w-1 rounded-full",
-          hasMeetings && !isSelected ? "bg-primary" : "bg-transparent",
+          hasMeetings && !isSelected
+            ? isInverse
+              ? "bg-white/80"
+              : "bg-primary"
+            : "bg-transparent",
         )}
       />
     </button>
@@ -90,6 +113,7 @@ export function MeetingDayStrip({
   onSelectDate,
   today,
   className,
+  tone = "default",
 }: {
   rooms: TranslationRoomDto[];
   selectedDate: Date;
@@ -97,9 +121,11 @@ export function MeetingDayStrip({
   /** Passed in so a page that already fixed "now" at mount does not disagree with this one. */
   today: Date;
   className?: string;
+  tone?: "default" | "inverse";
 }) {
   const week = useMemo(() => weekOf(selectedDate), [selectedDate]);
   const marked = useMemo(() => daysWithMeetings(rooms), [rooms]);
+  const isInverse = tone === "inverse";
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
@@ -107,7 +133,12 @@ export function MeetingDayStrip({
         type="button"
         onClick={() => onSelectDate(shiftWeeks(selectedDate, -1))}
         aria-label="Previous week"
-        className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+        className={cn(
+          "grid size-7 cursor-pointer place-items-center rounded-full transition-colors",
+          isInverse
+            ? "text-white/70 hover:bg-white/10 hover:text-white"
+            : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+        )}
       >
         <CaretLeft size={14} weight="bold" />
       </button>
@@ -120,6 +151,7 @@ export function MeetingDayStrip({
           isToday={isSameDay(day, today)}
           hasMeetings={marked.has(startOfDay(day))}
           onSelect={() => onSelectDate(day)}
+          tone={tone}
         />
       ))}
 
@@ -127,7 +159,12 @@ export function MeetingDayStrip({
         type="button"
         onClick={() => onSelectDate(shiftWeeks(selectedDate, 1))}
         aria-label="Next week"
-        className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+        className={cn(
+          "grid size-7 cursor-pointer place-items-center rounded-full transition-colors",
+          isInverse
+            ? "text-white/70 hover:bg-white/10 hover:text-white"
+            : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+        )}
       >
         <CaretRight size={14} weight="bold" />
       </button>
