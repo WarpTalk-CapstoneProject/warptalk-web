@@ -25,6 +25,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { ListDisplayPopover } from "@/components/ui/list-display-popover";
 import {
@@ -70,6 +71,23 @@ const LANGUAGE_OPTIONS = languagesInScope("voiceProfile").map((language) => ({
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_PROFILE_NAME_LENGTH = 100;
+const CONSENT_ITEMS = [
+  { key: "ownVoiceConfirmed", label: "This is my own voice." },
+  { key: "aiUseConfirmed", label: "I allow WarpTalk to use this voice profile for AI speech translation." },
+  { key: "syntheticVoiceAcknowledged", label: "I understand generated speech may sound like me in supported languages." },
+  { key: "noImpersonationConfirmed", label: "I will not use this voice profile to impersonate, deceive, or mislead others." },
+  { key: "retentionAcknowledged", label: "I understand I can delete this voice profile later." },
+] as const;
+
+type ConsentKey = (typeof CONSENT_ITEMS)[number]["key"];
+const EMPTY_CONSENT: Record<ConsentKey, boolean> = {
+  ownVoiceConfirmed: false,
+  aiUseConfirmed: false,
+  syntheticVoiceAcknowledged: false,
+  noImpersonationConfirmed: false,
+  retentionAcknowledged: false,
+};
+
 type VoiceProfileFilter = "active" | "ready" | "missing" | "all";
 type VoiceProfileSortKey = "name" | "member" | "health" | "language" | "status";
 type SortDirection = "asc" | "desc";
@@ -152,6 +170,7 @@ export default function VoiceProfilesPage() {
   const [language, setLanguage] = useState("vi-VN");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [sampleAssessment, setSampleAssessment] = useState<string | null>(null);
+  const [consent, setConsent] = useState<Record<ConsentKey, boolean>>(EMPTY_CONSENT);
   const [isCheckingSample, setIsCheckingSample] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
@@ -229,6 +248,8 @@ export default function VoiceProfilesPage() {
   const allVisibleProfilesSelected =
     filteredProfileIds.length > 0 && filteredProfileIds.every((id) => selectedProfileIds.includes(id));
   const hasSelectedProfiles = selectedProfiles.length > 0;
+  const consentComplete = CONSENT_ITEMS.every((item) => consent[item.key]);
+  const canSaveProfile = Boolean(displayName.trim() && sampleFile && consentComplete && !isCheckingSample && !isRecording);
 
   useEffect(() => {
     if (!hasSelectedProfiles || !selectionActionRef.current) return;
@@ -351,6 +372,7 @@ export default function VoiceProfilesPage() {
     setLanguage(normalizeLanguage(workspaceLanguage) ?? "vi-VN");
     setSampleFile(null);
     setSampleAssessment(null);
+    setConsent(EMPTY_CONSENT);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -360,6 +382,7 @@ export default function VoiceProfilesPage() {
     setLanguage(normalizeLanguage(profile?.language) ?? normalizeLanguage(workspaceLanguage) ?? "vi-VN");
     setSampleFile(null);
     setSampleAssessment(null);
+    setConsent(EMPTY_CONSENT);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setIsCreateOpen(true);
   }
@@ -458,14 +481,19 @@ export default function VoiceProfilesPage() {
       toast.error("Record or upload a clear voice sample first.");
       return;
     }
+    if (!consentComplete) {
+      toast.error("Complete consent to continue.");
+      return;
+    }
 
     try {
       await createMutation.mutateAsync({
         displayName: displayName.trim(),
         language,
         sample: sampleFile,
+        ...consent,
       });
-      toast.success("Voice profile created");
+      toast.success("Voice profile saved");
       setIsCreateOpen(false);
       resetForm();
     } catch {
@@ -549,7 +577,7 @@ export default function VoiceProfilesPage() {
               className="flex h-[28px] items-center gap-1.5 rounded-full bg-foreground pl-2.5 pr-3 text-[13px] font-medium text-background shadow-sm transition-opacity hover:opacity-90"
             >
               <Plus weight="bold" size={12} />
-              New Profile
+              Add voice profile
             </button>
           </div>
         </section>
@@ -698,7 +726,7 @@ export default function VoiceProfilesPage() {
       >
         <DialogContent className="max-h-[calc(100vh-48px)] w-[calc(100vw-32px)] overflow-y-auto p-5 sm:max-w-[620px]">
           <DialogHeader className="gap-1 pr-8">
-            <DialogTitle>Upload voice sample</DialogTitle>
+            <DialogTitle>Set up voice profile</DialogTitle>
             <DialogDescription>
               Create or replace a voice profile with one clear speaker sample.
             </DialogDescription>
@@ -827,13 +855,44 @@ export default function VoiceProfilesPage() {
                 </div>
               </div>
             </div>
+            <div className="grid gap-3 rounded-lg border border-border bg-canvas p-3">
+              <div>
+                <p className="text-[13px] font-medium text-ink">Voice consent agreement</p>
+                <p className="mt-1 text-xs leading-5 text-ink-muted">
+                  Required before WarpTalk can save and use this voice profile for AI speech.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                {CONSENT_ITEMS.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-start gap-2 text-xs leading-5 text-ink-muted"
+                  >
+                    <Checkbox
+                      checked={consent[item.key]}
+                      onCheckedChange={(checked) =>
+                        setConsent((current) => ({
+                          ...current,
+                          [item.key]: checked === true,
+                        }))
+                      }
+                      className="mt-0.5"
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                ))}
+              </div>
+              {!consentComplete && (
+                <p className="text-xs text-ink-subtle">Complete consent to continue.</p>
+              )}
+            </div>
             <DialogFooter className="!mx-[-20px] !mb-[-20px] border-t border-border !p-3">
               <Button
                 type="submit"
-                disabled={createMutation.isPending || isCheckingSample || isRecording}
-                className="min-w-[96px] text-white"
+                disabled={createMutation.isPending || !canSaveProfile}
+                className="min-w-[160px] text-white"
               >
-                {createMutation.isPending ? "Uploading..." : "Save sample"}
+                {createMutation.isPending ? "Saving..." : "Agree & save voice profile"}
               </Button>
             </DialogFooter>
           </form>
@@ -977,6 +1036,11 @@ function VoiceProfileRow({
           >
             {profile.isActive ? "Active" : profile.status}
           </Badge>
+          {profile.hasSample ? (
+            <span className="mt-0.5 block truncate text-[10px] text-ink-muted">
+              {voiceConsentLabel(profile)}
+            </span>
+          ) : null}
         </div>
       )}
     </div>
@@ -1221,4 +1285,10 @@ function isVoiceProfileManager(role: string | null) {
 
 function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function voiceConsentLabel(profile: VoiceProfileDto) {
+  const status = profile.consentStatus?.toLowerCase();
+  if (status === "granted") return "Consent active";
+  return "Needs consent";
 }

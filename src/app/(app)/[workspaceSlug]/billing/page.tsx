@@ -18,6 +18,7 @@ import {
 } from "@phosphor-icons/react";
 import { isAxiosError } from "axios";
 import Link from "next/link";
+import { WorkspaceEmptyState } from "@/components/workspace/page-chrome";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useEffect, useState, useMemo } from "react";
@@ -683,42 +684,35 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           }
         />
 
-        <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm text-ink overflow-hidden">
-          <CardContent className="flex items-center justify-between gap-4 p-5 h-full">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-ink border border-hairline/50 shrink-0">
-                <CreditCard className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-ink-muted mb-1">
-                  Current subscription plan
-                </p>
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl font-bold tracking-tight">
-                    {isSubscriptionLoading ? "..." : displayPlanName}
-                  </p>
-                  {subscription && (
-                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 border-none rounded-md text-[11px] px-1.5 py-0.5 font-semibold">
-                      Active
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-ink-muted mt-1">
-                  {isSubscriptionLoading
-                    ? "Loading plan details..."
-                    : subscription
-                      ? `${displayPlanPrice} / month`
-                      : "No active plan. Upgrade to unlock advanced AI capabilities."}
-                </p>
-              </div>
+        <div className="flex items-start justify-between gap-4 rounded-[14px] border border-border bg-canvas p-4 shadow-linear">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[12px] font-medium text-ink-muted">Current plan</span>
             </div>
-            <Link href={`/${workspaceSlug}/payment/plans`}>
-              <button className="inline-flex h-8 items-center rounded-md border border-hairline bg-surface-2 hover:bg-surface-3 px-3 text-xs font-semibold text-ink transition duration-150 cursor-pointer shrink-0">
-                {subscription ? "Change Plan" : "Upgrade Plan"}
-              </button>
-            </Link>
-          </CardContent>
-        </Card>
+            <div className="mt-3 flex items-center gap-2">
+              <p className="text-[24px] font-semibold leading-none tracking-tight text-ink">
+                {isSubscriptionLoading ? "…" : displayPlanName}
+              </p>
+              {subscription && (
+                <Badge className="rounded-full border-none bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400">
+                  Active
+                </Badge>
+              )}
+            </div>
+            <p className="mt-1.5 text-[12px] text-ink-muted">
+              {isSubscriptionLoading
+                ? "Loading plan details…"
+                : subscription
+                  ? `${displayPlanPrice} / month`
+                  : "No active plan. Upgrade to unlock advanced AI capabilities."}
+            </p>
+          </div>
+          <Link href={`/${workspaceSlug}/payment/plans`} className="shrink-0">
+            <span className="inline-flex h-[28px] items-center rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2">
+              {subscription ? "Change plan" : "Upgrade plan"}
+            </span>
+          </Link>
+        </div>
       </section>
 
       <Tabs value={billingTab} onValueChange={setBillingTab} className="w-full">
@@ -1824,31 +1818,25 @@ function BillingNoSubscriptionState({
 }: {
   workspaceSlug: string;
 }) {
+  // The shared empty state, not a 320px card floating in the middle of an 80vh void. It used to
+  // be centred vertically in the viewport, so the copy wrapped to six short lines in a narrow
+  // column while the rest of the page was blank — the state read as an error page for a workspace
+  // that is simply new.
   return (
-    <div className="flex h-[80vh] items-center justify-center w-full">
-      <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">
-        <CardHeader className="flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <CreditCard className="h-6 w-6" />
-          </div>
-          <CardTitle className="text-lg font-bold">
-            No active subscription
-          </CardTitle>
-          <CardDescription className="text-xs">
-            This workspace does not have a billing plan yet, so there is no
-            balance or usage to report. Choose a plan to start tracking credits
-            and AI usage.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center pt-2">
+    <div className="px-4 py-4">
+      <WorkspaceEmptyState
+        icon={<CreditCard className="h-7 w-7" />}
+        title="No active subscription"
+        description="This workspace has no billing plan yet, so there is no balance or usage to report. Choose a plan to start tracking credits and AI usage."
+        action={
           <Link href={`/${workspaceSlug}/payment/plans`}>
-            <button className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover px-4 text-xs font-semibold text-white transition duration-150 cursor-pointer">
+            <span className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90">
               <Wallet className="h-3.5 w-3.5" />
-              <span>Choose a plan</span>
-            </button>
+              Choose a plan
+            </span>
           </Link>
-        </CardContent>
-      </Card>
+        }
+      />
     </div>
   );
 }
@@ -1904,18 +1892,17 @@ function BillingMetric({
   value: string;
   detail: string;
 }) {
+  // Same box as the dashboard's tiles: 14px radius on `bg-canvas`, a 12px muted label, a 24px
+  // semibold value, one line of context. It was a translucent `bg-surface-1/40` card with a 48px
+  // icon tile and a 2xl bold number — a third card language on a page that already had two.
   return (
-    <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm text-ink overflow-hidden">
-      <CardContent className="flex items-center gap-4 p-5 h-full">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-ink border border-hairline/50 shrink-0">
-          <Icon className="h-6 w-6 text-primary" />
-        </div>
-        <div>
-          <p className="text-xs text-ink-muted mb-1">{label}</p>
-          <p className="text-2xl font-bold tracking-tight">{value}</p>
-          <p className="text-xs text-ink-muted mt-1">{detail}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="rounded-[14px] border border-border bg-canvas p-4 shadow-linear">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] font-medium text-ink-muted">{label}</span>
+        <Icon className="h-4 w-4 text-ink-muted" />
+      </div>
+      <p className="mt-3 text-[24px] font-semibold leading-none tracking-tight text-ink">{value}</p>
+      <p className="mt-1.5 text-[12px] text-ink-muted">{detail}</p>
+    </div>
   );
 }

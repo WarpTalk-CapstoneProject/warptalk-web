@@ -50,6 +50,7 @@
     "test:copy-room-code": "node scripts/check-copy-room-code-contract.mjs",
     "test:merge-participants": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/merge-participants.test.ts",
     "test:voice-preference": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/voice/__tests__/voice-preference.test.ts",
+    "test:wt-355-voice-consent": "node scripts/check-wt-355-voice-consent-contract.mjs",
     "test:language-flag": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/language-flag.test.ts",
     "test:notification-center": "node scripts/check-notification-center-contract.mjs",
     "test:admin-portal": "node scripts/check-admin-portal-contract.mjs",

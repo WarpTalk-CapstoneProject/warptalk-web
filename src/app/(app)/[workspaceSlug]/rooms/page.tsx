@@ -533,6 +533,20 @@ export default function MeetingsPageLinear() {
         .some((value) => value.toLowerCase().includes(normalizedQuery));
     };
 
+    // A day picked off the strip wins over the tab, in every tab. Picking a date is the
+    // more specific question ("what is on Tuesday?") and the tab is the general one.
+    if (dayFilter) {
+      return sortRooms(
+        rooms.filter(
+          (r) => matchesSearch(r) && isScheduledOn(r, dayFilter),
+        ),
+        sortKey,
+        sortDirection,
+        members,
+        user,
+      );
+    }
+
     if (activeTab === "active") {
       const now = new Date();
       const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60000);
@@ -553,20 +567,6 @@ export default function MeetingsPageLinear() {
               (!r.scheduledAt ||
                 (new Date(r.scheduledAt) <= fifteenMinsFromNow &&
                   new Date(r.scheduledAt) >= twoHoursAgo)))),
-        ),
-        sortKey,
-        sortDirection,
-        members,
-        user,
-      );
-    }
-    // A day off the strip narrows whichever tab is open. It replaced the Scheduled TAB, and
-    // WT-247's reasoning still holds: what belongs to a day is what was BOOKED for it, not what
-    // its status happens to be now — the row renders its own state.
-    if (dayFilter) {
-      return sortRooms(
-        rooms.filter(
-          (r) => matchesSearch(r) && isScheduledOn(r, dayFilter),
         ),
         sortKey,
         sortDirection,
