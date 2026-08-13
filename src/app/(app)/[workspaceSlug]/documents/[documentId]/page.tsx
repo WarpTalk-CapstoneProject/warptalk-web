@@ -185,7 +185,11 @@ export default function DocumentDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-8 text-ink animate-fade-in max-w-7xl mx-auto w-full">
+    /* h-full + min-h-0, not min-h-full: the page owns the viewport and the panes scroll inside
+       it. With min-h-full the whole page grew with the document, which is what pushed the
+       properties panel off the top of a 40KB report and made it unreachable without scrolling
+       back past everything. */
+    <div className="flex h-full min-h-0 flex-col gap-6 px-4 py-4 pb-8 text-ink animate-fade-in max-w-7xl mx-auto w-full">
       {/* Back button & Header */}
       <div className="flex flex-col gap-2">
         <button
@@ -257,14 +261,15 @@ export default function DocumentDetailPage({ params }: PageProps) {
       </div>
 
       {/* Main Grid: Original File Card vs Right (Properties Sidebar) */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px] items-start">
+      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
         {/* Central panel — the document itself.
             It used to be a card containing a second card containing the file's NAME, size,
             format badge and a Download button: everything about the file except the file. The
             page asks you to approve a document, so the document is what belongs here, flat, with
             no chrome between the reader and the text. The name and format live in the properties
             panel to the right, which already lists them. */}
-        <div className="flex flex-col gap-6 min-w-0">
+        {/* The scroll lives HERE, on the document, not on the page. */}
+        <div className="flex min-h-0 min-w-0 flex-col gap-6 overflow-y-auto lg:h-full">
           <DocumentPreview
             workspaceId={activeWorkspaceId}
             documentId={doc.id}
@@ -275,8 +280,11 @@ export default function DocumentDetailPage({ params }: PageProps) {
           />
         </div>
 
-        {/* Right Sidebar: Properties & Access Policies */}
-        <div className="flex flex-col gap-6">
+        {/* Right sidebar: sticky, and scrolls on its own when its own content is tall. It stays
+            beside the document however long the document is — approving a file means reading it
+            AND checking who it will be shared with, and those two facts were previously never on
+            screen at the same time. */}
+        <div className="flex flex-col gap-6 lg:sticky lg:top-0 lg:max-h-full lg:overflow-y-auto lg:pb-2">
           <DocumentMetadataCard
             doc={doc}
             membersList={membersList}

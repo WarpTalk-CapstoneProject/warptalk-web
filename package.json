@@ -121,6 +121,7 @@
     "livekit-client": "^2.19.0",
     "lucide-react": "^1.14.0",
     "lumidot": "^1.0.0",
+    "mammoth": "^1.12.1",
     "motion": "^12.39.0",
     "next": "16.2.12",
     "next-auth": "5.0.0-beta.32",
