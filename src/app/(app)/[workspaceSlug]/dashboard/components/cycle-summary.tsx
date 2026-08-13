@@ -51,17 +51,12 @@ export function CycleSummary({
 }) {
   if (!credits) {
     return (
-      /* The one promotional surface on this page, and the only place colour belongs: a soft
-         blurred gradient behind the copy, the way OpenAI's platform banner does it. Two blurred
-         radial blobs rather than a linear-gradient image — they stay soft at any width, cost no
-         asset, and sit under `overflow-hidden` so nothing bleeds past the corner radius. */
-      <div className="relative overflow-hidden rounded-[14px] border border-border bg-surface-1 px-4 py-4">
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -right-16 -top-24 size-72 rounded-full bg-[var(--primary)]/25 blur-3xl" />
-          <div className="absolute -bottom-28 right-32 size-64 rounded-full bg-emerald-400/20 blur-3xl" />
-          <div className="absolute -top-20 right-64 size-56 rounded-full bg-fuchsia-400/15 blur-3xl" />
-        </div>
-        <div className="relative flex flex-wrap items-center justify-between gap-3">
+      /* Plain. The gradient this used to carry now lives in DashboardHero above.
+         Tying the page's one decorative surface to an ERROR state meant a workspace with a plan
+         got a flat page with no top to it, and a workspace without one got its warning dressed up
+         as a promotion. This is a fact about the workspace, and it should read like one. */
+      <div className="rounded-[14px] border border-hairline bg-surface-1 px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[13px] font-medium text-ink">
               No plan on this workspace
@@ -73,7 +68,7 @@ export function CycleSummary({
           </div>
           <Link
             href={plansHref}
-            className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full bg-foreground px-3 text-[13px] font-medium text-background transition hover:opacity-90"
+            className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 text-[13px] font-medium text-ink transition hover:bg-surface-2"
           >
             Choose a plan
             <ArrowUpRight className="h-3.5 w-3.5" />
