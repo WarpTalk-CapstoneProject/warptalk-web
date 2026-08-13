@@ -159,6 +159,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const addWorkspaceTab = useWorkspaceTabsStore((state) => state.addTab);
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const logout = useAuthStore((state) => state.logout);
   const activeMeetingRoomId = useActiveMeetingStore(
@@ -166,7 +167,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
   const openTour = useOnboardingStore((state) => state.openTour);
-  const tourSeenAt = useOnboardingStore((state) => state.tourSeenAt);
+  const tourSeenAtByUser = useOnboardingStore((state) => state.tourSeenAtByUser);
   const [mounted, setMounted] = useState(false);
   
   // `isError` and `refetch` were not read. The gate below spun on `!activeWorkspaceId`, and a
@@ -242,17 +243,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
    * lands next to the control rather than on it.
    *
    * The check is repeated inside the timer rather than only in the dependency array, because
-   * `tourSeenAt` is persisted and zustand rehydrates it after the first client render — reading
+   * The record is persisted and zustand rehydrates it after the first client render — reading
    * it once at effect time would show a returning user the tour they finished last week.
    */
   useEffect(() => {
-    if (tourSeenAt !== null || !activeWorkspaceSlug) return;
+    // Keyed by user, so signing out and back in does not re-run a tour this person already
+    // dismissed — which is exactly what the previous single flag did, because it was cleared
+    // on every sign-in for account isolation.
+    if (!currentUserId || !activeWorkspaceSlug) return;
+    if (tourSeenAtByUser[currentUserId] != null) return;
 
     const timer = setTimeout(() => {
-      if (useOnboardingStore.getState().tourSeenAt === null) openTour();
+      if (!useOnboardingStore.getState().hasSeenTour(currentUserId)) openTour();
     }, 900);
     return () => clearTimeout(timer);
-  }, [tourSeenAt, activeWorkspaceSlug, openTour]);
+  }, [tourSeenAtByUser, currentUserId, activeWorkspaceSlug, openTour]);
 
   useEffect(() => {
     if (mounted && !isAuthenticated) {
