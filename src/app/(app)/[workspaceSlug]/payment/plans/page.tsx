@@ -32,10 +32,8 @@ import {
   CaretLeft,
   CheckCircle,
   CreditCard,
-  DotsThree,
   Lightning,
   Lock,
-  Plus,
   ShieldCheck,
   Wallet,
   X,
@@ -100,24 +98,19 @@ function getPlanDescription(plan: PlanDto) {
     : "Basic workspace access for getting started with meetings and collaboration.";
 }
 
-const LINKED_PAYMENT_CARDS = [
-  {
-    id: "primary-card",
-    brand: "Visa",
-    last4: "4242",
-    holder: "Alice Smith",
-    expiry: "12/28",
-    status: "Primary",
-  },
-  {
-    id: "backup-card",
-    brand: "Mastercard",
-    last4: "1188",
-    holder: "Workspace backup",
-    expiry: "09/27",
-    status: "Backup",
-  },
-];
+/* There is no linked-card list, and this panel must not invent one.
+ *
+ * It briefly rendered two hardcoded cards — a Visa ending 4242 held by "Alice Smith" and a
+ * Mastercard "backup" — under the heading "Cards available for subscription renewal and credit
+ * top-up" and the line "Secured by Stripe billing". An owner reading that concludes the
+ * workspace has payment methods on file. It does not: neither billing.service.ts nor
+ * types/billing.ts has a payment-method endpoint or DTO, and the buttons beside those cards
+ * ("Add payment card", the per-card menu) had no handlers, so nothing on screen could correct
+ * the impression.
+ *
+ * What is true is below: the card is collected by Stripe at checkout and held by Stripe, not
+ * by this workspace. When a saved-method endpoint exists, this panel can list what it returns.
+ */
 
 export default function WorkspacePlansPage() {
   const router = useRouter();
@@ -688,75 +681,51 @@ export default function WorkspacePlansPage() {
               </Card>
 
               <Card className="rounded-[22px] border-border bg-canvas shadow-linear">
-                <CardHeader className="flex flex-row items-start justify-between gap-4 p-5">
-                  <div>
-                    <CardTitle className="text-base font-semibold text-ink">
-                      Linked cards
-                    </CardTitle>
-                    <CardDescription className="mt-1 text-[12px]">
-                      Cards available for subscription renewal and credit
-                      top-up.
-                    </CardDescription>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-1 text-ink transition hover:bg-surface-2"
-                    aria-label="Add payment card"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
+                <CardHeader className="p-5">
+                  <CardTitle className="text-base font-semibold text-ink">
+                    How payment works
+                  </CardTitle>
+                  <CardDescription className="mt-1 text-[12px]">
+                    WarpTalk does not hold a card for this workspace.
+                  </CardDescription>
                 </CardHeader>
 
                 <CardContent className="space-y-3 px-5 pb-5">
-                  {LINKED_PAYMENT_CARDS.map((card) => (
-                    <div
-                      key={card.id}
-                      className="relative overflow-hidden rounded-2xl border border-border bg-surface-1 p-4 shadow-sm"
-                    >
-                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.18),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_44%,rgba(0,0,0,0.08))]" />
-                      <div className="relative flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-canvas text-ink">
-                            <CreditCard className="h-5 w-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-semibold text-ink">
-                              {card.brand} ending {card.last4}
-                            </p>
-                            <p className="truncate text-[12px] text-ink-muted">
-                              {card.holder}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-2 hover:text-ink"
-                          aria-label={`${card.brand} card options`}
-                        >
-                          <DotsThree className="h-5 w-5" weight="bold" />
-                        </button>
+                  <div className="rounded-2xl border border-border bg-surface-1 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-canvas text-ink">
+                        <CreditCard className="h-5 w-5" />
                       </div>
-
-                      <div className="relative mt-5 flex items-end justify-between gap-4">
-                        <div>
-                          <p className="font-mono text-[17px] font-semibold tracking-[0.22em] text-ink">
-                            **** **** **** {card.last4}
-                          </p>
-                          <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-ink-muted">
-                            Expires {card.expiry}
-                          </p>
-                        </div>
-                        <Badge className="rounded-full border border-border bg-canvas px-2.5 py-1 text-[11px] font-medium text-ink shadow-none hover:bg-canvas">
-                          {card.status}
-                        </Badge>
-                      </div>
-
-                      <div className="relative mt-4 flex items-center gap-1.5 text-[11px] font-medium text-ink-muted">
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                        Secured by Stripe billing
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-ink">
+                          Card details are entered at checkout
+                        </p>
+                        <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
+                          Choosing a plan or topping up credits opens Stripe
+                          Checkout. The card is collected and stored there, so
+                          nothing sensitive passes through or rests in WarpTalk.
+                        </p>
                       </div>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-surface-1 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-canvas text-ink">
+                        <ShieldCheck className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-ink">
+                          Managing a saved card
+                        </p>
+                        <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
+                          Replacing or removing a card is done from the Stripe
+                          receipt emailed after each payment. WarpTalk has no
+                          saved-card list to show here yet.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
