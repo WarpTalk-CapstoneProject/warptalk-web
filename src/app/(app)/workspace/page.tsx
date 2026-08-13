@@ -27,6 +27,7 @@ import {
   useSelectWorkspace,
   useMyJoinRequests,
 } from "@/hooks/use-workspace";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import type { WorkspaceInvitationDto } from "@/types/workspace";
 
 export default function WorkspaceOnboardingGatePage() {
@@ -86,6 +87,10 @@ export default function WorkspaceOnboardingGatePage() {
   }, [isAuthenticated, router]);
 
   useEffect(() => {
+    if (selectWorkspace.isPending) {
+      return;
+    }
+
     if (isAuthenticated && !activeWorkspaceId && !workspacesLoading && !pendingInvitationsLoading) {
       if (pendingInvitations.length > 0) {
         return;
@@ -93,20 +98,11 @@ export default function WorkspaceOnboardingGatePage() {
 
       if (workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
-        const defaultLanguage =
-          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
-            ? firstWs.defaultLanguage
-            : "en";
-        selectWorkspace.mutate(firstWs.id);
-        setActiveWorkspace(
-          firstWs.id,
-          firstWs.name,
-          firstWs.slug,
-          firstWs.role || "Member",
-          firstWs.membershipType || "Internal",
-          defaultLanguage
-        );
-        router.replace(`/${firstWs.slug}/home`);
+        void (async () => {
+          const selection = await selectWorkspace.mutateAsync(firstWs.id);
+          applySelectedWorkspace(selection, setActiveWorkspace);
+          router.replace(`/${selection.slug}/home`);
+        })();
       }
     }
   }, [isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, pendingInvitations, pendingInvitationsLoading, selectWorkspace, setActiveWorkspace, router]);
@@ -117,18 +113,10 @@ export default function WorkspaceOnboardingGatePage() {
 
   async function handleOpenWorkspace(workspaceId: string, workspaceSlug?: string | null) {
     if (!workspaceSlug) return;
-    const workspace = workspacesData?.items.find((item) => item.id === workspaceId);
-    await selectWorkspace.mutateAsync(workspaceId);
-    setActiveWorkspace(
-      workspaceId,
-      workspace?.name || "Workspace",
-      workspaceSlug,
-      workspace?.role || "Member",
-      workspace?.membershipType || "Internal",
-      workspace?.defaultLanguage || "en"
-    );
+    const selection = await selectWorkspace.mutateAsync(workspaceId);
+    applySelectedWorkspace(selection, setActiveWorkspace);
     await refetchWorkspaces();
-    router.push(`/${workspaceSlug}/home`);
+    router.push(`/${selection.slug}/home`);
   }
 
   if (

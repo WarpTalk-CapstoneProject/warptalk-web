@@ -38,6 +38,7 @@ import { getErrorStatus } from "@/lib/api/retry-policy";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 
 const PersistentMeetingSession = dynamic(
   () =>
@@ -261,27 +262,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!mounted || !isAuthenticated || isOnboardingRoute || isAdminRoute || workspacesLoading) return;
+    if (selectWorkspace.isPending) return;
 
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
-        const membershipType =
-          "membershipType" in firstWs && typeof firstWs.membershipType === "string"
-            ? firstWs.membershipType
-            : "Internal";
-        const defaultLanguage =
-          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
-            ? firstWs.defaultLanguage
-            : "en";
-        selectWorkspace.mutate(firstWs.id);
-        setActiveWorkspace(
-          firstWs.id,
-          firstWs.name,
-          firstWs.slug,
-          firstWs.role || "Member",
-          membershipType,
-          defaultLanguage
-        );
+        // Hydrated from the SELECT RESPONSE, not from the list row. The list's shape varies by
+        // endpoint — hence the `"membershipType" in firstWs` guards this replaced — and the
+        // select call is the one authority on what this user's role in this workspace is. It is
+        // awaited so a failed selection redirects instead of leaving the shell holding a
+        // workspace the server never confirmed.
+        void (async () => {
+          try {
+            const selection = await selectWorkspace.mutateAsync(firstWs.id);
+            applySelectedWorkspace(selection, setActiveWorkspace);
+          } catch {
+            router.replace("/workspace");
+          }
+        })();
       } else if (isSystemAdmin) {
         // A platform admin with no workspace of their own is not a new user who has yet to make
         // one — they administer the platform the workspaces live in. Sending them to
