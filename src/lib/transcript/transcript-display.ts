@@ -44,6 +44,16 @@ export function groupTranscriptSegments(
   const utterances: GroupedTranscriptSegment[] = [];
 
   for (const segment of segments) {
+    // Control markers are dropped here, not only in the saved-transcript path. The filter used
+    // to live solely in groupSavedTranscriptSegments, so `__MEETING_END__` was invisible on the
+    // room detail page and perfectly visible in the LIVE panel during the meeting — attributed
+    // to "System", timestamped 0:00, with a 100% confidence badge beside it.
+    //
+    // Dropping before the merge matters as much as dropping at all: a marker absorbed into a
+    // neighbouring utterance stops being a segment of its own and becomes part of a real line's
+    // text, where no later filter can find it.
+    if (isTranscriptControlMarker(segment.originalText)) continue;
+
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameUtterance(previous, segment)) {
       utterances.push({ ...segment, mergedSegmentIds: [segment.segmentId] });

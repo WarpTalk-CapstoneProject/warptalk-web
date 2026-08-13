@@ -70,14 +70,35 @@ assert.doesNotMatch(
   /getUserMedia\(/,
   "the live meeting surface must not open a capture that competes with LiveKit's own",
 );
+// The two denoisers must never run on the same audio — stacking them distorted the production
+// mic PCM — so exactly one constraint pair drives both, and it is a parameter rather than an
+// expression derived from the toggle. The previous version of this contract pinned
+// `noiseSuppression: !noiseSuppressionEnabled` at the applyConstraints call site, which is how
+// the ORDER bug survived review: it locked in *what* was set while saying nothing about *when*.
+assert.match(hook, /noiseSuppression:\s*enabled/);
+assert.match(hook, /voiceIsolation:\s*enabled/);
+assert.match(hook, /autoGainControl:\s*true/);
+assert.match(hook, /applyConstraints/);
+
+// ORDER. Krisp has to be carrying the audio before the browser's denoiser is stood down.
+// Reversed — which is what shipped — a Krisp that fails (its WASM was blocked by a CSP missing
+// 'wasm-unsafe-eval') left the microphone with NO suppression at all, making the toggle strictly
+// worse than off while the UI claimed browser suppression was still running.
+const krispAttach = hook.indexOf("setProcessor(krispRef.current)");
+const standDownBrowser = hook.indexOf("setBrowserSuppression(false)");
+assert.ok(krispAttach !== -1, "Krisp must still be attached");
+assert.ok(standDownBrowser !== -1, "the browser denoiser must be stood down explicitly");
+assert.ok(
+  krispAttach < standDownBrowser,
+  "Krisp must be attached BEFORE the browser's noise suppression is disabled",
+);
+
+// And the failure path must put the microphone back before anyone is told about it.
 assert.match(
   hook,
-  /noiseSuppression:\s*!noiseSuppressionEnabled/,
-  "Krisp and browser noise suppression must not run on the same audio",
+  /catch \(error\) \{[\s\S]*?setBrowserSuppression\(true\)[\s\S]*?onNoiseSuppressionError\?\.\(error\)/,
+  "a failed Krisp must restore browser suppression BEFORE reporting, or the report is a lie",
 );
-assert.match(hook, /voiceIsolation:\s*!noiseSuppressionEnabled/);
-assert.match(hook, /autoGainControl:\s*true/);
-assert.match(hook, /await mediaStreamTrack\.applyConstraints/);
 for (const prejoinSurface of [joinPage, setupModal]) {
   assert.match(
     prejoinSurface,
