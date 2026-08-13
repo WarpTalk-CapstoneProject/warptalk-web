@@ -1491,15 +1491,20 @@ export function PersistentMeetingSession({
       "TranslationTextReceived",
       (translation: TranslationTextDto) => {
         if (!meetingLiveRef.current) return;
-        // Only render the translation into MY chosen listen language — the gateway fans
-        // out every participant's target language to the whole room group, so without this
-        // check the transcript panel mixes in every other listener's language too.
-        if (
-          normalizeLanguageCode(translation.targetLang) !==
-          normalizeLanguageCode(targetLanguageRef.current)
-        ) {
-          return;
-        }
+        // Every language is kept, filed under its own key by addOrMergeTranslationText, and the
+        // transcript panel renders the one matching this viewer's listen language.
+        //
+        // WT-371 Bug 4: this used to drop anything that did not match targetLanguageRef at the
+        // instant of arrival, which made the transcript depend on WHEN the reader's listen
+        // language finished resolving. On a cold navigation the room default stands in until the
+        // participant row arrives, so the first lines of a meeting were admitted in the wrong
+        // language and kept it — "English → Vietnamese" above "Vietnamese → English" in one
+        // panel. Changing the language mid-meeting had the same effect from the other side:
+        // everything already on screen stayed behind.
+        //
+        // Nothing extra crosses the network — the gateway fans all of them to the room group
+        // regardless — and "loạn ngôn ngữ" is now prevented where it belongs, at render, by a
+        // reader who knows their own language.
         addOrMergeTranslationText(translation);
       },
     );
@@ -2523,7 +2528,16 @@ export function PersistentMeetingSession({
                     // this bar — would press Start and get "Unauthorized". The control bar's own
                     // prop doc is "omit to hide the control", so this hides it rather than
                     // offering a button that cannot work.
-                    onStartWarptalk={isRoomHost ? handleStartWarptalk : undefined}
+                    onStartWarptalk={
+                      // WT-371: the room decides who may START translation. Stopping stays
+                      // host-only below — opening a meeting up is not the same as letting
+                      // anyone cut it off for everybody. The server enforces the same rule in
+                      // TranslationRoomSessionService.CanStartSessionAsync; this only decides
+                      // whether the control is offered.
+                      isRoomHost || room?.settings?.participantsCanStartTranslation
+                        ? handleStartWarptalk
+                        : undefined
+                    }
                     onStopWarptalk={isRoomHost ? handleStopWarptalk : undefined}
                     onToggleSubtitles={() =>
                       setSubtitlesEnabled((current) => !current)

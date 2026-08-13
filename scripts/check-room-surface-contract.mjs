@@ -197,10 +197,25 @@ assert.doesNotMatch(
 );
 // Only an explicit choice is sent. Echoing the resolved default back would pin the value into the
 // room's settings blob and defeat the server-side resolution this mirrors.
+//
+// WT-371 added a second setting to the same payload, so this pins the RULE rather than the one
+// expression that used to express it: `settings` stays undefined until the host has actually
+// chosen something, and each key is included only when they chose that key. Matching the literal
+// ternary meant the contract failed the moment a second setting was added correctly.
 assert.match(
   createRoomDialog,
-  /settings:\s*\n?\s*requiresApproval === null \? undefined : \{ requiresApproval \}/,
+  /settings:\s*\n?\s*requiresApproval === null && !participantsCanStartTranslation\s*\n?\s*\?\s*undefined/,
   "The create dialog must send settings only when the host made an explicit choice.",
+);
+assert.match(
+  createRoomDialog,
+  /\.\.\.\(requiresApproval === null \? \{\} : \{ requiresApproval \}\)/,
+  "requiresApproval must be omitted, not defaulted, when the host did not choose it.",
+);
+assert.match(
+  createRoomDialog,
+  /\.\.\.\(participantsCanStartTranslation\s*\n?\s*\?\s*\{ participantsCanStartTranslation: true \}/,
+  "participantsCanStartTranslation must be sent only when the host turned it on.",
 );
 assert.match(
   access,

@@ -1,4 +1,7 @@
 import { create } from "zustand";
+// Relative, with the extension: session-scoped-state.test.ts imports this store under the plain
+// node test runner, which does not resolve the "@/" alias for a real (non-type) import.
+import { normalizeLanguageCode } from "../lib/language/languages.ts";
 import type {
   AiSuggestionDto,
   ChatMessageDto,
@@ -109,6 +112,11 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
             existing.segmentId === segment.segmentId
               ? {
                   ...segment,
+                  // Translations already filed against this bubble survive a later STT revision
+                  // of the same segment. TranscriptSegmentReceived always carries them as null
+                  // (AiResultConsumerService builds it that way), so spreading `segment` over an
+                  // existing entry would erase every translation the panel is rendering.
+                  translations: existing.translations ?? segment.translations,
                   translatedText: existing.translatedText || segment.translatedText,
                   targetLanguage: existing.targetLanguage || segment.targetLanguage,
                   // Keep the FIRST arrival. A revision of the same segment (the translation
@@ -121,6 +129,33 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
         : [...s.transcriptSegments, { ...segment, receivedAt: segment.receivedAt ?? Date.now() }],
     })),
 
+  /**
+   * Files a translation under ITS OWN language rather than overwriting the bubble's.
+   *
+   * WT-371 Bug 4. This used to keep exactly one translation per bubble — `translatedText` plus
+   * `targetLanguage`, replaced by whichever payload landed last — and the SignalR handler
+   * protected that single slot by dropping every translation whose language was not the
+   * viewer's. Two things fall out of that, and the report is both:
+   *
+   *   • The viewer's listen language is RESOLVED, not known. It comes from the picker, then
+   *     session storage, then their participant row (see participant-language-preference), and
+   *     the participant row arrives over the network. In the window before it does, the room
+   *     default stands in — so on a cold direct navigation to an [en, vi] room the filter
+   *     briefly admitted the wrong language, those bubbles kept it forever, and the panel ended
+   *     up showing "English → Vietnamese" on one line and "Vietnamese → English" on the next.
+   *   • Changing the listen language mid-meeting only affected new lines. Everything already on
+   *     screen stayed in the old language, which is the same mixture arrived at from the other
+   *     direction.
+   *
+   * Keyed by normalized language, the bubble no longer has a language of its own — the READER
+   * does, and the panel picks the matching entry at render time. A late-resolving or changed
+   * listen language re-renders the whole transcript into that language instead of leaving a
+   * permanent seam. The handler no longer has to filter to protect a slot, which is what made
+   * the race reachable in the first place.
+   *
+   * Memory is bounded by (segments × languages in the room) short strings; nothing extra crosses
+   * the network, since the gateway already fans every language out to the whole room group.
+   */
   addOrMergeTranslationText: (translation) =>
     set((s) => {
       // translation.segmentId is its OWN id ("{sourceSegmentId}-{targetLang}-c{idx}"), never
@@ -129,6 +164,11 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       // translation.segmentId only covers old/unmigrated messages that never carried it.
       const joinKey = translation.sourceSegmentId || translation.segmentId;
       const chunkIndex = translation.chunkIndex ?? 0;
+      // Normalized so "en-US" from a picker and "en" from the worker are one key. Unnormalized
+      // they are two, and the panel — which looks the reader's language up by key — would miss.
+      const language = normalizeLanguageCode(translation.targetLang);
+      if (!language) return {};
+
       const existingIndex = s.transcriptSegments.findIndex((segment) => segment.segmentId === joinKey);
 
       if (existingIndex === -1) {
@@ -141,8 +181,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
               speakerName: "Speaker",
               originalText: translation.originalText,
               originalLanguage: translation.sourceLang,
-              translatedText: translation.translatedText,
-              targetLanguage: translation.targetLang,
+              translations: { [language]: translation.translatedText },
               confidence: 1,
               startTimeMs: translation.startTimeMs ?? 0,
               endTimeMs: translation.endTimeMs ?? 0,
@@ -152,21 +191,24 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       }
 
       const segment = s.transcriptSegments[existingIndex];
-      // One STT segment can be split into multiple translated sentences (chunk_index >
-      // 0 for the 2nd+ sentence) — those must be APPENDED, not overwrite the first
-      // sentence's translation. chunk_index 0 always replaces (it's either the only
-      // sentence, or a fresh segment's first one).
-      const translatedText =
-        chunkIndex > 0 && segment.targetLanguage === translation.targetLang && segment.translatedText
-          ? `${segment.translatedText} ${translation.translatedText}`.trim()
+      const existingTranslations = segment.translations ?? {};
+      // One STT segment can be split into multiple translated sentences (chunk_index > 0 for
+      // the 2nd+ sentence) — those must be APPENDED, not overwrite the first sentence's
+      // translation. chunk_index 0 always replaces (it's either the only sentence, or a fresh
+      // segment's first one). Now scoped to the language being written: sentence 2 of the
+      // Vietnamese translation must never be appended to the English one, which is what a
+      // single shared slot made possible whenever two languages interleaved.
+      const previous = existingTranslations[language];
+      const text =
+        chunkIndex > 0 && previous
+          ? `${previous} ${translation.translatedText}`.trim()
           : translation.translatedText;
 
       const updated = {
         ...segment,
         originalText: segment.originalText || translation.originalText,
         originalLanguage: segment.originalLanguage || translation.sourceLang,
-        translatedText,
-        targetLanguage: translation.targetLang,
+        translations: { ...existingTranslations, [language]: text },
         startTimeMs: segment.startTimeMs || translation.startTimeMs || 0,
         endTimeMs: translation.endTimeMs || segment.endTimeMs,
       };

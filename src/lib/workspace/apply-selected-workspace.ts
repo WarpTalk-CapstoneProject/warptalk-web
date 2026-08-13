@@ -7,6 +7,7 @@ type SetActiveWorkspace = (
   role: string | null,
   membershipType: string | null,
   defaultLanguage: string | null,
+  canCreateMeetings?: boolean | null,
 ) => void;
 
 export function applySelectedWorkspace(
@@ -20,5 +21,8 @@ export function applySelectedWorkspace(
     selection.role,
     selection.membershipType,
     selection.defaultLanguage || "en",
+    // `?? true`, not `|| true` — an explicit `false` from the server is the whole point of the
+    // field and must survive. Only a missing value falls back to allowed.
+    selection.canCreateMeetings ?? true,
   );
 }
