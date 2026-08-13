@@ -52,6 +52,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  markLanguagePickerShown,
+  wasLanguagePickerShown,
+} from "@/lib/meeting/language-picker-shown";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
@@ -119,7 +123,6 @@ import {
   ReactionOverlay,
   type FloatingReaction,
 } from "@/components/rooms/live/reaction-overlay";
-import { BreakoutSetupModal } from "@/components/rooms/live/breakout-setup-modal";
 import { LanguagePickerModal } from "@/components/rooms/live/language-picker-modal";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useUpdateUserSettings, useUserSettings } from "@/hooks/use-user-settings";
@@ -129,7 +132,6 @@ import {
 } from "@/lib/language/language-profile";
 import {
   fetchMyBreakoutAssignment,
-  useEndBreakouts,
 } from "@/hooks/use-breakouts";
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
@@ -323,6 +325,23 @@ export function PersistentMeetingSession({
     });
   }
 
+  /**
+   * Blur could not attach. Put the toggle back down and say so.
+   *
+   * Without this the switch stayed lit over an unblurred camera and nothing anywhere reported a
+   * fault — the "background blur không còn lên nữa" report had no console error to go with it
+   * because the rejection was never caught. A toggle that lies about the camera is worse than
+   * one that admits it failed.
+   */
+  const handleBackgroundBlurError = useCallback(() => {
+    setBackgroundBlurEnabled(false);
+    writeTrackEffectsPreferences({ backgroundBlurEnabled: false });
+    toast.error("Background blur is unavailable.", {
+      description:
+        "Your camera is publishing unblurred. Reload the meeting to try again.",
+    });
+  }, []);
+
   const liveParticipants = useTranslationRoomStore(
     (state) => state.participants,
   );
@@ -449,11 +468,11 @@ export function PersistentMeetingSession({
 
   // Breakout rooms (scoped-down): `breakoutState` describes THIS viewer's own current
   // assignment/connection (drives the LiveKit token swap + top-bar countdown chip below).
-  // `breakoutsRunning` is room-wide — true from the first BreakoutsStarted broadcast to the
+  // The host-facing breakout controls are gone with the feature; these handlers stay only so a
+  // client already in a breakout still follows a BreakoutsEnded back to the main room.
+  // `breakoutState` is per-viewer — it describes THIS viewer's own current
   // last BreakoutsEnded one, regardless of whether THIS viewer has an assignment (e.g. the
   // host, who stays in the main room) — drives the host-controls flyout's active state.
-  const [showBreakoutSetup, setShowBreakoutSetup] = useState(false);
-  const [breakoutsRunning, setBreakoutsRunning] = useState(false);
   const [breakoutState, setBreakoutState] = useState<{
     active: boolean;
     label: string | null;
@@ -482,7 +501,6 @@ export function PersistentMeetingSession({
   useEffect(() => {
     currentMeetingSessionRef.current = meetingSession;
   }, [meetingSession]);
-  const endBreakoutsMutation = useEndBreakouts(roomId);
 
   // WT-08: application-level reconnect state — the hub connection itself already
   // auto-reconnects at the transport level (see createHubConnection/withAutomaticReconnect),
@@ -1340,12 +1358,25 @@ export function PersistentMeetingSession({
 
   useEffect(() => {
     if (languagePickerShownRef.current) return;
+    // ...and not already asked earlier in this tab, for this room.
+    //
+    // The ref alone is per COMPONENT INSTANCE, so anything that remounts this session asks
+    // again: pressing "Return to meeting" from the mini dock re-enters /live, the instance is
+    // rebuilt, the ref is a fresh `false`, and the language modal reappears over a meeting the
+    // user is already in — "bấm return to meeting nó ra cái service modal tiếp". sessionStorage
+    // is the right scope for the same reason the active meeting uses it: per tab, cleared when
+    // the tab closes, never shared with a second tab that legitimately needs its own answer.
+    if (wasLanguagePickerShown(roomId)) {
+      languagePickerShownRef.current = true;
+      return;
+    }
     if (!meetingSession?.token) return;
     // Wait for the answer we may already have. Opening before the settings resolve is how a
     // remembered preference still gets asked for.
     if (!userSettingsQuery.isSuccess) return;
 
     languagePickerShownRef.current = true;
+    markLanguagePickerShown(roomId);
 
     if (languagesAreRemembered) {
       // Applied silently. Being asked again is the product forgetting, which is the whole
@@ -1600,7 +1631,6 @@ export function PersistentMeetingSession({
         durationSeconds: number | null,
         startedAt: string | null,
       ) => {
-        setBreakoutsRunning(true);
         const mine = user?.id
           ? (assignments ?? []).find((a) => a.userId === user.id)
           : undefined;
@@ -1635,7 +1665,6 @@ export function PersistentMeetingSession({
       },
     );
     connection.on("BreakoutsEnded", () => {
-      setBreakoutsRunning(false);
       if (!breakoutActiveRef.current) return;
 
       setBreakoutState({
@@ -2114,15 +2143,6 @@ export function PersistentMeetingSession({
     });
   }
 
-  // Breakout rooms: local state updates happen from the BreakoutsStarted/BreakoutsEnded hub
-  // broadcasts (see the SignalR effect above), not optimistically here — same pattern as
-  // room lock/recording.
-  function handleEndBreakoutRooms() {
-    endBreakoutsMutation.mutate(undefined, {
-      onError: () => toast.error("Could not end breakout rooms."),
-    });
-  }
-
   if (roomQuery.isLoading) {
     return (
       <StatePanel
@@ -2227,6 +2247,7 @@ export function PersistentMeetingSession({
           noiseSuppressionEnabled={noiseSuppressionEnabled}
           backgroundBlurEnabled={backgroundBlurEnabled}
           onNoiseSuppressionError={handleNoiseSuppressionError}
+          onBackgroundBlurError={handleBackgroundBlurError}
         />
 
         {!compact && isReconnecting ? (
@@ -2522,13 +2543,6 @@ export function PersistentMeetingSession({
                     onToggleRecording={
                       isHost ? handleToggleRecording : undefined
                     }
-                    breakoutActive={breakoutsRunning}
-                    onOpenBreakoutSetup={
-                      isHost ? () => setShowBreakoutSetup(true) : undefined
-                    }
-                    onEndBreakoutRooms={
-                      isHost ? handleEndBreakoutRooms : undefined
-                    }
                   />
                 </div>
                 <div data-meeting-exit-control className="shrink-0">
@@ -2566,15 +2580,6 @@ export function PersistentMeetingSession({
         </main>
         )}
       </LiveKitRoom>
-
-      {!compact && isHost ? (
-        <BreakoutSetupModal
-          open={showBreakoutSetup}
-          onOpenChange={setShowBreakoutSetup}
-          roomId={roomId}
-          participants={participants}
-        />
-      ) : null}
 
       {!compact ? <LanguagePickerModal
         open={showLanguagePicker}

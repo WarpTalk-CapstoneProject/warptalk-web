@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { getLanguageName } from "@/lib/language/languages";
 import {
   findSuggestionForUtterance,
+  formatTranscriptClockTime,
   formatTranscriptTimestamp,
   groupSegmentsByTranslationSession,
   groupTranscriptSegments,
@@ -145,11 +146,22 @@ function TranscriptBubble({
           <span className="min-w-0 truncate font-semibold text-ink-muted">
             {isSelf ? "You" : speakerName}
           </span>
+          {/* The clock when we have one, the old offset only as a fallback.
+              `startTimeMs` is an offset into the audio INGRESS TRACK, and that track resets on
+              reconnect — so a line spoken 18 minutes in rendered as 6:00, under a label that
+              claimed to be "Meeting time". `receivedAt` is stamped once, on arrival, and has no
+              origin to get wrong. */}
           <span
             className="shrink-0 font-mono tabular-nums"
-            aria-label={`Meeting time ${formatTranscriptTimestamp(segment.startTimeMs)}`}
+            aria-label={
+              segment.receivedAt
+                ? `Spoken at ${formatTranscriptClockTime(segment.receivedAt)}`
+                : `Meeting time ${formatTranscriptTimestamp(segment.startTimeMs)}`
+            }
           >
-            {formatTranscriptTimestamp(segment.startTimeMs)}
+            {segment.receivedAt
+              ? formatTranscriptClockTime(segment.receivedAt)
+              : formatTranscriptTimestamp(segment.startTimeMs)}
           </span>
           {suggestion ? (
             <SuggestionBadge

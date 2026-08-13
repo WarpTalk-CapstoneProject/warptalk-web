@@ -111,10 +111,14 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
                   ...segment,
                   translatedText: existing.translatedText || segment.translatedText,
                   targetLanguage: existing.targetLanguage || segment.targetLanguage,
+                  // Keep the FIRST arrival. A revision of the same segment (the translation
+                  // landing, a corrected transcription) must not shuffle the line's clock
+                  // forward to whenever the correction happened.
+                  receivedAt: existing.receivedAt ?? segment.receivedAt ?? Date.now(),
                 }
               : existing,
           )
-        : [...s.transcriptSegments, segment],
+        : [...s.transcriptSegments, { ...segment, receivedAt: segment.receivedAt ?? Date.now() }],
     })),
 
   addOrMergeTranslationText: (translation) =>

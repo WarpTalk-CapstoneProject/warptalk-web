@@ -262,6 +262,25 @@ export function getAnimatedWordTokens(text: string, maxCharacters?: number): Ani
   return tokens.slice(startIndex);
 }
 
+/**
+ * The wall-clock time a line was spoken, as HH:MM.
+ *
+ * The live panel used to print `startTimeMs` through formatTranscriptTimestamp and label it
+ * "Meeting time". It is neither: it is an offset into the audio ingress track, which resets when
+ * that track reconnects, so a line spoken at minute 18 of a meeting rendered as 6:00. The team
+ * had already read the number as a clock ("is that the time?" — "yes"), so this makes it one.
+ *
+ * A clock also cannot drift: there is no origin to get wrong, and anyone can check it against
+ * the clock on the wall.
+ */
+export function formatTranscriptClockTime(epochMs: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(epochMs));
+}
+
 export function formatTranscriptTimestamp(timeMs: number): string {
   const totalSeconds = Math.floor(Math.max(0, timeMs) / 1_000);
   const hours = Math.floor(totalSeconds / 3_600);
