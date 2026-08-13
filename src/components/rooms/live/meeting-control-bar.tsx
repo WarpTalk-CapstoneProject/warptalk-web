@@ -1,11 +1,11 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
+import { CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName } from "@/lib/language/languages";
+import { getLanguageName, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -199,7 +199,13 @@ export function MeetingControlBar({
 }) {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
-    "root" | "layout" | "listenLanguage" | "speakLanguage" | "voice"
+    | "root"
+    | "layout"
+    | "listenLanguage"
+    | "speakLanguage"
+    | "listenLanguageAll"
+    | "speakLanguageAll"
+    | "voice"
   >("root");
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
   const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
@@ -533,6 +539,7 @@ export function MeetingControlBar({
                       close={closeSettingsMenu}
                     />
                   ))}
+                  <AddLanguageRow onClick={() => setSettingsSection("listenLanguageAll")} />
                 </>
               ) : null}
 
@@ -545,6 +552,49 @@ export function MeetingControlBar({
                       label={getLanguageName(language)}
                       value={language}
                       active={speakLanguage === language}
+                      onSelect={onChangeSpeakLanguage}
+                      close={closeSettingsMenu}
+                    />
+                  ))}
+                  <AddLanguageRow onClick={() => setSettingsSection("speakLanguageAll")} />
+                </>
+              ) : null}
+
+              {/* The room's configuration is what gets OFFERED, not what a person is limited
+                  to. Somebody who speaks Korean in a Vietnamese/Japanese room should be able
+                  to say so and be understood; the room was configured by whoever booked it,
+                  before they knew who would turn up. */}
+              {settingsSection === "listenLanguageAll" && onChangeListenLanguage ? (
+                <>
+                  <SettingsPanelHeader
+                    title="All languages"
+                    onBack={() => setSettingsSection("listenLanguage")}
+                  />
+                  {languagesNotAlreadyOffered(availableListenLanguages).map((language) => (
+                    <LanguageOption
+                      key={language.code}
+                      label={language.name}
+                      value={language.code}
+                      active={listenLanguage === language.code}
+                      onSelect={onChangeListenLanguage}
+                      close={closeSettingsMenu}
+                    />
+                  ))}
+                </>
+              ) : null}
+
+              {settingsSection === "speakLanguageAll" && onChangeSpeakLanguage ? (
+                <>
+                  <SettingsPanelHeader
+                    title="All languages"
+                    onBack={() => setSettingsSection("speakLanguage")}
+                  />
+                  {languagesNotAlreadyOffered(availableSpeakLanguages).map((language) => (
+                    <LanguageOption
+                      key={language.code}
+                      label={language.name}
+                      value={language.code}
+                      active={speakLanguage === language.code}
                       onSelect={onChangeSpeakLanguage}
                       close={closeSettingsMenu}
                     />
@@ -822,6 +872,25 @@ function VoiceOption({
  * ROOM; here the choice is this participant's own listen (or speak) language, of which there
  * is exactly one.
  */
+/** Every meeting language this product knows, minus the ones the room already offers. */
+function languagesNotAlreadyOffered(offered: string[] | undefined) {
+  const already = new Set((offered ?? []).map(normalizeLanguageCode));
+  return languagesInScope("meeting").filter((language) => !already.has(language.code));
+}
+
+function AddLanguageRow({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-1 flex w-full items-center gap-2 border-t border-border px-2.5 py-2 text-left text-[13px] text-ink-muted hover:bg-surface-2 hover:text-ink"
+    >
+      <Plus className="h-3.5 w-3.5 shrink-0" weight="bold" aria-hidden />
+      Add another language
+    </button>
+  );
+}
+
 function LanguageOption({
   label,
   value,
