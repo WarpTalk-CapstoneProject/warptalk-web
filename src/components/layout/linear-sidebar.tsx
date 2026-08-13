@@ -23,9 +23,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
-import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
+import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { INVITE_SNOOZE_DAYS, shouldSuggestInvite } from "@/lib/onboarding/invite-suggestion";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { IconProps } from "@phosphor-icons/react";
@@ -52,6 +54,7 @@ import {
   Users,
   Warning,
   Waveform,
+  X,
   Brain,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
@@ -68,11 +71,17 @@ interface NavItem {
   label: string;
   href: string;
   exact?: boolean;
+  /**
+   * Names this row for the product tour. An attribute rather than a CSS selector, so a layout
+   * change moves the tour's target with the element instead of silently detaching it.
+   */
+  tourId?: string;
   actions?: Array<{
     icon: IconType;
     href?: string;
     onClick?: () => void;
     title?: string;
+    tourId?: string;
   }>;
 }
 
@@ -90,6 +99,7 @@ function NavLink({
     (!item.exact && pathname.startsWith(item.href + "/"));
   return (
     <div
+      data-tour={item.tourId}
       className={cn(
         "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
         collapsed && "mx-auto size-9 justify-center rounded-full px-0",
@@ -131,6 +141,7 @@ function NavLink({
                 key={i}
                 type="button"
                 title={action.title}
+                data-tour={action.tourId}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-border/50 text-ink-muted hover:text-ink shrink-0 ml-1"
                 onClick={(e) => {
                   e.preventDefault();
@@ -188,14 +199,20 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       icon: SquaresFour,
       label: "Meetings",
       href: `/${slug}/rooms`,
+      tourId: "nav-meetings",
       actions: [
         { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: "Join by code" },
-        { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
+        {
+          icon: Plus,
+          onClick: () => setCreateRoomModalOpen(true),
+          title: "Create Meeting",
+          tourId: "nav-create-meeting",
+        }
       ]
     },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
-    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles` },
+    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -207,6 +224,32 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
+
+  /**
+   * Whether to suggest inviting people, this visit.
+   *
+   * Page size 1: only `total` is read, and this query mounts on every screen in the app — the
+   * sidebar is always there. The rule itself is in lib/onboarding/invite-suggestion.ts, seeded
+   * so the answer holds still for a day rather than being re-rolled on every render.
+   */
+  const { data: memberPage } = useWorkspaceMembers(
+    isOwnerOrAdmin && activeWorkspaceId ? activeWorkspaceId : undefined,
+    1,
+    1,
+  );
+  const inviteDismissedAt = useOnboardingStore((state) => state.inviteDismissedAt);
+  const dismissInviteSuggestion = useOnboardingStore((state) => state.dismissInviteSuggestion);
+  // The clock is read once per mount, not per render: `Date.now()` in the condition would make
+  // the decision a moving target and defeat the point of seeding it by day.
+  const [suggestionClock] = useState(() => Date.now());
+  const suggestsInvite =
+    Boolean(activeWorkspaceId) &&
+    shouldSuggestInvite({
+      workspaceId: activeWorkspaceId ?? "",
+      memberCount: memberPage?.total ?? memberPage?.items?.length ?? 0,
+      dismissedAtMs: inviteDismissedAt[activeWorkspaceId ?? ""] ?? null,
+      nowMs: suggestionClock,
+    });
   const selectWorkspaceMutation = useSelectWorkspace();
 
   const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
@@ -232,8 +275,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
   const workspaceNav: NavItem[] = [];
   workspaceNav.push(
-    { icon: Users, label: "Members", href: `/${slug}/members` },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents` }
+    { icon: Users, label: "Members", href: `/${slug}/members`, tourId: "nav-members" },
+    { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" }
   );
 
   if (isOwnerOrAdmin) {
@@ -241,10 +284,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // "who is in this workspace" and "who is on the way in" were never two questions.
     // What the system has indexed from this workspace's documents and meetings. Owner/Admin
     // only, because the view crosses per-document access policies.
-    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge` });
+    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
     workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
-    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
+    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard`, tourId: "nav-dashboard" });
   }
 
   const isSettingsPage = pathname.includes("/settings") || pathname.includes("/advanced");
@@ -744,21 +787,45 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         )}
       </nav>
 
-      {isOwnerOrAdmin && activeWorkspaceId && !collapsed && (
+      {/*
+        A suggestion, not furniture.
+        It used to render for every Owner and Admin on every screen forever, with no way to send
+        it away — including for workspaces whose team was invited months ago. Now it appears on
+        some days and not others (seeded by workspace and date, so it holds still rather than
+        flickering), stops entirely once the workspace has a team, and has a dismiss that is
+        remembered.
+
+        The dismiss is a sibling of the card's button rather than a child: a button inside a
+        button is invalid HTML, and browsers resolve it by dropping one of them.
+      */}
+      {isOwnerOrAdmin && activeWorkspaceId && suggestsInvite && !collapsed && (
         <div className="px-3 pb-2 pt-3">
-          <button
-            type="button"
-            onClick={() => setIsInviteModalOpen(true)}
-            className="group w-full rounded-[14px] border border-border bg-surface-1 p-3 text-left shadow-linear transition hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
-            <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
-              <PaperPlaneTilt size={17} weight="duotone" />
-            </span>
-            <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
-            <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
-              Bring your team in to collaborate and share workspace rooms.
-            </span>
-          </button>
+          <div className="group relative">
+            <button
+              type="button"
+              onClick={() => setIsInviteModalOpen(true)}
+              className="w-full rounded-[14px] border border-border bg-surface-1 p-3 text-left shadow-linear transition hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
+                <PaperPlaneTilt size={17} weight="duotone" />
+              </span>
+              <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
+              <span className="mt-1 block pr-5 text-[12px] leading-5 text-ink-muted">
+                Bring your team in to collaborate and share workspace rooms.
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                dismissInviteSuggestion(activeWorkspaceId, Date.now())
+              }
+              title={`Dismiss for ${INVITE_SNOOZE_DAYS} days`}
+              aria-label="Dismiss the invite suggestion"
+              className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-md text-ink-subtle opacity-0 transition hover:bg-surface-3 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover:opacity-100"
+            >
+              <X size={11} weight="bold" />
+            </button>
+          </div>
         </div>
       )}
 
