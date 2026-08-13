@@ -57,6 +57,7 @@ import { getErrorStatus } from "@/lib/api/retry-policy";
 import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
+import { DashboardHero } from "./components/dashboard-hero";
 import { CycleSummary } from "./components/cycle-summary";
 import { UsageBreakdown } from "./components/usage-breakdown";
 import { UsageTrend } from "./components/usage-trend";
@@ -202,6 +203,25 @@ export default function WorkspaceAdminDashboardPage() {
       />
 
       <WorkspaceBody className="flex flex-col gap-4">
+        {/* The masthead. It carries the page's only colour — see DashboardHero — and its message
+            follows the workspace's actual state rather than being a fixed advert, so a workspace
+            with a plan is not told to buy one. */}
+        <DashboardHero
+          messageKey={noPlan ? "no-plan" : "has-plan"}
+          title={
+            noPlan
+              ? "Start translating in this workspace"
+              : "Your workspace at a glance"
+          }
+          description={
+            noPlan
+              ? "Meetings translate against a credit balance. Choose a plan to give this workspace one, and every meeting in it gets live translation, transcripts and AI summaries."
+              : "Credits, burn rate and what is coming up — everything that decides whether this workspace keeps translating, on one page."
+          }
+          actionLabel={noPlan ? "Choose a plan" : "Open billing"}
+          actionHref={noPlan ? plansHref : billingHref}
+        />
+
         {creditsQuery.isPending ? (
           <BlockSpinner height="h-[152px]" />
         ) : creditsQuery.isError && !noPlan ? (
@@ -220,11 +240,16 @@ export default function WorkspaceAdminDashboardPage() {
           />
         )}
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        {/* One container, hairline-divided — not two floating cards.
+            OpenAI's platform dashboard reads as a single instrument panel because the numbers sit
+            in one frame divided by 1px rules; separate bordered cards draw four more boxes inside
+            a box and make two related readings look unrelated. `divide-x` handles the seam, so
+            neither child carries a border of its own. */}
+        <div className="grid divide-y divide-hairline overflow-hidden rounded-2xl border border-hairline bg-surface-1 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
           <WorkspaceSection
             title="Credit usage"
             description={`Consumed against topped up, month by month in ${year}.`}
-            className="lg:col-span-2"
+            className="lg:col-span-2 rounded-none border-0 bg-transparent shadow-none"
           >
             {trendQuery.isPending ? (
               <BlockSpinner height="h-[220px]" bare />
@@ -241,6 +266,7 @@ export default function WorkspaceAdminDashboardPage() {
 
           <WorkspaceSection
             title="Where credits go"
+            className="rounded-none border-0 bg-transparent shadow-none"
             actions={
               <div className="flex items-center gap-1">
                 {BREAKDOWN_WINDOWS.map((window) => (
