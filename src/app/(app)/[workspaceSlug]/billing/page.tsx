@@ -91,8 +91,20 @@ const BILLING_FILTER_WIDTH_CLASS: Record<string, string> = {
   payroll: "w-[96px]",
 };
 
-const ESTIMATED_VND_PER_CREDIT = 10;
-const TOKEN_PROXY_PER_CREDIT = 100;
+/* Deliberately no VND-per-credit constant here, and no token multiplier.
+ *
+ * This page briefly carried `ESTIMATED_VND_PER_CREDIT = 10` and `TOKEN_PROXY_PER_CREDIT = 100`
+ * and rendered both through `formatMoney(..., "VND")` as an "Est. Cost" column. Both numbers
+ * were invented. The workspace-facing API cannot price a credit: `/usages/rates`
+ * (billingService.getServiceRates) returns credits PER USAGE UNIT — minutes of STT, minutes of
+ * translation — not money, and the one endpoint that does hold `credit_value_vnd`,
+ * GET /usages/pricing-config, is [Authorize(Roles = AdminSystem)] and 403s for the workspace
+ * owner reading their own bill. The configured value is 4 VND, so the invented 10 overstated
+ * every row by 2.5x while looking like a settled figure.
+ *
+ * Credits are what the billing system settles in and what this page actually knows, so credits
+ * are what it reports. When a workspace-scoped price endpoint exists, money can come back.
+ */
 
 /**
  * The billing API answers "this workspace has no plan" with an explicit error code rather than an
@@ -437,6 +449,10 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const netChange = totalTopUp - totalConsumed;
 
   const usageBreakdown = report?.usageBreakdown ?? [];
+  const usageBreakdownTotal = usageBreakdown.reduce(
+    (sum, usage) => sum + usage.creditsConsumed,
+    0,
+  );
   const workspaceMembers = useMemo(
     () => membersPage?.items ?? [],
     [membersPage?.items],
@@ -449,13 +465,45 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     return map;
   }, [workspaceMembers]);
 
+  /* Payroll asks a different question from the Transaction History tab, so it asks it itself.
+   *
+   * These rows used to be derived from `historyPage` — the history query — which is bound to
+   * that tab's type/date/amount filter state and to no month at all. The card said "Current
+   * month" throughout: switching the history filter to `top_up` dropped every payroll row to
+   * 0 cr while the badge still claimed the month, and picking a date range there silently
+   * re-scoped the attribution. Its own query, with the month in the request, cannot drift. */
+  const monthRange = useMemo(() => {
+    const from = new Date(CURRENT_YEAR, CURRENT_MONTH - 1, 1, 0, 0, 0, 0);
+    const to = new Date(CURRENT_YEAR, CURRENT_MONTH, 0, 23, 59, 59, 999);
+    return { from: from.toISOString(), to: to.toISOString() };
+  }, []);
+
+  const MEMBER_SPEND_PAGE_SIZE = 1000;
+
+  const { data: memberSpendPage, isLoading: isMemberSpendLoading } = useQuery({
+    queryKey: ["billing", "member-spend", workspaceId, CURRENT_YEAR, CURRENT_MONTH],
+    queryFn: () =>
+      billingService.getCreditHistory(workspaceId, 1, MEMBER_SPEND_PAGE_SIZE, {
+        type: "consume",
+        fromDate: monthRange.from,
+        toDate: monthRange.to,
+      }),
+    enabled: !!workspaceId,
+    retry: 1,
+  });
+
   const consumedTransactions = useMemo(
     () =>
-      (historyPage?.items ?? []).filter(
+      (memberSpendPage?.items ?? []).filter(
         (tx) => tx.type === "consume" && tx.amount < 0,
       ),
-    [historyPage],
+    [memberSpendPage],
   );
+
+  /* One page is a cap, not "everything". A workspace past it would otherwise read as though
+     the missing consumption never happened, so the table says so instead. */
+  const memberSpendTruncated =
+    (memberSpendPage?.totalCount ?? 0) > (memberSpendPage?.items?.length ?? 0);
 
   const memberSpendRows = useMemo(() => {
     const rows = new Map<
@@ -528,8 +576,6 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
         return {
           ...row,
-          estimatedTokens: row.credits * TOKEN_PROXY_PER_CREDIT,
-          estimatedCost: row.credits * ESTIMATED_VND_PER_CREDIT,
           topFeature: featureBreakdown[0],
           featureBreakdown,
         };
@@ -541,11 +587,11 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     (sum, row) => sum + row.credits,
     0,
   );
-  const memberSpendTotalCost =
-    memberSpendTotalCredits * ESTIMATED_VND_PER_CREDIT;
-  const memberSpendTotalTokens =
-    memberSpendTotalCredits * TOKEN_PROXY_PER_CREDIT;
   const topSpender = memberSpendRows.find((row) => row.credits > 0);
+  const memberShareOfCredits = (credits: number) =>
+    memberSpendTotalCredits > 0
+      ? Math.round((credits / memberSpendTotalCredits) * 100)
+      : 0;
 
   const handleOpenExport = () => {
     setIsExportOpen(true);
@@ -1509,11 +1555,11 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               </CardHeader>
               <CardContent>
                 <p className="text-sm font-semibold text-ink">
-                  {formatMoney(memberSpendTotalCost, "VND")}
+                  {consumedTransactions.length.toLocaleString()} billable events
                 </p>
                 <p className="mt-2 text-[12px] text-ink-muted">
-                  Estimated from consumed credits at{" "}
-                  {ESTIMATED_VND_PER_CREDIT.toLocaleString()} VND per credit.
+                  Consumed credits for {format(new Date(CURRENT_YEAR, CURRENT_MONTH - 1, 1), "MMMM yyyy")},
+                  attributed to the member who spent them.
                 </p>
               </CardContent>
             </Card>
@@ -1522,23 +1568,24 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
                 <div>
                   <CardDescription className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-                    Token usage proxy
+                    Members with usage
                   </CardDescription>
                   <CardTitle className="mt-3 text-2xl font-semibold tracking-tight">
-                    {memberSpendTotalTokens.toLocaleString()}
+                    {memberSpendRows.filter((row) => row.credits > 0).length}
+                    <span className="text-base font-normal text-ink-muted">
+                      {" "}/ {memberSpendRows.length}
+                    </span>
                   </CardTitle>
                 </div>
-                <Badge className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink-muted hover:bg-surface-2">
-                  Est.
-                </Badge>
               </CardHeader>
               <CardContent>
                 <p className="text-sm font-semibold text-ink">
-                  {TOKEN_PROXY_PER_CREDIT.toLocaleString()} token proxy / credit
+                  Settled in credits
                 </p>
                 <p className="mt-2 text-[12px] text-ink-muted">
-                  Backend exposes credits and usage units today; raw provider
-                  tokens are not exposed on this API yet.
+                  The workspace API reports credits and usage units. It does not
+                  expose provider tokens or a per-credit price, so neither is
+                  shown here.
                 </p>
               </CardContent>
             </Card>
@@ -1582,20 +1629,12 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   member.
                 </CardDescription>
               </div>
+              {/* The three pills that were here — "This month", "All members", "Credits" — had
+                  no onClick and no state behind them, and the first was painted as the active
+                  filter unconditionally. A permanently-selected control that cannot be
+                  deselected reads as a filtered view; this table has exactly one scope, and
+                  the header below states it rather than pretending to offer a choice. */}
               <div className="flex flex-wrap items-center gap-2">
-                {["This month", "All members", "Credits"].map((period, index) => (
-                  <button
-                    key={period}
-                    type="button"
-                    className={`inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold transition ${
-                      index === 0
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
-                    }`}
-                  >
-                    {period}
-                  </button>
-                ))}
                 <button
                   type="button"
                   onClick={handleOpenExport}
@@ -1630,11 +1669,15 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                       </p>
                     ) : (
                       usageBreakdown.slice(0, 4).map((usage) => {
+                        /* Share of the breakdown's own total, not of the member-spend total.
+                           These are two different sources — usageBreakdown is the server's
+                           monthly report, memberSpendTotalCredits is the sum of a capped page
+                           of transactions — so dividing one by the other produced percentages
+                           that did not add up and could exceed 100 before the clamp hid it. */
                         const percent =
-                          memberSpendTotalCredits > 0
+                          usageBreakdownTotal > 0
                             ? Math.round(
-                                (usage.creditsConsumed /
-                                  memberSpendTotalCredits) *
+                                (usage.creditsConsumed / usageBreakdownTotal) *
                                   100,
                               )
                             : 0;
@@ -1679,15 +1722,15 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                         Credits
                       </TableHead>
                       <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider py-2.5">
-                        Token Proxy
+                        Share
                       </TableHead>
                       <TableHead className="text-right text-[11px] font-semibold text-ink-muted uppercase tracking-wider pr-5 py-2.5">
-                        Est. Cost
+                        Last Activity
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="divide-y divide-hairline/20">
-                    {isHistoryLoading || isMembersLoading ? (
+                    {isMemberSpendLoading || isMembersLoading ? (
                       <TableRow>
                         <TableCell
                           colSpan={6}
@@ -1750,18 +1793,15 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                           <TableCell className="py-3 text-right text-xs font-semibold text-ink">
                             {member.credits.toLocaleString()} cr
                           </TableCell>
-                          <TableCell className="py-3 text-right text-xs font-mono text-ink-muted">
-                            {member.estimatedTokens.toLocaleString()}
+                          <TableCell className="py-3 text-right text-xs tabular-nums text-ink-muted">
+                            {member.credits > 0
+                              ? `${memberShareOfCredits(member.credits)}%`
+                              : "—"}
                           </TableCell>
-                          <TableCell className="py-3 pr-5 text-right">
-                            <p className="text-xs font-semibold text-ink">
-                              {formatMoney(member.estimatedCost, "VND")}
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-ink-muted">
-                              {member.lastActivity
-                                ? format(new Date(member.lastActivity), "MMM dd HH:mm")
-                                : "No activity"}
-                            </p>
+                          <TableCell className="py-3 pr-5 text-right text-xs text-ink-muted">
+                            {member.lastActivity
+                              ? format(new Date(member.lastActivity), "MMM dd HH:mm")
+                              : "No activity"}
                           </TableCell>
                         </TableRow>
                       ))
@@ -1773,10 +1813,14 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               <div className="flex flex-col gap-3 border-t border-hairline/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-ink-muted">
                   Showing {memberSpendRows.length} workspace members. Owner pays
-                  centrally; this table shows attributed usage.
+                  centrally; this table shows attributed usage for{" "}
+                  {format(new Date(CURRENT_YEAR, CURRENT_MONTH - 1, 1), "MMMM yyyy")}.
+                  {memberSpendTruncated
+                    ? ` Only the most recent ${MEMBER_SPEND_PAGE_SIZE.toLocaleString()} of ${(memberSpendPage?.totalCount ?? 0).toLocaleString()} transactions are counted.`
+                    : ""}
                 </p>
                 <p className="text-xs font-semibold text-ink">
-                  {formatMoney(memberSpendTotalCost, "VND")} estimated
+                  {memberSpendTotalCredits.toLocaleString()} cr attributed
                 </p>
               </div>
             </CardContent>

@@ -44,6 +44,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
+import { getPlanPricing } from "@/lib/billing/plan-pricing";
 
 // We fetch plans dynamically now.
 
@@ -52,11 +53,6 @@ function getTopUpRate(credits: number) {
   if (credits >= 25000) return { rate: 8.5, discount: 15 };
   if (credits >= 10000) return { rate: 9, discount: 10 };
   return { rate: 10, discount: 0 };
-}
-
-function isFreePlan(plan: PlanDto) {
-  const value = `${plan.name} ${plan.slug} ${plan.tier}`.toLowerCase();
-  return value.includes("free") || plan.price === 0;
 }
 
 function isEnterprisePlan(plan: PlanDto) {
@@ -158,13 +154,6 @@ export default function WorkspacePlansPage() {
         .sort((a, b) => a.sortOrder - b.sortOrder),
     [plansData],
   );
-  const comparisonPlans = useMemo(
-    () =>
-      [activePlans.find(isFreePlan), activePlans.find(isEnterprisePlan)].filter(
-        (plan): plan is PlanDto => Boolean(plan),
-      ),
-    [activePlans],
-  );
 
   useEffect(() => {
     if (!isAuthenticated || !user) router.push("/login");
@@ -208,6 +197,27 @@ export default function WorkspacePlansPage() {
   }, [queryClient]);
 
   const activePlanId = subscription?.planId;
+
+  /* Every active plan, in sortOrder — not a hand-picked Free/Enterprise pair.
+   *
+   * This was `[activePlans.find(isFreePlan), activePlans.find(isEnterprisePlan)]`, matched by
+   * substring on name/slug/tier. Two things followed. Any third plan the team activates is
+   * silently unpurchasable, because the only checkout surface never renders it. Worse, a
+   * subscriber whose plan is not in that pair falls through to `comparisonPlans[0]`, which
+   * makes `selectedPlanIsCurrent` false — and the Cancel Subscription button is gated on it,
+   * so a paying customer had no way to cancel.
+   *
+   * The workspace's own plan is appended when the catalogue no longer lists it, which is the
+   * grandfathered case: migration 040 set is_active = false on every plan except enterprise,
+   * so subscriptions predating it point at rows `activePlans` filters out. */
+  const comparisonPlans = useMemo(() => {
+    const plans = [...activePlans];
+    const activePlanRow = plansData.find((plan) => plan.id === activePlanId);
+    if (activePlanRow && !plans.some((plan) => plan.id === activePlanRow.id)) {
+      plans.push(activePlanRow);
+    }
+    return plans;
+  }, [activePlans, plansData, activePlanId]);
   const activePlanTierIndex = activePlanId
     ? activePlans.findIndex((p) => p.id === activePlanId)
     : -1;
@@ -359,14 +369,14 @@ export default function WorkspacePlansPage() {
     ? isEnterprisePlan(selectedPlan)
     : false;
   const selectedPlanPrice = selectedPlan?.price ?? 0;
-  const selectedPlanDisplayPrice =
-    billingInterval === "yearly"
-      ? Math.round(selectedPlanPrice * 0.79)
-      : selectedPlanPrice;
-  const selectedPlanCheckoutTotal =
-    billingInterval === "yearly"
-      ? Math.round(selectedPlanPrice * 12 * 0.79)
-      : selectedPlanPrice;
+
+  /* The arithmetic lives in lib/billing/plan-pricing, under test. It has been wrong twice
+     inline here — most recently by treating a yearly-priced plan's annual figure as a monthly
+     one and sending price x 12 x 0.79 to Checkout. */
+  const {
+    displayPricePerMonth: selectedPlanDisplayPrice,
+    checkoutTotal: selectedPlanCheckoutTotal,
+  } = getPlanPricing(selectedPlan, billingInterval);
   const selectedPlanFeatures = selectedPlan
     ? getPlanFeatureList(selectedPlan)
     : [];
