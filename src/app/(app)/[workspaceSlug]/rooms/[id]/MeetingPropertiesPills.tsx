@@ -11,6 +11,7 @@ export function MeetingPropertiesPills({
   room,
   apiParticipants,
   occupancyLabel,
+  occupancyNoun,
   user,
   onCopy
 }: {
@@ -23,6 +24,8 @@ export function MeetingPropertiesPills({
    * Tracking panel beside it.
    */
   occupancyLabel: string;
+  /** "in room" while it is running, "attended" once it is over. */
+  occupancyNoun: string;
   user: { id: string; fullName?: string } | null;
   /** WT-310(12) — the page's copy handler, so the room-code pill reuses its confirmation. */
   onCopy: (text: string, label: string) => void;
@@ -115,12 +118,16 @@ export function MeetingPropertiesPills({
           a placeholder rather than to delete a true one. */}
       <div
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-        title="Participants in the room, out of the meeting type's seat capacity"
+        title={
+          occupancyNoun === "attended"
+            ? "People who joined this meeting"
+            : "Participants in the room, out of the meeting type's seat capacity"
+        }
       >
         <Users size={12} weight="regular" className="text-ink-muted" aria-hidden />
         <span className="tabular-nums text-[12px] font-medium">{occupancyLabel}</span>
-        <span className="text-[12px] text-ink-muted">in room</span>
-        <span className="sr-only">participants in the room, out of the seat capacity</span>
+        <span className="text-[12px] text-ink-muted">{occupancyNoun}</span>
+        <span className="sr-only">{occupancyNoun}</span>
       </div>
 
       {/* scheduledAt, not createdAt.

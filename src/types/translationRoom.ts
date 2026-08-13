@@ -40,6 +40,11 @@ export interface TranslationRoomDto {
     requiresApproval: boolean;
   };
   participantCount?: number;
+  /**
+   * Distinct people who were ever in the room. `participantCount` is live occupancy and is 0
+   * for every finished meeting, so a room that ended showed "0/100" however many attended.
+   */
+  attendedCount?: number;
   isHost?: boolean;
   /**
    * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.
