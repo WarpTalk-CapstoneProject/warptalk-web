@@ -44,12 +44,36 @@ import { formatMoney } from "@/lib/format/currency";
 
 // We fetch plans dynamically now.
 
-function getTopUpRate(credits: number) {
-  if (credits >= 50000) return { rate: 8, discount: 20 };
-  if (credits >= 25000) return { rate: 8.5, discount: 15 };
-  if (credits >= 10000) return { rate: 9, discount: 10 };
-  return { rate: 10, discount: 0 };
-}
+/**
+ * Buying credit is switched off here, and the panel says so.
+ *
+ * WHY THE BUTTON IS GONE
+ *     It posted `paymentType: "CreditTopUp"`, and the backend has no such payment type —
+ *     PaymentConstants.PaymentTypes is Subscription / SubscriptionRenewal / SubscriptionUpdate /
+ *     InvoicePayment. So no handler matched, `if (handler is not null)` skipped the credit grant
+ *     in silence, and the request still wrote a payment record, issued an invoice and returned
+ *     success. The customer paid, saw an invoice, and their balance never moved. There are only
+ *     three paths that raise CreditsRemaining — cycle renewal, the subscription handler, and an
+ *     admin adjustment — and the gRPC top-up is refused outright with "Direct credit top-up is
+ *     disabled".
+ *
+ *     A button that takes money and grants nothing cannot stay reachable while the handler is
+ *     written. Turning it off is the smallest change that stops the harm.
+ *
+ * WHY THE PRICE IS ONE NUMBER
+ *     The ladder here was 10 / 9 / 8.5 / 8 VND per credit with volume discounts. None of it is
+ *     real: docs/credit-economics.md §4.2 sets retail at 4.00 VND per credit with no discount,
+ *     and the backend already agrees (CreditValueVnd = 4m). The frontend was overcharging by
+ *     2–2.5×; a 1,500-credit minimum was quoted at 15,000 VND against a true 6,000 VND.
+ *
+ *     It is stated, not hardcoded into a calculation: 4 VND is an admin-editable parameter in
+ *     billing_pricing_config, so once the handler exists this panel must READ the configured
+ *     value rather than carry its own copy — even a copy that happens to be right today.
+ */
+const TOP_UP_ENABLED = false;
+
+/** Retail rate from docs/credit-economics.md §4.2. Display only — see above. */
+const DOCUMENTED_VND_PER_CREDIT = 4;
 
 export default function WorkspacePlansPage() {
   const router = useRouter();
@@ -273,8 +297,7 @@ export default function WorkspacePlansPage() {
     return { label: "Downgrade", variant: "downgrade", disabled: false };
   };
 
-  const { rate, discount } = getTopUpRate(topUpCredits);
-  const topUpTotal = topUpCredits * rate;
+  const topUpTotal = topUpCredits * DOCUMENTED_VND_PER_CREDIT;
 
   if (!isRoleLoaded) {
     return (
@@ -635,70 +658,13 @@ export default function WorkspacePlansPage() {
                 </div>
               </div>
 
-              {/* Volume Discounts */}
               <div className="bg-surface-2/50 rounded-xl p-5 border border-hairline">
-                <p className="text-sm font-semibold text-ink mb-3">
-                  Volume discount tiers:
+                <p className="text-sm font-semibold text-ink">
+                  {DOCUMENTED_VND_PER_CREDIT} VND per credit
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits > 0 && topUpCredits < 10000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits > 0 && topUpCredits < 10000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      &lt; 10k
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      10 VND/cr
-                    </span>
-                  </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 10000 && topUpCredits < 25000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 10000 && topUpCredits < 25000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      10k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      9 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (10%)
-                      </span>
-                    </span>
-                  </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 25000 && topUpCredits < 50000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 25000 && topUpCredits < 50000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      25k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      8.5 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (15%)
-                      </span>
-                    </span>
-                  </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 50000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 50000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      50k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      8 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (20%)
-                      </span>
-                    </span>
-                  </div>
-                </div>
+                <p className="text-xs text-ink-muted mt-1">
+                  One rate, whatever the amount. There is no volume discount.
+                </p>
               </div>
 
               {topUpCredits > 0 && (
@@ -707,16 +673,9 @@ export default function WorkspacePlansPage() {
                     <span className="text-sm font-medium text-ink-muted">
                       Rate applied
                     </span>
-                    <div className="flex items-center gap-2">
-                      {discount > 0 && (
-                        <Badge className="bg-semantic-success/20 hover:bg-semantic-success/20 text-semantic-success border-none text-xs px-2 py-0.5 rounded-full font-bold shadow-none">
-                          Save {discount}%
-                        </Badge>
-                      )}
-                      <span className="text-sm font-semibold text-ink">
-                        {rate} VND / credit
-                      </span>
-                    </div>
+                    <span className="text-sm font-semibold text-ink">
+                      {DOCUMENTED_VND_PER_CREDIT} VND / credit
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-ink-muted">
@@ -742,6 +701,7 @@ export default function WorkspacePlansPage() {
                 </p>
               )}
 
+              {TOP_UP_ENABLED ? (
               <button
                 type="button"
                 disabled={isProcessing || topUpCredits < 1500}
@@ -763,6 +723,21 @@ export default function WorkspacePlansPage() {
                   "Enter credit amount above (Min 1,500)"
                 )}
               </button>
+              ) : (
+                /* Says why, and does not pretend the button is merely busy. Somebody who came
+                   here to buy credit needs to know it will not arrive, not to be left guessing
+                   whether they clicked wrong. */
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+                  <p className="text-sm font-semibold text-ink">
+                    Credit top-up is temporarily unavailable
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Payment would be taken without the credits being added, so the purchase is
+                    switched off until that is fixed. Your subscription still renews its credits
+                    on schedule. Contact support if you need a balance adjustment.
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -2,7 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { WorkspaceKnowledgeQuery } from "@/types/workspace-knowledge";
+import type {
+  UpdateKnowledgeChunkRequest,
+  WorkspaceKnowledgeQuery,
+} from "@/types/workspace-knowledge";
 import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
@@ -660,5 +663,44 @@ export function useWorkspaceKnowledge(
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
+  });
+}
+
+/**
+ * Corrects one indexed chunk.
+ *
+ * Invalidates every page of this workspace's listing rather than patching the one row: the
+ * fact-category filter is part of the query key, so recategorising a chunk changes which
+ * filtered pages it belongs to — and a surgical cache write would leave it on the page for
+ * the category it just left.
+ */
+export function useUpdateKnowledgeChunk(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      chunkId,
+      update,
+    }: {
+      chunkId: string;
+      update: UpdateKnowledgeChunkRequest;
+    }) => WorkspaceService.updateKnowledgeChunk(workspaceId, chunkId, update),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["workspaces", "knowledge", workspaceId],
+      });
+    },
+  });
+}
+
+export function useDeleteKnowledgeChunk(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (chunkId: string) =>
+      WorkspaceService.deleteKnowledgeChunk(workspaceId, chunkId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["workspaces", "knowledge", workspaceId],
+      });
+    },
   });
 }

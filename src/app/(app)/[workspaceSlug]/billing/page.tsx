@@ -61,6 +61,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
+import { usageTypeDetailLabel } from "@/lib/billing/usage-labels";
 import type {
   GroupedCreditTransaction,
   UsageGroupSummary,
@@ -121,19 +122,6 @@ function getIconForUsage(usageType: string) {
   if (usageType.toLowerCase().includes("translation")) return Translate;
   if (usageType.toLowerCase().includes("summary")) return Robot;
   return Coins;
-}
-
-function getLabelForUsage(usageType: string) {
-  if (usageType === "translation" || usageType === "voice_translation")
-    return "Real-time Translation (Speech-to-Text / STT)";
-  if (usageType === "summary" || usageType === "meeting_summary")
-    return "AI Meeting Insights (Summarization)";
-  if (usageType === "chat") return "AI Workspace Co-pilot Chat";
-  if (usageType === "text_to_speech")
-    return "AI Voice Synthesis (Text-to-Speech / TTS)";
-  if (usageType === "voice_cloning")
-    return "Custom AI Voice Cloning (Voice Cloning)";
-  return usageType.replace(/_/g, " ");
 }
 
 function getUnitSuffixForUsage(usageType: string): string {
@@ -819,7 +807,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   <div className="grid gap-4 md:grid-cols-2">
                     {usageBreakdown.map((usage: UsageBreakdownDto) => {
                       const Icon = getIconForUsage(usage.usageType);
-                      const name = getLabelForUsage(usage.usageType);
+                      const name = usageTypeDetailLabel(usage.usageType);
                       const percent = report?.totalConsumedCredits
                         ? Math.round(
                             (usage.creditsConsumed /
@@ -1731,7 +1719,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                         selectedTxGroup.originalTx.reduce<
                           Record<string, UsageGroupSummary>
                         >((acc, item) => {
-                          const type = getLabelForUsage(
+                          const type = usageTypeDetailLabel(
                             item.referenceType || "Other",
                           );
                           const rawType = item.referenceType || "Other";
@@ -1788,7 +1776,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                               <span className="font-mono text-ink-muted text-[10px] mr-2.5">
                                 {format(new Date(item.createdAt), "HH:mm:ss")}
                               </span>
-                              {getLabelForUsage(
+                              {usageTypeDetailLabel(
                                 item.referenceType || "AI usage",
                               )}
                             </span>
