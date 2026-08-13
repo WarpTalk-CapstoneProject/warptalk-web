@@ -27,7 +27,7 @@ const setupModal = await readFile(
 );
 
 assert.match(hook, /onNoiseSuppressionError\?: \(error: unknown\) => void/);
-assert.match(hook, /await localAudioTrack\.setProcessor\(krispRef\.current\)/);
+assert.match(hook, /await localAudioTrack\.setProcessor\(krisp\b/);
 assert.match(hook, /onNoiseSuppressionError\?\.\(error\)/);
 assert.match(roomPage, /onNoiseSuppressionError=\{handleNoiseSuppressionError\}/);
 assert.match(roomPage, /setNoiseSuppressionEnabled\(false\)/);
@@ -84,13 +84,26 @@ assert.match(hook, /applyConstraints/);
 // Reversed — which is what shipped — a Krisp that fails (its WASM was blocked by a CSP missing
 // 'wasm-unsafe-eval') left the microphone with NO suppression at all, making the toggle strictly
 // worse than off while the UI claimed browser suppression was still running.
-const krispAttach = hook.indexOf("setProcessor(krispRef.current)");
+const krispAttach = hook.indexOf("setProcessor(krisp)");
 const standDownBrowser = hook.indexOf("setBrowserSuppression(false)");
 assert.ok(krispAttach !== -1, "Krisp must still be attached");
 assert.ok(standDownBrowser !== -1, "the browser denoiser must be stood down explicitly");
 assert.ok(
   krispAttach < standDownBrowser,
   "Krisp must be attached BEFORE the browser's noise suppression is disabled",
+);
+
+// Attaching is not running. setProcessor() resolves even on a LiveKit project that cannot run
+// Krisp — init() only fetches a public manifest, and the real gate is setEnabled(), which logs
+// and returns false rather than throwing. Catching the throw alone left that silent path
+// surrendering browser suppression to an inert filter, which is WT-320.
+const enableCall = hook.indexOf("setEnabled(true)");
+const enabledCheck = hook.indexOf("isEnabled()");
+assert.ok(enableCall !== -1, "Krisp must be explicitly enabled, not just attached");
+assert.ok(enabledCheck !== -1, "Krisp's own enabled state must be checked");
+assert.ok(
+  enabledCheck < standDownBrowser,
+  "Krisp must report itself ENABLED before the browser's suppression is given up",
 );
 
 // And the failure path must put the microphone back before anyone is told about it.
