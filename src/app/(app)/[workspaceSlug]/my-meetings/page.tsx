@@ -149,8 +149,10 @@ export default function MyMeetingsPage() {
   const todayKey = String(startOfDay(new Date()));
   const truncated = (meetings.data?.total ?? 0) > allMeetings.length;
 
+  // bg-surface-1, the same white Meetings and Members open onto. A workspace page that brings
+  // its own wash reads as bolted on from somewhere else.
   return (
-    <main className="flex h-full flex-col bg-canvas text-ink">
+    <main className="flex h-full flex-col bg-surface-1 text-ink">
       <header className="flex flex-col gap-4 border-b border-border px-5 py-5 lg:flex-row lg:items-end lg:justify-between lg:px-8">
         <div>
           <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
@@ -174,7 +176,7 @@ export default function MyMeetingsPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[268px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-canvas/30 px-4 py-5 lg:flex">
+        <aside className="hidden w-[268px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-4 py-5 lg:flex">
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
               <button
@@ -274,7 +276,7 @@ export default function MyMeetingsPage() {
 
                   <div
                     ref={group.key === todayKey ? todayRef : undefined}
-                    className="sticky top-0 z-10 -mx-4 bg-canvas/95 px-4 py-2 backdrop-blur"
+                    className="sticky top-0 z-10 -mx-4 bg-surface-1/95 px-4 py-2 backdrop-blur"
                   >
                     <div className="flex items-baseline gap-2">
                       <span
@@ -716,9 +718,12 @@ function rowToneClass(meeting: MyMeetingItem) {
     return "border-rose-500/20 bg-rose-500/[0.06] hover:border-rose-500/35 hover:bg-rose-500/[0.1]";
   }
   if (meeting.timeState === "upcoming") {
-    return "border-sky-500/15 bg-sky-500/[0.04] hover:border-sky-500/30 hover:bg-sky-500/[0.08]";
+    // The state is already carried by the accent bar and the badge. Tinting the whole row as
+    // well turned the content area into a green-and-blue wash, which is what stopped this page
+    // reading as white — the one thing every other workspace page does.
+    return "border-border bg-surface-1 hover:border-sky-500/30 hover:bg-sky-500/[0.04]";
   }
-  return "border-emerald-500/15 bg-emerald-500/[0.04] hover:border-emerald-500/30 hover:bg-emerald-500/[0.08]";
+  return "border-border bg-surface-1 hover:border-emerald-500/30 hover:bg-emerald-500/[0.04]";
 }
 
 function stateBadgeClass(meeting: MyMeetingItem) {
