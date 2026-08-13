@@ -43,6 +43,7 @@ import {
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import { getLanguageName } from "@/lib/language/languages";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -729,6 +730,34 @@ export function PersistentMeetingSession({
   // Chinese/Japanese/English translation bubbles too ("loạn ngôn ngữ"). A ref keeps the
   // filter reading the latest value without forcing the SignalR effect to reconnect on
   // every language change.
+  /**
+   * Tell a participant when the host starts translation, and what they have to do about it.
+   *
+   * A member has no Start button, so from their seat translation beginning is invisible: the
+   * transcript simply stays empty until they happen to open Settings and pick the two languages.
+   * That is the whole of "tưởng không dịch được" — nothing was broken, nobody had been asked.
+   *
+   * Fires on the TRANSITION into started, not on the state, so re-renders and the five-second
+   * session poll cannot repeat it. Hosts are excluded: they pressed the button.
+   */
+  const announcedTranslationRef = useRef(false);
+  useEffect(() => {
+    if (!translationStarted) {
+      announcedTranslationRef.current = false;
+      return;
+    }
+    if (isRoomHost || announcedTranslationRef.current) return;
+    announcedTranslationRef.current = true;
+
+    const needsLanguages = !sourceLanguage || !targetLanguage;
+    toast.info("The host started translation.", {
+      description: needsLanguages
+        ? "Choose the language you speak and the one you want to hear — the control is next to Stop Translation."
+        : `You are speaking ${getLanguageName(sourceLanguage)} and hearing ${getLanguageName(targetLanguage)}.`,
+      duration: needsLanguages ? 12000 : 6000,
+    });
+  }, [translationStarted, isRoomHost, sourceLanguage, targetLanguage]);
+
   const targetLanguageRef = useRef(targetLanguage);
   useEffect(() => {
     targetLanguageRef.current = targetLanguage;
