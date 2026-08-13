@@ -263,6 +263,33 @@ export function getAnimatedWordTokens(text: string, maxCharacters?: number): Ani
 }
 
 /**
+ * The recogniser's confidence in a line, as a percentage — or null when it did not say.
+ *
+ * WT-371 Bug 3: the panel printed `Math.round(confidence * 100)%` on a value that is NOT a
+ * probability. `stt_worker/model.py` publishes `confidence=round(avg_logprob, 4)`, an average
+ * token LOG-probability, which is at most 0 and usually negative. Multiplied by 100 it rendered
+ * as "-23%" — a number with no meaning, in a unit it does not have.
+ *
+ * exp() is the actual inverse: a mean log-probability of -0.23 is a mean per-token probability
+ * of 0.79, i.e. 79%. That is a real score and the one the model actually reported.
+ *
+ * Values already in (0, 1] are passed through, so a producer that starts publishing a plain
+ * probability does not have to be exponentiated twice to be read correctly.
+ */
+export function confidencePercent(raw: number | null | undefined): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  // The backend's ModelConfidence already collapses its -1.0 "no logprobs" sentinel to null,
+  // so anything arriving here is a measurement — but a 0 tells us nothing either way and a
+  // "100%" built from it would be the confident lie WT-277 was about.
+  if (raw === 0) return null;
+
+  const probability = raw < 0 ? Math.exp(raw) : raw;
+  if (probability <= 0 || probability > 1) return null;
+
+  return Math.round(probability * 100);
+}
+
+/**
  * The wall-clock time a line was spoken, as HH:MM.
  *
  * The live panel used to print `startTimeMs` through formatTranscriptTimestamp and label it

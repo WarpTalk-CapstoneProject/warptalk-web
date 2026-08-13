@@ -5,6 +5,7 @@ import { ClosedCaptioning } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
 import { getLanguageName } from "@/lib/language/languages";
 import {
+  confidencePercent,
   findSuggestionForUtterance,
   formatTranscriptClockTime,
   formatTranscriptTimestamp,
@@ -261,18 +262,14 @@ function TranscriptBubble({
               {getLanguageName(segment.originalLanguage)}
               {segment.targetLanguage ? ` → ${getLanguageName(segment.targetLanguage)}` : ""}
             </span>
-            {/* How sure the recogniser was. Shown only when the segment actually carries it —
-                realtime delta events do not, and printing "0%" for "not measured" would be a
-                confident lie about an uncertain line. Rounded, because a decimal place on a
-                confidence score implies a precision that is not there.
-
-                `typeof === "number"` alone did NOT achieve that. TranscriptSegmentDto declares
-                `confidence: number`, not optional, so a delta event that carries no confidence
-                arrives as 0 rather than undefined — and `typeof 0 === "number"` is true. The
-                badge duly rendered "0%" on perfectly good lines, which is the lie this comment
-                was written to prevent. A real 0.0 is not distinguishable from "not measured"
-                anyway, so both are hidden. */}
-            {typeof segment.confidence === "number" && segment.confidence > 0 ? (
+            {/* How sure the recogniser was, as a real percentage.
+                WT-371 Bug 3: this printed `confidence * 100` on a value that is not a
+                probability — stt_worker publishes an average token LOG-probability, at most 0
+                and usually negative, so the badge read "-23%". confidencePercent applies the
+                actual inverse (exp), turning -0.23 into 79%. Rounded, because a decimal place
+                on a confidence score implies a precision that is not there, and hidden when the
+                producer reported nothing rather than shown as a confident 0% or 100%. */}
+            {confidencePercent(segment.confidence) !== null ? (
               <span
                 title="How confident the speech recogniser was in this line"
                 className={
@@ -281,7 +278,7 @@ function TranscriptBubble({
                     : "rounded-full bg-surface-2 px-1.5 py-px tabular-nums"
                 }
               >
-                {Math.round(segment.confidence * 100)}%
+                {confidencePercent(segment.confidence)}%
               </span>
             ) : null}
           </p>

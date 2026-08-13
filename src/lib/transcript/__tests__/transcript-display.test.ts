@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   dedupeTranscriptSegments,
   findSuggestionForUtterance,
+  confidencePercent,
   formatTranscriptTimestamp,
   getAnimatedWordTokens,
   getLiveCaptionText,
@@ -302,4 +303,28 @@ test("a marker is dropped BEFORE it can be merged into a real line", () => {
 
 test("a live transcript that is nothing but markers renders as empty, not as noise", () => {
   assert.deepEqual(groupTranscriptSegments([segment({ originalText: "__MEETING_END__" })]), []);
+});
+
+// WT-371 Bug 3. stt_worker publishes `confidence=round(avg_logprob, 4)` — an average token
+// LOG-probability, at most 0 and usually negative. The panel multiplied it by 100 and rendered
+// "-23%": a number with no meaning, in a unit it does not have.
+test("a negative log-probability becomes a real percentage", () => {
+  assert.equal(confidencePercent(-0.23), 79);
+  assert.equal(confidencePercent(-0.7), 50);
+});
+
+test("a perfect score is 100%, not a negative", () => {
+  assert.equal(confidencePercent(-0.0001), 100);
+});
+
+test("a value already in 0..1 is not exponentiated twice", () => {
+  // Reading a plain probability as a logprob would turn 0.8 into 122%.
+  assert.equal(confidencePercent(0.8), 80);
+});
+
+test("nothing reported renders nothing, never a confident 0% or 100%", () => {
+  assert.equal(confidencePercent(null), null);
+  assert.equal(confidencePercent(undefined), null);
+  assert.equal(confidencePercent(0), null);
+  assert.equal(confidencePercent(Number.NaN), null);
 });
