@@ -23,23 +23,26 @@ import { useRouter } from "next/navigation";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { showMeetingStartedToast } from "@/components/rooms/meeting-started-toast";
+import { type RawNotification, readMeetingStartedNotice } from "@/lib/notifications/meeting-started-notice";
+import { playNotificationCue } from "@/lib/notifications/notification-sounds";
+import { useMeetingStartedStore } from "@/stores/meeting-started-store";
 
 interface RealtimeContextType {
   connection: signalR.HubConnection | null;
   isConnected: boolean;
 }
 
-interface NotificationEventPayload {
-  title?: string;
-  content?: string;
-  message?: string;
-  type?: string;
+/**
+ * The realtime notification, in whichever spelling arrives.
+ *
+ * `RawNotification` accepts both snake_case (the SignalR relay's RealtimeNotificationMessage) and
+ * camelCase (the REST list's NotificationMessageDto) — reading only one of them is what silently
+ * removed the Join button from the meeting-started popup.
+ */
+type NotificationEventPayload = RawNotification & {
   actionUrl?: string;
-  data?: { actionUrl?: string };
-  /** MEETING_STARTED / MEETING_SUMMARY_READY carry room_id + room_title (see the validator). */
-  payloadJson?: string;
-}
+  data?: { actionUrl?: string } | null;
+};
 
 interface WorkspaceSettingsEventPayload {
   message?: string;
@@ -150,13 +153,10 @@ export function RealtimeNotificationProvider({
         // a meeting in progress cannot, and the only useful response is one click. This type
         // used to be discarded at validation before it ever reached a client
         // (warptalk-backend#190), so the popup had nothing to show.
-        if (notif.type === "MEETING_STARTED") {
-          const payload = readMeetingPayload(notif.payloadJson);
-          showMeetingStartedToast({
-            title: payload.roomTitle ?? notif.title ?? "A meeting",
-            host: extractHostName(notif.content ?? notif.message),
-            joinHref: actionUrl ?? null,
-          });
+        const meetingStarted = readMeetingStartedNotice(notif);
+        if (meetingStarted) {
+          playNotificationCue("meeting-started");
+          useMeetingStartedStore.getState().show(meetingStarted);
           return;
         }
 
@@ -493,35 +493,4 @@ export function RealtimeNotificationProvider({
   );
 }
 
-/**
- * The room a MEETING_STARTED notification is about.
- *
- * Parsed defensively: payloadJson is a string the server built, and a client that throws inside
- * a SignalR callback takes the whole connection's handler down with it — so a malformed payload
- * degrades to "a meeting started" rather than to no notifications at all.
- */
-function readMeetingPayload(payloadJson?: string): { roomTitle?: string; roomId?: string } {
-  if (!payloadJson) return {};
-  try {
-    const parsed = JSON.parse(payloadJson) as Record<string, unknown>;
-    return {
-      roomTitle: typeof parsed.room_title === "string" ? parsed.room_title : undefined,
-      roomId: typeof parsed.room_id === "string" ? parsed.room_id : undefined,
-    };
-  } catch {
-    return {};
-  }
-}
 
-/**
- * The host's name out of the server's sentence, which reads `"Title" has started`.
- *
- * Returns undefined rather than guessing when the shape is not what we expect: the toast says
- * "A meeting has started" in that case, which is true, where a bad guess would put the wrong
- * person's name on it.
- */
-function extractHostName(content?: string): string | undefined {
-  if (!content) return undefined;
-  const match = content.match(/^(.+?)\s+started\s/i);
-  return match?.[1]?.trim() || undefined;
-}
