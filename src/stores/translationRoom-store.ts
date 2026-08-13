@@ -43,7 +43,7 @@ interface TranslationRoomStoreState {
   updateParticipantSpeakLanguage: (userId: string, speakLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
-  addSuggestion: (suggestion: AiSuggestionDto) => void;
+  addSuggestion: (suggestion: AiSuggestionDto, preferredLanguage?: string) => void;
   dismissSuggestion: (segmentId: string) => void;
   setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
@@ -176,9 +176,33 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       return { transcriptSegments };
     }),
 
-  addSuggestion: (suggestion) =>
+  /**
+   * AI suggestions are fanned out to the WHOLE room, one per language the room is translating
+   * into — the same broadcast shape as TranslationTextReceived, which the transcript handler
+   * already filters by the viewer's own language. This did not filter at all, so a viewer set to
+   * English read a suggestion written in Vietnamese because another participant was listening in
+   * Vietnamese ("e set speak en - hear en mà sao suggest ở vi").
+   *
+   * PREFERRED, not required. Dropping every non-matching suggestion would be correct only if the
+   * worker is guaranteed to emit the viewer's language, and it is not — a room translating into
+   * one language would then show nobody any suggestions at all. So a matching language always
+   * wins, and a non-matching one is only kept when nothing better has arrived for that segment.
+   */
+  addSuggestion: (suggestion, preferredLanguage) =>
     set((s) => ({
-      suggestions: { ...s.suggestions, [suggestion.segmentId]: suggestion },
+      suggestions: (() => {
+        const existing = s.suggestions[suggestion.segmentId];
+        if (!existing) return { ...s.suggestions, [suggestion.segmentId]: suggestion };
+
+        const matches = (candidate: AiSuggestionDto) =>
+          Boolean(preferredLanguage) &&
+          candidate.language?.slice(0, 2).toLowerCase() ===
+            preferredLanguage!.slice(0, 2).toLowerCase();
+
+        // Keep what is already shown unless the newcomer is a better language match.
+        if (matches(existing) || !matches(suggestion)) return s.suggestions;
+        return { ...s.suggestions, [suggestion.segmentId]: suggestion };
+      })(),
     })),
 
   dismissSuggestion: (segmentId) =>

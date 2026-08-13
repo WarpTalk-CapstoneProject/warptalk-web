@@ -1507,7 +1507,11 @@ export function PersistentMeetingSession({
       // Same gate the transcript handlers use: a suggestion belongs to a live segment, so
       // it has nothing to attach to once translation has stopped.
       if (!meetingLiveRef.current) return;
-      addSuggestion(suggestion);
+      // ...and the same language question the TranslationTextReceived handler above already
+      // asks. Suggestions are fanned out to the whole room, so without this a viewer reading
+      // in English was shown a suggestion written in Vietnamese because somebody else in the
+      // room was listening in Vietnamese. Preferred rather than filtered — see addSuggestion.
+      addSuggestion(suggestion, targetLanguageRef.current);
     });
     connection.on("TranslationRoomEnded", () => {
       void refetchRoom();

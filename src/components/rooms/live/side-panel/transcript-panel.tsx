@@ -23,6 +23,22 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import type { AiSuggestionDto, TranscriptSegmentDto } from "@/types/realtime";
 
+/** Within this many pixels of the end counts as "following the live transcript". */
+const STICK_TO_BOTTOM_PX = 48;
+
+/**
+ * Where the reader had scrolled to, per room, for as long as this tab lives.
+ *
+ * Module-level rather than component state on purpose: the whole point is to survive the panel
+ * being unmounted, which is exactly what switching to the Chat tab does. Not persisted to
+ * storage — a scroll offset is meaningless against a transcript that has grown since, and a
+ * stale one would land the reader somewhere arbitrary.
+ */
+const transcriptScrollOffsets = new Map<
+  string,
+  { offset: number; atBottom: boolean }
+>();
+
 export function TranscriptPanel({
   segments,
   roomId,
@@ -38,6 +54,8 @@ export function TranscriptPanel({
   baseTime?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const hasRestoredRef = useRef(false);
   const currentUserId = useAuthStore((state) => state.user?.id);
   const suggestions = useTranslationRoomStore((state) => state.suggestions);
   const dismissSuggestion = useTranslationRoomStore((state) => state.dismissSuggestion);
@@ -49,11 +67,58 @@ export function TranscriptPanel({
     return groupSegmentsByTranslationSession(utterances, sessions ?? [], baseTime);
   }, [segments, sessions, baseTime]);
 
+  // WHERE THE READER WAS, NOT WHERE THE TRANSCRIPT ENDS.
+  //
+  // This forced scrollTop to the bottom on EVERY change to `blocks`, and `blocks` is a useMemo
+  // that yields a fresh array whenever segments, sessions or baseTime change. Two consequences,
+  // and the report is both:
+  //
+  //   • Switching Chat → Transcript remounts this panel, so the effect ran with the container
+  //     freshly at zero and drove it to the bottom of an 18-minute transcript — with
+  //     `scroll-smooth` on the container, an animation the whole length of the list. "nó scroll
+  //     lâu".
+  //   • Reading something further up was impossible during an active meeting: every new line
+  //     yanked the view back down.
+  //
+  // Now it behaves the way every chat log does. The reader's offset is remembered per room for
+  // as long as the tab lives, new lines only follow when the reader is already at the bottom,
+  // and the restore is a jump rather than a gliding animation.
+  function rememberScroll() {
+    const element = containerRef.current;
+    if (!element) return;
+    const distanceFromBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    stickToBottomRef.current = distanceFromBottom <= STICK_TO_BOTTOM_PX;
+    transcriptScrollOffsets.set(roomId, {
+      offset: element.scrollTop,
+      atBottom: stickToBottomRef.current,
+    });
+  }
+
   useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    const element = containerRef.current;
+    if (!element) return;
+
+    /** Move without animating — `scroll-smooth` is for following live lines, not for restoring. */
+    function jumpTo(top: number) {
+      const previous = element!.style.scrollBehavior;
+      element!.style.scrollBehavior = "auto";
+      element!.scrollTop = top;
+      element!.style.scrollBehavior = previous;
     }
-  }, [blocks]);
+
+    if (!hasRestoredRef.current) {
+      hasRestoredRef.current = true;
+      const remembered = transcriptScrollOffsets.get(roomId);
+      // Anyone who was at the bottom stays at the bottom, including a first visit: the newest
+      // line is what a live transcript is for.
+      jumpTo(remembered && !remembered.atBottom ? remembered.offset : element.scrollHeight);
+      stickToBottomRef.current = remembered ? remembered.atBottom : true;
+      return;
+    }
+
+    if (stickToBottomRef.current) element.scrollTop = element.scrollHeight;
+  }, [blocks, roomId]);
 
   if (!segments.length) {
     return <EmptyPanel text="Start WarpTalk to see live translation here." />;
@@ -62,7 +127,11 @@ export function TranscriptPanel({
   const showSessionLabels = blocks.length > 1;
 
   return (
-    <div ref={containerRef} className="flex-1 space-y-1 overflow-y-auto p-3 custom-scrollbar scroll-smooth">
+    <div
+      ref={containerRef}
+      onScroll={rememberScroll}
+      className="flex-1 space-y-1 overflow-y-auto p-3 custom-scrollbar scroll-smooth"
+    >
       {/* Said once, at the top, rather than as a divider inside the list: consecutive lines
           from one speaker are merged into a single utterance, so there is no reliable seam to
           put a marker on. Someone who was here from the start sees nothing. */}
@@ -195,8 +264,15 @@ function TranscriptBubble({
             {/* How sure the recogniser was. Shown only when the segment actually carries it —
                 realtime delta events do not, and printing "0%" for "not measured" would be a
                 confident lie about an uncertain line. Rounded, because a decimal place on a
-                confidence score implies a precision that is not there. */}
-            {typeof segment.confidence === "number" ? (
+                confidence score implies a precision that is not there.
+
+                `typeof === "number"` alone did NOT achieve that. TranscriptSegmentDto declares
+                `confidence: number`, not optional, so a delta event that carries no confidence
+                arrives as 0 rather than undefined — and `typeof 0 === "number"` is true. The
+                badge duly rendered "0%" on perfectly good lines, which is the lie this comment
+                was written to prevent. A real 0.0 is not distinguishable from "not measured"
+                anyway, so both are hidden. */}
+            {typeof segment.confidence === "number" && segment.confidence > 0 ? (
               <span
                 title="How confident the speech recogniser was in this line"
                 className={
