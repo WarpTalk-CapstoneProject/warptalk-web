@@ -19,12 +19,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { useGoogleLogin } from "@react-oauth/google";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
+import { GoogleIdTokenLogin } from "@/components/auth/google-id-token-login";
 import { BlurText } from "@/components/visuals/blur-text";
 import { LineWaves } from "@/components/visuals/line-waves";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -78,49 +78,29 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        const idToken = tokenResponse.access_token;
-        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, {
-          idToken,
-        });
-        const { user, accessToken, expiresAt } = res.data;
+  const handleGoogleAuthenticated = ({ user, accessToken, expiresAt }: AuthResponse) => {
+    login(user, accessToken);
+    setAccessTokenCookie(accessToken, expiresAt);
 
-        login(user, accessToken);
-        setAccessTokenCookie(accessToken, expiresAt);
-
-        const isAdmin = user.roles?.some(
-          (role: string) => role.toLowerCase() === "admin",
-        );
-        if (isAdmin && callbackUrl === "/workspace/dashboard") {
-          router.replace("/dashboard");
-        } else {
-          router.replace(callbackUrl);
-        }
-      } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(
-          error?.response?.data?.error ||
-            "Google login failed. Please try again.",
-        );
-      }
-    },
-    onError: () => {
-      toast.error("Google authentication failed or popup was closed.");
-    },
-  });
+    const isAdmin = user.roles?.some(
+      (role: string) => role.toLowerCase() === "admin",
+    );
+    if (isAdmin && callbackUrl === "/workspace/dashboard") {
+      router.replace("/dashboard");
+    } else {
+      router.replace(callbackUrl);
+    }
+  };
 
   return (
-    <button
-      type="button"
-      onClick={() => handleGoogleLogin()}
-      className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-white/15 bg-white text-[15px] font-semibold text-black transition hover:bg-white/90"
-      data-login-field
-    >
-      <GoogleAuthIcon className="size-5" />
-      Continue with Google
-    </button>
+    <div data-login-field>
+      <GoogleIdTokenLogin
+        onAuthenticated={handleGoogleAuthenticated}
+        errorMessage="Google login failed. Please try again."
+        missingCredentialMessage="Google authentication failed or popup was closed."
+        width="360"
+      />
+    </div>
   );
 }
 

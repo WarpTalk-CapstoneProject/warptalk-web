@@ -16,10 +16,9 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { useGoogleLogin } from "@react-oauth/google";
-
 import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
+import { GoogleIdTokenLogin } from "@/components/auth/google-id-token-login";
 import { Checkbox } from "@/components/ui/checkbox";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
@@ -51,58 +50,31 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
-  // Nothing on this path may be written to the console. The Google access
-  // token, and the AuthResponse the backend returns for it, both carry live
-  // credentials — the response body holds the access token and the 7-day
-  // refresh token in plaintext. Anything printed here survives in the
-  // browser's console history and in any screen recording of a demo, and a
-  // refresh token read from it stays redeemable for a week even after the
-  // user signs out. The toasts below are the user-facing signal; the console
-  // is not a place to put credentials.
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        const idToken = tokenResponse.access_token;
-        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, {
-          idToken,
-        });
-        const { user, accessToken, expiresAt } = res.data;
+  // Nothing on this path may be written to the console. The Google ID token
+  // and the AuthResponse both carry live credentials.
+  const handleGoogleAuthenticated = ({ user, accessToken, expiresAt }: AuthResponse) => {
+    login(user, accessToken);
+    setAccessTokenCookie(accessToken, expiresAt);
 
-        login(user, accessToken);
-        setAccessTokenCookie(accessToken, expiresAt);
+    toast.success("Google login successful!");
 
-        toast.success("Google login successful!");
-
-        const isAdmin = user.roles?.some(
-          (r: string) => r.toLowerCase() === "admin",
-        );
-        if (isAdmin && callbackUrl === "/workspace/dashboard") {
-          router.replace("/dashboard");
-        } else {
-          router.replace(callbackUrl);
-        }
-      } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(
-          error?.response?.data?.error ||
-            "Google login failed. Please try again.",
-        );
-      }
-    },
-    onError: () => {
-      toast.error("Google authentication failed or popup was closed.");
-    },
-  });
+    const isAdmin = user.roles?.some(
+      (r: string) => r.toLowerCase() === "admin",
+    );
+    if (isAdmin && callbackUrl === "/workspace/dashboard") {
+      router.replace("/dashboard");
+    } else {
+      router.replace(callbackUrl);
+    }
+  };
 
   return (
-    <button
-      type="button"
-      onClick={() => handleGoogleLogin()}
-      className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
-    >
-      <GoogleAuthIcon className="size-5" />
-      Continue with Google
-    </button>
+    <GoogleIdTokenLogin
+      onAuthenticated={handleGoogleAuthenticated}
+      errorMessage="Google login failed. Please try again."
+      missingCredentialMessage="Google authentication failed or popup was closed."
+      width="328"
+    />
   );
 }
 

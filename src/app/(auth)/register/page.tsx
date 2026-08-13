@@ -8,14 +8,13 @@ import { Eye, EyeClosed, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useGoogleLogin } from "@react-oauth/google";
 
 import {
   CinematicAuthShell,
   GoogleAuthIcon,
   InputGroup,
-  SocialButton,
 } from "@/components/auth/cinematic-auth-shell";
+import { GoogleIdTokenLogin } from "@/components/auth/google-id-token-login";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
@@ -49,33 +48,19 @@ function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        const idToken = tokenResponse.access_token;
-        const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, { idToken });
-        const { user, accessToken, expiresAt } = res.data;
+  const handleGoogleAuthenticated = ({ user, accessToken, expiresAt }: AuthResponse) => {
+    login(user, accessToken);
+    setAccessTokenCookie(accessToken, expiresAt);
 
-        login(user, accessToken);
-        setAccessTokenCookie(accessToken, expiresAt);
-
-        toast.success("Google sign-in successful!");
-        router.replace(callbackUrl);
-      } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
-      }
-    },
-    onError: () => {
-      toast.error("Google authentication failed.");
-    },
-  });
+    toast.success("Google sign-in successful!");
+    router.replace(callbackUrl);
+  };
 
   return (
-    <SocialButton
-      icon={<GoogleAuthIcon />}
-      label="Google"
-      onClick={() => handleGoogleLogin()}
+    <GoogleIdTokenLogin
+      onAuthenticated={handleGoogleAuthenticated}
+      errorMessage="Google sign-in failed. Please try again."
+      width="320"
     />
   );
 }
