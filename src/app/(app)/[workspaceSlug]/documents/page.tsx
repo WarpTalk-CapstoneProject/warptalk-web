@@ -1151,8 +1151,8 @@ export default function WorkspaceDocumentsPage() {
 
       {/* ─── Upload Modal ("New" Document Upload Modal) ─── */}
       <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-        <DialogContent className="border-hairline bg-surface-1 sm:max-w-3xl w-full rounded-2xl shadow-2xl p-6 sm:p-8 flex flex-col max-h-[92vh]">
-          <DialogHeader className="pb-4 border-b border-hairline/40 shrink-0">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-3xl w-full overflow-hidden rounded-2xl shadow-2xl p-5 sm:p-6 flex flex-col max-h-[calc(100vh-32px)]">
+          <DialogHeader className="pb-3 border-b border-hairline/40 shrink-0">
             <DialogTitle className="text-xl font-bold text-ink flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Upload className="h-5 w-5" />
@@ -1167,21 +1167,21 @@ export default function WorkspaceDocumentsPage() {
 
           <form
             onSubmit={handleSubmit(handleUploadSubmit)}
-            className="flex flex-col gap-6 overflow-y-auto pr-1.5 pt-5 flex-1"
+            className="flex min-w-0 flex-col gap-4 overflow-hidden pt-4"
           >
             {/* Step 1: File Selection & Document Name */}
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-ink flex items-center justify-between">
+                <label className="flex items-center justify-between gap-3 text-xs font-bold text-ink">
                   <span>1. Select Reference File</span>
-                  <span className="text-[11px] font-normal text-ink-muted">
+                  <span className="truncate text-[11px] font-normal text-ink-muted">
                     Supported: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP,
                     GIF (Max 10MB)
                   </span>
                 </label>
 
                 {!selectedFile ? (
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-hairline hover:border-primary/60 rounded-2xl cursor-pointer bg-surface-2/40 hover:bg-surface-2/80 transition-all p-4 text-center group">
+                  <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-hairline hover:border-primary/60 rounded-2xl cursor-pointer bg-surface-2/40 hover:bg-surface-2/80 transition-all p-4 text-center group">
                     <div className="flex flex-col items-center justify-center gap-1.5">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:scale-110 transition-transform">
                         <Upload className="h-5 w-5" />
@@ -1267,7 +1267,7 @@ export default function WorkspaceDocumentsPage() {
             </div>
 
             {/* Step 2: Options & AI Permission Toggle */}
-            <div className="flex flex-col gap-3 pt-3 border-t border-hairline/40">
+            <div className="grid gap-3 pt-3 border-t border-hairline/40 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <div className="flex items-center justify-between p-3.5 rounded-xl border border-hairline bg-surface-2/40">
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-2">
@@ -1296,7 +1296,7 @@ export default function WorkspaceDocumentsPage() {
               {selectedFileIsImage && (
                 <Badge
                   variant="outline"
-                  className="w-fit border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold text-sky-700"
+                  className="w-fit border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold text-sky-700 sm:col-span-2"
                 >
                   <Info className="mr-1 h-3.5 w-3.5" />
                   Image files are stored as administrative attachments. AI
@@ -1315,7 +1315,7 @@ export default function WorkspaceDocumentsPage() {
               </div>
             </div>
 
-            <DialogFooter className="mt-4 pt-4 border-t border-hairline/40 flex justify-end gap-2.5 shrink-0">
+            <DialogFooter className="!mx-0 !mb-0 mt-1 pt-3 border-t border-hairline/40 flex justify-end gap-2.5 shrink-0 bg-transparent p-0">
               <button
                 type="button"
                 onClick={() => setIsUploadModalOpen(false)}
