@@ -24,8 +24,28 @@ export interface TranscriptSegmentDto {
   speakerName: string;
   originalText: string;
   originalLanguage: string;
+  /**
+   * Set on the wire, never populated by the gateway — AiResultConsumerService builds every
+   * TranscriptSegmentReceived with `TranslatedText: null, TargetLanguage: null`. Kept because
+   * the record shape is shared with the hub model, and read only as a fallback for a segment
+   * that predates `translations`.
+   *
+   * @deprecated for live rendering — read {@link translations} through
+   * `resolveSegmentTranslation`, which answers for a specific reader's language.
+   */
   translatedText?: string;
+  /** @deprecated see {@link translatedText}. */
   targetLanguage?: string;
+  /**
+   * Every translation of this line, keyed by NORMALIZED target language code ("en", "vi").
+   *
+   * WT-371 Bug 4: a bubble does not have a target language — a reader does. The room translates
+   * into every language somebody is listening in and the gateway fans all of them out to the
+   * whole group, so the panel picks the entry matching the viewer's listen language at render
+   * time. Holding one overwritten translation instead is what let a slow-resolving listen
+   * language leave the transcript showing two different directions at once.
+   */
+  translations?: Record<string, string>;
   confidence: number;
   startTimeMs: number;
   endTimeMs: number;

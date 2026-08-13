@@ -11,6 +11,7 @@ import {
   groupSavedTranscriptSegments,
   groupTranscriptSegments,
   isTranscriptControlMarker,
+  resolveSegmentTranslation,
   resolveTranscriptSpeakerName,
 } from "../transcript-display.ts";
 import type { ParticipantInfoDto, TranscriptSegmentDto } from "../../../types/realtime.ts";
@@ -327,4 +328,98 @@ test("nothing reported renders nothing, never a confident 0% or 100%", () => {
   assert.equal(confidencePercent(undefined), null);
   assert.equal(confidencePercent(0), null);
   assert.equal(confidencePercent(Number.NaN), null);
+});
+
+// ── WT-371 Bug 4: the transcript reads from ONE seat ────────────────────────────────────────
+//
+// A room with A (speak en / listen vi) and B (speak vi / listen en) translates into both
+// languages, and the gateway fans both to the whole group. The panel used to keep one
+// translation per bubble, overwritten by whichever landed last, so which direction a line
+// showed depended on arrival order and on when the reader's own listen language finished
+// resolving — "English → Vietnamese" above "Vietnamese → English", in one panel.
+
+test("a line resolves into the reader's language, not into whichever arrived last", () => {
+  const line = segment({
+    originalLanguage: "en",
+    translations: { vi: "Xin chào", ja: "こんにちは" },
+    // Left over from an unrelated listener. Reading this is the defect.
+    translatedText: "こんにちは",
+    targetLanguage: "ja",
+  });
+
+  assert.equal(resolveSegmentTranslation(line, "vi"), "Xin chào");
+  assert.equal(resolveSegmentTranslation(line, "ja"), "こんにちは");
+});
+
+test("a regional tag reads the same entry as its base language", () => {
+  // The picker offers "en-US"; the worker publishes "en". Unnormalized these are two keys and
+  // the lookup silently misses, which renders as a line that never got translated.
+  const line = segment({ originalLanguage: "vi", translations: { en: "Hello" } });
+
+  assert.equal(resolveSegmentTranslation(line, "en-US"), "Hello");
+});
+
+test("nothing is shown when the speaker already spoke the reader's language", () => {
+  // B speaks Vietnamese; A reads Vietnamese. There is nothing to translate, and echoing the
+  // same sentence under itself is how "→ Vietnamese" ended up beneath a Vietnamese line.
+  const line = segment({ originalLanguage: "vi", translations: { en: "Hello" } });
+
+  assert.equal(resolveSegmentTranslation(line, "vi"), null);
+});
+
+test("a translation for somebody else's language is not borrowed", () => {
+  const line = segment({ originalLanguage: "en", translations: { ja: "こんにちは" } });
+
+  assert.equal(resolveSegmentTranslation(line, "vi"), null);
+});
+
+test("a legacy inline translation counts only for the language it was made for", () => {
+  const legacy = segment({
+    originalLanguage: "en",
+    translations: undefined,
+    translatedText: "Xin chào",
+    targetLanguage: "vi",
+  });
+
+  assert.equal(resolveSegmentTranslation(legacy, "vi"), "Xin chào");
+  assert.equal(resolveSegmentTranslation(legacy, "ja"), null);
+});
+
+test("merging two chunks unions their languages instead of splicing them together", () => {
+  // The old merge concatenated a single translatedText slot, so a bubble carrying Vietnamese
+  // followed by one carrying Japanese produced one string of both.
+  const [utterance] = groupTranscriptSegments([
+    segment({
+      segmentId: "s1",
+      originalText: "Hello",
+      translations: { vi: "Xin chào", ja: "こんにちは" },
+    }),
+    segment({
+      segmentId: "s2",
+      originalText: "how are you?",
+      startTimeMs: 2_100,
+      endTimeMs: 3_000,
+      translations: { vi: "bạn khỏe không?" },
+    }),
+  ]);
+
+  assert.equal(utterance.translations?.vi, "Xin chào bạn khỏe không?");
+  assert.equal(utterance.translations?.ja, "こんにちは");
+});
+
+test("one speaker's continuous sentence stays one bubble across several languages", () => {
+  // The merge used to refuse when two segments' targetLanguage differed. With the room
+  // translating into more than one language that split every utterance in half.
+  const utterances = groupTranscriptSegments([
+    segment({ segmentId: "s1", translations: { vi: "Xin chào" }, targetLanguage: "vi" }),
+    segment({
+      segmentId: "s2",
+      startTimeMs: 2_100,
+      endTimeMs: 3_000,
+      translations: { ja: "こんにちは" },
+      targetLanguage: "ja",
+    }),
+  ]);
+
+  assert.equal(utterances.length, 1);
 });

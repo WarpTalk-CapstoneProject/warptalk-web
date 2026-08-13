@@ -1,3 +1,8 @@
+// Relative, with the extension, because this module's own unit tests run under the plain node
+// test runner (`--experimental-strip-types`), which does not resolve the "@/" alias. The other
+// imports here get away with it only because they are `import type` and erase before runtime —
+// this one is a real value.
+import { normalizeLanguageCode } from "../language/languages.ts";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 import type { TranscriptSegmentDto as SavedTranscriptSegmentDto } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
@@ -15,6 +20,66 @@ export type AnimatedWordToken = {
 
 const MAX_UTTERANCE_GAP_MS = 2_500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * The translation of a line INTO A PARTICULAR READER'S LANGUAGE, or null when there is none.
+ *
+ * WT-371 Bug 4. The panel used to print `segment.translatedText` and `segment.targetLanguage` —
+ * whichever translation had most recently been merged into the bubble — which meant the direction
+ * shown depended on arrival order and on when the reader's own listen language finished resolving.
+ * Two lines side by side could read "English → Vietnamese" and "Vietnamese → English".
+ *
+ * Asking with the reader's language instead makes the answer a property of who is looking. Every
+ * bubble in the panel resolves against the same language, so the transcript reads consistently
+ * from that seat and re-reads consistently the moment the seat's language changes.
+ *
+ * Returns null — not the original text — when the speaker was already speaking the reader's
+ * language. There is nothing to translate, and echoing the same sentence twice under itself is
+ * how "→ Vietnamese" ended up under a Vietnamese line.
+ */
+export function resolveSegmentTranslation(
+  segment: Pick<TranscriptSegmentDto, "translations" | "translatedText" | "targetLanguage" | "originalLanguage">,
+  readerLanguage: string | null | undefined,
+): string | null {
+  const language = normalizeLanguageCode(readerLanguage ?? "");
+  if (!language) return null;
+  if (normalizeLanguageCode(segment.originalLanguage) === language) return null;
+
+  const translations = segment.translations;
+  if (translations && Object.keys(translations).length > 0) {
+    // The map is authoritative once it exists. Falling through to the legacy field when the
+    // reader's language is simply not among the translations would hand them SOMEBODY ELSE's
+    // language — the precise defect this function exists to remove — because that field holds
+    // whichever translation happened to be merged last.
+    return translations[language]?.trim() || null;
+  }
+
+  // Only for segments captured before `translations` existed, and only when the language
+  // actually matches. The old code read this field without asking who it was translated for.
+  if (
+    segment.translatedText?.trim()
+    && normalizeLanguageCode(segment.targetLanguage ?? "") === language
+  ) {
+    return segment.translatedText.trim();
+  }
+
+  return null;
+}
+
+/** Union of two bubbles' per-language translations, appending where both hold the same language. */
+function mergeTranslations(
+  previous: Record<string, string> | undefined,
+  next: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!previous) return next;
+  if (!next) return previous;
+
+  const merged = { ...previous };
+  for (const [language, text] of Object.entries(next)) {
+    merged[language] = appendText(merged[language], text);
+  }
+  return merged;
+}
 
 export function dedupeTranscriptSegments(
   segments: TranscriptSegmentDto[],
@@ -64,6 +129,10 @@ export function groupTranscriptSegments(
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
       translatedText: appendText(previous.translatedText, segment.translatedText) || undefined,
+      // Merged per language. Concatenating into one slot the way translatedText does would
+      // splice a Vietnamese sentence onto an English one whenever the two bubbles carried
+      // different languages, which is exactly the confusion WT-371 Bug 4 was about.
+      translations: mergeTranslations(previous.translations, segment.translations),
       confidence: Math.min(previous.confidence, segment.confidence),
       endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
       // Merging drops the absorbed segment's id from `segmentId` forever. Without this
@@ -322,7 +391,11 @@ export function formatTranscriptTimestamp(timeMs: number): string {
 function belongsToSameUtterance(previous: TranscriptSegmentDto, next: TranscriptSegmentDto): boolean {
   if (previous.speakerId !== next.speakerId) return false;
   if (previous.originalLanguage !== next.originalLanguage) return false;
-  if (previous.targetLanguage && next.targetLanguage && previous.targetLanguage !== next.targetLanguage) return false;
+  // No target-language check any more. It existed to stop two bubbles with DIFFERENT
+  // translations from being folded into one slot that could only hold a single language; the
+  // translations are keyed by language now, so a merge unions them and nothing is lost.
+  // Keeping the check would instead split one person's continuous sentence into two bubbles
+  // whenever the room translated it into more than one language.
 
   const hasTimeline = previous.endTimeMs > 0 && next.startTimeMs > 0;
   if (!hasTimeline) return true;

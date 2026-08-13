@@ -11,6 +11,7 @@ import {
   formatTranscriptTimestamp,
   groupSegmentsByTranslationSession,
   groupTranscriptSegments,
+  resolveSegmentTranslation,
   type GroupedTranscriptSegment,
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
@@ -45,9 +46,16 @@ export function TranscriptPanel({
   roomId,
   baseTime,
   missedCount = 0,
+  readerLanguage,
 }: {
   segments: TranscriptSegmentDto[];
   roomId: string;
+  /**
+   * The viewer's own listen language. Every bubble resolves its translation against this one
+   * value, which is what makes the panel read consistently from a single seat (WT-371 Bug 4).
+   * Changing it re-renders the whole transcript in the new language rather than only new lines.
+   */
+  readerLanguage?: string;
   /** Lines that were already spoken when this person joined. 0 for anyone who was here. */
   missedCount?: number;
   /** Room start time — segments' startTimeMs is elapsed ms from here, used to bucket
@@ -153,6 +161,7 @@ export function TranscriptPanel({
               <TranscriptBubble
                 key={segment.segmentId}
                 segment={segment}
+                readerLanguage={readerLanguage}
                 isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
                 suggestion={findSuggestionForUtterance(segment, suggestions)}
                 onDismissSuggestion={dismissSuggestion}
@@ -190,15 +199,19 @@ function formatSessionWindow(session: TranslationSessionBlock<unknown>["session"
 function TranscriptBubble({
   segment,
   isSelf,
+  readerLanguage,
   suggestion,
   onDismissSuggestion,
 }: {
   segment: TranscriptSegmentDto;
   isSelf: boolean;
+  /** The language THIS viewer reads in. Every bubble in the panel resolves against it. */
+  readerLanguage?: string;
   suggestion?: AiSuggestionDto;
   onDismissSuggestion: (segmentId: string) => void;
 }) {
   const speakerName = segment.speakerName || "Speaker";
+  const translation = resolveSegmentTranslation(segment, readerLanguage);
   // Closed by default. The hint was not asked for, so it announces itself with a badge and
   // waits to be opened rather than pushing the line somebody actually said out of the way.
   const [suggestionOpen, setSuggestionOpen] = useState(false);
@@ -252,15 +265,20 @@ function TranscriptBubble({
           <p className={`text-[13px] leading-relaxed ${isSelf ? "text-white" : "text-ink-muted"}`}>
             <AnimatedWords text={segment.originalText} />
           </p>
-          {segment.translatedText ? (
+          {translation ? (
             <p className={`mt-1.5 text-[13px] font-medium leading-relaxed ${isSelf ? "text-white" : "text-ink"}`}>
-              <AnimatedWords text={segment.translatedText} />
+              <AnimatedWords text={translation} />
             </p>
           ) : null}
           <p className={`mt-2 flex items-center gap-1.5 text-[10px] font-medium ${isSelf ? "text-white/70" : "text-ink-subtle"}`}>
+            {/* WT-371 Bug 4: the arrow points at the READER's language, not at whichever
+                translation happened to arrive last. Every line in the panel therefore ends the
+                same way, and a line already spoken in the reader's language shows one language
+                and no arrow — because nothing was translated for them, not because something
+                is missing. */}
             <span>
               {getLanguageName(segment.originalLanguage)}
-              {segment.targetLanguage ? ` → ${getLanguageName(segment.targetLanguage)}` : ""}
+              {translation && readerLanguage ? ` → ${getLanguageName(readerLanguage)}` : ""}
             </span>
             {/* How sure the recogniser was, as a real percentage.
                 WT-371 Bug 3: this printed `confidence * 100` on a value that is not a
