@@ -28,7 +28,7 @@ import { LanguageLabel } from "@/components/language/language-label";
 import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
 // cannot drift the way the language chip did.
-import { isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
+import { isMeetingOver, isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -430,7 +430,24 @@ export default function MeetingsPageLinear() {
     // Tuesday" are contradictory questions, and answering the second under a tab labelled All is
     // how that tab came to show one row.
     if (dayFilter && !isAllView) {
-      return rooms.filter((r) => matchesSearch(r) && isScheduledOn(r, dayFilter));
+      // The day NARROWS the tab; it does not replace it. Returning here with only the date
+      // predicate dropped the tab's status rule entirely, so picking a day on Active listed
+      // every room booked that day — including cancelled and ended ones — under a heading that
+      // still read "Active Meetings". A daily series whose schedule had been stopped showed its
+      // future occurrences there as "Cancelled", which reads as the UI reporting the wrong
+      // thing about a meeting that looks perfectly fine.
+      //
+      // Active and History ask opposite questions about the same day, so each keeps its own
+      // half: Active is what is still to come or still running, History is what is over. A
+      // future date under Active is not "nothing is live right now" — it is "here is what is
+      // booked" — which is why this is a terminal-status exclusion rather than the tab's
+      // now-relative window.
+      return (activeTab === "history" ? rowSource : rooms).filter(
+        (r) =>
+          matchesSearch(r) &&
+          isScheduledOn(r, dayFilter) &&
+          (activeTab === "history" ? isMeetingOver(r.status) : !isMeetingOver(r.status)),
+      );
     }
 
     if (activeTab === "active") {

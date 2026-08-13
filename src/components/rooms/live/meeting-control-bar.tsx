@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getFlagEmoji } from "@/lib/language/language-flag";
@@ -245,6 +245,28 @@ export function MeetingControlBar({
             {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
             {warptalkStarted ? "Stop Translation" : "Start Translation"}
           </button>
+          <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
+        </>
+      ) : null}
+
+      {/*
+        The two languages that decide whether this person hears anything, next to the control
+        that starts it — NOT four levels into the settings menu, which is where they were and why
+        "translation is broken" was the conclusion every time somebody had not set them. This is
+        deliberately outside the isHost block: a member cannot start translation and is exactly
+        who needs these.
+      */}
+      {onChangeSpeakLanguage && onChangeListenLanguage && availableListenLanguages ? (
+        <>
+          <LanguagePairPicker
+            speakLanguage={speakLanguage}
+            listenLanguage={listenLanguage}
+            availableSpeakLanguages={availableSpeakLanguages ?? availableListenLanguages}
+            availableListenLanguages={availableListenLanguages}
+            onChangeSpeakLanguage={onChangeSpeakLanguage}
+            onChangeListenLanguage={onChangeListenLanguage}
+            highlight={Boolean(warptalkStarted) && (!speakLanguage || !listenLanguage)}
+          />
           <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
         </>
       ) : null}
@@ -1055,5 +1077,145 @@ function MeetControl({
     >
       {icon}
     </button>
+  );
+}
+
+/**
+ * "English → Vietnamese", with the two pickers one click away.
+ *
+ * Both values already existed on this bar and were only reachable through Settings → Speaking /
+ * Listening in. Nobody found them, so a room where a participant had never chosen looked like a
+ * room where translation did not work. `highlight` rings the control while translation is
+ * running and one of the two is still unset — the one moment the choice is urgent.
+ */
+function LanguagePairPicker({
+  speakLanguage,
+  listenLanguage,
+  availableSpeakLanguages,
+  availableListenLanguages,
+  onChangeSpeakLanguage,
+  onChangeListenLanguage,
+  highlight,
+}: {
+  speakLanguage?: string;
+  listenLanguage?: string;
+  availableSpeakLanguages: string[];
+  availableListenLanguages: string[];
+  onChangeSpeakLanguage: (language: string) => void;
+  onChangeListenLanguage: (language: string) => void;
+  highlight: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Choose the language you speak and the one you hear"
+        className={`flex h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors ${
+          highlight
+            ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/40 hover:bg-amber-500/15"
+            : "bg-surface-2 text-ink hover:bg-surface-3"
+        }`}
+      >
+        <Translate className="h-4 w-4" />
+        <span className="tabular-nums">
+          {speakLanguage ? getLanguageName(speakLanguage) : "Set language"}
+        </span>
+        <CaretRight className="h-3 w-3 rotate-90 opacity-60" weight="bold" />
+        <span>{listenLanguage ? getLanguageName(listenLanguage) : "—"}</span>
+        <CaretDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} weight="bold" />
+      </button>
+
+      {open ? (
+        <div
+          role="menu"
+          className="absolute bottom-[calc(100%+10px)] left-1/2 z-50 w-64 -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-surface-1 p-1.5 shadow-lg"
+        >
+          <LanguageColumn
+            title="I speak"
+            hint="What the microphone is transcribed as."
+            options={availableSpeakLanguages}
+            selected={speakLanguage}
+            onSelect={(language) => {
+              onChangeSpeakLanguage(language);
+              setOpen(false);
+            }}
+          />
+          <div className="my-1 h-[1px] bg-border" />
+          <LanguageColumn
+            title="I hear"
+            hint="What everyone else is translated into, for you."
+            options={availableListenLanguages}
+            selected={listenLanguage}
+            onSelect={(language) => {
+              onChangeListenLanguage(language);
+              setOpen(false);
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LanguageColumn({
+  title,
+  hint,
+  options,
+  selected,
+  onSelect,
+}: {
+  title: string;
+  hint: string;
+  options: string[];
+  selected?: string;
+  onSelect: (language: string) => void;
+}) {
+  return (
+    <div>
+      <p className="px-2.5 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
+        {title}
+      </p>
+      <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">{hint}</p>
+      <div className="max-h-40 overflow-y-auto">
+        {options.map((language) => (
+          <button
+            key={language}
+            type="button"
+            role="menuitemradio"
+            aria-checked={selected === language}
+            onClick={() => onSelect(language)}
+            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+              selected === language ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+            }`}
+          >
+            <span>{getFlagEmoji(language)}</span>
+            <span className="flex-1 truncate">{getLanguageName(language)}</span>
+            {selected === language ? <CheckCircle className="h-3.5 w-3.5" weight="fill" /> : null}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

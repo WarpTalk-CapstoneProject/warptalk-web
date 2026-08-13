@@ -43,6 +43,7 @@ import {
   type TourStep,
 } from "@/lib/onboarding/tour-steps";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 
 /** Breathing room between the lit control and the edge of the hole. */
@@ -119,6 +120,7 @@ function useTargetRect(target: string | null): Rect | null {
 
 function TourRunner() {
   const closeTour = useOnboardingStore((state) => state.closeTour);
+  const userId = useAuthStore((state) => state.user?.id);
 
   // Resolved once, on mount. A Member never walks to a highlight of the Billing link they do
   // not have, and the count in "3/9" cannot change under them halfway through.
@@ -130,7 +132,7 @@ function TourRunner() {
   const step = steps[index] ?? null;
   const rect = useTargetRect(step?.target ?? null);
 
-  const finish = useCallback(() => closeTour(Date.now()), [closeTour]);
+  const finish = useCallback(() => closeTour(userId, Date.now()), [closeTour, userId]);
 
   const next = useCallback(() => {
     setIndex((current) => {

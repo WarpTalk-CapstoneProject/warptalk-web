@@ -57,17 +57,20 @@ export function UsageTrend({
   }));
   const hasAnything = data.some((point) => point.consumed > 0 || point.toppedUp > 0);
 
-  if (!hasAnything) {
-    return (
-      <p className="flex h-[220px] items-center justify-center text-[12px] text-ink-muted">
-        {emptyMessage ?? `No credits used or added in ${year}.`}
-      </p>
-    );
-  }
+  // An empty period still DRAWS. Replacing the chart with a sentence — which is what this did —
+  // makes a workspace with no usage look like a workspace whose dashboard is broken, and it
+  // moves the whole panel every time the first credit is spent. OpenAI's usage page is the
+  // reference: the axes, the grid and a flat baseline are always there, and the message sits on
+  // top of them. The bars are simply all zero.
 
   return (
     <>
-      <div className="h-[220px] w-full">
+      <div className="relative h-[220px] w-full">
+        {!hasAnything ? (
+          <p className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-center text-[12px] text-ink-muted">
+            {emptyMessage ?? `No credits used or added in ${year}.`}
+          </p>
+        ) : null}
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={3}>
             <CartesianGrid strokeDasharray="2 3" vertical={false} stroke={GRID} />
@@ -84,6 +87,9 @@ export function UsageTrend({
             <YAxis
               axisLine={false}
               tickLine={false}
+              // Without a floor, an all-zero series collapses the axis to one tick at 0 and the
+              // grid disappears with it — the chart would be "there" and still look absent.
+              domain={hasAnything ? [0, "auto"] : [0, 100]}
               tick={{ fontSize: 11, fill: AXIS }}
               tickFormatter={(value: number) =>
                 value >= 1000 ? `${Math.round(value / 1000)}k` : `${value}`
