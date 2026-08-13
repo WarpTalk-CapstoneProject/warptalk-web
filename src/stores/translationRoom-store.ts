@@ -1,5 +1,7 @@
 import { create } from "zustand";
-import { normalizeLanguageCode } from "@/lib/language/languages";
+// Relative, with the extension: session-scoped-state.test.ts imports this store under the plain
+// node test runner, which does not resolve the "@/" alias for a real (non-type) import.
+import { normalizeLanguageCode } from "../lib/language/languages.ts";
 import type {
   AiSuggestionDto,
   ChatMessageDto,
