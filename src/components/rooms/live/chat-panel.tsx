@@ -19,6 +19,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
+import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -548,9 +549,19 @@ export function ChatPanel({
                       </span>
                       <Download className="h-3.5 w-3.5 shrink-0 text-ink-subtle" />
                     </button>
+                  ) : isAssistant ? (
+                    // WarpBot answers in markdown here too, and this rendered the source of
+                    // it — "**transcript hiện tại**" reached the reader as those characters.
+                    // Left-aligned unconditionally: a bulleted list right-aligned to match a
+                    // chat bubble is unreadable, and WarpBot's messages are never "mine".
+                    <div
+                      className={`mt-0.5 max-w-full break-words text-left text-[13px] font-medium leading-relaxed text-primary`}
+                    >
+                      <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
+                    </div>
                   ) : (
                     <p
-                      className={`mt-0.5 max-w-full text-[13px] leading-relaxed whitespace-pre-wrap break-words ${isAssistant ? "text-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}
+                      className={`mt-0.5 max-w-full text-[13px] leading-relaxed whitespace-pre-wrap break-words text-ink-muted ${isMine ? "text-right" : "text-left"}`}
                     >
                       {message.originalText}
                     </p>
