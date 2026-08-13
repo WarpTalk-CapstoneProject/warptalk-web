@@ -15,11 +15,14 @@
  * components/workspace/page-chrome.tsx for why that shape is the product's.
  */
 
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowClockwise,
+  CaretDown,
+  CaretRight,
   CheckCircle,
   FileText,
   Spinner,
@@ -65,6 +68,10 @@ export default function RoomEndedPage() {
         : false;
     },
   });
+
+  // At most one open at a time. Two long transcripts expanded together turn the page into a
+  // wall of text with the list that navigates it pushed off screen.
+  const [openArtifactId, setOpenArtifactId] = useState<string | null>(null);
 
   const room = roomQuery.data;
   const artifacts = artifactsQuery.data ?? [];
@@ -148,30 +155,50 @@ export default function RoomEndedPage() {
               const isFailed = FAILED_STATUSES.includes(status);
               const StatusIcon = isReady ? CheckCircle : isFailed ? WarningCircle : ArrowClockwise;
 
+              const isOpen = openArtifactId === artifact.id;
+
               return (
-                <div
-                  key={artifact.id}
-                  className="flex items-center gap-3 border-b border-hairline px-1 py-3 last:border-b-0"
-                >
-                  <StatusIcon
-                    className={`h-4 w-4 shrink-0 ${
-                      isReady
-                        ? "text-emerald-600"
-                        : isFailed
-                          ? "text-destructive"
-                          : "animate-spin text-ink-muted"
-                    }`}
-                  />
-                  {/* The title alone. The server generates it FROM the type — "summary export
-                      (TEXT/MARKDOWN)" over "SUMMARY_EXPORT" — so printing both put the same two
-                      words on two lines, which the old card hid only by being large enough to
-                      absorb it. */}
-                  <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
-                    {artifact.title || artifact.type.replaceAll("_", " ").toLowerCase()}
-                  </p>
-                  <Badge variant={isReady ? "default" : isFailed ? "destructive" : "secondary"}>
-                    {artifact.status}
-                  </Badge>
+                <div key={artifact.id} className="border-b border-hairline last:border-b-0">
+                  <button
+                    type="button"
+                    // Only a finished artifact has anything to show. An in-progress one is a
+                    // row that reports its own progress, not a thing to open.
+                    disabled={!isReady}
+                    aria-expanded={isOpen}
+                    onClick={() => setOpenArtifactId(isOpen ? null : artifact.id)}
+                    className="flex w-full items-center gap-3 px-1 py-3 text-left transition-colors enabled:hover:bg-surface-2/50 disabled:cursor-default"
+                  >
+                    {isReady ? (
+                      isOpen ? (
+                        <CaretDown className="h-3 w-3 shrink-0 text-ink-subtle" weight="bold" />
+                      ) : (
+                        <CaretRight className="h-3 w-3 shrink-0 text-ink-subtle" weight="bold" />
+                      )
+                    ) : (
+                      <span className="w-3 shrink-0" />
+                    )}
+                    <StatusIcon
+                      className={`h-4 w-4 shrink-0 ${
+                        isReady
+                          ? "text-emerald-600"
+                          : isFailed
+                            ? "text-destructive"
+                            : "animate-spin text-ink-muted"
+                      }`}
+                    />
+                    {/* The title alone. The server generates it FROM the type — "summary export
+                        (TEXT/MARKDOWN)" over "SUMMARY_EXPORT" — so printing both put the same two
+                        words on two lines, which the old card hid only by being large enough to
+                        absorb it. */}
+                    <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
+                      {artifact.title || artifact.type.replaceAll("_", " ").toLowerCase()}
+                    </p>
+                    <Badge variant={isReady ? "default" : isFailed ? "destructive" : "secondary"}>
+                      {artifact.status}
+                    </Badge>
+                  </button>
+
+                  {isOpen ? <ArtifactPreview artifactId={artifact.id} /> : null}
                 </div>
               );
             })}
@@ -179,5 +206,63 @@ export default function RoomEndedPage() {
         )}
       </WorkspaceBody>
     </WorkspacePage>
+  );
+}
+
+/**
+ * The artifact's own text, read on this page instead of downloaded and opened elsewhere.
+ *
+ * The summary and transcript are written INTO the artifact row (ArtifactsFinalizer sets
+ * Content), so the download endpoint already answers with the text for anything that is not a
+ * recording. Sending someone to a file manager to find out what their meeting was about was
+ * never a deliberate decision — it is just what a page with only a download button leaves them.
+ *
+ * Fetched only when opened, and cached from then on: this is the text of a finished meeting, so
+ * it cannot change under the reader.
+ */
+function ArtifactPreview({ artifactId }: { artifactId: string }) {
+  const { data, status } = useQuery({
+    queryKey: ["translationRooms", "artifact", artifactId, "content"],
+    queryFn: async () => (await translationRoomService.artifactDownload(artifactId)).data,
+    staleTime: Infinity,
+  });
+
+  if (status === "pending") {
+    return (
+      <div className="flex items-center gap-2 px-1 pb-3 text-[12px] text-ink-muted">
+        <Spinner className="h-3.5 w-3.5 animate-spin" />
+        Loading preview
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <p className="px-1 pb-3 text-[12px] text-ink-subtle">
+        Couldn&rsquo;t load this artifact&rsquo;s content.
+      </p>
+    );
+  }
+
+  // A recording has a signed URL and no text. Saying which of the two this is beats rendering
+  // an empty box that looks like a failure.
+  if (!data?.content?.trim()) {
+    return (
+      <p className="px-1 pb-3 text-[12px] text-ink-subtle">
+        {data?.url
+          ? "This artifact is a file rather than text — use Open artifacts to download it."
+          : "No content was stored for this artifact."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="px-1 pb-3">
+      {/* Capped and scrollable. A ninety-minute transcript is thousands of lines, and a preview
+          that pushes every other artifact off the page is not a preview. */}
+      <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md border border-hairline bg-surface-1 p-3 font-sans text-[12px] leading-relaxed text-ink-muted">
+        {data.content}
+      </pre>
+    </div>
   );
 }
