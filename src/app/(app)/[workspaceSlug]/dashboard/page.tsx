@@ -1,49 +1,103 @@
 "use client";
 
+/**
+ * The workspace owner's dashboard.
+ *
+ * WHAT IT WAS, TWICE
+ *   First it was four tiles — Credit balance 0, Meetings 9, Documents 2, Team members 6 — over a
+ *   chart reading "Failed to load chart data" and a panel reading "No consumption recorded".
+ *   Every number true, none of them a reason to open the page, and two thirds of the screen
+ *   permanently displaying its own failure.
+ *
+ *   Then it was a to-do list: what needs approving, what is scheduled, and the counts on one
+ *   quiet line. That is a better inbox and a worse dashboard. An owner is the person who pays for
+ *   this workspace, and neither version told them the one thing only they can act on — whether
+ *   the money holds out.
+ *
+ * WHAT IT IS
+ *   Spend first, because that is the owner's question: how much credit is left, how fast it is
+ *   going, and whether it reaches the renewal date — with the pace comparison that makes the
+ *   number mean something. Then where the credits went and how the year has trended. Then the
+ *   operational half that was worth keeping: what needs a decision, and what is about to run.
+ *
+ * THE FAILURE STATES ARE THE DESIGN
+ *   A workspace with no subscription is not a broken dashboard, and it is the state every new
+ *   workspace starts in. Billing reads 404 there — the API used to answer 400 for it, which is
+ *   why the old page could only render an error — so each panel that depends on a plan says so
+ *   plainly and the panels that do not (usage, meetings, members, documents) carry on working.
+ */
+
 import { useQuery } from "@tanstack/react-query";
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useWorkspaceRole } from "@/hooks/use-workspace-role";
-import { useWorkspaceMembers, useWorkspaceDocuments } from "@/hooks/use-workspace";
-import { useTranslationRooms } from "@/hooks/use-translationRooms";
-import { billingService } from "@/services/billing.service";
-import { UsageChart } from "@/components/admin/UsageChart";
-import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import {
-  Users,
-  FileText,
-  VideoCamera,
-  CreditCard,
-  ArrowUpRight,
-  Sparkle,
-  Spinner
-} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import {
+  ArrowUpRight,
+  CheckCircle,
+  CreditCard,
+  FileText,
+  Spinner,
+  Users,
+  VideoCamera,
+  Warning,
+} from "@phosphor-icons/react/dist/ssr";
+
+import {
+  WorkspaceBody,
+  WorkspaceEmptyState,
+  WorkspaceFilterPill,
+  WorkspacePage,
+  WorkspaceSection,
+  WorkspaceToolbar,
+} from "@/components/workspace/page-chrome";
+import { WORKSPACE_DOCUMENT_STATUS } from "@/constants/workspace-document";
+import { useTranslationRooms } from "@/hooks/use-translationRooms";
+import { useWorkspaceDocuments, useWorkspaceMembers } from "@/hooks/use-workspace";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { getErrorStatus } from "@/lib/api/retry-policy";
+import { billingService } from "@/services/billing.service";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+
+import { CycleSummary } from "./components/cycle-summary";
+import { UsageBreakdown } from "./components/usage-breakdown";
+import { UsageTrend } from "./components/usage-trend";
+
+/** Below this share of the cycle's credits remaining, the balance needs a decision. */
+const LOW_CREDIT_PERCENT = 15;
+
+/** How many rows a "what is coming up" list can carry before it stops being a summary. */
+const UPCOMING_LIMIT = 5;
+
+const BREAKDOWN_WINDOWS = [
+  { days: 7, label: "7d" },
+  { days: 30, label: "30d" },
+  { days: 90, label: "90d" },
+] as const;
 
 export default function WorkspaceAdminDashboardPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
-  const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const role = useWorkspaceRole();
 
   const isOwnerOrAdmin = role === "owner" || role === "admin";
 
-  // Fetch metrics and stats (React hooks at the top level)
+  // Read once, at mount. Reading the clock during render is impure — the same render would
+  // produce a different projection depending on when React happened to run it — and "coming up"
+  // only has to be right for the visit, not tick over while the tab sits open.
+  const [now] = useState(() => Date.now());
+  const [breakdownDays, setBreakdownDays] = useState<number>(30);
+  const year = new Date(now).getFullYear();
+
+  const enabled = Boolean(activeWorkspaceId) && isOwnerOrAdmin;
+
   const { data: members, isLoading: isLoadingMembers } = useWorkspaceMembers(
     activeWorkspaceId || "",
     1,
-    100
+    100,
   );
   const { data: documents, isLoading: isLoadingDocuments } = useWorkspaceDocuments(
     activeWorkspaceId || "",
     1,
-    100
+    100,
   );
   // Same reason as the Meetings list: without workspaceId the server cannot widen this to a
   // workspace Owner/Admin, and the Meetings tile read 0 for an Admin while the Owner saw 3.
@@ -52,191 +106,367 @@ export default function WorkspaceAdminDashboardPage() {
     workspaceId: activeWorkspaceId ?? undefined,
   });
 
-  // Query workspace credit balance
-  const { data: credits, isLoading: isLoadingCredits } = useQuery({
+  const creditsQuery = useQuery({
     queryKey: ["workspace-credits", activeWorkspaceId],
     queryFn: () => billingService.getWorkspaceCredits(activeWorkspaceId!),
-    enabled: Boolean(activeWorkspaceId && isOwnerOrAdmin),
+    enabled,
+  });
+  const subscriptionQuery = useQuery({
+    queryKey: ["workspace-subscription", activeWorkspaceId],
+    queryFn: () => billingService.getActiveSubscription(activeWorkspaceId!),
+    enabled,
+  });
+  const trendQuery = useQuery({
+    queryKey: ["workspace-usage-trend", activeWorkspaceId, year],
+    queryFn: () => billingService.getWorkspaceUsageChart(activeWorkspaceId!, year),
+    enabled,
+  });
+  // Reads usage records rather than the subscription, so it answers even before a plan exists.
+  const breakdownQuery = useQuery({
+    queryKey: ["workspace-usage-breakdown", activeWorkspaceId, breakdownDays],
+    queryFn: () => billingService.getWorkspaceUsageBreakdown(activeWorkspaceId!, breakdownDays),
+    enabled,
   });
 
   if (!isOwnerOrAdmin) {
     return (
-      <div className="flex h-full items-center justify-center p-6 bg-canvas text-ink">
-        <div className="max-w-md text-center space-y-4">
-          <h1 className="text-xl font-bold tracking-tight text-ink">
-            Access Denied
-          </h1>
-          <p className="text-ink-muted text-sm">
-            This dashboard is only visible to workspace owners and admins.
-          </p>
-        </div>
-      </div>
+      <WorkspacePage>
+        <WorkspaceBody className="pt-6">
+          <WorkspaceEmptyState
+            icon={<CreditCard size={28} weight="duotone" />}
+            title="Only an Owner or Admin can see this dashboard"
+            description="It reports workspace-wide spend and resources, so it is limited to the people who manage them."
+          />
+        </WorkspaceBody>
+      </WorkspacePage>
     );
   }
 
-  const totalMembers = members?.total ?? members?.items?.length ?? 0;
-  const totalDocuments = documents?.total ?? documents?.items?.length ?? 0;
-  const totalRooms = roomsData?.rooms?.length ?? roomsData?.total ?? 0;
-  const activeRooms = roomsData?.rooms?.filter((r) => r.status === "in_progress").length ?? 0;
+  const billingHref = `/${activeWorkspaceSlug}/billing`;
+  const plansHref = `/${activeWorkspaceSlug}/payment/plans`;
 
-  const currentCredits = credits?.currentCredits ?? 0;
-  const totalCredits = credits?.totalCredits ?? 1000;
-  const creditUsagePercent = Math.min(
-    100,
-    Math.round(((totalCredits - currentCredits) / totalCredits) * 100) || 0
+  // 404 is the account state "this workspace has no plan", not a fault. Anything else genuinely
+  // failed, and saying "no plan" over a 500 would be a lie the owner acts on.
+  const noPlan = getErrorStatus(creditsQuery.error) === 404;
+  const credits = creditsQuery.data ?? null;
+  const subscription = subscriptionQuery.data ?? null;
+
+  const allDocuments = documents?.items ?? [];
+  const pendingDocuments = allDocuments.filter((doc) =>
+    doc.status?.toLowerCase().includes(WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL),
   );
 
+  const rooms = roomsData?.rooms ?? [];
+  const upcoming = rooms
+    .filter(
+      (room) =>
+        room.status === "in_progress" ||
+        room.status === "waiting" ||
+        (room.status === "scheduled" &&
+          room.scheduledAt &&
+          new Date(room.scheduledAt).getTime() >= now),
+    )
+    .sort((a, b) => {
+      // Running first — it is happening whether or not it was booked earliest.
+      const liveRank = (status: string) => (status === "in_progress" ? 0 : 1);
+      if (liveRank(a.status) !== liveRank(b.status)) return liveRank(a.status) - liveRank(b.status);
+      return new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime();
+    })
+    .slice(0, UPCOMING_LIMIT);
+
+  const remainingPercent =
+    credits && credits.totalCredits > 0
+      ? Math.round((Math.max(0, credits.currentCredits) / credits.totalCredits) * 100)
+      : null;
+  const creditIsLow = remainingPercent !== null && remainingPercent <= LOW_CREDIT_PERCENT;
+
+  const isLoadingAttention = isLoadingDocuments || creditsQuery.isPending;
+  const nothingNeedsYou =
+    !isLoadingAttention &&
+    pendingDocuments.length === 0 &&
+    !creditIsLow &&
+    !subscription?.cancelAtPeriodEnd;
+
   return (
-    <div className="flex-1 overflow-y-auto p-6 lg:p-10 scrollbar-hide bg-canvas text-ink">
-      <div className="max-w-7xl mx-auto space-y-8 w-full">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="text-[28px] font-bold tracking-tight text-ink flex items-center gap-2">
-              <Sparkle className="text-primary w-7 h-7" weight="duotone" />
-              {activeWorkspaceName} Dashboard
-            </h1>
-            <p className="text-ink-muted text-[13px]">
-              Overview of workspace metrics, credit consumption, and resources.
-            </p>
-          </div>
+    <WorkspacePage>
+      <WorkspaceToolbar
+        actions={
+          <Link
+            href={billingHref}
+            className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2"
+          >
+            Billing
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        }
+      />
+
+      <WorkspaceBody className="flex flex-col gap-4">
+        {creditsQuery.isPending ? (
+          <BlockSpinner height="h-[152px]" />
+        ) : creditsQuery.isError && !noPlan ? (
+          <PanelNotice
+            title="Could not read this workspace's credits"
+            detail="Billing did not answer. The rest of the page is unaffected."
+            onRetry={() => creditsQuery.refetch()}
+          />
+        ) : (
+          <CycleSummary
+            credits={noPlan ? null : credits}
+            subscription={subscription}
+            now={now}
+            billingHref={billingHref}
+            plansHref={plansHref}
+          />
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <WorkspaceSection
+            title="Credit usage"
+            description={`Consumed against topped up, month by month in ${year}.`}
+            className="lg:col-span-2"
+          >
+            {trendQuery.isPending ? (
+              <BlockSpinner height="h-[220px]" bare />
+            ) : trendQuery.isError ? (
+              <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
+                {getErrorStatus(trendQuery.error) === 404
+                  ? "Usage is charted once this workspace has a plan."
+                  : "Usage could not be loaded."}
+              </p>
+            ) : (
+              <UsageTrend year={year} monthlyData={trendQuery.data?.monthlyData ?? []} />
+            )}
+          </WorkspaceSection>
+
+          <WorkspaceSection
+            title="Where credits go"
+            actions={
+              <div className="flex items-center gap-1">
+                {BREAKDOWN_WINDOWS.map((window) => (
+                  <WorkspaceFilterPill
+                    key={window.days}
+                    label={window.label}
+                    selected={breakdownDays === window.days}
+                    onClick={() => setBreakdownDays(window.days)}
+                  />
+                ))}
+              </div>
+            }
+          >
+            {breakdownQuery.isPending ? (
+              <BlockSpinner height="h-[220px]" bare />
+            ) : breakdownQuery.isError ? (
+              <p className="py-8 text-center text-[12px] text-ink-muted">
+                Usage could not be loaded.
+              </p>
+            ) : (
+              <UsageBreakdown rows={breakdownQuery.data ?? []} />
+            )}
+          </WorkspaceSection>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Credits Balance */}
-          <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-[13px] font-medium text-ink-muted">Credit Balance</CardTitle>
-              <CreditCard className="w-4 h-4 text-ink-muted" />
-            </CardHeader>
-            <CardContent>
-              {isLoadingCredits ? (
-                <div className="flex h-9 items-center"><Spinner className="w-5 h-5 animate-spin text-ink-muted" /></div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-bold tracking-tight text-ink">{currentCredits.toLocaleString()}</span>
-                    <span className="text-[11px] text-ink-muted">/ {totalCredits.toLocaleString()} credits</span>
-                  </div>
-                  <div className="w-full bg-surface-2 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-primary h-full transition-all duration-300"
-                      style={{ width: `${100 - creditUsagePercent}%` }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-ink-muted">
-                    {100 - creditUsagePercent}% of monthly credits remaining.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <WorkspaceSection title="Needs a decision">
+            {isLoadingAttention ? (
+              <BlockSpinner height="h-[52px]" bare />
+            ) : nothingNeedsYou ? (
+              <div className="flex items-center gap-2 py-2 text-[13px] text-ink-muted">
+                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                Nothing is waiting on you.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {pendingDocuments.length > 0 ? (
+                  <ActionRow
+                    icon={<FileText className="h-4 w-4" />}
+                    href={`/${activeWorkspaceSlug}/documents`}
+                    title={`${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} waiting for approval`}
+                    detail={pendingDocuments
+                      .slice(0, 3)
+                      .map((doc) => doc.name)
+                      .join(" · ")}
+                  />
+                ) : null}
 
-          {/* Active Meetings */}
-          <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-[13px] font-medium text-ink-muted">Meetings</CardTitle>
-              <VideoCamera className="w-4 h-4 text-ink-muted" />
-            </CardHeader>
-            <CardContent>
-              {isLoadingRooms ? (
-                <div className="flex h-9 items-center"><Spinner className="w-5 h-5 animate-spin text-ink-muted" /></div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-2xl font-bold tracking-tight text-ink">{totalRooms}</div>
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span className="text-ink-muted">{activeRooms} currently in progress</span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                {creditIsLow ? (
+                  <ActionRow
+                    icon={<Warning className="h-4 w-4 text-amber-500" />}
+                    href={billingHref}
+                    title={`Credits are at ${remainingPercent}%`}
+                    detail={`${Math.max(0, credits?.currentCredits ?? 0).toLocaleString()} left — meetings stop translating when this runs out.`}
+                  />
+                ) : null}
 
-          {/* Total Documents */}
-          <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-[13px] font-medium text-ink-muted">Documents</CardTitle>
-              <FileText className="w-4 h-4 text-ink-muted" />
-            </CardHeader>
-            <CardContent>
-              {isLoadingDocuments ? (
-                <div className="flex h-9 items-center"><Spinner className="w-5 h-5 animate-spin text-ink-muted" /></div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-2xl font-bold tracking-tight text-ink">{totalDocuments}</div>
-                  <p className="text-[11px] text-ink-muted">
-                    Reference materials and files in knowledge base.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                {subscription?.cancelAtPeriodEnd ? (
+                  <ActionRow
+                    icon={<Warning className="h-4 w-4 text-amber-500" />}
+                    href={billingHref}
+                    title="The plan is set to cancel"
+                    detail={`${subscription.planName} ends on ${new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric" }).format(new Date(subscription.currentPeriodEnd))}.`}
+                  />
+                ) : null}
+              </div>
+            )}
+          </WorkspaceSection>
 
-          {/* Workspace Members */}
-          <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-[13px] font-medium text-ink-muted">Team Members</CardTitle>
-              <Users className="w-4 h-4 text-ink-muted" />
-            </CardHeader>
-            <CardContent>
-              {isLoadingMembers ? (
-                <div className="flex h-9 items-center"><Spinner className="w-5 h-5 animate-spin text-ink-muted" /></div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-2xl font-bold tracking-tight text-ink">{totalMembers}</div>
-                  <p className="text-[11px] text-ink-muted">
-                    Active accounts inside this workspace.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <WorkspaceSection title="Coming up">
+            {isLoadingRooms ? (
+              <BlockSpinner height="h-[52px]" bare />
+            ) : upcoming.length === 0 ? (
+              <p className="py-2 text-[13px] text-ink-muted">No meetings scheduled.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {upcoming.map((room) => (
+                  <ActionRow
+                    key={room.id}
+                    icon={<VideoCamera className="h-4 w-4" />}
+                    href={`/${activeWorkspaceSlug}/rooms/${room.id}`}
+                    title={room.title || room.translationRoomCode}
+                    detail={
+                      room.status === "in_progress"
+                        ? "Running now"
+                        : room.scheduledAt
+                          ? new Intl.DateTimeFormat("en-US", {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            }).format(new Date(room.scheduledAt))
+                          : "No time set"
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </WorkspaceSection>
         </div>
 
-        {/* Charts Section */}
-        <div className="grid gap-6 md:grid-cols-3">
-          {/* Main Usage Chart (Span 2) */}
-          <div className="md:col-span-2">
-            <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold flex items-center justify-between">
-                  <span>Usage Statistics</span>
-                  <Link
-                    href={`/${activeWorkspaceSlug}/billing`}
-                    className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
-                  >
-                    View details
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </Link>
-                </CardTitle>
-                <CardDescription className="text-xs text-ink-muted">
-                  Credits consumed vs top-up volume over the current year.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-2">
-                {activeWorkspaceId && <UsageChart workspaceId={activeWorkspaceId} />}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Breakdown Chart (Span 1) */}
-          <div>
-            <Card className="border-border/60 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] rounded-xl h-full">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">Features Allocation</CardTitle>
-                <CardDescription className="text-xs text-ink-muted">
-                  Credit distribution by system feature.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-2 flex flex-col justify-center min-h-[300px]">
-                {activeWorkspaceId && <FeatureBreakdownChart workspaceId={activeWorkspaceId} />}
-              </CardContent>
-            </Card>
-          </div>
+        {/* The counts, kept because "how big is this workspace" is a fair question — just not the
+            one the page opens with. One line, not four tiles. */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[14px] border border-border bg-canvas px-4 py-3.5 text-[13px]">
+          <CountLink
+            href={`/${activeWorkspaceSlug}/members`}
+            icon={<Users className="h-4 w-4" />}
+            isLoading={isLoadingMembers}
+            value={members?.total ?? members?.items?.length ?? 0}
+            label="members"
+          />
+          <CountLink
+            href={`/${activeWorkspaceSlug}/documents`}
+            icon={<FileText className="h-4 w-4" />}
+            isLoading={isLoadingDocuments}
+            value={documents?.total ?? allDocuments.length}
+            label="documents"
+          />
+          <CountLink
+            href={`/${activeWorkspaceSlug}/rooms`}
+            icon={<VideoCamera className="h-4 w-4" />}
+            isLoading={isLoadingRooms}
+            value={roomsData?.total ?? rooms.length}
+            label="meetings"
+          />
         </div>
-      </div>
+      </WorkspaceBody>
+    </WorkspacePage>
+  );
+}
+
+function BlockSpinner({ height, bare = false }: { height: string; bare?: boolean }) {
+  return (
+    <div
+      className={`flex ${height} items-center justify-center gap-2 text-[13px] text-ink-muted ${
+        bare ? "" : "rounded-[14px] border border-border bg-canvas"
+      }`}
+    >
+      <Spinner className="h-4 w-4 animate-spin" />
+      Loading…
     </div>
+  );
+}
+
+function PanelNotice({
+  title,
+  detail,
+  onRetry,
+}: {
+  title: string;
+  detail: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-border bg-canvas px-4 py-4">
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+          <Warning className="h-4 w-4 text-amber-500" />
+          {title}
+        </p>
+        <p className="mt-0.5 text-[12px] text-ink-muted">{detail}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex h-[28px] shrink-0 items-center rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
+/** A thing to do, and the one line that says why. The whole row is the link. */
+function ActionRow({
+  icon,
+  href,
+  title,
+  detail,
+}: {
+  icon: ReactNode;
+  href: string;
+  title: string;
+  detail?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2"
+    >
+      <span className="shrink-0 text-ink-muted">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-ink">{title}</span>
+        {detail ? (
+          <span className="block truncate text-[12px] text-ink-muted">{detail}</span>
+        ) : null}
+      </span>
+      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ink-subtle" />
+    </Link>
+  );
+}
+
+function CountLink({
+  href,
+  icon,
+  isLoading,
+  value,
+  label,
+}: {
+  href: string;
+  icon: ReactNode;
+  isLoading: boolean;
+  value: number;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-1.5 text-ink-muted transition-colors hover:text-ink"
+    >
+      {icon}
+      <span className="font-medium tabular-nums text-ink">
+        {isLoading ? "—" : value.toLocaleString()}
+      </span>
+      {label}
+    </Link>
   );
 }

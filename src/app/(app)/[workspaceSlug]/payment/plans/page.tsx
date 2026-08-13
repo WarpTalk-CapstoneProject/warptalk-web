@@ -44,12 +44,36 @@ import { formatMoney } from "@/lib/format/currency";
 
 // We fetch plans dynamically now.
 
-function getTopUpRate(credits: number) {
-  if (credits >= 50000) return { rate: 8, discount: 20 };
-  if (credits >= 25000) return { rate: 8.5, discount: 15 };
-  if (credits >= 10000) return { rate: 9, discount: 10 };
-  return { rate: 10, discount: 0 };
-}
+/**
+ * Buying credit is switched off here, and the panel says so.
+ *
+ * WHY THE BUTTON IS GONE
+ *     It posted `paymentType: "CreditTopUp"`, and the backend has no such payment type —
+ *     PaymentConstants.PaymentTypes is Subscription / SubscriptionRenewal / SubscriptionUpdate /
+ *     InvoicePayment. So no handler matched, `if (handler is not null)` skipped the credit grant
+ *     in silence, and the request still wrote a payment record, issued an invoice and returned
+ *     success. The customer paid, saw an invoice, and their balance never moved. There are only
+ *     three paths that raise CreditsRemaining — cycle renewal, the subscription handler, and an
+ *     admin adjustment — and the gRPC top-up is refused outright with "Direct credit top-up is
+ *     disabled".
+ *
+ *     A button that takes money and grants nothing cannot stay reachable while the handler is
+ *     written. Turning it off is the smallest change that stops the harm.
+ *
+ * WHY THE PRICE IS ONE NUMBER
+ *     The ladder here was 10 / 9 / 8.5 / 8 VND per credit with volume discounts. None of it is
+ *     real: docs/credit-economics.md §4.2 sets retail at 4.00 VND per credit with no discount,
+ *     and the backend already agrees (CreditValueVnd = 4m). The frontend was overcharging by
+ *     2–2.5×; a 1,500-credit minimum was quoted at 15,000 VND against a true 6,000 VND.
+ *
+ *     It is stated, not hardcoded into a calculation: 4 VND is an admin-editable parameter in
+ *     billing_pricing_config, so once the handler exists this panel must READ the configured
+ *     value rather than carry its own copy — even a copy that happens to be right today.
+ */
+const TOP_UP_ENABLED = false;
+
+/** Retail rate from docs/credit-economics.md §4.2. Display only — see above. */
+const DOCUMENTED_VND_PER_CREDIT = 4;
 
 export default function WorkspacePlansPage() {
   const router = useRouter();
@@ -273,8 +297,7 @@ export default function WorkspacePlansPage() {
     return { label: "Downgrade", variant: "downgrade", disabled: false };
   };
 
-  const { rate, discount } = getTopUpRate(topUpCredits);
-  const topUpTotal = topUpCredits * rate;
+  const topUpTotal = topUpCredits * DOCUMENTED_VND_PER_CREDIT;
 
   if (!isRoleLoaded) {
     return (
@@ -304,59 +327,53 @@ export default function WorkspacePlansPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col pb-12 pt-4 px-4 lg:px-8 w-full max-w-[1600px] mx-auto">
-      {/* Back to Billing Link */}
-      <div className="w-full flex justify-start mb-4">
-        <Link
-          href={`/${slug}/billing`}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink transition duration-150 cursor-pointer"
-        >
-          <CaretLeft className="h-4 w-4" />
-          <span>Back to Billing</span>
-        </Link>
-      </div>
+    /* This was a marketing landing page living inside the product: a 5xl centred headline, a
+       "Pricing & Subscriptions" badge above it, and a lead paragraph — the visual language of a
+       website's /pricing, rendered inside a workspace the user has already signed into and paid
+       attention to. It is a settings screen. It gets the settings chrome: the same toolbar row
+       every other workspace page has, with the one real choice (monthly or yearly) in it. */
+    <div className="flex h-full min-h-0 flex-col bg-surface-1 text-ink">
+      <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex min-w-[260px] flex-1 items-center gap-3">
+          <Link
+            href={`/${slug}/billing`}
+            className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
+          >
+            <CaretLeft className="h-3.5 w-3.5" />
+            <span>Billing</span>
+          </Link>
+          <span className="truncate text-[13px] text-ink-muted">
+            {subscription?.status === "active"
+              ? `Currently on ${subscription.planName}.`
+              : "No active plan on this workspace."}
+          </span>
+        </div>
 
-      <div className="text-center max-w-2xl mx-auto mb-10 mt-2">
-        <Badge
-          variant="secondary"
-          className="mb-4 bg-surface-2 text-primary border border-hairline hover:bg-surface-2"
-        >
-          Pricing &amp; Subscriptions
-        </Badge>
-        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink mb-4">
-          Choose the right plan for your team
-        </h1>
-        <p className="text-lg text-muted-foreground">
-          {subscription?.status === "active"
-            ? `You are currently on the ${subscription.planName} plan.`
-            : "Upgrade your workspace to unlock advanced AI capabilities, real-time translation, and more credits."}
-        </p>
-        <div className="mt-8 flex justify-center">
+        <div className="flex shrink-0 items-center gap-2 pl-4">
           <Tabs
             value={billingInterval}
-            onValueChange={(val) =>
-              setBillingInterval(val as "monthly" | "yearly")
-            }
+            onValueChange={(val) => setBillingInterval(val as "monthly" | "yearly")}
             className="w-fit"
           >
-            <TabsList className="bg-surface-2 p-1 rounded-full border border-hairline">
+            <TabsList className="h-[28px] rounded-full border border-border/60 bg-surface-2 p-0.5">
               <TabsTrigger
                 value="monthly"
-                className="rounded-full text-sm px-6 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+                className="h-[24px] rounded-full px-3 text-[12px] data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
                 Monthly
               </TabsTrigger>
               <TabsTrigger
                 value="yearly"
-                className="rounded-full text-sm px-6 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
+                className="h-[24px] rounded-full px-3 text-[12px] data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
-                Yearly (Save up to 21%)
+                Yearly · save 21%
               </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
 
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-8">
       <div
         className={`grid grid-cols-1 gap-6 lg:gap-8 w-full mx-auto justify-center ${
           activePlans.length === 1
@@ -406,57 +423,53 @@ export default function WorkspacePlansPage() {
             }
 
             return (
+              /* Palette tokens, not #7F1DFF and text-gray-900. The hardcoded pair meant the card
+                 rendered near-black text on near-black in dark mode, and its accent was a purple
+                 that appears nowhere else in the app. */
               <Card
                 key={plan.id}
-                className={`relative flex flex-col h-full overflow-hidden rounded-3xl transition-all duration-300 border bg-white p-8 ${
+                className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-canvas p-5 shadow-linear transition-colors ${
                   isCurrent
-                    ? "border-[2.5px] border-[#7F1DFF] shadow-[0_8px_30px_rgb(127,29,255,0.06)]"
+                    ? "border-primary"
                     : isFeatured
-                      ? "border-[2.5px] border-[#7F1DFF]/40 shadow-sm"
-                      : "border-gray-200 shadow-sm hover:border-gray-300"
+                      ? "border-primary/40"
+                      : "border-border hover:border-border/80"
                 }`}
               >
-                <CardHeader className="p-0 pb-6 flex flex-col items-start text-left">
-                  <div className="flex justify-between items-center w-full gap-2 mb-3">
-                    <CardTitle className="text-2xl font-extrabold tracking-tight text-gray-900">
+                <CardHeader className="flex flex-col items-start p-0 pb-4 text-left">
+                  <div className="mb-2 flex w-full items-center justify-between gap-2">
+                    <CardTitle className="text-[15px] font-semibold tracking-tight text-ink">
                       {plan.name}
                     </CardTitle>
 
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex shrink-0 gap-2">
                       {isCurrent && (
-                        <Badge className="bg-[#7F1DFF]/10 text-[#7F1DFF] border-none rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider">
-                          ACTIVE
+                        <Badge className="rounded-full border-none bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          Current plan
                         </Badge>
                       )}
                       {!isCurrent && isFeatured && (
-                        <Badge className="bg-[#7F1DFF]/10 text-[#7F1DFF] border-none rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-wider">
-                          MOST POPULAR
+                        <Badge className="rounded-full border-none bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          Most popular
                         </Badge>
                       )}
                     </div>
                   </div>
 
-                  <p className="text-[13px] text-gray-500 leading-relaxed min-h-[38px] font-normal">
+                  <p className="min-h-[34px] text-[12px] leading-relaxed text-ink-muted">
                     {plan.description}
                   </p>
 
-                  <div className="mt-5 flex flex-col items-start w-full">
+                  <div className="mt-4 flex w-full flex-col items-start">
                     <div className="flex items-baseline whitespace-nowrap">
-                      <span className="text-4xl font-extrabold tracking-tight text-gray-900">
-                        {displayPrice > 0
-                          ? formatMoney(displayPrice, "VND")
-                          : "Free"}
+                      <span className="text-[24px] font-semibold tracking-tight text-ink">
+                        {displayPrice > 0 ? formatMoney(displayPrice, "VND") : "Free"}
                       </span>
-                      <span className="text-sm font-medium text-gray-500 ml-1">
-                        /mo
-                      </span>
+                      <span className="ml-1 text-[12px] text-ink-muted">/mo</span>
                     </div>
 
-                    <p className="text-[11px] text-gray-500 font-semibold mt-2">
-                      Pause or cancel anytime.
-                    </p>
-                    <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
-                      24/7 dedicated support.
+                    <p className="mt-1.5 text-[11px] text-ink-muted">
+                      Pause or cancel anytime · 24/7 support
                     </p>
                   </div>
                 </CardHeader>
@@ -582,7 +595,7 @@ export default function WorkspacePlansPage() {
         )}
       </div>
 
-      <div className="mt-20 w-full max-w-3xl mx-auto px-4 pb-12">
+      <div className="mt-8 w-full max-w-3xl">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-3">
             <div className="flex size-8 rounded-full bg-primary/10 items-center justify-center">
@@ -645,70 +658,13 @@ export default function WorkspacePlansPage() {
                 </div>
               </div>
 
-              {/* Volume Discounts */}
               <div className="bg-surface-2/50 rounded-xl p-5 border border-hairline">
-                <p className="text-sm font-semibold text-ink mb-3">
-                  Volume discount tiers:
+                <p className="text-sm font-semibold text-ink">
+                  {DOCUMENTED_VND_PER_CREDIT} VND per credit
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits > 0 && topUpCredits < 10000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits > 0 && topUpCredits < 10000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      &lt; 10k
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      10 VND/cr
-                    </span>
-                  </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 10000 && topUpCredits < 25000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 10000 && topUpCredits < 25000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      10k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      9 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (10%)
-                      </span>
-                    </span>
-                  </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 25000 && topUpCredits < 50000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 25000 && topUpCredits < 50000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      25k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      8.5 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (15%)
-                      </span>
-                    </span>
-                  </div>
-                  <div
-                    className={`flex flex-col p-2.5 rounded-lg border transition-colors ${topUpCredits >= 50000 ? "bg-surface-1 border-primary/40 shadow-sm" : "border-transparent"}`}
-                  >
-                    <span
-                      className={`text-xs font-bold ${topUpCredits >= 50000 ? "text-primary" : "text-ink-muted"}`}
-                    >
-                      50k+
-                    </span>
-                    <span className="text-xs font-medium text-ink mt-0.5">
-                      8 VND/cr{" "}
-                      <span className="text-semantic-success text-[10px] ml-0.5">
-                        (20%)
-                      </span>
-                    </span>
-                  </div>
-                </div>
+                <p className="text-xs text-ink-muted mt-1">
+                  One rate, whatever the amount. There is no volume discount.
+                </p>
               </div>
 
               {topUpCredits > 0 && (
@@ -717,16 +673,9 @@ export default function WorkspacePlansPage() {
                     <span className="text-sm font-medium text-ink-muted">
                       Rate applied
                     </span>
-                    <div className="flex items-center gap-2">
-                      {discount > 0 && (
-                        <Badge className="bg-semantic-success/20 hover:bg-semantic-success/20 text-semantic-success border-none text-xs px-2 py-0.5 rounded-full font-bold shadow-none">
-                          Save {discount}%
-                        </Badge>
-                      )}
-                      <span className="text-sm font-semibold text-ink">
-                        {rate} VND / credit
-                      </span>
-                    </div>
+                    <span className="text-sm font-semibold text-ink">
+                      {DOCUMENTED_VND_PER_CREDIT} VND / credit
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-ink-muted">
@@ -752,6 +701,7 @@ export default function WorkspacePlansPage() {
                 </p>
               )}
 
+              {TOP_UP_ENABLED ? (
               <button
                 type="button"
                 disabled={isProcessing || topUpCredits < 1500}
@@ -773,9 +723,25 @@ export default function WorkspacePlansPage() {
                   "Enter credit amount above (Min 1,500)"
                 )}
               </button>
+              ) : (
+                /* Says why, and does not pretend the button is merely busy. Somebody who came
+                   here to buy credit needs to know it will not arrive, not to be left guessing
+                   whether they clicked wrong. */
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+                  <p className="text-sm font-semibold text-ink">
+                    Credit top-up is temporarily unavailable
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Payment would be taken without the credits being added, so the purchase is
+                    switched off until that is fixed. Your subscription still renews its credits
+                    on schedule. Contact support if you need a balance adjustment.
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
+      </div>
       </div>
       {/* Cancel Subscription confirmation dialog */}
       <Dialog

@@ -2,6 +2,8 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 import type {
+  UpdateKnowledgeChunkRequest,
+  WorkspaceKnowledgeChunkDto,
   WorkspaceKnowledgePageDto,
   WorkspaceKnowledgeQuery,
 } from "@/types/workspace-knowledge";
@@ -252,6 +254,30 @@ export const WorkspaceService = {
       { params: query },
     );
     return data;
+  },
+
+  /**
+   * Corrects one chunk's fact, category and retrievability. Owner only, server-side.
+   *
+   * The indexed text is deliberately not in the payload: it is what the vector was computed
+   * from, and changing it without re-embedding would leave WarpBot retrieving on the old
+   * meaning while showing the new words.
+   */
+  async updateKnowledgeChunk(
+    workspaceId: string,
+    chunkId: string,
+    update: UpdateKnowledgeChunkRequest,
+  ): Promise<WorkspaceKnowledgeChunkDto> {
+    const { data } = await apiClient.patch<WorkspaceKnowledgeChunkDto>(
+      API.workspaces.knowledgeChunk(workspaceId, chunkId),
+      update,
+    );
+    return data;
+  },
+
+  /** Removes the chunk from the index. The document or meeting it came from is untouched. */
+  async deleteKnowledgeChunk(workspaceId: string, chunkId: string): Promise<void> {
+    await apiClient.delete(API.workspaces.knowledgeChunk(workspaceId, chunkId));
   },
 
   async getDocumentById(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {

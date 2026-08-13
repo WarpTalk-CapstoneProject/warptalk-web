@@ -59,27 +59,68 @@ assert.ok(
   "lib/signalr.ts must not keep an in-flight refresh of its own.",
 );
 
-// This assertion used to require the opposite order, on the reasoning that persistTokens
-// writes the in-memory store first so the store can never be staler. That is true of ONE tab.
-// zustand's persist middleware does not listen for the storage event, so a second tab's store
-// never learns that the first tab rotated the family — it refreshes with a token the server
-// has already retired, which is a replay, which revokes the family and logs both tabs out.
-// localStorage is the only copy the tabs share, so it is the one to trust; persistTokens now
-// writes it synchronously, which is what makes trusting it safe.
-const refresherAt = client.indexOf("function getRefreshToken()");
-assert.ok(refresherAt > 0, "getRefreshToken must exist.");
-const body = client.slice(refresherAt, refresherAt + 1400);
-const storeAt = body.indexOf("useAuthStore.getState().refreshToken");
-const persistedAt = body.indexOf("getPersistedAuthState()?.refreshToken");
-assert.ok(storeAt > 0 && persistedAt > 0, "Both token sources must still be consulted.");
+// The refresh token is no longer JS's to hold.
+//
+// This block used to arbitrate between two client-side copies of it — the zustand store and
+// localStorage — because a stale copy meant a replay, and a replay revokes the whole rotation
+// family and logs every tab out. That arbitration is gone rather than fixed: the token now lives
+// in an HttpOnly cookie the browser attaches itself, so there is no copy to go stale and no
+// second source to disagree with. The bug it was managing was the ~30-minute forced logout in
+// production, where the client held a token the server had already rotated away.
+//
+// What has to stay true is that no client-side copy comes back.
 assert.ok(
-  persistedAt < storeAt,
-  "The shared persisted copy must be preferred — the in-memory store is per-tab and goes stale the moment another tab rotates the family.",
+  !client.includes("function getRefreshToken()"),
+  "getRefreshToken must not come back — the refresh token is an HttpOnly cookie, not JS state.",
+);
+// Comments stripped first: these files explain at length why the client-side copy went away, and
+// that history is worth keeping. It is the CODE that must not hold one.
+const withoutComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+for (const rel of ["src/lib/api/client.ts", "src/stores/auth-store.ts", "src/types/auth.ts"]) {
+  assert.ok(
+    !/refreshToken/.test(withoutComments(read(rel))),
+    `${rel} must not hold a refreshToken — the browser owns it now, and a JS copy is the bug.`,
+  );
+}
+
+// The cookie only travels on a credentialed request, and the request must carry no token of its
+// own: an empty body is what proves the server is reading the cookie rather than the client.
+assert.match(
+  client,
+  /withCredentials:\s*true/,
+  "The axios instance must send credentials, or the refresh cookie never reaches the gateway.",
 );
 assert.match(
   client,
-  /function persistTokens\([\s\S]{0,300}writePersistedTokens\(accessToken, refreshToken\)/,
-  "persistTokens must write localStorage synchronously — preferring it is only safe if it is not behind.",
+  /axios\.post<AuthResponse>\([\s\S]{0,160}\{\},\s*\n?\s*\{\s*withCredentials:\s*true\s*\}/,
+  "The refresh call must post an empty body with credentials — no refresh token in the payload.",
+);
+
+// The gate that replaced "do we hold a refresh token": a JS-readable marker cookie, plus the
+// access token as a fallback. A false positive costs one 400 that ends the session correctly; a
+// false negative — refusing to refresh while a valid cookie sits in the jar — is the logout bug.
+assert.match(
+  client,
+  /function canAttemptRefresh\(\)[\s\S]{0,200}hasRedeemableSession\(/,
+  "The refresh gate must ask hasRedeemableSession(), the only question JS can still answer.",
+);
+
+// The proactive timer wakes further out than the reactive window, so it must say so. Passing the
+// default made the refresher judge the token healthy and hand it straight back — the timer fired
+// on schedule and refreshed nothing, which is the second half of the same production logout.
+assert.match(
+  client,
+  /getUsableAccessToken\(PROACTIVE_REFRESH_WINDOW_MS\)/,
+  "The proactive refresh must pass its own window, or it is a no-op that looks like it ran.",
+);
+const lifecycle = read("src/lib/api/token-lifecycle.ts");
+const margin = /PROACTIVE_REFRESH_MARGIN_MS\s*=\s*([\d_]+)/.exec(lifecycle);
+const window = /PROACTIVE_REFRESH_WINDOW_MS\s*=\s*([\d_]+)/.exec(lifecycle);
+assert.ok(margin && window, "Both proactive-refresh constants must exist.");
+assert.ok(
+  Number(margin[1].replaceAll("_", "")) < Number(window[1].replaceAll("_", "")),
+  "The window must exceed the margin — setTimeout has no upper bound on lateness, and a throttled background tab fires seconds late.",
 );
 
 console.log("Single token refresher contract: PASS");

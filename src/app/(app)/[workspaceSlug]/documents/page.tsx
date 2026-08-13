@@ -6,6 +6,7 @@ import {
   WORKSPACE_DOCUMENT_SOURCE_TYPE,
   WORKSPACE_DOCUMENT_STATUS,
 } from "@/constants/workspace-document";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -354,86 +355,49 @@ export default function WorkspaceDocumentsPage() {
       {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
       {/* ─── Pill Category Filters & View Toggle Bar ─── */}
       <div className="flex shrink-0 items-center justify-between gap-4 py-3">
-        {/* Left Side: Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveCategory("all")}
-            className={`rounded-full border px-4 py-1.5 text-[13px] transition-all ${
-              activeCategory === "all"
-                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
-            }`}
-          >
+        {/* Left Side: Category Pills.
+            One FilterChip per category, same control Meetings and Knowledge render. The leading
+            icons are gone on purpose: they were only on five of the six chips, in five different
+            colours, so a row of filters read as a row of unrelated actions. A count is the one
+            thing worth carrying beside a label, and FilterChip has a slot for it. */}
+        <FilterChipGroup label="Filter documents by category">
+          <FilterChip selected={activeCategory === "all"} onClick={() => setActiveCategory("all")}>
             All
-          </button>
+          </FilterChip>
           {canApproveDocuments && (
-            <button
+            <FilterChip
+              selected={activeCategory === "pending"}
               onClick={() => setActiveCategory("pending")}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
-                activeCategory === "pending"
-                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
-              }`}
+              badge={pendingCount > 0 ? pendingCount : undefined}
             >
-              <Info className="h-3.5 w-3.5 text-amber-500" />
-              <span>Pending Approval</span>
-              {pendingCount > 0 && (
-                <span className="ml-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white px-1">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
+              Pending Approval
+            </FilterChip>
           )}
-          <button
-            onClick={() => setActiveCategory("ai")}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
-              activeCategory === "ai"
-                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
-            }`}
-          >
-            <Sparkle className="h-3.5 w-3.5 text-emerald-500" />
-            <span>AI Context</span>
-          </button>
-          <button
+          <FilterChip selected={activeCategory === "ai"} onClick={() => setActiveCategory("ai")}>
+            AI Context
+          </FilterChip>
+          <FilterChip
+            selected={activeCategory === "admin"}
             onClick={() => setActiveCategory("admin")}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
-              activeCategory === "admin"
-                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
-            }`}
           >
-            <FileText className="h-3.5 w-3.5 text-ink-muted" />
-            <span>Administrative</span>
-          </button>
-          <button
+            Administrative
+          </FilterChip>
+          <FilterChip
+            selected={activeCategory === "sensitive"}
             onClick={() => setActiveCategory("sensitive")}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
-              activeCategory === "sensitive"
-                ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
-            }`}
           >
-            <Lock className="h-3.5 w-3.5 text-destructive" />
-            <span>Restricted</span>
-          </button>
+            Restricted
+          </FilterChip>
           {archivedCount > 0 && (
-            <button
+            <FilterChip
+              selected={activeCategory === "archived"}
               onClick={() => setActiveCategory("archived")}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] transition-all ${
-                activeCategory === "archived"
-                  ? "border-transparent bg-surface-2 text-foreground font-medium shadow-none"
-                  : "border-border/40 bg-transparent text-muted-foreground hover:border-border/60 hover:bg-surface-2 hover:text-foreground"
-              }`}
+              badge={archivedCount}
             >
-              <Archive className="h-3.5 w-3.5 text-amber-500" />
-              <span>Archived</span>
-              <span className="ml-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-600 px-1">
-                {archivedCount}
-              </span>
-            </button>
+              Archived
+            </FilterChip>
           )}
-        </div>
+        </FilterChipGroup>
 
         {/* Right Side: Action Icons (Filter & Grid/List Toggle) */}
         <div className="flex items-center gap-2 shrink-0">
@@ -523,19 +487,24 @@ export default function WorkspaceDocumentsPage() {
           </div>
         </div>
       ) : viewMode === "list" ? (
-        /* List Table View */
-        <div className="w-full overflow-x-auto rounded-xl border border-hairline/30 bg-surface-1/40 shadow-sm">
+        /* List Table View — flat, with no card around it. The border, radius, tinted fill and
+           shadow drew a box whose only content was the table, so the page read as a card on a
+           page rather than a list of documents. Meetings lists nothing in a card either. */
+        <div className="w-full overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-hairline/20 bg-surface-2/50 text-ink-muted font-semibold">
-                <th className="py-3 px-4 font-semibold">Name</th>
-                <th className="py-3 px-4 font-semibold">Uploaded By</th>
-                <th className="py-3 px-4 font-semibold">Approved By</th>
-                <th className="py-3 px-4 font-semibold">Classification / AI</th>
-                <th className="py-3 px-4 font-semibold">People</th>
-                <th className="py-3 px-4 font-semibold">Last Modified</th>
-                <th className="py-3 px-4 font-semibold">Size</th>
-                <th className="py-3 px-4 font-semibold text-right">Actions</th>
+              {/* One column per fact. There used to be a "People" column here as well, rendering
+                  the same uploader and the same approver a second time under their own labels —
+                  three columns carrying two facts, and the widest thing in the row was the
+                  repetition. */}
+              <tr className="border-b border-hairline/40 text-[11px] font-medium tracking-wide text-ink-muted uppercase">
+                <th className="px-4 py-2.5 font-medium">Name</th>
+                <th className="px-4 py-2.5 font-medium">Uploaded by</th>
+                <th className="px-4 py-2.5 font-medium">Approved by</th>
+                <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-2.5 font-medium">Modified</th>
+                <th className="px-4 py-2.5 font-medium">Size</th>
+                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline/20">
@@ -650,23 +619,6 @@ export default function WorkspaceDocumentsPage() {
                           <span>AI Context</span>
                         </span>
                       )}
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <DocumentActor
-                          label="Uploader"
-                          member={workspaceMembers.find(
-                            (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
-                          )}
-                        />
-                        <DocumentActor
-                          label="Approver"
-                          member={workspaceMembers.find(
-                            (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
-                          )}
-                        />
-                      </div>
                     </td>
 
                     {/* Last Modified Date */}

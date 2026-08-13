@@ -54,9 +54,9 @@ function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
       try {
         const idToken = tokenResponse.access_token;
         const res = await apiClient.post<AuthResponse>(API.auth.googleLogin, { idToken });
-        const { user, accessToken, refreshToken, expiresAt } = res.data;
+        const { user, accessToken, expiresAt } = res.data;
 
-        login(user, accessToken, refreshToken);
+        login(user, accessToken);
         setAccessTokenCookie(accessToken, expiresAt);
 
         toast.success("Google sign-in successful!");
@@ -129,9 +129,9 @@ function RegisterForm() {
         });
       }
 
-      const { user, accessToken, refreshToken, expiresAt } = res.data;
+      const { user, accessToken, expiresAt } = res.data;
 
-      login(user, accessToken, refreshToken);
+      login(user, accessToken);
       setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Registration successful!");

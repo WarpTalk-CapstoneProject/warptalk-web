@@ -34,3 +34,19 @@ export interface SetPreferredVoiceRequest {
   language: string;
   voiceId: string | null;
 }
+
+/**
+ * What this person has decided about having their voice cloned.
+ *
+ * `hasDecided` is separate from `isGranted` deliberately: "never been asked" and "asked and said
+ * no" are the same false to a boolean and completely different on screen — one should show the
+ * request, the other must not nag somebody who already declined.
+ */
+export interface VoiceConsentStatusDto {
+  hasDecided: boolean;
+  isGranted: boolean;
+  status: string | null;
+  consentTextVersion: string | null;
+  grantedAt: string | null;
+  revokedAt: string | null;
+}

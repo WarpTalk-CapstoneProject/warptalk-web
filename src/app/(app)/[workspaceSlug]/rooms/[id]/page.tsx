@@ -36,8 +36,11 @@ import {
   Star,
   StopCircle,
   Strikethrough,
+  Repeat,
   Underline as UnderlineIcon,
 } from "lucide-react";
+// Aliased: this file already imports Tiptap's `Link` extension, and the editor's Link and the
+// router's Link are two very different things to have under one name.
 import { useParams, useRouter } from "next/navigation";
 import {
   useCallback,
@@ -124,6 +127,7 @@ import type {
   TranslationRoomStatus,
 } from "@/types/translationRoom";
 import type { WorkspaceMemberDto } from "@/types/workspace";
+import { RoomRecurrenceLine } from "@/components/rooms/room-recurrence-line";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 
 type UserIdentity = {
@@ -237,6 +241,14 @@ export default function RoomInformationPage() {
       : null,
   );
 
+  // Read ABOVE the `if (!room)` guard below, and it has to stay there. React counts hooks
+  // per render: while the room query is still loading this component returns early, so a
+  // hook placed after that guard runs on the second render and not the first. React sees
+  // the count grow and throws error #310 ("Rendered more hooks than during the previous
+  // render"), which is a blank error page rather than a degraded one — the whole room
+  // detail route died on every fresh load.
+  const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
+
   function handleCopy(text: string, label: string) {
     navigator.clipboard.writeText(text);
     setCopiedText(`${label} copied`);
@@ -255,7 +267,6 @@ export default function RoomInformationPage() {
 
   const isEnded = room.status === "ended";
   const isHost = room.hostId === user?.id || Boolean(room.isHost);
-  const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
   const isActiveInMeeting = activeRoomId === room.id;
   // WT-273: the CTA is one decision, taken with the viewer's host identity in hand. It used to
   // be derived from room.status alone, three lines above where `isHost` was computed, so the
@@ -371,6 +382,18 @@ export default function RoomInformationPage() {
                       </button>
                     ) : null}
                   </div>
+                  {/* WT-327: the repeat rule lives on the meeting, because the meeting is the
+                      only thing there is. There is no separate booking page to send anyone to —
+                      the booking has one code and one next date, and this page already shows the
+                      code. Host-only "Stop repeating" sits here for the same reason: deleting the
+                      page it used to live on must not delete the ability. */}
+                  {room.seriesId ? (
+                    <RoomRecurrenceLine
+                      seriesId={room.seriesId}
+                      isHost={canEditRoom}
+                      workspaceSlug={workspaceSlug}
+                    />
+                  ) : null}
                   <MeetingPropertiesPills
                     room={room}
                     apiParticipants={apiParticipants}

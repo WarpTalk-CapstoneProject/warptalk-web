@@ -1,3 +1,7 @@
+import type { RetentionState } from "@/lib/meeting/room-history-mapping";
+
+export type { RetentionState };
+
 import type { TranscriptDto } from "@/types/transcript";
 import type { TranslationRoomStatus } from "@/types/translationRoom";
 import type { MeetingSummaryActionItem, MeetingSummarySection } from "@/types/meetingSummary";
@@ -121,13 +125,14 @@ export interface EndedRoomHistoryItem {
   transcript?: TranscriptDto;
   summary?: TranslationRoomSummaryArtifact;
   artifacts: RoomHistoryArtifact[];
-  retention: {
-    policyName: string;
-    expiresAt: string;
-    transcriptRetentionDays: number;
-    recordingRetentionDays: number;
-    deleteAfterExpiry: boolean;
-  };
+  /**
+   * Only ever `scheduled` when an artifact genuinely carries an expiry. Nothing in
+   * warptalk-backend writes that field today and there is no purge job, so in practice this
+   * is `not_configured` — see `resolveRetention` in `@/lib/meeting/room-history-mapping`.
+   * The previous shape carried invented day-counts and an `expiresAt` that fell back to the
+   * meeting's own end time.
+   */
+  retention: RetentionState;
   consent: {
     recording: RoomConsentStatus;
     transcript: RoomConsentStatus;
@@ -137,4 +142,9 @@ export interface EndedRoomHistoryItem {
 
 export interface RoomHistoryResponse {
   rooms: EndedRoomHistoryItem[];
+  /** The server's count for the current server-side filters — NOT `rooms.length`. */
+  total: number;
+  /** 1-based. */
+  page: number;
+  pageSize: number;
 }

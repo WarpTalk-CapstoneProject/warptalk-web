@@ -97,8 +97,11 @@ checks.push([
 ]);
 checks.push([
   "the reset runs before the arriving account's identity is installed",
+  // No refreshToken in the set() any more: the refresh token moved into an HttpOnly cookie the
+  // browser will not hand to JS, which is the whole point of that migration. The ordering this
+  // pins is unchanged — reset first, identity second.
   authStore.indexOf("resetSessionScopedStateOnLogin()") <
-    authStore.indexOf("set({ user, accessToken, refreshToken, isAuthenticated: true })"),
+    authStore.indexOf("set({ user, accessToken, isAuthenticated: true })"),
 ]);
 checks.push([
   "discarding a rehydrated dead session clears the cache with it",

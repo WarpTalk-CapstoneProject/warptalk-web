@@ -123,8 +123,8 @@ function JoinWorkspaceContent() {
           email: email.trim(),
           password: password.trim(),
         });
-        const { user: userDto, accessToken, refreshToken, expiresAt } = res.data;
-        loginAction(userDto, accessToken, refreshToken);
+        const { user: userDto, accessToken, expiresAt } = res.data;
+        loginAction(userDto, accessToken);
         setAccessTokenCookie(accessToken, expiresAt);
         toast.success("Logged in successfully!");
         if (code) {
@@ -136,8 +136,8 @@ function JoinWorkspaceContent() {
           password: password.trim(),
           fullName: `${firstName.trim()} ${lastName.trim()}`.trim(),
         });
-        const { user: userDto, accessToken, refreshToken, expiresAt } = res.data;
-        loginAction(userDto, accessToken, refreshToken);
+        const { user: userDto, accessToken, expiresAt } = res.data;
+        loginAction(userDto, accessToken);
         setAccessTokenCookie(accessToken, expiresAt);
         toast.success("Account created successfully!");
         if (code) {

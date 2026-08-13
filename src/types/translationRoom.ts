@@ -47,6 +47,12 @@ export interface TranslationRoomDto {
    * artifacts and billing — so this is only ever used to say "this repeats" in the UI.
    */
   seriesId?: string;
+  /**
+   * WT-327: the booking this row stands for, present only on a list that asked to be grouped by
+   * series. On an ungrouped list it is absent even for an occurrence, so a caller can never
+   * mistake "one occurrence of many" for "the whole booking".
+   */
+  series?: SeriesListSummary | null;
 }
 
 /** One Start→Pause (or Start→End) window — "Translation N" in the transcript is this
@@ -119,9 +125,8 @@ export interface CreateTranslationRoomRequest {
  * rules change. Sending a UTC instant, or a fixed offset, cannot express that.
  */
 export interface RecurrenceRequest {
-  /** Only "DAILY" is accepted by the server today. The field exists so weekly/monthly need no new shape. */
-  type: "DAILY" | "WEEKLY" | "MONTHLY";
-  /** "HH:mm", 24-hour, zero-padded. The hour picked in the Daily modal. */
+  type: RecurrenceType;
+  /** "HH:mm", 24-hour, zero-padded. The hour picked in the repeat modal. */
   startTimeLocal: string;
   /** IANA zone id, e.g. "Asia/Ho_Chi_Minh". Read from the browser, not hardcoded. */
   timeZone: string;
@@ -129,17 +134,96 @@ export interface RecurrenceRequest {
   startDateLocal?: string;
   /** "yyyy-MM-dd", INCLUSIVE. Omitted means the server's default span — never "forever". */
   endDateLocal?: string;
+  /**
+   * WEEKLY only: ISO weekdays, Monday 1 … Sunday 7. Omitted means "the weekday the start date
+   * lands on". Sending it on a DAILY or MONTHLY rule is refused by the server, not ignored — the
+   * rule on screen and the rule that runs have to be the same rule.
+   */
+  byWeekdays?: number[];
+  /** MONTHLY only: day of the month 1–31. Omitted means the start date's own day. */
+  byMonthDay?: number;
 }
+
+export type RecurrenceType = "DAILY" | "WEEKLY" | "MONTHLY";
+
+export type RecurrenceSeriesStatus = "ACTIVE" | "CANCELLED" | "COMPLETED";
 
 /** WT-327: what a room reports about the series it belongs to. */
 export interface RecurrenceSummaryResponse {
   seriesId: string;
-  type: string;
+  type: RecurrenceType;
   startTimeLocal: string;
   timeZone: string;
   startDateLocal: string;
   endDateLocal: string;
-  status: "ACTIVE" | "CANCELLED" | "COMPLETED";
+  status: RecurrenceSeriesStatus;
+  interval: number;
+  byWeekdays?: number[] | null;
+  byMonthDay?: number | null;
+}
+
+/**
+ * WT-327: the booking behind ONE row of a grouped meetings list — enough to render
+ * "Weekly · Mon, Wed · 08:00 · next Thursday" without a request per row.
+ *
+ * Present only when the list was asked to group by series. Its absence on an occurrence row is
+ * meaningful: that row is one meeting, not the whole booking.
+ */
+export interface SeriesListSummary {
+  seriesId: string;
+  type: RecurrenceType;
+  interval: number;
+  byWeekdays?: number[] | null;
+  byMonthDay?: number | null;
+  startTimeLocal: string;
+  timeZone: string;
+  status: RecurrenceSeriesStatus;
+  /** Occurrences matching the same filters as the list — "3 meetings still to come", not the lifetime total. */
+  occurrenceCount: number;
+  /** UTC ISO of the first occurrence at or after now, or null when the rest are in the past. */
+  nextOccurrenceAt?: string | null;
+}
+
+/** WT-327: the booking, its rule, and every occurrence the caller may see. */
+export interface SeriesDetail {
+  series: RecurrenceSummaryResponse;
+  hostId: string;
+  title: string;
+  description?: string | null;
+  translationRoomType: string;
+  sourceLanguage: string;
+  targetLanguages: string[];
+  invitedEmails: string[];
+  occurrences: TranslationRoomDto[];
+  /**
+   * The occurrence a "join this booking" action lands on: the one running now, else the next one
+   * due. Null once the whole series is in the past — which is what makes a stable series link say
+   * "nothing to join" rather than dropping someone into a finished meeting.
+   */
+  currentOccurrenceId?: string | null;
+}
+
+/**
+ * WT-327: an edit to the BOOKING — the template every future occurrence is stamped from.
+ *
+ * The rule itself (cadence, time, date range) is deliberately not editable: moving a series has
+ * to decide what happens to occurrences already invited to and possibly already started, and
+ * that is a different feature with different confirmations.
+ */
+export interface UpdateSeriesRequest {
+  title?: string;
+  description?: string;
+  maxParticipants?: number;
+  sourceLanguage?: string;
+  targetLanguages?: string[];
+  settings?: CreateTranslationRoomRequest["settings"];
+  invitedEmails?: string[];
+}
+
+export interface UpdateSeriesResult {
+  seriesId: string;
+  /** Future occurrences the edit reached. Meetings that already started keep what they ran with. */
+  updatedOccurrenceCount: number;
 }
 
 /**

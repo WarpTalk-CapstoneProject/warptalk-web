@@ -23,11 +23,15 @@ import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
+import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { ProductTour } from "@/components/onboarding/product-tour";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { getErrorStatus } from "@/lib/api/retry-policy";
@@ -43,6 +47,35 @@ const PersistentMeetingSession = dynamic(
     ),
   { ssr: false },
 );
+
+/**
+ * Whether the sidebar should be showing its icon-only rail YET.
+ *
+ * LinearSidebar renders two different trees — a rail and a full sidebar — and React swaps them
+ * the instant the flag changes, while AnimatedWidthPanel spends 420ms tweening the width. The two
+ * halves were never connected, so closing read as: every label vanishes at once, and only then
+ * does the panel slide shut.
+ *
+ * Opening swaps immediately — the labels should be arriving as the panel widens. Closing holds
+ * the full tree for a beat so the labels are carried out by the narrowing panel (which is
+ * overflow-hidden, so they are clipped away rather than deleted) and only then becomes the rail.
+ * The delay is deliberately shorter than the width tween: the swap lands while the panel is
+ * still moving, so it is never a visible step on a sidebar that has already stopped.
+ */
+function useRailSwapDelay(open: boolean, delayMs: number) {
+  const [collapsed, setCollapsed] = useState(!open);
+
+  useEffect(() => {
+    if (open) {
+      setCollapsed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setCollapsed(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [open, delayMs]);
+
+  return collapsed;
+}
 
 function AnimatedWidthPanel({
   open,
@@ -120,6 +153,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     leftSidebarOpen,
     toggleLeftSidebar,
   } = useUIStore();
+  // 160ms against the panel's 420ms width tween — see useRailSwapDelay.
+  const railCollapsed = useRailSwapDelay(leftSidebarOpen, 160);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
@@ -130,6 +165,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     (state) => state.activeRoomId,
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
+  const openTour = useOnboardingStore((state) => state.openTour);
+  const tourSeenAt = useOnboardingStore((state) => state.tourSeenAt);
   const [mounted, setMounted] = useState(false);
   
   // `isError` and `refetch` were not read. The gate below spun on `!activeWorkspaceId`, and a
@@ -175,6 +212,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isSystemAdmin = useIsSystemAdmin();
   // Decides more than the header divider: it is also what tells the meeting dock to stop
   // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
   // window floats on top of the meeting it is a copy of.
@@ -195,6 +233,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => cancelAnimationFrame(handle);
   }, []);
 
+  /**
+   * The first-run tour, once — and only once the shell it describes is actually on screen.
+   *
+   * Two conditions, both load-bearing. Without a workspace slug the sidebar has no destinations
+   * to point at, and the tour would open against a shell that is still a spinner. The delay
+   * covers the rest: the panel width tween runs for 420ms, and a spotlight measured mid-tween
+   * lands next to the control rather than on it.
+   *
+   * The check is repeated inside the timer rather than only in the dependency array, because
+   * `tourSeenAt` is persisted and zustand rehydrates it after the first client render — reading
+   * it once at effect time would show a returning user the tour they finished last week.
+   */
+  useEffect(() => {
+    if (tourSeenAt !== null || !activeWorkspaceSlug) return;
+
+    const timer = setTimeout(() => {
+      if (useOnboardingStore.getState().tourSeenAt === null) openTour();
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [tourSeenAt, activeWorkspaceSlug, openTour]);
+
   useEffect(() => {
     if (mounted && !isAuthenticated) {
       router.replace("/login");
@@ -208,6 +267,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
+        // Hydrated from the SELECT RESPONSE, not from the list row. The list's shape varies by
+        // endpoint — hence the `"membershipType" in firstWs` guards this replaced — and the
+        // select call is the one authority on what this user's role in this workspace is. It is
+        // awaited so a failed selection redirects instead of leaving the shell holding a
+        // workspace the server never confirmed.
         void (async () => {
           try {
             const selection = await selectWorkspace.mutateAsync(firstWs.id);
@@ -216,11 +280,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             router.replace("/workspace");
           }
         })();
+      } else if (isSystemAdmin) {
+        // A platform admin with no workspace of their own is not a new user who has yet to make
+        // one — they administer the platform the workspaces live in. Sending them to
+        // /workspace made the master account look like it had signed up by mistake, and the
+        // only way on was to create a workspace nobody wanted. The admin portal is their home.
+        router.replace("/admin");
       } else {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, isSystemAdmin, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
 
   if (!mounted || !isAuthenticated) {
     return (
@@ -291,7 +361,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         collapsedWidth={64}
         side="left"
       >
-        <LinearSidebar collapsed={!leftSidebarOpen} />
+        <LinearSidebar collapsed={railCollapsed} />
       </AnimatedWidthPanel>
       {/* Main Column */}
       <div className="relative flex flex-col flex-1 overflow-hidden min-w-0">
@@ -434,7 +504,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
             <NotificationPopover />
             <ThemeToggleButton />
-            <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
+            {/* This was a button with no onClick — the only affordance in the header that did
+                nothing at all. It opens the tour now, which is also where the tour's last step
+                points, so somebody who skipped it knows where it went. */}
+            <button
+              type="button"
+              data-tour="help-button"
+              onClick={openTour}
+              title="Show me around"
+              aria-label="Show me around"
+              className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
+            >
+              <Question size={12} weight="bold" />
+            </button>
             <div className="w-[1px] h-3.5 bg-border mx-1" />
             <button
               onClick={toggleRightSidebar}
@@ -446,6 +528,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {!isAdminRoute && <WorkspaceTabs />}
+
+        <ProductTour />
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <main className="relative min-h-0 flex-1 overflow-y-auto">
@@ -476,13 +560,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               className="bg-surface-1"
             >
               <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
+              {/* Members, not "Properties".
+                  The panel used to be a header over the sentence "Select an item to view its
+                  properties and actions" — and nothing in the app ever published an item for it
+                  to describe, so that sentence was the whole feature. 260px had been reserved
+                  for something that never arrived.
+
+                  Properties is meant to return here for a selected item; it is not built in this
+                  change because there is still no selection to read. Adding a store nothing
+                  writes to would be the same placeholder again, one layer deeper. */}
               <div className="flex items-center px-4 h-[38px] border-b border-border">
-                <span className="text-[12px] font-medium text-ink">Properties</span>
+                <span className="text-[12px] font-medium text-ink">Members</span>
               </div>
               <div className="flex-1 p-4 overflow-y-auto">
-                <div className="text-[12px] text-ink-muted">
-                  Select an item to view its properties and actions.
-                </div>
+                <WorkspaceMembersPanel
+                  workspaceId={activeWorkspaceId}
+                  workspaceSlug={activeWorkspaceSlug}
+                />
               </div>
             </aside>
             </AnimatedWidthPanel>

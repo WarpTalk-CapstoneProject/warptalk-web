@@ -3,9 +3,14 @@ import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 import {
   chooseNewestAccessToken,
+  DEFAULT_REFRESH_WINDOW_MS,
   isAccessTokenExpiring,
+  PROACTIVE_REFRESH_MARGIN_MS,
+  PROACTIVE_REFRESH_WINDOW_MS,
 } from "@/lib/api/token-lifecycle";
+import { normalizeResponseRoles } from "@/lib/api/normalize-response";
 import {
+  hasRedeemableSession,
   recordSessionTeardown,
   resolveAccessTokenExpiryMs,
   setAccessTokenCookie,
@@ -18,6 +23,20 @@ import {
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5200/api/v1",
   timeout: 30_000,
+  // The session lives in HttpOnly cookies, so the refresh cannot work without this.
+  //
+  // Production is cross-origin — app.warptalk.io.vn calling api.warptalk.io.vn — and a
+  // cross-origin XHR sends no cookies at all unless it asks to. The refresh token is in the
+  // `warptalk_refresh` cookie and nowhere else, so without this flag the browser held a
+  // perfectly valid credential and never sent it: every session ended after exactly one
+  // access-token lifetime. The two subdomains share the registrable domain, which is what
+  // makes the cookie's SameSite=Lax survive the trip; the gateway answers the preflight with
+  // Access-Control-Allow-Credentials: true.
+  //
+  // This does not weaken the bearer-token scheme. The gateway takes the JWT from the
+  // Authorization header (and, for hub paths only, the query string) and never from a cookie,
+  // so an access_token cookie riding along cannot shadow the header set below.
+  withCredentials: true,
 });
 
 function getCookieValue(name: string): string | null {
@@ -37,7 +56,6 @@ function getCookieValue(name: string): string | null {
 
 function getPersistedAuthState(): {
   accessToken?: string | null;
-  refreshToken?: string | null;
 } | null {
   if (typeof localStorage === "undefined") {
     return null;
@@ -49,7 +67,6 @@ function getPersistedAuthState(): {
     const parsed = JSON.parse(persisted) as {
       state?: {
         accessToken?: string | null;
-        refreshToken?: string | null;
       };
     };
     return parsed.state ?? null;
@@ -69,38 +86,32 @@ function getAccessToken(): string | null {
   );
 }
 
-function getRefreshToken(): string | null {
-  // localStorage FIRST, and persistTokens now writes it synchronously so that is safe.
-  //
-  // This was the other way round, and the reasoning was right about one tab and wrong about
-  // two. Refresh tokens rotate and the server revokes the whole family when an already-rotated
-  // token is presented, so freshness matters more here than anywhere else. Within a tab the
-  // in-memory store is written first, which is why it used to win. But zustand's persist
-  // middleware does not listen for the storage event, so a second tab's store never learns
-  // that the first tab rotated the family:
-  //
-  //   tab A refreshes  -> new token in A's store and in localStorage
-  //   tab B refreshes  -> reads ITS OWN store, still holding the token A rotated away
-  //   server           -> replay detected, family revoked, BOTH tabs logged out
-  //
-  // The Web Lock below stops the two refreshes overlapping; it cannot stop the second one
-  // being stale. localStorage is the only copy both tabs share, so it is the one to trust —
-  // and writing it synchronously removes the lag that made the store the safer read.
-  return getPersistedAuthState()?.refreshToken
-    ?? useAuthStore.getState().refreshToken
-    ?? null;
+/**
+ * Whether a refresh is worth attempting. See `hasRedeemableSession` for why this is the
+ * strongest question that can still be asked.
+ *
+ * What used to be here read the refresh token out of localStorage and the zustand store, and
+ * ranked the two by staleness because a stale one revokes the rotation family. That ranking
+ * is now moot in the best possible way: the browser's cookie jar holds exactly one refresh
+ * token per browser and the server rotates it in place with Set-Cookie, so two tabs cannot
+ * hold different copies. The Web Lock below still matters — two tabs presenting the *same*
+ * cookie concurrently is a replay, and the server revokes the family for that — but the
+ * cross-tab staleness this function used to guard against no longer has a way to happen.
+ */
+function canAttemptRefresh(): boolean {
+  return hasRedeemableSession(getAccessToken());
 }
 
 /**
- * Writes the rotated pair everywhere a reader might look, in the same tick.
+ * Writes the new access token everywhere a reader might look, in the same tick.
  *
- * The synchronous localStorage write is the point: the persist middleware gets there
- * eventually, and "eventually" is long enough for another tab to refresh with a token this
- * one just rotated away — which the server answers by revoking the family and logging both
- * tabs out. The existing shape is patched rather than replaced so the middleware's own
- * version marker and any other persisted field survive.
+ * The synchronous localStorage write is what stops a reader seeing the old token after the
+ * refresh has completed: the persist middleware gets there eventually, and "eventually" is
+ * long enough for a concurrent request to attach a token that has just been replaced. The
+ * existing shape is patched rather than replaced so the middleware's own version marker and
+ * any other persisted field survive.
  */
-function writePersistedTokens(accessToken: string, refreshToken: string) {
+function writePersistedTokens(accessToken: string) {
   if (typeof localStorage === "undefined") return;
   try {
     const raw = localStorage.getItem("warptalk-auth");
@@ -109,7 +120,7 @@ function writePersistedTokens(accessToken: string, refreshToken: string) {
       "warptalk-auth",
       JSON.stringify({
         ...parsed,
-        state: { ...(parsed?.state ?? {}), accessToken, refreshToken },
+        state: { ...(parsed?.state ?? {}), accessToken },
       }),
     );
   } catch {
@@ -118,12 +129,15 @@ function writePersistedTokens(accessToken: string, refreshToken: string) {
   }
 }
 
-function persistTokens(accessToken: string, refreshToken: string, expiresAt?: string) {
-  useAuthStore.getState().setTokens(accessToken, refreshToken);
-  writePersistedTokens(accessToken, refreshToken);
+function persistTokens(accessToken: string, expiresAt?: string) {
+  useAuthStore.getState().setTokens(accessToken);
+  writePersistedTokens(accessToken);
   // A refresh issues a brand new 30-minute token. Re-stamping the cookie with a hardcoded
   // seven days here is how a session that had been refreshed once still ended up holding a
   // week-long cookie around a half-hour token.
+  //
+  // This also re-stamps the seven-day session marker, which is what keeps an actively used
+  // session's marker ahead of the refresh cookie the server is rotating underneath it.
   setAccessTokenCookie(accessToken, expiresAt);
 }
 
@@ -204,13 +218,14 @@ function isFormDataLike(value: unknown): value is Record<string | symbol, unknow
 let refreshPromise: Promise<string> | null = null;
 
 /**
- * Thrown when there is nothing left to refresh with. It is a dead session just as much as a
- * server-rejected refresh token is — the difference is that no request ever leaves the
- * browser, so no response interceptor sees a 4xx to react to.
+ * Thrown when there is no sign this browser holds a redeemable session, so a refresh would be
+ * a request made on spec. It is a dead session just as much as a server-rejected refresh token
+ * is — the difference is that no request ever leaves the browser, so no response interceptor
+ * sees a 4xx to react to.
  */
 class MissingRefreshTokenError extends Error {
   constructor() {
-    super("No refresh token");
+    super("No redeemable session");
     this.name = "MissingRefreshTokenError";
   }
 }
@@ -245,24 +260,29 @@ async function requestNewAccessToken(failedAccessToken?: string | null): Promise
       return latestAccessToken!;
     }
 
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) {
+    if (!canAttemptRefresh()) {
       // The reason production saw ZERO /auth/refresh requests while users were being logged
-      // out: the request is never made, because there is nothing to send. Which of the two
-      // stores was empty is the fact that three rounds of reading this code could not
-      // establish, so it is recorded rather than deduced.
+      // out: the request was never made, because the client was looking for the refresh token
+      // in localStorage and the server had moved it into an HttpOnly cookie. What was
+      // observable at the moment of the decision is recorded rather than deduced — three
+      // rounds of reading this code failed to establish it from source alone.
       recordSessionTeardown(
-        `refresh-token-missing(store=${useAuthStore.getState().refreshToken ? "yes" : "no"},persisted=${getPersistedAuthState()?.refreshToken ? "yes" : "no"})`,
+        `no-redeemable-session(marker=${hasRedeemableSession(null) ? "yes" : "no"},access=${getAccessToken() ? "yes" : "no"})`,
       );
       throw new MissingRefreshTokenError();
     }
 
+    // No body and no bearer token: the credential is the `warptalk_refresh` HttpOnly cookie,
+    // and withCredentials is what puts it on the wire. A bare axios call rather than
+    // apiClient, deliberately — going through the instance would re-enter the request
+    // interceptor that is very likely the caller here.
     const { data } = await axios.post<AuthResponse>(
       `${apiClient.defaults.baseURL}/auth/refresh`,
-      { refreshToken },
+      {},
+      { withCredentials: true },
     );
 
-    persistTokens(data.accessToken, data.refreshToken, data.expiresAt);
+    persistTokens(data.accessToken, data.expiresAt);
     return data.accessToken;
   };
 
@@ -291,12 +311,14 @@ function refreshAccessToken(failedAccessToken?: string | null): Promise<string> 
  * server revokes the entire family on replay is a session that ends itself, on a timer, for
  * no reason the user can see.
  */
-export async function getUsableAccessToken(): Promise<string | null> {
+export async function getUsableAccessToken(
+  refreshWindowMs: number = DEFAULT_REFRESH_WINDOW_MS,
+): Promise<string | null> {
   const token = getAccessToken();
-  if (token && !isAccessTokenExpiring(token)) {
+  if (token && !isAccessTokenExpiring(token, Date.now(), refreshWindowMs)) {
     return token;
   }
-  if (!getRefreshToken()) {
+  if (!canAttemptRefresh()) {
     return token;
   }
   return refreshAccessToken(token);
@@ -452,12 +474,30 @@ function scheduleProactiveRefresh(accessToken: string | null) {
   const expiryMs = resolveAccessTokenExpiryMs(accessToken, null);
   if (expiryMs === null) return;
 
-  const delay = Math.max(10_000, expiryMs - Date.now() - 120_000);
+  const delay = Math.max(10_000, expiryMs - Date.now() - PROACTIVE_REFRESH_MARGIN_MS);
   proactiveRefreshTimer = setTimeout(() => {
     proactiveRefreshTimer = null;
+    // PROACTIVE_REFRESH_WINDOW_MS, not the default: this timer wakes further out than the
+    // reactive window, and passing the default made the refresher declare the token healthy
+    // and hand it straight back. See token-lifecycle.ts.
+    //
     // Failures are the request interceptor's problem, not this timer's: it must not end a
     // session on its own, or a laptop waking from sleep would sign the user out.
-    void getUsableAccessToken().catch(() => {});
+    void getUsableAccessToken(PROACTIVE_REFRESH_WINDOW_MS)
+      .then((token) => {
+        // Rearm. A successful refresh writes the new token to the store, and the subscription
+        // above reschedules from there — but only when the value actually changed. A refresh
+        // that another tab had already completed returns the token this timer is holding, so
+        // nothing changes, nothing reschedules, and the session runs out with no timer armed.
+        //
+        // Guarded on the token still being alive so a failed refresh cannot turn this into a
+        // ten-second poll: once it is dead there is nothing useful left to do here, and the
+        // next request is what ends the session.
+        if (token && token === getAccessToken() && !isAccessTokenExpiring(token)) {
+          scheduleProactiveRefresh(token);
+        }
+      })
+      .catch(() => {});
   }, delay);
 }
 
@@ -510,30 +550,18 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
 });
 
 // ─── Response interceptor: refresh on 401 ───
-function normalizeResponseRoles(data: unknown): unknown {
-  if (!data || typeof data !== "object") return data;
-  if (Array.isArray(data)) return data.map(normalizeResponseRoles);
-
-  const obj = data as Record<string, unknown>;
-  const result: Record<string, unknown> = {};
-  for (const key of Object.keys(obj)) {
-    const val = obj[key];
-    if (
-      (key === "role" || key === "roleName" || key === "currentRole" || key === "workspaceRole") &&
-      typeof val === "string"
-    ) {
-      result[key] = val.toLowerCase();
-    } else if (typeof val === "object" && val !== null) {
-      result[key] = normalizeResponseRoles(val);
-    } else {
-      result[key] = val;
-    }
-  }
-  return result;
-}
-
 apiClient.interceptors.response.use(
   (response) => {
+    // A response the caller asked for as bytes has no roles in it to normalise, and walking it
+    // can only do harm. `isPlainObject` already refuses to rebuild a Blob, but stating the rule
+    // here as well is what stops the next binary response type from having to rediscover it:
+    // a file download crashed the document page with "x.text is not a function", and the same
+    // `{}` was being handed to every artifact and transcript download in the app.
+    const responseType = response.config?.responseType;
+    if (responseType && responseType !== "json") {
+      return response;
+    }
+
     if (response.data) {
       response.data = normalizeResponseRoles(response.data);
     }
@@ -552,11 +580,11 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // A 401 with nothing to refresh from is terminal. Going through refreshAccessToken() here
-    // would throw a non-Axios error that the 4xx check below cannot recognise, which is how an
+    // A 401 with nothing to redeem is terminal. Going through refreshAccessToken() here would
+    // throw a non-Axios error that the 4xx check below cannot recognise, which is how an
     // expired session ended up spinning forever instead of landing on /login.
-    if (!getRefreshToken()) {
-      endDeadSession("no-refresh-token-on-401");
+    if (!canAttemptRefresh()) {
+      endDeadSession("no-redeemable-session-on-401");
       return Promise.reject(error);
     }
 

@@ -91,6 +91,38 @@ function cookieSuffix(): string {
 }
 
 /**
+ * True when this browser looks like it still holds a redeemable refresh token.
+ *
+ * This is the only question JavaScript can still ask about the refresh token. The token
+ * itself lives in the `warptalk_refresh` HttpOnly cookie (backend `AuthSessionCookies`),
+ * which is the point of it being HttpOnly — no script can read it, so no XSS can steal it.
+ * The consequence is that nothing in this client can inspect the credential to decide
+ * whether refreshing is worth attempting, and the code that used to do exactly that
+ * silently stopped refreshing at all: `getRefreshToken()` read localStorage, the server had
+ * stopped putting the token there, so every refresh decision resolved to "there is nothing
+ * to send" and every session died at the thirty-minute mark.
+ *
+ * So the question is asked of the marker instead, which is written next to the access token
+ * on every login and every refresh and carries no credential. It is deliberately weaker
+ * than the truth: a marker without a live refresh cookie merely costs one request that comes
+ * back 400 and ends the session properly, which is the correct outcome anyway. Being wrong
+ * in the other direction — refusing to refresh while a valid cookie sits in the jar — is the
+ * failure that has to stay impossible, so the access token counts as evidence too, for the
+ * case where a cookie write was blocked but the session is real.
+ */
+export function hasRedeemableSession(
+  accessToken?: string | null,
+  cookieSource: string = typeof document === "undefined" ? "" : document.cookie,
+): boolean {
+  const prefix = `${SESSION_MARKER_COOKIE}=`;
+  for (const part of cookieSource.split("; ")) {
+    if (part.startsWith(prefix) && part.length > prefix.length) return true;
+  }
+
+  return Boolean(accessToken);
+}
+
+/**
  * Build the `document.cookie` assignment for the access token, or null when we refuse to
  * write one.
  *

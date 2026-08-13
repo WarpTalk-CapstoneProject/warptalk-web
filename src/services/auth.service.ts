@@ -5,7 +5,6 @@ import type {
   ChangePasswordRequest,
   GoogleLoginRequest,
   LoginRequest,
-  LogoutRequest,
   RegisterRequest,
   UpdateProfileRequest,
   UserDto,
@@ -27,21 +26,26 @@ export const authService = {
     return apiClient.post<AuthResponse>(API.auth.googleLogin, data);
   },
 
-  refresh(refreshToken: string) {
-    return apiClient.post<AuthResponse>(API.auth.refresh, { refreshToken });
-  },
+  // No refresh() here on purpose. The one that used to sit at this spot took a refresh token
+  // as an argument and had no callers — the real refresh lives in lib/api/client.ts, which
+  // must hold the Web Lock and must not re-enter the interceptor that usually calls it.
 
   /**
-   * Revoke the refresh token server-side.
+   * Revoke the session server-side.
    *
    * The endpoint is `[Authorize]`, and this is called while the session is
    * being torn down, so the departing access token has to be handed over
    * explicitly — by the time the request interceptor would look one up, the
    * store is already empty. /auth/logout is exempt from interceptor management
    * in lib/api/client.ts precisely so this header survives.
+   *
+   * The body is empty: the refresh token being revoked is the HttpOnly
+   * `warptalk_refresh` cookie, which this side cannot read and does not need to.
+   * `withCredentials` on the client sends it, and the endpoint's path is inside
+   * the cookie's own Path scope.
    */
-  logout(data: LogoutRequest, accessToken?: string | null) {
-    return apiClient.post<void>(API.auth.logout, data, {
+  logout(accessToken?: string | null) {
+    return apiClient.post<void>(API.auth.logout, {}, {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     });
   },
