@@ -212,4 +212,18 @@ assert.doesNotMatch(
   "the layout must not read browser storage during render — the store owns rehydration",
 );
 
+// --- WT-357: starting translation must not tear down the media connection ----------------
+// TranslationRoomStarted is broadcast room-wide, and its handler called
+// retryMeetingConnection() unconditionally. That function begins with setMeetingSession(null),
+// which drops `hasToken` and so <LiveKitRoom connect>; useLiveKitRoom answers with
+// room.disconnect(), stopping the camera and microphone tracks the participant is publishing.
+// Pressing Start Translation therefore turned everyone's devices off and hitched the UI while
+// the connection was rebuilt. The re-join is still right for a client with no real token — the
+// lobby — which is what the guard distinguishes.
+assert.match(
+  meetingSession,
+  /connection\.on\(\s*\n?\s*"TranslationRoomStarted"[\s\S]{0,2600}?const session = currentMeetingSessionRef\.current;\s*\n?\s*if \(session\?\.token && !session\.isWaitingRoom\) return;\s*\n?\s*retryMeetingConnectionRef\.current\(\);/,
+  "TranslationRoomStarted must only re-join clients that hold no live session — a re-join disconnects LiveKit and stops published tracks",
+);
+
 console.log("Persistent meeting contract passed.");

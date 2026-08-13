@@ -1,19 +1,23 @@
 # History & Artifacts Page Documentation
 
-This document tracks the host history UI at `/history`.
+This document tracks the workspace history and room artifact UI at `/:workspaceSlug/history` and `/:workspaceSlug/rooms/:id/artifacts`.
 
 ## Current Behavior
 
-- `/history` has been converted to the shadcn dashboard style: stat cards, search, status tabs, ended-room list, selected transcript preview, artifact cards, and detail sidebar.
-- The page continues to use `useRoomHistory()` when available and falls back to preview history when backend/artifact APIs are unavailable.
-- Users can filter locally by all, ready, flagged, or missing artifact states.
-- Download buttons are currently visual preview actions until real artifact URLs exist.
+- `/:workspaceSlug/history` renders finished translation rooms and retained outputs from `useRoomHistory()`.
+- `/:workspaceSlug/rooms/:id/artifacts` renders room artifact cards; summary artifacts show their inline JSON content when available.
+- The frontend-only meeting-summary seed returns a ready `summary_export`, `transcript_export`, and `recording` artifact for `summary-seed-room-fpt-sep490-su26`.
+- Users can search history locally and filter by completed/cancelled/output state.
+- Download buttons call backend download APIs for real artifacts and return local seed content for seed artifact IDs.
 
 ## Files Affected
 
-- `src/app/(app)/history/page.tsx`
+- `src/app/(app)/[workspaceSlug]/history/page.tsx`
+- `src/app/(app)/[workspaceSlug]/rooms/[id]/artifacts/page.tsx`
 - `src/hooks/use-room-history.ts`
-- `src/services/roomHistory.service.ts`
+- `src/services/room-history.service.ts`
+- `src/services/translation-room.service.ts`
+- `src/lib/meeting/meeting-summary-seed.ts`
 - `src/types/roomHistory.ts`
 
 ## Template Mapping
@@ -41,8 +45,8 @@ Until then, the UI remains safe to review with preview data.
 
 ## Testing Checklist
 
-- [ ] `/history` renders in the host shell.
+- [ ] `/:workspaceSlug/history` renders in the workspace shell.
 - [ ] Search filters room history locally.
-- [ ] Tabs filter by artifact state.
-- [ ] Selecting a room updates the transcript preview and detail sidebar.
-- [ ] Empty backend state still shows the preview layout.
+- [ ] Tabs filter by status/output state.
+- [ ] Selecting a room updates the detail sidebar.
+- [ ] `/:workspaceSlug/rooms/summary-seed-room-fpt-sep490-su26/artifacts` shows seeded summary JSON content and downloadable seed artifacts.

@@ -16,8 +16,8 @@ const root = path.resolve(import.meta.dirname, "..");
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 
 for (const gone of [
-  "src/app/(app)/[workspaceSlug]/ai-summaries",
-  "src/app/(app)/[workspaceSlug]/transcript",
+  "src/app/(app)/[workspaceSlug]/ai-summaries/page.tsx",
+  "src/app/(app)/[workspaceSlug]/transcript/page.tsx",
 ]) {
   assert.ok(
     !fs.existsSync(path.join(root, gone)),

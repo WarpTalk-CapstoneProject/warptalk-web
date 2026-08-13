@@ -24,8 +24,10 @@ This document tracks project-wide code quality checks that affect local developm
 
 - Warnings should still be cleaned up incrementally when touching the related files.
 - Build-blocking lint errors should be reserved for issues that are safe to enforce across the current codebase.
+- Heavy browser-only export libraries should be loaded on demand. Excel workbook generation uses `src/lib/export/create-excel-workbook.ts` so `exceljs` does not increase first-load JavaScript for pages that only need export after a click.
 
 ## Testing Checklist
 
 - Run `npm run lint`.
 - Run `npx tsc --noEmit` before Docker builds when TypeScript behavior changed.
+- Run `npm run build` after bundle-splitting changes and compare `.next/diagnostics/route-bundle-stats.json` for affected routes.

@@ -3,6 +3,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { ListDisplayPopover } from "@/components/ui/list-display-popover";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +20,11 @@ import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { SeriesListSummary, TranslationRoomDto } from "@/types/translationRoom";
+import type { UserDto } from "@/types/auth";
+import type {
+  SeriesListSummary,
+  TranslationRoomDto,
+} from "@/types/translationRoom";
 import {
   describeRecurrenceWithTime,
   recurrenceBadgeLabel,
@@ -28,6 +34,10 @@ import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
 // cannot drift the way the language chip did.
 import { isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
+import {
+  isMeetingSummarySeedWorkspaceSlug,
+  withMeetingSummarySeedRooms,
+} from "@/lib/meeting/meeting-summary-seed";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -58,16 +68,95 @@ function formatTimeShort(value?: string) {
   }).format(new Date(value));
 }
 
+function sortRooms(
+  rooms: TranslationRoomDto[],
+  sortKey: RoomSortKey,
+  direction: SortDirection,
+  members: WorkspaceMemberDto[],
+  user?: UserDto | null,
+) {
+  return [...rooms].sort((first, second) => {
+    const result = compareRooms(first, second, sortKey, members, user);
+    return direction === "asc" ? result : -result;
+  });
+}
+
+function compareRooms(
+  first: TranslationRoomDto,
+  second: TranslationRoomDto,
+  sortKey: RoomSortKey,
+  members: WorkspaceMemberDto[],
+  user?: UserDto | null,
+) {
+  if (sortKey === "status") {
+    return compareText(first.status, second.status);
+  }
+  if (sortKey === "host") {
+    return compareText(
+      resolveRoomHost(first, members, user ?? null).name,
+      resolveRoomHost(second, members, user ?? null).name,
+    );
+  }
+  if (sortKey === "date") {
+    return (
+      getRoomDateValue(first.scheduledAt ?? first.createdAt) -
+      getRoomDateValue(second.scheduledAt ?? second.createdAt)
+    );
+  }
+  if (sortKey === "code") {
+    return compareText(first.translationRoomCode, second.translationRoomCode);
+  }
+  return compareText(first.title, second.title);
+}
+
+function getRoomDateValue(value?: string) {
+  return value ? new Date(value).getTime() : 0;
+}
+
+function compareText(first?: string | null, second?: string | null) {
+  return (first ?? "").localeCompare(second ?? "", undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
+
+type RoomSortKey = "title" | "status" | "host" | "date" | "code";
+type SortDirection = "asc" | "desc";
+type RoomDisplayProperty =
+  "code" | "status" | "host" | "languages" | "occupancy" | "date";
+
+const ROOM_SORT_COLUMNS: Array<{ key: RoomSortKey; label: string }> = [
+  { key: "title", label: "Title" },
+  { key: "status", label: "Status" },
+  { key: "host", label: "Host" },
+  { key: "date", label: "Date" },
+  { key: "code", label: "Room code" },
+];
+
+const ROOM_DISPLAY_PROPERTIES: Array<{
+  key: RoomDisplayProperty;
+  label: string;
+}> = [
+  { key: "code", label: "Room code" },
+  { key: "status", label: "Status" },
+  { key: "host", label: "Host" },
+  { key: "languages", label: "Languages" },
+  { key: "occupancy", label: "Seats" },
+  { key: "date", label: "Date" },
+];
+
+const DEFAULT_ROOM_DISPLAY_PROPERTIES = ROOM_DISPLAY_PROPERTIES.map(
+  (property) => property.key,
+);
+
+const ROOM_FILTER_WIDTH_CLASS: Record<"active" | "history" | "all", string> = {
+  active: "w-[78px]",
+  history: "w-[78px]",
+  all: "w-[58px]",
+};
 
 /**
  * WT-327: marks a room that is one occurrence of a recurring booking.
- *
- * A series is NOT grouped or collapsed in this list, deliberately. Every occurrence is a real,
- * separate meeting — its own code, its own transcript, its own artifacts, its own billing — and
- * a collapsed "1 series" row would hide exactly the thing the host came here to check: whether
- * tomorrow's 8am actually exists. The day timeline could not collapse it at all, since each
- * occurrence belongs to a different day. So they look like N meetings, because they ARE N
- * meetings; this badge is the only thing that says they share a rule.
  */
 function RepeatBadge({
   compact = false,
@@ -132,9 +221,11 @@ function StatusIcon({ status }: { status: string }) {
 function LinearRow({
   room,
   members,
+  visibleProperties,
 }: {
   room: TranslationRoomDto;
   members: WorkspaceMemberDto[];
+  visibleProperties: RoomDisplayProperty[];
 }) {
   const params = useParams();
   const workspaceSlug = params?.workspaceSlug as string;
@@ -154,6 +245,10 @@ function LinearRow({
   // WT-327: a grouped row opens the meeting it stands for — the one live now, or the next due,
   // which is what the server picked as the row's representative. There is no separate booking
   // page: the booking has one code and one next date, and both belong on the meeting itself.
+  //
+  // This briefly pointed at `/{slug}/series/{seriesId}`. No such route exists anywhere under
+  // src/app, so every grouped recurring row on the History tab fell through to not-found.tsx.
+  // If a booking page is ever built, add the route FIRST and link to it in the same change.
   const href = `/${workspaceSlug}/rooms/${room.id}`;
 
   return (
@@ -181,13 +276,17 @@ function LinearRow({
         )}
       </div>
 
-      <div className="flex items-center w-8 shrink-0">
-        <StatusIcon status={room.status} />
-      </div>
+      {visibleProperties.includes("status") && (
+        <div className="flex items-center w-8 shrink-0">
+          <StatusIcon status={room.status} />
+        </div>
+      )}
 
-      <div className="hidden @[560px]:block w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
-        {room.translationRoomCode}
-      </div>
+      {visibleProperties.includes("code") && (
+        <div className="hidden @[560px]:block w-[80px] shrink-0 font-mono text-[11px] text-muted-foreground tracking-tight">
+          {room.translationRoomCode}
+        </div>
+      )}
       {/* overflow-hidden, not just min-w-0. min-w-0 lets this column shrink to nothing, which is
           what has to happen when the Properties panel opens — but the badges after the title are
           shrink-0, so with nothing clipping them they simply drew on top of the status column.
@@ -223,25 +322,30 @@ function LinearRow({
           with the meaning huddled in the middle of it. The pill hugs what it contains and is
           capped at the column, so the columns still line up and nothing can overflow them. */}
       <div className="flex items-center gap-2.5 shrink-0 text-muted-foreground text-[11px]">
-        <div className="flex shrink-0 items-center">
-          <StatusPanel status={room.status} />
-        </div>
-
-        <div className="hidden @[700px]:flex shrink-0 items-center">
-          <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            <Avatar className="size-5 shrink-0 rounded-full">
-              <AvatarImage src={hostAvatar} alt={hostName} />
-              <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
-                {hostName.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
+        {visibleProperties.includes("status") && (
+          <div className="flex w-[104px] shrink-0 items-center">
+            <StatusPanel status={room.status} />
           </div>
-        </div>
+        )}
 
-        <div className="flex shrink-0 items-center">
-          <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
+        {visibleProperties.includes("host") && (
+          <div className="hidden @[700px]:flex w-[164px] shrink-0 items-center">
+            <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              <Avatar className="size-5 shrink-0 rounded-full">
+                <AvatarImage src={hostAvatar} alt={hostName} />
+                <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
+                  {hostName.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
+            </div>
+          </div>
+        )}
+
+        {visibleProperties.includes("languages") && (
+          <div className="flex w-[176px] shrink-0 items-center">
+            <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
 
                 It used to read "English → 🇻🇳 · 🇯🇵", which asserted a relationship the product
                 does not have: every participant picks their own speak and listen language, so
@@ -258,8 +362,10 @@ function LinearRow({
                 only thing carrying the meaning. A room can declare any number of languages —
                 nothing client-side caps the set — so the pill is capped at the column and clips
                 rather than pushing the occupancy and date columns out of line. */}
-            {meetingLanguageSet(room.sourceLanguage, room.targetLanguages).map(
-              (language, index) => (
+              {meetingLanguageSet(
+                room.sourceLanguage,
+                room.targetLanguages,
+              ).map((language, index) => (
                 <div key={language} className="flex items-center">
                   {index > 0 && (
                     <span className="text-muted-foreground/40 px-1 text-[13px] font-bold">
@@ -268,42 +374,49 @@ function LinearRow({
                   )}
                   <LanguageLabel value={language} showName={false} />
                 </div>
-              ),
-            )}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* WT-321(3): the bare "0/100" was read as an error code, a progress bar, anything but
             what it is. It is unchanged in meaning — `useRoomOccupancy` still returns
             seats-taken over the meeting type's seat cap (WT-274) — it just says so now. A
             people icon and a title are the whole fix; the number itself was never wrong. */}
-        <div
-          className="hidden @[820px]:flex h-[26px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-          title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
-        >
-          <Users size={13} weight="regular" aria-hidden />
-          <span className="tabular-nums">{occupancy.label}</span>
-          <span className="sr-only">
-            participants in the room, out of {occupancy.capacity} seats
-          </span>
-        </div>
+        {visibleProperties.includes("occupancy") && (
+          <div
+            className="hidden @[820px]:flex h-[26px] w-[84px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+            title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
+          >
+            <Users size={13} weight="regular" aria-hidden />
+            <span className="tabular-nums">{occupancy.label}</span>
+            <span className="sr-only">
+              participants in the room, out of {occupancy.capacity} seats
+            </span>
+          </div>
+        )}
 
-        <div className="hidden @[900px]:flex h-[26px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <CalendarIcon size={13} weight="regular" />
-          <span className="tabular-nums">
-            {formatTimeShort(room.scheduledAt ?? room.createdAt)}
-          </span>
-        </div>
+        {visibleProperties.includes("date") && (
+          <div className="hidden @[900px]:flex h-[26px] w-[96px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <CalendarIcon size={13} weight="regular" />
+            <span className="tabular-nums">
+              {formatTimeShort(room.scheduledAt ?? room.createdAt)}
+            </span>
+          </div>
+        )}
       </div>
     </Link>
   );
 }
 
-
 import { useUIStore } from "@/stores/ui-store";
 
 export default function MeetingsPageLinear() {
   const router = useRouter();
+  const params = useParams();
+  const workspaceSlug = params?.workspaceSlug as string | undefined;
+  const shouldShowSummarySeed =
+    isMeetingSummarySeedWorkspaceSlug(workspaceSlug);
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
@@ -312,10 +425,19 @@ export default function MeetingsPageLinear() {
     1,
     100,
   );
-  const members = membersQuery.data?.items ?? [];
+  const members = useMemo(
+    () => membersQuery.data?.items ?? [],
+    [membersQuery.data?.items],
+  );
+  const user = useAuthStore((state) => state.user);
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<RoomSortKey>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [visibleDisplayProperties, setVisibleDisplayProperties] = useState<
+    RoomDisplayProperty[]
+  >(DEFAULT_ROOM_DISPLAY_PROPERTIES);
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -364,8 +486,14 @@ export default function MeetingsPageLinear() {
   );
 
   const rooms = useMemo(() => {
-    return roomList.data?.rooms ?? [];
-  }, [roomList.data?.rooms]);
+    const source = roomList.data?.rooms ?? [];
+    return shouldShowSummarySeed ? withMeetingSummarySeedRooms(source) : source;
+  }, [roomList.data?.rooms, shouldShowSummarySeed]);
+
+  const groupedRooms = useMemo(() => {
+    const source = groupedList.data?.rooms ?? [];
+    return shouldShowSummarySeed ? withMeetingSummarySeedRooms(source) : source;
+  }, [groupedList.data?.rooms, shouldShowSummarySeed]);
 
   // WT-251/WT-232: the calendar gave no hint which days hold anything, and it opens on today,
   // so a meeting booked for any other day was invisible in this tab — findable only under
@@ -377,20 +505,16 @@ export default function MeetingsPageLinear() {
   // Measured against the selected day rather than against the clock: reading the current time
   // during render is impure, and "next after where you are" is the more useful answer anyway —
   // it works the same whether the user has paged backwards or forwards.
-
   /**
    * WT-327: which of the two answers this view is showing.
    *
-   * Grouped when the question is "what meetings do I have?" — the booking is the answer, and
-   * fourteen rows for one standup was the defect. Ungrouped when the question is about a moment:
-   * the Active tab is "what is live or starting now", and a day off the strip is "what is on
-   * Thursday". Neither of those has a booking as an answer; both have a meeting.
+   * All is not grouped, and is not filtered by a day. History keeps the grouped view because
+   * "what did we run?" is still answered by the booking. Active and day-filtered views answer a
+   * specific moment, so they use individual room occurrences.
    */
-  const isGroupedView = activeTab !== "active" && !dayFilter;
-  const rowSource = useMemo(
-    () => (isGroupedView ? (groupedList.data?.rooms ?? []) : rooms),
-    [isGroupedView, groupedList.data?.rooms, rooms],
-  );
+  const isAllView = activeTab === "all";
+  const isGroupedView = activeTab === "history" && !dayFilter;
+  const rowSource = isGroupedView ? groupedRooms : rooms;
 
   const filteredRooms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -409,65 +533,112 @@ export default function MeetingsPageLinear() {
         .some((value) => value.toLowerCase().includes(normalizedQuery));
     };
 
-    // A day picked off the strip wins over the tab, in EVERY tab.
-    //
-    // This used to sit after the Active branch, which returned first — so on Active, the tab the
-    // page opens on, clicking a day did nothing at all and the strip was decoration. Picking a
-    // date is the more specific question ("what is on Tuesday?") and the tab is the general one;
-    // the specific one has to be answered.
-    if (dayFilter) {
-      return rooms.filter((r) => matchesSearch(r) && isScheduledOn(r, dayFilter));
+    // A day picked off the strip wins over the tab, except on All: "everything I have" and
+    // "what is on Tuesday" are contradictory questions.
+    if (dayFilter && !isAllView) {
+      return sortRooms(
+        rooms.filter((r) => matchesSearch(r) && isScheduledOn(r, dayFilter)),
+        sortKey,
+        sortDirection,
+        members,
+        user,
+      );
     }
 
     if (activeTab === "active") {
       const now = new Date();
       const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60000);
-      // A scheduled room needs a window on BOTH sides. The check used to be "starts within the
-      // next fifteen minutes" with no lower bound, so `scheduledAt <= now + 15min` was also true
-      // for every meeting whose time had already passed — a room booked for last week sat in
-      // Active forever, which is most of what made the tab meaningless. Two hours of grace after
-      // the hour keeps a meeting that is running late; older than that it was never started, and
-      // it belongs to its own day under Scheduled, not here.
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60000);
-      return rooms.filter(
-        (r) =>
-          matchesSearch(r) &&
-          (r.status === "in_progress" ||
-            r.status === "waiting" ||
-            (r.status === "scheduled" &&
-              (!r.scheduledAt ||
-                (new Date(r.scheduledAt) <= fifteenMinsFromNow &&
-                  new Date(r.scheduledAt) >= twoHoursAgo)))),
+      return sortRooms(
+        rooms.filter(
+          (r) =>
+            matchesSearch(r) &&
+            (r.status === "in_progress" ||
+              r.status === "waiting" ||
+              (r.status === "scheduled" &&
+                (!r.scheduledAt ||
+                  (new Date(r.scheduledAt) <= fifteenMinsFromNow &&
+                    new Date(r.scheduledAt) >= twoHoursAgo)))),
+        ),
+        sortKey,
+        sortDirection,
+        members,
+        user,
       );
     }
-    if (activeTab === "history")
-      return rowSource.filter(
-        (r) =>
-          matchesSearch(r) &&
-          (r.status === "ended" ||
-            r.status === "cancelled" ||
-            r.status === "timeout"),
-      );
-    return rowSource.filter(matchesSearch);
-  }, [rooms, rowSource, activeTab, dayFilter, searchQuery]);
 
+    if (activeTab === "history") {
+      return sortRooms(
+        rowSource.filter(
+          (r) =>
+            matchesSearch(r) &&
+            (r.status === "ended" ||
+              r.status === "cancelled" ||
+              r.status === "timeout"),
+        ),
+        sortKey,
+        sortDirection,
+        members,
+        user,
+      );
+    }
+
+    return sortRooms(
+      rowSource.filter(matchesSearch),
+      sortKey,
+      sortDirection,
+      members,
+      user,
+    );
+  }, [
+    rooms,
+    rowSource,
+    activeTab,
+    dayFilter,
+    isAllView,
+    searchQuery,
+    sortDirection,
+    sortKey,
+    members,
+    user,
+  ]);
+
+  function toggleDisplayProperty(property: string) {
+    setVisibleDisplayProperties((current) => {
+      const typedProperty = property as RoomDisplayProperty;
+      if (current.includes(typedProperty)) {
+        if (sortKey === property) setSortKey("title");
+        return current.filter((item) => item !== typedProperty);
+      }
+
+      return [...current, typedProperty];
+    });
+  }
   return (
     <div className="flex flex-col h-full bg-surface-1">
       {/* View Tabs & Actions */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+      <section className="flex shrink-0 flex-col gap-2 px-2 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        {/* The chip style this page defined now lives in FilterChip, so Knowledge, Documents and
+            the admin pages render the same control instead of four near-copies of it. */}
+        <FilterChipGroup label="Filter meetings">
           {(["active", "history", "all"] as const).map((tab) => (
-            <div
+            <FilterChip
               key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex items-center justify-center px-4 py-1.5 rounded-full cursor-pointer transition-all capitalize text-[13px] select-none border ${activeTab === tab ? "bg-surface-2 border-transparent text-foreground font-medium shadow-none" : "bg-transparent border-border/40 text-muted-foreground hover:bg-surface-2 hover:border-border/60 hover:text-foreground"}`}
+              selected={activeTab === tab}
+              className={ROOM_FILTER_WIDTH_CLASS[tab]}
+              onClick={() => {
+                setActiveTab(tab);
+                // Leaving a day selected while moving to All would silently narrow the one tab
+                // whose whole point is that it narrows nothing.
+                if (tab === "all") setDayFilter(null);
+              }}
             >
               {tab}
-            </div>
+            </FilterChip>
           ))}
-        </div>
+        </FilterChipGroup>
 
-        <div className="flex items-center gap-2 pl-4 shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           <ExpandingSearchDock
             value={searchQuery}
             onValueChange={setSearchQuery}
@@ -486,12 +657,36 @@ export default function MeetingsPageLinear() {
           >
             <Funnel weight="bold" size={13} />
           </button>
-          <button
-            className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm"
-            title="Display Options"
-          >
-            <SlidersHorizontal weight="bold" size={13} />
-          </button>
+          <ListDisplayPopover
+            trigger={<SlidersHorizontal weight="bold" size={13} />}
+            triggerClassName="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm"
+            triggerTitle="Display Options"
+            ordering={sortKey}
+            orderingOptions={ROOM_SORT_COLUMNS.map((column) => ({
+              value: column.key,
+              label: column.label,
+              disabled:
+                column.key !== "title" &&
+                !visibleDisplayProperties.includes(
+                  column.key === "date"
+                    ? "date"
+                    : column.key === "code"
+                      ? "code"
+                      : (column.key as RoomDisplayProperty),
+                ),
+            }))}
+            onOrderingChange={(value) => setSortKey(value as RoomSortKey)}
+            direction={sortDirection}
+            onDirectionChange={setSortDirection}
+            properties={ROOM_DISPLAY_PROPERTIES}
+            visibleProperties={visibleDisplayProperties}
+            onToggleProperty={toggleDisplayProperty}
+            onReset={() => {
+              setSortKey("date");
+              setSortDirection("asc");
+              setVisibleDisplayProperties(DEFAULT_ROOM_DISPLAY_PROPERTIES);
+            }}
+          />
 
           <div className="h-4 w-[1px] bg-border mx-1" />
 
@@ -512,12 +707,15 @@ export default function MeetingsPageLinear() {
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Replaces the Scheduled tab. A permanent strip says which days have anything on them
           without costing a click, which a tab could never do — and it is the same component the
           home panel renders, so the two cannot disagree about which days are marked. */}
-      <div className="flex items-center gap-3 border-b border-border/40 px-4 pb-3 shrink-0">
+      {/* Hidden on All — see isAllView. */}
+      <div
+        className={`items-center gap-3 border-b border-border/40 px-2 pb-2 shrink-0 ${isAllView ? "hidden" : "flex"}`}
+      >
         <MeetingDayStrip
           rooms={rooms}
           selectedDate={selectedDate}
@@ -541,7 +739,7 @@ export default function MeetingsPageLinear() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {(
+        {
           <div className="flex-1 overflow-y-auto">
             {/* Group Header */}
             <div
@@ -564,7 +762,12 @@ export default function MeetingsPageLinear() {
               <div className="flex flex-col pb-8">
                 {filteredRooms.length > 0 ? (
                   filteredRooms.map((room) => (
-                    <LinearRow key={room.id} room={room} members={members} />
+                    <LinearRow
+                      key={room.id}
+                      room={room}
+                      members={members}
+                      visibleProperties={visibleDisplayProperties}
+                    />
                   ))
                 ) : (
                   <div className="px-6 py-12 text-[13px] text-muted-foreground flex flex-col items-center justify-center">
@@ -579,7 +782,7 @@ export default function MeetingsPageLinear() {
               </div>
             )}
           </div>
-        )}
+        }
       </div>
 
       <Dialog open={joinModalOpen} onOpenChange={setJoinModalOpen}>

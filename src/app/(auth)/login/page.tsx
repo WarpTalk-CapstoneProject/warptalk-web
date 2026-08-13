@@ -200,7 +200,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="relative w-full min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden bg-white text-black font-sans">
+    <div className="login-auth-page relative w-full min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden bg-white text-black font-sans">
       <AnimatedHalftone />
 
       {/* Header Logo area like ChatGPT */}
@@ -212,9 +212,10 @@ function LoginForm() {
           <Image
             src="/assets/logos/warptalk-sidebar-logo.png"
             alt="WarpTalk"
-            width={100}
-            height={24}
-            className="h-6 w-auto object-contain mix-blend-multiply"
+            width={806}
+            height={200}
+            className="object-contain mix-blend-multiply"
+            style={{ width: "auto", height: 24 }}
             priority
           />
         </Link>
@@ -262,7 +263,7 @@ function LoginForm() {
                     autoFocus
                     placeholder="Email address"
                     className={cn(
-                      "h-14 w-full rounded-full border border-neutral-300 bg-white px-5 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
+                      "login-auth-field h-14 w-full rounded-full border border-neutral-300 bg-white px-5 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
                       errors.email &&
                         "border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]",
                     )}
@@ -319,7 +320,7 @@ function LoginForm() {
                       autoFocus
                       placeholder="Password"
                       className={cn(
-                        "h-14 w-full rounded-full border border-neutral-300 bg-white px-5 pr-12 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
+                        "login-auth-field h-14 w-full rounded-full border border-neutral-300 bg-white px-5 pr-12 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
                         errors.password &&
                           "border-[#d92d20] focus:border-[#d92d20] focus:ring-[#d92d20]",
                       )}

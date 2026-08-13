@@ -2,20 +2,26 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { VoiceProfileService } from "@/services/voice-profile.service";
+import { useAuthStore } from "@/stores/auth-store";
 import type {
   CreateVoiceProfileRequest,
   SetPreferredVoiceRequest,
 } from "@/types/voice-profile";
 
 export const VOICE_PROFILE_KEYS = {
-  list: () => ["voiceProfiles", "list"] as const,
+  lists: () => ["voiceProfiles", "list"] as const,
+  list: (userId: string | null | undefined) =>
+    ["voiceProfiles", "list", userId ?? "anonymous"] as const,
   catalog: (language: string) => ["voiceProfiles", "catalog", language] as const,
 };
 
 export function useVoiceProfiles() {
+  const userId = useAuthStore((state) => state.user?.id);
+
   return useQuery({
-    queryKey: VOICE_PROFILE_KEYS.list(),
+    queryKey: VOICE_PROFILE_KEYS.list(userId),
     queryFn: () => VoiceProfileService.list(),
+    enabled: Boolean(userId),
     staleTime: 30000,
   });
 }
@@ -25,7 +31,7 @@ export function useCreateVoiceProfile() {
   return useMutation({
     mutationFn: (request: CreateVoiceProfileRequest) => VoiceProfileService.create(request),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.list() });
+      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.lists() });
     },
   });
 }
@@ -35,7 +41,7 @@ export function useDeleteVoiceProfile() {
   return useMutation({
     mutationFn: (id: string) => VoiceProfileService.remove(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.list() });
+      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.lists() });
     },
   });
 }
@@ -60,7 +66,7 @@ export function useSetPreferredVoice() {
     mutationFn: (request: SetPreferredVoiceRequest) =>
       VoiceProfileService.setPreferredVoice(request),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.list() });
+      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.lists() });
     },
   });
 }

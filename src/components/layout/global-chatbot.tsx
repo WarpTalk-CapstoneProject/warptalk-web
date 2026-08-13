@@ -389,6 +389,28 @@ export function GlobalChatbot() {
     }
   };
 
+  useEffect(() => {
+    const handleOpenAssistant = (event: Event) => {
+      const customEvent = event as CustomEvent<{ prompt?: string }>;
+      const prompt =
+        typeof customEvent.detail?.prompt === "string"
+          ? customEvent.detail.prompt
+          : "";
+
+      startNewConversation();
+      setDisabledPageContextKey(null);
+      setInputValue(prompt);
+      setIsOpen(true);
+      setIsMinimized(false);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    };
+
+    window.addEventListener("warptalk:open-assistant", handleOpenAssistant);
+    return () => {
+      window.removeEventListener("warptalk:open-assistant", handleOpenAssistant);
+    };
+  }, []);
+
   // Real workspace members/meetings/documents for the @mention picker — each refetches
   // as the user types after "@". Selecting one attaches a real entityId that rides along
   // with the next sent message as a structured mention (see sendMessage below), not just

@@ -44,21 +44,21 @@ function formatDateTime(value: string) {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+    <div className="rounded-[7px] border border-hairline bg-surface-1 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase text-ink-subtle">
         {label}
       </p>
-      <p className="mt-2 text-xl font-semibold tabular-nums text-ink">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-ink-muted">{hint}</p> : null}
+      <p className="mt-1 text-lg font-semibold tabular-nums leading-5 text-ink">{value}</p>
+      {hint ? <p className="mt-0.5 truncate text-[11px] text-ink-muted">{hint}</p> : null}
     </div>
   );
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-hairline/60 py-2.5 last:border-b-0">
-      <span className="text-xs text-ink-muted">{label}</span>
-      <span className="text-right text-[13px] text-ink">{value}</span>
+    <div className="grid grid-cols-[150px_minmax(0,1fr)] items-baseline gap-3 border-b border-hairline/60 py-1.5 last:border-b-0">
+      <span className="text-[11px] text-ink-muted">{label}</span>
+      <span className="min-w-0 text-right text-[12px] text-ink">{value}</span>
     </div>
   );
 }
@@ -69,12 +69,12 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
  */
 function PendingApiTab({ title, description }: { title: string; description: string }) {
   return (
-    <div className="grid place-items-center rounded-xl border border-dashed border-hairline bg-surface-1/60 px-6 py-14 text-center">
+    <div className="grid place-items-center rounded-[7px] border border-dashed border-hairline bg-surface-1/60 px-4 py-8 text-center">
       <div className="max-w-md">
-        <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
-          <Info size={20} weight="duotone" />
+        <span className="mx-auto grid size-8 place-items-center rounded-[7px] bg-surface-2 text-ink-subtle">
+          <Info size={16} weight="duotone" />
         </span>
-        <p className="mt-3 text-sm font-medium text-ink">{title}</p>
+        <p className="mt-2 text-sm font-medium text-ink">{title}</p>
         <p className="mt-1 text-xs leading-5 text-ink-muted">{description}</p>
       </div>
     </div>
@@ -83,8 +83,8 @@ function PendingApiTab({ title, description }: { title: string; description: str
 
 function OverviewTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+      <div className="grid content-start gap-2 sm:grid-cols-2">
         <Stat
           label="Members"
           value={numberFormatter.format(workspace.memberCount)}
@@ -107,10 +107,10 @@ function OverviewTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-          <h2 className="text-sm font-semibold text-ink">Workspace record</h2>
-          <div className="mt-2">
+      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-1">
+        <section className="rounded-[7px] border border-hairline bg-surface-1 px-3 py-2">
+          <h2 className="text-[12px] font-semibold text-ink">Workspace record</h2>
+          <div className="mt-1">
             <Field label="Slug" value={<span className="font-mono text-xs">{workspace.slug}</span>} />
             <Field
               label="Owner"
@@ -139,9 +139,9 @@ function OverviewTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
           </div>
         </section>
 
-        <section className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-          <h2 className="text-sm font-semibold text-ink">Tenancy policy</h2>
-          <div className="mt-2">
+        <section className="rounded-[7px] border border-hairline bg-surface-1 px-3 py-2">
+          <h2 className="text-[12px] font-semibold text-ink">Tenancy policy</h2>
+          <div className="mt-1">
             <Field
               label="External collaboration"
               value={workspace.allowExternalCollaboration ? "Allowed" : "Blocked"}
@@ -151,7 +151,7 @@ function OverviewTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
               value={workspace.requireVerifiedDomainForInternal ? "Required" : "Not required"}
             />
           </div>
-          <p className="mt-3 text-xs leading-5 text-ink-muted">
+          <p className="mt-2 text-[11px] leading-4 text-ink-muted">
             Last activity is the newest signal on the workspace record itself — member joins,
             document uploads, and settings changes. Meeting-level activity arrives with the
             per-workspace analytics API.
@@ -165,12 +165,12 @@ function OverviewTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
 function AuditTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
   if (workspace.lifecycleHistory.length === 0) {
     return (
-      <div className="grid place-items-center rounded-xl border border-hairline bg-surface-1 px-6 py-14 text-center shadow-linear">
+      <div className="grid place-items-center rounded-[7px] border border-hairline bg-surface-1 px-4 py-8 text-center">
         <div>
-          <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
-            <ClockCounterClockwise size={20} weight="duotone" />
+          <span className="mx-auto grid size-8 place-items-center rounded-[7px] bg-surface-2 text-ink-subtle">
+            <ClockCounterClockwise size={16} weight="duotone" />
           </span>
-          <p className="mt-3 text-sm font-medium text-ink">No administrative actions yet</p>
+          <p className="mt-2 text-sm font-medium text-ink">No administrative actions yet</p>
           <p className="mt-1 text-xs text-ink-muted">
             Suspending or reactivating this workspace records an entry here permanently.
           </p>
@@ -180,17 +180,17 @@ function AuditTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
   }
 
   return (
-    <ol className="overflow-hidden rounded-xl border border-hairline bg-surface-1 shadow-linear">
+    <ol className="overflow-hidden rounded-[7px] border border-hairline bg-surface-1">
       {workspace.lifecycleHistory.map((event) => (
         <li
           key={event.id}
-          className="flex gap-3 border-b border-hairline/60 px-4 py-3 last:border-b-0"
+          className="flex gap-2 border-b border-hairline/60 px-3 py-2 last:border-b-0"
         >
           <span
             className={
               event.action === "suspend"
-                ? "mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-amber-500/10 text-amber-600"
-                : "mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-600"
+                ? "mt-0.5 grid size-6 shrink-0 place-items-center rounded-[7px] bg-amber-500/10 text-amber-600"
+                : "mt-0.5 grid size-6 shrink-0 place-items-center rounded-[7px] bg-emerald-500/10 text-emerald-600"
             }
           >
             {event.action === "suspend" ? (
@@ -200,11 +200,11 @@ function AuditTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
             )}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-medium text-ink">
+            <p className="text-[12px] font-medium text-ink">
               {event.action === "suspend" ? "Suspended" : "Reactivated"}
             </p>
-            <p className="mt-0.5 text-[13px] leading-5 text-ink-muted">{event.reason}</p>
-            <p className="mt-1 font-mono text-[11px] text-ink-subtle">
+            <p className="mt-0.5 text-[12px] leading-4 text-ink-muted">{event.reason}</p>
+            <p className="mt-0.5 font-mono text-[10px] text-ink-subtle">
               {formatDateTime(event.performedAt)} · admin {event.performedBy}
             </p>
           </div>
@@ -231,7 +231,7 @@ function KnowledgeTab({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div>
-      <p className="mb-1 max-w-3xl text-xs leading-5 text-ink-muted">
+      <p className="mb-2 max-w-3xl text-[11px] leading-4 text-ink-muted">
         Documents, meeting summaries and glossary terms this workspace has indexed, with the fact
         drawn from each. This is what the assistant can retrieve for its members. Raw transcript
         lines stay indexed for WarpBot but are not listed here.
@@ -321,8 +321,8 @@ export default function AdminWorkspaceDetailPage() {
   }
 
   return (
-    <div className="min-h-full bg-canvas text-ink">
-      <div className="mx-auto w-full max-w-[1480px] px-5 py-5 lg:px-7">
+    <div className="min-h-full bg-surface-1 text-ink">
+      <div className="w-full px-2 py-2">
         <Link
           href="/admin/workspaces"
           className="inline-flex items-center gap-1.5 text-xs text-ink-muted transition-colors hover:text-ink"
@@ -332,7 +332,7 @@ export default function AdminWorkspaceDetailPage() {
         </Link>
 
         {detailQuery.isPending || !workspace ? (
-          <div className="mt-4 space-y-4">
+          <div className="mt-3 space-y-3">
             <div className="h-8 w-64 animate-pulse rounded bg-surface-2" />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {Array.from({ length: 4 }).map((_, index) => (
@@ -342,10 +342,10 @@ export default function AdminWorkspaceDetailPage() {
           </div>
         ) : (
           <>
-            <header className="mt-3 flex flex-col gap-4 border-b border-hairline pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <header className="mt-2 flex flex-col gap-2 border-b border-hairline pb-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-2xl font-semibold tracking-tight">{workspace.name}</h1>
+                  <h1 className="text-xl font-semibold tracking-tight">{workspace.name}</h1>
                   <WorkspaceStatusBadge status={workspace.status} />
                 </div>
                 <p className="mt-1 font-mono text-xs text-ink-subtle">{workspace.slug}</p>
@@ -401,46 +401,49 @@ export default function AdminWorkspaceDetailPage() {
               </div>
             </header>
 
-            <Tabs defaultValue="overview" className="mt-4">
-              <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
-                <TabsTrigger value="members">Members</TabsTrigger>
-                <TabsTrigger value="usage">Usage</TabsTrigger>
-                <TabsTrigger value="billing">Billing</TabsTrigger>
-                <TabsTrigger value="audit">Audit</TabsTrigger>
+            <Tabs defaultValue="overview" className="mt-2">
+              <TabsList
+                variant="line"
+                className="flex h-auto w-full justify-start gap-2 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 pb-1 hide-scrollbar"
+              >
+                <TabsTrigger value="overview" className="h-[26px] flex-none rounded-full border border-border/60 px-3 text-[12px] data-active:bg-[#ececf0] data-active:text-[#08090a] dark:data-active:bg-[#2b2b2e] dark:data-active:text-white">Overview</TabsTrigger>
+                <TabsTrigger value="knowledge" className="h-[26px] flex-none rounded-full border border-border/60 px-3 text-[12px] data-active:bg-[#ececf0] data-active:text-[#08090a] dark:data-active:bg-[#2b2b2e] dark:data-active:text-white">Knowledge</TabsTrigger>
+                <TabsTrigger value="members" className="h-[26px] flex-none rounded-full border border-border/60 px-3 text-[12px] data-active:bg-[#ececf0] data-active:text-[#08090a] dark:data-active:bg-[#2b2b2e] dark:data-active:text-white">Members</TabsTrigger>
+                <TabsTrigger value="usage" className="h-[26px] flex-none rounded-full border border-border/60 px-3 text-[12px] data-active:bg-[#ececf0] data-active:text-[#08090a] dark:data-active:bg-[#2b2b2e] dark:data-active:text-white">Usage</TabsTrigger>
+                <TabsTrigger value="billing" className="h-[26px] flex-none rounded-full border border-border/60 px-3 text-[12px] data-active:bg-[#ececf0] data-active:text-[#08090a] dark:data-active:bg-[#2b2b2e] dark:data-active:text-white">Billing</TabsTrigger>
+                <TabsTrigger value="audit" className="h-[26px] flex-none rounded-full border border-border/60 px-3 text-[12px] data-active:bg-[#ececf0] data-active:text-[#08090a] dark:data-active:bg-[#2b2b2e] dark:data-active:text-white">Audit</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="overview" className="mt-4">
+              <TabsContent value="overview" className="mt-2">
                 <OverviewTab workspace={workspace} />
               </TabsContent>
 
-              <TabsContent value="knowledge" className="mt-4">
+              <TabsContent value="knowledge" className="mt-2">
                 <KnowledgeTab workspaceId={workspace.id} />
               </TabsContent>
 
-              <TabsContent value="members" className="mt-4">
+              <TabsContent value="members" className="mt-2">
                 <PendingApiTab
                   title="Member roster is not exposed to the admin portal yet"
                   description="Only aggregate counts are available today. The per-member list needs a platform-wide members endpoint; the workspace-scoped one requires the caller to be a member of the tenant."
                 />
               </TabsContent>
 
-              <TabsContent value="usage" className="mt-4">
+              <TabsContent value="usage" className="mt-2">
                 <PendingApiTab
                   title="Per-workspace usage analytics are not available yet"
                   description="Meeting counts, credit consumption, and AI-service breakdown come from the per-workspace analytics API, which is a separate backend slice."
                 />
               </TabsContent>
 
-              <TabsContent value="billing" className="mt-4">
+              <TabsContent value="billing" className="mt-2">
                 <PendingApiTab
                   title="Per-workspace billing is not available yet"
                   description="Plan, credit balance, and transaction history come from the billing service's admin endpoints, which are a separate backend slice."
                 />
               </TabsContent>
 
-              <TabsContent value="audit" className="mt-4">
+              <TabsContent value="audit" className="mt-2">
                 <AuditTab workspace={workspace} />
               </TabsContent>
             </Tabs>

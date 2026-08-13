@@ -38,6 +38,10 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - `/rooms` and `/history` were compacted to match `/dashboard` density at 100% zoom: smaller section gaps, smaller headings, 82px metric cards, compact table rows, and tighter detail panels.
 - The global `Ask WarpBot` popover shows ambient page context as a Linear-style gray shell that is tall enough to wrap both the context row and the chat input when context is visible. The compact chat width is wider than before, and the input remains a white inset surface with a subtle shadow on a separate `z-10` layer. The gray shell/context row animates up/down when hidden or shown while the input stays in place. The context card includes the current page/entity label, status when available, a type-specific context icon, and an `x` control that disables sending page context for the active page/entity. The four-corner toolbar icon inside the composer toggles the gray page-context card; when the card is hidden, the outgoing assistant message sends `pageContext: null`. The header resize icon continues to resize the whole chat popover.
 - Clicking the main `Ask WarpBot` trigger always clears the previous conversation ID and messages. The minimized-conversation chip is the explicit way to resume a minimized conversation.
+- The expanded Linear sidebar uses a 58px workspace-selector row so the workspace avatar/name baseline lines up with the app header breadcrumb and the first nav row (`Home`) lines up with the first page filter row (`All`) on dashboard document pages.
+- Root providers mount a lightweight page-transition loader. Internal link clicks and browser back/forward show a monochrome top progress bar immediately, then complete and hide after the pathname/search params settle. This is intentionally global so cold local/dev navigations show feedback without changing individual page layouts or navigation logic.
+- The page-transition bar uses GSAP only after a navigation starts, so GSAP is not pulled into the initial app provider bundle just to render the shell.
+- `src/app/loading.tsx` uses the same top progress-bar direction for route-level suspense/loading states.
 
 ## Files Affected
 
@@ -57,6 +61,10 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - `src/components/layout/participant-sidebar.tsx`
 - `src/components/layout/global-chatbot.tsx`
 - `.agents/page-docs/dashboard-inner-pages.md`
+- `src/components/layout/linear-sidebar.tsx`
+- `src/app/providers.tsx`
+- `src/app/loading.tsx`
+- `src/components/navigation/page-transition-loader.tsx`
 
 ## Important UI Notes
 
@@ -68,6 +76,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - The `.glass-dashboard-scope` class in `globals.css` scopes glass styling to authenticated host pages so landing and auth pages stay unchanged.
 - The Host profile control is currently presentational in this layout pass. Account-menu behavior should be wired back in if the product requires profile or logout actions from the topbar.
 - Removing the Ask WarpBot page-context strip only suppresses the ambient `pageContext` payload for the current page/entity. Explicit `@` mention chips still send their selected entity references.
+- The page-transition indicator must stay presentational and lightweight. Keep it global, monochrome, pinned to the top edge, pointer-events disabled, and avoid adding page-specific state or data fetching to it. The visual should remain only the long progress bar, without an enclosing card, border, blur, or shadow.
 
 ## Known Limitations
 
@@ -82,4 +91,6 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Verify active navigation states on nested routes.
 - Check narrow desktop widths to ensure the fixed host sidebar and topbar actions do not overlap page content.
 - Open Ask WarpBot twice and confirm each main-trigger click starts a blank conversation; use the minimized chip to confirm explicit resume still works.
+- Open `/{workspaceSlug}/documents` and verify the sidebar workspace avatar/name aligns vertically with the header breadcrumb, and `Home` aligns vertically with the `All` filter pill.
+- Click between two internal routes and confirm the top progress bar appears immediately, completes, then disappears after navigation completes.
 - Run `npm run test:2807-hotfix`.

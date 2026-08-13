@@ -21,6 +21,14 @@ export const API = {
     catalog: "/auth/voice-profiles/catalog",
     preferredVoice: "/auth/voice-profiles/preferred-voice",
   },
+  // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
+  // profile: it is given once for the product, outlives any single profile or meeting, and is
+  // the thing AuthService is asked about over gRPC before a route may enable cloning.
+  voiceConsent: {
+    status: "/auth/voice-consent",
+    grant: "/auth/voice-consent/grant",
+    revoke: "/auth/voice-consent/revoke",
+  },
   translationRooms: {
     create: "/translation-rooms",
     list: "/translation-rooms",

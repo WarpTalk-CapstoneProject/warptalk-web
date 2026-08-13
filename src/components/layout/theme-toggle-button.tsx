@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { useEffect, useMemo } from "react";
 import { MoonStars, SunDim } from "@phosphor-icons/react/dist/ssr";
 import { useTheme } from "next-themes";
+import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
@@ -94,6 +95,7 @@ function injectPolygonGradientStyles(duration: number) {
 
 export function ThemeToggleButton({ className }: { className?: string }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const pathname = usePathname();
 
   useEffect(() => {
     ensureBaseStyles();
@@ -105,7 +107,9 @@ export function ThemeToggleButton({ className }: { className?: string }) {
 
   const toggleTheme = () => {
     const nextTheme = currentTheme === "dark" ? "light" : "dark";
+    const hasWebglBackground = pathname?.endsWith("/home");
     if (
+      hasWebglBackground ||
       typeof document === "undefined" ||
       !document.startViewTransition ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches

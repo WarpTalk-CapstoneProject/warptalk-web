@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useIsDesktopRuntime } from "@/hooks/use-is-desktop-runtime";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { cn } from "@/lib/utils";
@@ -34,7 +35,6 @@ import {
   CaretLeft,
   Check,
   CreditCard,
-  Desktop,
   FileText,
   GearSix,
   Gauge,
@@ -42,19 +42,19 @@ import {
   House,
   Keyboard,
   MagnifyingGlass,
+  Monitor,
   PaperPlaneTilt,
   Plus,
-  SignOut,
   Sliders,
   SquaresFour,
   User,
-  UserPlus,
   Users,
   Warning,
   Waveform,
   Brain,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { AccountMenuDialog } from "@/components/layout/account-menu-dialog";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -67,6 +67,8 @@ interface NavItem {
   label: string;
   href: string;
   exact?: boolean;
+  /** Opens in a new tab and never highlights — for routes that live outside the app shell. */
+  external?: boolean;
   actions?: Array<{
     icon: IconType;
     href?: string;
@@ -85,8 +87,9 @@ function NavLink({
   collapsed?: boolean;
 }) {
   const isActive =
-    pathname === item.href ||
-    (!item.exact && pathname.startsWith(item.href + "/"));
+    !item.external &&
+    (pathname === item.href ||
+      (!item.exact && pathname.startsWith(item.href + "/")));
   return (
     <div
       className={cn(
@@ -101,6 +104,8 @@ function NavLink({
     >
       <Link
         href={item.href}
+        target={item.external ? "_blank" : undefined}
+        rel={item.external ? "noopener noreferrer" : undefined}
         className={cn(
           "flex items-center gap-2.5 flex-1 min-w-0 h-full",
           collapsed && "justify-center",
@@ -164,10 +169,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isSystemAdmin = useIsSystemAdmin();
+  const isDesktopRuntime = useIsDesktopRuntime();
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -432,7 +439,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         {user && (
           <div className="p-3 mt-auto shrink-0">
             <div
-              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace")}
+              onClick={() => setAccountMenuOpen(true)}
               className="flex items-center gap-2.5 bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 p-2 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80"
             >
               <Avatar className="size-8 rounded-lg border border-border/50">
@@ -485,7 +492,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       {/* Workspace Selector Dropdown */}
       <div
         className={cn(
-          "flex h-[48px] shrink-0 items-center",
+          "flex h-[58px] shrink-0 items-center",
           collapsed ? "justify-center px-2" : "justify-between px-3",
         )}
       >
@@ -740,6 +747,25 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             </div>
           </>
         )}
+
+        {/* Offering the desktop app to someone already inside it would be noise. */}
+        {!isDesktopRuntime && (
+          <>
+            <div className="mx-2 my-3 h-px bg-border/60" />
+            <div className="flex flex-col gap-px pb-2">
+              <NavLink
+                item={{
+                  icon: Monitor,
+                  label: "Download desktop",
+                  href: "/download",
+                  external: true,
+                }}
+                pathname={pathname}
+                collapsed={collapsed}
+              />
+            </div>
+          </>
+        )}
       </nav>
 
       {isOwnerOrAdmin && activeWorkspaceId && !collapsed && (
@@ -778,13 +804,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       {user && (
         <div className="mt-auto shrink-0 p-3">
           <div
-            onClick={() =>
-              router.push(
-                activeWorkspaceSlug
-                  ? `/${activeWorkspaceSlug}/settings/account/profile`
-                  : "/workspace",
-              )
-            }
+            onClick={() => setAccountMenuOpen(true)}
             title={collapsed ? user.fullName || "Profile" : undefined}
             aria-label={collapsed ? user.fullName || "Profile" : undefined}
             className={cn(
@@ -880,6 +900,19 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {user ? (
+        <AccountMenuDialog
+          open={accountMenuOpen}
+          onOpenChange={setAccountMenuOpen}
+          user={user}
+          workspaceId={activeWorkspaceId}
+          workspaceSlug={activeWorkspaceSlug}
+          role={role}
+          membershipType={membershipType}
+          onSignOut={logout}
+        />
+      ) : null}
 
       <InviteMemberDialog
         open={isInviteModalOpen}

@@ -82,7 +82,18 @@ jobs:
             ref=development
             if [ -n "${WEB_REF:-}" ] &&
               git ls-remote --exit-code --heads "$url" "$WEB_REF" >/dev/null 2>&1; then
-              ref="$WEB_REF"
+              if [ "$repo" = "infrastructure" ]; then
+                tmp="$(mktemp -d)"
+                if git clone --quiet --depth 1 --branch "$WEB_REF" "$url" "$tmp" &&
+                  [ -f "$tmp/scripts/check-realtime-event-contract.mjs" ]; then
+                  ref="$WEB_REF"
+                else
+                  echo "warptalk-infrastructure@$WEB_REF does not contain the realtime contract runner; falling back to development"
+                fi
+                rm -rf "$tmp"
+              else
+                ref="$WEB_REF"
+              fi
             fi
             echo "$repo=$ref" >> "$GITHUB_OUTPUT"
             echo "Validating against warptalk-$repo@$ref"

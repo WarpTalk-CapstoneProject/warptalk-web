@@ -20,6 +20,9 @@ import {
   FileText,
   Sparkle,
 } from "@phosphor-icons/react/dist/ssr";
+import type { ReactNode } from "react";
+
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 
 import { AdminFilterTabs, AdminPanel } from "@/components/admin/admin-page-chrome";
 import { Button } from "@/components/ui/button";
@@ -74,6 +77,8 @@ interface KnowledgeTableProps {
    * admin is told what the absence means. Same fact, different next step.
    */
   emptyHint: string;
+  /** Optional page-level actions rendered beside source filters on workspace pages. */
+  toolbarActions?: ReactNode;
 }
 
 export function KnowledgeTable({
@@ -84,47 +89,63 @@ export function KnowledgeTable({
   isFetching,
   onRetry,
   emptyHint,
+  toolbarActions,
 }: KnowledgeTableProps) {
   const items = data?.items ?? [];
   const { factCategory, cursorStack } = filters;
+  const sourceFilters = SOURCE_TABS.map((tab) => (
+    <FilterChip
+      key={tab.value}
+      selected={filters.sourceTab === tab.value}
+      onClick={() => filters.setSourceTab(tab.value)}
+    >
+      {tab.label}
+    </FilterChip>
+  ));
 
   return (
     <>
-      <AdminFilterTabs
-        tabs={SOURCE_TABS}
-        value={filters.sourceTab}
-        onChange={filters.setSourceTab}
-        label="Filter indexed knowledge by source"
-        trailing={items.length ? `${items.length} on this page` : undefined}
-      />
+      {toolbarActions ? (
+        <section className="flex shrink-0 flex-col gap-2 px-2 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <FilterChipGroup
+            label="Filter indexed knowledge by source"
+            trailing={items.length ? `${items.length} on this page` : undefined}
+            className="min-w-0 flex-1"
+          >
+            {sourceFilters}
+          </FilterChipGroup>
+          <div className="flex shrink-0 items-center gap-2">{toolbarActions}</div>
+        </section>
+      ) : (
+        <AdminFilterTabs
+          tabs={SOURCE_TABS}
+          value={filters.sourceTab}
+          onChange={filters.setSourceTab}
+          label="Filter indexed knowledge by source"
+          trailing={items.length ? `${items.length} on this page` : undefined}
+        />
+      )}
 
-      <div className="flex flex-wrap items-center gap-1 py-3">
-        <button
-          type="button"
+      <FilterChipGroup
+        label="Filter facts by category"
+        className={toolbarActions ? "px-2 pb-1.5 pt-2" : "py-3"}
+      >
+        <FilterChip
+          selected={factCategory === null}
           onClick={() => filters.setFactCategory(null)}
-          className={`h-6 rounded-md px-2.5 text-[11px] font-medium transition-colors ${
-            factCategory === null
-              ? "bg-surface-2 text-ink"
-              : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-          }`}
         >
           All facts
-        </button>
+        </FilterChip>
         {FACT_CATEGORIES.map((category) => (
-          <button
+          <FilterChip
             key={category}
-            type="button"
+            selected={factCategory === category}
             onClick={() => filters.setFactCategory(category)}
-            className={`h-6 rounded-md px-2.5 text-[11px] font-medium capitalize transition-colors ${
-              factCategory === category
-                ? "bg-surface-2 text-ink"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-            }`}
           >
             {category}
-          </button>
+          </FilterChip>
         ))}
-      </div>
+      </FilterChipGroup>
 
       <AdminPanel>
         {isError ? (

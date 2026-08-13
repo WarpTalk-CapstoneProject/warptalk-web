@@ -16,9 +16,17 @@ import {
   isPublicEmailDomain,
   slugPreviewFromName,
 } from "@/lib/workspace/email-domain";
-import { useCreateWorkspace, useSelectWorkspace } from "@/hooks/use-workspace";
+import { getPrimaryInternalWorkspace } from "@/lib/workspace/workspace-membership";
+import {
+  useCreateWorkspace,
+  useSelectWorkspace,
+  useWorkspaces,
+} from "@/hooks/use-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { WorkspaceDto } from "@/types/workspace";
+
+const EMPTY_WORKSPACES: WorkspaceDto[] = [];
 
 const createWorkspaceSchema = z.object({
   name: z
@@ -70,6 +78,11 @@ export default function CreateWorkspaceDemoPage() {
   );
   const createWorkspace = useCreateWorkspace();
   const selectWorkspace = useSelectWorkspace();
+  const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
+  const workspaces = workspacesData?.items ?? EMPTY_WORKSPACES;
+  const primaryInternalWorkspace = getPrimaryInternalWorkspace(workspaces);
+  const hasPrimaryInternalWorkspace = Boolean(activeWorkspaceId || primaryInternalWorkspace);
+  const primaryInternalWorkspaceSlug = activeWorkspaceSlug || primaryInternalWorkspace?.slug;
   const [serverError, setServerError] = useState<ServerErrorState | null>(null);
   const mounted = useSyncExternalStore(
     () => () => undefined,
@@ -100,20 +113,37 @@ export default function CreateWorkspaceDemoPage() {
     createWorkspace.isPending ||
     selectWorkspace.isPending ||
     form.formState.isSubmitting;
+  const internalWorkspaceIssue = hasPrimaryInternalWorkspace
+    ? `Your account already has one internal workspace membership in ${primaryInternalWorkspace?.name || "a workspace"}. Open it, or join another workspace by request or invitation instead.`
+    : null;
   const canCreate =
-    isAuthenticated && !!emailDomain && !accountIssue && !activeWorkspaceId;
+    isAuthenticated &&
+    !!emailDomain &&
+    !accountIssue &&
+    !internalWorkspaceIssue &&
+    !workspacesLoading;
 
   useEffect(() => {
     if (mounted && !isAuthenticated) router.replace("/login");
   }, [mounted, isAuthenticated, router]);
 
   useEffect(() => {
-    if (mounted && activeWorkspaceId) {
-      router.replace(`/${activeWorkspaceSlug || "workspace"}/home`);
-    }
-  }, [mounted, activeWorkspaceId, activeWorkspaceSlug, router]);
+    if (!mounted || workspacesLoading || !hasPrimaryInternalWorkspace) return;
+    router.replace(primaryInternalWorkspaceSlug ? `/${primaryInternalWorkspaceSlug}/home` : "/workspace");
+  }, [
+    mounted,
+    workspacesLoading,
+    hasPrimaryInternalWorkspace,
+    primaryInternalWorkspaceSlug,
+    router,
+  ]);
 
   async function onSubmit(values: CreateWorkspaceFormData) {
+    if (internalWorkspaceIssue) {
+      setServerError({ kind: "internal-home", message: internalWorkspaceIssue });
+      return;
+    }
+
     if (!emailDomain) {
       setServerError({
         kind: "account",
@@ -152,7 +182,12 @@ export default function CreateWorkspaceDemoPage() {
     }
   }
 
-  if (!mounted || !isAuthenticated || activeWorkspaceId) {
+  if (
+    !mounted ||
+    !isAuthenticated ||
+    workspacesLoading ||
+    hasPrimaryInternalWorkspace
+  ) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -192,9 +227,9 @@ export default function CreateWorkspaceDemoPage() {
           className="flex flex-col gap-5"
         >
           {/* Server/Account Errors */}
-          {(accountIssue || serverError) && (
+          {(accountIssue || internalWorkspaceIssue || serverError) && (
             <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-[12px] text-destructive leading-relaxed">
-              {serverError?.message ?? accountIssue}
+              {serverError?.message ?? internalWorkspaceIssue ?? accountIssue}
             </div>
           )}
 

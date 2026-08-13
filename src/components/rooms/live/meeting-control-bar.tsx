@@ -567,17 +567,33 @@ export function MeetingControlBar({
                   {onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0 && voiceEnabled !== false ? (
                     <>
                       <div className="my-1 h-[1px] bg-surface-3" />
+                      {/* "Assigned, not matched" is the honest description of the default: the
+                          worker picks deterministically from this language's catalog by hashing
+                          the speaker id, so everyone keeps a stable voice and no two people
+                          sound alike — but nothing compares it to how the speaker actually
+                          sounds. Saying so is what makes the list below worth opening. */}
                       <VoiceOption
                         label="Automatic"
+                        detail="Assigned, not matched to your voice"
                         value=""
                         active={!voicePreference}
                         onSelect={onChangeVoicePreference}
                         close={closeSettingsMenu}
                       />
-                      {voiceCatalog.map((voice) => (
+                      {/* Grouped by gender, then by name. The label alone still leaves six
+                          mixed rows to read one at a time; clustering them is what turns the
+                          list into "here are the masculine ones". */}
+                      {[...voiceCatalog]
+                        .sort(
+                          (a, b) =>
+                            (a.gender || "").localeCompare(b.gender || "") ||
+                            a.name.localeCompare(b.name),
+                        )
+                        .map((voice) => (
                         <VoiceOption
                           key={voice.id}
                           label={voice.name}
+                          detail={voice.gender || undefined}
                           value={voice.id}
                           active={voicePreference === voice.id}
                           onSelect={onChangeVoicePreference}
@@ -752,14 +768,27 @@ function VoiceCloneRow({
   );
 }
 
+/**
+ * One voice in the in-meeting picker.
+ *
+ * `detail` carries the voice's gender, and it is the whole reason this row has two lines.
+ * Cartesia names its library voices things like "Skylar - Friendly Guide" and "Corey -
+ * Supportive Buddy" — nothing in that tells you whether you are about to be dubbed as a man or
+ * a woman, so choosing was a guess you could only check by speaking and listening to yourself.
+ * The catalog has carried `gender` since it was built (VoiceOptionDto), the Voice Profiles page
+ * already showed it, and this menu — the one people actually meet, mid-meeting, having just
+ * heard themselves in the wrong voice — was the only place that dropped it.
+ */
 function VoiceOption({
   label,
+  detail,
   value,
   active,
   onSelect,
   close,
 }: {
   label: string;
+  detail?: string;
   value: string;
   active: boolean;
   onSelect: (voiceId: string) => void;
@@ -772,10 +801,15 @@ function VoiceOption({
         onSelect(value);
         close();
       }}
-      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
+      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
     >
-      {label}
-      {active ? <CheckCircle className="h-3.5 w-3.5 text-ink" weight="fill" /> : null}
+      <span className="min-w-0 text-left">
+        <span className="block truncate">{label}</span>
+        {detail ? (
+          <span className="block truncate text-[11px] capitalize text-ink-subtle">{detail}</span>
+        ) : null}
+      </span>
+      {active ? <CheckCircle className="h-3.5 w-3.5 shrink-0 text-ink" weight="fill" /> : null}
     </button>
   );
 }

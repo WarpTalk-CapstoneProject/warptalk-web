@@ -107,6 +107,7 @@ export function CreateRoomDialog() {
     string | null
   >(null);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasOpenRef = useRef(isOpen);
 
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
@@ -202,11 +203,34 @@ export function CreateRoomDialog() {
       ? ""
       : `${window.location.origin}/join?code=${createdRoomCode}`;
 
+  function resetDraftState({ clearEditRoom = false } = {}) {
+    setTitle("");
+    setDescription("");
+    setInvitedEmails([]);
+    setMeetingLanguages(["en-US", "vi-VN"]);
+    setAppliedLanguagePolicyKey(null);
+    setScheduledAt(null);
+    setDailyRecurrence(null);
+    setRequiresApproval(null);
+    setIsExpanded(false);
+    setCreatedRoomId(null);
+    setCreatedRoomCode(null);
+    setSubmitError(null);
+    setInitializedEditRoomId(null);
+    setInitializedInvitationsRoomId(null);
+    if (clearEditRoom) setEditRoomId(null);
+  }
+
   function handleOpenChange(open: boolean) {
     setIsOpen(open);
     if (open && resetTimeoutRef.current) {
       clearTimeout(resetTimeoutRef.current);
       resetTimeoutRef.current = null;
+    }
+    if (open && !editRoomId && !createdRoomId) {
+      // If the user reopens Create before the close animation reset fires, clear stale
+      // invitees immediately so a new room cannot inherit the previous room's guests.
+      resetDraftState();
     }
     if (!open) {
       if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
@@ -235,6 +259,17 @@ export function CreateRoomDialog() {
       }, 400);
     }
   }
+
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current && !editRoomId && !createdRoomId) {
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+        resetTimeoutRef.current = null;
+      }
+      resetDraftState();
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen, editRoomId, createdRoomId]);
 
   useEffect(
     () => () => {
@@ -357,7 +392,11 @@ export function CreateRoomDialog() {
         });
         setCreatedRoomId(room.id);
         setCreatedRoomCode(room.translationRoomCode);
-        toast.success("Room created successfully. Invites sent!");
+        toast.success(
+          invitedEmails.length > 0
+            ? "Room created successfully. Invites sent!"
+            : "Room created successfully.",
+        );
       }
     } catch (error) {
       // WT-270: the server explains itself — "Target language 'ko' is not allowed by the
