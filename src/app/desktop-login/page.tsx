@@ -50,18 +50,7 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 const CONTACT_URL =
   process.env.NEXT_PUBLIC_CONTACT_URL?.trim() ?? "https://warptalk.vn/#contact";
 
-function getSafeCallbackUrl(value: string | null) {
-  if (
-    !value ||
-    !value.startsWith("/") ||
-    value.startsWith("//") ||
-    value === "/rooms"
-  ) {
-    return "/workspace";
-  }
-
-  return value;
-}
+import { getSafeRedirect as getSafeCallbackUrl } from "@/lib/auth/safe-redirect";
 
 function openContactPage() {
   const bridge = window as Window & { warptalk?: ExternalBridge };

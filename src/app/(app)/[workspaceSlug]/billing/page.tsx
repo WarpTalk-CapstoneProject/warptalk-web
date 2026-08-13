@@ -839,8 +839,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               onClick={() => setBillingTab(item.value)}
               className={`flex h-[26px] ${BILLING_FILTER_WIDTH_CLASS[item.value]} shrink-0 items-center justify-center rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
                 billingTab === item.value
-                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
+                  ? "border-hairline-strong bg-surface-2 text-foreground shadow-none"
+                  : "border-border bg-transparent text-muted-foreground hover:border-hairline-strong hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               {item.label}

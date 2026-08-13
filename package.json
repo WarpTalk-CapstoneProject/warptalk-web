@@ -89,7 +89,8 @@
     "test:meeting-record": "node scripts/check-meeting-record-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-artifacts.test.ts src/lib/meeting/__tests__/meeting-summary.test.ts",
     "test:hooks-early-return": "node scripts/check-hooks-before-early-return.mjs",
     "test:room-history-mapping": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/room-history-mapping.test.ts",
-    "test:plan-pricing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/plan-pricing.test.ts"
+    "test:plan-pricing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/plan-pricing.test.ts",
+    "test:map-with-limit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/async/__tests__/map-with-limit.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

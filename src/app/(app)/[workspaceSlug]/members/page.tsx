@@ -111,6 +111,9 @@ const MEMBER_DISPLAY_PROPERTIES: Array<{
 const DEFAULT_MEMBER_DISPLAY_PROPERTIES =
   MEMBER_DISPLAY_PROPERTIES.map((property) => property.key);
 
+/** Matches the pending-invitation and join-request queries, which fetch one page of 100. */
+const MEMBER_DIRECTORY_PAGE_SIZE = 200;
+
 function getMemberGridTemplate(
   visibleProperties: MemberDisplayProperty[],
   isOwnerOrAdmin: boolean,
@@ -138,7 +141,6 @@ export default function WorkspaceMembersPage() {
   const currentUser = useAuthStore((s) => s.user);
 
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<DirectoryFilter>("all");
   const [sortKey, setSortKey] = useState<MemberSortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -162,10 +164,23 @@ export default function WorkspaceMembersPage() {
   const [isExporting, setIsExporting] = useState(false);
 
   // TanStack Query Hooks
+  /* One complete set, not a page of ten.
+   *
+   * This was `useWorkspaceMembers(id, page, 10, query)`, and three things followed from it.
+   * Sorting — added with the column headers — reordered ten rows and called itself a sort of
+   * the directory, so "earliest joiner" meant "earliest joiner on this page" and each page
+   * sorted independently. The pending sets below are deliberately unpaginated and pinned to
+   * page 1, so from page 2 the invitations and join requests vanished from a table whose whole
+   * point is that they sit alongside members. And `listMembers` has no sort parameter (see
+   * workspace.service.ts), so ordering server-side is not available to ask for.
+   *
+   * The comment on the pending queries already made the argument: one page of 100 covers any
+   * workspace this product serves. The same reasoning applies to members, and the cap is
+   * surfaced below rather than silently truncating. */
   const membersQuery = useWorkspaceMembers(
     activeWorkspaceId || "",
-    page,
-    10,
+    1,
+    MEMBER_DIRECTORY_PAGE_SIZE,
     query,
   );
   // Pending invitations and join requests are small, complete sets — one page of 100 covers
@@ -241,12 +256,12 @@ export default function WorkspaceMembersPage() {
     ? (joinRequestsQuery.data?.items ?? [])
     : [];
 
-  // Members paginate; the pending sets do not, so they belong on the first page only.
-  // Repeating them under every page would misreport how many people are waiting.
+  // Members, invitations and join requests are all complete sets now, so the directory is
+  // whole and nothing has to be withheld from a later page.
   const directoryRows = buildMemberDirectory(
     membersList,
-    page === 1 ? pendingInvitations : [],
-    page === 1 ? pendingRequests : [],
+    pendingInvitations,
+    pendingRequests,
   );
   const filteredMembers = filterMemberDirectory(directoryRows, filter);
   const sortedMembers = [...filteredMembers].sort((first, second) => {
@@ -255,15 +270,23 @@ export default function WorkspaceMembersPage() {
   });
 
   function toggleDisplayProperty(property: string) {
-    setVisibleDisplayProperties((current) => {
-      const typedProperty = property as MemberDisplayProperty;
-      if (current.includes(typedProperty)) {
-        if (sortKey === typedProperty) setSortKey("name");
-        return current.filter((item) => item !== typedProperty);
-      }
+    const typedProperty = property as MemberDisplayProperty;
+    const isHiding = visibleDisplayProperties.includes(typedProperty);
 
-      return [...current, typedProperty];
-    });
+    /* Both setters at the top level. `setSortKey` used to be called INSIDE the
+       `setVisibleDisplayProperties` updater, and React requires an updater to be pure — it
+       runs twice under StrictMode and may be replayed on a render that is then discarded, so
+       the reset fired on renders that never committed and could be skipped on the one that
+       did. Hiding the column you are sorting by falls back to the name order. */
+    if (isHiding && sortKey === typedProperty) {
+      setSortKey("name");
+    }
+
+    setVisibleDisplayProperties((current) =>
+      isHiding
+        ? current.filter((item) => item !== typedProperty)
+        : [...current, typedProperty],
+    );
   }
 
   const invitedCount = buildMemberDirectory(
@@ -474,14 +497,11 @@ export default function WorkspaceMembersPage() {
             <button
               key={item.key}
               type="button"
-              onClick={() => {
-                setFilter(item.key);
-                setPage(1);
-              }}
+              onClick={() => setFilter(item.key)}
               className={`flex h-[26px] ${MEMBER_FILTER_WIDTH_CLASS[item.key] ?? "w-[86px]"} items-center justify-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors select-none ${
                 filter === item.key
-                  ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-                  : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white"
+                  ? "border-hairline-strong bg-surface-2 text-foreground shadow-none"
+                  : "border-border bg-transparent text-muted-foreground hover:border-hairline-strong hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               {item.label}
@@ -497,10 +517,7 @@ export default function WorkspaceMembersPage() {
         <div className="flex shrink-0 items-center gap-2">
           <ExpandingSearchDock
             value={query}
-            onValueChange={(value) => {
-              setQuery(value);
-              setPage(1);
-            }}
+            onValueChange={setQuery}
             placeholder="Search people..."
             ariaLabel="Search people"
             collapsedWidth={28}
@@ -865,28 +882,19 @@ export default function WorkspaceMembersPage() {
           </div>
         )}
 
-        {/* Pagination */}
-        {membersQuery.data && membersQuery.data.total > 10 && (
-          <div className="flex items-center justify-end px-2 py-3 border-t border-hairline/60 gap-2 mt-2">
-            <button
-              onClick={() => setPage((p) => Math.max(p - 1, 1))}
-              disabled={page === 1}
-              className="px-2.5 py-1 text-xs border border-hairline rounded hover:bg-surface-2 disabled:opacity-45 cursor-pointer font-medium"
-            >
-              Previous
-            </button>
-            <span className="text-xs text-ink-muted font-medium">
-              Page {page}
-            </span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={membersList.length < 10}
-              className="px-2.5 py-1 text-xs border border-hairline rounded hover:bg-surface-2 disabled:opacity-45 cursor-pointer font-medium"
-            >
-              Next
-            </button>
-          </div>
-        )}
+        {/* A cap that bites is said out loud. Silently showing the first 200 of 500 members
+            would read as "this workspace has 200 members", and the sort above would quietly be
+            a sort of whichever 200 came back. */}
+        {membersQuery.data &&
+          membersQuery.data.total > membersList.length && (
+            <div className="flex items-center justify-between gap-3 border-t border-hairline/60 px-2 py-3 mt-2">
+              <p className="text-xs text-ink-muted">
+                Showing the first {membersList.length.toLocaleString()} of{" "}
+                {membersQuery.data.total.toLocaleString()} members. Search to
+                narrow the list.
+              </p>
+            </div>
+          )}
       </div>
 
       {/* The same invite dialog the sidebar opens — one dialog, one behaviour. */}

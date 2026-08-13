@@ -12,6 +12,12 @@
  *
  * A filter chip is the most repeated control in the product, so four answers to "what does a
  * chosen filter look like" is four chances for a screen to look like a different application.
+ *
+ * Colours are PALETTE TOKENS, never literal hex. This briefly carried `#ececf0` / `#08090a` /
+ * `#6b7280` and a dark-mode set beside them, which took the most repeated control in the
+ * product out of the theme system entirely — every token change silently skipped it. The same
+ * mistake is recorded on the plans page: "the hardcoded pair meant the card rendered near-black
+ * text on near-black in dark mode".
  * Voice Profiles is the reference because it is the page used as the visual size baseline.
  *
  * NO ICONS. They were only ever on some of the chips in a row, which made those rows read as a
@@ -49,8 +55,8 @@ export function FilterChip({
         "text-[12px] font-medium capitalize transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         selected
-          ? "border-[#d5d6dc] bg-[#ececf0] text-[#08090a] shadow-none dark:border-[#34363a] dark:bg-[#2b2b2e] dark:text-white"
-          : "border-[#e2e3e7] bg-transparent text-[#6b7280] hover:border-[#d6d7dc] hover:bg-[#f1f1f4] hover:text-[#0f1115] dark:border-[#25272b] dark:text-[#9fa0a5] dark:hover:border-[#303236] dark:hover:bg-[#232524] dark:hover:text-white",
+          ? "border-hairline-strong bg-surface-2 text-foreground shadow-none"
+          : "border-border bg-transparent text-muted-foreground hover:border-hairline-strong hover:bg-surface-2 hover:text-foreground",
         className,
       )}
     >

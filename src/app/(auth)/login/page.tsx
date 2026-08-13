@@ -34,18 +34,9 @@ const loginSchema = z.object({
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
+import { getSafeRedirect as getSafeCallbackUrl } from "@/lib/auth/safe-redirect";
 
-function getSafeCallbackUrl(value: string | null) {
-  if (
-    !value ||
-    !value.startsWith("/") ||
-    value.startsWith("//") ||
-    value === "/rooms"
-  )
-    return "/workspace";
-  return value;
-}
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
 function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
   const router = useRouter();
