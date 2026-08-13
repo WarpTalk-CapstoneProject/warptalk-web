@@ -55,7 +55,7 @@ import {
   Brain,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
-import { AccountMenuDialog } from "@/components/layout/account-menu-dialog";
+import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -779,8 +779,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       {/* User Account Panel */}
       {user && (
         <div className="mt-auto shrink-0 p-3">
+          <AccountMenu
+            open={accountMenuOpen}
+            onOpenChange={setAccountMenuOpen}
+            user={user}
+            workspaceId={activeWorkspaceId}
+            workspaceSlug={activeWorkspaceSlug}
+            role={role}
+            membershipType={membershipType}
+            onSignOut={logout}
+            trigger={
           <div
-            onClick={() => setAccountMenuOpen(true)}
             title={collapsed ? user.fullName || "Profile" : undefined}
             aria-label={collapsed ? user.fullName || "Profile" : undefined}
             className={cn(
@@ -839,6 +848,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </button>
             )}
           </div>
+            }
+          />
         </div>
         )}
 
@@ -876,19 +887,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           </form>
         </DialogContent>
       </Dialog>
-
-      {user ? (
-        <AccountMenuDialog
-          open={accountMenuOpen}
-          onOpenChange={setAccountMenuOpen}
-          user={user}
-          workspaceId={activeWorkspaceId}
-          workspaceSlug={activeWorkspaceSlug}
-          role={role}
-          membershipType={membershipType}
-          onSignOut={logout}
-        />
-      ) : null}
 
       <InviteMemberDialog
         open={isInviteModalOpen}
