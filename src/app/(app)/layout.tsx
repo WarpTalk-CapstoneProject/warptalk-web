@@ -30,6 +30,8 @@ import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { ProductTour } from "@/components/onboarding/product-tour";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { getErrorStatus } from "@/lib/api/retry-policy";
@@ -162,6 +164,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     (state) => state.activeRoomId,
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
+  const openTour = useOnboardingStore((state) => state.openTour);
+  const tourSeenAt = useOnboardingStore((state) => state.tourSeenAt);
   const [mounted, setMounted] = useState(false);
   
   // `isError` and `refetch` were not read. The gate below spun on `!activeWorkspaceId`, and a
@@ -227,6 +231,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const handle = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(handle);
   }, []);
+
+  /**
+   * The first-run tour, once — and only once the shell it describes is actually on screen.
+   *
+   * Two conditions, both load-bearing. Without a workspace slug the sidebar has no destinations
+   * to point at, and the tour would open against a shell that is still a spinner. The delay
+   * covers the rest: the panel width tween runs for 420ms, and a spotlight measured mid-tween
+   * lands next to the control rather than on it.
+   *
+   * The check is repeated inside the timer rather than only in the dependency array, because
+   * `tourSeenAt` is persisted and zustand rehydrates it after the first client render — reading
+   * it once at effect time would show a returning user the tour they finished last week.
+   */
+  useEffect(() => {
+    if (tourSeenAt !== null || !activeWorkspaceSlug) return;
+
+    const timer = setTimeout(() => {
+      if (useOnboardingStore.getState().tourSeenAt === null) openTour();
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [tourSeenAt, activeWorkspaceSlug, openTour]);
 
   useEffect(() => {
     if (mounted && !isAuthenticated) {
@@ -481,7 +506,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
             <NotificationPopover />
             <ThemeToggleButton />
-            <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
+            {/* This was a button with no onClick — the only affordance in the header that did
+                nothing at all. It opens the tour now, which is also where the tour's last step
+                points, so somebody who skipped it knows where it went. */}
+            <button
+              type="button"
+              data-tour="help-button"
+              onClick={openTour}
+              title="Show me around"
+              aria-label="Show me around"
+              className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
+            >
+              <Question size={12} weight="bold" />
+            </button>
             <div className="w-[1px] h-3.5 bg-border mx-1" />
             <button
               onClick={toggleRightSidebar}
@@ -493,6 +530,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {!isAdminRoute && <WorkspaceTabs />}
+
+        <ProductTour />
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <main className="relative min-h-0 flex-1 overflow-y-auto">

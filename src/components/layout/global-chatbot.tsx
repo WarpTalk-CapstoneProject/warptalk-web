@@ -963,6 +963,7 @@ export function GlobalChatbot() {
           >
             <PopoverTrigger
               aria-label="Ask WarpBot"
+              data-tour="warpbot-launcher"
               className="flex items-center h-[26px] pl-[8px] pr-[10px] rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors group text-ink"
             >
               <span
