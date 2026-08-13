@@ -70,3 +70,17 @@ export const FACT_CATEGORIES = [
 ] as const;
 
 export type FactCategory = (typeof FACT_CATEGORIES)[number];
+
+/**
+ * What an Owner may correct about a chunk.
+ *
+ * Three fields, not the whole DTO. The indexed text is the only thing the vector was computed
+ * from and the provenance is a record of where the text came from — neither is the reader's to
+ * revise. Both nullable strings are meaningful when null: clearing a wrong fact is itself a
+ * correction, and is not the same as declining to change it.
+ */
+export interface UpdateKnowledgeChunkRequest {
+  fact: string | null;
+  factCategory: string | null;
+  aiRetrieval: boolean;
+}
