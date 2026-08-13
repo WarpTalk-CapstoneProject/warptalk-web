@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   CheckCircle,
@@ -32,12 +32,21 @@ import {
   useSelectWorkspace,
   useWorkspaces,
 } from "@/hooks/use-workspace";
+import { getSafeRedirect } from "@/lib/auth/safe-redirect";
 import type { WorkspaceDto, WorkspaceInvitationDto } from "@/types/workspace";
 
 const EMPTY_WORKSPACES: WorkspaceDto[] = [];
 
 export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
+  /* The proxy sends an expired-but-refreshable session here rather than letting a
+     workspace-scoped route 404, and puts the page the user actually asked for in `?redirect`.
+     Nothing read it, so every deep link was quietly swapped for `/{slug}/home` — and because
+     the access token lives 30 minutes against a 7-day session, that is the ordinary path back
+     into a tab left open, not an edge case. Shared meeting and document links landed on the
+     wrong page for the same reason. */
+  const searchParams = useSearchParams();
+  const requestedPath = getSafeRedirect(searchParams.get("redirect"), "");
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -115,7 +124,7 @@ export default function WorkspaceOnboardingGatePage() {
           firstWs.membershipType || "Internal",
           defaultLanguage,
         );
-        router.replace(`/${firstWs.slug}/home`);
+        router.replace(requestedPath || `/${firstWs.slug}/home`);
       }
     }
   }, [
@@ -128,6 +137,7 @@ export default function WorkspaceOnboardingGatePage() {
     selectWorkspace,
     setActiveWorkspace,
     router,
+    requestedPath,
   ]);
 
   async function handleAcceptInvitation(invitationId: string) {
@@ -147,7 +157,7 @@ export default function WorkspaceOnboardingGatePage() {
       workspace?.defaultLanguage || "en",
     );
     await refetchWorkspaces();
-    router.push(`/${workspaceSlug}/home`);
+    router.push(requestedPath || `/${workspaceSlug}/home`);
   }
 
   if (

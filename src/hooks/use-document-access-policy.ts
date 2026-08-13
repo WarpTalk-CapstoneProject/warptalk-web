@@ -20,9 +20,12 @@ export interface DocumentAccessPolicyHookReturn {
   setShowAllowedDropdown: (show: boolean) => void;
   setShowBlockedDropdown: (show: boolean) => void;
   toggleExternalAccess: (checked: boolean) => Promise<void>;
-  allowUser: (userId: string, userName?: string, options?: { silent?: boolean }) => Promise<void>;
-  blockUser: (userId: string, userName?: string, options?: { silent?: boolean }) => Promise<void>;
-  removePolicy: (policyId: string, options?: { silent?: boolean }) => Promise<void>;
+  /* These resolve to whether the write actually landed. They used to be Promise<void> and
+     swallowed every failure into a toast, so a bulk caller looping over them could report
+     "Allowed 200 members" after the 91st request 4xx'd. */
+  allowUser: (userId: string, userName?: string, options?: { silent?: boolean }) => Promise<boolean>;
+  blockUser: (userId: string, userName?: string, options?: { silent?: boolean }) => Promise<boolean>;
+  removePolicy: (policyId: string, options?: { silent?: boolean }) => Promise<boolean>;
 }
 
 export function useDocumentAccessPolicy(
@@ -90,9 +93,12 @@ export function useDocumentAccessPolicy(
       if (!options?.silent) {
         toast.success("Access policy rule removed.");
       }
+      return true;
     } catch (err: unknown) {
       const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to remove policy rule.";
-      toast.error(errorMsg);
+      // A bulk caller reports the tally itself; one toast per failed row would bury the page.
+      if (!options?.silent) toast.error(errorMsg);
+      return false;
     }
   };
 
@@ -102,7 +108,7 @@ export function useDocumentAccessPolicy(
     );
 
     if (existingPolicy) {
-      await removePolicy(existingPolicy.id, options);
+      return removePolicy(existingPolicy.id, options);
     } else {
       try {
         await addPolicyMutation.mutateAsync({
@@ -115,9 +121,11 @@ export function useDocumentAccessPolicy(
         if (!options?.silent) {
           toast.success(`Allowed access for ${userName || "user"}.`);
         }
+        return true;
       } catch (err: unknown) {
         const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to allow user access.";
-        toast.error(errorMsg);
+        if (!options?.silent) toast.error(errorMsg);
+        return false;
       }
     }
   };
@@ -128,7 +136,7 @@ export function useDocumentAccessPolicy(
     );
 
     if (existingPolicy) {
-      await removePolicy(existingPolicy.id, options);
+      return removePolicy(existingPolicy.id, options);
     } else {
       try {
         await addPolicyMutation.mutateAsync({
@@ -141,9 +149,11 @@ export function useDocumentAccessPolicy(
         if (!options?.silent) {
           toast.success(`Blocked access for ${userName || "user"}.`);
         }
+        return true;
       } catch (err: unknown) {
         const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to block user access.";
-        toast.error(errorMsg);
+        if (!options?.silent) toast.error(errorMsg);
+        return false;
       }
     }
   };

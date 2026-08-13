@@ -4,9 +4,9 @@ import { flushSync } from "react-dom";
 import { useEffect, useMemo } from "react";
 import { MoonStars, SunDim } from "@phosphor-icons/react/dist/ssr";
 import { useTheme } from "next-themes";
-import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { WEBGL_SURFACE_ATTRIBUTE } from "@/lib/visuals/webgl-surface";
 
 const STYLE_ID = "warptalk-theme-toggle-style";
 const BASE_STYLE_ID = "warptalk-theme-toggle-base-style";
@@ -95,7 +95,6 @@ function injectPolygonGradientStyles(duration: number) {
 
 export function ThemeToggleButton({ className }: { className?: string }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const pathname = usePathname();
 
   useEffect(() => {
     ensureBaseStyles();
@@ -107,7 +106,16 @@ export function ThemeToggleButton({ className }: { className?: string }) {
 
   const toggleTheme = () => {
     const nextTheme = currentTheme === "dark" ? "light" : "dark";
-    const hasWebglBackground = pathname?.endsWith("/home");
+    /* A live WebGL canvas cannot be captured by the View Transition snapshot, so the sweep
+       animation tears over it. Whoever mounts such a canvas says so by marking it; the toggle
+       asks the document rather than inferring it from the route.
+
+       This read `pathname?.endsWith("/home")`. That is the wrong altitude twice over: a second
+       WebGL surface anywhere else silently brings the tearing back, and removing the canvas
+       from /home leaves the toggle permanently degraded there with nothing to explain why. */
+    const hasWebglBackground =
+      typeof document !== "undefined" &&
+      document.querySelector(`[${WEBGL_SURFACE_ATTRIBUTE}]`) !== null;
     if (
       hasWebglBackground ||
       typeof document === "undefined" ||

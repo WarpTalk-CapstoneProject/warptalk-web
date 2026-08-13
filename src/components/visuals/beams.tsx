@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/utils";
+import { webglSurfaceProps } from "@/lib/visuals/webgl-surface";
 
 type BeamsProps = {
   beamWidth?: number;
@@ -318,5 +319,13 @@ export function Beams({
     };
   }, [beamHeight, beamNumber, beamWidth, lightColor, noiseIntensity, rotation, scale, speed]);
 
-  return <div ref={containerRef} className={cn("relative h-full w-full", className)} />;
+  // Declares "a live WebGL canvas is on screen" so the theme toggle can skip its View
+  // Transition sweep, which cannot snapshot a canvas and tears across it.
+  return (
+    <div
+      ref={containerRef}
+      className={cn("relative h-full w-full", className)}
+      {...webglSurfaceProps()}
+    />
+  );
 }

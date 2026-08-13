@@ -22,10 +22,7 @@ import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
-function getSafeCallbackUrl(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value === "/rooms") return "/workspace";
-  return value;
-}
+import { getSafeRedirect as getSafeCallbackUrl } from "@/lib/auth/safe-redirect";
 
 const getRegisterSchema = (hasToken: boolean) =>
   z.object({

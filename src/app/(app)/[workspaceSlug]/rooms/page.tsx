@@ -604,15 +604,20 @@ export default function MeetingsPageLinear() {
   ]);
 
   function toggleDisplayProperty(property: string) {
-    setVisibleDisplayProperties((current) => {
-      const typedProperty = property as RoomDisplayProperty;
-      if (current.includes(typedProperty)) {
-        if (sortKey === property) setSortKey("title");
-        return current.filter((item) => item !== typedProperty);
-      }
+    const typedProperty = property as RoomDisplayProperty;
+    const isHiding = visibleDisplayProperties.includes(typedProperty);
 
-      return [...current, typedProperty];
-    });
+    // Both setters at the top level — see the note on the members page: a state updater has to
+    // be pure, and this one was calling setSortKey from inside it.
+    if (isHiding && sortKey === property) {
+      setSortKey("title");
+    }
+
+    setVisibleDisplayProperties((current) =>
+      isHiding
+        ? current.filter((item) => item !== typedProperty)
+        : [...current, typedProperty],
+    );
   }
   return (
     <div className="flex flex-col h-full bg-surface-1">

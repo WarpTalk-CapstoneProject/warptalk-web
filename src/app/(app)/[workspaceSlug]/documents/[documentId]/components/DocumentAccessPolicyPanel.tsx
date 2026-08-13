@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { Check, Lock, MagnifyingGlass, Users, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
+import { mapWithLimit } from "@/lib/async/map-with-limit";
+
 import { Card, CardContent } from "@/components/ui/card";
 
 interface WorkspaceMemberItem {
@@ -29,23 +31,52 @@ interface DocumentAccessPolicyPanelProps {
   membersList: WorkspaceMemberItem[];
   protectedUserIds?: Array<string | null | undefined>;
   toggleExternalAccess: (checked: boolean) => Promise<void>;
+  /* Resolve to whether the write landed, so a bulk action can tally what actually happened
+     rather than assuming every call in the loop succeeded. */
   allowUser: (
     userId: string,
     userName: string,
     options?: { silent?: boolean },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   blockUser: (
     userId: string,
     userName: string,
     options?: { silent?: boolean },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   removePolicy: (
     policyId: string,
     options?: { silent?: boolean },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
 }
 
 type PolicyEffect = "ALLOW" | "DENY";
+/** Enough to finish a large workspace quickly, low enough not to trip rate limits. */
+const POLICY_WRITE_CONCURRENCY = 6;
+
+/** Says what actually happened, including the part that did not. */
+function reportBulkOutcome(
+  outcomes: boolean[],
+  verb: string,
+  noun = "eligible members",
+) {
+  const succeeded = outcomes.filter(Boolean).length;
+  const failed = outcomes.length - succeeded;
+
+  if (failed === 0) {
+    toast.success(`${verb} ${succeeded} ${noun}.`);
+    return;
+  }
+
+  if (succeeded === 0) {
+    toast.error(`Could not update any of the ${outcomes.length} ${noun}.`);
+    return;
+  }
+
+  toast.warning(
+    `${verb} ${succeeded} of ${outcomes.length} ${noun}; ${failed} failed and were left unchanged.`,
+  );
+}
+
 type BulkAction = {
   effect: PolicyEffect;
   mode: "add" | "clear";
@@ -159,27 +190,31 @@ export function DocumentAccessPolicyPanel({
 
     setBulkAction({ effect, mode: "add" });
     try {
-      for (const member of targetMembers) {
-        const opposite = findUserPolicy(
-          member.userId,
-          effect === "ALLOW" ? "DENY" : "ALLOW",
-        );
-        if (opposite) {
-          await removePolicy(opposite.id, { silent: true });
-        }
+      /* Bounded concurrency, and a tally of what actually landed.
+         This was a serial `for … await`: up to two round-trips per member, one at a time, so a
+         200-member workspace meant ~400 sequential requests behind a single spinner. And
+         because the helpers swallowed failures, it reported "Allowed 200 eligible members"
+         even when the 91st request failed and that member was left ungoverned. */
+      const outcomes = await mapWithLimit(
+        targetMembers,
+        POLICY_WRITE_CONCURRENCY,
+        async (member) => {
+          const opposite = findUserPolicy(
+            member.userId,
+            effect === "ALLOW" ? "DENY" : "ALLOW",
+          );
+          if (opposite) {
+            const removed = await removePolicy(opposite.id, { silent: true });
+            if (!removed) return false;
+          }
 
-        if (effect === "ALLOW") {
-          await allowUser(member.userId, member.fullName, { silent: true });
-        } else {
-          await blockUser(member.userId, member.fullName, { silent: true });
-        }
-      }
-
-      toast.success(
-        effect === "ALLOW"
-          ? `Allowed ${targetMembers.length} eligible members.`
-          : `Blocked ${targetMembers.length} eligible members.`,
+          return effect === "ALLOW"
+            ? allowUser(member.userId, member.fullName, { silent: true })
+            : blockUser(member.userId, member.fullName, { silent: true });
+        },
       );
+
+      reportBulkOutcome(outcomes, effect === "ALLOW" ? "Allowed" : "Blocked");
     } finally {
       setBulkAction(null);
     }
@@ -203,15 +238,13 @@ export function DocumentAccessPolicyPanel({
 
     setBulkAction({ effect, mode: "clear" });
     try {
-      for (const policy of targetPolicies) {
-        await removePolicy(policy.id, { silent: true });
-      }
-
-      toast.success(
-        effect === "ALLOW"
-          ? `Cleared ${targetPolicies.length} allowed rules.`
-          : `Cleared ${targetPolicies.length} blocked rules.`,
+      const outcomes = await mapWithLimit(
+        targetPolicies,
+        POLICY_WRITE_CONCURRENCY,
+        (policy) => removePolicy(policy.id, { silent: true }),
       );
+
+      reportBulkOutcome(outcomes, "Cleared", "rules");
     } finally {
       setBulkAction(null);
     }
