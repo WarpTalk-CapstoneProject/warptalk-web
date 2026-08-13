@@ -13,7 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useInviteWorkspaceMember } from "@/hooks/use-workspace";
+import {
+  useInviteWorkspaceMember,
+  useWorkspaceInvitationPolicy,
+} from "@/hooks/use-workspace";
 
 /**
  * The one dialog for inviting somebody into a workspace.
@@ -44,6 +47,7 @@ export function InviteMemberDialog({
 }) {
   const [email, setEmail] = useState("");
   const [roleName, setRoleName] = useState("Member");
+  const [membershipType, setMembershipType] = useState<"Internal" | "External" | null>(null);
   // Set once the server returns the token. The row keeps only a hash, so this is the single
   // moment the link exists — the dialog stays on it until the inviter dismisses it.
   const [link, setLink] = useState<string | null>(null);
@@ -51,10 +55,30 @@ export function InviteMemberDialog({
   const [delivered, setDelivered] = useState(true);
 
   const inviteMutation = useInviteWorkspaceMember(workspaceId);
+  const policyQuery = useWorkspaceInvitationPolicy(workspaceId, email.trim());
+  const policy = policyQuery.data;
+  const allowedMembershipTypes = policy?.allowedMembershipTypes ?? ["Internal"];
+  const suggestedMembershipType =
+    policy?.suggestedMembershipType?.toLowerCase() === "external"
+      ? "External"
+      : "Internal";
+  const effectiveMembershipType = membershipType ?? suggestedMembershipType;
+  const effectiveRoleName =
+    effectiveMembershipType === "External" ? "Member" : roleName;
+  const canInviteInternal = allowedMembershipTypes.some(
+    (type) => type.toLowerCase() === "internal",
+  );
+  const canInviteExternal = allowedMembershipTypes.some(
+    (type) => type.toLowerCase() === "external",
+  );
+  const selectedMembershipAllowed = allowedMembershipTypes.some(
+    (type) => type.toLowerCase() === effectiveMembershipType.toLowerCase(),
+  );
 
   const reset = () => {
     setEmail("");
     setRoleName("Member");
+    setMembershipType(null);
     setLink(null);
     setLinkEmail("");
     setDelivered(true);
@@ -68,7 +92,8 @@ export function InviteMemberDialog({
     try {
       const response = await inviteMutation.mutateAsync({
         email: trimmed,
-        roleName,
+        roleName: effectiveRoleName,
+        membershipType: effectiveMembershipType,
       });
 
       // Delivery can fail while the invitation itself is perfectly valid — the server says
@@ -211,10 +236,42 @@ export function InviteMemberDialog({
                 type="email"
                 placeholder="colleague@company.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setMembershipType(null);
+                }}
                 required
                 className="bg-surface-1"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-access" className="text-xs font-medium">
+                Access type
+              </Label>
+              <select
+                id="invite-access"
+                value={effectiveMembershipType}
+                onChange={(e) =>
+                  setMembershipType(e.target.value as "Internal" | "External")
+                }
+                className="w-full h-9 rounded-md border border-border bg-surface-1 px-3 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="Internal" disabled={!canInviteInternal}>
+                  Internal
+                </option>
+                <option value="External" disabled={!canInviteExternal}>
+                  External
+                </option>
+              </select>
+              <p className="text-[11px] leading-4 text-ink-muted">
+                {effectiveMembershipType === "Internal"
+                  ? policy?.internalDisabledReason && !canInviteInternal
+                    ? policy.internalDisabledReason
+                    : "Internal access follows this workspace's verified-domain policy."
+                  : policy?.externalDisabledReason && !canInviteExternal
+                    ? policy.externalDisabledReason
+                    : "External collaborators always join as Member."}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="invite-role" className="text-xs font-medium">
@@ -222,16 +279,19 @@ export function InviteMemberDialog({
               </Label>
               <select
                 id="invite-role"
-                value={roleName}
+                value={effectiveRoleName}
                 onChange={(e) => setRoleName(e.target.value)}
+                disabled={effectiveMembershipType === "External"}
                 className="w-full h-9 rounded-md border border-border bg-surface-1 px-3 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="Member">Member</option>
-                {canGrantAdmin && <option value="Admin">Admin</option>}
+                {canGrantAdmin && effectiveMembershipType === "Internal" && (
+                  <option value="Admin">Admin</option>
+                )}
               </select>
               <p className="text-[11px] leading-4 text-ink-muted">
-                Internal or External access is assigned automatically from the
-                workspace&apos;s verified domains.
+                Owner/Admin choose the access class explicitly; the server only
+                validates whether that choice is legal right now.
               </p>
             </div>
             <DialogFooter className="pt-2">
@@ -244,7 +304,13 @@ export function InviteMemberDialog({
               </Button>
               <Button
                 type="submit"
-                disabled={inviteMutation.isPending || !email.trim()}
+                disabled={
+                  inviteMutation.isPending ||
+                  policyQuery.isFetching ||
+                  !policy ||
+                  !email.trim() ||
+                  (policyQuery.isFetched && !selectedMembershipAllowed)
+                }
                 className="text-white"
               >
                 {inviteMutation.isPending ? "Sending..." : "Send invite"}

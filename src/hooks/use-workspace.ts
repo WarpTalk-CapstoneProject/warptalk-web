@@ -18,6 +18,8 @@ export const WORKSPACE_KEYS = {
     ["workspaces", "members", workspaceId, { page, pageSize, search }] as const,
   invitations: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "invitations", workspaceId, { page, pageSize, search }] as const,
+  invitationPolicy: (workspaceId: string, email: string) =>
+    ["workspaces", "invitation-policy", workspaceId, email] as const,
   pendingInvitations: () => ["workspaces", "invitations", "pending"] as const,
   myJoinRequests: () => ["workspaces", "join-requests", "mine"] as const,
   invitationPreview: (token: string) => ["workspaces", "invitation-preview", token] as const,
@@ -253,18 +255,28 @@ export function useUpdateWorkspaceMember(workspaceId: string) {
 export function useInviteWorkspaceMember(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ email, roleName }: { email: string; roleName: string }) =>
-      WorkspaceService.invite(workspaceId, email, roleName),
+    mutationFn: ({ email, roleName, membershipType }: { email: string; roleName: string; membershipType: string }) =>
+      WorkspaceService.invite(workspaceId, email, roleName, membershipType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
     },
   });
 }
 
-export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string) {
+export function useWorkspaceInvitationPolicy(workspaceId: string, email = "") {
   return useQuery({
-    queryKey: [...WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search), category],
-    queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search, category),
+    queryKey: WORKSPACE_KEYS.invitationPolicy(workspaceId, email),
+    queryFn: () => WorkspaceService.getInvitationPolicy(workspaceId, email),
+    enabled: !!workspaceId,
+    placeholderData: (previousData) => previousData,
+    staleTime: 15000,
+  });
+}
+
+export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", kind?: string) {
+  return useQuery({
+    queryKey: [...WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search), kind],
+    queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search, kind),
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
@@ -360,7 +372,7 @@ export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
 export function useMyJoinRequests() {
   return useQuery({
     queryKey: WORKSPACE_KEYS.myJoinRequests(),
-    queryFn: WorkspaceService.getPendingInvitations, // Pending requests query fallback
+    queryFn: WorkspaceService.getMyJoinRequests,
     staleTime: 30000,
   });
 }

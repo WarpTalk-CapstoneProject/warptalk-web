@@ -4,9 +4,10 @@ import assert from "node:assert/strict";
 import {
   buildMemberDirectory,
   filterMemberDirectory,
+  groupMemberRowsByMembership,
   nameFromEmail,
 } from "../member-directory.ts";
-import type { WorkspaceInvitationDto, WorkspaceMemberDto } from "@/types/workspace";
+import type { WorkspaceMemberDto } from "@/types/workspace";
 
 const member = (over: Partial<WorkspaceMemberDto> = {}): WorkspaceMemberDto => ({
   id: "m1",
@@ -22,94 +23,118 @@ const member = (over: Partial<WorkspaceMemberDto> = {}): WorkspaceMemberDto => (
   ...over,
 });
 
-const invite = (over: Partial<WorkspaceInvitationDto> = {}): WorkspaceInvitationDto => ({
-  id: "i1",
-  workspaceId: "w1",
-  email: "nhi@warptalk.io.vn",
-  roleName: "Member",
-  status: "PENDING",
-  membershipType: "Internal",
-  deliveryStatus: "Sent",
-  sentCount: 1,
-  expiresAt: "2026-08-20T00:00:00Z",
-  createdAt: "2026-08-08T00:00:00Z",
-  ...over,
+test("member directory contains active joined members only", () => {
+  const rows = buildMemberDirectory([
+    member(),
+    member({
+      id: "m2",
+      userId: "u2",
+      email: "pending@warptalk.io.vn",
+      fullName: "Pending Person",
+      status: "Invited",
+      roleName: "Member",
+    }),
+    member({
+      id: "m3",
+      userId: "u3",
+      email: "suspended@warptalk.io.vn",
+      fullName: "Suspended Person",
+      status: "Suspended",
+      roleName: "Member",
+    }),
+  ]);
+
+  assert.deepEqual(rows.map((row) => row.email), ["tu@warptalk.io.vn"]);
 });
 
-test("pending invitations and requests share one list with the members", () => {
-  const rows = buildMemberDirectory(
-    [member()],
-    [invite()],
-    [invite({ id: "r1", email: "ky@gmail.com", status: "REQUESTED" })],
-  );
+test("members are sorted by role and access level", () => {
+  const rows = buildMemberDirectory([
+    member({
+      id: "external",
+      userId: "external",
+      fullName: "External Member",
+      email: "external@gmail.com",
+      roleName: "Member",
+      membershipType: "External",
+      joinedAt: "2026-08-10T00:00:00Z",
+    }),
+    member({
+      id: "internal",
+      userId: "internal",
+      fullName: "Internal Member",
+      email: "internal@warptalk.io.vn",
+      roleName: "Member",
+      membershipType: "Internal",
+      joinedAt: "2026-08-11T00:00:00Z",
+    }),
+    member({
+      id: "admin",
+      userId: "admin",
+      fullName: "Admin User",
+      email: "admin@warptalk.io.vn",
+      roleName: "Admin",
+      joinedAt: "2026-08-12T00:00:00Z",
+    }),
+    member(),
+  ]);
 
   assert.deepEqual(
-    rows.map((row) => [row.status, row.email]),
+    rows.map((row) => [row.roleName, row.membershipType, row.email]),
     [
-      ["requested", "ky@gmail.com"],
-      ["invited", "nhi@warptalk.io.vn"],
-      ["joined", "tu@warptalk.io.vn"],
+      ["Owner", "Internal", "tu@warptalk.io.vn"],
+      ["Admin", "Internal", "admin@warptalk.io.vn"],
+      ["Member", "Internal", "internal@warptalk.io.vn"],
+      ["Member", "External", "external@gmail.com"],
     ],
-    "people waiting on an answer belong at the top",
   );
 });
 
-test("settled invitations do not become rows", () => {
-  const rows = buildMemberDirectory(
-    [],
-    [
-      invite({ id: "a", status: "ACCEPTED", email: "a@x.com" }),
-      invite({ id: "b", status: "REVOKED", email: "b@x.com" }),
-      invite({ id: "c", status: "EXPIRED", email: "c@x.com" }),
-    ],
-    [invite({ id: "d", status: "REJECTED", email: "d@x.com" })],
-  );
+test("filters exclude owner tab while still allowing member access filters", () => {
+  const rows = buildMemberDirectory([
+    member(),
+    member({ id: "a", userId: "a", roleName: "Admin", email: "a@warptalk.io.vn" }),
+    member({ id: "i", userId: "i", roleName: "Member", email: "i@warptalk.io.vn" }),
+    member({
+      id: "e",
+      userId: "e",
+      roleName: "Member",
+      membershipType: "External",
+      email: "e@gmail.com",
+    }),
+  ]);
 
-  assert.equal(rows.length, 0, "history is not a to-do list");
-});
-
-test("an invitation for somebody who already joined is dropped", () => {
-  // The real window: the invite is accepted, the members list refetches, and for a moment
-  // both lists contain the same person. They must not appear twice.
-  const rows = buildMemberDirectory(
-    [member({ email: "Nhi@WarpTalk.io.vn" })],
-    [invite({ email: "nhi@warptalk.io.vn" })],
-    [],
-  );
-
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].status, "joined");
-});
-
-test("a join request shows as Member, not as whatever the row carried", () => {
-  const rows = buildMemberDirectory(
-    [],
-    [],
-    [invite({ status: "REQUESTED", roleName: "Admin" })],
-  );
-
-  assert.equal(rows[0].roleName, "Member", "the approver grants the role, the request cannot");
-});
-
-test("role filters describe the workspace as it stands", () => {
-  const rows = buildMemberDirectory(
-    [member({ roleName: "Owner" }), member({ id: "m2", email: "x@x.com", roleName: "Member" })],
-    [invite({ roleName: "Admin" })],
-    [],
-  );
-
-  assert.deepEqual(
-    filterMemberDirectory(rows, "admin").map((row) => row.email),
-    [],
-    "an offered Admin role is not an Admin",
-  );
-  assert.deepEqual(filterMemberDirectory(rows, "owner").map((row) => row.email), [
+  assert.deepEqual(filterMemberDirectory(rows, "admin").map((row) => row.email), [
+    "a@warptalk.io.vn",
+  ]);
+  assert.deepEqual(filterMemberDirectory(rows, "member").map((row) => row.email), [
+    "i@warptalk.io.vn",
+    "e@gmail.com",
+  ]);
+  assert.deepEqual(filterMemberDirectory(rows, "internal").map((row) => row.email), [
     "tu@warptalk.io.vn",
+    "a@warptalk.io.vn",
+    "i@warptalk.io.vn",
   ]);
-  assert.deepEqual(filterMemberDirectory(rows, "invited").map((row) => row.email), [
-    "nhi@warptalk.io.vn",
+  assert.deepEqual(filterMemberDirectory(rows, "external").map((row) => row.email), [
+    "e@gmail.com",
   ]);
-  assert.equal(filterMemberDirectory(rows, "all").length, 3);
+});
+
+test("member groups split internal and external rows for table rendering", () => {
+  const rows = buildMemberDirectory([
+    member(),
+    member({
+      id: "e",
+      userId: "e",
+      roleName: "Member",
+      membershipType: "External",
+      email: "e@gmail.com",
+    }),
+  ]);
+
+  const grouped = groupMemberRowsByMembership(rows);
+  assert.deepEqual(grouped.internal.map((row) => row.email), ["tu@warptalk.io.vn"]);
+  assert.deepEqual(grouped.external.map((row) => row.email), ["e@gmail.com"]);
 });
 
 test("an invited person is named by their address until they have a name", () => {

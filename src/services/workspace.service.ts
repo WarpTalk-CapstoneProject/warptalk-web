@@ -20,6 +20,7 @@ import type {
   PagedResult,
   SelectWorkspaceResponse,
   InviteMemberResponse,
+  InvitationPolicyResponse,
   PreviewInvitationResponse,
   ExtractedTextDto,
   WorkspaceRoleChangePreview,
@@ -132,11 +133,25 @@ export const WorkspaceService = {
   },
 
   // ─── Invitations ───
-  async invite(workspaceId: string, email: string, roleName: string): Promise<InviteMemberResponse> {
+  async invite(
+    workspaceId: string,
+    email: string,
+    roleName: string,
+    membershipType: string,
+  ): Promise<InviteMemberResponse> {
     const { data } = await apiClient.post<InviteMemberResponse>(API.workspaces.invitations(workspaceId), {
       email,
       roleName,
+      membershipType,
     });
+    return data;
+  },
+
+  async getInvitationPolicy(workspaceId: string, email = ""): Promise<InvitationPolicyResponse> {
+    const { data } = await apiClient.get<InvitationPolicyResponse>(
+      API.workspaces.invitationPolicy(workspaceId),
+      { params: { email } },
+    );
     return data;
   },
 
@@ -145,9 +160,9 @@ export const WorkspaceService = {
     return data;
   },
 
-  async listInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string): Promise<PagedResult<WorkspaceInvitationDto>> {
+  async listInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", kind?: string): Promise<PagedResult<WorkspaceInvitationDto>> {
     const { data } = await apiClient.get<PagedResult<WorkspaceInvitationDto>>(API.workspaces.invitations(workspaceId), {
-      params: { page, pageSize, search, category },
+      params: { page, pageSize, search, kind },
     });
     return data;
   },
@@ -163,6 +178,11 @@ export const WorkspaceService = {
 
   async createJoinRequest(request: { roomCode?: string; workspaceSlug?: string }): Promise<WorkspaceInvitationDto> {
     const { data } = await apiClient.post<WorkspaceInvitationDto>(API.workspaces.joinRequests, request);
+    return data;
+  },
+
+  async getMyJoinRequests(): Promise<WorkspaceInvitationDto[]> {
+    const { data } = await apiClient.get<WorkspaceInvitationDto[]>(API.workspaces.myJoinRequests);
     return data;
   },
 

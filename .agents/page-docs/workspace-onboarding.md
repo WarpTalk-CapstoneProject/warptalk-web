@@ -34,6 +34,10 @@
 - `src/app/(app)/[workspaceSlug]/layout.tsx`
 - `src/app/(app)/workspace/join/page.tsx`
 
+## 2026-08-13 Join Request Status
+
+- `useMyJoinRequests` now calls `/workspaces/join-requests/mine` instead of reusing pending invitation lookup, so the Workspace Hub displays the user's inbound join-request statuses separately from invitation acceptance.
+
 ## Testing Checklist
 
 - [x] Verify `localhost`, `localhost:3000`, and reserved route names are rejected as workspace slugs.

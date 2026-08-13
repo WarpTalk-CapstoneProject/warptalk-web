@@ -131,12 +131,28 @@ export interface WorkspaceInvitationDto {
   reviewedAt?: string | null;
   workspaceName?: string | null;
   workspaceSlug?: string | null;
+  allowedFinalMembershipTypes?: string[] | null;
+  requiresPolicyAction?: boolean | null;
+  policyReason?: string | null;
+  suggestedActions?: string[] | null;
 }
 
 export interface ApproveJoinRequestResponse {
   invitation: WorkspaceInvitationDto;
   approvalEmailStatus: "Sent" | "Failed" | string;
   approvalEmailError?: string | null;
+}
+
+export interface InvitationPolicyResponse {
+  suggestedMembershipType: string;
+  allowedMembershipTypes: string[];
+  requireVerifiedDomainForInternal: boolean;
+  allowExternalCollaboration: boolean;
+  allowSubdomains: boolean;
+  isEmailDomainVerified: boolean;
+  isPublicEmailDomain: boolean;
+  internalDisabledReason?: string | null;
+  externalDisabledReason?: string | null;
 }
 
 export interface InviteMemberResponse {
