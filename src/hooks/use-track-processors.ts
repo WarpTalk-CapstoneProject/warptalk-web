@@ -14,6 +14,8 @@ export interface TrackEffectsPreferences {
   noiseSuppressionEnabled: boolean;
   backgroundBlurEnabled: boolean;
   onNoiseSuppressionError?: (error: unknown) => void;
+  /** Reported when the blur processor could not be attached. Omit to fail silently (do not). */
+  onBackgroundBlurError?: (error: unknown) => void;
 }
 
 /**
@@ -54,6 +56,7 @@ export function useTrackProcessors({
   noiseSuppressionEnabled,
   backgroundBlurEnabled,
   onNoiseSuppressionError,
+  onBackgroundBlurError,
 }: TrackEffectsPreferences) {
   const { microphoneTrack, cameraTrack } = useLocalParticipant();
   const krispRef = useRef<KrispNoiseFilterProcessor | null>(null);
@@ -159,15 +162,58 @@ export function useTrackProcessors({
   useEffect(() => {
     const track = cameraTrack?.track;
     if (!(track instanceof LocalVideoTrack)) return;
+    const localVideoTrack = track;
 
-    if (backgroundBlurEnabled) {
-      if (!blurRef.current) blurRef.current = BackgroundProcessor({ mode: "background-blur", blurRadius: BLUR_RADIUS });
-      void track.setProcessor(blurRef.current);
-    } else if (track.getProcessor()) {
-      void track.stopProcessor();
+    let cancelled = false;
+
+    async function applyBlurProcessor() {
+      // BLUR FAILS LOUDLY NOW, and that is the whole change.
+      //
+      // This was `void track.setProcessor(blurRef.current)` — a floating promise with no catch.
+      // setProcessor loads a WebAssembly segmentation model and fetches its weights, so it can
+      // reject for a dozen ordinary reasons (CSP, a blocked CDN, an unsupported browser, a
+      // camera that changed mid-flight). Every one of them landed as an unhandled rejection: the
+      // toggle stayed lit, no error was raised, and the picture simply never blurred. "Background
+      // blur không còn lên nữa" is exactly that shape of report — nothing to see anywhere.
+      //
+      // Krisp beside it got this treatment in WT-320. Blur was left as the one processor that
+      // could fail in silence.
+      if (!backgroundBlurEnabled) {
+        if (localVideoTrack.getProcessor()) await localVideoTrack.stopProcessor();
+        // Dropped on purpose. A BackgroundProcessor that has been stopped has released its
+        // WASM pipeline, and re-attaching that same instance is not something the library
+        // promises — reusing it is a plausible way for the SECOND enable of a session to do
+        // nothing at all, which is the other half of this report.
+        blurRef.current = null;
+        return;
+      }
+
+      try {
+        if (!blurRef.current) {
+          blurRef.current = BackgroundProcessor({
+            mode: "background-blur",
+            blurRadius: BLUR_RADIUS,
+          });
+        }
+        await localVideoTrack.setProcessor(blurRef.current);
+      } catch (error) {
+        // Leave the camera publishing unprocessed rather than half-attached, then report.
+        try {
+          if (localVideoTrack.getProcessor()) await localVideoTrack.stopProcessor();
+        } catch {
+          // Nothing further to try; the original failure is the one worth surfacing.
+        }
+        blurRef.current = null;
+        if (!cancelled) onBackgroundBlurError?.(error);
+      }
     }
+
+    void applyBlurProcessor();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backgroundBlurEnabled, cameraTrackSid]);
+  }, [backgroundBlurEnabled, cameraTrackSid, onBackgroundBlurError]);
 }
 
 /**

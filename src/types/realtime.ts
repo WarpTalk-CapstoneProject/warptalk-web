@@ -29,6 +29,19 @@ export interface TranscriptSegmentDto {
   confidence: number;
   startTimeMs: number;
   endTimeMs: number;
+  /**
+   * When THIS client received the segment, stamped in the store on first insert.
+   *
+   * `startTimeMs` cannot be used as a clock: it is an offset into the audio ingress track, and
+   * that track RESETS on reconnect — dedupeTranscriptSegments already carries a comment saying
+   * so. A line spoken 18 minutes into a meeting was rendered as 6:00 because the ingress had
+   * reconnected 6 minutes earlier, under an aria-label reading "Meeting time".
+   *
+   * Client-stamped rather than server-sent because for a live segment the two are a second
+   * apart, and a second is invisible next to being twelve minutes wrong. Absent on segments
+   * loaded from the saved transcript, which is why every reader must fall back.
+   */
+  receivedAt?: number;
 }
 
 export interface TranslationTextDto {
