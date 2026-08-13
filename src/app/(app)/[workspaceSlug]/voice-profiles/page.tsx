@@ -8,6 +8,7 @@ import {
   CaretDown,
   CaretUp,
   Check,
+  CheckCircle,
   Checks,
   Funnel,
   Microphone,
@@ -45,6 +46,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
+import { VoiceConsentCard } from "@/components/voice/voice-consent-card";
 import {
   useCreateVoiceProfile,
   useDeleteVoiceProfile,
@@ -189,6 +192,10 @@ export default function VoiceProfilesPage() {
   const selectionActionRef = useRef<HTMLDivElement | null>(null);
 
   const profileList = useMemo(() => profiles ?? [], [profiles]);
+  const readyCount = useMemo(
+    () => profileList.filter((profile) => profile.hasSample).length,
+    [profileList],
+  );
   const currentUserName = user?.fullName || user?.email || "Current user";
   const currentUserEmail = user?.email ?? "Signed-in user";
   const roleLabel = workspaceRole ? toTitleCase(workspaceRole) : "Participant";
@@ -582,6 +589,20 @@ export default function VoiceProfilesPage() {
           </div>
         </section>
 
+        <VoiceConsentCard />
+
+        <section className="mx-2 grid gap-3 border-y border-border px-2 py-3 sm:grid-cols-3">
+          <Metric icon={<Microphone size={16} weight="bold" />} label="Profiles" value={String(profileList.length)} />
+          <Metric icon={<CheckCircle size={16} weight="bold" />} label="With sample" value={String(readyCount)} />
+          <Metric
+            icon={<Waveform size={16} weight="bold" />}
+            label="Default language"
+            value={languageLabelText(normalizeLanguage(workspaceLanguage) ?? "vi-VN")}
+          />
+        </section>
+
+        <LibraryVoicePicker profiles={profileList} />
+
         <section className="mt-0.2 min-h-full overflow-x-auto px-2">
           <div className="min-w-[1040px]">
             <div
@@ -898,6 +919,20 @@ export default function VoiceProfilesPage() {
           </form>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function Metric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-surface-2 text-primary">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[12px] text-ink-muted">{label}</p>
+        <p className="truncate text-[18px] font-semibold leading-6 text-ink">{value}</p>
+      </div>
     </div>
   );
 }

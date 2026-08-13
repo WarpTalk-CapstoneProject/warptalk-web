@@ -5,6 +5,7 @@ import type {
   CreateVoiceProfileRequest,
   VoiceCatalogItemDto,
   SetPreferredVoiceRequest,
+  VoiceConsentStatusDto,
 } from "@/types/voice-profile";
 
 export const VoiceProfileService = {
@@ -54,5 +55,23 @@ export const VoiceProfileService = {
       request,
     );
     return status === 204 || !data ? null : (data as VoiceProfileDto);
+  },
+
+};
+
+export const VoiceConsentService = {
+  async status(): Promise<VoiceConsentStatusDto> {
+    const { data } = await apiClient.get<VoiceConsentStatusDto>(API.voiceConsent.status);
+    return data;
+  },
+
+  async grant(): Promise<VoiceConsentStatusDto> {
+    const { data } = await apiClient.post<VoiceConsentStatusDto>(API.voiceConsent.grant);
+    return data;
+  },
+
+  async revoke(): Promise<VoiceConsentStatusDto> {
+    const { data } = await apiClient.post<VoiceConsentStatusDto>(API.voiceConsent.revoke);
+    return data;
   },
 };
