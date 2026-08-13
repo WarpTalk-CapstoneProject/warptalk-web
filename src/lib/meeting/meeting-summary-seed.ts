@@ -431,23 +431,49 @@ export const meetingSummarySeedHistoryItem: TranslationRoomHistoryItemDto = {
   artifacts: meetingSummarySeedArtifacts,
 };
 
+/**
+ * Whether this build serves the seed meeting at all. Off unless someone turns it on.
+ *
+ * The seed is keyed on `fpt-sep490-su26` — a REAL workspace slug — and the accessors below sit
+ * in front of the live API in `translation-room.service.ts`, `room-history.service.ts` and the
+ * room/transcript hooks. Ungated, that puts a meeting that never happened, with participants
+ * who do not exist, into that workspace's Meetings list in production, with a fabricated
+ * transcript and AI summary behind it.
+ *
+ * So the switch is explicit and fail-closed: unset means off, in every environment including
+ * local dev. To demo against the seed, set `NEXT_PUBLIC_MEETING_SUMMARY_SEED=true` on that
+ * specific deployment.
+ *
+ * This is a RUNTIME gate, not a build-time one. `NEXT_PUBLIC_*` is inlined, so the comparison
+ * folds to `false`, but the fixtures above are still reachable through the exported accessors
+ * and a `next build` with the flag unset does ship them — verified by grepping .next/static
+ * for `fpt-sep490-su26`. They are invented demo content, not secrets, so what matters is that
+ * no user is ever served them as real, which the gate does guarantee. Getting them out of the
+ * bundle entirely means loading this module through `await import()`, which would make every
+ * accessor async and reshape the call sites in the room and history services.
+ */
+export function isMeetingSummarySeedEnabled() {
+  return process.env.NEXT_PUBLIC_MEETING_SUMMARY_SEED === "true";
+}
+
 export function isMeetingSummarySeedWorkspaceSlug(slug?: string | null) {
-  return slug === MEETING_SUMMARY_SEED_WORKSPACE_SLUG;
+  return isMeetingSummarySeedEnabled() && slug === MEETING_SUMMARY_SEED_WORKSPACE_SLUG;
 }
 
 export function isMeetingSummarySeedWorkspaceId(workspaceId?: string | null) {
-  return workspaceId === MEETING_SUMMARY_SEED_WORKSPACE_ID;
+  return isMeetingSummarySeedEnabled() && workspaceId === MEETING_SUMMARY_SEED_WORKSPACE_ID;
 }
 
 export function isMeetingSummarySeedRoomId(roomId?: string | null) {
-  return roomId === MEETING_SUMMARY_SEED_ROOM_ID;
+  return isMeetingSummarySeedEnabled() && roomId === MEETING_SUMMARY_SEED_ROOM_ID;
 }
 
 export function isMeetingSummarySeedTranscriptId(transcriptId?: string | null) {
-  return transcriptId === MEETING_SUMMARY_SEED_TRANSCRIPT_ID;
+  return isMeetingSummarySeedEnabled() && transcriptId === MEETING_SUMMARY_SEED_TRANSCRIPT_ID;
 }
 
 export function withMeetingSummarySeedRooms(rooms: TranslationRoomDto[]) {
+  if (!isMeetingSummarySeedEnabled()) return rooms;
   if (rooms.some((room) => room.id === MEETING_SUMMARY_SEED_ROOM_ID)) {
     return rooms;
   }
@@ -467,6 +493,9 @@ export function getMeetingSummarySeedArtifacts(roomId?: string | null) {
 }
 
 export function getMeetingSummarySeedArtifactById(artifactId?: string | null) {
+  // The only accessor that does not go through an id predicate — it matches against the
+  // fixture list directly, so it needs the enabled check of its own.
+  if (!isMeetingSummarySeedEnabled()) return null;
   return meetingSummarySeedArtifacts.find((artifact) => artifact.id === artifactId) ?? null;
 }
 
@@ -494,6 +523,9 @@ export function getMeetingSummarySeedHistoryResponse(options?: {
 }): RoomHistoryResponse {
   const page = options?.page && options.page > 0 ? Math.floor(options.page) : 1;
   const pageSize = options?.pageSize ?? 100;
+  if (!isMeetingSummarySeedEnabled()) {
+    return { rooms: [], total: 0, page, pageSize };
+  }
   const normalizedSearch = options?.search?.trim().toLowerCase();
   const matchesSearch = normalizedSearch
     ? [

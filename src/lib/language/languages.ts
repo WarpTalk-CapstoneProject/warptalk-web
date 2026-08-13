@@ -24,8 +24,20 @@
  * name wherever it turns up in stored data — without being offered anywhere.
  */
 export type LanguageScope =
-  /** Selectable as one of a meeting's languages, and on the pre-join screen. */
+  /** Selectable as one of a meeting's languages when a host creates or configures it. */
   | "meeting"
+  /**
+   * Selectable by a participant for themselves on the pre-join screen.
+   *
+   * Deliberately WIDER than `meeting`, and split out from it for that reason. `meeting` is a
+   * forward-looking product decision about what a host may declare on a NEW meeting; this is
+   * about rooms that already exist. Korean, French and Spanish were meeting languages until
+   * recently, so rooms declaring them are out there, and a participant who cannot pick Korean
+   * cannot join a Korean room in the language it was created for — the exact defect the
+   * pre-join picker was fixed for once already. Narrowing `meeting` must never silently
+   * strand a room that is already booked.
+   */
+  | "participantLanguage"
   /** Selectable when recording a voice profile. */
   | "voiceProfile"
   /** Has a provider voice library worth browsing. */
@@ -53,42 +65,42 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     locale: "vi-VN",
     name: "Vietnamese",
     region: "VN",
-    scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
+    scopes: ["meeting", "participantLanguage", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "en",
     locale: "en-US",
     name: "English",
     region: "US",
-    scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
+    scopes: ["meeting", "participantLanguage", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "ja",
     locale: "ja-JP",
     name: "Japanese",
     region: "JP",
-    scopes: ["meeting", "voiceProfile", "glossary", "chatTarget"],
+    scopes: ["meeting", "participantLanguage", "voiceProfile", "glossary", "chatTarget"],
   },
   {
     code: "ko",
     locale: "ko-KR",
     name: "Korean",
     region: "KR",
-    scopes: ["chatTarget"],
+    scopes: ["participantLanguage", "chatTarget"],
   },
   {
     code: "fr",
     locale: "fr-FR",
     name: "French",
     region: "FR",
-    scopes: ["chatTarget"],
+    scopes: ["participantLanguage", "chatTarget"],
   },
   {
     code: "es",
     locale: "es-ES",
     name: "Spanish",
     region: "ES",
-    scopes: ["chatTarget"],
+    scopes: ["participantLanguage", "chatTarget"],
   },
   {
     // Seeded and translatable, but deliberately not a meeting language — no scope puts it in
@@ -175,11 +187,39 @@ export function isLanguageAllowedByPolicy(
   return policy.includes(normalizeLanguageCode(value));
 }
 
-/** The meeting-scope languages a workspace policy permits. Empty policy ⇒ the whole scope. */
+/**
+ * The meeting languages a workspace may use. Empty policy ⇒ the default meeting scope.
+ *
+ * The `meeting` scope is what the product offers by DEFAULT — currently vi/en/ja. It is not a
+ * veto over a workspace that has explicitly permitted something else. Korean, French and
+ * Spanish were meeting-scope until recently, so a workspace configured back then can hold
+ * `allowedTargetLanguages: ["ko"]`; intersecting that with the narrowed scope yields nothing,
+ * and an empty picker means that workspace cannot create ANY meeting — see the note on
+ * `reconcileMeetingLanguages` below, which predicted exactly this.
+ *
+ * So a policy entry is honoured when it names a language that is valid in a meeting at all —
+ * that is, one in `participantLanguage`, which holds today's meeting languages plus the ones
+ * that used to be. Chinese is the case this must NOT widen to: it is seeded and translatable
+ * but has never been a room language, so a policy naming it still yields nothing to offer.
+ */
 export function meetingLanguagesForPolicy(allowedTargetLanguages?: string[] | null) {
-  return languagesInScope("meeting").filter((language) =>
-    isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  const policy = normalizeLanguagePolicy(allowedTargetLanguages);
+  if (policy.length === 0) return languagesInScope("meeting");
+
+  const scoped = languagesInScope("meeting").filter((language) =>
+    policy.includes(language.code),
   );
+  const scopedCodes = new Set(scoped.map((language) => language.code));
+
+  // Policy order, so a workspace that lists Korean first sees Korean first.
+  const grandfathered = policy
+    .filter((code) => !scopedCodes.has(code))
+    .map((code) => getLanguageByCode(code))
+    .filter((language): language is SupportedLanguage =>
+      Boolean(language?.scopes.includes("participantLanguage")),
+    );
+
+  return [...scoped, ...grandfathered];
 }
 
 /**

@@ -34,9 +34,11 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toast } from "sonner";
 
-// Meeting join languages follow the same project-scoped registry as room creation, so the
-// pre-join picker stays aligned with whatever languages meetings are allowed to declare.
-const languages = languagesInScope("meeting").map((language) => ({
+// `participantLanguage`, not `meeting`. A participant picks a language for THEMSELVES here,
+// and the rooms they are joining already exist — including ones created while Korean, French
+// and Spanish were still meeting languages. Building this picker from the (narrower) `meeting`
+// scope is what once left a Korean room unjoinable in the language it was created for.
+const languages = languagesInScope("participantLanguage").map((language) => ({
   value: language.locale,
   label: language.name,
 }));
