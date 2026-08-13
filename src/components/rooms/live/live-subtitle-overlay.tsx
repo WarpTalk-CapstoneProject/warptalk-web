@@ -10,11 +10,22 @@ import type { TranscriptSegmentDto } from "@/types/realtime";
 const HIDE_AFTER_MS = 6000;
 
 /**
- * Live caption display rendered in the meeting's reserved subtitle lane.
+ * Live captions: what was SAID, in the language it was said in.
  *
- * Shows ONLY real transcript/translation segments coming from the AI pipeline
- * via SignalR (TranscriptSegmentReceived / TranslationTextReceived) — there is
- * no mock/preview fallback here. The caption auto-hides after a short idle gap.
+ * CC used to render the TRANSLATION as the caption, with the original demoted to a grey
+ * subline underneath it. That made one button do two jobs — turning captions on was
+ * indistinguishable from turning translation on, and a room whose translation was not running
+ * showed captions that looked broken rather than captions of the original speech. Closed
+ * captions are an accessibility surface for the audio in the room; the translation has its own
+ * surfaces (the transcript panel, and the synthesised voice).
+ *
+ * So this shows `originalText` and nothing else. A segment that somehow carries only a
+ * translation is skipped rather than substituted, because silently showing translated words
+ * under a control labelled CC is the exact confusion this removes.
+ *
+ * Shows ONLY real segments coming from the AI pipeline via SignalR
+ * (TranscriptSegmentReceived / TranslationTextReceived) — there is no mock/preview fallback
+ * here. The caption auto-hides after a short idle gap.
  */
 export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
   const segments = useTranslationRoomStore((state) => state.transcriptSegments);
@@ -25,9 +36,8 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
   // fresh content arrives and hides once the idle timer fires.
   const [hiddenKey, setHiddenKey] = useState("");
 
-  const translated = latest?.translatedText?.trim();
   const original = latest?.originalText?.trim();
-  const contentKey = translated || original ? `${latest?.segmentId}:${translated ?? ""}:${original ?? ""}` : "";
+  const contentKey = original ? `${latest?.segmentId}:${original}` : "";
 
   useEffect(() => {
     if (!enabled || !contentKey) return;
@@ -38,12 +48,11 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
   if (!enabled) return null;
 
   const visible = Boolean(contentKey) && contentKey !== hiddenKey;
-  const showTranslated = Boolean(translated);
 
   return (
     <div className="pointer-events-none flex h-full w-full items-center justify-center px-4">
       <AnimatePresence>
-        {visible && latest && (original || translated) ? (
+        {visible && latest && original ? (
           <motion.div
             key={latest.segmentId}
             initial={{ opacity: 0, y: 8 }}
@@ -57,22 +66,9 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
                 {latest.speakerName}
               </span>
             ) : null}
-            {translated ? (
-              <p className="text-[18px] font-semibold leading-snug text-white">
-                <AnimatedWords text={translated} maxCharacters={96} />
-              </p>
-            ) : null}
-            {original ? (
-              <p
-                className={
-                  showTranslated
-                    ? "mt-0.5 text-[13px] leading-snug text-white/60"
-                    : "text-[18px] font-semibold leading-snug text-white"
-                }
-              >
-                <AnimatedWords text={original} maxCharacters={96} />
-              </p>
-            ) : null}
+            <p className="text-[18px] font-semibold leading-snug text-white">
+              <AnimatedWords text={original} maxCharacters={96} />
+            </p>
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -80,14 +76,15 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
   );
 }
 
-/** Most recently updated segment that actually has caption content. */
+/**
+ * Most recent segment that actually has SPOKEN words on it.
+ *
+ * Deliberately not "…or a translation": a translation-only segment has nothing to caption, and
+ * falling back to the last segment regardless would put an empty caption box on screen.
+ */
 function pickLatest(segments: TranscriptSegmentDto[]): TranscriptSegmentDto | null {
-  if (!segments.length) return null;
   for (let i = segments.length - 1; i >= 0; i--) {
-    const segment = segments[i];
-    if (segment.originalText?.trim() || segment.translatedText?.trim()) {
-      return segment;
-    }
+    if (segments[i].originalText?.trim()) return segments[i];
   }
-  return segments[segments.length - 1];
+  return null;
 }

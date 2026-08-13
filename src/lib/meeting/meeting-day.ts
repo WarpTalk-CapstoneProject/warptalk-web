@@ -88,3 +88,62 @@ export function meetingsOn(
         - new Date(b.scheduledAt as string).getTime(),
     );
 }
+
+/**
+ * Local-time month bounds, deliberately. The server filters on an instant, but the user is asking
+ * about a month on their own wall clock — deriving these in UTC would push a meeting late on the
+ * 31st into the next month for anyone east of Greenwich.
+ */
+export function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+}
+
+export function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+
+/** `2026-08`. The cache key for one month's worth of meetings. */
+export function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Every month a visible range touches, oldest first.
+ *
+ * A week is not contained by a month. The week of 31 August spans two of them, and a week view
+ * that fetched only its anchor's month would show the August half and silently hide the September
+ * half — an empty Thursday that is not empty. That is the same class of bug as the day filter
+ * that dropped its tab's status rule, so the week view waited for this rather than shipping on a
+ * month-scoped fetch.
+ *
+ * Lives here beside `weekOf` because the two are always used together: one says which days are on
+ * screen, this says which requests that costs.
+ */
+export function monthsSpanning(from: Date, to: Date): Date[] {
+  const months: Date[] = [];
+  const cursor = startOfMonth(from);
+  const last = startOfMonth(to);
+
+  while (cursor <= last) {
+    months.push(new Date(cursor));
+    // Safe on the 1st of the month — `setMonth` only overflows from a day the target month is too
+    // short to hold, which is how "31 January + 1 month" becomes 3 March.
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  // A range whose end precedes its start still asks for one month rather than nothing: an empty
+  // list would render as "you have no meetings", which is a claim, not an absence of one.
+  return months.length ? months : [startOfMonth(from)];
+}
+
+/**
+ * Whether a meeting is over — ended, cancelled, or timed out.
+ *
+ * Lives here beside `isScheduledOn` because the two are always asked together. Picking a day on
+ * the meetings list used to answer with the date alone, which dropped the tab's status rule and
+ * listed cancelled occurrences under "Active Meetings" — a stopped daily series showed its future
+ * dates as Cancelled, which reads as the UI reporting the wrong status for a healthy meeting.
+ */
+export function isMeetingOver(status: string): boolean {
+  return status === "ended" || status === "cancelled" || status === "timeout";
+}

@@ -40,9 +40,13 @@ import {
   useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
+  useJoinTranslationRoomByCode,
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import { getLanguageName } from "@/lib/language/languages";
+import { holdsSeat } from "@/lib/meeting/room-occupancy";
+import { playNotificationCue } from "@/lib/notifications/notification-sounds";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -212,6 +216,8 @@ export function PersistentMeetingSession({
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } =
     useJoinMeeting();
+  const { mutateAsync: registerParticipantAsync } = useJoinTranslationRoomByCode();
+  const participantRegisteredRef = useRef(false);
 
   const meetingJoinedRef = useRef(false);
   // Set by handleExit("end") so this client ignores its own TranslationRoomEnded broadcast and
@@ -729,6 +735,36 @@ export function PersistentMeetingSession({
   // Chinese/Japanese/English translation bubbles too ("loạn ngôn ngữ"). A ref keeps the
   // filter reading the latest value without forcing the SignalR effect to reconnect on
   // every language change.
+  /**
+   * Tell a participant when the host starts translation, and what they have to do about it.
+   *
+   * A member has no Start button, so from their seat translation beginning is invisible: the
+   * transcript simply stays empty until they happen to open Settings and pick the two languages.
+   * That is the whole of "tưởng không dịch được" — nothing was broken, nobody had been asked.
+   *
+   * Fires on the TRANSITION into started, not on the state, so re-renders and the five-second
+   * session poll cannot repeat it. Hosts are excluded: they pressed the button.
+   */
+  const announcedTranslationRef = useRef(false);
+  useEffect(() => {
+    if (!translationStarted) {
+      announcedTranslationRef.current = false;
+      return;
+    }
+    if (isRoomHost || announcedTranslationRef.current) return;
+    announcedTranslationRef.current = true;
+
+    playNotificationCue("translation-started");
+
+    const needsLanguages = !sourceLanguage || !targetLanguage;
+    toast.info("The host started translation.", {
+      description: needsLanguages
+        ? "Choose the language you speak and the one you want to hear — the control is next to Stop Translation."
+        : `You are speaking ${getLanguageName(sourceLanguage)} and hearing ${getLanguageName(targetLanguage)}.`,
+      duration: needsLanguages ? 12000 : 6000,
+    });
+  }, [translationStarted, isRoomHost, sourceLanguage, targetLanguage]);
+
   const targetLanguageRef = useRef(targetLanguage);
   useEffect(() => {
     targetLanguageRef.current = targetLanguage;
@@ -1169,6 +1205,89 @@ export function PersistentMeetingSession({
         });
     });
   }, [canConnectMeeting, displayName, joinMeetingAsync, room?.id]);
+
+  /**
+   * Make sure this person exists as a PARTICIPANT of the translation room, not only as a
+   * LiveKit peer.
+   *
+   * There are two joins and they are not the same thing:
+   *
+   *   POST /meetings/rooms/{id}/join     LiveKit token — puts you in the video grid
+   *   POST /translation-rooms/join       creates your participant row
+   *
+   * The effect above calls only the first. The second used to happen exclusively on the
+   * join-by-code path, i.e. the lobby — so anyone who arrived by clicking a notification or a
+   * link went straight to /live with media and no participant row. The visible symptoms were a
+   * People panel reading 1 while two faces were on screen, and Leave answering
+   * "Participant not found." The invisible one is worse: no participant row means no audio
+   * route, so that person was never transcribed OR translated, in a product whose entire
+   * purpose is translating them.
+   *
+   * Safe to call unconditionally. JoinTranslationRoomAsync finds an existing participant and
+   * updates it rather than inserting a second, and its capacity check explicitly does not
+   * count a repeated join from someone who already holds a seat.
+   *
+   * A failure here is logged and not surfaced: the meeting itself is working, and a toast about
+   * a registration the user never asked for would be noise they cannot act on. The roster
+   * refetch below is what makes the fix visible.
+   */
+  useEffect(() => {
+    if (!room?.translationRoomCode || !canConnectMeeting) return;
+    if (participantRegisteredRef.current) return;
+    participantRegisteredRef.current = true;
+
+    void registerParticipantAsync({
+      translationRoomCode: room.translationRoomCode,
+      displayName,
+      speakLanguage: sourceLanguage,
+      listenLanguage: targetLanguage,
+      // The device state this session actually has, so the roster does not claim a camera is on
+      // for somebody who joined with it off.
+      cameraEnabled,
+      microphoneEnabled,
+      speakerEnabled: true,
+    })
+      .then(() => refetchParticipants())
+      .catch((error: unknown) => {
+        // Reset so a later render can try again — a transient failure here costs this person
+        // their translation for the whole meeting, which is too expensive to give up on once.
+        participantRegisteredRef.current = false;
+        console.warn("translation_room_participant_registration_failed", error);
+      });
+  }, [
+    room?.translationRoomCode,
+    canConnectMeeting,
+    displayName,
+    sourceLanguage,
+    targetLanguage,
+    cameraEnabled,
+    microphoneEnabled,
+    registerParticipantAsync,
+    refetchParticipants,
+  ]);
+
+  /**
+   * A soft cue when somebody new arrives.
+   *
+   * Keyed on a RISE in the seat count rather than on the roster changing, because the roster
+   * object is replaced on every poll and by every mute, camera and language change — binding to
+   * it would beep continuously through an ordinary meeting.
+   *
+   * The first count after mount is recorded silently: everyone already in the room when you
+   * joined is not "somebody arriving", and announcing them would greet you with a burst of
+   * beeps for a meeting already in progress.
+   */
+  const seatCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const seated = apiParticipants.filter((participant) =>
+      holdsSeat(participant.status),
+    ).length;
+
+    const previous = seatCountRef.current;
+    seatCountRef.current = seated;
+    if (previous === null) return;
+    if (seated > previous) playNotificationCue("participant-joined");
+  }, [apiParticipants]);
 
   const userSettingsQuery = useUserSettings();
   const updateUserSettings = useUpdateUserSettings();
