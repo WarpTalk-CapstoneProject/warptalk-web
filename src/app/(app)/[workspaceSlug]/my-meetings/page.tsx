@@ -13,6 +13,7 @@ import {
   DownloadSimple,
   FileText,
   MagnifyingGlass,
+  Plus,
   SpinnerGap,
   Translate,
   Users,
@@ -42,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MyMeetingItem } from "@/types/myMeetings";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
@@ -70,6 +72,7 @@ export default function MyMeetingsPage() {
   const workspaceSlug = params?.workspaceSlug as string;
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const viewerUserId = useAuthStore((state) => state.user?.id ?? null);
+  const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
 
   const [monthAnchor, setMonthAnchor] = useState(() => new Date());
   const [query, setQuery] = useState("");
@@ -164,19 +167,30 @@ export default function MyMeetingsPage() {
           </p>
         </div>
 
-        <div className="relative w-full lg:w-[360px]">
-          <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search title, code, or description"
-            className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none"
-          />
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end lg:w-auto">
+          <div className="relative w-full sm:w-[340px] lg:w-[360px]">
+            <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search title, code, or description"
+              className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none"
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setCreateRoomModalOpen(true)}
+            className="h-9 shrink-0 gap-1.5 px-3 text-[12px]"
+          >
+            <Plus size={14} weight="bold" />
+            Create meeting
+          </Button>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[268px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-4 py-5 lg:flex">
+        <aside className="hidden w-[292px] shrink-0 flex-col gap-5 overflow-y-auto overflow-x-hidden border-r border-border bg-surface-1 px-4 py-5 lg:flex xl:w-[304px]">
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
               <button
@@ -200,13 +214,23 @@ export default function MyMeetingsPage() {
               </button>
             </div>
 
-            <div className="rounded-xl border border-border bg-surface-1 p-1">
+            <div className="overflow-hidden rounded-xl border border-border bg-canvas p-2">
               <Calendar
                 mode="single"
                 month={monthAnchor}
                 onMonthChange={setMonthAnchor}
                 onSelect={(date) => date && scrollToDay(date)}
-                className="w-full"
+                className="w-full bg-transparent p-0 [--cell-size:1.75rem]"
+                classNames={{
+                  root: "w-full",
+                  months: "w-full",
+                  month: "w-full gap-2",
+                  month_grid: "w-full table-fixed",
+                  week: "mt-1 flex w-full",
+                  weekdays: "flex w-full",
+                  weekday: "text-[11px]",
+                  day: "min-w-0",
+                }}
                 modifiers={{ hasMeeting: daysWithMeetings }}
                 modifiersClassNames={{
                   hasMeeting:
@@ -263,7 +287,7 @@ export default function MyMeetingsPage() {
           ) : groups.length === 0 ? (
             <EmptyState hasQuery={Boolean(query)} />
           ) : (
-            <div className="mx-auto w-full max-w-[900px] px-4 py-5">
+            <div className="mx-auto w-full max-w-[940px] px-4 py-5">
               {groups.map((group, index) => (
                 <div
                   key={group.key}
@@ -276,7 +300,7 @@ export default function MyMeetingsPage() {
 
                   <div
                     ref={group.key === todayKey ? todayRef : undefined}
-                    className="sticky top-0 z-10 -mx-4 bg-surface-1/95 px-4 py-2 backdrop-blur"
+                    className="sticky top-0 z-10 -mx-4 bg-surface-1/95 px-2 py-2 backdrop-blur sm:-ml-8 sm:pr-4"
                   >
                     <div className="flex items-baseline gap-2">
                       <span

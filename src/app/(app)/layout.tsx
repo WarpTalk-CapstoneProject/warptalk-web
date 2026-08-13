@@ -420,6 +420,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     }
                   } else if (feature === "history") {
                     parts.push({ label: "History" });
+                  } else if (feature === "my-meetings") {
+                    parts.push({ label: "My Meetings" });
                   } else if (feature === "dashboard") {
                     parts.push({ label: "Dashboard" });
                   } else if (feature === "home") {

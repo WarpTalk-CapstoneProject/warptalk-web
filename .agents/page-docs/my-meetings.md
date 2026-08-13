@@ -10,8 +10,12 @@ This document tracks the personal meeting timeline at `/[workspaceSlug]/my-meeti
 - The route shows only meetings the current user hosts, joined, or was invited to inside the active workspace.
 - The page loads one month window at a time through `useMyMeetings`, keyed by workspace plus month instead of by page number.
 - The left rail contains a mini calendar, month navigation, counters, and filter chips.
+- The page UI is English-only, including the sidebar/topbar label, page header, filters, row badges, dialog, loading, empty, and error states.
+- The page header includes a `Create meeting` action that opens the shared create-room dialog.
 - Clicking a day in the mini calendar scrolls the agenda to that day instead of filtering the list down to a single date.
+- The mini calendar uses local sizing so the left rail does not clip weekday/day columns at common desktop zoom levels.
 - The central agenda groups meetings by day, anchors initial scroll around `Today`, and renders gap markers when long empty ranges exist between clusters.
+- Day headings are visually offset from meeting rows so the date marker reads as a timeline anchor rather than part of the card.
 - Upcoming and live rows keep a clear action state by showing an audience badge (`Host`, `Going`, `Invited`) plus an `Open`/`Join` action.
 - Past rows show artifact chips with both label and current readiness/consent state.
 - The detail rail mirrors the selected meeting and lets users download ready artifacts directly from the panel.
@@ -48,5 +52,7 @@ This document tracks the personal meeting timeline at `/[workspaceSlug]/my-meeti
 - Change the mini-calendar month and confirm the query window updates without losing the app shell.
 - Click a calendar day with meetings and confirm the agenda scrolls to that day.
 - Confirm `Today` is highlighted and initial scroll lands near it.
+- Confirm the topbar and sidebar show `My Meetings`, not the raw `my-meetings` segment.
+- Confirm the `Create meeting` button opens the shared create meeting modal.
 - Verify upcoming/live rows show an audience badge plus `Open` or `Join`.
 - Verify past rows and the detail panel show artifact status text and only allow downloads for ready outputs.
