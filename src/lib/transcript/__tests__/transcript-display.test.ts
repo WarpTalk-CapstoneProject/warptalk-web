@@ -270,3 +270,36 @@ test("a real display name still wins", () => {
     "Huỳnh Ngọc Kỳ",
   );
 });
+
+// The marker was filtered in the SAVED transcript and not in the LIVE one, so it was invisible
+// on the room detail page and perfectly visible in the panel during the meeting — attributed to
+// "System", timestamped 0:00, with a 100% confidence badge beside it. One filter, two paths,
+// only one of them wired.
+
+test("the live grouping drops control markers, like the saved one does", () => {
+  const grouped = groupTranscriptSegments([
+    segment({ segmentId: "s1", originalText: "Hello everyone" }),
+    segment({ segmentId: "s2", speakerId: "system", speakerName: "System", originalText: "__MEETING_END__" }),
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].originalText, "Hello everyone");
+});
+
+test("a marker is dropped BEFORE it can be merged into a real line", () => {
+  // The order is what matters. Absorbed into a neighbouring utterance, the marker stops being a
+  // segment of its own and becomes part of somebody's sentence, where no later filter finds it.
+  const grouped = groupTranscriptSegments([
+    segment({ segmentId: "s1", originalText: "Thanks all" }),
+    segment({ segmentId: "s2", originalText: "__MEETING_END__" }),
+  ]);
+
+  assert.ok(
+    !grouped.some((utterance) => utterance.originalText.includes("MEETING_END")),
+    JSON.stringify(grouped.map((u) => u.originalText)),
+  );
+});
+
+test("a live transcript that is nothing but markers renders as empty, not as noise", () => {
+  assert.deepEqual(groupTranscriptSegments([segment({ originalText: "__MEETING_END__" })]), []);
+});

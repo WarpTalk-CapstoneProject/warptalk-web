@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/errors";
+import { useAuthStore } from "@/stores/auth-store";
 import {
   useKickMeetingParticipant,
   useMuteMeetingParticipant,
@@ -69,6 +70,7 @@ export function PeoplePanel({
   spotlightedUserId?: string | null;
   onToggleSpotlight?: (userId: string) => void;
 }) {
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const lkParticipants = useParticipants();
   const lkParticipantIds = new Set(lkParticipants.map((p) => p.identity));
   const { resolvedTheme } = useTheme();
@@ -126,6 +128,7 @@ export function PeoplePanel({
               key={participant.id}
               participant={participant}
               isHost={isHost}
+              isSelf={participant.userId === currentUserId}
               roomId={roomId}
               isRoomHost={participant.userId === room.hostId}
               isInRoom={lkParticipantIds.has(participant.userId)}
@@ -143,6 +146,7 @@ export function PeoplePanel({
 function ParticipantRow({
   participant,
   isHost,
+  isSelf,
   roomId,
   isRoomHost,
   isInRoom,
@@ -152,6 +156,8 @@ function ParticipantRow({
 }: {
   participant: TranslationRoomParticipantDto;
   isHost: boolean;
+  /** This row is the viewer. Host powers never apply to yourself — see canManage below. */
+  isSelf: boolean;
   roomId: string;
   isRoomHost: boolean;
   isInRoom: boolean;
@@ -166,7 +172,18 @@ function ParticipantRow({
   const muteParticipant = useMuteMeetingParticipant(roomId);
   const transferHost = useTransferMeetingHost(roomId);
 
-  const canManage = isHost && !isRoomHost;
+  // WT-367 — `!isRoomHost` was standing in for "this row is not me", and the two only coincide
+  // while the viewer is the host AND nobody has transferred the role. After a transfer the old
+  // host's own row is no longer the room host, so the proxy stopped protecting the one person it
+  // was meant to protect: they saw mute, kick and transfer-host on themselves.
+  //
+  // The server always refused these — the toast "Use the microphone control to mute yourself"
+  // comes from the backend, not from here — so the damage was never a bad action going through.
+  // It was offering a control that cannot work and only says so after it is clicked.
+  //
+  // Both guards are kept. `!isSelf` is the one that was missing; `!isRoomHost` still stops a host
+  // from being kicked out of their own meeting if the two identities ever diverge.
+  const canManage = isHost && !isSelf && !isRoomHost;
   const audioEnabled = participant.isTranslationAudioEnabled ?? true;
 
   const [showKickDialog, setShowKickDialog] = useState(false);
