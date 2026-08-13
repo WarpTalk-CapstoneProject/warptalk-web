@@ -21,6 +21,12 @@ export interface VerifiedDomainDto {
   id: string;
   domain: string;
   status: string;
+  /**
+   * What backs this claim: `owner_email` (matches the claiming account's own address, so the
+   * account is the evidence) or `self_asserted` (any other domain, recorded with the owner's
+   * consent since nothing else can attest to it). `dns_txt` is reserved for real verification.
+   */
+  verificationMethod: string;
   verificationToken?: string | null;
   createdAt: string;
   verifiedAt?: string | null;

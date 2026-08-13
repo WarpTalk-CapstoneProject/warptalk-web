@@ -17,6 +17,8 @@ import {
 } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useAuthStore } from "@/stores/auth-store";
+import { extractEmailDomain, isPublicEmailDomain } from "@/lib/workspace/email-domain";
 import { languagesInScope } from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
 import type { WorkspaceSettingsDto } from "@/types/workspace";
@@ -36,6 +38,22 @@ import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
 import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
+
+/**
+ * Which consent text the Owner agreed to when claiming a domain that is not their own account's.
+ * Recorded on the domain row, so a later change to the wording stays distinguishable from what
+ * was actually agreed to. Bump this string whenever the text below changes.
+ */
+const SELF_ASSERTED_DOMAIN_CONSENT_VERSION = "2026-08-13";
+
+const selfAssertedConsentText = (domain: string) =>
+  `WarpTalk does not verify domain ownership. Adding ${domain} records your organization's assertion that it owns this domain.\n\n` +
+  `Confirm that your organization owns ${domain}, and that you understand anyone invited with an @${domain} address can be assigned Internal membership.`;
+
+const lastDomainRevokeText = (domain: string) =>
+  `${domain} is the last verified domain for this workspace.\n\n` +
+  `Revoking it stops membership being decided by email domain: from then on you assign Internal and External by hand when inviting. ` +
+  `Members who are already Internal keep their access.`;
 
 const settingsSchema = z.object({
   defaultLanguage: z.string().min(1, "Please select default language"),
@@ -169,6 +187,7 @@ export default function WorkspaceSettingsPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const role = useWorkspaceStore((s) => s.role);
   const { setActiveWorkspace, activeWorkspaceSlug, membershipType } = useWorkspaceStore();
+  const currentUserEmail = useAuthStore((state) => state.user?.email);
 
   // Queries & Mutations
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
@@ -341,6 +360,7 @@ export default function WorkspaceSettingsPage() {
 
   const verifiedDomainList = verifiedDomainsQuery.data || [];
   const activeDomains = verifiedDomainList.map((vd: { domain: string }) => vd.domain);
+  const ownEmailDomain = extractEmailDomain(currentUserEmail);
 
   const handleAddDomain = async () => {
     const trimmed = newDomain.trim().toLowerCase();
@@ -349,8 +369,10 @@ export default function WorkspaceSettingsPage() {
       toast.error("Invalid domain format.");
       return;
     }
-    const publicDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"];
-    if (publicDomains.includes(trimmed)) {
+    // The shared list, not a local copy. This check used to name four providers inline while
+    // PUBLIC_EMAIL_DOMAINS listed thirteen, so typing proton.me passed here and came back a 403
+    // from the server that does use the full list.
+    if (isPublicEmailDomain(trimmed)) {
       toast.error("Cannot verify public domain names.");
       return;
     }
@@ -360,7 +382,14 @@ export default function WorkspaceSettingsPage() {
     }
     setDomainError(false);
     try {
-      await addDomainMutation.mutateAsync(trimmed);
+      // A domain that is not the Owner's own cannot be verified by anything, so the server
+      // requires the Owner to say they own it. Same text version recorded on the row.
+      const consentVersion =
+        ownEmailDomain && trimmed === ownEmailDomain ? undefined : SELF_ASSERTED_DOMAIN_CONSENT_VERSION;
+
+      if (consentVersion && !window.confirm(selfAssertedConsentText(trimmed))) return;
+
+      await addDomainMutation.mutateAsync({ domain: trimmed, consentVersion });
       toast.success(`Domain "${trimmed}" verified & added successfully.`);
       setNewDomain("");
     } catch (err: unknown) {
@@ -374,6 +403,10 @@ export default function WorkspaceSettingsPage() {
   const handleRemoveDomain = async (domainString: string) => {
     const target = verifiedDomainList.find((vd: { id: string; domain: string }) => vd.domain.toLowerCase() === domainString.toLowerCase());
     if (!target) return;
+
+    // Revoking the last domain is how a workspace stops deciding membership by domain, so it is
+    // a policy change and not just a list edit. Say so before it happens rather than after.
+    if (activeDomains.length === 1 && !window.confirm(lastDomainRevokeText(domainString))) return;
 
     setDomainError(false);
     try {
@@ -743,68 +776,123 @@ export default function WorkspaceSettingsPage() {
               />
             </div>
 
-            {/* Require Verified Domain */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+            {/*
+              How membership is decided — a status, not a switch.
+
+              This was a toggle. It could not be one: the value is derived from whether the
+              workspace holds a verified domain, so a switch offered a second way to set one fact
+              and let a workspace claim to require a domain while holding none. Adding the first
+              domain below turns this on; revoking the last one turns it off.
+            */}
+            <div className="py-3.5 px-4 flex items-start justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Require Verified Domain for Internal Members</span>
-                <span className="text-[11px] text-ink-muted">Enforce internal members to use verified domains.</span>
+                <span className="text-xs font-semibold text-ink">Internal membership</span>
+                <span className="text-[11px] text-ink-muted">
+                  {activeDomains.length > 0
+                    ? `Decided by verified domain — ${activeDomains.length} active. Only addresses on these domains can be invited as internal members.`
+                    : "Assigned by hand. You choose internal or external for each person you invite. Verify a domain below to decide it by email domain instead."}
+                </span>
               </div>
-              <Switch
-                checked={watchAll.requireVerifiedDomainForInternal}
-                onCheckedChange={(val) => commitTopLevel("requireVerifiedDomainForInternal", val)}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              />
+              <span
+                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  activeDomains.length > 0
+                    ? "border-primary/20 bg-primary/10 text-primary"
+                    : "border-hairline bg-surface-2 text-ink-muted"
+                }`}
+              >
+                {activeDomains.length > 0 ? "Domain-verified" : "Manual"}
+              </span>
             </div>
 
             {/* Verified Email Domains */}
             <div className="py-4 px-4 flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Verified Domains</span>
-                <span className="text-[11px] text-ink-muted">Manage specific corporate email domains allowed in this workspace.</span>
+                <span className="text-[11px] text-ink-muted">
+                  WarpTalk does not check DNS. Each domain here is your organization&apos;s assertion that it
+                  owns that domain, and anyone invited on it can be made an internal member.
+                </span>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  placeholder="Enter a domain (e.g., company.com)"
-                  value={newDomain}
-                  onChange={(e) => setNewDomain(e.target.value)}
-                  disabled={isSubmitting || !isOwnerOrAdmin || addDomainMutation.isPending}
-                  className="h-8 text-xs bg-surface-2 border-hairline flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddDomain();
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleAddDomain}
-                  disabled={isSubmitting || !isOwnerOrAdmin || addDomainMutation.isPending || !newDomain.trim()}
-                  className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink disabled:opacity-50"
-                >
-                  {addDomainMutation.isPending ? <Spinner className="h-3 w-3 animate-spin" /> : <Plus size={12} />} Add Domain
-                </button>
-              </div>
+              {/*
+                Owner only. The server has always refused an Admin here
+                (OnlyOwnerCanManageDomains) while this form gated on isOwnerOrAdmin, so an Admin
+                was shown a live input, typed a domain, and got a 403 for their trouble. An Admin
+                still sees the list — knowing which domains are verified is not the same as being
+                able to change them.
+              */}
+              {isOwner && (
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Enter a domain (e.g., company.com)"
+                    value={newDomain}
+                    onChange={(e) => setNewDomain(e.target.value)}
+                    disabled={isSubmitting || addDomainMutation.isPending}
+                    className="h-8 text-xs bg-surface-2 border-hairline flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddDomain();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddDomain}
+                    disabled={isSubmitting || addDomainMutation.isPending || !newDomain.trim()}
+                    className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink disabled:opacity-50"
+                  >
+                    {addDomainMutation.isPending ? <Spinner className="h-3 w-3 animate-spin" /> : <Plus size={12} />} Add Domain
+                  </button>
+                </div>
+              )}
+              {!isOwner && (
+                <span className="text-[10px] text-ink-subtle">
+                  Only the workspace owner can add or revoke verified domains.
+                </span>
+              )}
               <div className="flex flex-wrap gap-2 mt-1">
                 {verifiedDomainsQuery.isPending ? (
                   <span className="text-[10px] text-ink-muted flex items-center gap-1"><Spinner className="h-3 w-3 animate-spin" /> Loading domains...</span>
-                ) : activeDomains.length === 0 ? (
-                  <span className="text-[10px] text-ink-muted italic">No verified domains. Add one above.</span>
+                ) : verifiedDomainList.length === 0 ? (
+                  <span className="text-[10px] text-ink-muted italic">
+                    {isOwner ? "No verified domains. Add one above." : "No verified domains."}
+                  </span>
                 ) : (
-                  activeDomains.map((d: string) => (
-                    <div key={d} className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs">
+                  verifiedDomainList.map((vd) => (
+                    <div key={vd.id} className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs">
                       <Globe size={11} className="text-primary" />
-                      <span className="font-mono text-[10px] text-ink">{d}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveDomain(d)}
-                        disabled={isSubmitting || !isOwnerOrAdmin || revokeDomainMutation.isPending}
-                        className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer disabled:opacity-50"
-                        title={`Revoke domain ${d}`}
+                      <span className="font-mono text-[10px] text-ink">{vd.domain}</span>
+                      {/*
+                        What backs this claim. A domain matching the owner's own address is
+                        evidenced by that account; anything else rests only on their assertion,
+                        and saying which is which is the point of recording the tier at all.
+                      */}
+                      <span
+                        className={`rounded px-1 py-px text-[9px] font-semibold ${
+                          vd.verificationMethod === "self_asserted"
+                            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                            : "bg-surface-3 text-ink-muted"
+                        }`}
+                        title={
+                          vd.verificationMethod === "self_asserted"
+                            ? "Asserted by the workspace owner. Not verified against DNS."
+                            : "Matches the workspace owner's own email domain."
+                        }
                       >
-                        <Trash size={11} />
-                      </button>
+                        {vd.verificationMethod === "self_asserted" ? "Self-asserted" : "Owner email"}
+                      </span>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDomain(vd.domain)}
+                          disabled={isSubmitting || revokeDomainMutation.isPending}
+                          className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer disabled:opacity-50"
+                          title={`Revoke domain ${vd.domain}`}
+                        >
+                          <Trash size={11} />
+                        </button>
+                      )}
                     </div>
                   ))
                 )}

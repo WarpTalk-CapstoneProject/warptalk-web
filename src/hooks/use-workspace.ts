@@ -7,7 +7,7 @@ import type {
   UpdateKnowledgeChunkRequest,
   WorkspaceKnowledgeQuery,
 } from "@/types/workspace-knowledge";
-import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
+import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
 // Query Keys
@@ -15,6 +15,7 @@ export const WORKSPACE_KEYS = {
   list: (page: number, pageSize: number, search: string) => ["workspaces", "list", { page, pageSize, search }] as const,
   detail: (id: string) => ["workspaces", "detail", id] as const,
   settings: (id: string) => ["workspaces", "settings", id] as const,
+  verifiedDomains: (id: string) => ["workspaces", "verified-domains", id] as const,
   members: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "members", workspaceId, { page, pageSize, search }] as const,
   invitations: (workspaceId: string, page: number, pageSize: number, search: string) =>
@@ -113,34 +114,32 @@ export function usePatchWorkspaceSettings(workspaceId: string) {
   });
 }
 
+/**
+ * Verified domains come from `workspace_verified_domains`, through the endpoints that own it.
+ *
+ * All three of these used to work by PATCHing the `verifiedDomains` array inside the settings
+ * JSON — a display mirror the backend refreshes from that table and ignores on write. Reads
+ * showed whatever the mirror last happened to contain, and writes did nothing whatsoever.
+ *
+ * Both queries are invalidated together on every mutation: the domain list decides the
+ * workspace's membership policy, so a change here also changes what /settings reports.
+ */
 export function useVerifiedDomains(workspaceId: string) {
-  const settings = useWorkspaceSettings(workspaceId);
-  return {
-    ...settings,
-    data: (settings.data?.verifiedDomains || []).map((domain) => ({
-      id: domain,
-      domain,
-      status: "Verified",
-      createdAt: new Date().toISOString(),
-    })) as VerifiedDomainDto[],
-  };
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId),
+    queryFn: () => WorkspaceService.listVerifiedDomains(workspaceId),
+    enabled: !!workspaceId,
+  });
 }
 
 export function useAddVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
-  const settingsQuery = useWorkspaceSettings(workspaceId);
-  const patchSettings = usePatchWorkspaceSettings(workspaceId);
 
   return useMutation({
-    mutationFn: async (domain: string) => {
-      if (!settingsQuery.data) throw new Error("Settings not loaded");
-      const currentDomains = settingsQuery.data.verifiedDomains || [];
-      if (currentDomains.includes(domain)) return;
-      // Only the domain list travels. Spreading the whole cached document used to make this
-      // a blind full-document overwrite of everything else in the settings JSON.
-      await patchSettings.mutateAsync({ verifiedDomains: [...currentDomains, domain] });
-    },
+    mutationFn: ({ domain, consentVersion }: { domain: string; consentVersion?: string }) =>
+      WorkspaceService.addVerifiedDomain(workspaceId, domain, consentVersion),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId) });
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
@@ -148,20 +147,11 @@ export function useAddVerifiedDomain(workspaceId: string) {
 
 export function useRevokeVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
-  const settingsQuery = useWorkspaceSettings(workspaceId);
-  const patchSettings = usePatchWorkspaceSettings(workspaceId);
 
   return useMutation({
-    mutationFn: async (domainIdOrName: string) => {
-      if (!settingsQuery.data) throw new Error("Settings not loaded");
-      const currentDomains = settingsQuery.data.verifiedDomains || [];
-      await patchSettings.mutateAsync({
-        verifiedDomains: currentDomains.filter(
-          (d) => d.toLowerCase() !== domainIdOrName.toLowerCase()
-        ),
-      });
-    },
+    mutationFn: (domainId: string) => WorkspaceService.revokeVerifiedDomain(workspaceId, domainId),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId) });
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
