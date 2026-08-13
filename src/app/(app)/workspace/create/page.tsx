@@ -37,6 +37,19 @@ const createWorkspaceSchema = z.object({
 
 type CreateWorkspaceFormData = z.infer<typeof createWorkspaceSchema>;
 
+/**
+ * How this workspace decides who counts as an Internal member.
+ *
+ * Both are Enterprise Workspaces — there is no lesser kind. The difference is only how
+ * far the Owner's Internal/External choices are constrained:
+ *
+ * - `domain-verified`: choosing Internal requires the invitee's email to be on a verified
+ *   company domain.
+ * - `manual`: the Owner draws that line by hand. Internal and External still mean exactly
+ *   what they mean elsewhere; they just are not decided by the email domain.
+ */
+type MembershipPolicy = "domain-verified" | "manual";
+
 type ServerErrorKind = "account" | "domain" | "internal-home" | "form";
 
 interface ServerErrorState {
@@ -75,7 +88,20 @@ export default function CreateWorkspaceDemoPage() {
   const rawDomain = extractEmailDomain(user?.email);
   const emailDomain = getDomainFromEmail(user?.email);
   const isPublicDomain = isPublicEmailDomain(rawDomain);
-  const accountIssue = getAccountIssue(user?.email, rawDomain, isPublicDomain);
+
+  // Which membership policy the new workspace gets. Both are Enterprise Workspaces;
+  // what differs is whether the Owner's Internal/External choices are constrained by a
+  // verified domain. A public mailbox can never be verified, so those accounts can only
+  // pick the manual policy — the server enforces the same rule.
+  const [membershipPolicy, setMembershipPolicy] =
+    useState<MembershipPolicy>(isPublicDomain ? "manual" : "domain-verified");
+  const wantsVerifiedDomain = membershipPolicy === "domain-verified";
+  const accountIssue = getAccountIssue(
+    user?.email,
+    rawDomain,
+    isPublicDomain,
+    wantsVerifiedDomain,
+  );
 
   const form = useForm<CreateWorkspaceFormData>({
     resolver: zodResolver(createWorkspaceSchema),
@@ -95,19 +121,19 @@ export default function CreateWorkspaceDemoPage() {
     createWorkspace.isPending ||
     selectWorkspace.isPending ||
     form.formState.isSubmitting;
-  const canCreate = isAuthenticated && !!emailDomain && !accountIssue;
+  const canCreate = isAuthenticated && !!rawDomain && !accountIssue;
 
   useEffect(() => {
     if (mounted && !isAuthenticated) router.replace("/login");
   }, [mounted, isAuthenticated, router]);
 
   async function onSubmit(values: CreateWorkspaceFormData) {
-    if (!emailDomain) {
+    if (!rawDomain || (wantsVerifiedDomain && !emailDomain)) {
       setServerError({
         kind: "account",
         message:
           accountIssue ??
-          "A valid business email is required before creating a workspace.",
+          "A valid email address is required before creating a workspace.",
       });
       return;
     }
@@ -118,8 +144,13 @@ export default function CreateWorkspaceDemoPage() {
       const workspace = await createWorkspace.mutateAsync({
         name: values.name.trim(),
         logoUrl: values.logoUrl?.trim() || null,
-        verifiedDomains: [emailDomain],
-        requireVerifiedDomainForInternal: true,
+        // Only send a domain when one is actually being claimed. Sending an empty list
+        // alongside the flag would say two things at once; the server decides the policy
+        // from the domains it ends up holding, so say exactly one of them.
+        ...(wantsVerifiedDomain && emailDomain
+          ? { verifiedDomains: [emailDomain] }
+          : {}),
+        requireVerifiedDomainForInternal: wantsVerifiedDomain,
       });
 
       const selection = await selectWorkspace.mutateAsync(workspace.id);
@@ -215,15 +246,54 @@ export default function CreateWorkspaceDemoPage() {
                 {slugPreview || "workspace-name"}
               </span>
             </div>
-            {emailDomain && (
-              <p className="text-[11px] text-ink-muted mt-1">
-                Workspace will be verified for{" "}
-                <span className="font-semibold text-foreground">
-                  {emailDomain}
-                </span>
-              </p>
-            )}
           </div>
+
+          {/* Membership policy */}
+          <fieldset className="flex flex-col gap-1.5" disabled={isBusy}>
+            <legend className="text-[12px] font-medium text-ink-muted mb-1.5">
+              Who counts as an internal member
+            </legend>
+
+            <div className="flex flex-col gap-2">
+              <PolicyOption
+                value="domain-verified"
+                selected={membershipPolicy}
+                onSelect={setMembershipPolicy}
+                disabled={isPublicDomain}
+                title="Verify a company domain"
+                description={
+                  emailDomain
+                    ? `Anyone invited with an @${emailDomain} address can be an internal member. Other addresses can only join as external.`
+                    : "Anyone invited on your company's domain can be an internal member. Other addresses can only join as external."
+                }
+                footer={
+                  isPublicDomain ? (
+                    <span className="text-ink-subtle">
+                      Not available for {rawDomain} — public email domains cannot
+                      be verified.
+                    </span>
+                  ) : emailDomain ? (
+                    <span className="inline-flex items-center gap-1.5 rounded border border-hairline bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-ink">
+                      {emailDomain}
+                    </span>
+                  ) : null
+                }
+              />
+
+              <PolicyOption
+                value="manual"
+                selected={membershipPolicy}
+                onSelect={setMembershipPolicy}
+                title="Assign members manually"
+                description="You decide who is internal and who is external when you invite them. No domain is verified."
+                footer={
+                  <span className="text-ink-subtle">
+                    You can verify a domain later in Advanced settings.
+                  </span>
+                }
+              />
+            </div>
+          </fieldset>
 
           {/* Submit Button */}
           <Button
@@ -243,15 +313,67 @@ export default function CreateWorkspaceDemoPage() {
   );
 }
 
+function PolicyOption({
+  value,
+  selected,
+  onSelect,
+  title,
+  description,
+  footer,
+  disabled = false,
+}: {
+  value: MembershipPolicy;
+  selected: MembershipPolicy;
+  onSelect: (value: MembershipPolicy) => void;
+  title: string;
+  description: string;
+  footer?: React.ReactNode;
+  disabled?: boolean;
+}) {
+  const isSelected = selected === value;
+  return (
+    <label
+      className={`flex gap-2.5 rounded-md border p-3 transition-colors ${
+        disabled
+          ? "cursor-not-allowed border-border bg-surface-2/30 opacity-60"
+          : isSelected
+            ? "cursor-pointer border-primary bg-primary/5"
+            : "cursor-pointer border-border hover:bg-surface-2/40"
+      }`}
+    >
+      <input
+        type="radio"
+        name="membership-policy"
+        value={value}
+        checked={isSelected}
+        disabled={disabled}
+        onChange={() => onSelect(value)}
+        className="mt-0.5 accent-primary"
+      />
+      <span className="flex flex-col gap-0.5">
+        <span className="text-[13px] font-medium text-foreground">{title}</span>
+        <span className="text-[11px] leading-4 text-ink-muted">
+          {description}
+        </span>
+        {footer && <span className="mt-1 text-[10px] leading-4">{footer}</span>}
+      </span>
+    </label>
+  );
+}
+
 function getAccountIssue(
   email: string | undefined,
   rawDomain: string | null,
   isPublicDomain: boolean,
+  wantsVerifiedDomain: boolean,
 ): string | null {
   if (!email) return "Signed-in account email is missing.";
   if (!rawDomain) return "Signed-in account email is invalid.";
-  if (isPublicDomain)
-    return "Use a business email or join by invitation. Public email domains cannot be system-verified for an Enterprise Workspace.";
+  // Only a blocker for the domain-verified policy: a public mailbox cannot be verified as
+  // a company domain, so there is nothing to claim. It is no obstacle to a workspace that
+  // claims no domain at all, and the server draws the line in the same place.
+  if (isPublicDomain && wantsVerifiedDomain)
+    return `${rawDomain} is a public email domain and cannot be verified as a company domain. Choose "Assign members manually" instead, or sign in with a work address.`;
   return null;
 }
 
