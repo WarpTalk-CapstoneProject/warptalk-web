@@ -16,7 +16,8 @@ import type {
 
 const MEETING_KEY = ["translationRooms"] as const;
 const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
-const sessionsKey = (roomId: string) => [...MEETING_KEY, roomId, "sessions"] as const;
+/** Exported so a room-wide Start/Stop broadcast can refresh it without re-spelling the key. */
+export const sessionsKey = (roomId: string) => [...MEETING_KEY, roomId, "sessions"] as const;
 
 export function useTranslationRooms(params?: {
   status?: string;
@@ -27,13 +28,24 @@ export function useTranslationRooms(params?: {
   pageSize?: number;
   /** Pass the active workspace on any workspace-scoped screen. See `translationRoomService.list`. */
   workspaceId?: string;
+  /**
+   * WT-327: one row per repeating BOOKING instead of one per occurrence. See
+   * `translationRoomService.list` for which screens should ask for it — the day panel and the day
+   * strip must not, because they are asking about a date, and a booking has no single date.
+   */
+  groupBySeries?: boolean;
+  /** Off for a query a screen keeps mounted but is not currently showing. */
+  enabled?: boolean;
 }) {
+  const { enabled = true, ...listParams } = params ?? {};
+
   return useQuery({
-    queryKey: [...MEETING_KEY, params],
+    queryKey: [...MEETING_KEY, listParams],
     queryFn: async () => {
-      const { data } = await translationRoomService.list(params);
+      const { data } = await translationRoomService.list(listParams);
       return data;
     },
+    enabled,
   });
 }
 
@@ -158,6 +170,23 @@ export function usePauseTranslationRoom() {
         current ? { ...current, status: "paused" } : current,
       );
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
+      queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
+    },
+  });
+}
+
+/**
+ * Stop Translation. The room stays live — only the translation session ends — so the transcript
+ * keeps arriving and the room's own query data is deliberately left alone. What changes is the
+ * session list, which is where "is translation running" is read from.
+ */
+export function useStopTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await translationRoomService.stopTranslation(id);
+    },
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: sessionsKey(id) });
     },
   });

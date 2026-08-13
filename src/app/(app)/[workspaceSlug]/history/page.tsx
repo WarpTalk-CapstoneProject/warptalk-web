@@ -189,7 +189,12 @@ function MeetingDetail({ room, busyArtifactId, onDownload }: { room: EndedRoomHi
         )) : <p className="py-6 text-center text-[11px] text-ink-muted">No retained outputs for this meeting.</p>}
       </div>
 
-      <div className="mt-5 flex items-start gap-2 text-[10px] leading-4 text-ink-subtle"><Archive size={13} className="mt-0.5 shrink-0" /><span>{room.retention.expiresAt ? `Retention ends ${formatDate(room.retention.expiresAt)}.` : "Retention follows workspace policy."}</span></div>
+      {/* Only what an artifact actually states. "Retention follows workspace policy" was a
+          claim with nothing behind it — no policy is configured and no purge job exists —
+          and the date beside it fell back to the meeting's own end time. */}
+      {room.retention.kind === "scheduled" ? (
+        <div className="mt-5 flex items-start gap-2 text-[10px] leading-4 text-ink-subtle"><Archive size={13} className="mt-0.5 shrink-0" /><span>{`Retention ends ${formatDate(room.retention.expiresAt)}.`}</span></div>
+      ) : null}
     </aside>
   );
 }

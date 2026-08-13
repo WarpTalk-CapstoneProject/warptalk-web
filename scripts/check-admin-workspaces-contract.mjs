@@ -74,7 +74,7 @@ assert.match(
 );
 
 // Detail tabs required by the approved design.
-for (const tab of ["overview", "members", "usage", "billing", "audit"]) {
+for (const tab of ["overview", "knowledge", "members", "usage", "billing", "audit"]) {
   assert.match(
     detail,
     new RegExp(`TabsTrigger value="${tab}"`),

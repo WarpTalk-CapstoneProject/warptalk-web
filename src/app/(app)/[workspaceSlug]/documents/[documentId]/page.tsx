@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Check,
   Download,
-  FileText,
   ShieldWarning,
   Spinner,
   X,
@@ -13,7 +12,6 @@ import { useParams, useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -34,6 +32,7 @@ import { downloadBlob } from "@/lib/ui/download-blob";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 import { DocumentAccessPolicyPanel } from "./components/DocumentAccessPolicyPanel";
+import { DocumentPreview } from "./components/DocumentPreview";
 import { DocumentMetadataCard } from "./components/DocumentMetadataCard";
 
 interface PageProps {
@@ -186,7 +185,11 @@ export default function DocumentDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-8 text-ink animate-fade-in max-w-7xl mx-auto w-full">
+    /* h-full + min-h-0, not min-h-full: the page owns the viewport and the panes scroll inside
+       it. With min-h-full the whole page grew with the document, which is what pushed the
+       properties panel off the top of a 40KB report and made it unreachable without scrolling
+       back past everything. */
+    <div className="flex h-full min-h-0 flex-col gap-6 px-4 py-4 pb-8 text-ink animate-fade-in max-w-7xl mx-auto w-full">
       {/* Back button & Header */}
       <div className="flex flex-col gap-2">
         <button
@@ -196,26 +199,30 @@ export default function DocumentDetailPage({ params }: PageProps) {
           <ArrowLeft className="h-3.5 w-3.5" />
           <span>Back to Library</span>
         </button>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-1">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-ink break-all">
-              {doc.name}
-            </h1>
-            <p className="text-[11px] text-ink-muted mt-1 font-mono">
-              ID: {doc.id}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+        {/* An 18px title, not 24px bold, and the raw UUID is gone: "ID: abb02cc4-6593-…" under the
+            name was the second-largest thing on the page and is not something anyone reads — the
+            properties panel carries the identifiers.
+
+            Three filled buttons in three different colours (green, pink, indigo) read as three
+            equally urgent decisions. Only one action is primary here — Approve when a decision is
+            pending, otherwise Download — and the rest are outlined pills, the same shapes the
+            meetings and members toolbars use. */}
+        <div className="mt-1 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <h1 className="min-w-0 truncate text-[18px] font-semibold tracking-tight text-ink">
+            {doc.name}
+          </h1>
+
+          <div className="flex shrink-0 items-center gap-2">
             {canApproveDocuments && isPendingApproval && (
-              <div className="flex items-center gap-2 mr-1">
+              <>
                 <button
                   onClick={() => handleApprove(true)}
                   disabled={approveMutation.isPending}
-                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white px-3.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
-                  title="Approve Document"
+                  className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90 disabled:opacity-50"
+                  title="Approve document"
                 >
                   {approveMutation.isPending ? (
-                    <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
+                    <Spinner className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Check className="h-3.5 w-3.5" />
                   )}
@@ -224,25 +231,26 @@ export default function DocumentDetailPage({ params }: PageProps) {
                 <button
                   onClick={() => handleApprove(false)}
                   disabled={approveMutation.isPending}
-                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-xs font-semibold text-destructive px-3.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
-                  title="Reject Document"
+                  className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-destructive/30 bg-surface-1 px-3 text-[13px] font-medium text-destructive shadow-sm transition hover:bg-destructive/10 disabled:opacity-50"
+                  title="Reject document"
                 >
-                  {approveMutation.isPending ? (
-                    <Spinner className="h-3.5 w-3.5 animate-spin text-destructive" />
-                  ) : (
-                    <X className="h-3.5 w-3.5" />
-                  )}
+                  <X className="h-3.5 w-3.5" />
                   <span>Reject</span>
                 </button>
-              </div>
+                <div className="mx-1 h-4 w-[1px] bg-border" />
+              </>
             )}
             <button
               onClick={handleDownload}
               disabled={downloadMutation.isPending}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-primary hover:bg-primary-hover text-xs font-semibold text-white px-3.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
+              className={
+                canApproveDocuments && isPendingApproval
+                  ? "inline-flex h-[28px] items-center gap-1.5 rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2 disabled:opacity-50"
+                  : "inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90 disabled:opacity-50"
+              }
             >
               {downloadMutation.isPending ? (
-                <Spinner className="h-3.5 w-3.5 animate-spin text-white" />
+                <Spinner className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
@@ -253,108 +261,30 @@ export default function DocumentDetailPage({ params }: PageProps) {
       </div>
 
       {/* Main Grid: Original File Card vs Right (Properties Sidebar) */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px] items-start">
-        {/* Central panel - original file */}
-        <div className="flex flex-col gap-6 min-w-0">
-          <Card className="border-hairline bg-surface-1 rounded-xl shadow-sm overflow-hidden">
-            <CardHeader className="border-b border-hairline px-5 py-4 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <CardTitle className="text-sm font-semibold">
-                  Original File
-                </CardTitle>
-              </div>
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 border-hairline bg-surface-2 uppercase font-mono text-ink-muted"
-              >
-                {doc.fileExtension.replace(".", "") || "DOC"}
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="relative rounded-xl border border-hairline bg-surface-2 p-6 flex flex-col gap-6">
-                {/* Header row: File info + Download button */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
-                      <FileText className="h-6 w-6" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-base text-ink truncate">
-                        {doc.fileName}
-                      </span>
-                      <span className="text-xs text-ink-muted mt-0.5">
-                        {formatBytes(doc.sizeBytes)} •{" "}
-                        {doc.fileExtension.replace(".", "").toUpperCase() ||
-                          "DOC"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleDownload}
-                    disabled={downloadMutation.isPending}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-white transition hover:bg-primary-hover disabled:opacity-50 cursor-pointer shrink-0 shadow-sm"
-                  >
-                    {downloadMutation.isPending ? (
-                      <Spinner className="h-4 w-4 animate-spin text-white" />
-                    ) : (
-                      <Download className="h-4 w-4" />
-                    )}
-                    <span>Download File</span>
-                  </button>
-                </div>
-
-                {/* Status Monitoring Bar */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-hairline">
-                  <div className="flex items-center justify-between bg-surface-1 border border-hairline rounded-lg px-3.5 py-2.5">
-                    <span className="text-xs font-semibold text-ink-muted">
-                      Document Status
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] font-mono uppercase rounded px-2 py-0.5 font-semibold ${
-                        doc.status?.toLowerCase() === "public" ||
-                        doc.status?.toLowerCase() === "active"
-                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                          : doc.status?.toLowerCase().includes("pending")
-                            ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                            : doc.status?.toLowerCase() === "rejected"
-                              ? "bg-destructive/10 text-destructive border-destructive/20"
-                              : "bg-surface-3 border-hairline text-ink-muted"
-                      }`}
-                    >
-                      {doc.status}
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-surface-1 border border-hairline rounded-lg px-3.5 py-2.5">
-                    <span className="text-xs font-semibold text-ink-muted">
-                      AI Ingestion Status
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] font-mono uppercase rounded px-2 py-0.5 font-semibold ${
-                        doc.ingestionStatus?.toLowerCase() === "completed"
-                          ? "bg-primary/10 text-primary border-primary/20"
-                          : doc.ingestionStatus?.toLowerCase() === "processing"
-                            ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
-                            : doc.ingestionStatus?.toLowerCase() === "failed"
-                              ? "bg-destructive/10 text-destructive border-destructive/20"
-                              : "bg-surface-3 border-hairline text-ink-muted"
-                      }`}
-                    >
-                      {doc.ingestionStatus || "Pending"}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
+        {/* Central panel — the document itself.
+            It used to be a card containing a second card containing the file's NAME, size,
+            format badge and a Download button: everything about the file except the file. The
+            page asks you to approve a document, so the document is what belongs here, flat, with
+            no chrome between the reader and the text. The name and format live in the properties
+            panel to the right, which already lists them. */}
+        {/* The scroll lives HERE, on the document, not on the page. */}
+        <div className="flex min-h-0 min-w-0 flex-col gap-6 overflow-y-auto lg:h-full">
+          <DocumentPreview
+            workspaceId={activeWorkspaceId}
+            documentId={doc.id}
+            fileName={doc.fileName}
+            fileExtension={doc.fileExtension}
+            sizeBytes={doc.sizeBytes}
+            onDownload={handleDownload}
+          />
         </div>
 
-        {/* Right Sidebar: Properties & Access Policies */}
-        <div className="flex flex-col gap-6">
+        {/* Right sidebar: sticky, and scrolls on its own when its own content is tall. It stays
+            beside the document however long the document is — approving a file means reading it
+            AND checking who it will be shared with, and those two facts were previously never on
+            screen at the same time. */}
+        <div className="flex flex-col gap-6 lg:sticky lg:top-0 lg:max-h-full lg:overflow-y-auto lg:pb-2">
           <DocumentMetadataCard
             doc={doc}
             membersList={membersList}

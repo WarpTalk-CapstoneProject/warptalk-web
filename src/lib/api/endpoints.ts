@@ -21,6 +21,14 @@ export const API = {
     catalog: "/auth/voice-profiles/catalog",
     preferredVoice: "/auth/voice-profiles/preferred-voice",
   },
+  // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
+  // profile: it is given once for the product, outlives any single profile or meeting, and is
+  // the thing AuthService is asked about over gRPC before a route may enable cloning.
+  voiceConsent: {
+    status: "/auth/voice-consent",
+    grant: "/auth/voice-consent/grant",
+    revoke: "/auth/voice-consent/revoke",
+  },
   translationRooms: {
     create: "/translation-rooms",
     list: "/translation-rooms",
@@ -40,7 +48,10 @@ export const API = {
     leave: (id: string) => `/translation-rooms/${id}/participants/me/leave`,
     start: (id: string) => `/translation-rooms/${id}/start`,
     pause: (id: string) => `/translation-rooms/${id}/pause`,
+    /** Start Translation. `/start` only opens the room — see ResumeTranslationRoomAsync. */
     resume: (id: string) => `/translation-rooms/${id}/resume`,
+    /** Stop Translation and leave the meeting (and its transcript) running. Not `/pause`. */
+    stopTranslation: (id: string) => `/translation-rooms/${id}/translation/stop`,
     end: (id: string) => `/translation-rooms/${id}/end`,
     cancel: (id: string) => `/translation-rooms/${id}/cancel`,
     artifacts: (id: string) => `/translation-rooms/${id}/artifacts`,
@@ -57,6 +68,7 @@ export const API = {
   // translationRooms.create with a `recurrence` block; these two are about the series itself.
   translationRoomSeries: {
     get: (id: string) => `/translation-room-series/${id}`,
+    update: (id: string) => `/translation-room-series/${id}`,
     cancel: (id: string) => `/translation-room-series/${id}/cancel`,
   },
   roomArtifacts: {
@@ -140,6 +152,8 @@ export const API = {
     rejectJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/reject`,
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
     knowledge: (workspaceId: string) => `/workspaces/${workspaceId}/knowledge`,
+    knowledgeChunk: (workspaceId: string, chunkId: string) =>
+      `/workspaces/${workspaceId}/knowledge/${encodeURIComponent(chunkId)}`,
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
     documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,
     documentApprove: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/approve`,
@@ -166,6 +180,10 @@ export const API = {
     detail: (id: string) => `/admin/workspaces/${id}`,
     suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
     reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
+    // Separate from `workspaces.knowledge` on purpose: same page shape, different
+    // authorization. This one is gated by the platform "admin" role and reads a workspace
+    // the caller is not a member of.
+    knowledge: (id: string) => `/admin/workspaces/${id}/knowledge`,
   },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",

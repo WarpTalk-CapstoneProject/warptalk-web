@@ -49,6 +49,7 @@ import type {
   AssistantMentionDto,
   AssistantPageContextDto,
 } from "@/types/assistant";
+import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -962,6 +963,7 @@ export function GlobalChatbot() {
           >
             <PopoverTrigger
               aria-label="Ask WarpBot"
+              data-tour="warpbot-launcher"
               className="flex items-center h-[26px] pl-[8px] pr-[10px] rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors group text-ink"
             >
               <span
@@ -1031,18 +1033,25 @@ export function GlobalChatbot() {
                       key={msg.id}
                       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      {/* whitespace-pre-wrap so a "## Action items" / "- item" answer keeps
-                          its line breaks instead of collapsing into one run-on line. */}
+                      {/* The assistant writes markdown and this printed the source of it:
+                          "## Action items" and "**bold**" reached the reader as those
+                          characters. whitespace-pre-wrap kept the line breaks and nothing
+                          else. What a person typed is rendered as typed — their asterisks
+                          are asterisks. */}
                       <div
-                        className={`max-w-[85%] text-[13px] leading-relaxed whitespace-pre-wrap break-words ${
+                        className={`max-w-[85%] text-[13px] leading-relaxed break-words ${
                           msg.role === "user"
-                            ? "bg-surface-2 text-ink rounded-[12px] px-3.5 py-2"
+                            ? "bg-surface-2 text-ink rounded-[12px] px-3.5 py-2 whitespace-pre-wrap"
                             : msg.failed
-                              ? "text-red-500 py-2 pl-4"
+                              ? "text-red-500 py-2 pl-4 whitespace-pre-wrap"
                               : "text-ink py-2 pl-4"
                         }`}
                       >
-                        {msg.content}
+                        {msg.role === "assistant" && !msg.failed ? (
+                          <AssistantMarkdown>{msg.content}</AssistantMarkdown>
+                        ) : (
+                          msg.content
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1062,17 +1071,30 @@ export function GlobalChatbot() {
                 )}
               </div>
 
-              {/* Chat Input Section */}
+              {/* Chat Input Section
+                  The context chip is IN FLOW, not absolutely positioned.
+
+                  It used to be `absolute bottom-2 h-[118px]` inside this `shrink-0` section
+                  — a fixed-height tray anchored to the bottom, drawn behind the composer.
+                  The section is only as tall as the composer, so the remaining ~30px of that
+                  118px hung upward INTO the message list and painted over the last answer.
+                  That is the reported overlap, and it could not be tuned away: the composer
+                  grows with the text in it, so any fixed height is wrong at some height.
+
+                  Wrapping the chip and the composer in the tray gets the same look — chip
+                  above the input, both inside one rounded shell — out of the flex layout,
+                  which reserves the space it actually occupies. */}
               <div className="relative px-2 pb-2 shrink-0">
+                <div className={contextComposerShellClassName}>
                 <AnimatePresence initial={false}>
                   {ambientContextDisplay && (
                     <motion.div
                       key="page-context-shell"
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.18, ease: "easeOut" }}
-                      className={`${contextComposerShellClassName} absolute left-[7px] right-[7px] bottom-2 z-0 h-[118px]`}
+                      className="overflow-hidden"
                     >
                       <div className="flex min-h-[30px] items-center rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium text-ink">
                         <div
@@ -1359,6 +1381,7 @@ export function GlobalChatbot() {
                       </button>
                     </div>
                   </div>
+                </div>
                 </div>
               </div>
             </PopoverContent>

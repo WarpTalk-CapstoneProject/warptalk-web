@@ -24,6 +24,7 @@
 
 import type { ReactNode } from "react";
 
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { cn } from "@/lib/utils";
 
 /** The measure. Wider than a document, because these pages are tables about a whole platform. */
@@ -78,11 +79,14 @@ export function AdminPageHeader({
 export type AdminTab<T extends string> = { value: T; label: string };
 
 /**
- * One filter-tab style for the whole portal.
+ * One filter-tab style for the whole portal — and now for the whole app.
  *
- * There were three: a grey `bg-surface-2` pill on Workspaces, shadcn `Tabs` on Billing, and an
- * indigo-filled pill on Global Glossary. This is the workspace pages' own — selected fills with
- * ink, which reads as "chosen" without spending the accent colour on a filter.
+ * There were three here: a grey `bg-surface-2` pill on Workspaces, shadcn `Tabs` on Billing, and
+ * an indigo-filled pill on Global Glossary. This unified them on an ink-filled chip, which was
+ * right at the time and still left the portal looking unlike Meetings, the page the team
+ * actually looks at. So the decision moved up one level: `FilterChip` owns the appearance and
+ * this keeps the API, which is why the knowledge page and both admin tables changed with it and
+ * no caller had to.
  */
 export function AdminFilterTabs<T extends string>({
   tabs,
@@ -100,35 +104,17 @@ export function AdminFilterTabs<T extends string>({
   trailing?: ReactNode;
 }) {
   return (
-    <div
-      className="flex items-center gap-1 overflow-x-auto border-b border-border py-3"
-      role="tablist"
-      aria-label={label}
-    >
+    <FilterChipGroup label={label} trailing={trailing} className="border-b border-border py-3">
       {tabs.map((tab) => (
-        <button
+        <FilterChip
           key={tab.value}
-          type="button"
-          role="tab"
-          aria-selected={value === tab.value}
+          selected={value === tab.value}
           onClick={() => onChange(tab.value)}
-          className={cn(
-            "h-7 shrink-0 rounded-md px-3 text-[11px] font-medium transition-colors",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-            value === tab.value
-              ? "bg-ink text-surface-1"
-              : "text-ink-muted hover:bg-surface-2 hover:text-ink",
-          )}
         >
           {tab.label}
-        </button>
+        </FilterChip>
       ))}
-      {trailing ? (
-        <span className="ml-auto shrink-0 pl-3 text-[10px] tabular-nums text-ink-subtle">
-          {trailing}
-        </span>
-      ) : null}
-    </div>
+    </FilterChipGroup>
   );
 }
 

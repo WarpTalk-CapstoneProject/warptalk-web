@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useActiveMeetingStore } from "../../stores/active-meeting-store.ts";
 import { useAssistantContextStore } from "../../stores/assistant-context-store.ts";
 import { useNotificationStore } from "../../stores/notification-store.ts";
+import { useOnboardingStore } from "../../stores/onboarding-store.ts";
 import { usePresenceStore } from "../../stores/presence-store.ts";
 import { useTranslationRoomStore } from "../../stores/translationRoom-store.ts";
 import { useWorkspaceStore } from "../../stores/workspace-store.ts";
@@ -86,6 +87,9 @@ function resetSessionScopedStores() {
   useTranslationRoomStore.getState().reset();
   useActiveMeetingStore.getState().closeMeeting();
   useAssistantContextStore.getState().clearAllContext();
+  // "Already seen the tour" and "not now, thanks" are answers one person gave. The next
+  // account on this browser has not been shown anything and has dismissed nothing.
+  useOnboardingStore.getState().reset();
 }
 
 function resetSessionScopedBrowserStorage() {
