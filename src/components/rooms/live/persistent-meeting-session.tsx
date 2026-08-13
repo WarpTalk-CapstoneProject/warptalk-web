@@ -40,6 +40,7 @@ import {
   useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
+  useJoinTranslationRoomByCode,
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -213,6 +214,8 @@ export function PersistentMeetingSession({
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } =
     useJoinMeeting();
+  const { mutateAsync: registerParticipantAsync } = useJoinTranslationRoomByCode();
+  const participantRegisteredRef = useRef(false);
 
   const meetingJoinedRef = useRef(false);
   // Set by handleExit("end") so this client ignores its own TranslationRoomEnded broadcast and
@@ -1198,6 +1201,66 @@ export function PersistentMeetingSession({
         });
     });
   }, [canConnectMeeting, displayName, joinMeetingAsync, room?.id]);
+
+  /**
+   * Make sure this person exists as a PARTICIPANT of the translation room, not only as a
+   * LiveKit peer.
+   *
+   * There are two joins and they are not the same thing:
+   *
+   *   POST /meetings/rooms/{id}/join     LiveKit token — puts you in the video grid
+   *   POST /translation-rooms/join       creates your participant row
+   *
+   * The effect above calls only the first. The second used to happen exclusively on the
+   * join-by-code path, i.e. the lobby — so anyone who arrived by clicking a notification or a
+   * link went straight to /live with media and no participant row. The visible symptoms were a
+   * People panel reading 1 while two faces were on screen, and Leave answering
+   * "Participant not found." The invisible one is worse: no participant row means no audio
+   * route, so that person was never transcribed OR translated, in a product whose entire
+   * purpose is translating them.
+   *
+   * Safe to call unconditionally. JoinTranslationRoomAsync finds an existing participant and
+   * updates it rather than inserting a second, and its capacity check explicitly does not
+   * count a repeated join from someone who already holds a seat.
+   *
+   * A failure here is logged and not surfaced: the meeting itself is working, and a toast about
+   * a registration the user never asked for would be noise they cannot act on. The roster
+   * refetch below is what makes the fix visible.
+   */
+  useEffect(() => {
+    if (!room?.translationRoomCode || !canConnectMeeting) return;
+    if (participantRegisteredRef.current) return;
+    participantRegisteredRef.current = true;
+
+    void registerParticipantAsync({
+      translationRoomCode: room.translationRoomCode,
+      displayName,
+      speakLanguage: sourceLanguage,
+      listenLanguage: targetLanguage,
+      // The device state this session actually has, so the roster does not claim a camera is on
+      // for somebody who joined with it off.
+      cameraEnabled,
+      microphoneEnabled,
+      speakerEnabled: true,
+    })
+      .then(() => refetchParticipants())
+      .catch((error: unknown) => {
+        // Reset so a later render can try again — a transient failure here costs this person
+        // their translation for the whole meeting, which is too expensive to give up on once.
+        participantRegisteredRef.current = false;
+        console.warn("translation_room_participant_registration_failed", error);
+      });
+  }, [
+    room?.translationRoomCode,
+    canConnectMeeting,
+    displayName,
+    sourceLanguage,
+    targetLanguage,
+    cameraEnabled,
+    microphoneEnabled,
+    registerParticipantAsync,
+    refetchParticipants,
+  ]);
 
   const userSettingsQuery = useUserSettings();
   const updateUserSettings = useUpdateUserSettings();
