@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
 import type {
@@ -253,11 +254,45 @@ export function useUpdateWorkspaceMember(workspaceId: string) {
 export function useInviteWorkspaceMember(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ email, roleName }: { email: string; roleName: string }) =>
-      WorkspaceService.invite(workspaceId, email, roleName),
+    mutationFn: ({
+      email,
+      roleName,
+      membershipType,
+    }: {
+      email: string;
+      roleName: string;
+      membershipType: "Internal" | "External";
+    }) => WorkspaceService.invite(workspaceId, email, roleName, membershipType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
     },
+  });
+}
+
+/**
+ * What Internal/External access this workspace currently permits for `email`, so the invite
+ * form can pre-select and disable options instead of guessing at the rules client-side and
+ * finding out it guessed wrong from a 4xx after submit.
+ *
+ * Debounced by hand — email is typed character by character and every keystroke would
+ * otherwise fire a request. `enabled` requires a syntactically complete address so the
+ * server never sees "a", "al", "ali"...
+ */
+export function useInvitationPolicy(workspaceId: string, email: string) {
+  const [debouncedEmail, setDebouncedEmail] = useState(email);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedEmail(email), 350);
+    return () => clearTimeout(handle);
+  }, [email]);
+
+  const isLikelyCompleteEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail.trim());
+
+  return useQuery({
+    queryKey: ["workspaces", "invitation-policy", workspaceId, debouncedEmail.trim().toLowerCase()],
+    queryFn: () => WorkspaceService.getInvitationPolicy(workspaceId, debouncedEmail.trim()),
+    enabled: !!workspaceId && isLikelyCompleteEmail,
+    staleTime: 10_000,
   });
 }
 

@@ -20,6 +20,7 @@ import type {
   PagedResult,
   SelectWorkspaceResponse,
   InviteMemberResponse,
+  InvitationPolicyResponse,
   PreviewInvitationResponse,
   ExtractedTextDto,
   WorkspaceRoleChangePreview,
@@ -132,11 +133,25 @@ export const WorkspaceService = {
   },
 
   // ─── Invitations ───
-  async invite(workspaceId: string, email: string, roleName: string): Promise<InviteMemberResponse> {
+  async invite(
+    workspaceId: string,
+    email: string,
+    roleName: string,
+    membershipType: "Internal" | "External",
+  ): Promise<InviteMemberResponse> {
     const { data } = await apiClient.post<InviteMemberResponse>(API.workspaces.invitations(workspaceId), {
       email,
       roleName,
+      membershipType,
     });
+    return data;
+  },
+
+  async getInvitationPolicy(workspaceId: string, email: string): Promise<InvitationPolicyResponse> {
+    const { data } = await apiClient.get<InvitationPolicyResponse>(
+      API.workspaces.invitationPolicy(workspaceId),
+      { params: { email } },
+    );
     return data;
   },
 

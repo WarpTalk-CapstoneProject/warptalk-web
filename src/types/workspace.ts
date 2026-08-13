@@ -139,6 +139,22 @@ export interface ApproveJoinRequestResponse {
   approvalEmailError?: string | null;
 }
 
+/**
+ * What the workspace currently permits for one candidate address — the inviter still picks
+ * the access type, this only says which choices are legal and why one might be disabled.
+ */
+export interface InvitationPolicyResponse {
+  suggestedMembershipType: "Internal" | "External";
+  allowedMembershipTypes: ("Internal" | "External")[];
+  requireVerifiedDomainForInternal: boolean;
+  allowExternalCollaboration: boolean;
+  allowSubdomains: boolean;
+  isEmailDomainVerified: boolean;
+  isPublicEmailDomain: boolean;
+  internalDisabledReason?: string | null;
+  externalDisabledReason?: string | null;
+}
+
 export interface InviteMemberResponse {
   invitation: WorkspaceInvitationDto;
   /**

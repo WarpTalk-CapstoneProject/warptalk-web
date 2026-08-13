@@ -141,6 +141,7 @@ export const API = {
     memberRoleChange: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role-change`,
     transferOwnership: (workspaceId: string) => `/workspaces/${workspaceId}/members/transfer-ownership`,
     invitations: (workspaceId: string) => `/workspaces/${workspaceId}/invitations`,
+    invitationPolicy: (workspaceId: string) => `/workspaces/${workspaceId}/invitations/policy`,
     retryInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}/retry-delivery`,
     revokeInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}`,
     previewInvitation: (token: string) => `/workspaces/invitations/preview?token=${encodeURIComponent(token)}`,
