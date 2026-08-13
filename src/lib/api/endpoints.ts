@@ -33,6 +33,8 @@ export const API = {
     create: "/translation-rooms",
     list: "/translation-rooms",
     history: "/translation-rooms/history",
+    /** WT-333 — the caller's own meetings in one workspace, past and upcoming (UC 25). */
+    myMeetings: "/translation-rooms/my-meetings",
     join: "/translation-rooms/join",
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,

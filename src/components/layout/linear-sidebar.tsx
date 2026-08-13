@@ -33,6 +33,8 @@ import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { IconProps } from "@phosphor-icons/react";
 import {
+  Archive,
+  CalendarBlank,
   CaretDown,
   CaretLeft,
   Check,
@@ -208,6 +210,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         }
       ]
     },
+    { icon: CalendarBlank, label: "My Meetings", href: `/${slug}/my-meetings` },
+    { icon: Archive, label: "History", href: `/${slug}/history` },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
     { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
