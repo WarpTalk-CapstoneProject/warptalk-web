@@ -45,6 +45,8 @@ import {
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { getLanguageName } from "@/lib/language/languages";
+import { holdsSeat } from "@/lib/meeting/room-occupancy";
+import { playNotificationCue } from "@/lib/notifications/notification-sounds";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -752,6 +754,8 @@ export function PersistentMeetingSession({
     if (isRoomHost || announcedTranslationRef.current) return;
     announcedTranslationRef.current = true;
 
+    playNotificationCue("translation-started");
+
     const needsLanguages = !sourceLanguage || !targetLanguage;
     toast.info("The host started translation.", {
       description: needsLanguages
@@ -1261,6 +1265,29 @@ export function PersistentMeetingSession({
     registerParticipantAsync,
     refetchParticipants,
   ]);
+
+  /**
+   * A soft cue when somebody new arrives.
+   *
+   * Keyed on a RISE in the seat count rather than on the roster changing, because the roster
+   * object is replaced on every poll and by every mute, camera and language change — binding to
+   * it would beep continuously through an ordinary meeting.
+   *
+   * The first count after mount is recorded silently: everyone already in the room when you
+   * joined is not "somebody arriving", and announcing them would greet you with a burst of
+   * beeps for a meeting already in progress.
+   */
+  const seatCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const seated = apiParticipants.filter((participant) =>
+      holdsSeat(participant.status),
+    ).length;
+
+    const previous = seatCountRef.current;
+    seatCountRef.current = seated;
+    if (previous === null) return;
+    if (seated > previous) playNotificationCue("participant-joined");
+  }, [apiParticipants]);
 
   const userSettingsQuery = useUserSettings();
   const updateUserSettings = useUpdateUserSettings();
