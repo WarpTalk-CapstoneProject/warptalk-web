@@ -2523,7 +2523,16 @@ export function PersistentMeetingSession({
                     // this bar — would press Start and get "Unauthorized". The control bar's own
                     // prop doc is "omit to hide the control", so this hides it rather than
                     // offering a button that cannot work.
-                    onStartWarptalk={isRoomHost ? handleStartWarptalk : undefined}
+                    onStartWarptalk={
+                      // WT-371: the room decides who may START translation. Stopping stays
+                      // host-only below — opening a meeting up is not the same as letting
+                      // anyone cut it off for everybody. The server enforces the same rule in
+                      // TranslationRoomSessionService.CanStartSessionAsync; this only decides
+                      // whether the control is offered.
+                      isRoomHost || room?.settings?.participantsCanStartTranslation
+                        ? handleStartWarptalk
+                        : undefined
+                    }
                     onStopWarptalk={isRoomHost ? handleStopWarptalk : undefined}
                     onToggleSubtitles={() =>
                       setSubtitlesEnabled((current) => !current)

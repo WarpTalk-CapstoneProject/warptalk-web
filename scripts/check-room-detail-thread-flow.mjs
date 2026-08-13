@@ -67,7 +67,22 @@ const checks = [
   // association with it.
   ["the live transcript panel is not host-gated", transcriptPanelCall.length > 0 && !transcriptPanelCall.includes("isHost")],
   ["captions follow the meeting, not the viewer's role", livePage.includes("enabled={meetingLive && subtitlesEnabled}")],
-  ["only starting and stopping translation is host-only", livePage.includes("onStartWarptalk={isRoomHost ? handleStartWarptalk : undefined}") && livePage.includes("onStopWarptalk={isRoomHost ? handleStopWarptalk : undefined}")],
+  // WT-371 splits the two halves of what used to be one rule.
+  //
+  // STOPPING stays strictly host-only, and the reason above is why: translation spends a billed
+  // pipeline, and letting anyone cut it off takes the meeting's translation away from everybody
+  // in it.
+  //
+  // STARTING is now the room's decision. Host-only blocked a meeting whose host was late or busy
+  // — the same trap WT-341 removed from starting the room — so `participants_can_start_
+  // translation` exists, defaults to OFF, and has to be turned on by a host. The billing concern
+  // survives that: the spend is opened by the person who owns the room, deliberately, per room,
+  // rather than by a global relaxation nobody chose.
+  //
+  // The server enforces the same split in TranslationRoomSessionService.CanStartSessionAsync;
+  // this check only pins what the client offers.
+  ["stopping translation is host-only, always", livePage.includes("onStopWarptalk={isRoomHost ? handleStopWarptalk : undefined}")],
+  ["starting translation is host-only unless the room opened it up", livePage.includes("isRoomHost || room?.settings?.participantsCanStartTranslation") && livePage.includes("handleStartWarptalk")],
 ];
 
 const failures = checks.filter(([, passed]) => !passed);
