@@ -113,7 +113,29 @@ export function useTrackProcessors({
 
       try {
         if (!krispRef.current) krispRef.current = KrispNoiseFilter();
-        await localAudioTrack.setProcessor(krispRef.current);
+        const krisp = krispRef.current;
+        await localAudioTrack.setProcessor(krisp);
+
+        // ATTACHING IS NOT RUNNING, and this is the half a throw cannot tell you about.
+        //
+        // setProcessor() awaits init(), which only fetches a public model manifest — it does not
+        // check whether this LiveKit project may actually run Krisp. Enabling happens later in
+        // onPublish() → setEnabled(), which asks the server and, when the answer is no, LOGS AND
+        // RETURNS FALSE. livekit-client calls onPublish un-awaited and un-caught, so nothing
+        // rejects, no catch fires, and the toggle sits there lit while the filter is inert.
+        //
+        // Catching the throw (WASM blocked by CSP) fixed the loud failure and left this silent
+        // one exactly as it was: browser suppression surrendered for a processor that is not
+        // running. It is also what Firefox and Safari do, where Krisp is simply unsupported.
+        //
+        // So the browser's denoiser is stood down only against Krisp's own answer.
+        await krisp.setEnabled(true);
+        if (!krisp.isEnabled()) {
+          throw new Error(
+            "Krisp attached but did not enable — this LiveKit project or browser cannot run it.",
+          );
+        }
+
         await setBrowserSuppression(false);
       } catch (error) {
         // Put the microphone back the way a working fallback needs it BEFORE telling anyone.
