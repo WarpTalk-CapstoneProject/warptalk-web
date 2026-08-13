@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import { ClosedCaptioning } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
 import { getLanguageName } from "@/lib/language/languages";
@@ -13,7 +13,10 @@ import {
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
-import { SuggestionStrip } from "@/components/rooms/live/side-panel/suggestion-strip";
+import {
+  SuggestionBadge,
+  SuggestionDetail,
+} from "@/components/rooms/live/side-panel/suggestion-badge";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -125,6 +128,9 @@ function TranscriptBubble({
   onDismissSuggestion: (segmentId: string) => void;
 }) {
   const speakerName = segment.speakerName || "Speaker";
+  // Closed by default. The hint was not asked for, so it announces itself with a badge and
+  // waits to be opened rather than pushing the line somebody actually said out of the way.
+  const [suggestionOpen, setSuggestionOpen] = useState(false);
 
   return (
     <motion.article
@@ -135,18 +141,7 @@ function TranscriptBubble({
       className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
     >
       <div className={`flex max-w-[85%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
-        <AnimatePresence>
-          {suggestion ? (
-            <SuggestionStrip
-              key={suggestion.segmentId}
-              suggestion={suggestion}
-              isSelf={isSelf}
-              onDismiss={() => onDismissSuggestion(suggestion.segmentId)}
-            />
-          ) : null}
-        </AnimatePresence>
-
-        <div className={`flex min-w-0 items-baseline gap-1.5 px-1 text-[10px] text-ink-subtle ${isSelf ? "flex-row-reverse" : ""}`}>
+        <div className={`flex min-w-0 items-center gap-1.5 px-1 text-[10px] text-ink-subtle ${isSelf ? "flex-row-reverse" : ""}`}>
           <span className="min-w-0 truncate font-semibold text-ink-muted">
             {isSelf ? "You" : speakerName}
           </span>
@@ -156,6 +151,13 @@ function TranscriptBubble({
           >
             {formatTranscriptTimestamp(segment.startTimeMs)}
           </span>
+          {suggestion ? (
+            <SuggestionBadge
+              suggestion={suggestion}
+              open={suggestionOpen}
+              onToggle={() => setSuggestionOpen((current) => !current)}
+            />
+          ) : null}
         </div>
 
         <div
@@ -195,6 +197,20 @@ function TranscriptBubble({
               </span>
             ) : null}
           </p>
+
+          <AnimatePresence initial={false}>
+            {suggestion && suggestionOpen ? (
+              <SuggestionDetail
+                key={suggestion.segmentId}
+                suggestion={suggestion}
+                isSelf={isSelf}
+                onDismiss={() => {
+                  setSuggestionOpen(false);
+                  onDismissSuggestion(suggestion.segmentId);
+                }}
+              />
+            ) : null}
+          </AnimatePresence>
         </div>
       </div>
     </motion.article>

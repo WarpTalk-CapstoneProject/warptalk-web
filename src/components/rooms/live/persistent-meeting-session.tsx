@@ -939,6 +939,16 @@ export function PersistentMeetingSession({
   // Choices for the media bar's language dropdown: the room's spoken language plus every
   // configured target — always includes whatever is currently selected so a value coming
   // from an older/ad-hoc join config never renders as a dropdown option with no match.
+  // Languages this participant added themselves, beyond the ones the room was configured
+  // with. The room's configuration is what gets OFFERED, not a limit on who may speak: it
+  // was chosen by whoever booked the meeting, before they knew who would turn up. Somebody
+  // who speaks Korean in a Vietnamese/Japanese room adds Korean and is understood.
+  //
+  // Kept here rather than only in the current selection, so a language stays in the menu
+  // after they switch off it — otherwise adding one, trying another, and going back would
+  // mean finding it in the full list again every time.
+  const [addedLanguages, setAddedLanguages] = useState<string[]>([]);
+
   const availableListenLanguages = useMemo(() => {
     const codes = new Set<string>();
     if (room?.sourceLanguage)
@@ -946,9 +956,26 @@ export function PersistentMeetingSession({
     room?.targetLanguages?.forEach((language) =>
       codes.add(normalizeLanguageCode(language)),
     );
+    addedLanguages.forEach((language) => codes.add(language));
     codes.add(normalizeLanguageCode(targetLanguage));
     return Array.from(codes);
-  }, [room, targetLanguage]);
+  }, [room, targetLanguage, addedLanguages]);
+
+  /** Remember a pick that the room itself does not offer, so it stays in the menu. */
+  const rememberAddedLanguage = useCallback(
+    (language: string) => {
+      const configured = new Set<string>();
+      if (room?.sourceLanguage) configured.add(normalizeLanguageCode(room.sourceLanguage));
+      room?.targetLanguages?.forEach((code) =>
+        configured.add(normalizeLanguageCode(code)),
+      );
+      if (configured.has(language)) return;
+      setAddedLanguages((current) =>
+        current.includes(language) ? current : [...current, language],
+      );
+    },
+    [room],
+  );
 
   // Every OTHER participant's speak language, normalized — lets FilteredRoomAudio mute a
   // real participant's raw microphone track for a listener whose chosen language differs
@@ -999,14 +1026,16 @@ export function PersistentMeetingSession({
   const handleChangeListenLanguage = useCallback((language: string) => {
     const normalizedLanguage = normalizeLanguageCode(language);
     setListenLanguageState(normalizedLanguage);
+    rememberAddedLanguage(normalizedLanguage);
     rememberJoinPreference({ listenLanguage: normalizedLanguage });
-  }, [rememberJoinPreference]);
+  }, [rememberJoinPreference, rememberAddedLanguage]);
 
   const handleChangeSpeakLanguage = useCallback((language: string) => {
     const normalizedLanguage = normalizeLanguageCode(language);
     setSpeakLanguageState(normalizedLanguage);
+    rememberAddedLanguage(normalizedLanguage);
     rememberJoinPreference({ speakLanguage: normalizedLanguage });
-  }, [rememberJoinPreference]);
+  }, [rememberJoinPreference, rememberAddedLanguage]);
 
   /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
   function handleChangeVoicePreference(voiceId: string) {
