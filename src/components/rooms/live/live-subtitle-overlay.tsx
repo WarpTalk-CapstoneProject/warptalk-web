@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import { groupTranscriptSegments } from "@/lib/transcript/transcript-display";
+import {
+  groupTranscriptSegments,
+  isTranscriptControlMarker,
+} from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 
@@ -84,6 +87,10 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
  */
 function pickLatest(segments: TranscriptSegmentDto[]): TranscriptSegmentDto | null {
   for (let i = segments.length - 1; i >= 0; i--) {
+    // A control marker has originalText and would otherwise qualify — `__MEETING_END__` is
+    // published onto the STT stream the instant a meeting ends, which is exactly when it would
+    // flash across the screen as the closing caption.
+    if (isTranscriptControlMarker(segments[i].originalText)) continue;
     if (segments[i].originalText?.trim()) return segments[i];
   }
   return null;
