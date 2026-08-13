@@ -36,6 +36,7 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getErrorStatus } from "@/lib/api/retry-policy";
 import { billingService } from "@/services/billing.service";
 import type { UserDto } from "@/types/auth";
 
@@ -45,7 +46,7 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
   // is undefined, so every guard fell through and the bar rendered as nothing. That window is
   // seconds wide on a slow or failing credits call, which is exactly when an owner is looking
   // for it. status has one value at a time and no such gap.
-  const { data, status } = useQuery({
+  const { data, status, error } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId),
     enabled: Boolean(workspaceId),
@@ -61,10 +62,21 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
     );
   }
 
-  // Said, not swallowed. This used to `return null` on any failure, which is the same thing on
-  // screen as "this workspace has no credits" and as "the owner is not allowed to see this" —
-  // three different situations rendering as one blank space is how a missing bar becomes
-  // impossible to tell from a broken one.
+  // A workspace with no subscription is not a failure, and must not read as one.
+  //
+  // The endpoint answers 404 for it (BillingSubscriptionNotFound). It used to answer 400 for
+  // everything, which is why the dashboard showed "Couldn't load workspace credits." to an
+  // owner whose workspace simply has no plan — a scary sentence about a perfectly ordinary
+  // state. Backend fix: CreditsController.ToActionResult.
+  //
+  // 403 is the same kind of non-event from this component's point of view: a member who cannot
+  // see billing gets no bar, not an error about one.
+  const errorStatus = status === "error" ? getErrorStatus(error) : null;
+  if (errorStatus === 404 || errorStatus === 403) return null;
+
+  // Anything else IS said rather than swallowed. Returning null on every failure is the same
+  // thing on screen as "no plan", and a broken bar that looks identical to an absent one is a
+  // bar nobody can report.
   if (status === "error") {
     return (
       <div className="rounded-lg border border-border/60 bg-surface-1 px-3 py-2">
