@@ -51,20 +51,29 @@ export function CycleSummary({
 }) {
   if (!credits) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-border bg-canvas px-4 py-4">
-        <div className="min-w-0">
-          <p className="text-[13px] font-medium text-ink">No plan on this workspace</p>
-          <p className="mt-0.5 text-[12px] text-ink-muted">
-            Meetings translate against a credit balance, and this workspace has none to draw from.
-          </p>
+      /* Plain. The gradient this used to carry now lives in DashboardHero above.
+         Tying the page's one decorative surface to an ERROR state meant a workspace with a plan
+         got a flat page with no top to it, and a workspace without one got its warning dressed up
+         as a promotion. This is a fact about the workspace, and it should read like one. */
+      <div className="rounded-[14px] border border-hairline bg-surface-1 px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-ink">
+              No plan on this workspace
+            </p>
+            <p className="mt-0.5 text-[12px] text-ink-muted">
+              Meetings translate against a credit balance, and this workspace
+              has none to draw from.
+            </p>
+          </div>
+          <Link
+            href={plansHref}
+            className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 text-[13px] font-medium text-ink transition hover:bg-surface-2"
+          >
+            Choose a plan
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
-        <Link
-          href={plansHref}
-          className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full bg-foreground px-3 text-[13px] font-medium text-background transition hover:opacity-90"
-        >
-          Choose a plan
-          <ArrowUpRight className="h-3.5 w-3.5" />
-        </Link>
       </div>
     );
   }
@@ -82,7 +91,8 @@ export function CycleSummary({
   const daysLeft = daysLeftInCycle(credits, now);
 
   const projection = projectCycle(credits, now);
-  const isLow = remainingPercent !== null && remainingPercent <= LOW_CREDIT_PERCENT;
+  const isLow =
+    remainingPercent !== null && remainingPercent <= LOW_CREDIT_PERCENT;
   const willRunOut = projection.kind === "runs-out";
 
   return (
@@ -113,7 +123,11 @@ export function CycleSummary({
               ? "—"
               : `${Math.round(projection.perDay).toLocaleString()}/day`
           }
-          detail={projection.kind === "unknown" ? projection.reason : "Average since the cycle began"}
+          detail={
+            projection.kind === "unknown"
+              ? projection.reason
+              : "Average since the cycle began"
+          }
         />
         <Cell
           label={willRunOut ? "Runs out" : "Renews"}
@@ -155,11 +169,15 @@ export function CycleSummary({
 
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[12px]">
           <p className="text-ink-muted">
-            <span className="font-medium text-ink">{usedPercent}%</span> of credits used
+            <span className="font-medium text-ink">{usedPercent}%</span> of
+            credits used
             {elapsedPercent !== null ? (
               <>
                 {" · "}
-                <span className="font-medium text-ink">{elapsedPercent}%</span> of the cycle elapsed
+                <span className="font-medium text-ink">
+                  {elapsedPercent}%
+                </span>{" "}
+                of the cycle elapsed
               </>
             ) : null}
           </p>
@@ -167,13 +185,17 @@ export function CycleSummary({
           <div className="flex items-center gap-3">
             {subscription ? (
               <span className="text-ink-muted">
-                <span className="font-medium text-ink">{subscription.planName}</span>
+                <span className="font-medium text-ink">
+                  {subscription.planName}
+                </span>
                 {/* With its currency, like the billing page. A bare "1,290,000" beside a credit
                     count reads as more credits. */}
                 {subscription.price > 0
                   ? ` · ${formatMoney(subscription.price, "VND")}/cycle`
                   : ""}
-                {subscription.cancelAtPeriodEnd ? " · cancels at period end" : ""}
+                {subscription.cancelAtPeriodEnd
+                  ? " · cancels at period end"
+                  : ""}
               </span>
             ) : null}
             <Link
@@ -189,7 +211,8 @@ export function CycleSummary({
         {subscription?.cancelAtPeriodEnd ? (
           <p className="mt-2 flex items-center gap-1.5 text-[12px] text-amber-500">
             <Warning className="h-3.5 w-3.5" />
-            Translation stops for everyone in this workspace on {formatDay(new Date(end))}.
+            Translation stops for everyone in this workspace on{" "}
+            {formatDay(new Date(end))}.
           </p>
         ) : null}
       </div>
@@ -219,11 +242,16 @@ function Cell({
       >
         {value}
       </p>
-      {detail ? <p className="mt-1.5 text-[12px] text-ink-subtle">{detail}</p> : null}
+      {detail ? (
+        <p className="mt-1.5 text-[12px] text-ink-subtle">{detail}</p>
+      ) : null}
     </div>
   );
 }
 
 function formatDay(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(date);
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+  }).format(date);
 }

@@ -11,7 +11,7 @@ import type {
 } from "@/types/translationRoom";
 
 type RoomOccupancyInput = Pick<TranslationRoomDto, "id" | "maxParticipants"> &
-  Partial<Pick<TranslationRoomDto, "participantCount">>;
+  Partial<Pick<TranslationRoomDto, "participantCount" | "attendedCount" | "status">>;
 
 /**
  * WT-274: the single hook every "who is in this room" surface reads.
@@ -54,10 +54,16 @@ export function useRoomOccupancy(
       capacity: room?.maxParticipants,
       participants: roster,
       fallbackCount: room?.participantCount,
+      // A finished meeting reports how many turned up. Live occupancy is 0 for every room that
+      // has ended, so "0/100" was the only thing a finished meeting could ever say.
+      status: room?.status,
+      attendedCount: room?.attendedCount,
     });
   }, [
     apiParticipants,
     liveForThisRoom,
+    room?.status,
+    room?.attendedCount,
     room?.maxParticipants,
     room?.participantCount,
   ]);

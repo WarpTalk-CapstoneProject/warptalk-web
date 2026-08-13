@@ -32,7 +32,12 @@ function normalizeArtifactType(type: string): EndedRoomHistoryItem["artifacts"][
   return "transcript_export";
 }
 
-function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHistoryItem["artifacts"][number] {
+/**
+ * WT-333: exported, not moved. The personal timeline needs the same artifact shape the archive
+ * builds, and the `completed` → `ready` mapping above is a fix that took a bug to find — a second
+ * copy of it in another service is a second place for it to be lost. Nothing else here changes.
+ */
+export function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHistoryItem["artifacts"][number] {
   const type = normalizeArtifactType(artifact.type);
   const backendSource = type === "summary_export"
     ? "translation_room_summaries"

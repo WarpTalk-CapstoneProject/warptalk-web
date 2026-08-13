@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { INVITE_SNOOZE_DAYS, shouldSuggestInvite } from "@/lib/onboarding/invite-suggestion";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useOnboardingStore } from "@/stores/onboarding-store";
@@ -32,11 +33,12 @@ import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { IconProps } from "@phosphor-icons/react";
 import {
+  Archive,
+  CalendarBlank,
   CaretDown,
   CaretLeft,
   Check,
   CreditCard,
-  Desktop,
   FileText,
   GearSix,
   Gauge,
@@ -46,11 +48,9 @@ import {
   MagnifyingGlass,
   PaperPlaneTilt,
   Plus,
-  SignOut,
   Sliders,
   SquaresFour,
   User,
-  UserPlus,
   Users,
   Warning,
   Waveform,
@@ -210,6 +210,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         }
       ]
     },
+    { icon: CalendarBlank, label: "My Meetings", href: `/${slug}/my-meetings` },
+    { icon: Archive, label: "History", href: `/${slug}/history` },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
     { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
@@ -252,12 +254,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     });
   const selectWorkspaceMutation = useSelectWorkspace();
 
-  const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
+  const handleSelectWorkspace = async (workspaceId: string) => {
     try {
       const res = await selectWorkspaceMutation.mutateAsync(workspaceId);
-      setActiveWorkspace(workspaceId, name, slug, roleName, membershipType, res.defaultLanguage || defaultLanguage);
-      toast.success(`Switched to workspace "${name}"`);
-      router.push(`/${slug}/home`);
+      applySelectedWorkspace(res, setActiveWorkspace);
+      toast.success(`Switched to workspace "${res.name}"`);
+      router.push(`/${res.slug}/home`);
     } catch {
       toast.error("Failed to switch workspace");
     }
@@ -619,16 +621,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 {/* Workspace list */}
                 <div className="max-h-[200px] overflow-y-auto flex flex-col gap-0.5">
                   {workspaces.map((ws, idx) => {
-                    const membershipType =
-                      "membershipType" in ws && typeof ws.membershipType === "string"
-                        ? ws.membershipType
-                        : "Internal";
                     const isSelected = ws.id === activeWorkspaceId;
 
                     return (
                       <DropdownMenuItem
                         key={ws.id}
-                        onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", membershipType, ws.defaultLanguage || "en")}
+                        onClick={() => handleSelectWorkspace(ws.id)}
                         className={cn(
                           "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-[13px]",
                           isSelected ? "bg-surface-2 font-medium text-ink" : "hover:bg-surface-2 text-ink"

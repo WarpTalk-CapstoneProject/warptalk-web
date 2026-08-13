@@ -18,8 +18,16 @@ import { persist } from "zustand/middleware";
 interface OnboardingState {
   /** Workspace id → when its invite suggestion was last dismissed (epoch ms). */
   inviteDismissedAt: Record<string, number>;
-  /** When the product tour was last finished or skipped, or null if it never has been. */
-  tourSeenAt: number | null;
+  /**
+   * User id → when that person finished or skipped the tour.
+   *
+   * KEYED BY USER, AND NOT CLEARED ON SIGN-IN. It used to be one timestamp wiped by `reset()`
+   * whenever the signed-in account changed — which is correct for isolation and wrong for the
+   * person: signing out and back in wiped their own answer, so the tour ran again on every
+   * login. Keying by user is the stronger form of the same guarantee. A new account has no
+   * entry and gets its tour; the previous account's answer is still theirs when they return.
+   */
+  tourSeenAtByUser: Record<string, number>;
   /**
    * Whether the tour is on screen right now. Deliberately NOT persisted — a tour that was open
    * when the tab closed should not reopen days later on a page it no longer describes.
@@ -28,20 +36,21 @@ interface OnboardingState {
 
   dismissInviteSuggestion: (workspaceId: string, atMs: number) => void;
   openTour: () => void;
+  /** True when this person has already finished or skipped it. */
+  hasSeenTour: (userId: string | null | undefined) => boolean;
   /** Ends the tour and records that it has been seen — the same act whether finished or skipped. */
-  closeTour: (atMs: number) => void;
-  markTourSeen: (atMs: number) => void;
+  closeTour: (userId: string | null | undefined, atMs: number) => void;
   /** Show the tour again on the next opportunity — what "restart the tour" does. */
-  forgetTour: () => void;
+  forgetTour: (userId: string | null | undefined) => void;
   /** Called when the signed-in account changes. */
   reset: () => void;
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       inviteDismissedAt: {},
-      tourSeenAt: null,
+      tourSeenAtByUser: {},
       tourOpen: false,
 
       dismissInviteSuggestion: (workspaceId, atMs) =>
@@ -51,16 +60,35 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       openTour: () => set({ tourOpen: true }),
 
+      hasSeenTour: (userId) =>
+        // No user id yet means the shell has not resolved who this is. Treat that as "seen" so
+        // the tour never opens against an account we cannot record the answer against — it
+        // would run again on the next load, forever.
+        !userId || get().tourSeenAtByUser[userId] != null,
+
       // Skipping and finishing record the same thing on purpose. Someone who left after two
       // steps has decided they do not want this, and re-offering it on every sign-in would be
       // ignoring an answer they already gave.
-      closeTour: (atMs) => set({ tourOpen: false, tourSeenAt: atMs }),
+      closeTour: (userId, atMs) =>
+        set((state) => ({
+          tourOpen: false,
+          tourSeenAtByUser: userId
+            ? { ...state.tourSeenAtByUser, [userId]: atMs }
+            : state.tourSeenAtByUser,
+        })),
 
-      markTourSeen: (atMs) => set({ tourSeenAt: atMs }),
+      forgetTour: (userId) =>
+        set((state) => {
+          if (!userId) return state;
+          const next = { ...state.tourSeenAtByUser };
+          delete next[userId];
+          return { tourSeenAtByUser: next };
+        }),
 
-      forgetTour: () => set({ tourSeenAt: null }),
-
-      reset: () => set({ inviteDismissedAt: {}, tourSeenAt: null, tourOpen: false }),
+      // Only the ephemeral bit. The per-user records ARE the isolation — clearing them would
+      // hand the next sign-in a tour the previous person had already dismissed, and take away
+      // the answer they gave. Keying by user is the stronger guarantee, not a weaker one.
+      reset: () => set({ tourOpen: false }),
     }),
     {
       name: "warptalk-onboarding",
@@ -68,7 +96,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       // every new tab until somebody closed it in the right one.
       partialize: (state) => ({
         inviteDismissedAt: state.inviteDismissedAt,
-        tourSeenAt: state.tourSeenAt,
+        tourSeenAtByUser: state.tourSeenAtByUser,
       }),
     },
   ),

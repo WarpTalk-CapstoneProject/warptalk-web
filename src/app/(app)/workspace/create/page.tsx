@@ -17,6 +17,7 @@ import {
   slugPreviewFromName,
 } from "@/lib/workspace/email-domain";
 import { useCreateWorkspace, useSelectWorkspace } from "@/hooks/use-workspace";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
@@ -59,12 +60,6 @@ export default function CreateWorkspaceDemoPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const activeWorkspaceId = useWorkspaceStore(
-    (state) => state.activeWorkspaceId,
-  );
-  const activeWorkspaceSlug = useWorkspaceStore(
-    (state) => state.activeWorkspaceSlug,
-  );
   const setActiveWorkspace = useWorkspaceStore(
     (state) => state.setActiveWorkspace,
   );
@@ -100,18 +95,11 @@ export default function CreateWorkspaceDemoPage() {
     createWorkspace.isPending ||
     selectWorkspace.isPending ||
     form.formState.isSubmitting;
-  const canCreate =
-    isAuthenticated && !!emailDomain && !accountIssue && !activeWorkspaceId;
+  const canCreate = isAuthenticated && !!emailDomain && !accountIssue;
 
   useEffect(() => {
     if (mounted && !isAuthenticated) router.replace("/login");
   }, [mounted, isAuthenticated, router]);
-
-  useEffect(() => {
-    if (mounted && activeWorkspaceId) {
-      router.replace(`/${activeWorkspaceSlug || "workspace"}/home`);
-    }
-  }, [mounted, activeWorkspaceId, activeWorkspaceSlug, router]);
 
   async function onSubmit(values: CreateWorkspaceFormData) {
     if (!emailDomain) {
@@ -134,17 +122,10 @@ export default function CreateWorkspaceDemoPage() {
         requireVerifiedDomainForInternal: true,
       });
 
-      await selectWorkspace.mutateAsync(workspace.id);
-      setActiveWorkspace(
-        workspace.id,
-        workspace.name,
-        workspace.slug,
-        workspace.role || "Owner",
-        "Internal",
-        "en",
-      );
+      const selection = await selectWorkspace.mutateAsync(workspace.id);
+      applySelectedWorkspace(selection, setActiveWorkspace);
       toast.success(`Workspace "${workspace.name}" created.`);
-      router.push(`/${workspace.slug}/home`);
+      router.push(`/${selection.slug}/home`);
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);
@@ -152,7 +133,7 @@ export default function CreateWorkspaceDemoPage() {
     }
   }
 
-  if (!mounted || !isAuthenticated || activeWorkspaceId) {
+  if (!mounted || !isAuthenticated) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
