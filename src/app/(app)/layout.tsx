@@ -23,6 +23,7 @@ import { NotificationSoundToggle } from "@/components/layout/notification-sound-
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
+import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
@@ -539,6 +540,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <ProductTour />
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* A non-scrolling frame around the scrolling main column, so anything pinned to the
+              content area — the meeting-started banner — stays put while the page scrolls under
+              it. `<main>` itself cannot serve: it IS the scroll container. */}
+          <div className="relative flex min-w-0 flex-1 flex-col">
           <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}
             {activeMeetingRoomId ? (
@@ -557,6 +562,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </MiniMeetingDock>
             ) : null}
           </main>
+
+            <MeetingStartedBanner />
+          </div>
 
           {/* Right Sidebar (Context/Properties) */}
           {!isAdminRoute && !isLiveMeetingRoute && !pathname.startsWith('/rooms/') && (
