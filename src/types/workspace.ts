@@ -240,6 +240,8 @@ export interface SelectWorkspaceResponse {
   selectedWorkspaceId: string;
   name: string;
   slug: string;
+  role: string;
+  membershipType: string;
   defaultLanguage?: string;
 }
 

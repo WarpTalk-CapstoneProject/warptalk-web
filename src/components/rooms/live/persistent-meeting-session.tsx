@@ -40,9 +40,13 @@ import {
   useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
+  useJoinTranslationRoomByCode,
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import { getLanguageName } from "@/lib/language/languages";
+import { holdsSeat } from "@/lib/meeting/room-occupancy";
+import { playNotificationCue } from "@/lib/notifications/notification-sounds";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -52,6 +56,7 @@ import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
+import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
@@ -211,6 +216,8 @@ export function PersistentMeetingSession({
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } =
     useJoinMeeting();
+  const { mutateAsync: registerParticipantAsync } = useJoinTranslationRoomByCode();
+  const participantRegisteredRef = useRef(false);
 
   const meetingJoinedRef = useRef(false);
   // Set by handleExit("end") so this client ignores its own TranslationRoomEnded broadcast and
@@ -330,6 +337,11 @@ export function PersistentMeetingSession({
   );
   const removeLiveParticipant = useTranslationRoomStore(
     (state) => state.removeParticipant,
+  );
+  // WT-354: the roster the hub hands a joiner on arrival. Without it the live list could only
+  // ever contain people who joined AFTER this client did.
+  const setLiveParticipants = useTranslationRoomStore(
+    (state) => state.setParticipants,
   );
   const raisedHands = useTranslationRoomStore((state) => state.raisedHands);
   const setHandRaisedInStore = useTranslationRoomStore(
@@ -462,6 +474,14 @@ export function PersistentMeetingSession({
       mainMeetingSessionRef.current = meetingSession;
     }
   }, [meetingSession, breakoutState.active]);
+  // WT-357: the session as it is right now, for handlers registered once on the hub connection.
+  // Distinct from mainMeetingSessionRef above, which deliberately freezes at the MAIN room's
+  // session while a breakout is active — a handler asking "do I already hold a live session"
+  // must be told about the session it actually holds.
+  const currentMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
+  useEffect(() => {
+    currentMeetingSessionRef.current = meetingSession;
+  }, [meetingSession]);
   const endBreakoutsMutation = useEndBreakouts(roomId);
 
   // WT-08: application-level reconnect state — the hub connection itself already
@@ -470,9 +490,14 @@ export function PersistentMeetingSession({
   const [isSignalRReconnecting, setIsSignalRReconnecting] = useState(false);
   const [isLiveKitReconnecting, setIsLiveKitReconnecting] = useState(false);
   const isReconnecting = isSignalRReconnecting || isLiveKitReconnecting;
-  const participants = liveParticipants.length
+  const mergedParticipants = liveParticipants.length
     ? mergeParticipants(apiParticipants, liveParticipants)
     : apiParticipants;
+  // WT-358: the People panel prints role verbatim from the API list, and the live presence
+  // payload carries no role — so without this a Transfer Host left the old host labelled Host
+  // until the page was reloaded. The server has written both rows by now, so a later refetch
+  // agrees with this rather than reverting it.
+  const participants = applyLiveHostRole(mergedParticipants, liveHostUserId);
   const participantsRef = useRef(participants);
   useEffect(() => {
     participantsRef.current = participants;
@@ -710,6 +735,36 @@ export function PersistentMeetingSession({
   // Chinese/Japanese/English translation bubbles too ("loạn ngôn ngữ"). A ref keeps the
   // filter reading the latest value without forcing the SignalR effect to reconnect on
   // every language change.
+  /**
+   * Tell a participant when the host starts translation, and what they have to do about it.
+   *
+   * A member has no Start button, so from their seat translation beginning is invisible: the
+   * transcript simply stays empty until they happen to open Settings and pick the two languages.
+   * That is the whole of "tưởng không dịch được" — nothing was broken, nobody had been asked.
+   *
+   * Fires on the TRANSITION into started, not on the state, so re-renders and the five-second
+   * session poll cannot repeat it. Hosts are excluded: they pressed the button.
+   */
+  const announcedTranslationRef = useRef(false);
+  useEffect(() => {
+    if (!translationStarted) {
+      announcedTranslationRef.current = false;
+      return;
+    }
+    if (isRoomHost || announcedTranslationRef.current) return;
+    announcedTranslationRef.current = true;
+
+    playNotificationCue("translation-started");
+
+    const needsLanguages = !sourceLanguage || !targetLanguage;
+    toast.info("The host started translation.", {
+      description: needsLanguages
+        ? "Choose the language you speak and the one you want to hear — the control is next to Stop Translation."
+        : `You are speaking ${getLanguageName(sourceLanguage)} and hearing ${getLanguageName(targetLanguage)}.`,
+      duration: needsLanguages ? 12000 : 6000,
+    });
+  }, [translationStarted, isRoomHost, sourceLanguage, targetLanguage]);
+
   const targetLanguageRef = useRef(targetLanguage);
   useEffect(() => {
     targetLanguageRef.current = targetLanguage;
@@ -920,6 +975,16 @@ export function PersistentMeetingSession({
   // Choices for the media bar's language dropdown: the room's spoken language plus every
   // configured target — always includes whatever is currently selected so a value coming
   // from an older/ad-hoc join config never renders as a dropdown option with no match.
+  // Languages this participant added themselves, beyond the ones the room was configured
+  // with. The room's configuration is what gets OFFERED, not a limit on who may speak: it
+  // was chosen by whoever booked the meeting, before they knew who would turn up. Somebody
+  // who speaks Korean in a Vietnamese/Japanese room adds Korean and is understood.
+  //
+  // Kept here rather than only in the current selection, so a language stays in the menu
+  // after they switch off it — otherwise adding one, trying another, and going back would
+  // mean finding it in the full list again every time.
+  const [addedLanguages, setAddedLanguages] = useState<string[]>([]);
+
   const availableListenLanguages = useMemo(() => {
     const codes = new Set<string>();
     if (room?.sourceLanguage)
@@ -927,9 +992,26 @@ export function PersistentMeetingSession({
     room?.targetLanguages?.forEach((language) =>
       codes.add(normalizeLanguageCode(language)),
     );
+    addedLanguages.forEach((language) => codes.add(language));
     codes.add(normalizeLanguageCode(targetLanguage));
     return Array.from(codes);
-  }, [room, targetLanguage]);
+  }, [room, targetLanguage, addedLanguages]);
+
+  /** Remember a pick that the room itself does not offer, so it stays in the menu. */
+  const rememberAddedLanguage = useCallback(
+    (language: string) => {
+      const configured = new Set<string>();
+      if (room?.sourceLanguage) configured.add(normalizeLanguageCode(room.sourceLanguage));
+      room?.targetLanguages?.forEach((code) =>
+        configured.add(normalizeLanguageCode(code)),
+      );
+      if (configured.has(language)) return;
+      setAddedLanguages((current) =>
+        current.includes(language) ? current : [...current, language],
+      );
+    },
+    [room],
+  );
 
   // Every OTHER participant's speak language, normalized — lets FilteredRoomAudio mute a
   // real participant's raw microphone track for a listener whose chosen language differs
@@ -980,14 +1062,16 @@ export function PersistentMeetingSession({
   const handleChangeListenLanguage = useCallback((language: string) => {
     const normalizedLanguage = normalizeLanguageCode(language);
     setListenLanguageState(normalizedLanguage);
+    rememberAddedLanguage(normalizedLanguage);
     rememberJoinPreference({ listenLanguage: normalizedLanguage });
-  }, [rememberJoinPreference]);
+  }, [rememberJoinPreference, rememberAddedLanguage]);
 
   const handleChangeSpeakLanguage = useCallback((language: string) => {
     const normalizedLanguage = normalizeLanguageCode(language);
     setSpeakLanguageState(normalizedLanguage);
+    rememberAddedLanguage(normalizedLanguage);
     rememberJoinPreference({ speakLanguage: normalizedLanguage });
-  }, [rememberJoinPreference]);
+  }, [rememberJoinPreference, rememberAddedLanguage]);
 
   /** voiceId "" (or falsy) clears the preference, back to the automatic per-speaker default. */
   function handleChangeVoicePreference(voiceId: string) {
@@ -1122,6 +1206,89 @@ export function PersistentMeetingSession({
     });
   }, [canConnectMeeting, displayName, joinMeetingAsync, room?.id]);
 
+  /**
+   * Make sure this person exists as a PARTICIPANT of the translation room, not only as a
+   * LiveKit peer.
+   *
+   * There are two joins and they are not the same thing:
+   *
+   *   POST /meetings/rooms/{id}/join     LiveKit token — puts you in the video grid
+   *   POST /translation-rooms/join       creates your participant row
+   *
+   * The effect above calls only the first. The second used to happen exclusively on the
+   * join-by-code path, i.e. the lobby — so anyone who arrived by clicking a notification or a
+   * link went straight to /live with media and no participant row. The visible symptoms were a
+   * People panel reading 1 while two faces were on screen, and Leave answering
+   * "Participant not found." The invisible one is worse: no participant row means no audio
+   * route, so that person was never transcribed OR translated, in a product whose entire
+   * purpose is translating them.
+   *
+   * Safe to call unconditionally. JoinTranslationRoomAsync finds an existing participant and
+   * updates it rather than inserting a second, and its capacity check explicitly does not
+   * count a repeated join from someone who already holds a seat.
+   *
+   * A failure here is logged and not surfaced: the meeting itself is working, and a toast about
+   * a registration the user never asked for would be noise they cannot act on. The roster
+   * refetch below is what makes the fix visible.
+   */
+  useEffect(() => {
+    if (!room?.translationRoomCode || !canConnectMeeting) return;
+    if (participantRegisteredRef.current) return;
+    participantRegisteredRef.current = true;
+
+    void registerParticipantAsync({
+      translationRoomCode: room.translationRoomCode,
+      displayName,
+      speakLanguage: sourceLanguage,
+      listenLanguage: targetLanguage,
+      // The device state this session actually has, so the roster does not claim a camera is on
+      // for somebody who joined with it off.
+      cameraEnabled,
+      microphoneEnabled,
+      speakerEnabled: true,
+    })
+      .then(() => refetchParticipants())
+      .catch((error: unknown) => {
+        // Reset so a later render can try again — a transient failure here costs this person
+        // their translation for the whole meeting, which is too expensive to give up on once.
+        participantRegisteredRef.current = false;
+        console.warn("translation_room_participant_registration_failed", error);
+      });
+  }, [
+    room?.translationRoomCode,
+    canConnectMeeting,
+    displayName,
+    sourceLanguage,
+    targetLanguage,
+    cameraEnabled,
+    microphoneEnabled,
+    registerParticipantAsync,
+    refetchParticipants,
+  ]);
+
+  /**
+   * A soft cue when somebody new arrives.
+   *
+   * Keyed on a RISE in the seat count rather than on the roster changing, because the roster
+   * object is replaced on every poll and by every mute, camera and language change — binding to
+   * it would beep continuously through an ordinary meeting.
+   *
+   * The first count after mount is recorded silently: everyone already in the room when you
+   * joined is not "somebody arriving", and announcing them would greet you with a burst of
+   * beeps for a meeting already in progress.
+   */
+  const seatCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const seated = apiParticipants.filter((participant) =>
+      holdsSeat(participant.status),
+    ).length;
+
+    const previous = seatCountRef.current;
+    seatCountRef.current = seated;
+    if (previous === null) return;
+    if (seated > previous) playNotificationCue("participant-joined");
+  }, [apiParticipants]);
+
   const userSettingsQuery = useUserSettings();
   const updateUserSettings = useUpdateUserSettings();
   const userSettings = userSettingsQuery.data;
@@ -1229,6 +1396,22 @@ export function PersistentMeetingSession({
         // everyone, including FilteredRoomAudio's choice of dub over raw microphone.
         void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
         void refetchRoom().then(() => {
+          // WT-357: only a client that does NOT already hold a live media session may re-join
+          // here. retryMeetingConnection begins with setMeetingSession(null), which drops
+          // `hasToken` and therefore <LiveKitRoom connect> — useLiveKitRoom then runs
+          // room.disconnect(), stopping the camera and microphone tracks this participant is
+          // publishing. That is what the report describes as "pressing Start Translation turns
+          // the camera and mic off and the UI hitches": the devices were not toggled, the whole
+          // media connection was torn down and rebuilt, for everyone in the room at once,
+          // because the gateway broadcasts TranslationRoomStarted room-wide.
+          //
+          // The call still earns its place for the clients it was written for: somebody sitting
+          // in the lobby holds an empty token (JoinMeetingResponse.IsWaitingRoom), and the room
+          // starting is exactly when they need a real one. Everyone else already has one — a
+          // translation session opening changes nothing about a LiveKit grant — and learns the
+          // news from setLiveState, the sessions invalidation and the room refetch above.
+          const session = currentMeetingSessionRef.current;
+          if (session?.token && !session.isWaitingRoom) return;
           retryMeetingConnectionRef.current();
         });
       },
@@ -1240,6 +1423,17 @@ export function PersistentMeetingSession({
     // preference for an interpreter dub that has stopped being produced.
     connection.on("TranslationStopped", () => {
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
+    });
+    // WT-354: who was already here. The hub sends this to the caller alone, once, immediately
+    // after JoinTranslationRoom — every other participant event describes a CHANGE, so without a
+    // starting point the live roster of a late joiner began empty and no later event could fill
+    // it in. A host joining a meeting in progress saw a People panel containing only themselves.
+    //
+    // Replaces rather than merges: this IS the room as the server sees it, and anything already
+    // in the store for this room predates the connection that just opened.
+    connection.on("ParticipantRoster", (roster: ParticipantInfoDto[]) => {
+      setLiveParticipants(roster);
+      void refetchParticipants();
     });
     connection.on("ParticipantJoined", (participant: ParticipantInfoDto) => {
       addLiveParticipant(participant);
@@ -1576,6 +1770,7 @@ export function PersistentMeetingSession({
     refetchParticipants,
     refetchRoom,
     removeLiveParticipant,
+    setLiveParticipants,
     resetLiveRoom,
     displayName,
     roomId,

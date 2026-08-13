@@ -67,27 +67,85 @@ export function useTrackProcessors({
     const localAudioTrack = track;
 
     let cancelled = false;
-    async function applyNoiseProcessor() {
-      try {
-        const mediaStreamTrack = localAudioTrack.mediaStreamTrack;
-        // Run exactly one denoiser. Krisp receives AEC/AGC audio without the
-        // browser's noise suppression or voice isolation; disabling Krisp restores
-        // browser suppression. Stacking all three distorted the production mic PCM.
-        await mediaStreamTrack.applyConstraints({
-          echoCancellation: true,
-          noiseSuppression: !noiseSuppressionEnabled,
-          voiceIsolation: !noiseSuppressionEnabled,
-          autoGainControl: true,
-          channelCount: 1,
-        } as MediaTrackConstraints & { voiceIsolation: boolean });
 
-        if (noiseSuppressionEnabled && isKrispNoiseFilterSupported()) {
-          if (!krispRef.current) krispRef.current = KrispNoiseFilter();
-          await localAudioTrack.setProcessor(krispRef.current);
-        } else if (localAudioTrack.getProcessor()) {
-          await localAudioTrack.stopProcessor();
+    /**
+     * Run exactly one denoiser. Krisp wants AEC/AGC audio WITHOUT the browser's own suppression
+     * or voice isolation — stacking all three distorted the production mic PCM — so the browser's
+     * pair is switched off only while Krisp is actually carrying the load.
+     */
+    async function setBrowserSuppression(enabled: boolean) {
+      await localAudioTrack.mediaStreamTrack.applyConstraints({
+        echoCancellation: true,
+        noiseSuppression: enabled,
+        voiceIsolation: enabled,
+        autoGainControl: true,
+        channelCount: 1,
+      } as MediaTrackConstraints & { voiceIsolation: boolean });
+    }
+
+    async function applyNoiseProcessor() {
+      // ORDER IS LOAD-BEARING, and getting it wrong was the whole bug.
+      //
+      // This used to disable the browser's suppression FIRST and attach Krisp second, with no
+      // rollback when the second step threw. Krisp is WebAssembly, and production's CSP was
+      // missing 'wasm-unsafe-eval', so it threw every time — leaving the microphone with the
+      // browser's denoiser switched off and Krisp not running. Turning noise suppression ON made
+      // the audio strictly WORSE than leaving it off, while the toast said "browser noise
+      // suppression remains enabled". It did not.
+      //
+      // Krisp attaches first now. The browser's pair is only stood down once there is something
+      // to stand down for, and is restored if anything fails.
+      if (!noiseSuppressionEnabled) {
+        try {
+          if (localAudioTrack.getProcessor()) await localAudioTrack.stopProcessor();
+        } finally {
+          await setBrowserSuppression(true);
         }
+        return;
+      }
+
+      if (!isKrispNoiseFilterSupported()) {
+        // Not an error: some browsers simply cannot run it. The browser's own suppression stays
+        // on, which is the best available, and nothing is reported as broken.
+        await setBrowserSuppression(true);
+        return;
+      }
+
+      try {
+        if (!krispRef.current) krispRef.current = KrispNoiseFilter();
+        const krisp = krispRef.current;
+        await localAudioTrack.setProcessor(krisp);
+
+        // ATTACHING IS NOT RUNNING, and this is the half a throw cannot tell you about.
+        //
+        // setProcessor() awaits init(), which only fetches a public model manifest — it does not
+        // check whether this LiveKit project may actually run Krisp. Enabling happens later in
+        // onPublish() → setEnabled(), which asks the server and, when the answer is no, LOGS AND
+        // RETURNS FALSE. livekit-client calls onPublish un-awaited and un-caught, so nothing
+        // rejects, no catch fires, and the toggle sits there lit while the filter is inert.
+        //
+        // Catching the throw (WASM blocked by CSP) fixed the loud failure and left this silent
+        // one exactly as it was: browser suppression surrendered for a processor that is not
+        // running. It is also what Firefox and Safari do, where Krisp is simply unsupported.
+        //
+        // So the browser's denoiser is stood down only against Krisp's own answer.
+        await krisp.setEnabled(true);
+        if (!krisp.isEnabled()) {
+          throw new Error(
+            "Krisp attached but did not enable — this LiveKit project or browser cannot run it.",
+          );
+        }
+
+        await setBrowserSuppression(false);
       } catch (error) {
+        // Put the microphone back the way a working fallback needs it BEFORE telling anyone.
+        // The report is only honest if it is true by the time it is made.
+        try {
+          if (localAudioTrack.getProcessor()) await localAudioTrack.stopProcessor();
+          await setBrowserSuppression(true);
+        } catch {
+          // Nothing further to try; the original failure is the one worth surfacing.
+        }
         if (!cancelled) onNoiseSuppressionError?.(error);
       }
     }

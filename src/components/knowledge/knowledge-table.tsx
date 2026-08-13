@@ -20,10 +20,12 @@ import {
   FileText,
   Sparkle,
 } from "@phosphor-icons/react/dist/ssr";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 
 import { AdminFilterTabs, AdminPanel } from "@/components/admin/admin-page-chrome";
 import { Button } from "@/components/ui/button";
 import type { KnowledgeFilters } from "@/hooks/use-knowledge-filters";
+import { cn } from "@/lib/utils";
 import {
   canGoBack,
   hasAnyFact,
@@ -70,6 +72,11 @@ interface KnowledgeTableProps {
   isFetching: boolean;
   onRetry: () => void;
   /**
+   * Opens a row. Optional because the admin portal renders this same table with nothing to
+   * open — its rows belong to a workspace the platform admin does not administer.
+   */
+  onSelect?: (chunk: WorkspaceKnowledgeChunkDto) => void;
+  /**
    * The empty state differs by audience: an Owner is told how to put something in the index, an
    * admin is told what the absence means. Same fact, different next step.
    */
@@ -83,6 +90,7 @@ export function KnowledgeTable({
   isError,
   isFetching,
   onRetry,
+  onSelect,
   emptyHint,
 }: KnowledgeTableProps) {
   const items = data?.items ?? [];
@@ -98,33 +106,23 @@ export function KnowledgeTable({
         trailing={items.length ? `${items.length} on this page` : undefined}
       />
 
-      <div className="flex flex-wrap items-center gap-1 py-3">
-        <button
-          type="button"
+      <FilterChipGroup label="Filter facts by category" className="py-3">
+        <FilterChip
+          selected={factCategory === null}
           onClick={() => filters.setFactCategory(null)}
-          className={`h-6 rounded-md px-2.5 text-[11px] font-medium transition-colors ${
-            factCategory === null
-              ? "bg-surface-2 text-ink"
-              : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-          }`}
         >
           All facts
-        </button>
+        </FilterChip>
         {FACT_CATEGORIES.map((category) => (
-          <button
+          <FilterChip
             key={category}
-            type="button"
+            selected={factCategory === category}
             onClick={() => filters.setFactCategory(category)}
-            className={`h-6 rounded-md px-2.5 text-[11px] font-medium capitalize transition-colors ${
-              factCategory === category
-                ? "bg-surface-2 text-ink"
-                : "text-ink-muted hover:bg-surface-2 hover:text-ink"
-            }`}
           >
             {category}
-          </button>
+          </FilterChip>
         ))}
-      </div>
+      </FilterChipGroup>
 
       <AdminPanel>
         {isError ? (
@@ -161,7 +159,26 @@ export function KnowledgeTable({
                 {items.map((chunk) => (
                   <tr
                     key={chunk.chunkId}
-                    className="border-b border-border/60 align-top last:border-0"
+                    // The whole row opens it, not a trailing "…" button: every cell here is
+                    // part of the same one thing, and there is nothing else a click could mean.
+                    onClick={onSelect ? () => onSelect(chunk) : undefined}
+                    onKeyDown={
+                      onSelect
+                        ? (event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            onSelect(chunk);
+                          }
+                        : undefined
+                    }
+                    tabIndex={onSelect ? 0 : undefined}
+                    role={onSelect ? "button" : undefined}
+                    aria-label={onSelect ? `Open ${sourceLabel(chunk)}` : undefined}
+                    className={cn(
+                      "border-b border-border/60 align-top last:border-0",
+                      onSelect &&
+                        "cursor-pointer transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none",
+                    )}
                   >
                     <td className="w-[190px] px-4 py-3">
                       <SourceCell chunk={chunk} />

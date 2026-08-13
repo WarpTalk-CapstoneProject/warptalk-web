@@ -11,12 +11,17 @@ import assert from "node:assert/strict";
 
 import {
   daysWithMeetings,
+  isMeetingOver,
   isSameDay,
   isScheduledOn,
   meetingsOn,
   shiftWeeks,
   startOfDay,
   weekOf,
+  endOfMonth,
+  monthKey,
+  monthsSpanning,
+  startOfMonth,
 } from "../meeting-day.ts";
 
 /** Only the fields these helpers read. */
@@ -120,4 +125,87 @@ test("a day's meetings come back earliest first", () => {
 test("isSameDay ignores the time of day", () => {
   assert.equal(isSameDay(new Date(2026, 7, 10, 0, 0), new Date(2026, 7, 10, 23, 59)), true);
   assert.equal(isSameDay(new Date(2026, 7, 10, 23, 59), new Date(2026, 7, 11, 0, 0)), false);
+});
+
+// The report: a daily series booked for the 15th and 16th showed those days as "Cancelled",
+// under a heading reading "Active Meetings 2". The status was real — the series had been stopped,
+// so its future occurrences were cancelled with it — but the tab had no business showing them.
+// Picking a day returned before the tab's status rule ran, so the date replaced the tab instead
+// of narrowing it.
+test("a day picked on Active excludes meetings that are over", () => {
+  assert.equal(isMeetingOver("cancelled"), true);
+  assert.equal(isMeetingOver("ended"), true);
+  assert.equal(isMeetingOver("timeout"), true);
+});
+
+test("a day picked on Active keeps everything still to come", () => {
+  for (const live of ["scheduled", "waiting", "in_progress", "paused"]) {
+    assert.equal(isMeetingOver(live), false, `${live} is not over`);
+  }
+});
+
+// The week view fetches by month, because that is what the cache is keyed by. The one thing that
+// has to hold for that to be safe is this: a week that straddles two months must ask for both.
+// Getting it wrong is invisible in testing — the view still renders, it just quietly drops half a
+// week — which is why it is pinned here rather than trusted.
+
+test("a range inside one month asks for that month only", () => {
+  assert.deepEqual(
+    monthsSpanning(new Date(2026, 7, 10), new Date(2026, 7, 16)).map(monthKey),
+    ["2026-08"],
+  );
+});
+
+test("a week crossing a month boundary asks for BOTH months", () => {
+  // Mon 31 Aug 2026 → Sun 6 Sep 2026, the exact case the month-scoped fetch would have halved.
+  const week = weekOf(new Date(2026, 7, 31));
+  assert.deepEqual(
+    monthsSpanning(week[0], week[6]).map(monthKey),
+    ["2026-08", "2026-09"],
+  );
+});
+
+test("a week crossing a year boundary asks for both months, in order", () => {
+  const week = weekOf(new Date(2026, 11, 31));
+  assert.deepEqual(
+    monthsSpanning(week[0], week[6]).map(monthKey),
+    ["2026-12", "2027-01"],
+  );
+});
+
+test("a whole month asks for exactly that month, not the next one too", () => {
+  const anchor = new Date(2026, 1, 14);
+  assert.deepEqual(
+    monthsSpanning(startOfMonth(anchor), endOfMonth(anchor)).map(monthKey),
+    ["2026-02"],
+  );
+});
+
+test("the months come back oldest first, with no gaps", () => {
+  assert.deepEqual(
+    monthsSpanning(new Date(2026, 10, 25), new Date(2027, 1, 2)).map(monthKey),
+    ["2026-11", "2026-12", "2027-01", "2027-02"],
+  );
+});
+
+test("an inverted range yields one month rather than looping forever", () => {
+  assert.deepEqual(
+    monthsSpanning(new Date(2026, 7, 20), new Date(2026, 6, 1)).map(monthKey),
+    ["2026-08"],
+  );
+});
+
+// Month bounds are built by day-1 arithmetic, not by adding 30 days: February and a 31-day month
+// are where the naive version drifts.
+test("endOfMonth lands on the real last day, February included", () => {
+  assert.equal(iso(endOfMonth(new Date(2026, 1, 5))), "2026-02-28");
+  assert.equal(iso(endOfMonth(new Date(2028, 1, 5))), "2028-02-29");
+  assert.equal(iso(endOfMonth(new Date(2026, 0, 5))), "2026-01-31");
+  assert.equal(iso(startOfMonth(new Date(2026, 0, 31))), "2026-01-01");
+});
+
+test("endOfMonth includes the last day's meetings, not midnight that morning", () => {
+  const end = endOfMonth(new Date(2026, 7, 5));
+  assert.equal(end.getHours(), 23);
+  assert.equal(end.getMinutes(), 59);
 });

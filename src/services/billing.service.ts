@@ -137,12 +137,17 @@ export const billingService = {
   },
 
   /**
-   * Get workspace usage breakdown (Donut).
+   * Get workspace usage breakdown.
+   *
+   * `FeatureAdoptionDto`, not `UsageSummaryDto`: the per-workspace endpoint returns
+   * `IEnumerable<FeatureAdoptionDto>`, which carries `usageCount` on top of the credits. The
+   * declared return type said otherwise while the request generic below already said the truth,
+   * so a caller reading `usageCount` was told the field did not exist on data that always has it.
    */
   getWorkspaceUsageBreakdown: async (
     workspaceId: string,
     days = 30,
-  ): Promise<import("@/types/billing").UsageSummaryDto[]> => {
+  ): Promise<import("@/types/billing").FeatureAdoptionDto[]> => {
     const { data } = await apiClient.get<
       import("@/types/billing").FeatureAdoptionDto[]
     >(`/usages/workspace/${workspaceId}/breakdown`, { params: { days } });

@@ -191,3 +191,36 @@ test("WT-308: the People panel derives presence from this module, not its own ch
     "people-panel must not re-derive presence with an inline status chain",
   );
 });
+
+// A finished meeting has no occupancy — nobody is in a meeting that ended — so "0/100" was the
+// only thing it could ever report, however many people attended. What it has is an attendance.
+test("a finished meeting reports how many attended, not how many are present", () => {
+  for (const status of ["ended", "ENDED", "cancelled", "timeout"]) {
+    const occupancy = roomOccupancy({
+      capacity: 100,
+      participants: [],
+      status,
+      attendedCount: 7,
+    });
+    assert.equal(occupancy.label, "7", `${status} should report attendance`);
+    assert.equal(occupancy.seatCount, 7);
+    assert.equal(occupancy.isFull, false);
+  }
+});
+
+test("a finished meeting nobody attended says 0, not 0/100", () => {
+  const occupancy = roomOccupancy({ capacity: 100, participants: [], status: "ended" });
+  assert.equal(occupancy.label, "0");
+});
+
+test("a live room still reports occupancy out of capacity", () => {
+  for (const status of ["in_progress", "waiting", "scheduled", "paused", undefined]) {
+    const occupancy = roomOccupancy({
+      capacity: 100,
+      participants: [{ status: "connected" }],
+      status,
+      attendedCount: 99,
+    });
+    assert.equal(occupancy.label, "1/100", `${status} should report live occupancy`);
+  }
+});

@@ -32,6 +32,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Host glass variables now use a readable white acrylic direction: structural frame around `rgba(255,255,255,0.18)`, sidebar/topbar/content surfaces around `rgba(255,255,255,0.9)`, and shadcn card/input scopes around `0.9`.
 - Sign out clears the preview auth store and routes the user back to `/login`.
 - The host sidebar keeps room creation as an in-page action instead of a dedicated navigation item; `/rooms/create` remains reachable from the `Create room` button and command search.
+- The workspace app sidebar now includes a dedicated `My Meetings` route at `/[workspaceSlug]/my-meetings`, positioned above the workspace `History` route so the personal timeline and workspace archive stay distinct in navigation.
 - Admin and workspace layouts now share the same muted content background, sticky topbar, and padded content wrapper used by the host dashboard shell.
 - Admin, workspace, and participant sidebars keep their existing collapsible behavior while sharing the updated logo treatment.
 - Command search now includes the full review route set: dashboard, rooms, create room, history, AI summaries, AI chat, terminology, feedback, workspace, admin, and dev test.
@@ -62,6 +63,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 
 - The host sidebar intentionally uses the dashboard light frosted treatment instead of the former dark glass treatment, so internal host routes visually match `/dashboard`.
 - `/dashboard` now imports and renders the same `HostSidebar` component as the other host pages, preventing sidebar drift between dashboard and inner routes.
+- `My Meetings` is explicitly a routed page in the app shell, not a card embedded into `/[workspaceSlug]/home`.
 - The dashboard route no longer renders its own duplicate background/sidebar/topbar shell; its page component now owns content only.
 - Breadcrumb labels are derived from the current pathname. This keeps the header generic, but route-specific custom labels may need a mapping if future pages need friendlier names.
 - Command search is frontend-only and navigates between available local app pages.

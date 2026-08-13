@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,7 @@ import { LanguageLabel } from "@/components/language/language-label";
 import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
 // cannot drift the way the language chip did.
-import { isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
+import { isMeetingOver, isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -386,7 +387,17 @@ export default function MeetingsPageLinear() {
    * the Active tab is "what is live or starting now", and a day off the strip is "what is on
    * Thursday". Neither of those has a booking as an answer; both have a meeting.
    */
-  const isGroupedView = activeTab !== "active" && !dayFilter;
+  /**
+   * All is not grouped, and is not filtered by a day.
+   *
+   * It used to be both, and that is what made it meaningless: the booking view collapsed a daily
+   * standup into ONE row, the day strip then narrowed that to a single date, and a tab labelled
+   * "All" showed one line. "All" has to mean every meeting this person has — running, scheduled,
+   * ended or cancelled — with each occurrence its own row. History keeps the grouped view,
+   * because "what did we run?" is still answered by the booking.
+   */
+  const isAllView = activeTab === "all";
+  const isGroupedView = activeTab === "history" && !dayFilter;
   const rowSource = useMemo(
     () => (isGroupedView ? (groupedList.data?.rooms ?? []) : rooms),
     [isGroupedView, groupedList.data?.rooms, rooms],
@@ -415,8 +426,28 @@ export default function MeetingsPageLinear() {
     // page opens on, clicking a day did nothing at all and the strip was decoration. Picking a
     // date is the more specific question ("what is on Tuesday?") and the tab is the general one;
     // the specific one has to be answered.
-    if (dayFilter) {
-      return rooms.filter((r) => matchesSearch(r) && isScheduledOn(r, dayFilter));
+    // Except on All, which has no strip to pick from: "everything I have" and "what is on
+    // Tuesday" are contradictory questions, and answering the second under a tab labelled All is
+    // how that tab came to show one row.
+    if (dayFilter && !isAllView) {
+      // The day NARROWS the tab; it does not replace it. Returning here with only the date
+      // predicate dropped the tab's status rule entirely, so picking a day on Active listed
+      // every room booked that day — including cancelled and ended ones — under a heading that
+      // still read "Active Meetings". A daily series whose schedule had been stopped showed its
+      // future occurrences there as "Cancelled", which reads as the UI reporting the wrong
+      // thing about a meeting that looks perfectly fine.
+      //
+      // Active and History ask opposite questions about the same day, so each keeps its own
+      // half: Active is what is still to come or still running, History is what is over. A
+      // future date under Active is not "nothing is live right now" — it is "here is what is
+      // booked" — which is why this is a terminal-status exclusion rather than the tab's
+      // now-relative window.
+      return (activeTab === "history" ? rowSource : rooms).filter(
+        (r) =>
+          matchesSearch(r) &&
+          isScheduledOn(r, dayFilter) &&
+          (activeTab === "history" ? isMeetingOver(r.status) : !isMeetingOver(r.status)),
+      );
     }
 
     if (activeTab === "active") {
@@ -448,24 +479,33 @@ export default function MeetingsPageLinear() {
             r.status === "cancelled" ||
             r.status === "timeout"),
       );
-    return rowSource.filter(matchesSearch);
-  }, [rooms, rowSource, activeTab, dayFilter, searchQuery]);
+    // All: every room this person can see, in every status, one row per occurrence. No status
+    // filter and no grouping — the two things that were hiding meetings from a tab named All.
+    return rooms.filter(matchesSearch);
+  }, [rooms, rowSource, activeTab, dayFilter, isAllView, searchQuery]);
 
   return (
     <div className="flex flex-col h-full bg-surface-1">
       {/* View Tabs & Actions */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+        {/* The chip style this page defined now lives in FilterChip, so Knowledge, Documents and
+            the admin pages render the same control instead of four near-copies of it. */}
+        <FilterChipGroup label="Filter meetings">
           {(["active", "history", "all"] as const).map((tab) => (
-            <div
+            <FilterChip
               key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex items-center justify-center px-4 py-1.5 rounded-full cursor-pointer transition-all capitalize text-[13px] select-none border ${activeTab === tab ? "bg-surface-2 border-transparent text-foreground font-medium shadow-none" : "bg-transparent border-border/40 text-muted-foreground hover:bg-surface-2 hover:border-border/60 hover:text-foreground"}`}
+              selected={activeTab === tab}
+              onClick={() => {
+                setActiveTab(tab);
+                // Leaving a day selected while moving to All would silently narrow the one tab
+                // whose whole point is that it narrows nothing.
+                if (tab === "all") setDayFilter(null);
+              }}
             >
               {tab}
-            </div>
+            </FilterChip>
           ))}
-        </div>
+        </FilterChipGroup>
 
         <div className="flex items-center gap-2 pl-4 shrink-0">
           <ExpandingSearchDock
@@ -517,7 +557,10 @@ export default function MeetingsPageLinear() {
       {/* Replaces the Scheduled tab. A permanent strip says which days have anything on them
           without costing a click, which a tab could never do — and it is the same component the
           home panel renders, so the two cannot disagree about which days are marked. */}
-      <div className="flex items-center gap-3 border-b border-border/40 px-4 pb-3 shrink-0">
+      {/* Hidden on All — see isAllView. */}
+      <div
+        className={`items-center gap-3 border-b border-border/40 px-4 pb-3 shrink-0 ${isAllView ? "hidden" : "flex"}`}
+      >
         <MeetingDayStrip
           rooms={rooms}
           selectedDate={selectedDate}

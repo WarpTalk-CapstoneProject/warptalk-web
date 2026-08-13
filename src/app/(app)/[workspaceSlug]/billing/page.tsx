@@ -61,6 +61,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
+import { usageTypeDetailLabel } from "@/lib/billing/usage-labels";
 import type {
   GroupedCreditTransaction,
   UsageGroupSummary,
@@ -121,19 +122,6 @@ function getIconForUsage(usageType: string) {
   if (usageType.toLowerCase().includes("translation")) return Translate;
   if (usageType.toLowerCase().includes("summary")) return Robot;
   return Coins;
-}
-
-function getLabelForUsage(usageType: string) {
-  if (usageType === "translation" || usageType === "voice_translation")
-    return "Real-time Translation (Speech-to-Text / STT)";
-  if (usageType === "summary" || usageType === "meeting_summary")
-    return "AI Meeting Insights (Summarization)";
-  if (usageType === "chat") return "AI Workspace Co-pilot Chat";
-  if (usageType === "text_to_speech")
-    return "AI Voice Synthesis (Text-to-Speech / TTS)";
-  if (usageType === "voice_cloning")
-    return "Custom AI Voice Cloning (Voice Cloning)";
-  return usageType.replace(/_/g, " ");
 }
 
 function getUnitSuffixForUsage(usageType: string): string {
@@ -584,11 +572,30 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     );
   }
 
-  if (!isCoreLoading && hasNoSubscription) {
+  // Decide nothing until the three queries that own every number on this page have settled.
+  //
+  // This used to be two `!isCoreLoading &&` guards with the full layout as the fall-through, so
+  // WHILE loading both guards were false and the billing management page rendered — balance,
+  // usage, invoices, the lot — and was then replaced by "No active subscription" the moment the
+  // queries answered. A workspace with no plan therefore watched its billing page load and then
+  // un-load, which reads as the app changing its mind rather than as an answer.
+  //
+  // The comment above the guards had the reason right and applied it only to the error branch:
+  // falling through paints a fabricated balance of 0. Loading paints the same fabrication, and
+  // then takes it away.
+  if (isCoreLoading) {
+    return (
+      <div className="flex h-[60vh] w-full items-center justify-center bg-surface-1">
+        <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+      </div>
+    );
+  }
+
+  if (hasNoSubscription) {
     return <BillingNoSubscriptionState workspaceSlug={workspaceSlug} />;
   }
 
-  if (!isCoreLoading && hardError) {
+  if (hardError) {
     return (
       <BillingErrorState
         message={getBillingErrorMessage(hardError)}
@@ -800,7 +807,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   <div className="grid gap-4 md:grid-cols-2">
                     {usageBreakdown.map((usage: UsageBreakdownDto) => {
                       const Icon = getIconForUsage(usage.usageType);
-                      const name = getLabelForUsage(usage.usageType);
+                      const name = usageTypeDetailLabel(usage.usageType);
                       const percent = report?.totalConsumedCredits
                         ? Math.round(
                             (usage.creditsConsumed /
@@ -1712,7 +1719,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                         selectedTxGroup.originalTx.reduce<
                           Record<string, UsageGroupSummary>
                         >((acc, item) => {
-                          const type = getLabelForUsage(
+                          const type = usageTypeDetailLabel(
                             item.referenceType || "Other",
                           );
                           const rawType = item.referenceType || "Other";
@@ -1769,7 +1776,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                               <span className="font-mono text-ink-muted text-[10px] mr-2.5">
                                 {format(new Date(item.createdAt), "HH:mm:ss")}
                               </span>
-                              {getLabelForUsage(
+                              {usageTypeDetailLabel(
                                 item.referenceType || "AI usage",
                               )}
                             </span>
