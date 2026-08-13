@@ -88,3 +88,15 @@ export function meetingsOn(
         - new Date(b.scheduledAt as string).getTime(),
     );
 }
+
+/**
+ * Whether a meeting is over — ended, cancelled, or timed out.
+ *
+ * Lives here beside `isScheduledOn` because the two are always asked together. Picking a day on
+ * the meetings list used to answer with the date alone, which dropped the tab's status rule and
+ * listed cancelled occurrences under "Active Meetings" — a stopped daily series showed its future
+ * dates as Cancelled, which reads as the UI reporting the wrong status for a healthy meeting.
+ */
+export function isMeetingOver(status: string): boolean {
+  return status === "ended" || status === "cancelled" || status === "timeout";
+}

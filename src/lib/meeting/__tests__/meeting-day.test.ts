@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 
 import {
   daysWithMeetings,
+  isMeetingOver,
   isSameDay,
   isScheduledOn,
   meetingsOn,
@@ -120,4 +121,21 @@ test("a day's meetings come back earliest first", () => {
 test("isSameDay ignores the time of day", () => {
   assert.equal(isSameDay(new Date(2026, 7, 10, 0, 0), new Date(2026, 7, 10, 23, 59)), true);
   assert.equal(isSameDay(new Date(2026, 7, 10, 23, 59), new Date(2026, 7, 11, 0, 0)), false);
+});
+
+// The report: a daily series booked for the 15th and 16th showed those days as "Cancelled",
+// under a heading reading "Active Meetings 2". The status was real — the series had been stopped,
+// so its future occurrences were cancelled with it — but the tab had no business showing them.
+// Picking a day returned before the tab's status rule ran, so the date replaced the tab instead
+// of narrowing it.
+test("a day picked on Active excludes meetings that are over", () => {
+  assert.equal(isMeetingOver("cancelled"), true);
+  assert.equal(isMeetingOver("ended"), true);
+  assert.equal(isMeetingOver("timeout"), true);
+});
+
+test("a day picked on Active keeps everything still to come", () => {
+  for (const live of ["scheduled", "waiting", "in_progress", "paused"]) {
+    assert.equal(isMeetingOver(live), false, `${live} is not over`);
+  }
 });
