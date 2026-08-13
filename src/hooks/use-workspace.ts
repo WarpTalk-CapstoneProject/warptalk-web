@@ -112,6 +112,24 @@ export function usePatchWorkspaceSettings(workspaceId: string) {
   });
 }
 
+/**
+ * Owner-only rename. It hits its own endpoint rather than the settings document, so the
+ * settings cache is untouched; what changes is the workspace detail plus every list that
+ * renders the name (sidebar, switcher), hence the broad "workspaces" invalidation.
+ *
+ * The slug is not part of a rename, so no route or stored slug needs to move.
+ */
+export function useRenameWorkspace(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => WorkspaceService.rename(workspaceId, name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.detail(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "list"] });
+    },
+  });
+}
+
 export function useVerifiedDomains(workspaceId: string) {
   const settings = useWorkspaceSettings(workspaceId);
   return {

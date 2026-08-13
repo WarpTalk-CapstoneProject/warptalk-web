@@ -132,6 +132,7 @@ export const API = {
     get: (id: string) => `/workspaces/${id}`,
     select: (id: string) => `/workspaces/${id}/select`,
     settings: (id: string) => `/workspaces/${id}/settings`,
+    name: (id: string) => `/workspaces/${id}/name`,
     members: (workspaceId: string) => `/workspaces/${workspaceId}/members`,
     memberDetail: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}`,
     memberRole: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role`,

@@ -79,6 +79,14 @@ export const WorkspaceService = {
     return data;
   },
 
+  /**
+   * Owner-only. Changes the display name only — the slug is immutable, so every
+   * `[workspaceSlug]` route and invitation link keeps working after a rename.
+   */
+  async rename(id: string, name: string): Promise<void> {
+    await apiClient.patch(API.workspaces.name(id), { name });
+  },
+
   async deleteWorkspace(id: string): Promise<void> {
     await apiClient.delete(API.workspaces.get(id));
   },

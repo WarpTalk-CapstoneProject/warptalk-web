@@ -1,24 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Spinner } from "@phosphor-icons/react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useAuthStore } from "@/stores/auth-store";
-import { useWorkspaceMembers, useTransferWorkspaceOwnership, useDeleteWorkspace } from "@/hooks/use-workspace";
+import { useWorkspaceMembers, useTransferWorkspaceOwnership, useDeleteWorkspace, useRenameWorkspace } from "@/hooks/use-workspace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
+/** Mirrors workspace.workspaces.name VARCHAR(150); the server rejects anything longer. */
+const WORKSPACE_NAME_MAX_LENGTH = 150;
+
 export default function AdvancedSettingsPage() {
   const router = useRouter();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
+  const membershipType = useWorkspaceStore((state) => state.membershipType);
+  const defaultLanguage = useWorkspaceStore((state) => state.defaultLanguage);
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const role = useWorkspaceRole();
   const currentUser = useAuthStore((state) => state.user);
+
+  // Held as null until the field is touched so that the store stays the source of truth —
+  // both while the persisted store rehydrates and again after a successful save.
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
 
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [newOwnerId, setNewOwnerId] = useState("");
@@ -30,10 +41,19 @@ export default function AdvancedSettingsPage() {
   const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
   const transferOwnershipMutation = useTransferWorkspaceOwnership(activeWorkspaceId || "");
   const deleteWorkspaceMutation = useDeleteWorkspace();
+  const renameWorkspaceMutation = useRenameWorkspace(activeWorkspaceId || "");
 
   const isOwner = role === "owner";
   const membersList = membersQuery.data?.items || [];
   const selectedNewOwner = membersList.find((member) => member.userId === newOwnerId);
+
+  const nameValue = nameDraft ?? activeWorkspaceName ?? "";
+  const trimmedName = nameValue.trim();
+  const canSaveName =
+    trimmedName.length > 0
+    && trimmedName.length <= WORKSPACE_NAME_MAX_LENGTH
+    && trimmedName !== (activeWorkspaceName || "")
+    && !renameWorkspaceMutation.isPending;
 
   if (!activeWorkspaceId) return null;
   if (!isOwner) {
@@ -46,6 +66,29 @@ export default function AdvancedSettingsPage() {
       </div>
     );
   }
+
+  const handleRenameSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!canSaveName) return;
+    try {
+      await renameWorkspaceMutation.mutateAsync(trimmedName);
+      // Push the new name into the store so the sidebar and switcher update without a reload.
+      // The slug is passed back unchanged on purpose: a rename never moves the workspace's
+      // address, and every [workspaceSlug] route depends on it staying put.
+      setActiveWorkspace(
+        activeWorkspaceId,
+        trimmedName,
+        activeWorkspaceSlug,
+        role,
+        membershipType,
+        defaultLanguage,
+      );
+      setNameDraft(null);
+      toast.success("Workspace renamed successfully.");
+    } catch {
+      toast.error("Failed to rename workspace.");
+    }
+  };
 
   const handleTransferConfirm = async () => {
     if (!newOwnerId) return;
@@ -85,6 +128,44 @@ export default function AdvancedSettingsPage() {
           Perform high-risk operations for this workspace. Proceed with caution.
         </p>
       </div>
+
+      {/* Rename Workspace */}
+      <Card className="border-hairline bg-surface-1 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold text-ink">Workspace name</CardTitle>
+          <CardDescription className="text-xs text-ink-muted">
+            The display name shown to everyone in this workspace. The workspace URL is unaffected —
+            it keeps using <strong>{activeWorkspaceSlug}</strong>, so existing links and invitations stay valid.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleRenameSubmit} className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <div className="flex flex-1 flex-col gap-1">
+              <Input
+                value={nameValue}
+                onChange={(event) => setNameDraft(event.target.value)}
+                maxLength={WORKSPACE_NAME_MAX_LENGTH}
+                placeholder="Workspace name"
+                className="h-9 border-hairline bg-surface-2/40 text-xs"
+              />
+              <span className="text-[11px] text-ink-muted">
+                {trimmedName.length}/{WORKSPACE_NAME_MAX_LENGTH} characters
+              </span>
+            </div>
+            <button
+              type="submit"
+              disabled={!canSaveName}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-xs font-semibold text-white transition hover:bg-primary-hover disabled:opacity-50 cursor-pointer shrink-0"
+            >
+              {renameWorkspaceMutation.isPending ? (
+                <Spinner className="h-4 w-4 animate-spin text-white" />
+              ) : (
+                "Save"
+              )}
+            </button>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* Danger Zone */}
       <Card className="border-destructive/20 bg-destructive/5 shadow-sm">
