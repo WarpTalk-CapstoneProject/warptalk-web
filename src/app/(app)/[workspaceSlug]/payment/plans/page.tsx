@@ -241,11 +241,29 @@ export default function WorkspacePlansPage() {
       }
     }
 
+    // WT-370 — never bill a USER ID as a workspace.
+    //
+    // This used to fall back to `activeWorkspaceId || user.id`, so a checkout started before the
+    // workspace store had hydrated sent the buyer's own id in the WorkspaceId metadata. It is a
+    // well-formed Guid, so every validation downstream passes it: the webhook parses it, the
+    // handler builds a Subscription row against it, and the INSERT then fails on the workspace
+    // foreign key — inside a try/catch that logs and, until today, answered Stripe 200 OK. Money
+    // taken, no plan, no retry, nothing to see in the dashboard.
+    //
+    // There is no sensible fallback here. A plan belongs to a workspace; without one there is
+    // nothing to buy, and saying so is better than guessing an id that will fail four layers away.
+    if (!activeWorkspaceId) {
+      toast.error(
+        "Open a workspace before choosing a plan — a subscription belongs to a workspace.",
+      );
+      return;
+    }
+
     try {
       setIsProcessing(true);
       const url = await billingService.createCheckoutSession({
         userId: user.id,
-        workspaceId: activeWorkspaceId || user.id,
+        workspaceId: activeWorkspaceId,
         amount,
         currency: "vnd",
         paymentType,

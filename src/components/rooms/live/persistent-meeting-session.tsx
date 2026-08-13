@@ -1572,13 +1572,17 @@ export function PersistentMeetingSession({
           "This room has been forcibly closed or you were disconnected from another device.",
       );
       onMeetingClosed();
-      router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+      // WT-348, same reason as handleExit — and it matters more here. A push left /live one Back
+      // press away for someone the SERVER just removed: they would land straight back on the
+      // page that reconnects them, to be disconnected again. An involuntary exit is the last
+      // navigation that should stay in history.
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
     connection.on("ParticipantKicked", () => {
       toast.error("You have been permanently removed from this room.");
       onMeetingClosed();
-      router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
     // Breakout rooms (scoped-down) — BreakoutsStarted/BreakoutsEnded are relayed by
@@ -1891,7 +1895,13 @@ export function PersistentMeetingSession({
         toast.success("You left the room.");
       }
       onMeetingClosed();
-      router.push(
+      // WT-348: replace, not push. Leaving used to push the rooms list on top of /live, so the
+      // live URL stayed one Back press away — and /live's own guard (WT-366) only turns away
+      // rooms that have ENDED. Leave a meeting the others are still in, press Back, and the page
+      // happily called openMeeting() again: language modal, fresh LiveKit connection, back in the
+      // call you just walked out of. Replacing the entry means Back goes where the user came
+      // from, which is the room, not into it.
+      router.replace(
         action === "end"
           ? buildMeetingEndedPath(activeWorkspaceSlug, roomId)
           : `/${activeWorkspaceSlug || "workspace"}/rooms`,

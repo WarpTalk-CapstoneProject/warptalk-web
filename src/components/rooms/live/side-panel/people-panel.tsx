@@ -113,12 +113,21 @@ export function PeoplePanel({
             </p>
           </div>
         ) : null}
-        {participantsError ? (
+        {/* WT-367 — the error only counts when there is nothing to show.
+            This query polls every 3 seconds, and the comment on it in persistent-meeting-session
+            says why that is dangerous: 20 requests a minute against a gateway that rate-limits an
+            IP at 100/min and answers rejections with a bodyless 503. React Query keeps the last
+            good `data` alongside `isError`, so a single rejected poll used to paint a red failure
+            over a roster that was on screen, correct, and about to be refreshed three seconds
+            later. Reporting a fault the user can see is untrue is worse than reporting nothing.
+
+            It also said "controls" when what failed is the participant LIST — which sent this
+            ticket looking at the host-control authorization code for a networking blip. */}
+        {participantsError && participants.length === 0 ? (
           <p className="text-[13px] text-red-600">
-            Could not load participant controls.
+            Could not load the participant list.
           </p>
-        ) : null}
-        {visibleParticipants.length === 0 ? (
+        ) : visibleParticipants.length === 0 ? (
           <p className="rounded-md border border-dashed border-border px-3 py-4 text-[13px] text-ink-subtle">
             No active participants in this room.
           </p>
@@ -130,7 +139,14 @@ export function PeoplePanel({
               isHost={isHost}
               isSelf={participant.userId === currentUserId}
               roomId={roomId}
-              isRoomHost={participant.userId === room.hostId}
+              // WT-367: `participant.role`, not `room.hostId`. The role has already been
+              // reconciled against the live HostChanged broadcast by applyLiveHostRole (WT-358);
+              // `room.hostId` comes from the room query and stays stale until it refetches. In
+              // that window the two disagree, and `canManage` below reads this as "do not touch
+              // the host" — so the NEW host could not mute, kick or re-transfer the person they
+              // had just taken the role from. Deriving both from the same corrected field is
+              // also what stops this panel from having a second opinion about who the host is.
+              isRoomHost={participant.role?.toUpperCase() === "HOST"}
               isInRoom={lkParticipantIds.has(participant.userId)}
               handRaised={raisedHandUserIds?.has(participant.userId) ?? false}
               isSpotlighted={spotlightedUserId === participant.userId}
