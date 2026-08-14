@@ -122,14 +122,35 @@ function RegisterForm() {
           fullName: `${data.firstName} ${data.lastName}`.trim(),
         });
       } else {
-        res = await apiClient.post<AuthResponse>(API.auth.register, {
-          email: data.email,
-          password: data.password,
-          fullName: `${data.firstName} ${data.lastName}`.trim(),
-        });
+        res = await apiClient.post<AuthResponse | PendingVerification>(
+          API.auth.register,
+          {
+            email: data.email,
+            password: data.password,
+            fullName: `${data.firstName} ${data.lastName}`.trim(),
+          },
+        );
       }
 
-      const { user, accessToken, expiresAt } = res.data;
+      // BR-02 — a self-registered account has no session until its email is verified.
+      //
+      // This used to call login() with whatever came back, which signed the user straight into
+      // the app. Login itself has always refused an unverified account, so registration was the
+      // way around the gate rather than the way through it. The server now returns no tokens in
+      // that case, so calling login() here would install `undefined` as an access token.
+      //
+      // The invited path above is deliberately untouched: an invitation that arrived at the
+      // address IS the proof of the address, and asking for a second confirmation of the same
+      // mailbox is a step that proves nothing.
+      if ("emailVerificationRequired" in res.data && res.data.emailVerificationRequired) {
+        toast.success("Account created. Check your email to verify your address.");
+        // The address is deliberately not passed in the query string: it is personal data,
+        // and a URL is the one place it would be logged by every proxy on the way.
+        router.replace("/verify-email");
+        return;
+      }
+
+      const { user, accessToken, expiresAt } = res.data as AuthResponse;
 
       login(user, accessToken);
       setAccessTokenCookie(accessToken, expiresAt);
@@ -263,6 +284,11 @@ function RegisterForm() {
       )}
     </CinematicAuthShell>
   );
+}
+
+/** What POST /auth/register returns when the address still has to be proven (BR-02). */
+interface PendingVerification {
+  emailVerificationRequired: true;
 }
 
 export default function RegisterPage() {
