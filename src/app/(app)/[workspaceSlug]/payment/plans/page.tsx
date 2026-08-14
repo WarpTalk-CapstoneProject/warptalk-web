@@ -517,27 +517,15 @@ export default function WorkspacePlansPage() {
                         {isProcessing ? "Processing..." : "Get Started"}
                       </button>
                     )}
-                    {isCurrent && subscription?.status === "active" && (
-                      <button
-                        type="button"
-                        disabled={isCancelling}
-                        onClick={() => setShowCancelDialog(true)}
-                        className="inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all border border-gray-300 hover:border-red-300 hover:bg-red-50 hover:text-red-600 bg-white text-gray-600 cursor-pointer disabled:opacity-50"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancel Subscription
-                      </button>
-                    )}
-                    {isCurrent && subscription?.status === "cancelled" && (
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all border border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancelled (Ends soon)
-                      </button>
-                    )}
+                    {/* No cancel button inside the plan card.
+                        It sat where every other card shows "Get started", so the primary action on
+                        the plan you already have was to leave — the loudest thing on the page
+                        pointed at the exit. Ending a subscription is also not a per-plan choice:
+                        it belongs to the account, once, and it now lives under the grid.
+
+                        The disabled "Cancelled (Ends soon)" button that replaced it was worse
+                        still: a button-shaped thing that cannot be pressed, occupying the slot a
+                        reader looks to for what they can do. The state is on the badge above. */}
                   </div>
 
                   <ul className="space-y-3">
@@ -612,6 +600,25 @@ export default function WorkspacePlansPage() {
           })
         )}
       </div>
+
+      {/* Cancel RENEWAL, not the subscription.
+          The old wording and the old endpoint said "Cancel Subscription", which reads as "end it
+          now" — and an owner who wanted to stop paying next month had no way to say so without
+          fearing they would cut translation off mid-cycle for everybody. What the API actually
+          does is set cancelAtPeriodEnd: the plan runs to the date it was paid for. The label now
+          says that, and the confirmation dialog says the date out loud. */}
+      {subscription?.status === "active" ? (
+        <div className="mt-6 flex w-full max-w-3xl justify-center">
+          <button
+            type="button"
+            disabled={isCancelling}
+            onClick={() => setShowCancelDialog(true)}
+            className="text-[12px] text-ink-muted underline-offset-4 transition-colors hover:text-ink hover:underline disabled:opacity-50"
+          >
+            Cancel renewal
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-8 w-full max-w-3xl">
         <div className="text-center mb-8">
@@ -775,7 +782,7 @@ export default function WorkspacePlansPage() {
         <DialogContent className="sm:max-w-[460px] border-hairline bg-surface-1 shadow-lg rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-ink">
-              Cancel subscription?
+              Cancel renewal?
             </DialogTitle>
             <DialogDescription className="text-sm text-ink-muted mt-1">
               Your workspace will remain on the{" "}
