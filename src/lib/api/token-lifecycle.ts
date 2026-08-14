@@ -40,6 +40,53 @@ export function getAccessTokenExpiryMs(token: string | null | undefined): number
   }
 }
 
+/**
+ * The platform-wide roles carried by the access token, lowercased.
+ *
+ * WT-376. `useIsSystemAdmin` reads the same roles off the auth STORE, which only exists once
+ * React has mounted — so the proxy, which decides where a freshly-logged-in user lands before
+ * any of that runs, had no way to know it was routing a platform administrator and sent both
+ * admin accounts to "Set up your workspace" like any new signup.
+ *
+ * ASP.NET writes role claims under either `role` or the long ClaimTypes.Role URI depending on
+ * whether the mapper was suppressed, and a single role serialises as a bare string rather than
+ * an array. All three shapes are read, because getting this wrong fails open into the exact
+ * bug it exists to fix.
+ *
+ * The signature is not verified, for the reason `isLiveAccessToken` gives: the browser has no
+ * key and the API still authenticates every call. This decides a REDIRECT, never access —
+ * `/admin` re-checks with AdminLayout, and every admin endpoint checks server-side.
+ */
+export function getAccessTokenRoles(token: string | null | undefined): string[] {
+  if (!token) return [];
+
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return [];
+
+  try {
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(padded)) as Record<string, unknown>;
+    const claim =
+      payload["role"] ??
+      payload["roles"] ??
+      payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
+
+    if (typeof claim === "string") return [claim.toLowerCase()];
+    if (Array.isArray(claim)) {
+      return claim.filter((r): r is string => typeof r === "string").map((r) => r.toLowerCase());
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/** Whether the token names a WarpTalk platform administrator (auth.roles, not a workspace role). */
+export function isPlatformAdminToken(token: string | null | undefined): boolean {
+  return getAccessTokenRoles(token).includes("admin");
+}
+
 export function isAccessTokenExpiring(
   token: string | null | undefined,
   nowMs = Date.now(),

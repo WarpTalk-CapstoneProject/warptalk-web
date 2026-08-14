@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
+import { isPlatformAdminToken } from "@/lib/api/token-lifecycle";
 import {
   ACCESS_TOKEN_COOKIE,
   SESSION_MARKER_COOKIE,
@@ -93,9 +94,23 @@ export function proxy(request: NextRequest) {
     const activeWorkspaceSlug = normalizeWorkspaceSlug(request.cookies.get("active_workspace_slug")?.value);
     if (activeWorkspaceSlug) {
       return NextResponse.redirect(new URL(`/${activeWorkspaceSlug}/dashboard`, request.url));
-    } else {
-      return NextResponse.redirect(new URL("/workspace", request.url));
     }
+
+    // WT-376: a platform administrator with no workspace of their own belongs in the admin
+    // portal, not on the new-signup setup screen. Both seeded admin accounts landed on
+    // "Set up your workspace" and were offered Join or Create — the product telling the people
+    // who run it that they had not started using it yet.
+    //
+    // The role has to be read from the TOKEN here. `useIsSystemAdmin` reads the same claim off
+    // the auth store, which does not exist until React mounts, and this redirect happens before
+    // any of that. Only the landing paths above are redirected: an admin who deliberately
+    // navigates to /workspace still gets it, because admins legitimately create workspaces too
+    // and bouncing them out of that page would be a second trap in place of the first.
+    if (isPlatformAdminToken(accessToken)) {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+
+    return NextResponse.redirect(new URL("/workspace", request.url));
   }
 
   if (!hasSession && !isPublicRoute) {
