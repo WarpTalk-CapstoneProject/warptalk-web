@@ -52,6 +52,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  markLanguagePickerShown,
+  wasLanguagePickerShown,
+} from "@/lib/meeting/language-picker-shown";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
@@ -119,7 +123,6 @@ import {
   ReactionOverlay,
   type FloatingReaction,
 } from "@/components/rooms/live/reaction-overlay";
-import { BreakoutSetupModal } from "@/components/rooms/live/breakout-setup-modal";
 import { LanguagePickerModal } from "@/components/rooms/live/language-picker-modal";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useUpdateUserSettings, useUserSettings } from "@/hooks/use-user-settings";
@@ -129,7 +132,6 @@ import {
 } from "@/lib/language/language-profile";
 import {
   fetchMyBreakoutAssignment,
-  useEndBreakouts,
 } from "@/hooks/use-breakouts";
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
@@ -323,6 +325,23 @@ export function PersistentMeetingSession({
     });
   }
 
+  /**
+   * Blur could not attach. Put the toggle back down and say so.
+   *
+   * Without this the switch stayed lit over an unblurred camera and nothing anywhere reported a
+   * fault — the "background blur không còn lên nữa" report had no console error to go with it
+   * because the rejection was never caught. A toggle that lies about the camera is worse than
+   * one that admits it failed.
+   */
+  const handleBackgroundBlurError = useCallback(() => {
+    setBackgroundBlurEnabled(false);
+    writeTrackEffectsPreferences({ backgroundBlurEnabled: false });
+    toast.error("Background blur is unavailable.", {
+      description:
+        "Your camera is publishing unblurred. Reload the meeting to try again.",
+    });
+  }, []);
+
   const liveParticipants = useTranslationRoomStore(
     (state) => state.participants,
   );
@@ -449,11 +468,11 @@ export function PersistentMeetingSession({
 
   // Breakout rooms (scoped-down): `breakoutState` describes THIS viewer's own current
   // assignment/connection (drives the LiveKit token swap + top-bar countdown chip below).
-  // `breakoutsRunning` is room-wide — true from the first BreakoutsStarted broadcast to the
+  // The host-facing breakout controls are gone with the feature; these handlers stay only so a
+  // client already in a breakout still follows a BreakoutsEnded back to the main room.
+  // `breakoutState` is per-viewer — it describes THIS viewer's own current
   // last BreakoutsEnded one, regardless of whether THIS viewer has an assignment (e.g. the
   // host, who stays in the main room) — drives the host-controls flyout's active state.
-  const [showBreakoutSetup, setShowBreakoutSetup] = useState(false);
-  const [breakoutsRunning, setBreakoutsRunning] = useState(false);
   const [breakoutState, setBreakoutState] = useState<{
     active: boolean;
     label: string | null;
@@ -482,7 +501,6 @@ export function PersistentMeetingSession({
   useEffect(() => {
     currentMeetingSessionRef.current = meetingSession;
   }, [meetingSession]);
-  const endBreakoutsMutation = useEndBreakouts(roomId);
 
   // WT-08: application-level reconnect state — the hub connection itself already
   // auto-reconnects at the transport level (see createHubConnection/withAutomaticReconnect),
@@ -1340,12 +1358,25 @@ export function PersistentMeetingSession({
 
   useEffect(() => {
     if (languagePickerShownRef.current) return;
+    // ...and not already asked earlier in this tab, for this room.
+    //
+    // The ref alone is per COMPONENT INSTANCE, so anything that remounts this session asks
+    // again: pressing "Return to meeting" from the mini dock re-enters /live, the instance is
+    // rebuilt, the ref is a fresh `false`, and the language modal reappears over a meeting the
+    // user is already in — "bấm return to meeting nó ra cái service modal tiếp". sessionStorage
+    // is the right scope for the same reason the active meeting uses it: per tab, cleared when
+    // the tab closes, never shared with a second tab that legitimately needs its own answer.
+    if (wasLanguagePickerShown(roomId)) {
+      languagePickerShownRef.current = true;
+      return;
+    }
     if (!meetingSession?.token) return;
     // Wait for the answer we may already have. Opening before the settings resolve is how a
     // remembered preference still gets asked for.
     if (!userSettingsQuery.isSuccess) return;
 
     languagePickerShownRef.current = true;
+    markLanguagePickerShown(roomId);
 
     if (languagesAreRemembered) {
       // Applied silently. Being asked again is the product forgetting, which is the whole
@@ -1460,15 +1491,20 @@ export function PersistentMeetingSession({
       "TranslationTextReceived",
       (translation: TranslationTextDto) => {
         if (!meetingLiveRef.current) return;
-        // Only render the translation into MY chosen listen language — the gateway fans
-        // out every participant's target language to the whole room group, so without this
-        // check the transcript panel mixes in every other listener's language too.
-        if (
-          normalizeLanguageCode(translation.targetLang) !==
-          normalizeLanguageCode(targetLanguageRef.current)
-        ) {
-          return;
-        }
+        // Every language is kept, filed under its own key by addOrMergeTranslationText, and the
+        // transcript panel renders the one matching this viewer's listen language.
+        //
+        // WT-371 Bug 4: this used to drop anything that did not match targetLanguageRef at the
+        // instant of arrival, which made the transcript depend on WHEN the reader's listen
+        // language finished resolving. On a cold navigation the room default stands in until the
+        // participant row arrives, so the first lines of a meeting were admitted in the wrong
+        // language and kept it — "English → Vietnamese" above "Vietnamese → English" in one
+        // panel. Changing the language mid-meeting had the same effect from the other side:
+        // everything already on screen stayed behind.
+        //
+        // Nothing extra crosses the network — the gateway fans all of them to the room group
+        // regardless — and "loạn ngôn ngữ" is now prevented where it belongs, at render, by a
+        // reader who knows their own language.
         addOrMergeTranslationText(translation);
       },
     );
@@ -1476,7 +1512,11 @@ export function PersistentMeetingSession({
       // Same gate the transcript handlers use: a suggestion belongs to a live segment, so
       // it has nothing to attach to once translation has stopped.
       if (!meetingLiveRef.current) return;
-      addSuggestion(suggestion);
+      // ...and the same language question the TranslationTextReceived handler above already
+      // asks. Suggestions are fanned out to the whole room, so without this a viewer reading
+      // in English was shown a suggestion written in Vietnamese because somebody else in the
+      // room was listening in Vietnamese. Preferred rather than filtered — see addSuggestion.
+      addSuggestion(suggestion, targetLanguageRef.current);
     });
     connection.on("TranslationRoomEnded", () => {
       void refetchRoom();
@@ -1572,13 +1612,17 @@ export function PersistentMeetingSession({
           "This room has been forcibly closed or you were disconnected from another device.",
       );
       onMeetingClosed();
-      router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+      // WT-348, same reason as handleExit — and it matters more here. A push left /live one Back
+      // press away for someone the SERVER just removed: they would land straight back on the
+      // page that reconnects them, to be disconnected again. An involuntary exit is the last
+      // navigation that should stay in history.
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
     connection.on("ParticipantKicked", () => {
       toast.error("You have been permanently removed from this room.");
       onMeetingClosed();
-      router.push(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
     // Breakout rooms (scoped-down) — BreakoutsStarted/BreakoutsEnded are relayed by
@@ -1596,7 +1640,6 @@ export function PersistentMeetingSession({
         durationSeconds: number | null,
         startedAt: string | null,
       ) => {
-        setBreakoutsRunning(true);
         const mine = user?.id
           ? (assignments ?? []).find((a) => a.userId === user.id)
           : undefined;
@@ -1631,7 +1674,6 @@ export function PersistentMeetingSession({
       },
     );
     connection.on("BreakoutsEnded", () => {
-      setBreakoutsRunning(false);
       if (!breakoutActiveRef.current) return;
 
       setBreakoutState({
@@ -1891,7 +1933,13 @@ export function PersistentMeetingSession({
         toast.success("You left the room.");
       }
       onMeetingClosed();
-      router.push(
+      // WT-348: replace, not push. Leaving used to push the rooms list on top of /live, so the
+      // live URL stayed one Back press away — and /live's own guard (WT-366) only turns away
+      // rooms that have ENDED. Leave a meeting the others are still in, press Back, and the page
+      // happily called openMeeting() again: language modal, fresh LiveKit connection, back in the
+      // call you just walked out of. Replacing the entry means Back goes where the user came
+      // from, which is the room, not into it.
+      router.replace(
         action === "end"
           ? buildMeetingEndedPath(activeWorkspaceSlug, roomId)
           : `/${activeWorkspaceSlug || "workspace"}/rooms`,
@@ -2104,15 +2152,6 @@ export function PersistentMeetingSession({
     });
   }
 
-  // Breakout rooms: local state updates happen from the BreakoutsStarted/BreakoutsEnded hub
-  // broadcasts (see the SignalR effect above), not optimistically here — same pattern as
-  // room lock/recording.
-  function handleEndBreakoutRooms() {
-    endBreakoutsMutation.mutate(undefined, {
-      onError: () => toast.error("Could not end breakout rooms."),
-    });
-  }
-
   if (roomQuery.isLoading) {
     return (
       <StatePanel
@@ -2217,6 +2256,7 @@ export function PersistentMeetingSession({
           noiseSuppressionEnabled={noiseSuppressionEnabled}
           backgroundBlurEnabled={backgroundBlurEnabled}
           onNoiseSuppressionError={handleNoiseSuppressionError}
+          onBackgroundBlurError={handleBackgroundBlurError}
         />
 
         {!compact && isReconnecting ? (
@@ -2488,7 +2528,16 @@ export function PersistentMeetingSession({
                     // this bar — would press Start and get "Unauthorized". The control bar's own
                     // prop doc is "omit to hide the control", so this hides it rather than
                     // offering a button that cannot work.
-                    onStartWarptalk={isRoomHost ? handleStartWarptalk : undefined}
+                    onStartWarptalk={
+                      // WT-371: the room decides who may START translation. Stopping stays
+                      // host-only below — opening a meeting up is not the same as letting
+                      // anyone cut it off for everybody. The server enforces the same rule in
+                      // TranslationRoomSessionService.CanStartSessionAsync; this only decides
+                      // whether the control is offered.
+                      isRoomHost || room?.settings?.participantsCanStartTranslation
+                        ? handleStartWarptalk
+                        : undefined
+                    }
                     onStopWarptalk={isRoomHost ? handleStopWarptalk : undefined}
                     onToggleSubtitles={() =>
                       setSubtitlesEnabled((current) => !current)
@@ -2511,13 +2560,6 @@ export function PersistentMeetingSession({
                     onMuteAll={isHost ? handleMuteAll : undefined}
                     onToggleRecording={
                       isHost ? handleToggleRecording : undefined
-                    }
-                    breakoutActive={breakoutsRunning}
-                    onOpenBreakoutSetup={
-                      isHost ? () => setShowBreakoutSetup(true) : undefined
-                    }
-                    onEndBreakoutRooms={
-                      isHost ? handleEndBreakoutRooms : undefined
                     }
                   />
                 </div>
@@ -2556,15 +2598,6 @@ export function PersistentMeetingSession({
         </main>
         )}
       </LiveKitRoom>
-
-      {!compact && isHost ? (
-        <BreakoutSetupModal
-          open={showBreakoutSetup}
-          onOpenChange={setShowBreakoutSetup}
-          roomId={roomId}
-          participants={participants}
-        />
-      ) : null}
 
       {!compact ? <LanguagePickerModal
         open={showLanguagePicker}

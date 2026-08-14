@@ -14,10 +14,12 @@ import {
   Translate,
   Users,
   WarningCircle,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { parseSummarySections } from "@/lib/meeting/meeting-summary";
 import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
@@ -44,7 +46,53 @@ export default function HistoryPage() {
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
+  // Which output is open in the panel, and what it is showing. Cleared whenever the selected
+  // meeting changes — a preview belonging to a different room is worse than none.
+  const [openArtifactId, setOpenArtifactId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ArtifactPreviewState | null>(null);
   const history = useRoomHistory(activeWorkspaceId);
+
+  function closePreview() {
+    setOpenArtifactId(null);
+    setPreview(null);
+  }
+
+  async function openArtifact(artifact: RoomHistoryArtifact) {
+    const title = artifact.title || artifactLabel(artifact.type);
+
+    if (openArtifactId === artifact.id) {
+      closePreview();
+      return;
+    }
+
+    setOpenArtifactId(artifact.id);
+    setPreview({ kind: "loading", title });
+
+    try {
+      if (artifact.consentRequired) {
+        await translationRoomService.approveArtifactConsent(artifact.id);
+        await history.refetch();
+      }
+      const { data } = await translationRoomService.artifactDownload(artifact.id);
+
+      if (data.content != null && data.content !== "") {
+        setPreview({ kind: "text", title, body: readableArtifactBody(data.content) });
+        return;
+      }
+
+      // A recording has no text to show — it is a file, and downloading is the only sensible
+      // thing to do with it.
+      if (data.url) {
+        openArtifactDownload(data);
+        closePreview();
+        return;
+      }
+
+      setPreview({ kind: "error", title, message: "This output has no readable content stored." });
+    } catch (error) {
+      setPreview({ kind: "error", title, message: getErrorMessage(error, "Could not open this output.") });
+    }
+  }
 
   const rooms = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -107,14 +155,12 @@ export default function HistoryPage() {
   return (
     <main className="min-h-full bg-surface-1 text-ink">
       <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">
-        <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
-              <Archive size={14} /> Workspace archive
-            </div>
-            <h1 className="text-[30px] font-semibold leading-none">Meeting history</h1>
-            <p className="mt-2 text-[13px] text-ink-muted">Finished translation rooms and the outputs retained with them.</p>
-          </div>
+        {/* No page title, no eyebrow, no description — the shape Meetings and Members use.
+            The route name is already in the top bar and the sidebar, so a 30px "Meeting history"
+            under a breadcrumb reading "history" was the same word twice, and the sentence under
+            it was documentation living in the furniture. See components/workspace/page-chrome,
+            which records this as the house rule; this page had simply never been converted. */}
+        <header className="flex justify-end border-b border-border pb-4">
           <div className="relative w-full lg:w-[360px]">
             <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, code, host, or language" className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none" />
@@ -136,10 +182,10 @@ export default function HistoryPage() {
                   <div className="grid grid-cols-[minmax(260px,1.4fr)_150px_minmax(180px,1fr)_80px_80px_120px] border-b border-border bg-surface-2/45 px-4 py-2 text-[10px] font-medium text-ink-subtle">
                     <span>Meeting</span><span>Ended</span><span>Language route</span><span>Time</span><span>People</span><span>Outputs</span>
                   </div>
-                  {rooms.map((room) => <HistoryRow key={room.id} room={room} selected={selected?.id === room.id} onSelect={() => setSelectedId(room.id)} />)}
+                  {rooms.map((room) => <HistoryRow key={room.id} room={room} selected={selected?.id === room.id} onSelect={() => { setSelectedId(room.id); closePreview(); }} />)}
                 </div>
               </div>
-              {selected ? <MeetingDetail room={selected} busyArtifactId={busyArtifactId} onDownload={downloadArtifact} /> : null}
+              {selected ? <MeetingDetail room={selected} busyArtifactId={busyArtifactId} onDownload={downloadArtifact} onOpen={openArtifact} openArtifactId={openArtifactId} preview={preview} onClosePreview={closePreview} /> : null}
             </div>
           )}
         </section>
@@ -164,7 +210,13 @@ function HistoryRow({ room, selected, onSelect }: { room: EndedRoomHistoryItem; 
   );
 }
 
-function MeetingDetail({ room, busyArtifactId, onDownload }: { room: EndedRoomHistoryItem; busyArtifactId: string | null; onDownload: (artifact: RoomHistoryArtifact) => void }) {
+/** What the preview pane is showing, or why it cannot show anything. */
+type ArtifactPreviewState =
+  | { kind: "loading"; title: string }
+  | { kind: "text"; title: string; body: string }
+  | { kind: "error"; title: string; message: string };
+
+function MeetingDetail({ room, busyArtifactId, onDownload, onOpen, openArtifactId, preview, onClosePreview }: { room: EndedRoomHistoryItem; busyArtifactId: string | null; onDownload: (artifact: RoomHistoryArtifact) => void; onOpen: (artifact: RoomHistoryArtifact) => void; openArtifactId: string | null; preview: ArtifactPreviewState | null; onClosePreview: () => void }) {
   return (
     <aside className="border-t border-border bg-surface-1 p-5 lg:border-l lg:border-t-0">
       <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle"><span className={cn("size-1.5 rounded-full", room.status === "ended" ? "bg-emerald-500" : "bg-ink-subtle")} />{room.status}</div>
@@ -180,14 +232,25 @@ function MeetingDetail({ room, busyArtifactId, onDownload }: { room: EndedRoomHi
 
       <div className="mt-5 flex items-center justify-between"><h3 className="text-[11px] font-semibold">Retained outputs</h3><span className="text-[10px] text-ink-subtle">{room.artifacts.length}</span></div>
       <div className="mt-2 divide-y divide-border border-y border-border">
+        {/* The row OPENS the output; the icon downloads it.
+            The whole row used to be one button wired straight to the download, so the only way
+            to find out what a summary said was to fetch a file and open it in another app — and
+            when that fetch failed there was no way to read it at all. Reading is the common
+            intent; downloading is the occasional one. */}
         {room.artifacts.length ? room.artifacts.map((artifact) => (
-          <button key={artifact.id} type="button" disabled={busyArtifactId === artifact.id} onClick={() => onDownload(artifact)} className="group flex w-full items-center gap-3 py-3 text-left disabled:opacity-50">
-            <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-1"><ArtifactIcon artifact={artifact} /></span>
-            <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-medium">{artifact.title || artifactLabel(artifact.type)}</span><span className="mt-0.5 block text-[10px] text-ink-subtle">{artifact.format || artifactLabel(artifact.type)} · {artifactStatusLabel(artifact)}</span></span>
-            {busyArtifactId === artifact.id ? <SpinnerGap size={14} className="animate-spin" /> : <DownloadSimple size={14} className="text-ink-subtle transition-colors group-hover:text-ink" />}
-          </button>
+          <div key={artifact.id} className="group flex w-full items-center gap-3 py-3">
+            <button type="button" onClick={() => onOpen(artifact)} aria-expanded={openArtifactId === artifact.id} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+              <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-1"><ArtifactIcon artifact={artifact} /></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-medium">{artifact.title || artifactLabel(artifact.type)}</span><span className="mt-0.5 block text-[10px] text-ink-subtle">{artifact.format || artifactLabel(artifact.type)} · {artifactStatusLabel(artifact)}</span></span>
+            </button>
+            <button type="button" disabled={busyArtifactId === artifact.id} onClick={() => onDownload(artifact)} aria-label={`Download ${artifact.title || artifactLabel(artifact.type)}`} className="shrink-0 rounded p-1 disabled:opacity-50">
+              {busyArtifactId === artifact.id ? <SpinnerGap size={14} className="animate-spin" /> : <DownloadSimple size={14} className="text-ink-subtle transition-colors group-hover:text-ink" />}
+            </button>
+          </div>
         )) : <p className="py-6 text-center text-[11px] text-ink-muted">No retained outputs for this meeting.</p>}
       </div>
+
+      {openArtifactId ? <ArtifactPreview state={preview} onClose={onClosePreview} /> : null}
 
       {/* Only what an artifact actually states. "Retention follows workspace policy" was a
           claim with nothing behind it — no policy is configured and no purge job exists —
@@ -197,6 +260,68 @@ function MeetingDetail({ room, busyArtifactId, onDownload }: { room: EndedRoomHi
       ) : null}
     </aside>
   );
+}
+
+/**
+ * An output's own content, read in place.
+ *
+ * A summary artifact stores structured JSON, not prose, so dumping it verbatim gives the reader
+ * `{"summary":"…","decisions":[…]}` — which is what the artifacts page did and what WT-362
+ * reported as "renders raw JSON". Parsed into its parts when it parses, shown as plain text when
+ * it does not (a transcript export is markdown and must survive untouched).
+ */
+function ArtifactPreview({ state, onClose }: { state: ArtifactPreviewState | null; onClose: () => void }) {
+  if (!state) return null;
+
+  return (
+    <section className="mt-3 rounded-md border border-border bg-surface-1">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <h4 className="min-w-0 truncate text-[11px] font-semibold">{state.title}</h4>
+        <button type="button" onClick={onClose} aria-label="Close output" className="shrink-0 rounded p-0.5 text-ink-subtle hover:text-ink"><X size={13} /></button>
+      </div>
+      <div className="max-h-[320px] overflow-y-auto px-3 py-2.5">
+        {state.kind === "loading" ? (
+          <p className="flex items-center gap-2 py-4 text-[11px] text-ink-muted"><SpinnerGap size={13} className="animate-spin" />Loading…</p>
+        ) : state.kind === "error" ? (
+          <p className="py-4 text-[11px] text-ink-muted">{state.message}</p>
+        ) : (
+          <pre className="whitespace-pre-wrap break-words font-sans text-[11px] leading-5 text-ink">{state.body}</pre>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Turns an artifact's stored content into something a person can read.
+ *
+ * Never throws: an artifact that is not JSON (transcript exports are markdown) is returned as it
+ * is, which is exactly right for them.
+ */
+function readableArtifactBody(raw: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return raw;
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.summary !== "string") return raw;
+
+  if (record.insufficientData === true) {
+    return record.summary || "The assistant could not generate a summary for this meeting.";
+  }
+
+  const lines: string[] = [record.summary.trim()];
+
+  for (const section of parseSummarySections(record)) {
+    const items = section.items.map((item) => `• ${item.owner ? `${item.owner}: ` : ""}${item.text}`);
+    if (items.length) lines.push("", section.title, ...items);
+  }
+
+  return lines.join("\n");
 }
 
 function Detail({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {

@@ -131,3 +131,42 @@ export function sourceLabel(
 export function hasAnyFact(items: readonly Pick<WorkspaceKnowledgeChunkDto, "fact">[]): boolean {
   return items.some((chunk) => Boolean(chunk.fact));
 }
+
+/**
+ * Facts, grouped by the thing they came from.
+ *
+ * The API returns a page in whatever order the query produced, so two facts extracted from the
+ * SAME meeting could sit rows apart with other meetings in between — which is exactly how the
+ * page read: "knihc", "Tuấn bùi", "Test Audio…", "test", "â", "Tuấn bùi" again. Someone
+ * scanning the Source column cannot tell where one meeting's knowledge ends and the next starts.
+ *
+ * Grouped by source, then by chunkIndex so a document reads in its own order rather than an
+ * arbitrary one. The sort is stable, so rows the server already ordered sensibly keep that order
+ * within their group.
+ *
+ * SCOPE: this orders the page you are looking at. The server paginates at 50, so a source split
+ * across a page boundary stays split — grouping across pages means moving the ordering into the
+ * query itself.
+ */
+export function orderKnowledgeChunks<
+  T extends Pick<
+    WorkspaceKnowledgeChunkDto,
+    "sourceType" | "sourceTitle" | "documentName" | "documentId" | "chunkIndex"
+  >,
+>(chunks: readonly T[]): T[] {
+  // documentId before the label: two meetings can share a title, and grouping on the label
+  // alone would file knowledge from different meetings under one heading.
+  const groupKey = (chunk: T) =>
+    `${chunk.sourceType} ${chunk.documentId ?? sourceLabel(chunk)}`;
+
+  return [...chunks].sort((left, right) => {
+    const byGroup = groupKey(left).localeCompare(groupKey(right));
+    if (byGroup !== 0) return byGroup;
+
+    // Nulls last: a chunk with no index is not "index 0", and treating it as one would push a
+    // document's real opening chunk down the list.
+    const leftIndex = left.chunkIndex ?? Number.MAX_SAFE_INTEGER;
+    const rightIndex = right.chunkIndex ?? Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex;
+  });
+}
