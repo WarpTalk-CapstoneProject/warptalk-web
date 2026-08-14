@@ -12,7 +12,6 @@ import {
   Clock,
   DownloadSimple,
   FileText,
-  MagnifyingGlass,
   SpinnerGap,
   Translate,
   Users,
@@ -29,7 +28,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { useMyMeetingsInRange } from "@/hooks/use-my-meetings";
 import {
   artifactLabel,
@@ -39,6 +37,7 @@ import {
 import { endOfMonth, shiftWeeks, startOfMonth, weekOf } from "@/lib/meeting/meeting-day";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { translationRoomService } from "@/services/translation-room.service";
@@ -209,27 +208,20 @@ export default function MyMeetingsPage() {
   // its own wash reads as bolted on from somewhere else.
   return (
     <main className="flex h-full flex-col bg-surface-1 text-ink">
-      <header className="flex flex-col gap-4 border-b border-border px-5 py-5 lg:flex-row lg:items-end lg:justify-between lg:px-8">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
-            <CalendarBlank size={14} /> Personal timeline
-          </div>
-          <h1 className="text-[30px] font-semibold leading-none">My meetings</h1>
-          <p className="mt-2 text-[13px] text-ink-muted">
-            Upcoming meetings you host or are invited to, plus past meetings you actually joined.
-          </p>
-        </div>
-
+      {/* No eyebrow, no 30px title, no description — the house rule in
+          components/workspace/page-chrome. The route name is already in the top bar and the
+          sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
+          same word three times with documentation living in the furniture. Meetings and Members
+          open straight onto their content and this now does too. */}
+      <header className="flex flex-col gap-4 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-end lg:px-8">
         <div className="flex w-full items-center gap-2 lg:w-auto">
-          <div className="relative min-w-0 flex-1 lg:w-[300px] lg:flex-none">
-            <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search title, code, or description"
-              className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none"
-            />
-          </div>
+          {/* See history/page.tsx: one search affordance across the list pages. */}
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={setQuery}
+            placeholder="Search title, code, or description"
+            expandedWidth={300}
+          />
 
           <div
             className="flex h-9 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-2/60 p-0.5"

@@ -9,7 +9,6 @@ import {
   Clock,
   DownloadSimple,
   FileText,
-  MagnifyingGlass,
   SpinnerGap,
   Translate,
   Users,
@@ -20,9 +19,10 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { parseSummarySections } from "@/lib/meeting/meeting-summary";
-import { Input } from "@/components/ui/input";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { cn } from "@/lib/utils";
 import { formatLanguageRoute as formatRoute } from "@/lib/language/languages";
 import { translationRoomService } from "@/services/translation-room.service";
@@ -160,19 +160,38 @@ export default function HistoryPage() {
             under a breadcrumb reading "history" was the same word twice, and the sentence under
             it was documentation living in the furniture. See components/workspace/page-chrome,
             which records this as the house rule; this page had simply never been converted. */}
-        <header className="flex justify-end border-b border-border pb-4">
-          <div className="relative w-full lg:w-[360px]">
-            <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, code, host, or language" className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none" />
-          </div>
+        {/* The same search affordance Meetings and Members use, not a 360px input box.
+            Every list page had invented its own: a full-width bordered field here, a 300px one on
+            My Meetings, a collapsed dock on Meetings — three answers to one question, and the
+            widest of them spent a third of the row on a control nobody uses until they need it. */}
+        <header className="flex items-center justify-end gap-2 border-b border-border pb-4">
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={setQuery}
+            placeholder="Search title, code, host, or language"
+            expandedWidth={320}
+          />
         </header>
 
-        <div className="flex items-center gap-1 border-b border-border py-3" role="tablist" aria-label="History filters">
+        {/* FilterChip, not a bespoke 11px tab that fills with bg-ink. That fill is the loudest
+            token in the palette and it was spent on a FILTER — a choice, not an action — so the
+            selected chip here shouted while the identical control on Meetings and Documents
+            whispered. filter-chip.tsx records this as the one answer for the whole app. */}
+        <FilterChipGroup
+          label="History filters"
+          className="border-b border-border py-3"
+          trailing={`${rooms.length} results`}
+        >
           {historyFilters.map((item) => (
-            <button key={item.value} type="button" role="tab" aria-selected={filter === item.value} onClick={() => setFilter(item.value)} className={cn("h-7 rounded-md px-3 text-[11px] font-medium transition-colors", filter === item.value ? "bg-ink text-surface-1" : "text-ink-muted hover:bg-surface-2 hover:text-ink")}>{item.label}</button>
+            <FilterChip
+              key={item.value}
+              selected={filter === item.value}
+              onClick={() => setFilter(item.value)}
+            >
+              {item.label}
+            </FilterChip>
           ))}
-          <span className="ml-auto text-[10px] tabular-nums text-ink-subtle">{rooms.length} results</span>
-        </div>
+        </FilterChipGroup>
 
         <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Meeting history results">
           {history.isLoading ? <LoadingState /> : history.isError ? <ErrorState onRetry={() => history.refetch()} /> : rooms.length === 0 ? <EmptyState hasQuery={Boolean(query)} /> : (
