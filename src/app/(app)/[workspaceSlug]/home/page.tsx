@@ -17,7 +17,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { MeetingDayPanel } from "@/components/home/meeting-day-panel";
 
@@ -91,16 +91,25 @@ export default function WorkspaceHomePage() {
   const setCreateRoomModalOpen = useUIStore((s) => s.setCreateRoomModalOpen);
   const setSearchMeetingModalOpen = useUIStore((s) => s.setSearchMeetingModalOpen);
 
+  const canCreateMeetings = useCanCreateMeetings();
+
   const slug = activeWorkspaceSlug || "workspace";
   const isOwnerOrAdmin = role === "owner" || role === "admin";
 
   const quickActions: QuickAction[] = [
-    {
-      title: "Create room",
-      icon: Plus,
-      onClick: () => setCreateRoomModalOpen(true),
-      featured: true,
-    },
+    // WT-371 #2: dropped entirely for a member without the permission rather than shown disabled.
+    // "Create room" is the featured action on this page; rendering it greyed out would make the
+    // page look broken to an external collaborator for whom it is simply not part of the product.
+    ...(canCreateMeetings
+      ? [
+          {
+            title: "Create room",
+            icon: Plus,
+            onClick: () => setCreateRoomModalOpen(true),
+            featured: true,
+          } satisfies QuickAction,
+        ]
+      : []),
     {
       title: "Find meeting",
       icon: MagnifyingGlass,

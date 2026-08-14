@@ -38,6 +38,8 @@ export interface TranslationRoomDto {
   createdAt: string;
   settings?: {
     requiresApproval: boolean;
+    /** WT-371: whether anyone in the room may start translation, or only the host. */
+    participantsCanStartTranslation?: boolean;
   };
   participantCount?: number;
   /**
@@ -111,6 +113,7 @@ export interface CreateTranslationRoomRequest {
     muteOnEntry?: boolean;
     autoRecord?: boolean;
     breakoutsEnabled?: boolean;
+    participantsCanStartTranslation?: boolean;
   };
   scheduledAt?: string;
   invitedEmails?: string[];

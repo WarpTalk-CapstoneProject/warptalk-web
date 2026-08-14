@@ -265,6 +265,12 @@ export interface SelectWorkspaceResponse {
   role: string;
   membershipType: string;
   defaultLanguage?: string;
+  /**
+   * This member's own meeting-creation permission in the selected workspace. Optional because a
+   * backend older than WT-371 #2 does not send it; treat `undefined` as allowed, which is how the
+   * app behaved before the field existed.
+   */
+  canCreateMeetings?: boolean;
 }
 
 export interface ExtractedPageDto {

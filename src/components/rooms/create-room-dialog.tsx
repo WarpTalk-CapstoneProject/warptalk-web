@@ -94,6 +94,8 @@ export function CreateRoomDialog() {
   // which point the workspace's own default fills it in below; only a non-null value is sent, so
   // a host who never opens the menu still gets the meeting type's server-side default.
   const [requiresApproval, setRequiresApproval] = useState<boolean | null>(null);
+  // WT-371: off unless the host says otherwise — see the toggle's comment in OptionsMenu.
+  const [participantsCanStartTranslation, setParticipantsCanStartTranslation] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -313,7 +315,14 @@ export function CreateRoomDialog() {
           // that is what lets the meeting type seed the rest. Echoing the type's own default back
           // at it would work today and quietly pin the value if a type's profile ever changed.
           settings:
-            requiresApproval === null ? undefined : { requiresApproval },
+            requiresApproval === null && !participantsCanStartTranslation
+              ? undefined
+              : {
+                  ...(requiresApproval === null ? {} : { requiresApproval }),
+                  ...(participantsCanStartTranslation
+                    ? { participantsCanStartTranslation: true }
+                    : {}),
+                },
         };
 
         if (dailyRecurrence) {
@@ -513,6 +522,10 @@ export function CreateRoomDialog() {
                     if (draft) setScheduledAt(null);
                   }}
                   requiresApproval={effectiveRequiresApproval}
+                  participantsCanStartTranslation={participantsCanStartTranslation}
+                  onParticipantsCanStartTranslationChange={
+                    setParticipantsCanStartTranslation
+                  }
                   onRequiresApprovalChange={setRequiresApproval}
                 />
               </div>

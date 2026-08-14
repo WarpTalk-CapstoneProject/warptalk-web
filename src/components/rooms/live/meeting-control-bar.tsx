@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, UsersFour } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getFlagEmoji } from "@/lib/language/language-flag";
@@ -106,9 +106,6 @@ export function MeetingControlBar({
   onToggleMuteOnEntry,
   onMuteAll,
   onToggleRecording,
-  breakoutActive,
-  onOpenBreakoutSetup,
-  onEndBreakoutRooms,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -190,12 +187,6 @@ export function MeetingControlBar({
   onMuteAll?: () => void;
   /** WT-06, host-only: starts/stops LiveKit Egress recording for the room. Omit to hide the record button. */
   onToggleRecording?: () => void;
-  /** Whether breakout rooms are currently in progress for this meeting. */
-  breakoutActive?: boolean;
-  /** Host-only: opens the breakout room setup modal. Omit to hide the row. */
-  onOpenBreakoutSetup?: () => void;
-  /** Host-only: ends all active breakout rooms, returning everyone to the main room. Shown only while breakoutActive. */
-  onEndBreakoutRooms?: () => void;
 }) {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
@@ -327,29 +318,11 @@ export function MeetingControlBar({
                     }}
                   />
                 ) : null}
-                {onOpenBreakoutSetup ? (
-                  <HostControlRow
-                    label={breakoutActive ? "Manage breakout rooms" : "Breakout rooms"}
-                    description={breakoutActive ? "Breakouts are in progress." : "Split participants into smaller groups."}
-                    icon={<UsersFour className="h-4 w-4" />}
-                    active={Boolean(breakoutActive)}
-                    onClick={() => {
-                      onOpenBreakoutSetup();
-                      setIsHostControlsMenuOpen(false);
-                    }}
-                  />
-                ) : null}
-                {breakoutActive && onEndBreakoutRooms ? (
-                  <HostControlRow
-                    label="End breakout rooms"
-                    description="Move everyone back to the main room now."
-                    icon={<Stop className="h-4 w-4" weight="fill" />}
-                    onClick={() => {
-                      onEndBreakoutRooms();
-                      setIsHostControlsMenuOpen(false);
-                    }}
-                  />
-                ) : null}
+                {/* Breakout rooms were removed from the product; their two rows are gone with
+                    them. The menu had outlived the feature and was still offering "Split
+                    participants into smaller groups" in the host controls — the one menu a host
+                    opens during a live meeting. An entry point to something that no longer
+                    exists is worse than no entry point. */}
               </motion.div>
             ) : null}
           </AnimatePresence>
