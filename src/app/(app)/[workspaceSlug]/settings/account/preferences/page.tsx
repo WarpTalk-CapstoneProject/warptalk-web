@@ -95,7 +95,10 @@ export default function PersonalPreferencesPage() {
       const initialValues: PreferencesFormData = {
         defaultSpeakLanguage: settingsData.defaultSpeakLanguage || "en",
         defaultListenLanguage: settingsData.defaultListenLanguage || "en",
-        voiceCloneEnabled: settingsData.voiceCloneEnabled ?? true,
+        // Off, not on, when the server did not say. This is biometric processing, and a
+        // fallback that shows a switch ON while the stored value is OFF tells the user their
+        // voice is being cloned when it is not (WT-401). AuthService's own default is false.
+        voiceCloneEnabled: settingsData.voiceCloneEnabled ?? false,
         micNoiseSuppression: settingsData.micNoiseSuppression ?? true,
         defaultTranslationRoomType: settingsData.defaultTranslationRoomType || "instant",
         autoRecordTranslationRooms: settingsData.autoRecordTranslationRooms ?? false,
