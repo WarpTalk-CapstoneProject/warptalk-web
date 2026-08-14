@@ -251,9 +251,29 @@ export const billingService = {
   /**
    * Get all active subscription plans from the backend.
    */
+  /**
+   * The customer catalogue: active plans only (BR-74).
+   *
+   * The server filters now. It did not, so a plan an administrator had deactivated stayed
+   * selectable on the landing page and in every checkout flow — right up to the point where
+   * SubscriptionService refused to create the subscription.
+   */
   getPlans: async (): Promise<import("@/types/billing").PlanDto[]> => {
     const { data } =
       await apiClient.get<import("@/types/billing").PlanDto[]>(`/plans`);
+    return data;
+  },
+
+  /**
+   * Every plan, deactivated ones included. System Admin only — the route is authorized.
+   *
+   * The plan-management page must NOT use `getPlans`: deactivating a plan through the edit form
+   * would drop it out of the only list that page has, and there would be no way to switch it back
+   * on. Deactivation would be a one-way door.
+   */
+  getAllPlansForAdmin: async (): Promise<import("@/types/billing").PlanDto[]> => {
+    const { data } =
+      await apiClient.get<import("@/types/billing").PlanDto[]>(`/plans/all`);
     return data;
   },
 

@@ -135,7 +135,8 @@ export default function AdminPlansPage() {
   // Queries
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["admin-plans"],
-    queryFn: () => billingService.getPlans(),
+    // Admin list: deactivated plans must stay visible here or they can never be re-enabled.
+    queryFn: () => billingService.getAllPlansForAdmin(),
   });
 
   // Mutations
