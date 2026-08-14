@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useUIStore } from "@/stores/ui-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { IconProps } from "@phosphor-icons/react";
 import {
   Archive,
@@ -179,6 +179,7 @@ function NavLink({
 export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const canCreateMeetings = useCanCreateMeetings();
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -210,12 +211,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       tourId: "nav-meetings",
       actions: [
         { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: "Join by code" },
-        {
-          icon: Plus,
-          onClick: () => setCreateRoomModalOpen(true),
-          title: "Create Meeting",
-          tourId: "nav-create-meeting",
-        }
+        // Join by code stays for everyone — an external collaborator is invited INTO meetings, they
+        // just may not open them. WT-371 #2.
+        ...(canCreateMeetings
+          ? [
+              {
+                icon: Plus,
+                onClick: () => setCreateRoomModalOpen(true),
+                title: "Create Meeting",
+                tourId: "nav-create-meeting",
+              },
+            ]
+          : [])
       ]
     },
     { icon: CalendarBlank, label: "My Meetings", href: `/${slug}/my-meetings` },

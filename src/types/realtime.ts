@@ -24,11 +24,44 @@ export interface TranscriptSegmentDto {
   speakerName: string;
   originalText: string;
   originalLanguage: string;
+  /**
+   * Set on the wire, never populated by the gateway — AiResultConsumerService builds every
+   * TranscriptSegmentReceived with `TranslatedText: null, TargetLanguage: null`. Kept because
+   * the record shape is shared with the hub model, and read only as a fallback for a segment
+   * that predates `translations`.
+   *
+   * @deprecated for live rendering — read {@link translations} through
+   * `resolveSegmentTranslation`, which answers for a specific reader's language.
+   */
   translatedText?: string;
+  /** @deprecated see {@link translatedText}. */
   targetLanguage?: string;
+  /**
+   * Every translation of this line, keyed by NORMALIZED target language code ("en", "vi").
+   *
+   * WT-371 Bug 4: a bubble does not have a target language — a reader does. The room translates
+   * into every language somebody is listening in and the gateway fans all of them out to the
+   * whole group, so the panel picks the entry matching the viewer's listen language at render
+   * time. Holding one overwritten translation instead is what let a slow-resolving listen
+   * language leave the transcript showing two different directions at once.
+   */
+  translations?: Record<string, string>;
   confidence: number;
   startTimeMs: number;
   endTimeMs: number;
+  /**
+   * When THIS client received the segment, stamped in the store on first insert.
+   *
+   * `startTimeMs` cannot be used as a clock: it is an offset into the audio ingress track, and
+   * that track RESETS on reconnect — dedupeTranscriptSegments already carries a comment saying
+   * so. A line spoken 18 minutes into a meeting was rendered as 6:00 because the ingress had
+   * reconnected 6 minutes earlier, under an aria-label reading "Meeting time".
+   *
+   * Client-stamped rather than server-sent because for a live segment the two are a second
+   * apart, and a second is invisible next to being twelve minutes wrong. Absent on segments
+   * loaded from the saved transcript, which is why every reader must fall back.
+   */
+  receivedAt?: number;
 }
 
 export interface TranslationTextDto {

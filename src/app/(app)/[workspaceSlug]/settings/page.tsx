@@ -164,7 +164,8 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
 export default function WorkspaceSettingsPage() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const role = useWorkspaceStore((s) => s.role);
-  const { setActiveWorkspace, activeWorkspaceSlug, membershipType } = useWorkspaceStore();
+  const { setActiveWorkspace, activeWorkspaceSlug, membershipType, canCreateMeetings } =
+    useWorkspaceStore();
 
   // Queries & Mutations
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
@@ -203,10 +204,15 @@ export default function WorkspaceSettingsPage() {
         (workspaceQuery.data?.role || role || "").toLowerCase(),
         membershipType,
         String(patch.defaultLanguage),
+        // Carried through, not dropped. This call re-writes the whole active-workspace record to
+        // change ONE field, so omitting the permission would reset it to "unknown" — which reads as
+        // allowed — and every New-meeting button would come back for an external member the moment
+        // an admin changed the workspace's default language.
+        canCreateMeetings,
       );
     }
     return saved;
-  }, [activeWorkspaceId, activeWorkspaceSlug, membershipType, patchSettingsMutation, role, setActiveWorkspace, workspaceQuery.data]);
+  }, [activeWorkspaceId, activeWorkspaceSlug, canCreateMeetings, membershipType, patchSettingsMutation, role, setActiveWorkspace, workspaceQuery.data]);
 
   const autoSave = useAutoSaveQueue<Partial<WorkspaceSettingsDto>>({
     save: saveWorkspacePatch,

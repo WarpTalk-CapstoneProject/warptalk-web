@@ -81,7 +81,21 @@ function JoinMeetingContent() {
   const animationRef = useRef<number | null>(null);
 
   const displayName = user?.fullName || user?.email || "Guest";
-  const [roomCode, setRoomCode] = useState(searchParams.get("code") ?? "");
+  // WT-368 — the room code is DERIVED from the URL until somebody types.
+  //
+  // This was `useState(searchParams.get("code") ?? "")`. /join is a statically rendered route,
+  // so useSearchParams() is empty during the render that the initialiser runs in, and useState
+  // ignores every later initialiser value. An invite link therefore landed on a screen with an
+  // empty code box and no sign that a code had been supplied at all — the user had to read it
+  // back out of their own URL bar and retype it.
+  //
+  // Derived rather than synced in an effect: there is no moment where the two can disagree, and
+  // no render where the box is briefly empty. `typedCode` is null until the field is touched, so
+  // deliberately CLEARING it stays cleared instead of being refilled from the URL on the next
+  // render — which a `roomCode === ""` test would get wrong.
+  const codeFromUrl = searchParams.get("code") ?? "";
+  const [typedCode, setTypedCode] = useState<string | null>(null);
+  const roomCode = typedCode ?? codeFromUrl;
   const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
   const [listenLanguage, setListenLanguage] = useState("en-US");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -468,7 +482,8 @@ function JoinMeetingContent() {
               </h4>
               <Input
                 value={roomCode}
-                onChange={(event) => setRoomCode(event.target.value)}
+                // Typing takes ownership of the field from the URL. See the note above.
+                onChange={(event) => setTypedCode(event.target.value)}
                 placeholder="e.g. abc-defg-hij"
                 autoFocus={!roomCode}
                 className="h-[34px] rounded-[12px] border-border bg-canvas text-[12px] font-mono"

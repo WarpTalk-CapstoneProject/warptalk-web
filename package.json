@@ -91,6 +91,10 @@
     "test:room-history-mapping": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/room-history-mapping.test.ts",
     "test:normalize-response": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/api/__tests__/normalize-response.test.ts",
     "test:cycle-projection": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/cycle-projection.test.ts",
+    "test:dashboard-panels": "node scripts/check-dashboard-panels.mjs",
+    "test:external-member-permissions": "node scripts/check-external-member-permissions.mjs",
+    "test:summary-state": "node scripts/check-summary-state-wired.mjs",
+    "test:meeting-realtime": "node scripts/check-meeting-realtime-wired.mjs",
     "test:onboarding": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/onboarding/__tests__/invite-suggestion.test.ts src/lib/onboarding/__tests__/tour-steps.test.ts",
     "test:scripts-wired": "node scripts/check-test-scripts-wired.mjs",
     "test:meeting-started-notice": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/notifications/__tests__/meeting-started-notice.test.ts"

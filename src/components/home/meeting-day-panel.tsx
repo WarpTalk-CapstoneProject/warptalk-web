@@ -10,9 +10,8 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { meetingLanguageSet } from "@/lib/language/languages";
 import { isSameDay, meetingsOn } from "@/lib/meeting/meeting-day";
 import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
-import { Beams } from "@/components/visuals/beams";
 import { useUIStore } from "@/stores/ui-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 
 const LONG_DATE = new Intl.DateTimeFormat("en-US", {
@@ -142,6 +141,7 @@ export function MeetingDayPanel() {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const canCreateMeetings = useCanCreateMeetings();
 
   const [today] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
@@ -163,23 +163,10 @@ export function MeetingDayPanel() {
   return (
     <section
       aria-label="Meetings by day"
-      className="relative isolate overflow-hidden rounded-[14px] border border-border bg-black p-3 shadow-linear sm:p-4"
+      className="rounded-[14px] border border-border bg-canvas p-3 shadow-linear sm:p-4"
     >
-      <Beams
-        beamNumber={12}
-        beamWidth={2.4}
-        beamHeight={22}
-        lightColor="#ffffff"
-        speed={2}
-        noiseIntensity={1.75}
-        scale={0.3}
-        rotation={30}
-        className="pointer-events-none absolute inset-0 -z-20"
-      />
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-black/20" />
-
-      <header className="relative z-10 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold text-white">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold text-ink">
           {LONG_DATE.format(selectedDate)}
         </h2>
 
@@ -190,7 +177,6 @@ export function MeetingDayPanel() {
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
           today={today}
-          tone="inverse"
         />
       </header>
 
@@ -198,37 +184,41 @@ export function MeetingDayPanel() {
           the measure so the panel never changes size: loading, one meeting and five meetings all
           occupy the same box, and switching days can no longer resize the card and shove the
           shortcuts below it around. Past three rows the list scrolls inside instead of growing. */}
-      <div className="relative z-10 mt-3 h-[176px]">
+      <div className="mt-3 h-[176px]">
         {roomList.isPending ? (
           // Placeholder rows rather than a spinner, clipped to the box like the real list.
           <div className="flex h-full flex-col gap-2 overflow-hidden" aria-hidden>
             {[0, 1, 2].map((row) => (
-              <div key={row} className="h-[42px] shrink-0 animate-pulse rounded-xl bg-white/10" />
+              <div key={row} className="h-[42px] shrink-0 animate-pulse rounded-xl bg-surface-2" />
             ))}
           </div>
         ) : dayMeetings.length > 0 ? (
           <DayHourRail meetings={dayMeetings} workspaceSlug={slug} />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
-            <VideoCamera size={22} weight="duotone" className="text-white/70" />
+          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 px-4 text-center">
+            <VideoCamera size={22} weight="duotone" className="text-ink-muted" />
             <div>
-              <p className="text-[13px] font-medium text-white">
+              <p className="text-[13px] font-medium text-ink">
                 {isSameDay(selectedDate, today)
                   ? "No meetings scheduled for today"
                   : "No meetings scheduled for this day"}
               </p>
-              <p className="mt-0.5 text-[12px] text-white/65">
-                Schedule one, or enjoy the quiet.
+              <p className="mt-0.5 text-[12px] text-ink-muted">
+                {canCreateMeetings
+                  ? "Schedule one, or enjoy the quiet."
+                  : "You'll see meetings here once someone invites you."}
               </p>
             </div>
-            <Button
-              type="button"
-              onClick={() => setCreateRoomModalOpen(true)}
-              className="h-8 gap-1.5 rounded-full px-3 text-[13px]"
-            >
-              <Plus size={14} weight="bold" />
-              New meeting
-            </Button>
+            {canCreateMeetings && (
+              <Button
+                type="button"
+                onClick={() => setCreateRoomModalOpen(true)}
+                className="h-8 gap-1.5 rounded-full px-3 text-[13px]"
+              >
+                <Plus size={14} weight="bold" />
+                New meeting
+              </Button>
+            )}
           </div>
         )}
       </div>

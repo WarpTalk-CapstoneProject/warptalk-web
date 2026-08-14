@@ -118,6 +118,7 @@ import {
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
+import { useCanCreateMeetings } from "@/stores/workspace-store";
 import type { UserDto } from "@/types/auth";
 import type { TranscriptSegmentDto } from "@/types/transcript";
 import type {
@@ -168,6 +169,7 @@ export default function RoomInformationPage() {
   const endRoomMutation = useEndTranslationRoom();
   const startRoomMutation = useStartTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
+  const canCreateMeetings = useCanCreateMeetings();
   const user = useAuthStore((state) => state.user);
   // Read ABOVE the `if (!room)` guard below, and it has to stay there. React counts hooks
   // per render: while the room query is still loading this component returns early, so a
@@ -312,10 +314,12 @@ export default function RoomInformationPage() {
   // Only the host, and only while the room still has settings worth changing — once it is
   // live or ended, editing it would rewrite a meeting already in progress or already over.
   const canEditRoom =
+    canCreateMeetings &&
     room.hostId === user?.id &&
     (room.status === "scheduled" || room.status === "waiting");
 
   const openRoomEditor = () => {
+    if (!canCreateMeetings) return;
     useUIStore.getState().setEditRoomId(room.id);
     useUIStore.getState().setCreateRoomModalOpen(true);
   };

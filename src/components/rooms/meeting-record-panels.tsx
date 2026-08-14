@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
+import { resolveSummaryState } from "@/lib/meeting/room-history-mapping";
 import {
   artifactLabel,
   artifactStatusLabel,
@@ -276,11 +277,16 @@ export function SummaryPanel({
   const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
   const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
   const isRewriting = requestedTemplate !== null && requestedTemplate !== currentTemplate;
+  const summaryState = resolveSummaryState({
+    artifactStatus: artifact?.status,
+    hasStructuredContent,
+    insufficientData: summary?.insufficientData,
+    recentlyEnded,
+  });
   const isGenerating =
     forceGenerating ||
     isRewriting ||
-    artifact?.status === "processing" ||
-    (!artifact && recentlyEnded);
+    summaryState === "generating";
 
   useEffect(() => {
     // A rewrite that never lands must not leave the picker spinning forever — the summary
@@ -441,7 +447,9 @@ export function SummaryPanel({
               No summary output
             </h3>
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
-              {summary?.insufficientData
+              {summaryState === "failed"
+                ? "Summary generation did not complete for this meeting. The transcript is still available."
+                : summary?.insufficientData
                   ? "There wasn't enough transcript content in this meeting to generate a summary."
                   : "This meeting ended without a summary artifact."}
             </p>
@@ -449,7 +457,13 @@ export function SummaryPanel({
         </div>
       )}
 
-      {artifact ? (
+      {/* WT-369: offered only when there is a summary to download.
+          The artifact ROW existing is not the same as the summary existing — the finalizer
+          writes a SUMMARY_EXPORT row even when the AI worker produced nothing, marked
+          insufficientData. So "No summary output" was rendered with a live "Download summary
+          file" button under it, and pressing it fetched a JSON blob whose only content was a
+          sentence saying there was no summary. */}
+      {artifact && summaryState === "ready" ? (
         <div className="border-t border-border p-4">
           <Button
             size="sm"

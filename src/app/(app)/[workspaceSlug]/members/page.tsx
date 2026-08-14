@@ -689,14 +689,17 @@ export default function WorkspaceMembersPage() {
 
                   {/* Role Badge */}
                   {visibleDisplayProperties.includes("role") && (
-                  <div>
+                  <div className="min-w-0">
                     <Badge
                       variant="outline"
-                      className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
+                      title={
+                        member && isExternal
+                          ? "External members always hold the Member role — it cannot be changed."
+                          : undefined
+                      }
+                      className="max-w-full truncate whitespace-nowrap rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
                     >
-                      {member && isExternal
-                        ? "Member · External · Fixed"
-                        : row.roleName}
+                      {row.roleName}
                     </Badge>
                   </div>
                   )}

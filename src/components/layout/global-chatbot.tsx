@@ -49,6 +49,11 @@ import type {
   AssistantMentionDto,
   AssistantPageContextDto,
 } from "@/types/assistant";
+import {
+  AssistantQuestionCard,
+  parseAssistantQuestions,
+  type AssistantQuestion,
+} from "@/components/layout/assistant-question-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
@@ -92,6 +97,8 @@ const TOOL_LABELS: Record<string, string> = {
   get_room_detail: "Looking up room details…",
   get_transcript: "Reading the transcript…",
   get_document: "Reading the document…",
+  ask_user: "Needs a couple of details…",
+  create_meeting: "Creating the meeting…",
 };
 
 interface SlashCommand {
@@ -278,6 +285,9 @@ export function GlobalChatbot() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [activeToolLabel, setActiveToolLabel] = useState<string | null>(null);
+  // The card WarpBot last put up, or null. One at a time: a second question set replaces the
+  // first, because answering a stale card would send answers the assistant has moved past.
+  const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationTitle, setConversationTitle] = useState("New chat");
@@ -568,6 +578,18 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
         setActiveToolLabel(TOOL_LABELS[payload.toolName] ?? "Looking that up…");
+        armResponseTimeout();
+      },
+    );
+
+    connection.on(
+      "AssistantQuestion",
+      (payload: { conversationId: string; questionsJson: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        const questions = parseAssistantQuestions(payload.questionsJson);
+        // A malformed payload leaves the card absent rather than rendering an empty shell —
+        // the user's own message box still works, which is the fallback that matters.
+        if (questions.length) setPendingQuestions(questions);
         armResponseTimeout();
       },
     );
@@ -1091,6 +1113,25 @@ export function GlobalChatbot() {
                     </div>
                   </div>
                 )}
+
+                {/* Last in the thread, not attached to a message: the questions belong to the
+                    turn that is still open, and pinning them to a bubble would leave them
+                    scrolled away above whatever WarpBot said while asking. */}
+                {pendingQuestions ? (
+                  <div className="pl-4">
+                    <AssistantQuestionCard
+                      questions={pendingQuestions}
+                      disabled={isAiTyping}
+                      onSubmit={(answer) => {
+                        // An ordinary message, sent the ordinary way. Nothing is paused waiting
+                        // for this, so the assistant simply reads it on its next turn with the
+                        // whole conversation in front of it.
+                        setPendingQuestions(null);
+                        void sendMessage(answer);
+                      }}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               {/* Chat Input Section
