@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 /**
  * The knowledge listing itself: source filters, fact-category chips, the table, and the pager.
  *
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils";
 import {
   canGoBack,
   hasAnyFact,
+  orderKnowledgeChunks,
   shouldShowPager,
   sourceLabel,
   SOURCE_TABS,
@@ -93,7 +95,9 @@ export function KnowledgeTable({
   onSelect,
   emptyHint,
 }: KnowledgeTableProps) {
-  const items = data?.items ?? [];
+  // Grouped by source so a meeting's facts read as one block instead of being scattered
+  // through the page. See orderKnowledgeChunks for why the server's order was not enough.
+  const items = useMemo(() => orderKnowledgeChunks(data?.items ?? []), [data?.items]);
   const { factCategory, cursorStack } = filters;
 
   return (

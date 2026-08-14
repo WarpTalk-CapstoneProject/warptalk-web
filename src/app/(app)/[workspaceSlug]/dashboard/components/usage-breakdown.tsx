@@ -23,8 +23,11 @@ export function UsageBreakdown({ rows }: { rows: FeatureAdoptionDto[] }) {
     .sort((a, b) => b.totalCreditsConsumed - a.totalCreditsConsumed);
 
   if (ranked.length === 0) {
+    // Holds the chart's height on purpose: this column and the trend share one frame, and a
+    // 40px empty state beside a 220px chart makes the divided container look broken rather
+    // than empty.
     return (
-      <p className="py-8 text-center text-[12px] text-ink-muted">
+      <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
         Nothing has been used in this window.
       </p>
     );

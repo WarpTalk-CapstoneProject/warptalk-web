@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
+import { resolveSummaryState } from "@/lib/meeting/room-history-mapping";
 import {
   artifactLabel,
   artifactStatusLabel,
@@ -167,7 +168,23 @@ export function SummaryPanel({
       (summary.summary || summary.decisions.length || summary.actionItems.length),
   );
   const recentlyEnded = useRecentlyEnded(room.endedAt);
-  const isGenerating = !artifact && recentlyEnded;
+
+  // WT-369 — resolveSummaryState was written, documented and unit-tested for exactly this, and
+  // then never called from anywhere. Its own doc comment describes the line it was meant to
+  // replace — `isGenerating = !artifact && recentlyEnded` — which was still sitting right here.
+  //
+  // The two are not equivalent. That flag only knows "no artifact yet", so an artifact that
+  // exists but is still `processing` fell straight through to "This meeting ended without a
+  // summary artifact" — printed directly above its own Download button — and a summary that
+  // landed after the wall-clock timer expired got the same false sentence. State belongs to the
+  // artifact, not to a clock.
+  const summaryState = resolveSummaryState({
+    artifactStatus: artifact?.status,
+    hasStructuredContent,
+    insufficientData: summary?.insufficientData,
+    recentlyEnded,
+  });
+  const isGenerating = summaryState === "generating";
 
   const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
   const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
@@ -339,15 +356,23 @@ export function SummaryPanel({
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
               {isGenerating
                 ? "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute."
-                : summary?.insufficientData
-                  ? "There wasn't enough transcript content in this meeting to generate a summary."
-                  : "This meeting ended without a summary artifact."}
+                : summaryState === "failed"
+                  ? "Summary generation did not complete for this meeting. The transcript is still available."
+                  : summary?.insufficientData
+                    ? "There wasn't enough transcript content in this meeting to generate a summary."
+                    : "This meeting ended without a summary artifact."}
             </p>
           </div>
         </div>
       )}
 
-      {artifact ? (
+      {/* WT-369: offered only when there is a summary to download.
+          The artifact ROW existing is not the same as the summary existing — the finalizer
+          writes a SUMMARY_EXPORT row even when the AI worker produced nothing, marked
+          insufficientData. So "No summary output" was rendered with a live "Download summary
+          file" button under it, and pressing it fetched a JSON blob whose only content was a
+          sentence saying there was no summary. */}
+      {artifact && summaryState === "ready" ? (
         <div className="border-t border-border p-4">
           <Button
             size="sm"
