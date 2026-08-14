@@ -105,7 +105,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <main className="min-h-full bg-canvas text-ink">
+    <main className="min-h-full bg-surface-1 text-ink">
       <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">
         <header className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -166,7 +166,7 @@ function HistoryRow({ room, selected, onSelect }: { room: EndedRoomHistoryItem; 
 
 function MeetingDetail({ room, busyArtifactId, onDownload }: { room: EndedRoomHistoryItem; busyArtifactId: string | null; onDownload: (artifact: RoomHistoryArtifact) => void }) {
   return (
-    <aside className="border-t border-border bg-canvas/35 p-5 lg:border-l lg:border-t-0">
+    <aside className="border-t border-border bg-surface-1 p-5 lg:border-l lg:border-t-0">
       <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle"><span className={cn("size-1.5 rounded-full", room.status === "ended" ? "bg-emerald-500" : "bg-ink-subtle")} />{room.status}</div>
       <h2 className="mt-3 text-[18px] font-semibold leading-6">{room.title}</h2>
       {room.description ? <p className="mt-2 text-[12px] leading-5 text-ink-muted">{room.description}</p> : null}

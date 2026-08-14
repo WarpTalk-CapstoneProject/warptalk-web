@@ -13,6 +13,7 @@ The script verifies:
 - All host sidebar routes return `200`:
   - `/dashboard`
   - `/rooms`
+  - `/my-meetings`
   - `/history`
   - `/ai-summaries`
   - `/ai-chat`
@@ -40,6 +41,7 @@ Repeat the same flow for:
 
 - `/dashboard` -> `/settings` -> Back
 - `/rooms` -> `/voice-profiles` -> Back
+- `/my-meetings` -> `/history` -> Back
 - `/ai-chat` -> `/settings` -> Back
 - `/terminology` -> `/feedback` -> Back
 

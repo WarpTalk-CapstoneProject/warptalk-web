@@ -34,6 +34,7 @@ import { downloadBlob } from "@/lib/ui/download-blob";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 import { DocumentAccessPolicyPanel } from "./components/DocumentAccessPolicyPanel";
+import { DocumentPreview } from "./components/DocumentPreview";
 
 interface PageProps {
   params: Promise<{ documentId: string }>;
@@ -182,7 +183,11 @@ export default function DocumentDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-4 overflow-hidden px-4 py-4 text-ink animate-fade-in">
+    /* h-full + min-h-0, never min-h-full: the page owns the viewport and the panes scroll inside
+       it. With min-h-full the whole page grew with the document, which is what pushed the file
+       information panel off the top of a 40KB report and made it unreachable without scrolling
+       back past everything. */
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-4 overflow-hidden px-4 py-4 text-ink animate-fade-in">
       <div className="flex shrink-0 items-center justify-between gap-4 border-b border-hairline/60 pb-3">
         <button
           onClick={() => router.push(`/${workspaceSlug}/documents`)}
@@ -299,20 +304,38 @@ export default function DocumentDetailPage({ params }: PageProps) {
           </div>
         </section>
 
-        <section className="h-full min-h-0 min-w-0">
-          <DocumentAccessPolicyPanel
-            canManagePolicies={canManagePolicies}
-            isExternalAllowed={isExternalAllowed}
-            isSubmitting={isSubmitting}
-            policiesList={policiesList}
-            membersList={membersList}
-            protectedUserIds={[doc.uploadedBy]}
-            toggleExternalAccess={toggleExternalAccess}
-            allowUser={allowUser}
-            blockUser={blockUser}
-            removePolicy={removePolicy}
+        {/* The wide column carries the document ITSELF, and the scroll lives HERE rather than on
+            the page. The page used to show everything about the file except the file: name, size,
+            format and a Download button, on a screen whose whole purpose is deciding whether to
+            approve what the file says. The file-information card to the left already answers the
+            metadata questions, so this column is free to be the document and the access rules
+            that will apply to it — the two things an approver has to weigh together, and which
+            were previously never on screen at the same time. */}
+        <div className="flex h-full min-h-0 min-w-0 flex-col gap-6 overflow-y-auto">
+          <DocumentPreview
+            workspaceId={activeWorkspaceId || ""}
+            documentId={doc.id}
+            fileName={doc.fileName}
+            fileExtension={doc.fileExtension}
+            sizeBytes={doc.sizeBytes}
+            onDownload={handleDownload}
           />
-        </section>
+
+          <section className="min-h-0 min-w-0">
+            <DocumentAccessPolicyPanel
+              canManagePolicies={canManagePolicies}
+              isExternalAllowed={isExternalAllowed}
+              isSubmitting={isSubmitting}
+              policiesList={policiesList}
+              membersList={membersList}
+              protectedUserIds={[doc.uploadedBy]}
+              toggleExternalAccess={toggleExternalAccess}
+              allowUser={allowUser}
+              blockUser={blockUser}
+              removePolicy={removePolicy}
+            />
+          </section>
+        </div>
       </div>
     </div>
   );

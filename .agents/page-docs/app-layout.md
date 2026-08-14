@@ -32,6 +32,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Host glass variables now use a readable white acrylic direction: structural frame around `rgba(255,255,255,0.18)`, sidebar/topbar/content surfaces around `rgba(255,255,255,0.9)`, and shadcn card/input scopes around `0.9`.
 - Sign out clears the preview auth store and routes the user back to `/login`.
 - The host sidebar keeps room creation as an in-page action instead of a dedicated navigation item; `/rooms/create` remains reachable from the `Create room` button and command search.
+- The workspace app sidebar now includes a dedicated `My Meetings` route at `/[workspaceSlug]/my-meetings`, positioned above the workspace `History` route so the personal timeline and workspace archive stay distinct in navigation.
 - Admin and workspace layouts now share the same muted content background, sticky topbar, and padded content wrapper used by the host dashboard shell.
 - Admin, workspace, and participant sidebars keep their existing collapsible behavior while sharing the updated logo treatment.
 - Command search now includes the full review route set: dashboard, rooms, create room, history, AI summaries, AI chat, terminology, feedback, workspace, admin, and dev test.
@@ -70,6 +71,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 
 - The host sidebar intentionally uses the dashboard light frosted treatment instead of the former dark glass treatment, so internal host routes visually match `/dashboard`.
 - `/dashboard` now imports and renders the same `HostSidebar` component as the other host pages, preventing sidebar drift between dashboard and inner routes.
+- `My Meetings` is explicitly a routed page in the app shell, not a card embedded into `/[workspaceSlug]/home`.
 - The dashboard route no longer renders its own duplicate background/sidebar/topbar shell; its page component now owns content only.
 - Breadcrumb labels are derived from the current pathname. This keeps the header generic, but route-specific custom labels may need a mapping if future pages need friendlier names.
 - Command search is frontend-only and navigates between available local app pages.
@@ -77,6 +79,13 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - The Host profile control is currently presentational in this layout pass. Account-menu behavior should be wired back in if the product requires profile or logout actions from the topbar.
 - Removing the Ask WarpBot page-context strip only suppresses the ambient `pageContext` payload for the current page/entity. Explicit `@` mention chips still send their selected entity references.
 - The page-transition indicator must stay presentational and lightweight. Keep it global, monochrome, pinned to the top edge, pointer-events disabled, and avoid adding page-specific state or data fetching to it. The visual should remain only the long progress bar, without an enclosing card, border, blur, or shadow.
+
+- **No workspace tab strip in the header.** `WorkspaceTabs` and `useWorkspaceTabsStore` still exist in the tree and are still used elsewhere, but `(app)/layout.tsx` deliberately does not render the strip or the "add current page as a tab" button. This is a standing decision ("fix(layout): remove workspace tabs from app header") — a merge from a branch that still renders it must not quietly bring it back.
+- The Help (`?`) icon in the header opens the product tour (`data-tour="help-button"`). It was previously a button with no `onClick` — the only affordance in the header that did nothing — and the tour's final step points at it, so anyone who skipped the tour can find their way back.
+- `<ProductTour />` mounts inside the shell, and the tour is remembered per person (`tourSeenAtByUser` keyed by user id), not per sign-in.
+- The scrolling `<main>` is wrapped in a non-scrolling frame (`relative flex min-w-0 flex-1 flex-col`) so `<MeetingStartedBanner />` can pin to the content area and stay put while the page scrolls underneath. `<main>` itself cannot host the banner: it *is* the scroll container.
+- The header also carries `<NotificationSoundToggle />` beside the notification bell.
+- Picking the first workspace on load hydrates from the **select response**, via `applySelectedWorkspace`, not from the workspace list row. List shape varies by endpoint; the select call is the one authority on this user's role, membership type, and default language. The call is awaited, and a failure redirects to `/workspace` rather than leaving the shell holding a workspace the server never confirmed. A `selectWorkspace.isPending` guard stops the effect racing itself.
 
 ## Known Limitations
 

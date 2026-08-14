@@ -22,6 +22,7 @@ import {
   useSelectWorkspace,
   useWorkspaces,
 } from "@/hooks/use-workspace";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { WorkspaceDto } from "@/types/workspace";
@@ -67,12 +68,6 @@ export default function CreateWorkspaceDemoPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const activeWorkspaceId = useWorkspaceStore(
-    (state) => state.activeWorkspaceId,
-  );
-  const activeWorkspaceSlug = useWorkspaceStore(
-    (state) => state.activeWorkspaceSlug,
-  );
   const setActiveWorkspace = useWorkspaceStore(
     (state) => state.setActiveWorkspace,
   );
@@ -81,8 +76,12 @@ export default function CreateWorkspaceDemoPage() {
   const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? EMPTY_WORKSPACES;
   const primaryInternalWorkspace = getPrimaryInternalWorkspace(workspaces);
-  const hasPrimaryInternalWorkspace = Boolean(activeWorkspaceId || primaryInternalWorkspace);
-  const primaryInternalWorkspaceSlug = activeWorkspaceSlug || primaryInternalWorkspace?.slug;
+  // Membership decides this, not the session. These two used to fall back to the store's
+  // `activeWorkspaceId` / `activeWorkspaceSlug`, which meant merely having a workspace OPEN
+  // barred you from creating one — development removed that gate for good reason. What is left
+  // is the rule that is actually about the account: one internal membership.
+  const hasPrimaryInternalWorkspace = Boolean(primaryInternalWorkspace);
+  const primaryInternalWorkspaceSlug = primaryInternalWorkspace?.slug;
   const [serverError, setServerError] = useState<ServerErrorState | null>(null);
   const mounted = useSyncExternalStore(
     () => () => undefined,
@@ -113,6 +112,11 @@ export default function CreateWorkspaceDemoPage() {
     createWorkspace.isPending ||
     selectWorkspace.isPending ||
     form.formState.isSubmitting;
+  // Development dropped the old gate, which refused a second workspace to anyone who merely had
+  // an ACTIVE one — a session detail, not a rule about the account. That gate deserved to go and
+  // is gone. What replaces it is narrower and is a real rule: one INTERNAL membership per
+  // account. Having a workspace open no longer blocks anything; already belonging to one as an
+  // internal member does.
   const internalWorkspaceIssue = hasPrimaryInternalWorkspace
     ? `Your account already has one internal workspace membership in ${primaryInternalWorkspace?.name || "a workspace"}. Open it, or join another workspace by request or invitation instead.`
     : null;
@@ -129,7 +133,11 @@ export default function CreateWorkspaceDemoPage() {
 
   useEffect(() => {
     if (!mounted || workspacesLoading || !hasPrimaryInternalWorkspace) return;
-    router.replace(primaryInternalWorkspaceSlug ? `/${primaryInternalWorkspaceSlug}/home` : "/workspace");
+    router.replace(
+      primaryInternalWorkspaceSlug
+        ? `/${primaryInternalWorkspaceSlug}/home`
+        : "/workspace",
+    );
   }, [
     mounted,
     workspacesLoading,
@@ -164,17 +172,10 @@ export default function CreateWorkspaceDemoPage() {
         requireVerifiedDomainForInternal: true,
       });
 
-      await selectWorkspace.mutateAsync(workspace.id);
-      setActiveWorkspace(
-        workspace.id,
-        workspace.name,
-        workspace.slug,
-        workspace.role || "Owner",
-        "Internal",
-        "en",
-      );
+      const selection = await selectWorkspace.mutateAsync(workspace.id);
+      applySelectedWorkspace(selection, setActiveWorkspace);
       toast.success(`Workspace "${workspace.name}" created.`);
-      router.push(`/${workspace.slug}/home`);
+      router.push(`/${selection.slug}/home`);
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);

@@ -23,19 +23,26 @@ import { useRouter } from "next/navigation";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { type RawNotification, readMeetingStartedNotice } from "@/lib/notifications/meeting-started-notice";
+import { playNotificationCue } from "@/lib/notifications/notification-sounds";
+import { useMeetingStartedStore } from "@/stores/meeting-started-store";
+
 interface RealtimeContextType {
   connection: signalR.HubConnection | null;
   isConnected: boolean;
 }
 
-interface NotificationEventPayload {
-  title?: string;
-  content?: string;
-  message?: string;
-  type?: string;
+/**
+ * The realtime notification, in whichever spelling arrives.
+ *
+ * `RawNotification` accepts both snake_case (the SignalR relay's RealtimeNotificationMessage) and
+ * camelCase (the REST list's NotificationMessageDto) — reading only one of them is what silently
+ * removed the Join button from the meeting-started popup.
+ */
+type NotificationEventPayload = RawNotification & {
   actionUrl?: string;
-  data?: { actionUrl?: string };
-}
+  data?: { actionUrl?: string } | null;
+};
 
 interface WorkspaceSettingsEventPayload {
   message?: string;
@@ -142,6 +149,17 @@ export function RealtimeNotificationProvider({
         const message =
           notif.content || notif.message || "You have a new update.";
         const actionUrl = notif.actionUrl || notif.data?.actionUrl;
+        // A meeting that is RUNNING is different news from an invitation: an invite can wait,
+        // a meeting in progress cannot, and the only useful response is one click. This type
+        // used to be discarded at validation before it ever reached a client
+        // (warptalk-backend#190), so the popup had nothing to show.
+        const meetingStarted = readMeetingStartedNotice(notif);
+        if (meetingStarted) {
+          playNotificationCue("meeting-started");
+          useMeetingStartedStore.getState().show(meetingStarted);
+          return;
+        }
+
         const isMeetingInvite =
           notif.type === "MeetingInvite" ||
           notif.type === "MeetingInvitation" ||

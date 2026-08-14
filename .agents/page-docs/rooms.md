@@ -10,6 +10,8 @@ This document tracks the workspace Rooms overview at `/:workspaceSlug/rooms`.
 - The room detail Summary tab uses a GSAP-driven gray skeleton shimmer while the AI summary is still generating or being rewritten.
 - The room detail Transcript tab renders the current viewer's lines on the right, keeps transcript bubble text black for readability in light/dark modes, and keeps the scroll area inside the transcript frame.
 - Users can filter rooms locally by status tabs and search by title/code/language.
+- **A picked day narrows the tab; it does not replace it.** Filtering by a day still applies the tab's status rule: Active keeps only rooms that are not over (`!isMeetingOver`), History keeps only those that are. Dropping the status rule made picking a day on Active list cancelled and ended rooms under a heading reading "Active Meetings" — a stopped daily series showed its future occurrences there as "Cancelled". The exception is the All tab, where "everything I have" and "what is on Tuesday" are contradictory questions.
+- The day-filtered result is still passed through `sortRooms`: the day narrows *which* rows appear and says nothing about their order.
 - Create opens the shared create-room modal, and Join routes to `/join?code=...`.
 
 ## Files Affected

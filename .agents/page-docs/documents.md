@@ -19,14 +19,15 @@ Detail route: `src/app/(app)/[workspaceSlug]/documents/[documentId]/page.tsx`
 ## Detail Page
 
 - Do not show the raw document UUID in the visible header or metadata area.
-- Keep only one visible download action, inside the `File information` panel.
-- The main body is a 25/75 layout on large screens: the compact left column is only for file information and status, while the wider right column is for access policies and who can view the document.
-- The detail page should fit inside the app viewport without creating a page-level scrollbar. Long access-member sets must scroll inside the user list controls instead.
+- Keep only one *primary* download action, inside the `File information` panel. `DocumentPreview` also offers a download, but only in its fallback states — no in-browser reader for the format, the fetch failed, or the conversion failed. That one is a recovery route out of a preview that cannot render, not a second primary action, so it must not be promoted into the normal reading view.
+- The main body is a 25/75 layout on large screens. The compact left column is only for file information and status. The wider right column carries **the document itself** (`DocumentPreview`) with the access policies beneath it.
+- The right column must render the document. The page asks the user to approve a file, so the file has to be readable on it; a detail page showing the name, size and format but not the contents is the bug fixed in "render the document, and keep the properties beside it". Approving also means checking who the file will be shared with, so the document and its access rules belong in the same scrolling column.
+- The detail page should fit inside the app viewport without creating a page-level scrollbar. The page root is `h-full min-h-0 overflow-hidden`, never `min-h-full`: with `min-h-full` the page grows with the document and pushes the `File information` panel off the top of a long report, unreachable without scrolling back past everything. The document column owns its own scroll; long access-member sets must scroll inside the user list controls instead.
 - Detail-page surfaces should stay neutral: white, black, gray, borders, and muted surface tones only. Do not add green, blue, purple, orange, red, or other accent colors to file status, access rules, chips, or action controls.
 - Access policy management must scale to larger workspaces: both `Allowed Users List` and `Blocked Users List` include member search, scrollable member rows, individual selection toggles, an `Add workspace` bulk action, and a `Clear all` bulk action for removing explicit rules in that list.
 - `Allowed Users List` and `Blocked Users List` sit side by side in the access panel and should show about five visible users before internal scrolling.
 - Do not allow manual allow/block overrides for workspace owners, workspace admins, or the uploader of the current document. Their access is governed by workspace/document ownership rules, not by per-document policy toggles.
-- Avoid reintroducing separate metadata cards for status, size, and upload details unless the detail page is redesigned as a denser admin workspace.
+- Avoid reintroducing separate metadata cards for status, size, and upload details unless the detail page is redesigned as a denser admin workspace. The single `File information` panel in the left column is where all of that lives.
 
 ## Classification Badges
 

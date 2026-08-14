@@ -47,12 +47,36 @@ import { formatMoney } from "@/lib/format/currency";
 
 // We fetch plans dynamically now.
 
-function getTopUpRate(credits: number) {
-  if (credits >= 50000) return { rate: 8, discount: 20 };
-  if (credits >= 25000) return { rate: 8.5, discount: 15 };
-  if (credits >= 10000) return { rate: 9, discount: 10 };
-  return { rate: 10, discount: 0 };
-}
+/**
+ * Buying credit is switched off here, and the panel says so.
+ *
+ * WHY THE BUTTON IS GONE
+ *     It posted `paymentType: "CreditTopUp"`, and the backend has no such payment type —
+ *     PaymentConstants.PaymentTypes is Subscription / SubscriptionRenewal / SubscriptionUpdate /
+ *     InvoicePayment. So no handler matched, `if (handler is not null)` skipped the credit grant
+ *     in silence, and the request still wrote a payment record, issued an invoice and returned
+ *     success. The customer paid, saw an invoice, and their balance never moved. There are only
+ *     three paths that raise CreditsRemaining — cycle renewal, the subscription handler, and an
+ *     admin adjustment — and the gRPC top-up is refused outright with "Direct credit top-up is
+ *     disabled".
+ *
+ *     A button that takes money and grants nothing cannot stay reachable while the handler is
+ *     written. Turning it off is the smallest change that stops the harm.
+ *
+ * WHY THE PRICE IS ONE NUMBER
+ *     The ladder here was 10 / 9 / 8.5 / 8 VND per credit with volume discounts. None of it is
+ *     real: docs/credit-economics.md §4.2 sets retail at 4.00 VND per credit with no discount,
+ *     and the backend already agrees (CreditValueVnd = 4m). The frontend was overcharging by
+ *     2–2.5×; a 1,500-credit minimum was quoted at 15,000 VND against a true 6,000 VND.
+ *
+ *     It is stated, not hardcoded into a calculation: 4 VND is an admin-editable parameter in
+ *     billing_pricing_config, so once the handler exists this panel must READ the configured
+ *     value rather than carry its own copy — even a copy that happens to be right today.
+ */
+const TOP_UP_ENABLED = false;
+
+/** Retail rate from docs/credit-economics.md §4.2. Display only — see above. */
+const DOCUMENTED_VND_PER_CREDIT = 4;
 
 function isFreePlan(plan: PlanDto) {
   const value = `${plan.name} ${plan.slug} ${plan.tier}`.toLowerCase();
@@ -351,8 +375,7 @@ export default function WorkspacePlansPage() {
     return { label: "Downgrade", variant: "downgrade", disabled: false };
   };
 
-  const { rate, discount } = getTopUpRate(topUpCredits);
-  const topUpTotal = topUpCredits * rate;
+  const topUpTotal = topUpCredits * DOCUMENTED_VND_PER_CREDIT;
   const selectedPlanAction = selectedPlan ? getPlanAction(selectedPlan) : null;
   const selectedPlanIsCurrent = selectedPlanAction?.variant === "current";
   const selectedPlanIsEnterprise = selectedPlan
@@ -808,81 +831,19 @@ export default function WorkspacePlansPage() {
                 </div>
               </div>
 
+              {/* This was a four-card "Volume discount tiers" grid quoting 10 / 9 / 8.5 / 8 VND
+                  per credit. None of those numbers were real: retail is 4.00 VND flat
+                  (docs/credit-economics.md §4.2, and CreditValueVnd = 4m in the backend), so the
+                  grid was overstating the price by 2–2.5× AND inventing a discount ladder that
+                  does not exist. A tier card cannot be restyled into truthfulness — there is one
+                  rate, so there is one card. */}
               <div className="rounded-2xl border border-border bg-surface-1/70 p-4 backdrop-blur">
-                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p className="text-[13px] font-semibold text-ink">
-                      Volume discount tiers
-                    </p>
-                    <p className="text-[12px] text-ink-muted">
-                      Higher credit packs reduce the price per credit.
-                    </p>
-                  </div>
-                  {discount > 0 && (
-                    <Badge className="w-fit rounded-full border border-border bg-canvas px-2.5 py-1 text-[11px] font-medium text-ink shadow-none hover:bg-canvas">
-                      Save {discount}%
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  {[
-                    {
-                      label: "< 10k",
-                      rateText: "10 VND/cr",
-                      active: topUpCredits > 0 && topUpCredits < 10000,
-                    },
-                    {
-                      label: "10k+",
-                      rateText: "9 VND/cr",
-                      discountText: "10%",
-                      active: topUpCredits >= 10000 && topUpCredits < 25000,
-                    },
-                    {
-                      label: "25k+",
-                      rateText: "8.5 VND/cr",
-                      discountText: "15%",
-                      active: topUpCredits >= 25000 && topUpCredits < 50000,
-                    },
-                    {
-                      label: "50k+",
-                      rateText: "8 VND/cr",
-                      discountText: "20%",
-                      active: topUpCredits >= 50000,
-                    },
-                  ].map((tier) => (
-                    <div
-                      key={tier.label}
-                      className={`rounded-2xl border p-3 transition ${
-                        tier.active
-                          ? "border-ink bg-ink text-canvas"
-                          : "border-border bg-canvas text-ink"
-                      }`}
-                    >
-                      <p
-                        className={`text-[12px] font-semibold ${
-                          tier.active ? "text-canvas/70" : "text-ink-muted"
-                        }`}
-                      >
-                        {tier.label}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-baseline gap-1.5">
-                        <span className="text-[13px] font-semibold">
-                          {tier.rateText}
-                        </span>
-                        {tier.discountText && (
-                          <span
-                            className={`text-[11px] font-semibold ${
-                              tier.active ? "text-canvas/70" : "text-ink-muted"
-                            }`}
-                          >
-                            ({tier.discountText})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-[13px] font-semibold text-ink">
+                  {DOCUMENTED_VND_PER_CREDIT} VND per credit
+                </p>
+                <p className="mt-1 text-[12px] text-ink-muted">
+                  One rate, whatever the amount. There is no volume discount.
+                </p>
               </div>
 
               {topUpCredits > 0 && (
@@ -890,7 +851,7 @@ export default function WorkspacePlansPage() {
                   <div>
                     <p className="text-[11px] text-ink-muted">Rate applied</p>
                     <p className="mt-1 text-[13px] font-semibold text-ink">
-                      {rate} VND / credit
+                      {DOCUMENTED_VND_PER_CREDIT} VND / credit
                     </p>
                   </div>
                   <div>
@@ -915,6 +876,7 @@ export default function WorkspacePlansPage() {
                 </p>
               )}
 
+              {TOP_UP_ENABLED ? (
               <button
                 type="button"
                 disabled={isProcessing || topUpCredits < 1500}
@@ -936,6 +898,22 @@ export default function WorkspacePlansPage() {
                   "Enter credit amount above (Min 1,500)"
                 )}
               </button>
+              ) : (
+                /* Says why, and does not pretend the button is merely busy. Somebody who came
+                   here to buy credit needs to know it will not arrive, not to be left guessing
+                   whether they clicked wrong. */
+                <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 backdrop-blur">
+                  <p className="text-[13px] font-semibold text-ink">
+                    Credit top-up is temporarily unavailable
+                  </p>
+                  <p className="mt-1 text-[12px] text-ink-muted">
+                    Payment would be taken without the credits being added, so the
+                    purchase is switched off until that is fixed. Your subscription
+                    still renews its credits on schedule. Contact support if you need
+                    a balance adjustment.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>

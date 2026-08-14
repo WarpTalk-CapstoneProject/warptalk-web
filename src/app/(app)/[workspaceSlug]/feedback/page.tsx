@@ -1,16 +1,35 @@
 "use client";
 
+/**
+ * How a meeting is rated, once it is over.
+ *
+ * It used to be a page-wide rounded Card with the form inside it, its two actions floating in a
+ * right-aligned row ABOVE the card they act on, and the four ratings as bordered boxes in a
+ * two-column grid — each box repeating a border the card already drew, with its five score
+ * buttons wrapping underneath the label.
+ *
+ * It is the workspace chrome now: square, flat, actions ranked in the one toolbar row, and each
+ * rating a single line with its scores on the right where the eye already is. Four questions
+ * that fit on four lines were taking up half a screen.
+ */
+
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { PaperPlaneRight, Spinner } from "@phosphor-icons/react/dist/ssr";
+import { useParams, useSearchParams } from "next/navigation";
+import { PaperPlaneRight, Spinner, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  WorkspaceBody,
+  WorkspaceEmptyState,
+  WorkspacePage,
+  WorkspacePrimaryButton,
+  WorkspaceSecondaryButton,
+  WorkspaceToolbar,
+} from "@/components/workspace/page-chrome";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +55,11 @@ export default function FeedbackPage() {
 }
 
 function FeedbackForm() {
+  // Workspace-scoped, like every other route in this segment. The two links out of this page
+  // pointed at a bare "/history", which is not a route: history lives under the workspace slug,
+  // so both of them 404'd.
+  const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
+  const historyHref = `/${workspaceSlug}/history`;
   const roomId = useSearchParams().get("roomId")?.trim() ?? "";
   const feedbackState = useTranslationRoomFeedbackState(roomId);
   const submitFeedback = useSubmitTranslationRoomFeedback(roomId);
@@ -48,14 +72,15 @@ function FeedbackForm() {
   const [comments, setComments] = useState("");
   const existing = feedbackState.data?.feedback;
   const submitted = feedbackState.data?.hasSubmitted === true;
-  const displayRatings = submitted && existing
-    ? {
-        overall: existing.overallRating,
-        translation: existing.translationQuality ?? 0,
-        audio: existing.audioQuality ?? 0,
-        summary: existing.aiSummaryQuality ?? 0,
-      }
-    : ratings;
+  const displayRatings =
+    submitted && existing
+      ? {
+          overall: existing.overallRating,
+          translation: existing.translationQuality ?? 0,
+          audio: existing.audioQuality ?? 0,
+          summary: existing.aiSummaryQuality ?? 0,
+        }
+      : ratings;
 
   const selectedRatings = Object.values(displayRatings).filter(Boolean);
   const averageScore = selectedRatings.length
@@ -63,7 +88,7 @@ function FeedbackForm() {
     : "0.0";
 
   function updateRating(key: RatingKey, value: number) {
-    if (feedbackState.data?.hasSubmitted) return;
+    if (submitted) return;
     setRatings((current) => ({ ...current, [key]: current[key] === value ? 0 : value }));
   }
 
@@ -93,15 +118,19 @@ function FeedbackForm() {
 
   if (!roomId) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Select a completed room</CardTitle>
-          <CardDescription>Feedback requires a room ID from meeting history.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/history" className={cn(buttonVariants())}>View history</Link>
-        </CardContent>
-      </Card>
+      <WorkspacePage>
+        <WorkspaceBody className="pt-6">
+          <WorkspaceEmptyState
+            title="Select a completed room"
+            description="Feedback is left against one meeting, and this page was opened without one."
+            action={
+              <Link href={historyHref}>
+                <WorkspaceSecondaryButton>View history</WorkspaceSecondaryButton>
+              </Link>
+            }
+          />
+        </WorkspaceBody>
+      </WorkspacePage>
     );
   }
 
@@ -109,49 +138,74 @@ function FeedbackForm() {
 
   if (feedbackState.isError) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Feedback unavailable</CardTitle>
-          <CardDescription>{getErrorMessage(feedbackState.error, "Could not load feedback state.")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={() => feedbackState.refetch()}>Retry</Button>
-        </CardContent>
-      </Card>
+      <WorkspacePage>
+        <WorkspaceBody className="pt-6">
+          <WorkspaceEmptyState
+            icon={<WarningCircle className="h-6 w-6" />}
+            title="Feedback unavailable"
+            description={getErrorMessage(feedbackState.error, "Could not load feedback state.")}
+            action={
+              <WorkspaceSecondaryButton onClick={() => feedbackState.refetch()}>
+                Retry
+              </WorkspaceSecondaryButton>
+            }
+          />
+        </WorkspaceBody>
+      </WorkspacePage>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap justify-end gap-2">
-        <Link href="/history" className={cn(buttonVariants({ variant: "outline" }))}>View history</Link>
-        <Button onClick={submit} disabled={submitted || submitFeedback.isPending}>
-          {submitFeedback.isPending
-            ? <Spinner weight="light" className="mr-2 h-4 w-4 animate-spin" />
-            : <PaperPlaneRight weight="light" className="mr-2 h-4 w-4" />}
-          {submitted ? "Feedback submitted" : "Submit feedback"}
-        </Button>
-      </div>
+    <WorkspacePage>
+      <WorkspaceToolbar
+        filters={
+          <>
+            <Badge variant={submitted ? "default" : "secondary"}>
+              {submitted ? "Submitted" : "Draft"}
+            </Badge>
+            {selectedRatings.length ? (
+              <span className="text-[13px] tabular-nums text-ink-muted">{averageScore} / 5</span>
+            ) : null}
+          </>
+        }
+        actions={
+          <>
+            <Link href={historyHref}>
+              <WorkspaceSecondaryButton>View history</WorkspaceSecondaryButton>
+            </Link>
+            <WorkspacePrimaryButton
+              onClick={submit}
+              disabled={submitted || submitFeedback.isPending}
+              icon={
+                submitFeedback.isPending ? (
+                  <Spinner weight="light" className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <PaperPlaneRight weight="light" className="h-3.5 w-3.5" />
+                )
+              }
+            >
+              {submitted ? "Submitted" : "Submit feedback"}
+            </WorkspacePrimaryButton>
+          </>
+        }
+      />
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle>Room quality form</CardTitle>
-              <CardDescription>Your response is stored once for this completed room.</CardDescription>
-            </div>
-            <Badge variant={submitted ? "default" : "secondary"}>{submitted ? "Submitted" : "Draft"}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
+      <WorkspaceBody>
+        <div className="max-w-3xl">
+          {/* One question per line, scores on the right. The grid of bordered boxes this
+              replaced drew four more borders inside a page that already had one, and pushed
+              four short questions down half a screen. */}
+          <div className="border-y border-hairline">
             {ratingFields.map((field) => (
-              <div key={field.key} className="rounded-lg border p-4">
-                <div className="mb-3">
-                  <Label className="text-sm font-semibold">{field.label}</Label>
-                  <p className="text-sm text-muted-foreground">{field.helper}</p>
+              <div
+                key={field.key}
+                className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-1 py-3 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <Label className="text-[13px] font-medium text-ink">{field.label}</Label>
+                  <p className="mt-0.5 text-[12px] text-ink-muted">{field.helper}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex shrink-0 gap-1.5">
                   {[1, 2, 3, 4, 5].map((score) => (
                     <button
                       key={score}
@@ -161,10 +215,10 @@ function FeedbackForm() {
                       aria-pressed={displayRatings[field.key] === score}
                       onClick={() => updateRating(field.key, score)}
                       className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-70",
+                        "flex h-7 w-7 items-center justify-center rounded-md border text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70",
                         displayRatings[field.key] === score
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card hover:bg-muted"
+                          ? "border-transparent bg-foreground text-background"
+                          : "border-border/60 bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink",
                       )}
                     >
                       {score}
@@ -175,29 +229,34 @@ function FeedbackForm() {
             ))}
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="feedback-comments">Notes</Label>
+          <div className="mt-5">
+            <Label htmlFor="feedback-comments" className="text-[13px] font-medium text-ink">
+              Notes
+            </Label>
             <Textarea
               id="feedback-comments"
-              value={submitted ? existing?.comments ?? "" : comments}
+              value={submitted ? (existing?.comments ?? "") : comments}
               disabled={submitted}
               onChange={(event) => setComments(event.target.value)}
-              placeholder="Add translation quality notes, missed terms, or follow-up requests."
-              className="min-h-32"
+              placeholder="Translation quality notes, missed terms, or follow-up requests."
+              className="mt-2 min-h-28 text-[13px]"
             />
           </div>
-          <p className="text-sm text-muted-foreground">Current selected average: {averageScore}/5</p>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </WorkspaceBody>
+    </WorkspacePage>
   );
 }
 
 function FeedbackLoading() {
   return (
-    <div className="flex min-h-48 items-center justify-center text-muted-foreground">
-      <Spinner weight="light" className="mr-2 h-5 w-5 animate-spin" />
-      Loading feedback
-    </div>
+    <WorkspacePage>
+      <WorkspaceBody className="pt-6">
+        <div className="flex min-h-48 items-center justify-center text-[13px] text-ink-muted">
+          <Spinner weight="light" className="mr-2 h-4 w-4 animate-spin" />
+          Loading feedback
+        </div>
+      </WorkspaceBody>
+    </WorkspacePage>
   );
 }

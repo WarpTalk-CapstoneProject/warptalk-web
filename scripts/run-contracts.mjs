@@ -15,26 +15,16 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+import { EXCLUDED, discoverSuites } from "./contract-suites.mjs";
+
 const root = path.resolve(import.meta.dirname, "..");
 const { scripts } = JSON.parse(
   fs.readFileSync(path.join(root, "package.json"), "utf8"),
 );
 
-/**
- * Scripts that must not run here, and why. Anything not listed is picked up automatically —
- * an exclusion has to be argued for, which is the point.
- */
-const EXCLUDED = {
-  // This script.
-  "test:contracts": "the runner itself",
-  // Needs a built server on :3000. CI gives it its own job after `npm run build`; see the
-  // "Production route contracts" step in .github/workflows/ci.yml.
-  "test:routes": "requires a running server, runs in the e2e job",
-};
-
-const suites = Object.keys(scripts)
-  .filter((name) => name.startsWith("test:") && !(name in EXCLUDED))
-  .sort();
+// The exclusion list lives in contract-suites.mjs so check-test-scripts-wired.mjs reads the same
+// one: a suite this runner skips is exactly a suite that guard must find in a workflow instead.
+const suites = discoverSuites(scripts);
 
 if (suites.length === 0) {
   console.error("No test:* scripts found in package.json — discovery is broken.");

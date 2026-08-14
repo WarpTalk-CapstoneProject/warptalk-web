@@ -88,7 +88,12 @@
     "test:chat-sender": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/chat-sender.test.ts",
     "test:meeting-record": "node scripts/check-meeting-record-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/meeting-artifacts.test.ts src/lib/meeting/__tests__/meeting-summary.test.ts",
     "test:hooks-early-return": "node scripts/check-hooks-before-early-return.mjs",
-    "test:room-history-mapping": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/room-history-mapping.test.ts"
+    "test:room-history-mapping": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/room-history-mapping.test.ts",
+    "test:normalize-response": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/api/__tests__/normalize-response.test.ts",
+    "test:cycle-projection": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/cycle-projection.test.ts",
+    "test:onboarding": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/onboarding/__tests__/invite-suggestion.test.ts src/lib/onboarding/__tests__/tour-steps.test.ts",
+    "test:scripts-wired": "node scripts/check-test-scripts-wired.mjs",
+    "test:meeting-started-notice": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/notifications/__tests__/meeting-started-notice.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -124,6 +129,7 @@
     "livekit-client": "^2.19.0",
     "lucide-react": "^1.14.0",
     "lumidot": "^1.0.0",
+    "mammoth": "^1.12.1",
     "motion": "^12.39.0",
     "next": "16.2.12",
     "next-auth": "5.0.0-beta.32",
@@ -133,7 +139,9 @@
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.72.0",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1",
     "resend": "^6.18.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",

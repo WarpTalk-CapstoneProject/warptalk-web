@@ -82,6 +82,7 @@ import {
 } from "@/components/rooms/meeting-record-panels";
 import type { EndedRoomHistoryItem } from "@/types/roomHistory";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
+import { isFinishedStatus } from "@/lib/meeting/room-occupancy";
 import {
   useTranscriptByRoom,
   useTranscriptSegments,
@@ -401,6 +402,7 @@ export default function RoomInformationPage() {
                     room={room}
                     apiParticipants={apiParticipants}
                     occupancyLabel={occupancy.label}
+                    occupancyNoun={isFinishedStatus(room.status) ? "attended" : "in room"}
                     user={user}
                     onCopy={handleCopy}
                   />

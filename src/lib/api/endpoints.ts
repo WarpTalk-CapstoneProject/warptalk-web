@@ -33,6 +33,8 @@ export const API = {
     create: "/translation-rooms",
     list: "/translation-rooms",
     history: "/translation-rooms/history",
+    /** WT-333 — the caller's own meetings in one workspace, past and upcoming (UC 25). */
+    myMeetings: "/translation-rooms/my-meetings",
     join: "/translation-rooms/join",
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,
@@ -150,6 +152,8 @@ export const API = {
     rejectJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/reject`,
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
     knowledge: (workspaceId: string) => `/workspaces/${workspaceId}/knowledge`,
+    knowledgeChunk: (workspaceId: string, chunkId: string) =>
+      `/workspaces/${workspaceId}/knowledge/${encodeURIComponent(chunkId)}`,
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
     documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,
     documentApprove: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/approve`,

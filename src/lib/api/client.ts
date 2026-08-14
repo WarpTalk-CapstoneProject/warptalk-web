@@ -8,6 +8,7 @@ import {
   PROACTIVE_REFRESH_MARGIN_MS,
   PROACTIVE_REFRESH_WINDOW_MS,
 } from "@/lib/api/token-lifecycle";
+import { normalizeResponseRoles } from "@/lib/api/normalize-response";
 import {
   hasRedeemableSession,
   recordSessionTeardown,
@@ -549,30 +550,18 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
 });
 
 // ─── Response interceptor: refresh on 401 ───
-function normalizeResponseRoles(data: unknown): unknown {
-  if (!data || typeof data !== "object") return data;
-  if (Array.isArray(data)) return data.map(normalizeResponseRoles);
-
-  const obj = data as Record<string, unknown>;
-  const result: Record<string, unknown> = {};
-  for (const key of Object.keys(obj)) {
-    const val = obj[key];
-    if (
-      (key === "role" || key === "roleName" || key === "currentRole" || key === "workspaceRole") &&
-      typeof val === "string"
-    ) {
-      result[key] = val.toLowerCase();
-    } else if (typeof val === "object" && val !== null) {
-      result[key] = normalizeResponseRoles(val);
-    } else {
-      result[key] = val;
-    }
-  }
-  return result;
-}
-
 apiClient.interceptors.response.use(
   (response) => {
+    // A response the caller asked for as bytes has no roles in it to normalise, and walking it
+    // can only do harm. `isPlainObject` already refuses to rebuild a Blob, but stating the rule
+    // here as well is what stops the next binary response type from having to rediscover it:
+    // a file download crashed the document page with "x.text is not a function", and the same
+    // `{}` was being handed to every artifact and transcript download in the app.
+    const responseType = response.config?.responseType;
+    if (responseType && responseType !== "json") {
+      return response;
+    }
+
     if (response.data) {
       response.data = normalizeResponseRoles(response.data);
     }

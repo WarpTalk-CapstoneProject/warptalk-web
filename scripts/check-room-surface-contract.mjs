@@ -347,10 +347,20 @@ assert.match(
 // (7) `0/100` is two real numbers — a CONNECTED seat count and the room's persisted
 // maxParticipants, which the backend stamps from TranslationRoomTypePolicy and enforces on
 // join. The pill stays; what changed is that it no longer reads as a bare placeholder.
+//
+// The noun is dynamic now, because occupancy is the wrong question for a meeting that ended:
+// nobody is in it, so "0/100" was the only thing a finished meeting could ever say however many
+// attended. Live rooms still say "in room"; finished ones say "attended". What this pins is
+// unchanged in spirit — the number must never appear without a word saying what it counts.
 assert.match(
   pills,
-  /\{occupancyLabel\}[\s\S]{0,200}?in room/,
+  /\{occupancyLabel\}[\s\S]{0,200}?\{occupancyNoun\}/,
   "The occupancy pill must name what its number counts (WT-330(7)).",
+);
+assert.match(
+  read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
+  /occupancyNoun=\{[\s\S]{0,120}?attended/,
+  "A finished meeting's pill must say what it counts — attendance, not occupancy.",
 );
 
 // (8) The roster is the only thing in the right column that grows with the data, and it must

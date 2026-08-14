@@ -366,6 +366,38 @@ export const translationRoomService = {
     };
   },
 
+  /**
+   * WT-333 — the caller's own meetings in one workspace, past and upcoming together (UC 25).
+   *
+   * Same response shape as `history`, and normalised the same way, so the two stay interchangeable
+   * for anything that consumes a room + roster + artifacts. What differs is on the server: this
+   * route pins the scope to the caller, carries no status filter, and orders by the booked slot.
+   *
+   * `workspaceId` is required by the server; sending nothing gets a 400 rather than every
+   * workspace, which is the intended answer.
+   */
+  async myMeetings(params: {
+    workspaceId: string;
+    from?: string;
+    to?: string;
+    search?: string;
+    status?: string;
+    pageSize?: number;
+  }) {
+    const response = await apiClient.get<TranslationRoomHistoryResponse>(API.translationRooms.myMeetings, { params });
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        rooms: response.data.rooms.map((item) => ({
+          ...item,
+          room: normalizeRoom(item.room as BackendRoom),
+          participants: item.participants.map((participant) => normalizeParticipant(participant as BackendParticipant)),
+        })),
+      },
+    };
+  },
+
   async artifacts(id: string) {
     const seedArtifacts = getMeetingSummarySeedArtifacts(id);
     if (seedArtifacts) {

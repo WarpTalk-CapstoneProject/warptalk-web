@@ -9,18 +9,21 @@
  * was there, but only as an icon that appeared on hover, which is not a place a person looks for
  * the way out.
  *
- * So it is a menu now, and the actions it offers are the ones that belong to "me and this
- * workspace" rather than to a page.
+ * WHY IT IS A DROPDOWN AND NOT A DIALOG
+ *   It was a centred modal with a dimmed backdrop, which is the weight you spend on a decision:
+ *   confirm this, discard that. This is a menu. It answers "where do I go from here", and the
+ *   answer is usually "nowhere, I was just checking my credits". A modal makes that cost a
+ *   blackout of the page behind it and a deliberate dismissal. Anchored to the card it opened
+ *   from, with the workspace still visible behind it, it costs a glance.
  *
  * THE CREDIT BAR
  *   Owners and admins get the workspace's remaining credits here, because credit is the thing
- *   that stops a meeting mid-sentence and the only place it was visible was the Billing page —
- *   which you had to already suspect a problem to open. It is deliberately NOT shown to members:
- *   they cannot top it up, and a number nobody can act on is only anxiety. Absent rather than
- *   zero when there is no subscription: "0 of 0" reads as an empty wallet, and a workspace with
- *   no plan does not have an empty wallet, it has no wallet.
+ *   that stops a meeting mid-sentence and the only other place it was visible was the Billing
+ *   page — which you had to already suspect a problem to open. It is deliberately NOT shown to
+ *   members: they cannot top it up, and a number nobody can act on is only anxiety.
  */
 
+import type { ReactElement } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -32,29 +35,58 @@ import {
 } from "@phosphor-icons/react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getErrorStatus } from "@/lib/api/retry-policy";
 import { billingService } from "@/services/billing.service";
 import type { UserDto } from "@/types/auth";
 
 function CreditBar({ workspaceId }: { workspaceId: string }) {
-  const { data, isLoading, isError } = useQuery({
+  // `status`, not `isLoading`. isLoading is `isPending && isFetching`, so it is FALSE in the
+  // gap between a failed attempt and its retry — and in that gap isError is false too and data
+  // is undefined, so every guard fell through and the bar rendered as nothing. That window is
+  // seconds wide on a slow or failing credits call, which is exactly when an owner is looking
+  // for it. status has one value at a time and no such gap.
+  const { data, status, error } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId),
     enabled: Boolean(workspaceId),
-    // Shares the billing page's key on purpose: opening this menu warms that page, and a
-    // top-up made there updates here without a second request.
     retry: 1,
   });
 
-  // A workspace with no plan answers this with an error, which is not a fault worth reporting in
-  // a menu — there is simply nothing to show yet.
-  if (isLoading || isError || !data || data.totalCredits <= 0) return null;
+  if (status === "pending") {
+    return (
+      <div className="rounded-lg border border-border/60 bg-surface-1 p-3">
+        <div className="h-3 w-24 animate-pulse rounded bg-surface-3" />
+        <div className="mt-2 h-1.5 w-full animate-pulse rounded-full bg-surface-3" />
+      </div>
+    );
+  }
+
+  // A workspace with no subscription is not a failure, and must not read as one.
+  //
+  // The endpoint answers 404 for it (BillingSubscriptionNotFound). It used to answer 400 for
+  // everything, which is why the dashboard showed "Couldn't load workspace credits." to an
+  // owner whose workspace simply has no plan — a scary sentence about a perfectly ordinary
+  // state. Backend fix: CreditsController.ToActionResult.
+  //
+  // 403 is the same kind of non-event from this component's point of view: a member who cannot
+  // see billing gets no bar, not an error about one.
+  const errorStatus = status === "error" ? getErrorStatus(error) : null;
+  if (errorStatus === 404 || errorStatus === 403) return null;
+
+  // Anything else IS said rather than swallowed. Returning null on every failure is the same
+  // thing on screen as "no plan", and a broken bar that looks identical to an absent one is a
+  // bar nobody can report.
+  if (status === "error") {
+    return (
+      <div className="rounded-lg border border-border/60 bg-surface-1 px-3 py-2">
+        <p className="text-[11px] text-ink-subtle">Couldn&rsquo;t load workspace credits.</p>
+      </div>
+    );
+  }
+
+  // No plan is not an empty wallet, it is no wallet. "0 of 0" would claim the first.
+  if (!data || data.totalCredits <= 0) return null;
 
   const remaining = Math.max(0, data.currentCredits);
   const percentage = Math.min(100, Math.round((remaining / data.totalCredits) * 100));
@@ -83,9 +115,10 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-export function AccountMenuDialog({
+export function AccountMenu({
   open,
   onOpenChange,
+  trigger,
   user,
   workspaceId,
   workspaceSlug,
@@ -95,6 +128,8 @@ export function AccountMenuDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The element the menu hangs off — the sidebar's user card. */
+  trigger: ReactElement;
   user: UserDto;
   workspaceId: string | null;
   workspaceSlug: string | null;
@@ -109,26 +144,31 @@ export function AccountMenuDialog({
   const close = () => onOpenChange(false);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[380px]">
-        <DialogHeader>
-          <DialogTitle className="sr-only">Account</DialogTitle>
-          <DialogDescription className="sr-only">
-            Your account, this workspace, and the way out.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex items-center gap-3">
-          <Avatar className="size-10 rounded-lg border border-border/50">
+    <Popover open={open} onOpenChange={onOpenChange}>
+      {/* nativeButton={false} because the trigger is the sidebar's user CARD, a div that
+          already contains its own hover sign-out button. Rendering it as a native <button>
+          would nest a button inside a button, which is invalid; Base UI logs an error for
+          exactly this and applies the button role and keyboard handling itself instead. */}
+      <PopoverTrigger nativeButton={false} render={trigger} />
+      {/* Above the card it belongs to, left edges aligned — the direction a menu at the bottom
+          of a sidebar has room to open. */}
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-[280px] gap-2 p-2"
+      >
+        <div className="flex items-center gap-2.5 px-1 pt-0.5">
+          <Avatar className="size-9 rounded-lg border border-border/50">
             <AvatarImage src={user.avatarUrl} alt={user.fullName} />
-            <AvatarFallback className="rounded-lg bg-primary/10 text-[15px] font-semibold text-primary">
+            <AvatarFallback className="rounded-lg bg-primary/10 text-[14px] font-semibold text-primary">
               {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate text-[14px] font-medium text-ink">{user.fullName}</p>
-            <p className="truncate text-[12px] text-ink-muted">{user.email}</p>
-            <p className="mt-0.5 truncate text-[11px] font-medium text-primary">
+            <p className="truncate text-[13px] font-medium text-ink">{user.fullName}</p>
+            <p className="truncate text-[11px] text-ink-muted">{user.email}</p>
+            <p className="mt-0.5 truncate text-[10px] font-medium text-primary">
               {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
               {" · "}
               {membershipType
@@ -180,14 +220,14 @@ export function AccountMenuDialog({
               close();
               onSignOut();
             }}
-            className="flex items-center gap-2.5 rounded-md px-2 py-2 text-left text-[13px] text-ink transition-colors hover:bg-surface-2"
+            className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-ink transition-colors hover:bg-surface-2"
           >
             <SignOut className="h-4 w-4" />
             Sign out
           </button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -206,7 +246,7 @@ function MenuLink({
     <Link
       href={href}
       onClick={onNavigate}
-      className="flex items-center gap-2.5 rounded-md px-2 py-2 text-[13px] text-ink transition-colors hover:bg-surface-2"
+      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] text-ink transition-colors hover:bg-surface-2"
     >
       {icon}
       {label}

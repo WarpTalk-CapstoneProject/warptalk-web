@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
+  getWorkspaceEntryPath,
   normalizeWorkspaceSlug,
   WORKSPACE_GATEWAY_PATH,
 } from "@/lib/workspace/workspace-slug";
@@ -99,7 +100,7 @@ export function proxy(request: NextRequest) {
   if (hasLiveAccessToken && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
     const activeWorkspaceSlug = normalizeWorkspaceSlug(request.cookies.get("active_workspace_slug")?.value);
     if (activeWorkspaceSlug) {
-      return NextResponse.redirect(new URL(`/${activeWorkspaceSlug}/dashboard`, request.url));
+      return NextResponse.redirect(new URL(getWorkspaceEntryPath(activeWorkspaceSlug), request.url));
     } else {
       return NextResponse.redirect(new URL("/workspace", request.url));
     }
