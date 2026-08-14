@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 const ROOTS = [
   "src/app/(auth)",
   "src/app/desktop-login",
+  "src/components/auth",
   "src/services/auth.service.ts",
   "src/stores/auth-store.ts",
   "src/lib/auth",

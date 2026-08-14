@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const loginPage = readFileSync(
-  new URL("../src/app/(auth)/login/page.tsx", import.meta.url),
+  new URL("../src/components/auth/login-page.tsx", import.meta.url),
   "utf8",
 );
 const globalsCss = readFileSync(

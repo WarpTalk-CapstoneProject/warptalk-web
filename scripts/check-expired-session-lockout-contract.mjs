@@ -25,11 +25,12 @@ const client = await read("src/lib/api/client.ts");
 const authStore = await read("src/stores/auth-store.ts");
 const signalr = await read("src/lib/realtime/signalr.ts");
 const landingRedirect = await read("src/lib/auth/landing-redirect.ts");
+const loginRoute = await read("src/app/(auth)/login/page.tsx");
+const desktopLoginRoute = await read("src/app/desktop-login/page.tsx");
 
 const callSites = [
-  "src/app/(auth)/login/page.tsx",
+  "src/components/auth/login-page.tsx",
   "src/app/(auth)/register/page.tsx",
-  "src/app/desktop-login/page.tsx",
   "src/app/(app)/workspace/join/page.tsx",
 ];
 const callSiteSources = Object.fromEntries(
@@ -37,6 +38,15 @@ const callSiteSources = Object.fromEntries(
 );
 
 const checks = [];
+
+checks.push([
+  "/login renders the shared login component",
+  loginRoute.includes("@/components/auth/login-page"),
+]);
+checks.push([
+  "/desktop-login renders the same shared login component as /login",
+  desktopLoginRoute.includes("@/components/auth/login-page"),
+]);
 
 // ── One writer ────────────────────────────────────────────────────────────────
 checks.push([
