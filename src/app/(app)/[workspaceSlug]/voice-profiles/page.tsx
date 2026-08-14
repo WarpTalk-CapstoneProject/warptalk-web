@@ -327,7 +327,7 @@ export default function VoiceProfilesPage() {
           </div>
 
           {isLoading ? (
-            <div className="rounded-[14px] border border-border bg-canvas px-5 py-6 text-[13px] text-ink-muted">
+            <div className="rounded-[14px] border border-border bg-surface-1 px-5 py-6 text-[13px] text-ink-muted">
               Loading voice profiles…
             </div>
           ) : profileList.length === 0 ? (
@@ -351,7 +351,7 @@ export default function VoiceProfilesPage() {
               description="Try a different language or clear the search."
             />
           ) : (
-            <div className="divide-y divide-border rounded-[14px] border border-border bg-canvas">
+            <div className="divide-y divide-border rounded-[14px] border border-border bg-surface-1">
               {filteredProfiles.map((profile, index) => (
                 <VoiceProfileRow
                   key={profile.id}

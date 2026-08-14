@@ -163,7 +163,7 @@ export function MeetingDayPanel() {
   return (
     <section
       aria-label="Meetings by day"
-      className="rounded-[14px] border border-border bg-canvas p-3 shadow-linear sm:p-4"
+      className="rounded-[14px] border border-border bg-surface-1 p-3 shadow-linear sm:p-4"
     >
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold text-ink">
