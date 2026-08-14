@@ -18,8 +18,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getErrorMessage } from "@/lib/api/errors";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import {
+  canCancelRenewal,
+  describeSubscription,
+  hasPaidEntitlement,
+} from "@/lib/billing/subscription-state";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -86,6 +90,10 @@ const TOP_UP_PACKAGES = [
 
 const DOCUMENTED_VND_PER_CREDIT = 4;
 
+/** One date format for the page, so "until 14 September 2026" reads the same wherever it appears. */
+const formatPlanDate = (date: Date) =>
+  date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
 export default function WorkspacePlansPage() {
   const router = useRouter();
   const params = useParams();
@@ -117,6 +125,7 @@ export default function WorkspacePlansPage() {
   const [showChangePlanDialog, setShowChangePlanDialog] = useState(false);
   const [pendingPlanSlug, setPendingPlanSlug] = useState("");
   const [pendingPlanName, setPendingPlanName] = useState("");
+  const [pendingPlanTotal, setPendingPlanTotal] = useState(0);
   const [topUpCredits, setTopUpCredits] = useState<number>(0);
   // Fetch plans from backend
   const { data: plansData = [], isLoading: loadingPlans } = useQuery({
@@ -174,54 +183,37 @@ export default function WorkspacePlansPage() {
     ? activePlans.findIndex((p) => p.id === activePlanId)
     : -1;
 
-  const pendingPlanTierIndex = pendingPlanSlug
-    ? activePlans.findIndex((p) => p.slug === pendingPlanSlug)
-    : -1;
-  const isUpgrade =
-    activePlanTierIndex === -1 ||
-    (pendingPlanTierIndex > -1 && pendingPlanTierIndex > activePlanTierIndex);
-  const isDowngrade =
-    activePlanTierIndex !== -1 &&
-    pendingPlanTierIndex > -1 &&
-    pendingPlanTierIndex < activePlanTierIndex;
+  /**
+   * One reading of the subscription, for the whole page.
+   *
+   * `subscription?.status === "active"` was the test here, in three places, and it is the bug:
+   * a renewal cancelled at period end sets Status to "cancelled" while the plan stays fully in
+   * force, so the page reported no plan on a workspace that had one.
+   *
+   * The clock is read once per mount rather than per render — this decides which controls exist,
+   * and a moving `Date.now()` would let them change under a reader mid-session.
+   */
+  const [subscriptionClock] = useState(() => Date.now());
+  const subscriptionState = describeSubscription(subscription, subscriptionClock);
+  const planEndsOn =
+    subscriptionState.kind === "cancellation-scheduled" ? subscriptionState.endsOn : null;
 
-  const confirmChangePlan = async () => {
-    if (!pendingPlanSlug || !activeWorkspaceId) return;
-    try {
-      setIsProcessing(true);
-      setShowChangePlanDialog(false);
-      const plansList = await billingService.getPlans().catch(() => []);
-      const targetPlan = plansList.find((p) => p.slug === pendingPlanSlug);
-      if (targetPlan) {
-        const updatedSub = await billingService.changeSubscription(
-          activeWorkspaceId,
-          targetPlan.id,
-        );
-        toast.success(`Successfully updated your plan to ${targetPlan.name}!`);
-        queryClient.setQueryData(
-          ["subscription", activeWorkspaceId],
-          updatedSub,
-        );
-        // Invalidate billing query cache so billing page shows updated plan
-        queryClient.invalidateQueries({ queryKey: ["billing"] });
-      }
-    } catch (error) {
-      // PUT /subscriptions/workspace/{id}/change-plan does not exist: there is no `change-plan`
-      // route anywhere in the billing service, so this always 404s for a workspace that already
-      // has a subscription — which is every workspace that reaches this button. Until the endpoint
-      // is built, say what is true. "Please contact support" reads as a transient fault and sends
-      // the user to ask about a feature that was never wired up.
-      toast.error(
-        getErrorMessage(
-          error,
-          "Changing an existing plan is not available yet. Contact sales to move between plans.",
-        ),
-      );
-    } finally {
-      setIsProcessing(false);
-      setPendingPlanSlug("");
-      setPendingPlanName("");
-    }
+  /**
+   * WT-381 — this used to PUT `/subscriptions/workspace/{id}/change-plan`, a route that does not
+   * exist anywhere in the billing service. Every owner who reached this button got a 404 dressed
+   * up as "contact sales", and the dialog they got it from promised a pro-rated credit for their
+   * unused time, which nothing in the system has ever calculated.
+   *
+   * Checkout is the path that works, and it has worked all along. `SubscriptionPaymentEventHandler`
+   * writes `Subscription.PlanId = plan.Id` when a payment arrives for a workspace that already has
+   * a subscription — so paying for a different plan IS the plan change. What it does not do is
+   * pro-rate: it sets `CurrentPeriodStart` to now, moves the period end a full cycle out, and adds
+   * the new plan's credits to the balance. The dialog now says that, because that is what happens.
+   */
+  const confirmChangePlan = () => {
+    if (!pendingPlanSlug) return;
+    setShowChangePlanDialog(false);
+    void handleCheckout(pendingPlanTotal, "Subscription", pendingPlanSlug, billingInterval, true);
   };
 
   const handleCheckout = async (
@@ -229,24 +221,27 @@ export default function WorkspacePlansPage() {
     paymentType: string,
     planSlug = "",
     billingCycle = "",
+    /** Set once the change-plan dialog has been confirmed, so it is not shown a second time. */
+    confirmed = false,
   ) => {
     if (!isAuthenticated || !user) {
       router.push("/login");
       return;
     }
 
-    // If upgrading/downgrading and user already has an active subscription, call direct changeSubscription API instead of Stripe Checkout
+    // Moving between plans charges in full and restarts the billing period today — see
+    // confirmChangePlan. Nobody should discover that on a Stripe page, so it is said first.
     if (
       paymentType === "Subscription" &&
-      subscription &&
-      subscription.status === "active"
+      !confirmed &&
+      hasPaidEntitlement(subscriptionState)
     ) {
-      const plansList = await billingService.getPlans().catch(() => []);
-      const targetPlan = plansList.find((p) => p.slug === planSlug);
+      const targetPlan = activePlans.find((p) => p.slug === planSlug);
 
       if (targetPlan) {
         setPendingPlanSlug(planSlug);
         setPendingPlanName(targetPlan.name);
+        setPendingPlanTotal(amount);
         setShowChangePlanDialog(true);
         return;
       }
@@ -301,7 +296,14 @@ export default function WorkspacePlansPage() {
       toast.success(
         "Subscription cancelled. You will retain access until the end of your billing period.",
       );
-      queryClient.setQueryData(["subscription", activeWorkspaceId], null);
+      // WT-381 — this wrote `null` here, and the page then showed a workspace with no plan at all.
+      // The backend had done no such thing: `Cancel()` sets AutoRenew=false and Status=cancelled
+      // and leaves IsActive=true on purpose, so the workspace keeps Enterprise to the end of the
+      // period it paid for. Refetching asks the only party that knows.
+      await queryClient.invalidateQueries({
+        queryKey: ["subscription", activeWorkspaceId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["billing"] });
       setShowCancelDialog(false);
       setCancelReason("");
       setCancelReasonOther("");
@@ -371,10 +373,17 @@ export default function WorkspacePlansPage() {
             <CaretLeft className="h-3.5 w-3.5" />
             <span>Billing</span>
           </Link>
+          {/* WT-381 — this said "No active plan on this workspace" to anyone who had cancelled
+              their renewal, which was the plainest form of the lie: the workspace is on the plan,
+              paid for, until the date now printed beside it. */}
           <span className="truncate text-[13px] text-ink-muted">
-            {subscription?.status === "active"
-              ? `Currently on ${subscription.planName}.`
-              : "No active plan on this workspace."}
+            {subscriptionState.kind === "active" &&
+              `Currently on ${subscriptionState.planName}.`}
+            {subscriptionState.kind === "cancellation-scheduled" &&
+              `${subscriptionState.planName} until ${formatPlanDate(subscriptionState.endsOn)} — renewal cancelled.`}
+            {subscriptionState.kind === "lapsed" &&
+              `${subscriptionState.planName} ended on ${formatPlanDate(subscriptionState.endedOn)}.`}
+            {subscriptionState.kind === "none" && "No active plan on this workspace."}
           </span>
         </div>
 
@@ -614,7 +623,7 @@ export default function WorkspacePlansPage() {
           fearing they would cut translation off mid-cycle for everybody. What the API actually
           does is set cancelAtPeriodEnd: the plan runs to the date it was paid for. The label now
           says that, and the confirmation dialog says the date out loud. */}
-      {subscription?.status === "active" ? (
+      {canCancelRenewal(subscriptionState) ? (
         <div className="mt-6 flex w-full max-w-3xl justify-center">
           <button
             type="button"
@@ -624,6 +633,21 @@ export default function WorkspacePlansPage() {
           >
             Cancel renewal
           </button>
+        </div>
+      ) : null}
+
+      {/* Once it has been done, say so — and say what is still true. Silence here was read as the
+          cancellation not having worked, which is what sent owners back to press it again.
+          Resuming a scheduled cancellation needs a backend endpoint that does not exist yet
+          (WT-381), so this does not offer a button it cannot honour. */}
+      {planEndsOn ? (
+        <div className="mt-6 flex w-full max-w-3xl justify-center">
+          <p className="max-w-md text-center text-[12px] leading-5 text-ink-muted">
+            Renewal is cancelled. Everything keeps working until{" "}
+            <span className="font-medium text-ink">{formatPlanDate(planEndsOn)}</span>, and you
+            will not be charged again. To keep the plan beyond that date, contact WarpTalk before
+            it ends.
+          </p>
         </div>
       ) : null}
 
@@ -895,33 +919,33 @@ export default function WorkspacePlansPage() {
         <DialogContent className="sm:max-w-[440px] border-hairline bg-surface-1 shadow-lg rounded-xl text-ink">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold">
-              {isUpgrade
-                ? "Upgrade workspace plan?"
-                : isDowngrade
-                  ? "Downgrade workspace plan?"
-                  : "Change workspace plan?"}
+              Move to {pendingPlanName}?
             </DialogTitle>
             <DialogDescription className="text-sm text-ink-muted mt-1">
-              {isUpgrade
-                ? "Are you sure you want to upgrade your workspace plan to "
-                : isDowngrade
-                  ? "Are you sure you want to downgrade your workspace plan to "
-                  : "Are you sure you want to change your workspace plan to "}
-              <strong>{pendingPlanName}</strong>?
+              This workspace is already on{" "}
+              <strong>
+                {subscriptionState.kind === "none" ? "a plan" : subscriptionState.planName}
+              </strong>
+              . Moving is a new purchase, not an adjustment to the current one.
             </DialogDescription>
           </DialogHeader>
+          {/* Every line here is what SubscriptionPaymentEventHandler actually does on payment.
+              The three it replaced were written for an endpoint that did not exist, and the
+              middle one — "any unused time will be credited to this change" — promised a
+              pro-rated refund that nothing in the billing service has ever calculated. */}
           <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1.5 my-2">
             <p>
-              • <strong>Billing updates today</strong>: Your billing cycle and
-              price will update immediately.
+              • <strong>You pay in full today</strong>:{" "}
+              {formatMoney(pendingPlanTotal, "VND")} for one{" "}
+              {billingInterval === "yearly" ? "year" : "month"}.
             </p>
             <p>
-              • <strong>Pro-rated credit</strong>: Any unused time on your
-              current plan will be credited to this change.
+              • <strong>The billing period restarts</strong>: it runs from today, and time
+              remaining on the current plan is not refunded or pro-rated.
             </p>
             <p>
-              • <strong>Credits carried over</strong>: All your remaining
-              credits will roll over to your new plan.
+              • <strong>Credits are added, not replaced</strong>: the new plan&apos;s allowance
+              is added to the balance you already have.
             </p>
           </div>
           <DialogFooter className="flex gap-2 flex-row justify-end">
@@ -930,7 +954,7 @@ export default function WorkspacePlansPage() {
               onClick={() => setShowChangePlanDialog(false)}
               className="inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 hover:bg-surface-3 px-4 text-sm font-medium text-ink cursor-pointer transition"
             >
-              Cancel
+              Keep current plan
             </button>
             <button
               type="button"
@@ -938,13 +962,7 @@ export default function WorkspacePlansPage() {
               onClick={confirmChangePlan}
               className="inline-flex h-9 items-center gap-2 rounded-md bg-primary hover:bg-primary-hover text-primary-foreground px-4 text-sm font-medium cursor-pointer transition disabled:opacity-60"
             >
-              {isProcessing
-                ? "Updating..."
-                : isUpgrade
-                  ? "Confirm Upgrade"
-                  : isDowngrade
-                    ? "Confirm Downgrade"
-                    : "Confirm Change"}
+              {isProcessing ? "Opening checkout..." : "Continue to payment"}
             </button>
           </DialogFooter>
         </DialogContent>

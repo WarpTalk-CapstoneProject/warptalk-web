@@ -288,21 +288,16 @@ export const billingService = {
     });
   },
 
-  /**
-   * Upgrade or downgrade the active subscription plan for a workspace.
+  /*
+   * WT-381 — `changeSubscription` used to live here and PUT
+   * `/subscriptions/workspace/{id}/change-plan`. That route does not exist in the billing service
+   * and never did, so the call 404'd for every workspace that had a subscription, which is every
+   * workspace that could reach it.
+   *
+   * There is no replacement to write, because the working path was already here. A payment for a
+   * different plan sets `Subscription.PlanId` in SubscriptionPaymentEventHandler — so
+   * `createCheckoutSession` above IS the plan change, and the plans page routes through it.
    */
-  changeSubscription: async (
-    workspaceId: string,
-    newPlanId: string,
-  ): Promise<import("@/types/billing").SubscriptionDto> => {
-    const { data } = await apiClient.put<
-      import("@/types/billing").SubscriptionDto
-    >(`/subscriptions/workspace/${workspaceId}/change-plan`, {
-      workspaceId,
-      planId: newPlanId,
-    });
-    return data;
-  },
 
   /**
    * Create a new subscription plan (Admin only).
