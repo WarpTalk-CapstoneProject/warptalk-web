@@ -12,7 +12,6 @@ import {
   Clock,
   DownloadSimple,
   FileText,
-  MagnifyingGlass,
   SpinnerGap,
   Translate,
   Users,
@@ -29,7 +28,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { useMyMeetingsInRange } from "@/hooks/use-my-meetings";
 import {
   artifactLabel,
@@ -39,6 +37,7 @@ import {
 import { endOfMonth, shiftWeeks, startOfMonth, weekOf } from "@/lib/meeting/meeting-day";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
+import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { translationRoomService } from "@/services/translation-room.service";
@@ -221,15 +220,13 @@ export default function MyMeetingsPage() {
         </div>
 
         <div className="flex w-full items-center gap-2 lg:w-auto">
-          <div className="relative min-w-0 flex-1 lg:w-[300px] lg:flex-none">
-            <MagnifyingGlass className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search title, code, or description"
-              className="h-9 rounded-md bg-surface-1 pl-9 text-[12px] shadow-none"
-            />
-          </div>
+          {/* See history/page.tsx: one search affordance across the list pages. */}
+          <ExpandingSearchDock
+            value={query}
+            onValueChange={setQuery}
+            placeholder="Search title, code, or description"
+            expandedWidth={300}
+          />
 
           <div
             className="flex h-9 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-2/60 p-0.5"
