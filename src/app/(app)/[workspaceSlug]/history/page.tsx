@@ -22,6 +22,7 @@ import { parseSummarySections } from "@/lib/meeting/meeting-summary";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { cn } from "@/lib/utils";
 import { formatLanguageRoute as formatRoute } from "@/lib/language/languages";
 import { translationRoomService } from "@/services/translation-room.service";
@@ -172,12 +173,25 @@ export default function HistoryPage() {
           />
         </header>
 
-        <div className="flex items-center gap-1 border-b border-border py-3" role="tablist" aria-label="History filters">
+        {/* FilterChip, not a bespoke 11px tab that fills with bg-ink. That fill is the loudest
+            token in the palette and it was spent on a FILTER — a choice, not an action — so the
+            selected chip here shouted while the identical control on Meetings and Documents
+            whispered. filter-chip.tsx records this as the one answer for the whole app. */}
+        <FilterChipGroup
+          label="History filters"
+          className="border-b border-border py-3"
+          trailing={`${rooms.length} results`}
+        >
           {historyFilters.map((item) => (
-            <button key={item.value} type="button" role="tab" aria-selected={filter === item.value} onClick={() => setFilter(item.value)} className={cn("h-7 rounded-md px-3 text-[11px] font-medium transition-colors", filter === item.value ? "bg-ink text-surface-1" : "text-ink-muted hover:bg-surface-2 hover:text-ink")}>{item.label}</button>
+            <FilterChip
+              key={item.value}
+              selected={filter === item.value}
+              onClick={() => setFilter(item.value)}
+            >
+              {item.label}
+            </FilterChip>
           ))}
-          <span className="ml-auto text-[10px] tabular-nums text-ink-subtle">{rooms.length} results</span>
-        </div>
+        </FilterChipGroup>
 
         <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Meeting history results">
           {history.isLoading ? <LoadingState /> : history.isError ? <ErrorState onRetry={() => history.refetch()} /> : rooms.length === 0 ? <EmptyState hasQuery={Boolean(query)} /> : (

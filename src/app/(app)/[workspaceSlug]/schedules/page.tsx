@@ -208,17 +208,12 @@ export default function MyMeetingsPage() {
   // its own wash reads as bolted on from somewhere else.
   return (
     <main className="flex h-full flex-col bg-surface-1 text-ink">
-      <header className="flex flex-col gap-4 border-b border-border px-5 py-5 lg:flex-row lg:items-end lg:justify-between lg:px-8">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink-muted">
-            <CalendarBlank size={14} /> Personal timeline
-          </div>
-          <h1 className="text-[30px] font-semibold leading-none">My meetings</h1>
-          <p className="mt-2 text-[13px] text-ink-muted">
-            Upcoming meetings you host or are invited to, plus past meetings you actually joined.
-          </p>
-        </div>
-
+      {/* No eyebrow, no 30px title, no description — the house rule in
+          components/workspace/page-chrome. The route name is already in the top bar and the
+          sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
+          same word three times with documentation living in the furniture. Meetings and Members
+          open straight onto their content and this now does too. */}
+      <header className="flex flex-col gap-4 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-end lg:px-8">
         <div className="flex w-full items-center gap-2 lg:w-auto">
           {/* See history/page.tsx: one search affordance across the list pages. */}
           <ExpandingSearchDock

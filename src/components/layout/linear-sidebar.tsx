@@ -217,7 +217,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           : [])
       ]
     },
-    { icon: CalendarBlank, label: "My Meetings", href: `/${slug}/my-meetings` },
+    { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
     { icon: Archive, label: "History", href: `/${slug}/history` },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
