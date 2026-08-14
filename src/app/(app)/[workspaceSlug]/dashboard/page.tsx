@@ -397,7 +397,7 @@ export default function WorkspaceAdminDashboardPage() {
 
         {/* The counts, kept because "how big is this workspace" is a fair question — just not the
             one the page opens with. One line, not four tiles. */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[14px] border border-border bg-canvas px-4 py-3.5 text-[13px]">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[14px] border border-border bg-surface-1 px-4 py-3.5 text-[13px]">
           <CountLink
             href={`/${activeWorkspaceSlug}/members`}
             icon={<Users className="h-4 w-4" />}
@@ -429,7 +429,7 @@ function BlockSpinner({ height, bare = false }: { height: string; bare?: boolean
   return (
     <div
       className={`flex ${height} items-center justify-center gap-2 text-[13px] text-ink-muted ${
-        bare ? "" : "rounded-[14px] border border-border bg-canvas"
+        bare ? "" : "rounded-[14px] border border-border bg-surface-1"
       }`}
     >
       <Spinner className="h-4 w-4 animate-spin" />
@@ -448,7 +448,7 @@ function PanelNotice({
   onRetry: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-border bg-canvas px-4 py-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-border bg-surface-1 px-4 py-4">
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
           <Warning className="h-4 w-4 text-amber-500" />

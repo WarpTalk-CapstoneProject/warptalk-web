@@ -56,13 +56,24 @@ export function proxy(request: NextRequest) {
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
-  if (
-    process.env.NODE_ENV === "production" &&
-    DEVELOPMENT_ONLY_PREFIXES.some(
-      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-    )
-  ) {
+  const isDevelopmentOnlyRoute = DEVELOPMENT_ONLY_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+
+  if (process.env.NODE_ENV === "production" && isDevelopmentOnlyRoute) {
     return new NextResponse(null, { status: 404 });
+  }
+
+  // Outside production these previews are reachable WITHOUT a session, because the whole point of
+  // them is to render a surface whose backend is not running on a laptop. The gate below would
+  // otherwise bounce them to /login, where signing in needs the very API they exist to stand in
+  // for — so `/dev/*` was, in practice, unreachable on every machine that most needed it.
+  //
+  // This cannot widen production by construction: the branch above returns 404 for exactly this
+  // set of prefixes, unconditionally, before anything here runs. `/dev` additionally carries its
+  // own `notFound()` layout, so the guarantee does not rest on this file alone.
+  if (isDevelopmentOnlyRoute) {
+    return NextResponse.next();
   }
 
   // A dead cookie must not survive the response that noticed it was dead, or the next page

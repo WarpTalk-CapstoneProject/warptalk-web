@@ -446,7 +446,7 @@ export default function WorkspacePlansPage() {
                  that appears nowhere else in the app. */
               <Card
                 key={plan.id}
-                className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-canvas p-5 shadow-linear transition-colors ${
+                className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-surface-1 p-5 shadow-linear transition-colors ${
                   isCurrent
                     ? "border-primary"
                     : isFeatured

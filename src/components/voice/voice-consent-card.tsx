@@ -55,7 +55,7 @@ export function VoiceConsentCard() {
   const granted = data?.isGranted === true;
 
   return (
-    <section className="mx-4 rounded-[14px] border border-border bg-canvas p-4">
+    <section className="mx-4 rounded-[14px] border border-border bg-surface-1 p-4">
       <div className="flex items-start gap-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-[9px] border border-border bg-surface-1 text-primary">
           <Microphone size={18} weight="duotone" />

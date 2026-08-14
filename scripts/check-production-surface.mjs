@@ -37,6 +37,25 @@ const failures = requiredMarkers
   .filter((marker) => !proxy.includes(marker))
   .map((marker) => `production route guard is missing: ${marker}`);
 
+// The /dev previews are reachable WITHOUT a session outside production, because the surfaces they
+// stand in for need a backend that does not run on a laptop. That pass-through is only safe while
+// the production 404 is evaluated FIRST — swap the two branches and every /dev route becomes a
+// public page on the live origin, with no auth gate and no test that notices. The order is the
+// whole guarantee, so it is asserted rather than assumed.
+const productionGuard = proxy.indexOf("status: 404");
+const devPassThrough = proxy.indexOf("if (isDevelopmentOnlyRoute) {");
+if (devPassThrough !== -1) {
+  if (productionGuard === -1 || productionGuard > devPassThrough) {
+    failures.push(
+      "the unauthenticated /dev pass-through runs before the production 404 — /dev would be public in production",
+    );
+  }
+  const guardBlock = proxy.slice(0, productionGuard);
+  if (!guardBlock.includes('process.env.NODE_ENV === "production"')) {
+    failures.push("the /dev 404 is no longer conditioned on NODE_ENV === production");
+  }
+}
+
 if (createRoom.includes("resource-picker") || optionsMenu.includes("MOCK_RESOURCES")) {
   failures.push("production room creation must not expose fabricated resource fixtures");
 }

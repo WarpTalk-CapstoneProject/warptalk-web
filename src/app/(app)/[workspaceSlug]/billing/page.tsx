@@ -2,17 +2,13 @@
 
 import {
   Download,
-  Robot,
-  Coins,
   CreditCard,
-  Translate,
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
   Spinner,
   Lock,
   Funnel,
-  SlidersHorizontal,
   WarningCircle,
   ArrowClockwise,
 } from "@phosphor-icons/react";
@@ -62,21 +58,27 @@ import {
 } from "@/components/ui/select";
 import { billingService } from "@/services/billing.service";
 import { usageTypeDetailLabel } from "@/lib/billing/usage-labels";
+import {
+  summariseCycleActivity,
+  summariseServiceUsage,
+} from "@/lib/billing/cycle-activity";
+import { projectCycle } from "@/lib/billing/cycle-projection";
 import type {
   GroupedCreditTransaction,
   UsageGroupSummary,
-  UsageBreakdownDto,
   InvoiceDto,
 } from "@/types/billing";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { createHubConnection } from "@/lib/realtime/signalr";
-import { UsageChart } from "@/components/admin/UsageChart";
-import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { useParams } from "next/navigation";
 import AdminBillingPage from "@/app/(internal)/billing/page";
 import { formatMoney } from "@/lib/format/currency";
+import { Metric, MetricGrid, Panel } from "./components/metric-grid";
+import { CycleSpendChart } from "./components/cycle-spend-chart";
+import { ServiceUsageTable } from "./components/service-usage-table";
+import { PlanPanel } from "./components/plan-panel";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -118,12 +120,6 @@ function getBillingErrorMessage(error: unknown): string {
     : "An unexpected error occurred.";
 }
 
-function getIconForUsage(usageType: string) {
-  if (usageType.toLowerCase().includes("translation")) return Translate;
-  if (usageType.toLowerCase().includes("summary")) return Robot;
-  return Coins;
-}
-
 function getUnitSuffixForUsage(usageType: string): string {
   const t = usageType.toLowerCase();
   if (t === "translation" || t === "voice_translation") return "cr/min";
@@ -157,6 +153,11 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     useWorkspaceStore((state) => state.activeWorkspaceSlug) || slug || "";
   const workspaceId = activeWorkspaceId || "";
   const role = useWorkspaceRole();
+
+  // Read once, at mount. Reading the clock during render is impure — the chart, the projection and
+  // the cycle percentage would each see a slightly different "now" and could disagree across a
+  // midnight boundary — and none of these numbers has to tick over while the tab sits open.
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -250,6 +251,46 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     queryKey: ["billing", "invoices", workspaceId, invoicesPageNumber],
     queryFn: () =>
       billingService.getWorkspaceInvoices(workspaceId, invoicesPageNumber, 20),
+    enabled: !!workspaceId,
+    retry: 1,
+  });
+
+  // The catalogue entry behind the subscription. `SubscriptionDto` carries a name and a price and
+  // nothing about what the plan GRANTS — participants, languages, voice cloning — so the limits an
+  // owner is actually paying for have to be looked up by planId.
+  const { data: plans } = useQuery({
+    queryKey: ["billing", "plans"],
+    queryFn: () => billingService.getPlans(),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const cycleStart = balance?.currentPeriodStart;
+
+  // Deliberately a SEPARATE query from the one behind the History tab, which carries that tab's
+  // filters. Reusing it would have made the overview chart change shape when somebody filtered the
+  // table below it — a chart silently answering a different question than its title claims.
+  const { data: cycleLedger, isLoading: isCycleLedgerLoading } = useQuery({
+    queryKey: ["billing", "cycle-ledger", workspaceId, cycleStart],
+    queryFn: () =>
+      billingService.getCreditHistory(workspaceId, 1, 1000, {
+        fromDate: cycleStart ? new Date(cycleStart).toISOString() : undefined,
+      }),
+    enabled: !!workspaceId && !!cycleStart,
+    retry: 1,
+  });
+
+  // `days` since the cycle began, so the per-service table covers the same window as everything
+  // above it. The endpoint counts back from today; asking for a fixed 30 would have labelled a
+  // 30-day window as "this cycle" on every plan whose cycle is not 30 days.
+  const cycleDaysElapsed = cycleStart
+    ? Math.max(1, Math.ceil((now - new Date(cycleStart).getTime()) / 86_400_000))
+    : 30;
+
+  const { data: serviceUsage, isLoading: isServiceUsageLoading } = useQuery({
+    queryKey: ["billing", "service-usage", workspaceId, cycleDaysElapsed],
+    queryFn: () =>
+      billingService.getWorkspaceUsageBreakdown(workspaceId, cycleDaysElapsed),
     enabled: !!workspaceId,
     retry: 1,
   });
@@ -348,14 +389,55 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   const currentCredits = balance?.currentCredits ?? 0;
   const totalCredits = balance?.totalCredits ?? 0;
-  const creditsUsed = balance
-    ? balance.totalCredits - balance.currentCredits
-    : 0;
+  // The server's own number, not `total - current`. They agree today, but only one of them stays
+  // right if a top-up mid-cycle raises the total.
+  const creditsUsed = balance?.creditsUsedThisCycle ?? 0;
   const usagePercent =
     totalCredits > 0 ? Math.round((creditsUsed / totalCredits) * 100) : 0;
   const renewsDate = balance?.currentPeriodEnd
     ? format(new Date(balance.currentPeriodEnd), "MMM dd, yyyy")
     : "--";
+
+  const cycleActivity = useMemo(() => {
+    if (!balance || !cycleLedger?.items) return null;
+    return summariseCycleActivity(
+      {
+        transactions: cycleLedger.items,
+        currentPeriodStart: balance.currentPeriodStart,
+        currentPeriodEnd: balance.currentPeriodEnd,
+        totalCredits: balance.totalCredits,
+      },
+      now,
+    );
+  }, [balance, cycleLedger, now]);
+
+  const serviceRows = useMemo(
+    () => summariseServiceUsage(serviceUsage ?? []),
+    [serviceUsage],
+  );
+
+  const projection = balance ? projectCycle(balance, now) : null;
+
+  const activePlan =
+    plans?.find((plan) => plan.id === subscription?.planId) ?? null;
+
+  // Only invoices that were actually paid. Counting issued-but-unpaid ones as "invoiced to date"
+  // would tell an owner they have spent money they still owe.
+  const invoiceSummary = useMemo(() => {
+    const items = invoicesPage?.items ?? [];
+    const paid = items.filter((invoice) => invoice.paidAt !== null);
+    const outstanding = items.filter(
+      (invoice) => invoice.paidAt === null && invoice.status?.toLowerCase() !== "void",
+    );
+    return {
+      paidTotal: paid.reduce((sum, invoice) => sum + invoice.total, 0),
+      paidCount: paid.length,
+      outstandingTotal: outstanding.reduce((sum, invoice) => sum + invoice.total, 0),
+      outstandingCount: outstanding.length,
+      currency: items[0]?.currency ?? "VND",
+      latest: items[0] ?? null,
+    };
+  }, [invoicesPage]);
 
   const totalTopUp = useMemo(() => {
     if (!historyPage?.items) return 0;
@@ -372,8 +454,6 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   }, [historyPage]);
 
   const netChange = totalTopUp - totalConsumed;
-
-  const usageBreakdown = report?.usageBreakdown ?? [];
 
   const handleOpenExport = () => {
     setIsExportOpen(true);
@@ -523,11 +603,6 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     }
   };
 
-  const displayPlanName = subscription?.planName || "No Active Plan";
-  const displayPlanPrice = subscription?.price
-    ? formatMoney(subscription.price, "VND")
-    : "--";
-
   // The three queries below own every number on this surface. If any of them failed we must not
   // fall through to the normal layout, because `?? 0` would paint a fabricated balance of 0 next to
   // spinners that never resolve.
@@ -556,7 +631,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   if (role !== "owner" && role !== "admin") {
     return (
       <div className="flex h-[80vh] items-center justify-center w-full">
-        <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">
+        <Card className="max-w-md rounded-[14px] border-border bg-surface-1 p-6 text-center shadow-none">
           <CardHeader className="flex flex-col items-center gap-2">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <Lock className="h-6 w-6" />
@@ -643,14 +718,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               </span>
             )}
           </button>
-          <button
-            type="button"
-            onClick={() => setBillingTab("history")}
-            className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title="Billing display options"
-          >
-            <SlidersHorizontal weight="bold" size={13} />
-          </button>
+          {/* A second icon button sat here labelled "Billing display options" and did exactly what
+              the funnel does — switch to the History tab. A control that names a feature the page
+              does not have is worse than no control. */}
           <div className="mx-1 h-4 w-[1px] bg-border" />
           <button
             onClick={handleOpenExport}
@@ -669,219 +739,274 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* Grid wrapper using standard border-hairline/30 bg-surface-1/40 card styling */}
-      <section className="grid gap-6 md:grid-cols-2">
-        <BillingMetric
-          icon={Coins}
-          label="AI credits remaining"
-          value={isBalanceLoading ? "..." : currentCredits.toLocaleString()}
+      {/* Billing's own facts, in one hairline-divided box.
+          Two floating tiles with their own borders, shadows and grey fills was three visual
+          weights for one row of numbers; cells inside a single box read across as one statement. */}
+      <MetricGrid>
+        <Metric
+          label="Credits remaining"
+          value={currentCredits.toLocaleString()}
           detail={
-            isBalanceLoading
-              ? "Loading..."
-              : `${creditsUsed.toLocaleString()} of ${totalCredits.toLocaleString()} used. Renews ${renewsDate}`
+            totalCredits > 0
+              ? `${100 - usagePercent}% of ${totalCredits.toLocaleString()} available`
+              : "No allowance on this cycle"
+          }
+          tone={totalCredits > 0 && 100 - usagePercent <= 15 ? "warn" : "default"}
+        />
+        <Metric
+          label="Spent this cycle"
+          value={creditsUsed.toLocaleString()}
+          detail={`${usagePercent}% of this cycle's credits`}
+        />
+        <Metric
+          label="Burn rate"
+          value={
+            projection && projection.kind !== "unknown"
+              ? `${Math.round(projection.perDay).toLocaleString()}/day`
+              : "—"
+          }
+          detail={
+            projection && projection.kind !== "unknown"
+              ? "Average since the cycle began"
+              : (projection?.reason ?? "No cycle to measure")
           }
         />
-
-        <div className="flex items-start justify-between gap-4 rounded-[14px] border border-border bg-canvas p-4 shadow-linear">
-          <div className="min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] font-medium text-ink-muted">Current plan</span>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <p className="text-[24px] font-semibold leading-none tracking-tight text-ink">
-                {isSubscriptionLoading ? "…" : displayPlanName}
-              </p>
-              {subscription && (
-                <Badge className="rounded-full border-none bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400">
-                  Active
-                </Badge>
-              )}
-            </div>
-            <p className="mt-1.5 text-[12px] text-ink-muted">
-              {isSubscriptionLoading
-                ? "Loading plan details…"
-                : subscription
-                  ? `${displayPlanPrice} / month`
-                  : "No active plan. Upgrade to unlock advanced AI capabilities."}
-            </p>
-          </div>
-          <Link href={`/${workspaceSlug}/payment/plans`} className="shrink-0">
-            <span className="inline-flex h-[28px] items-center rounded-full border border-border/60 bg-surface-1 px-3 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-2">
-              {subscription ? "Change plan" : "Upgrade plan"}
-            </span>
-          </Link>
-        </div>
-      </section>
+        <Metric
+          label={subscription?.cancelAtPeriodEnd ? "Cancels" : "Renews"}
+          value={renewsDate}
+          detail={
+            projection?.kind === "runs-out"
+              ? `Credits run out ${format(projection.onDate, "MMM dd")} — before renewal`
+              : projection?.kind === "lasts"
+                ? `${projection.creditsLeftAtRenewal.toLocaleString()} left at this rate`
+                : "Nothing spent yet this cycle"
+          }
+          tone={
+            subscription?.cancelAtPeriodEnd || projection?.kind === "runs-out"
+              ? "warn"
+              : "default"
+          }
+        />
+        <Metric
+          label="Busiest day"
+          value={
+            cycleActivity?.busiest ? format(cycleActivity.busiest.start, "MMM dd") : "—"
+          }
+          detail={
+            cycleActivity?.busiest
+              ? `${Math.round(cycleActivity.busiest.consumed).toLocaleString()} credits in one ${cycleActivity.bucketSize}`
+              : "No spending recorded yet"
+          }
+        />
+        <Metric
+          label="Invoiced to date"
+          value={
+            invoiceSummary.paidCount > 0
+              ? formatMoney(invoiceSummary.paidTotal, invoiceSummary.currency)
+              : "—"
+          }
+          detail={
+            invoiceSummary.outstandingCount > 0
+              ? `${formatMoney(invoiceSummary.outstandingTotal, invoiceSummary.currency)} outstanding across ${invoiceSummary.outstandingCount} invoice${invoiceSummary.outstandingCount === 1 ? "" : "s"}`
+              : invoiceSummary.paidCount > 0
+                ? `${invoiceSummary.paidCount} invoice${invoiceSummary.paidCount === 1 ? "" : "s"} paid · nothing outstanding`
+                : "No invoices issued yet"
+          }
+          tone={invoiceSummary.outstandingCount > 0 ? "warn" : "default"}
+        />
+      </MetricGrid>
 
       <Tabs value={billingTab} onValueChange={setBillingTab} className="w-full">
-        <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
-          <section className="flex flex-col gap-6">
-            <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
-              <CardContent className="pt-6">
-                <UsageChart workspaceId={workspaceId} />
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
-                <CardContent className="pt-6">
-                  <FeatureBreakdownChart workspaceId={workspaceId} />
-                </CardContent>
-              </Card>
-
-              <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-semibold">
-                    Credit allocation
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div
-                    className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full"
-                    style={{
-                      background: `conic-gradient(#5e6ad2 0 ${usagePercent}%, var(--color-surface-3) ${usagePercent}% 100%)`,
-                    }}
-                  >
-                    <div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-surface-1 border border-hairline/40">
-                      <p className="text-2xl font-bold">{usagePercent}%</p>
-                      <p className="text-xs text-ink-muted">used</p>
-                    </div>
+        <TabsContent value="overview" className="mt-4 outline-none">
+          {/* Detail on the left, the contract on the right. The rail holds what is TRUE of this
+              workspace regardless of a date range — the plan and what it grants — so it does not
+              move while the reader changes what the charts cover. */}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="flex min-w-0 flex-col gap-4">
+              <Panel
+                title="Credit spend"
+                description={
+                  cycleActivity
+                    ? `Per ${cycleActivity.bucketSize} since ${format(cycleActivity.buckets[0].start, "MMM dd")} · ${Math.round(cycleActivity.totalConsumed).toLocaleString()} credits spent`
+                    : "This billing cycle"
+                }
+              >
+                {isCycleLedgerLoading ? (
+                  <div className="flex h-[220px] items-center justify-center">
+                    <Spinner className="h-5 w-5 animate-spin text-ink-muted" />
                   </div>
-                  <div className="space-y-3 text-xs border-t border-hairline/25 pt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-ink-muted">Monthly allowance</span>
-                      <strong className="font-semibold text-ink">
-                        {totalCredits.toLocaleString()}
-                      </strong>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-ink-muted">Consumed</span>
-                      <strong className="font-semibold text-ink">
-                        {creditsUsed.toLocaleString()}
-                      </strong>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-ink-muted">Remaining</span>
-                      <strong className="font-semibold text-primary">
-                        {currentCredits.toLocaleString()}
-                      </strong>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-
-          <section className="grid min-h-0 flex-1 gap-6">
-            <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-hairline/20 px-5 pt-5">
-                <div>
-                  <CardTitle className="text-base font-semibold">
-                    Cost by AI service
-                  </CardTitle>
-                  <p className="text-xs text-ink-muted mt-1">
-                    Variable AI usage costs this billing cycle
-                    {subscription?.planName
-                      ? ` · ${subscription.planName} plan`
-                      : ""}
-                    .
-                  </p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className="rounded-md border-hairline text-xs"
-                >
-                  {format(new Date(), "MMMM yyyy")}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-4 p-5">
-                {isReportLoading ? (
-                  <p className="text-xs text-ink-muted py-4">
-                    Loading usage data...
-                  </p>
-                ) : usageBreakdown.length === 0 ? (
-                  <p className="text-xs text-ink-muted py-4">
-                    No usage data for this month.
-                  </p>
+                ) : cycleActivity ? (
+                  <CycleSpendChart activity={cycleActivity} />
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {usageBreakdown.map((usage: UsageBreakdownDto) => {
-                      const Icon = getIconForUsage(usage.usageType);
-                      const name = usageTypeDetailLabel(usage.usageType);
-                      const percent = report?.totalConsumedCredits
-                        ? Math.round(
-                            (usage.creditsConsumed /
-                              report.totalConsumedCredits) *
-                              100,
-                          )
-                        : 0;
-
-                      return (
-                        <div
-                          key={usage.usageType}
-                          className="rounded-lg border border-hairline/50 bg-surface-2 p-4 flex flex-col justify-between"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-canvas text-ink border border-hairline/40">
-                                <Icon className="h-4 w-4" />
-                              </span>
-                              <div>
-                                <p className="text-xs font-semibold text-ink">
-                                  {name}
-                                </p>
-                                <p className="text-[11px] text-ink-muted">
-                                  {percent}% of variable AI spend
-                                </p>
-                              </div>
-                            </div>
-                            <p className="text-sm font-semibold text-ink">
-                              {usage.creditsConsumed.toLocaleString()} cr
-                            </p>
-                          </div>
-                          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-3/60">
-                            <div
-                              className="h-full rounded-full bg-primary"
-                              style={{ width: `${percent}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <p className="flex h-[220px] items-center justify-center text-[12px] text-ink-muted">
+                    This cycle has no dates to chart against.
+                  </p>
                 )}
+              </Panel>
 
-                <div className="grid gap-4 sm:grid-cols-2 mt-2">
-                  <div className="rounded-lg border border-hairline/40 bg-surface-2/60 p-4">
-                    <p className="text-xs text-ink-muted">
-                      Average translation cost
-                    </p>
-                    <p className="text-base font-bold mt-1 text-ink">
-                      {report?.averageTranslationCostPer100Chars !== undefined &&
-                      report?.averageTranslationCostPer100Chars !== null
-                        ? `${report.averageTranslationCostPer100Chars} cr / 100 chars`
-                        : "--"}
-                    </p>
+              <Panel
+                title="Cost by AI service"
+                description={`What each service cost, and what it cost per use · last ${cycleDaysElapsed} day${cycleDaysElapsed === 1 ? "" : "s"}`}
+                actions={
+                  <Badge
+                    variant="outline"
+                    className="rounded-md border-hairline text-[11px] font-normal"
+                  >
+                    {format(new Date(), "MMMM yyyy")}
+                  </Badge>
+                }
+              >
+                {isServiceUsageLoading ? (
+                  <div className="flex h-[120px] items-center justify-center">
+                    <Spinner className="h-5 w-5 animate-spin text-ink-muted" />
                   </div>
-                  <div className="rounded-lg border border-hairline/40 bg-surface-2/60 p-4">
-                    <p className="text-xs text-ink-muted">
-                      Average cost per meeting
+                ) : (
+                  <ServiceUsageTable rows={serviceRows} />
+                )}
+              </Panel>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Panel title="Average translation cost" bodyClassName="py-3.5">
+                  <p className="text-[20px] font-semibold leading-none tabular-nums text-ink">
+                    {report?.averageTranslationCostPer100Chars != null
+                      ? `${report.averageTranslationCostPer100Chars} cr`
+                      : "—"}
+                  </p>
+                  <p className="mt-1.5 text-[12px] text-ink-subtle">
+                    {report?.averageTranslationCostPer100Chars != null
+                      ? "Per 100 characters translated"
+                      : "Nothing translated this month"}
+                  </p>
+                </Panel>
+                <Panel title="Average cost per meeting" bodyClassName="py-3.5">
+                  <p className="text-[20px] font-semibold leading-none tabular-nums text-ink">
+                    {report?.averageCostPerMeeting != null
+                      ? `${report.averageCostPerMeeting} cr`
+                      : "—"}
+                  </p>
+                  <p className="mt-1.5 text-[12px] text-ink-subtle">
+                    {report?.averageCostPerMeeting != null
+                      ? `Across ${format(new Date(), "MMMM")}`
+                      : "No meetings billed this month"}
+                  </p>
+                </Panel>
+              </div>
+            </div>
+
+            <aside className="flex min-w-0 flex-col gap-4">
+              <PlanPanel
+                subscription={subscription ?? null}
+                plan={activePlan}
+                plansHref={`/${workspaceSlug}/payment/plans`}
+              />
+
+              <Panel
+                title="Credit allocation"
+                description="This cycle's allowance, and what is left of it"
+              >
+                <div
+                  className="relative mx-auto flex h-32 w-32 items-center justify-center rounded-full"
+                  style={{
+                    background: `conic-gradient(var(--primary) 0 ${usagePercent}%, var(--surface-2) ${usagePercent}% 100%)`,
+                  }}
+                >
+                  <div className="flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full bg-surface-1">
+                    <p className="text-[22px] font-semibold leading-none tabular-nums text-ink">
+                      {usagePercent}%
                     </p>
-                    <p className="text-base font-bold mt-1 text-ink">
-                      {report?.averageCostPerMeeting !== undefined &&
-                      report?.averageCostPerMeeting !== null
-                        ? `${report.averageCostPerMeeting} cr`
-                        : "--"}
-                    </p>
+                    <p className="mt-1 text-[11px] text-ink-muted">used</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </section>
+                <div className="mt-4 space-y-2.5 border-t border-hairline pt-3.5 text-[13px]">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-muted">Available this cycle</span>
+                    <span className="font-medium tabular-nums text-ink">
+                      {totalCredits.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-muted">Consumed</span>
+                    <span className="font-medium tabular-nums text-ink">
+                      {creditsUsed.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-muted">Topped up this cycle</span>
+                    <span className="font-medium tabular-nums text-ink">
+                      {cycleActivity
+                        ? Math.round(cycleActivity.totalToppedUp).toLocaleString()
+                        : "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-muted">Remaining</span>
+                    <span className="font-semibold tabular-nums text-primary">
+                      {currentCredits.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </Panel>
+
+              <Panel
+                title="Latest invoice"
+                actions={
+                  invoiceSummary.latest ? (
+                    <button
+                      type="button"
+                      onClick={() => setBillingTab("invoices")}
+                      className="text-[12px] text-ink-muted transition-colors hover:text-ink"
+                    >
+                      All invoices
+                    </button>
+                  ) : undefined
+                }
+              >
+                {invoiceSummary.latest ? (
+                  <div className="space-y-2.5 text-[13px]">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="truncate text-ink-muted">
+                        {invoiceSummary.latest.invoiceNumber}
+                      </span>
+                      <span className="shrink-0 font-medium tabular-nums text-ink">
+                        {formatMoney(
+                          invoiceSummary.latest.total,
+                          invoiceSummary.latest.currency,
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-ink-muted">Issued</span>
+                      <span className="tabular-nums text-ink">
+                        {format(new Date(invoiceSummary.latest.issuedAt), "MMM dd, yyyy")}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-ink-muted">Status</span>
+                      <span
+                        className={
+                          invoiceSummary.latest.paidAt
+                            ? "font-medium text-emerald-600 dark:text-emerald-400"
+                            : "font-medium text-amber-500"
+                        }
+                      >
+                        {invoiceSummary.latest.paidAt ? "Paid" : "Unpaid"}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-ink-muted">
+                    {isInvoicesLoading
+                      ? "Loading invoices…"
+                      : "No invoice has been issued for this workspace yet."}
+                  </p>
+                )}
+              </Panel>
+            </aside>
+          </div>
         </TabsContent>
 
         <TabsContent value="history" className="mt-6 outline-none">
-          <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
+          <Card className="rounded-[14px] border-border bg-surface-1 shadow-none">
             <CardHeader className="flex flex-col items-start gap-4 pb-4 border-b border-hairline/20 px-5 pt-5">
               <div className="flex w-full items-center justify-between">
                 <CardTitle className="text-base font-semibold">
@@ -1062,7 +1187,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                         return (
                           <TableRow
                             key={tx.id}
-                            className="border-hairline/15 hover:bg-surface-2/20"
+                            className="border-hairline/60 hover:bg-surface-2"
                           >
                             <TableCell className="font-mono text-xs text-ink-muted pl-5 py-3">
                               {rowIndex}
@@ -1214,7 +1339,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         </TabsContent>
 
         <TabsContent value="invoices" className="mt-6 outline-none">
-          <Card className="border-hairline/30 bg-surface-1/40 rounded-lg shadow-sm">
+          <Card className="rounded-[14px] border-border bg-surface-1 shadow-none">
             <CardHeader className="pb-4 border-b border-hairline/20 px-5 pt-5">
               <CardTitle className="text-base font-semibold">
                 Billing History
@@ -1269,7 +1394,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                         return (
                           <TableRow
                             key={invoice.id}
-                            className="border-hairline/15 hover:bg-surface-2/20"
+                            className="border-hairline/60 hover:bg-surface-2"
                           >
                             <TableCell className="font-mono text-xs text-ink-muted pl-5 py-3">
                               {rowIndex}
@@ -1851,7 +1976,7 @@ function BillingErrorState({
 }) {
   return (
     <div className="flex h-[80vh] items-center justify-center w-full">
-      <Card className="max-w-md border-hairline bg-surface-1/40 p-6 text-center shadow-sm">
+      <Card className="max-w-md rounded-[14px] border-border bg-surface-1 p-6 text-center shadow-none">
         <CardHeader className="flex flex-col items-center gap-2">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <WarningCircle className="h-6 w-6" />
@@ -1875,32 +2000,6 @@ function BillingErrorState({
           </button>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function BillingMetric({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: typeof Coins;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  // Same box as the dashboard's tiles: 14px radius on `bg-canvas`, a 12px muted label, a 24px
-  // semibold value, one line of context. It was a translucent `bg-surface-1/40` card with a 48px
-  // icon tile and a 2xl bold number — a third card language on a page that already had two.
-  return (
-    <div className="rounded-[14px] border border-border bg-canvas p-4 shadow-linear">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-medium text-ink-muted">{label}</span>
-        <Icon className="h-4 w-4 text-ink-muted" />
-      </div>
-      <p className="mt-3 text-[24px] font-semibold leading-none tracking-tight text-ink">{value}</p>
-      <p className="mt-1.5 text-[12px] text-ink-muted">{detail}</p>
     </div>
   );
 }
