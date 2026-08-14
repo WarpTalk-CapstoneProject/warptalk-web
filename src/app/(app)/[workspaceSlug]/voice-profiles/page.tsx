@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
+import { MyDubVoicePicker } from "@/components/voice/my-dub-voice-picker";
 import { VoiceConsentCard } from "@/components/voice/voice-consent-card";
 import {
   WorkspaceEmptyState,
@@ -312,6 +313,8 @@ export default function VoiceProfilesPage() {
           <Metric icon={<CheckCircle size={16} weight="bold" />} label="With sample" value={String(readyCount)} />
           <Metric icon={<Waveform size={16} weight="bold" />} label="Default language" value="vi-VN" />
         </section>
+
+        <MyDubVoicePicker profiles={profileList} />
 
         <LibraryVoicePicker profiles={profileList} />
 
