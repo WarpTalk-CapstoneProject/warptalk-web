@@ -294,12 +294,24 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // What the system has indexed from this workspace's documents and meetings. Owner/Admin
     // only, because the view crosses per-document access policies.
     workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
-    workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
+    // No Billing entry: WT-380 moved it inside Workspace Settings, where a plan, an invoice and a
+    // credit balance belong. It is reached through Settings now, not from the app's main nav.
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard`, tourId: "nav-dashboard" });
   }
 
-  const isSettingsPage = pathname.includes("/settings") || pathname.includes("/advanced");
+  /**
+   * Which of the two sidebars this screen gets.
+   *
+   * `/payment` is in the list because Billing lives under Settings now (WT-380) and its primary
+   * action — choosing or changing a plan — navigates to `/{slug}/payment/plans`. Without this the
+   * chrome would flip to the main app nav on the way, dropping the reader out of Settings at the
+   * one moment they most need the way back to Billing.
+   */
+  const isSettingsPage =
+    pathname.includes("/settings") ||
+    pathname.includes("/advanced") ||
+    pathname.includes("/payment");
 
   if (isSettingsPage && collapsed) {
     const appHref = activeWorkspaceSlug
@@ -326,7 +338,15 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       settingsItems.push({
         icon: GearSix,
         label: "Workspace settings",
+        // Exact, or `/settings/billing` would light this row up too — NavLink treats a nav item as
+        // active for anything below its href, and every settings page is below this one.
+        exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
+      });
+      settingsItems.push({
+        icon: CreditCard,
+        label: "Billing",
+        href: `/${activeWorkspaceSlug}/settings/billing`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
@@ -450,6 +470,23 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       Workspace Settings
+                    </span>
+                  </Link>
+                </div>
+                {/* WT-380 — Billing belongs here, not on the app's main nav. `startsWith` rather
+                    than `===` so the row stays lit while the reader is off buying a plan at
+                    /payment/plans, which is where this page's primary action sends them. */}
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname.startsWith(`/${activeWorkspaceSlug}/settings/billing`) ||
+                    pathname.startsWith(`/${activeWorkspaceSlug}/payment`)
+                    ? "bg-surface-2"
+                    : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Billing
                     </span>
                   </Link>
                 </div>

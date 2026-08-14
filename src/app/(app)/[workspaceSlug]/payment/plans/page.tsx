@@ -365,7 +365,7 @@ export default function WorkspacePlansPage() {
       <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-[260px] flex-1 items-center gap-3">
           <Link
-            href={`/${slug}/billing`}
+            href={`/${slug}/settings/billing`}
             className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
           >
             <CaretLeft className="h-3.5 w-3.5" />

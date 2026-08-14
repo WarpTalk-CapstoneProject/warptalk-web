@@ -4,7 +4,7 @@
  * The billing surface, rendered against fixtures.
  *
  * WHY IT EXISTS
- *   Every panel on `/[workspaceSlug]/billing` needs a live billing service: a subscription, a
+ *   Every panel on `/[workspaceSlug]/settings/billing` needs a live billing service: a subscription, a
  *   credit balance, a transaction ledger and a plan catalogue. None of that is reachable from a
  *   laptop, so the only way to LOOK at this page has been to deploy it — which is how it accrued
  *   three different card languages, a chart with hardcoded slate colours that inverts in dark
@@ -24,10 +24,10 @@ import { useState } from "react";
 import { summariseCycleActivity, summariseServiceUsage } from "@/lib/billing/cycle-activity";
 import { projectCycle } from "@/lib/billing/cycle-projection";
 import type { CreditTransactionDto, PlanDto, SubscriptionDto } from "@/types/billing";
-import { CycleSpendChart } from "@/app/(app)/[workspaceSlug]/billing/components/cycle-spend-chart";
-import { Metric, MetricGrid, Panel } from "@/app/(app)/[workspaceSlug]/billing/components/metric-grid";
-import { PlanPanel } from "@/app/(app)/[workspaceSlug]/billing/components/plan-panel";
-import { ServiceUsageTable } from "@/app/(app)/[workspaceSlug]/billing/components/service-usage-table";
+import { CycleSpendChart } from "@/app/(app)/[workspaceSlug]/settings/billing/components/cycle-spend-chart";
+import { Metric, MetricGrid, Panel } from "@/app/(app)/[workspaceSlug]/settings/billing/components/metric-grid";
+import { PlanPanel } from "@/app/(app)/[workspaceSlug]/settings/billing/components/plan-panel";
+import { ServiceUsageTable } from "@/app/(app)/[workspaceSlug]/settings/billing/components/service-usage-table";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date(2026, 7, 14, 11, 0, 0).getTime();

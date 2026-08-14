@@ -77,6 +77,26 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  /**
+   * WT-380 — the Billing page moved under Workspace Settings, and its old address forwards.
+   *
+   * It is done here rather than by a `redirect()` in a page, which is where it started: a page
+   * redirect under this app's client layout streams the shell first, so Next cannot set a 3xx and
+   * downgrades it to a 200 carrying a client-side navigation. That works for a person clicking a
+   * bookmark and is worth nothing to anything else — a link preview, a crawler, or the login
+   * bounce below, which would otherwise send the user back to the dead address after signing in.
+   *
+   * Deliberately anchored to exactly two segments. `/billing` and `/billing/plans` are the
+   * platform-admin surface and must not be touched, and `/admin/billing` would match a naive
+   * "second segment is billing" test.
+   */
+  const movedBilling = /^\/([^/]+)\/billing\/?$/.exec(pathname);
+  if (movedBilling && movedBilling[1] !== "admin") {
+    const destination = new URL(`/${movedBilling[1]}/settings/billing`, request.url);
+    destination.search = request.nextUrl.search;
+    return NextResponse.redirect(destination);
+  }
+
   // A dead cookie must not survive the response that noticed it was dead, or the next page
   // load starts from the same misleading state. Applied to whatever response we return
   // below.
