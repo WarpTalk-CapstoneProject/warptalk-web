@@ -12,6 +12,7 @@ import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName } from "@/lib/language/languages";
 import { downloadAuthenticatedFile } from "@/lib/ui/download-artifact";
 import { API } from "@/lib/api/endpoints";
+import { getErrorMessage } from "@/lib/api/errors";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
@@ -369,8 +370,13 @@ export function ChatPanel({
           addChatMessage(message);
           editor.commands.clearContent(true);
         },
-        onError: () => {
-          setSendError("Message could not be sent. Try again.");
+        onError: (error) => {
+          // WT-365: "Try again." was advice that could not work. A 403 here means the server is
+          // REFUSING the message — the room no longer counts this client as an active
+          // participant — and retrying refuses it again, forever. The backend now sends its
+          // reason with the 403 (see MeetingChatController.ForbiddenWithReason), so say that;
+          // the generic line stays for the faults where trying again genuinely is the answer.
+          setSendError(getErrorMessage(error, "Message could not be sent. Try again."));
           // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
           // seconds and then blame WarpBot for a message that never reached it.
           if (asksTheAgent) {

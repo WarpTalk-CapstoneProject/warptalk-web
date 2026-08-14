@@ -351,11 +351,16 @@ export default function WorkspaceMembersPage() {
         <div>
           <Badge
             variant="outline"
-            className={`rounded-[4px] border-hairline px-2 py-0.5 text-[10px] font-semibold capitalize ${
+            title={
+              member && isExternal
+                ? "External members always hold the Member role - it cannot be changed."
+                : undefined
+            }
+            className={`max-w-full truncate whitespace-nowrap rounded-[4px] border-hairline px-2 py-0.5 text-[10px] font-semibold capitalize ${
               isOwnerRow ? "bg-primary/10 text-primary" : "bg-surface-2 text-ink"
             }`}
           >
-            {member && isExternal ? "Member - External - Fixed" : row.roleName}
+            {row.roleName}
           </Badge>
         </div>
 

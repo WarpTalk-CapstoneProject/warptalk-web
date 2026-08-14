@@ -202,7 +202,17 @@ export default function WorkspaceAdminDashboardPage() {
         }
       />
 
-      <WorkspaceBody className="flex flex-col gap-4">
+      {/* BLOCK LAYOUT, NOT A FLEX COLUMN — and that is the whole responsive bug.
+          WorkspaceBody is `flex-1` inside a `h-full` page, so it has a DEFINITE height and
+          scrolls. Making it `flex flex-col` turned every panel into a flex item with the default
+          `flex-shrink: 1`, and a flex item whose computed overflow is not `visible` has an
+          automatic minimum size of ZERO (CSS Flexbox §4.5) — so instead of the body scrolling,
+          the panels were squeezed. Exactly the two children carrying `overflow-hidden` collapsed:
+          DashboardHero flattened to a strip of its own gradient, and the chart row to a sliver
+          clipping "Credit usage" to "Cre…". Every other panel kept its height, which is why it
+          read as one weird overlap rather than a layout that had given up.
+          Block children cannot shrink, so the body scrolls the way it was built to. */}
+      <WorkspaceBody className="space-y-4">
         {/* The masthead. It carries the page's only colour — see DashboardHero — and its message
             follows the workspace's actual state rather than being a fixed advert, so a workspace
             with a plan is not told to buy one. */}
@@ -251,16 +261,30 @@ export default function WorkspaceAdminDashboardPage() {
             description={`Consumed against topped up, month by month in ${year}.`}
             className="lg:col-span-2 rounded-none border-0 bg-transparent shadow-none"
           >
+            {/* "No plan" is an EMPTY chart, not a missing one.
+                A workspace without a subscription 404s here, and this used to swap the whole
+                panel for one sentence — so the page a new owner sees has a hole where the chart
+                is, and the panel jumps to a different height the moment they buy anything.
+                UsageTrend already draws axes, grid and a flat baseline for an all-zero series
+                and puts the message on top of them; it just was never given the message. A real
+                failure (anything that is not a 404) still says so, because drawing an empty chart
+                over a broken request would be a lie the owner reads as "nothing used". */}
             {trendQuery.isPending ? (
               <BlockSpinner height="h-[220px]" bare />
-            ) : trendQuery.isError ? (
+            ) : trendQuery.isError && getErrorStatus(trendQuery.error) !== 404 ? (
               <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
-                {getErrorStatus(trendQuery.error) === 404
-                  ? "Usage is charted once this workspace has a plan."
-                  : "Usage could not be loaded."}
+                Usage could not be loaded.
               </p>
             ) : (
-              <UsageTrend year={year} monthlyData={trendQuery.data?.monthlyData ?? []} />
+              <UsageTrend
+                year={year}
+                monthlyData={trendQuery.data?.monthlyData ?? []}
+                emptyMessage={
+                  trendQuery.isError
+                    ? "Usage is charted once this workspace has a plan."
+                    : undefined
+                }
+              />
             )}
           </WorkspaceSection>
 
@@ -280,10 +304,12 @@ export default function WorkspaceAdminDashboardPage() {
               </div>
             }
           >
+            {/* Same 220px as the chart beside it. A one-line empty state left this column half
+                the height of the other and the shared frame looked mis-drawn. */}
             {breakdownQuery.isPending ? (
               <BlockSpinner height="h-[220px]" bare />
             ) : breakdownQuery.isError ? (
-              <p className="py-8 text-center text-[12px] text-ink-muted">
+              <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
                 Usage could not be loaded.
               </p>
             ) : (
