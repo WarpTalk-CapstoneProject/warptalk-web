@@ -73,6 +73,17 @@ import { formatMoney } from "@/lib/format/currency";
 const TOP_UP_ENABLED = false;
 
 /** Retail rate from docs/credit-economics.md §4.2. Display only — see above. */
+/** Stripe refuses a charge under 15,000 VND, which is 1,500 credits at the documented rate. */
+const TOP_UP_MINIMUM_CREDITS = 1500;
+
+/** The offered sizes. Round numbers a person recognises, not a ladder of discounts we do not give. */
+const TOP_UP_PACKAGES = [
+  { credits: 10_000, label: "10,000 credits" },
+  { credits: 25_000, label: "25,000 credits" },
+  { credits: 50_000, label: "50,000 credits" },
+  { credits: 100_000, label: "100,000 credits" },
+] as const;
+
 const DOCUMENTED_VND_PER_CREDIT = 4;
 
 export default function WorkspacePlansPage() {
@@ -392,17 +403,13 @@ export default function WorkspacePlansPage() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-8">
-      <div
-        className={`grid grid-cols-1 gap-6 lg:gap-8 w-full mx-auto justify-center ${
-          activePlans.length === 1
-            ? "max-w-[380px] md:grid-cols-1"
-            : activePlans.length === 2
-              ? "max-w-[780px] md:grid-cols-2"
-              : activePlans.length === 3
-                ? "max-w-[1150px] md:grid-cols-3"
-                : "max-w-[1400px] md:grid-cols-2 lg:grid-cols-4"
-        }`}
-      >
+      {/* One container width for the whole page, and one card width whatever the plan count.
+          The grid used to resize itself around however many plans existed — max-w-[380px] for
+          one, 1150px for three — so a workspace with a single plan got one narrow card floating
+          in the middle of an empty screen, directly above a full-width "Need more credits?"
+          panel. Two blocks, two different pages. The columns are fixed now and a short row is
+          simply a short row. */}
+      <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {loadingPlans ? (
           <div className="col-span-1 md:col-span-3 flex w-full items-center justify-center p-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -510,8 +517,8 @@ export default function WorkspacePlansPage() {
                         className={`inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                           action.variant === "upgrade" ||
                           action.variant === "get-started"
-                            ? "bg-[#7F1DFF] hover:bg-[#6c17db] text-white shadow-sm"
-                            : "bg-[#00E58F] hover:bg-[#00cf81] text-gray-900 shadow-sm"
+                            ? "bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm"
+                            : "bg-foreground text-background hover:opacity-90 shadow-sm"
                         }`}
                       >
                         {isProcessing ? "Processing..." : "Get Started"}
@@ -631,8 +638,8 @@ export default function WorkspacePlansPage() {
             </h2>
           </div>
           <p className="text-base text-muted-foreground">
-            Enter the number of credits you want. Volume discounts apply
-            automatically.
+            Pick a package, or enter your own amount. One rate whatever the
+            size — there is no volume discount.
           </p>
         </div>
 
@@ -643,43 +650,57 @@ export default function WorkspacePlansPage() {
                 <label className="text-base font-semibold text-ink mb-3 block">
                   How many credits do you need?
                 </label>
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1">
-                    <input
-                      type="number"
-                      min="1"
-                      step="1000"
-                      value={topUpCredits || ""}
-                      onChange={(e) =>
-                        setTopUpCredits(
-                          Math.max(0, parseInt(e.target.value) || 0),
-                        )
-                      }
-                      placeholder="e.g. 10000"
-                      className="w-full h-14 rounded-xl border-2 border-hairline bg-surface-1 px-5 text-xl font-medium text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
-                    />
-                  </div>
-                  <span className="text-base font-medium text-ink-muted shrink-0">
-                    credits
-                  </span>
+                {/* Packages first, a number second — the shape OpenAI's top-up uses, for the
+                    reason it uses it: most people want "enough for a while", not a figure they
+                    have to derive from a per-credit rate. The old control opened with an empty
+                    number field and a 1,500-credit minimum that only announced itself after you
+                    typed something too small.
+
+                    NO "Save 10%" BADGES. The panel below says in as many words that there is one
+                    rate whatever the amount, and dressing these as volume tiers would be a
+                    discount that does not exist. Each tile shows what it costs instead, which is
+                    the honest version of the same help. */}
+                <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {TOP_UP_PACKAGES.map((pkg) => {
+                    const selected = topUpCredits === pkg.credits;
+                    return (
+                      <button
+                        key={pkg.credits}
+                        type="button"
+                        onClick={() => setTopUpCredits(pkg.credits)}
+                        aria-pressed={selected}
+                        className={`flex flex-col items-start gap-1 rounded-[14px] border p-4 text-left transition-colors ${
+                          selected
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-ink/30"
+                        }`}
+                      >
+                        <span className="text-[15px] font-semibold text-ink">{pkg.label}</span>
+                        <span className="text-[12px] text-ink-muted">
+                          {formatMoney(pkg.credits * DOCUMENTED_VND_PER_CREDIT, "VND")}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div className="flex gap-2.5 mt-4 flex-wrap">
-                  {[
-                    { label: "10k", value: 10000 },
-                    { label: "25k", value: 25000 },
-                    { label: "50k", value: 50000 },
-                    { label: "100k", value: 100000 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => setTopUpCredits(preset.value)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all cursor-pointer ${topUpCredits === preset.value ? "bg-primary/10 text-primary border-primary shadow-sm" : "bg-surface-1 text-ink-muted border-hairline hover:border-ink-muted/30 hover:text-ink"}`}
-                    >
-                      {preset.label} credits
-                    </button>
-                  ))}
+                <div className="mt-3 flex items-center gap-3">
+                  <label htmlFor="topup-other" className="text-[13px] text-ink-muted">
+                    Other
+                  </label>
+                  <input
+                    id="topup-other"
+                    type="number"
+                    min="1"
+                    step="1000"
+                    value={topUpCredits || ""}
+                    onChange={(e) =>
+                      setTopUpCredits(Math.max(0, parseInt(e.target.value) || 0))
+                    }
+                    placeholder={`${TOP_UP_MINIMUM_CREDITS.toLocaleString()} minimum`}
+                    className="h-10 w-44 rounded-md border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-primary"
+                  />
+                  <span className="text-[13px] text-ink-muted">credits</span>
                 </div>
               </div>
 
@@ -719,7 +740,7 @@ export default function WorkspacePlansPage() {
                 </div>
               )}
 
-              {topUpCredits > 0 && topUpCredits < 1500 && (
+              {topUpCredits > 0 && topUpCredits < TOP_UP_MINIMUM_CREDITS && (
                 <p className="text-xs font-semibold text-rose-500 mt-2 bg-rose-500/10 p-3 rounded-lg">
                   ⚠️ Minimum top-up amount is 1,500 credits (equivalent to
                   15,000 VND Stripe transaction limit).
@@ -729,7 +750,7 @@ export default function WorkspacePlansPage() {
               {TOP_UP_ENABLED ? (
               <button
                 type="button"
-                disabled={isProcessing || topUpCredits < 1500}
+                disabled={isProcessing || topUpCredits < TOP_UP_MINIMUM_CREDITS}
                 onClick={() =>
                   handleCheckout(topUpTotal, "CreditTopUp", "", "")
                 }
@@ -737,7 +758,7 @@ export default function WorkspacePlansPage() {
               >
                 {isProcessing ? (
                   "Processing..."
-                ) : topUpCredits >= 1500 ? (
+                ) : topUpCredits >= TOP_UP_MINIMUM_CREDITS ? (
                   <>
                     <span>
                       Complete Top Up of {topUpCredits.toLocaleString()} credits
