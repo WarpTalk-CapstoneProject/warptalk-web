@@ -522,15 +522,25 @@ export default function WorkspaceMembersPage() {
                     </div>
                   </div>
 
-                  {/* Role Badge */}
-                  <div>
+                  {/* Role Badge — the ROLE, and nothing else.
+                      This printed "Member · External · Fixed" for an external member while the
+                      badge in the very next column printed "External" on its own. Two things went
+                      wrong at once: the word appeared twice side by side, and the long string
+                      overflowed its column into that neighbour, so the row read
+                      "Member · External · FixeExternal". Membership type has its own badge; "the
+                      role cannot be changed" is a rule about the control, which is where it now
+                      lives. */}
+                  <div className="min-w-0">
                     <Badge
                       variant="outline"
-                      className="rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
+                      title={
+                        member && isExternal
+                          ? "External members always hold the Member role — it cannot be changed."
+                          : undefined
+                      }
+                      className="max-w-full truncate whitespace-nowrap rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
                     >
-                      {member && isExternal
-                        ? "Member · External · Fixed"
-                        : row.roleName}
+                      {row.roleName}
                     </Badge>
                   </div>
 

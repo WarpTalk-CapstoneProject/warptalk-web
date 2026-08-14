@@ -18,7 +18,7 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { SeriesListSummary, TranslationRoomDto } from "@/types/translationRoom";
 import {
   describeRecurrenceWithTime,
@@ -363,6 +363,7 @@ export default function MeetingsPageLinear() {
   const setCreateRoomModalOpen = useUIStore(
     (state) => state.setCreateRoomModalOpen,
   );
+  const canCreateMeetings = useCanCreateMeetings();
 
   const rooms = useMemo(() => {
     return roomList.data?.rooms ?? [];
@@ -536,13 +537,15 @@ export default function MeetingsPageLinear() {
           <div className="h-4 w-[1px] bg-border mx-1" />
 
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setCreateRoomModalOpen(true)}
-              className="flex items-center gap-1.5 h-[28px] pl-2.5 pr-3 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity text-[13px] font-medium shadow-sm"
-            >
-              <Plus weight="bold" size={12} />
-              New Meeting
-            </button>
+            {canCreateMeetings && (
+              <button
+                onClick={() => setCreateRoomModalOpen(true)}
+                className="flex items-center gap-1.5 h-[28px] pl-2.5 pr-3 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity text-[13px] font-medium shadow-sm"
+              >
+                <Plus weight="bold" size={12} />
+                New Meeting
+              </button>
+            )}
             <button
               onClick={() => setJoinModalOpen(true)}
               className="flex items-center justify-center w-[28px] h-[28px] rounded-full bg-surface-2 hover:bg-surface-3 text-ink transition-colors shadow-sm border border-border/60"

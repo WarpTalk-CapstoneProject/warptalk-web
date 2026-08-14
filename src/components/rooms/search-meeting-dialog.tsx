@@ -28,7 +28,7 @@ import { looksLikeRoomCode } from "@/lib/meeting/room-code-guess";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useTheme } from "next-themes";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 
 type QuickSearchAction = {
@@ -43,6 +43,7 @@ export function SearchMeetingDialog() {
   const searchMeetingModalOpen = useUIStore((state) => state.searchMeetingModalOpen);
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const canCreateMeetings = useCanCreateMeetings();
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const [searchQuery, setSearchQuery] = useState("");
   const { resolvedTheme } = useTheme();
@@ -94,12 +95,18 @@ export function SearchMeetingDialog() {
   };
 
   const quickActions: QuickSearchAction[] = [
-    {
-      title: "Create room",
-      description: "Start a live translation room",
-      icon: Plus,
-      onSelect: () => closeAndRun(() => setCreateRoomModalOpen(true)),
-    },
+    // WT-371 #2: the command palette is a second door to the same dialog. Leaving it open for a
+    // member who cannot create meetings would mean the buttons are hidden and Ctrl-K still works.
+    ...(canCreateMeetings
+      ? [
+          {
+            title: "Create room",
+            description: "Start a live translation room",
+            icon: Plus,
+            onSelect: () => closeAndRun(() => setCreateRoomModalOpen(true)),
+          } satisfies QuickSearchAction,
+        ]
+      : []),
     {
       title: "Join by code",
       description: "Enter an invite or meeting code",

@@ -28,8 +28,31 @@ const CATEGORY_LABELS: Record<string, string> = {
   fact: "Reference",
 };
 
+/**
+ * What the badge's one-word label actually means, said in full when it is opened.
+ *
+ * WT-371 Bug 6, half two: "Thông tin suggest hiển thị không rõ cấu trúc (gồm những gì)". The
+ * badge said UNANSWERED and the panel it opened showed two paragraphs of prose. Nothing told the
+ * reader what kind of observation this was, so there was no way to know whether the first line
+ * was a question, a definition or a warning — or why it had appeared at all.
+ *
+ * These are the same five categories the suggester decides between, phrased for the person
+ * reading rather than for the model writing.
+ */
+const CATEGORY_MEANINGS: Record<string, string> = {
+  clarification: "A question that was asked and not answered",
+  term: "A term used in this meeting without being defined",
+  action: "A commitment with no owner or no deadline",
+  correction: "This contradicts something said earlier",
+  fact: "From a document attached to this meeting",
+};
+
 function labelFor(category: string) {
   return CATEGORY_LABELS[category] ?? "Suggestion";
+}
+
+function meaningFor(category: string) {
+  return CATEGORY_MEANINGS[category] ?? "Noticed automatically from what was said";
 }
 
 /**
@@ -98,6 +121,10 @@ export function SuggestionDetail({
   onDismiss: () => void;
 }) {
   const hasDetail = Boolean(suggestion.detail?.trim());
+  // Indexed here too rather than shared through a helper — same reason as in SuggestionBadge:
+  // react-hooks/static-components has to see the fixed set, and cannot through a call.
+  const Icon =
+    CATEGORY_ICONS[suggestion.category as keyof typeof CATEGORY_ICONS] ?? Sparkle;
 
   return (
     <motion.div
@@ -113,8 +140,25 @@ export function SuggestionDetail({
         }`}
       >
         <div className="min-w-0 flex-1">
+          {/* Three stated parts, in a fixed order, so the panel has a shape a reader can
+              learn: what kind of observation this is, the observation, then the evidence
+              for it. Before, `content` and `detail` arrived as two unlabelled paragraphs
+              and there was no way to tell which was which — or why any of it appeared. */}
           <p
-            className={`text-[11px] leading-snug ${isSelf ? "text-white" : "text-ink"}`}
+            className={`flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide ${
+              isSelf ? "text-white/60" : "text-primary/70"
+            }`}
+          >
+            <Icon className="h-2.5 w-2.5" weight="bold" aria-hidden />
+            {labelFor(suggestion.category)}
+          </p>
+          <p
+            className={`text-[10px] leading-snug ${isSelf ? "text-white/60" : "text-ink-subtle"}`}
+          >
+            {meaningFor(suggestion.category)}
+          </p>
+          <p
+            className={`mt-1.5 text-[11px] font-medium leading-snug ${isSelf ? "text-white" : "text-ink"}`}
           >
             {suggestion.content}
           </p>
@@ -127,6 +171,13 @@ export function SuggestionDetail({
               {suggestion.detail}
             </p>
           ) : null}
+          {/* Said once, at the bottom, because an unprompted hint that does not say where it
+              came from reads as the product asserting a fact. */}
+          <p
+            className={`mt-1.5 text-[9px] ${isSelf ? "text-white/45" : "text-ink-subtle/70"}`}
+          >
+            Generated automatically — check before relying on it.
+          </p>
         </div>
 
         <button
