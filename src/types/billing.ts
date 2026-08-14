@@ -238,3 +238,18 @@ export interface ServiceRatesDto {
   aiSummaryPerRequest: number;
   aiChatPerRequest: number;
 }
+
+/**
+ * Whether this workspace keeps translating after its credits reach zero.
+ *
+ * `planCapCredits` is the difference between "switched off" and "not available": a plan whose
+ * cap is 0 offers no allowance at all, and the page must not present a switch that cannot do
+ * anything. The cap itself is not the Owner's to change — see
+ * SubscriptionsController.SetOverage, which only moves between 0 and the plan's own figure.
+ */
+export interface WorkspaceOverageSettingDto {
+  enabled: boolean;
+  effectiveCapCredits: number;
+  planCapCredits: number;
+  overageCreditsThisCycle: number;
+}

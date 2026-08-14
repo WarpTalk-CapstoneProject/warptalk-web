@@ -79,6 +79,7 @@ import { Metric, MetricGrid, Panel } from "./components/metric-grid";
 import { CycleSpendChart } from "./components/cycle-spend-chart";
 import { ServiceUsageTable } from "./components/service-usage-table";
 import { PlanPanel } from "./components/plan-panel";
+import { OveragePanel } from "./components/overage-panel";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -899,6 +900,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                 plan={activePlan}
                 plansHref={`/${workspaceSlug}/payment/plans`}
               />
+
+              <OveragePanel workspaceId={workspaceId} />
 
               <Panel
                 title="Credit allocation"
