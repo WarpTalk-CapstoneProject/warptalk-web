@@ -207,6 +207,30 @@ export const billingService = {
     return data;
   },
 
+  /** Whether this workspace runs past zero credits, and how far its plan lets it. */
+  getOverageSetting: async (
+    workspaceId: string,
+  ): Promise<import("@/types/billing").WorkspaceOverageSettingDto> => {
+    const { data } = await apiClient.get<
+      import("@/types/billing").WorkspaceOverageSettingDto
+    >(`/subscriptions/workspace/${workspaceId}/overage`);
+    return data;
+  },
+
+  /**
+   * Turn it on or off. The server refuses `true` on a plan with no allowance rather than
+   * accepting it as a no-op, so the error is worth showing verbatim.
+   */
+  setOverage: async (
+    workspaceId: string,
+    enabled: boolean,
+  ): Promise<import("@/types/billing").WorkspaceOverageSettingDto> => {
+    const { data } = await apiClient.put<
+      import("@/types/billing").WorkspaceOverageSettingDto
+    >(`/subscriptions/workspace/${workspaceId}/overage`, { enabled });
+    return data;
+  },
+
   /**
    * Get paginated invoices for a workspace.
    */
