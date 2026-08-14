@@ -36,6 +36,23 @@ export interface SetPreferredVoiceRequest {
 }
 
 /**
+ * WT-396 — pick, or clear, the voice this user is DUBBED IN.
+ *
+ * The opposite direction from SetPreferredVoiceRequest above. That one says which voice you HEAR
+ * everybody else in; this one says how YOU sound to them. They were the same stored concept, so
+ * a recording someone uploaded of themselves changed neither, and the dub came back in a stock
+ * voice while the UI showed the profile as active.
+ *
+ * voiceId null clears the choice and goes back to cloning the speaker live from the meeting.
+ * language is only needed to validate a pick from the public catalogue — a voice that belongs to
+ * one of your own profiles is accepted without it.
+ */
+export interface SetDubVoiceRequest {
+  voiceId: string | null;
+  language?: string | null;
+}
+
+/**
  * What this person has decided about having their voice cloned.
  *
  * `hasDecided` is separate from `isGranted` deliberately: "never been asked" and "asked and said

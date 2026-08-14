@@ -20,6 +20,10 @@ export const API = {
     delete: (id: string) => `/auth/voice-profiles/${id}`,
     catalog: "/auth/voice-profiles/catalog",
     preferredVoice: "/auth/voice-profiles/preferred-voice",
+    // WT-396. The OTHER direction from preferredVoice, and the separation is the bug that was
+    // fixed: preferredVoice is the voice you HEAR other people in, this is the voice YOU are
+    // dubbed in. They shared a concept, so an uploaded recording of yourself changed neither.
+    dubVoice: "/auth/voice-profiles/dub-voice",
   },
   // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
   // profile: it is given once for the product, outlives any single profile or meeting, and is
