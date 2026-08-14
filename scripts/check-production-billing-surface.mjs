@@ -1,7 +1,7 @@
 import fs from "node:fs";
 
 const billingPage = fs.readFileSync(
-  "src/app/(app)/[workspaceSlug]/billing/page.tsx",
+  "src/app/(app)/[workspaceSlug]/settings/billing/page.tsx",
   "utf8",
 );
 const billingService = fs.readFileSync(

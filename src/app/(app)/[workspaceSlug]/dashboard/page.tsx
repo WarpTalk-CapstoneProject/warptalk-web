@@ -143,7 +143,7 @@ export default function WorkspaceAdminDashboardPage() {
     );
   }
 
-  const billingHref = `/${activeWorkspaceSlug}/billing`;
+  const billingHref = `/${activeWorkspaceSlug}/settings/billing`;
   const plansHref = `/${activeWorkspaceSlug}/payment/plans`;
 
   // 404 is the account state "this workspace has no plan", not a fault. Anything else genuinely

@@ -8,7 +8,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export default function PaymentCancelledPage() {
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
-  const billingLink = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/billing` : "/";
+  const billingLink = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/billing` : "/";
   const plansLink = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/payment/plans` : "/";
 
   return (
