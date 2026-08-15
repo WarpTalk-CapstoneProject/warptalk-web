@@ -59,6 +59,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 
 import { DashboardHero } from "./components/dashboard-hero";
 import { CycleSummary } from "./components/cycle-summary";
+import { MemberUsage } from "./components/member-usage";
 import { UsageBreakdown } from "./components/usage-breakdown";
 import { UsageTrend } from "./components/usage-trend";
 
@@ -105,6 +106,17 @@ export default function WorkspaceAdminDashboardPage() {
   const { data: roomsData, isLoading: isLoadingRooms } = useTranslationRooms({
     pageSize: 100,
     workspaceId: activeWorkspaceId ?? undefined,
+  });
+
+  // WT-413: who is spending it. Same owner/admin `enabled` gate as its neighbours — the
+  // endpoint refuses a member outright, so asking would only produce a 403 in the console.
+  const memberUsageQuery = useQuery({
+    queryKey: ["workspace-usage-by-member", activeWorkspaceId, breakdownDays],
+    queryFn: () =>
+      billingService.getUsageByMember(activeWorkspaceId!, {
+        from: new Date(Date.now() - breakdownDays * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    enabled,
   });
 
   const creditsQuery = useQuery({
@@ -314,6 +326,24 @@ export default function WorkspaceAdminDashboardPage() {
               </p>
             ) : (
               <UsageBreakdown rows={breakdownQuery.data ?? []} />
+            )}
+          </WorkspaceSection>
+        </div>
+
+        <div className="grid gap-4">
+          <WorkspaceSection title="Who is spending it">
+            {memberUsageQuery.isPending ? (
+              <BlockSpinner height="h-[220px]" bare />
+            ) : memberUsageQuery.isError ? (
+              <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
+                Member usage could not be loaded.
+              </p>
+            ) : (
+              <MemberUsage
+                rows={memberUsageQuery.data?.members ?? []}
+                members={members?.items ?? []}
+                total={memberUsageQuery.data?.totalCreditsConsumed ?? 0}
+              />
             )}
           </WorkspaceSection>
         </div>
