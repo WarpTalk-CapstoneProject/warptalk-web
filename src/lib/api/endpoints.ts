@@ -188,6 +188,15 @@ export const API = {
     detail: (id: string) => `/admin/users/${id}`,
   },
   /** Platform subscription directory and revenue summary (billing service). Read-only. */
+  /**
+   * Plans and rate cards. These live on the ordinary plans/usages controllers rather than under
+   * /admin — they predate the portal and are gated per-route on the platform admin role.
+   */
+  adminPricing: {
+    allPlans: "/plans/all",
+    rateCard: "/usages/rate-card",
+    pricingConfig: "/usages/pricing-config",
+  },
   adminSubscriptions: {
     base: "/admin/subscriptions",
     summary: "/admin/subscriptions/summary",
