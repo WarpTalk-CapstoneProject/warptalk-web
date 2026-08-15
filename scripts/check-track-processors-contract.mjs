@@ -141,3 +141,19 @@ for (const prejoinSurface of [joinPage, setupModal]) {
 }
 
 console.log("Track processor fallback contract passed.");
+
+// WT-427. The Krisp processor is dropped whenever it can no longer be reused: after stopping, on
+// failure, and when the microphone track it was bound to goes away.
+//
+// It was created once and never cleared, so the FIRST enable of a session could work and every
+// later one attached a processor that had already released its WASM pipeline. Since WT-320 this
+// hook treats "attached but not enabled" as an error, so that is a toggle which refuses to stay on
+// for the rest of the meeting.
+//
+// The blur processor beside it already did this and says why. Three sites, because missing any one
+// of them brings the bug back through a different door.
+const krispDrops = hook.match(/krispRef\.current = null/g) ?? [];
+assert.ok(
+  krispDrops.length >= 3,
+  `The Krisp processor must be dropped after stopping, on failure, and on track change — found ${krispDrops.length} of 3. Reusing a stopped processor is how the second enable of a session silently does nothing.`,
+);
