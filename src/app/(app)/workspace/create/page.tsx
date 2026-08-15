@@ -95,7 +95,9 @@ export default function CreateWorkspaceDemoPage() {
     createWorkspace.isPending ||
     selectWorkspace.isPending ||
     form.formState.isSubmitting;
-  const canCreate = isAuthenticated && !!emailDomain && !accountIssue;
+  // rawDomain, not emailDomain: getDomainFromEmail deliberately returns null for a public
+  // domain, so gating on it would keep refusing gmail.com after WT-417 removed the rule.
+  const canCreate = isAuthenticated && !!rawDomain && !accountIssue;
 
   useEffect(() => {
     if (mounted && !isAuthenticated) router.replace("/login");
@@ -250,8 +252,11 @@ function getAccountIssue(
 ): string | null {
   if (!email) return "Signed-in account email is missing.";
   if (!rawDomain) return "Signed-in account email is invalid.";
-  if (isPublicDomain)
-    return "Use a business email or join by invitation. Public email domains cannot be system-verified for an Enterprise Workspace.";
+  // WT-417: a public domain no longer blocks creation. It still cannot be system-VERIFIED —
+  // verifying gmail.com would make every Gmail address Internal to the workspace — and the
+  // server refuses that separately, so the only thing this screen needs to stop is a missing
+  // or malformed account email.
+  void isPublicDomain;
   return null;
 }
 

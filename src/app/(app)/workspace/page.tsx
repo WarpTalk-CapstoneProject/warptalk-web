@@ -15,11 +15,8 @@ import {
 import Image from "next/image";
 
 import { useAuthStore } from "@/stores/auth-store";
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import {
-  extractEmailDomain,
-  isPublicEmailDomain,
-} from "@/lib/workspace/email-domain";
 import {
   useAcceptWorkspaceInvitationById,
   usePendingWorkspaceInvitations,
@@ -36,10 +33,11 @@ export default function WorkspaceOnboardingGatePage() {
   const logout = useAuthStore((state) => state.logout);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  // Same helper the create form uses, so the two screens cannot drift on what counts as a
-  // public domain. Only affects what this screen says; the server does the refusing.
-  const publicDomainLabel = extractEmailDomain(user?.email);
-  const cannotCreateWorkspace = isPublicEmailDomain(publicDomainLabel);
+  // WT-417: a public email domain no longer blocks creating a workspace, so this screen has
+  // nothing left to disable. What a public domain still cannot do is have itself system-
+  // VERIFIED — verifying gmail.com would make every Gmail address Internal to that workspace —
+  // and the server enforces that separately, on the surface where it is actually decided.
+  const isSystemAdmin = useIsSystemAdmin();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
@@ -85,6 +83,23 @@ export default function WorkspaceOnboardingGatePage() {
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
   }, [isAuthenticated, router]);
+
+  /**
+   * A platform admin does not belong on this screen at all. WT-417.
+   *
+   * This page is the onboarding gate: "you have no workspace, join or create one". A system
+   * admin administers the platform the workspaces live in — they have no workspace of their own
+   * and need none — so landing here told the master account it had signed up by mistake, and
+   * the only way onward was to create a workspace nobody wanted.
+   *
+   * (app)/layout.tsx already sends them to /admin for this exact reason, but it hands
+   * /workspace straight through as an `isOnboardingRoute` before that branch can run, so this
+   * screen was the one place the rule did not reach. Same destination, same reasoning, applied
+   * where the gap was.
+   */
+  useEffect(() => {
+    if (isAuthenticated && isSystemAdmin) router.replace("/admin");
+  }, [isAuthenticated, isSystemAdmin, router]);
 
   useEffect(() => {
     if (selectWorkspace.isPending) {
@@ -321,16 +336,10 @@ export default function WorkspaceOnboardingGatePage() {
             <button
               type="button"
               onClick={() => router.push("/workspace/create")}
-              disabled={cannotCreateWorkspace}
-              aria-describedby={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
               className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all shadow-sm h-[160px] enabled:hover:bg-surface-2 enabled:hover:border-hairline-strong enabled:hover:shadow-md enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
             >
               <div
-                className={
-                  cannotCreateWorkspace
-                    ? "flex size-9 items-center justify-center rounded-[6px] border border-border bg-surface-2 text-ink-muted"
-                    : "flex size-9 items-center justify-center rounded-[6px] bg-primary text-white"
-                }
+                className="flex size-9 items-center justify-center rounded-[6px] bg-primary text-white"
               >
                 <Plus weight="bold" size={18} />
               </div>
@@ -339,12 +348,9 @@ export default function WorkspaceOnboardingGatePage() {
                   Create workspace
                 </span>
                 <span
-                  id={cannotCreateWorkspace ? "create-workspace-reason" : undefined}
                   className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty"
                 >
-                  {cannotCreateWorkspace
-                    ? `Needs a work email — ${publicDomainLabel} addresses can join an existing workspace by invitation.`
-                    : "Create a new workspace for your organization."}
+                  Create a new workspace for your organization.
                 </span>
               </div>
             </button>
