@@ -10,11 +10,14 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { useQuery } from "@tanstack/react-query";
 
+import Link from "next/link";
+
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { UsageChart } from "@/components/admin/UsageChart";
 import { billingService } from "@/services/billing.service";
 import { AdminPage, AdminPageHeader } from "@/components/admin/admin-page-chrome";
+import { useAdminWorkspaceDirectory } from "@/hooks/use-admin-workspaces";
 
 const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
@@ -61,6 +64,20 @@ export default function AdminOverviewPage() {
     refetchInterval: 60_000,
   });
 
+  /**
+   * Workspaces a human has suspended, which this page could not see at all.
+   *
+   * A suspension is the one platform state that stays until somebody acts on it: the workspace
+   * admits nobody new, its meetings cannot start, and nothing expires it. The directory lists
+   * them behind a tab, so noticing one required already suspecting it existed — and the tile
+   * beside this said "Active workspaces 2" without ever mentioning the third.
+   *
+   * Page size 1: only `total` is read. The row itself is not rendered here; the link goes to the
+   * directory, which is the screen built to act on them.
+   */
+  const suspendedQuery = useAdminWorkspaceDirectory({ page: 1, pageSize: 1, status: "suspended" });
+  const suspendedCount = suspendedQuery.data?.total ?? 0;
+
   const metrics = metricsQuery.data;
   const alerts = alertsQuery.data ?? [];
   const updatedAt = Math.max(metricsQuery.dataUpdatedAt, alertsQuery.dataUpdatedAt);
@@ -83,6 +100,28 @@ export default function AdminOverviewPage() {
             </span>
           }
         />
+
+        {/* Above the metrics, because it is the only thing on this page anyone has to DO.
+            Absent entirely when the count is zero — a permanent "0 suspended" strip is furniture,
+            and furniture is what the eye learns to skip. */}
+        {suspendedCount > 0 ? (
+          <Link
+            href="/admin/workspaces?status=suspended"
+            className="mt-5 flex items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm transition-colors hover:bg-amber-500/10"
+          >
+            <WarningCircle size={18} weight="duotone" className="shrink-0 text-amber-600" />
+            <span className="min-w-0 flex-1">
+              <span className="font-medium text-ink">
+                {suspendedCount} workspace{suspendedCount === 1 ? " is" : "s are"} suspended
+              </span>
+              <span className="ml-1.5 text-ink-muted">
+                Nothing lifts a suspension on its own — each one stays closed until an admin
+                reactivates it.
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-medium text-ink-muted">Review →</span>
+          </Link>
+        ) : null}
 
         {metricsQuery.isError ? (
           <div className="mt-5 flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
