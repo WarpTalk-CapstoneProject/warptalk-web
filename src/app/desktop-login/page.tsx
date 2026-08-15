@@ -146,7 +146,9 @@ function LoginContent() {
     searchParams.get("callbackUrl") || searchParams.get("redirect"),
   );
   const login = useAuthStore((s) => s.login);
-  const [screen, setScreen] = useState<ScreenMode>("welcome");
+  // This route is the desktop app's entry point, so it opens on the login form
+  // rather than the welcome splash, which is still reachable via Back.
+  const [screen, setScreen] = useState<ScreenMode>("login");
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "password">("email");
   const shellRef = useRef<HTMLDivElement | null>(null);
