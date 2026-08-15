@@ -222,6 +222,17 @@ export const API = {
     summary: "/admin/feedback/summary",
     comments: "/admin/feedback/comments",
   },
+  /**
+   * The catalog room validation reads — `translation_room.supported_languages`, inactive rows
+   * included. Read-only: translation-room has no bus, so a toggle could not be audited.
+   */
+  adminLanguages: {
+    base: "/admin/languages",
+  },
+  /** Voice-clone consent, counts only. No user ids cross this boundary. */
+  adminVoiceConsent: {
+    summary: "/admin/voice-consent/summary",
+  },
   adminSubscriptions: {
     base: "/admin/subscriptions",
     summary: "/admin/subscriptions/summary",

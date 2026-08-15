@@ -368,7 +368,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       },
       {
         section: "Configuration",
-        items: [{ icon: Globe, label: "Global glossary", href: "/admin/global-glossary" }],
+        items: [
+          { icon: Sliders, label: "Platform config", href: "/admin/configuration" },
+          { icon: Globe, label: "Global glossary", href: "/admin/global-glossary" },
+        ],
       },
     ];
 
