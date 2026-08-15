@@ -123,7 +123,10 @@ export function MeetingControlBar({
   isHost?: boolean;
   /** Whether the AI translation pipeline is currently running for this room. */
   warptalkStarted?: boolean;
-  /** Whether live subtitles are visible in the reserved caption lane. */
+  /** Whether live subtitles are visible in the reserved caption lane.
+   *
+   *  Visibility ONLY. This does not gate transcript capture, receipt or persistence — see the
+   *  CC control below and WT-408. */
   subtitlesEnabled: boolean;
   /** The language this participant currently hears translations/captions in. */
   listenLanguage?: string;
@@ -168,7 +171,9 @@ export function MeetingControlBar({
   onStartWarptalk?: () => void;
   /** Stops the AI translation pipeline for the room. Host-only; omit to hide the control. */
   onStopWarptalk?: () => void;
-  /** Toggles the local live-subtitle lane without changing transcript collection. */
+  /** Toggles the local live-subtitle lane without changing transcript collection.
+   *  The tooltip says so out loud (WT-408) — users were reading the CC glyph as a recording
+   *  switch. */
   onToggleSubtitles: () => void;
   /** Called when the participant picks a different listen language from the dropdown. */
   onChangeListenLanguage?: (language: string) => void;
@@ -363,8 +368,24 @@ export function MeetingControlBar({
         onToggleMicrophone={onToggleMicrophone}
       />
 
+      {/* WT-408. The label is the tooltip AND the aria-label, and it is the only thing telling
+          anyone what this button does. A CC glyph is conventionally read as "captions and
+          transcript", so turning it off was being understood as "stop recording what I say" —
+          a privacy expectation the code has never met. This control hides the floating subtitle
+          lane and nothing else: TranscriptSegmentReceived still fires, the transcript panel
+          still fills, and the meeting transcript is still persisted and exportable.
+          Saying so in the tooltip is the smallest honest fix.
+
+          NOT a decision that CC should only ever mean this. WT-408 offers a second option where
+          CC becomes a real consent control that gates receiving and persisting a participant's
+          speech; that needs backend work and a product call, and is deliberately not taken here.
+          What this removes is the gap between what the button claims and what it does. */}
       <MeetControl
-        label={subtitlesEnabled ? "Hide subtitles" : "Show subtitles"}
+        label={
+          subtitlesEnabled
+            ? "Hide captions (transcript keeps recording)"
+            : "Show captions"
+        }
         active={subtitlesEnabled}
         icon={
           <ClosedCaptioning
