@@ -15,6 +15,10 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  describeSummaryAbsence,
+  summaryAbsenceMessage,
+} from "@/lib/meeting/summary-absence";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { resolveSummaryState } from "@/lib/meeting/room-history-mapping";
 import {
@@ -186,6 +190,18 @@ export function SummaryPanel({
   });
   const isGenerating = summaryState === "generating";
 
+  // "Not shared with you" is not "does not exist". The ROW existing is the fact this panel could
+  // not see: room artifacts default to HOST_ONLY and the history projection omits `content` for
+  // anyone the access policy refuses, while still listing the artifact. See
+  // lib/meeting/summary-absence.ts.
+  const summaryAbsence = describeSummaryAbsence({
+    isGenerating,
+    summaryState,
+    hasSummaryArtifact: Boolean(artifact),
+    hasParsedSummary: Boolean(summary),
+    insufficientData: summary?.insufficientData,
+  });
+
   const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
   const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
   const isRewriting = requestedTemplate !== null && requestedTemplate !== currentTemplate;
@@ -350,17 +366,22 @@ export function SummaryPanel({
             ) : (
               <ChatCircleText size={28} className="mx-auto text-ink-muted" />
             )}
+            {/* "Not shared with you" is not "does not exist".
+                A meeting listed `summary export · Ready` under Artifacts while this panel said the
+                meeting ended without one. The summary existed; room artifacts default to HOST_ONLY
+                and the history projection omits `content` for anyone the access policy refuses,
+                while still listing the row. This panel saw a body-less artifact and reported the
+                meeting as having produced none — sending the reader after a broken generator
+                instead of the host. See lib/meeting/summary-absence.ts. */}
             <h3 className="mt-4 text-[15px] font-semibold">
-              {isGenerating ? "Generating summary…" : "No summary output"}
+              {isGenerating
+                ? "Generating summary…"
+                : summaryAbsence === "withheld"
+                  ? "Summary not shared with you"
+                  : "No summary output"}
             </h3>
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
-              {isGenerating
-                ? "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute."
-                : summaryState === "failed"
-                  ? "Summary generation did not complete for this meeting. The transcript is still available."
-                  : summary?.insufficientData
-                    ? "There wasn't enough transcript content in this meeting to generate a summary."
-                    : "This meeting ended without a summary artifact."}
+              {summaryAbsenceMessage(summaryAbsence)}
             </p>
           </div>
         </div>
