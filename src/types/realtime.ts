@@ -161,3 +161,19 @@ export interface VoiceOptionDto {
   name: string;
   gender: string;
 }
+
+/**
+ * What the TTS worker currently knows about one speaker's voice clone. WT-420.
+ *
+ * Every metric is optional and absent when the worker had nothing to say about it — a zero would
+ * render as "0 seconds captured" or "quality 0", which is a claim rather than a gap. See
+ * lib/meeting/clone-capture-state.ts for the reason codes and how they read.
+ */
+export interface VoiceCloneStateDto {
+  speakerId: string;
+  reason: string;
+  seconds?: number | null;
+  requiredSeconds?: number | null;
+  score?: number | null;
+  activeSpeechRatio?: number | null;
+}
