@@ -181,7 +181,7 @@ function LoginContent() {
 
   useEffect(() => {
     document.title =
-      screen === "welcome" ? "Warptalk-V1 | Welcome" : "Warptalk-V1 | Login";
+      screen === "welcome" ? "WarpTalk | Welcome" : "WarpTalk | Login";
   }, [screen]);
 
   useLayoutEffect(() => {
@@ -422,7 +422,7 @@ function LoginContent() {
 
               <div className="mb-7">
                 <p className="mb-2 text-sm font-medium text-white/50">
-                  Warptalk-V1
+                  WarpTalk
                 </p>
                 <h1 className="text-3xl font-semibold tracking-normal text-white">
                   Sign in
