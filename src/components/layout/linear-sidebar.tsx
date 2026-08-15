@@ -343,6 +343,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           // as active for anything beneath its href, and every admin page is beneath /admin.
           { icon: Gauge, label: "Overview", href: "/admin", exact: true },
           { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
+          { icon: Users, label: "Users", href: "/admin/users" },
         ],
       },
       {

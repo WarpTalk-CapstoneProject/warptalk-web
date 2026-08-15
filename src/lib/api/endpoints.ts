@@ -179,6 +179,14 @@ export const API = {
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
   },
+  /**
+   * The platform user directory (auth service). Read-only: there is no revoke-sessions call,
+   * because auditing one would need a message bus the auth service deliberately does not have.
+   */
+  adminUsers: {
+    base: "/admin/users",
+    detail: (id: string) => `/admin/users/${id}`,
+  },
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
