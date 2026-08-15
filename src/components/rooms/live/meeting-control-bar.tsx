@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { getFlagEmoji } from "@/lib/language/language-flag";
@@ -12,15 +12,9 @@ import {
 } from "@/lib/meeting/language-choice";
 import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+// Button, Dialog* and the Fingerprint icon were imported and never used — dead since whatever
+// removed their last call site, and invisible because unused imports are a warning here rather
+// than an error. `Plus` joined them when AddLanguageRow went.
 import type { VoiceCloneStateDto, VoiceOptionDto } from "@/types/realtime";
 
 import { ALLOWED_REACTION_EMOJIS } from "@/constants/realtime";
@@ -207,19 +201,12 @@ export function MeetingControlBar({
   onToggleMuteOnEntry?: (enabled: boolean) => void;
   /** WT-04, host-only: force-mutes every other participant (they can unmute themselves). */
   onMuteAll?: () => void;
-  /** WT-06, host-only: starts/stops LiveKit Egress recording for the room. Omit to hide the record button. */
+  /** WT-06: starts/stops LiveKit Egress recording for the room. Any participant may — the room
+   * is told by toast either way. Omit to hide the record button. */
   onToggleRecording?: () => void;
 }) {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<
-    | "root"
-    | "layout"
-    | "listenLanguage"
-    | "speakLanguage"
-    | "listenLanguageAll"
-    | "speakLanguageAll"
-    | "voice"
-  >("root");
+  const [settingsSection, setSettingsSection] = useState<"root" | "layout" | "voice">("root");
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
   const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
   // WT-272 wrote this hook and then attached it to one flyout of three. The reaction picker
@@ -298,8 +285,11 @@ export function MeetingControlBar({
           <LanguagePairPicker
             speakLanguage={speakLanguage}
             listenLanguage={listenLanguage}
-            availableSpeakLanguages={availableSpeakLanguages ?? availableListenLanguages}
-            availableListenLanguages={availableListenLanguages}
+            // Union, not one or the other. The two props are the same array today (the room's
+            // language set), but the picker now writes BOTH sides from one pick, so a language
+            // offered on either side has to be offerable at all — dropping to one list would
+            // silently remove options the moment they ever diverge.
+            languageOptions={mergeLanguageOptions(availableSpeakLanguages, availableListenLanguages)}
             onChangeSpeakLanguage={onChangeSpeakLanguage}
             onChangeListenLanguage={onChangeListenLanguage}
             highlight={Boolean(warptalkStarted) && (!speakLanguage || !listenLanguage)}
@@ -375,7 +365,10 @@ export function MeetingControlBar({
         </div>
       ) : null}
 
-      {isHost && onToggleRecording ? (
+      {/* No isHost clause, unlike Host controls above: recording is open to everyone in the
+          meeting (MeetingRoomService.IsInMeetingAsync), and every participant is toasted when it
+          starts or stops. The caller decides who sees this by passing onToggleRecording or not. */}
+      {onToggleRecording ? (
         <MeetControl
           label={
             recordingPending
@@ -573,81 +566,16 @@ export function MeetingControlBar({
                 </>
               ) : null}
 
-              {settingsSection === "listenLanguage" && onChangeListenLanguage && availableListenLanguages ? (
-                <>
-                  <SettingsPanelHeader title="Listening in" onBack={() => setSettingsSection("root")} />
-                  {availableListenLanguages.map((language) => (
-                    <LanguageOption
-                      key={language}
-                      label={getLanguageName(language)}
-                      value={language}
-                      active={listenLanguage === language}
-                      onSelect={onChangeListenLanguage}
-                      close={closeSettingsMenu}
-                    />
-                  ))}
-                  <AddLanguageRow onClick={() => setSettingsSection("listenLanguageAll")} />
-                </>
-              ) : null}
+              {/* "Listening in" / "Speaking" and their two "All languages" submenus used to sit
+                  here. The root rows that reached them were removed when LanguagePairPicker
+                  replaced this whole flow, and these four branches were left behind — reachable
+                  only from each other, so nothing could open any of them. Dead code that still
+                  reads as a feature is worse than no code: it is why "the language menu" kept
+                  being described as if it existed.
 
-              {settingsSection === "speakLanguage" && onChangeSpeakLanguage && availableSpeakLanguages ? (
-                <>
-                  <SettingsPanelHeader title="Speaking" onBack={() => setSettingsSection("root")} />
-                  {availableSpeakLanguages.map((language) => (
-                    <LanguageOption
-                      key={language}
-                      label={getLanguageName(language)}
-                      value={language}
-                      active={speakLanguage === language}
-                      onSelect={onChangeSpeakLanguage}
-                      close={closeSettingsMenu}
-                    />
-                  ))}
-                  <AddLanguageRow onClick={() => setSettingsSection("speakLanguageAll")} />
-                </>
-              ) : null}
-
-              {/* The room's configuration is what gets OFFERED, not what a person is limited
-                  to. Somebody who speaks Korean in a Vietnamese/Japanese room should be able
-                  to say so and be understood; the room was configured by whoever booked it,
-                  before they knew who would turn up. */}
-              {settingsSection === "listenLanguageAll" && onChangeListenLanguage ? (
-                <>
-                  <SettingsPanelHeader
-                    title="All languages"
-                    onBack={() => setSettingsSection("listenLanguage")}
-                  />
-                  {languagesNotAlreadyOffered(availableListenLanguages).map((language) => (
-                    <LanguageOption
-                      key={language.code}
-                      label={language.name}
-                      value={language.code}
-                      active={listenLanguage === language.code}
-                      onSelect={onChangeListenLanguage}
-                      close={closeSettingsMenu}
-                    />
-                  ))}
-                </>
-              ) : null}
-
-              {settingsSection === "speakLanguageAll" && onChangeSpeakLanguage ? (
-                <>
-                  <SettingsPanelHeader
-                    title="All languages"
-                    onBack={() => setSettingsSection("speakLanguage")}
-                  />
-                  {languagesNotAlreadyOffered(availableSpeakLanguages).map((language) => (
-                    <LanguageOption
-                      key={language.code}
-                      label={language.name}
-                      value={language.code}
-                      active={speakLanguage === language.code}
-                      onSelect={onChangeSpeakLanguage}
-                      close={closeSettingsMenu}
-                    />
-                  ))}
-                </>
-              ) : null}
+                  The one rule they carried that the bar picker did NOT have — a person may choose
+                  a language the room does not offer — moved into LanguagePairPicker's "Another
+                  language" disclosure rather than going away with them. */}
 
               {settingsSection === "voice" ? (
                 <>
@@ -911,64 +839,37 @@ function VoiceOption({
  * ROOM; here the choice is this participant's own listen (or speak) language, of which there
  * is exactly one.
  */
+/**
+ * The one list the merged language picker offers, from the two the bar is given.
+ *
+ * Deduped by normalized code but returning the ORIGINAL values, because the options are locale
+ * tags ("vi-VN") in some call paths and bare codes ("vi") in others, and handing a normalized
+ * code back to `onChangeSpeakLanguage` would change what gets written to the gateway.
+ */
+function mergeLanguageOptions(
+  speakOptions: string[] | undefined,
+  listenOptions: string[] | undefined,
+): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const language of [...(speakOptions ?? []), ...(listenOptions ?? [])]) {
+    const code = normalizeLanguageCode(language);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    merged.push(language);
+  }
+  return merged;
+}
+
 /** Every meeting language this product knows, minus the ones the room already offers. */
 function languagesNotAlreadyOffered(offered: string[] | undefined) {
   const already = new Set((offered ?? []).map(normalizeLanguageCode));
   return languagesInScope("meeting").filter((language) => !already.has(language.code));
 }
 
-function AddLanguageRow({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="mt-1 flex w-full items-center gap-2 border-t border-border px-2.5 py-2 text-left text-[13px] text-ink-muted hover:bg-surface-2 hover:text-ink"
-    >
-      <Plus className="h-3.5 w-3.5 shrink-0" weight="bold" aria-hidden />
-      Add another language
-    </button>
-  );
-}
-
-function LanguageOption({
-  label,
-  value,
-  active,
-  onSelect,
-  close,
-}: {
-  label: string;
-  value: string;
-  active: boolean;
-  onSelect: (language: string) => void;
-  close: () => void;
-}) {
-  const flag = getFlagEmoji(value);
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onSelect(value);
-        close();
-      }}
-      aria-pressed={active}
-      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
-    >
-      <span className="flex min-w-0 items-center gap-2">
-        {flag ? (
-          <span aria-hidden className="text-[14px] leading-none">
-            {flag}
-          </span>
-        ) : null}
-        <span className="truncate">{label}</span>
-      </span>
-      {active ? (
-        <CheckCircle className="h-4 w-4 shrink-0 text-primary" weight="fill" />
-      ) : null}
-    </button>
-  );
-}
+// AddLanguageRow and LanguageOption lived here to serve the settings menu's four language
+// submenus. Those submenus were unreachable and are gone; LanguageColumn is the one row renderer
+// now, and it is the picker's own.
 
 function LayoutOption({
   label,
@@ -1098,7 +999,7 @@ function MeetControl({
 }
 
 /**
- * One language per person, with the two-language form behind a disclosure.
+ * One language per person. One list, one pick, both sides written.
  *
  * WHY IT COLLAPSED TO ONE
  *   This asked for "I speak" and "I hear" separately, which is the routing plumbing rather than
@@ -1111,12 +1012,18 @@ function MeetControl({
  *   whenever those differ, so one language each derives a VN/EN/JP room's six directions on its
  *   own, and two people sharing a language still correctly hear each other unprocessed.
  *
- * WHY THE SPLIT SURVIVES
- *   Speaking one language and following another better is real, the backend supports it today,
- *   and deleting it would remove a working capability to shorten a menu. It is invisible until
- *   asked for and intact when asked for. A participant who is ALREADY split — from a previous
- *   session, or another tab — sees the disclosure open, because hiding the state they are in is
- *   how the control would start lying.
+ * WHY THE SPLIT IS GONE, AND NOT MERELY HIDDEN
+ *   It used to live behind a "Hear a different language" disclosure, which opened itself whenever
+ *   the stored pair happened to be mismatched. That is how the merged control shipped and was
+ *   never seen: a room default of speak=vi / hear=en put people in a split they had not chosen,
+ *   the picker read that as deliberate, and everyone got the two-column form anyway. A disclosure
+ *   that opens on state nobody selected is not a disclosure.
+ *
+ *   So the control now offers exactly one decision and RECONCILES what it finds: an inherited
+ *   mismatch is corrected on the next pick rather than preserved. The wire format is unchanged —
+ *   speak and listen are still two fields, still written independently — so a split configured
+ *   elsewhere still routes correctly; there is simply no longer a control in the meeting bar that
+ *   can create one.
  *
  * `highlight` rings the button while translation runs and nothing has been chosen — the one
  * moment the choice is urgent.
@@ -1124,31 +1031,71 @@ function MeetControl({
 function LanguagePairPicker({
   speakLanguage,
   listenLanguage,
-  availableSpeakLanguages,
-  availableListenLanguages,
+  languageOptions,
   onChangeSpeakLanguage,
   onChangeListenLanguage,
   highlight,
 }: {
   speakLanguage?: string;
   listenLanguage?: string;
-  availableSpeakLanguages: string[];
-  availableListenLanguages: string[];
+  /**
+   * The one list this control offers. It was two — speak options and listen options — which the
+   * only call site has always fed from the same array anyway; a single pick cannot honour two
+   * lists, so taking two would just be a way for them to disagree later.
+   */
+  languageOptions: string[];
+  /**
+   * Still two callbacks, because the wire format is still two fields. Every pick writes both:
+   * see the onSelect below.
+   */
   onChangeSpeakLanguage: (language: string) => void;
   onChangeListenLanguage: (language: string) => void;
   highlight: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Whether the languages the ROOM does not offer are showing.
+  //
+  // Behind a disclosure rather than in the main list because the room's set is the right answer
+  // for almost everybody, and a menu of every language WarpTalk knows buries the two that matter.
+  // Opened for somebody already on an off-menu language, so the panel shows the state they are in.
+  const [showOtherLanguages, setShowOtherLanguages] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const choice = describeLanguageChoice(speakLanguage, listenLanguage);
-  // Opened for somebody who is ALREADY split, so the panel shows the state they are in rather
-  // than a simplification of it. It stays open afterwards within the session: collapsing it under
-  // someone mid-decision would be its own small betrayal.
-  const [showSeparateHear, setShowSeparateHear] = useState(choice.mode === "split");
-  useEffect(() => {
-    if (choice.mode === "split") setShowSeparateHear(true);
-  }, [choice.mode]);
+  // The face of the control is ONE language even when the stored pair disagrees.
+  //
+  // `choice.speak` is what this participant's microphone is transcribed as, and that is the
+  // language they would name if asked. Showing "vi → en" for an inherited mismatch made the
+  // control look like a two-part decision — the exact reading this merge exists to remove — and
+  // the mismatch is corrected the moment they pick anything, so displaying it as a split would
+  // advertise a state the control can no longer produce.
+  const shownLanguage = choice.speak || choice.hear;
+
+  // Every meeting language the room does NOT offer, as plain codes so the list below can treat
+  // both halves the same way.
+  const otherLanguages = languagesNotAlreadyOffered(languageOptions).map((language) => language.code);
+
+  // Somebody whose current language is not on the room's list is already off-menu — collapsing
+  // the section that contains their own selection would hide the state they are in.
+  //
+  // Derived, not synced through an effect. Writing this into state on mount would be a cascading
+  // render for a value that is a pure function of the props, and it would also LATCH: once open it
+  // could never close again for a user who then picked a room language.
+  const onAnOffMenuLanguage =
+    shownLanguage.length > 0 &&
+    otherLanguages.some((code) => code === normalizeLanguageCode(shownLanguage));
+  const otherLanguagesVisible = showOtherLanguages || onAnOffMenuLanguage;
+
+  // Both sides, always, wherever the language came from. The mesh reads speak and listen
+  // independently, so writing one would leave exactly the half-applied state this control exists
+  // to remove — and writing both is also what repairs a pair that arrived mismatched from a room
+  // default or an older session.
+  function pick(language: string) {
+    const applied = applySingleLanguageChoice(language);
+    onChangeSpeakLanguage(applied.speak);
+    onChangeListenLanguage(applied.hear);
+    setOpen(false);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -1183,14 +1130,8 @@ function LanguagePairPicker({
         <Translate className="h-4 w-4" />
         {choice.mode === "unset" ? (
           <span>Set language</span>
-        ) : choice.mode === "single" ? (
-          <span>{getLanguageName(choice.speak)}</span>
         ) : (
-          <>
-            <span>{getLanguageName(choice.speak)}</span>
-            <CaretRight className="h-3 w-3 rotate-90 opacity-60" weight="bold" />
-            <span>{getLanguageName(choice.hear)}</span>
-          </>
+          <span>{getLanguageName(shownLanguage)}</span>
         )}
         <CaretDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} weight="bold" />
       </button>
@@ -1202,50 +1143,44 @@ function LanguagePairPicker({
         >
           <LanguageColumn
             title="My language"
-            hint={
-              showSeparateHear
-                ? "What the microphone is transcribed as."
-                : "What you speak, and what everyone else is translated into for you."
-            }
-            options={availableSpeakLanguages}
-            selected={choice.mode === "unset" ? undefined : choice.speak}
-            onSelect={(language) => {
-              // Both sides, always. The mesh reads them independently, so writing one would leave
-              // exactly the half-applied state this control exists to remove.
-              const applied = applySingleLanguageChoice(language);
-              onChangeSpeakLanguage(applied.speak);
-              if (!showSeparateHear) onChangeListenLanguage(applied.hear);
-              setOpen(false);
-            }}
+            hint="What you speak, and what everyone else is translated into for you."
+            options={languageOptions}
+            selected={choice.mode === "unset" ? undefined : shownLanguage}
+            onSelect={pick}
           />
 
-          {showSeparateHear ? (
+          {/* The room's configuration is what gets OFFERED, not what a person is limited to.
+              Somebody who speaks Korean in a Vietnamese/Japanese room should be able to say so and
+              be understood; the room was configured by whoever booked it, before they knew who
+              would turn up.
+
+              That rule used to live four levels into the settings menu ("Listening in" → "All
+              languages"). Those rows were removed when this picker replaced them and the submenus
+              were left behind — unreachable, because nothing navigated to them any more. The rule
+              is worth keeping, so it moved here rather than being deleted with the dead code. */}
+          {otherLanguages.length > 0 ? (
             <>
               <div className="my-1 h-[1px] bg-border" />
-              <LanguageColumn
-                title="I hear"
-                hint="What everyone else is translated into, for you."
-                options={availableListenLanguages}
-                selected={listenLanguage}
-                onSelect={(language) => {
-                  onChangeListenLanguage(language);
-                  setOpen(false);
-                }}
-              />
+              {otherLanguagesVisible ? (
+                <LanguageColumn
+                  title="Other languages"
+                  hint="Not offered by this room, but still translated for you."
+                  options={otherLanguages}
+                  selected={choice.mode === "unset" ? undefined : shownLanguage}
+                  onSelect={pick}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowOtherLanguages(true)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                >
+                  <CaretRight className="h-3 w-3" weight="bold" />
+                  <span>Another language</span>
+                </button>
+              )}
             </>
-          ) : (
-            <>
-              <div className="my-1 h-[1px] bg-border" />
-              <button
-                type="button"
-                onClick={() => setShowSeparateHear(true)}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
-              >
-                <CaretRight className="h-3 w-3" weight="bold" />
-                <span>Hear a different language</span>
-              </button>
-            </>
-          )}
+          ) : null}
         </div>
       ) : null}
     </div>

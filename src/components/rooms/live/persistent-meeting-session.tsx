@@ -2160,7 +2160,12 @@ export function PersistentMeetingSession({
   useEffect(() => {
     if (
       !shouldAutoStartRecording({
-        isHost,
+        // isRoomHost, not isHost. Anyone may now press the button, but exactly ONE client
+        // should start a recording nobody asked for, and the room's own host is the
+        // unambiguous choice. On isHost this also fired for every workspace Owner/Admin who
+        // joined — each one racing the others into "Recording is already in progress", and,
+        // before the server was widened, into an unprompted 403 toast on every join.
+        isHost: isRoomHost,
         isConnected: Boolean(meetingSession?.token) && !isMeetingJoining,
         isRecording,
         hasAttempted: autoRecordAttemptedRef.current,
@@ -2178,7 +2183,7 @@ export function PersistentMeetingSession({
     // setRecordingMutation is a fresh object on every render, so depending on it would re-run
     // this effect forever. The ref is what makes it run once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, meetingSession?.token, isMeetingJoining, isRecording]);
+  }, [isRoomHost, meetingSession?.token, isMeetingJoining, isRecording]);
 
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
@@ -2608,9 +2613,15 @@ export function PersistentMeetingSession({
                       isHost ? handleToggleMuteOnEntry : undefined
                     }
                     onMuteAll={isHost ? handleMuteAll : undefined}
-                    onToggleRecording={
-                      isHost ? handleToggleRecording : undefined
-                    }
+                    // Not gated on isHost, unlike the three host controls above it.
+                    //
+                    // Recording belongs to the room rather than to whoever booked it: the person
+                    // who needs the transcript timestamped is usually not the person who created
+                    // the meeting. MeetingRoomService.SetRecordingAsync accepts any participant
+                    // (IsInMeetingAsync), and every participant is told the moment it starts or
+                    // stops by the RecordingStateChanged toast above — that notice, not the
+                    // permission check, is what makes this safe to open up.
+                    onToggleRecording={handleToggleRecording}
                   />
                 </div>
                 <div data-meeting-exit-control className="shrink-0">

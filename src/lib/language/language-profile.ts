@@ -114,13 +114,26 @@ export function suggestLanguageProfile(
         ? "locale"
         : "room";
 
-  // Listen is NOT guessed from the locale. What you speak and what you want to hear are
-  // different questions, and a locale answers only the first — defaulting both to Vietnamese
-  // for a Vietnamese speaker would turn translation off without being asked.
-  const listen =
-    firstAvailable([settingsListen, roomListen], available) ??
-    firstAvailable(available.filter((code) => normalizeLanguage(code) !== speak), available) ??
-    speak;
+  // Listen follows speak unless this user has said otherwise ON PURPOSE.
+  //
+  // This used to end with "pick anything BUT their speak language", on the reasoning that
+  // "defaulting both to Vietnamese for a Vietnamese speaker would turn translation off without
+  // being asked". That reasoning reads listen==speak as "no translation", which is only true
+  // between two people who share a language: a Vietnamese speaker whose listen language is
+  // Vietnamese still has everyone ELSE translated into Vietnamese for them. Nothing is turned
+  // off; that is the product working.
+  //
+  // What it actually did was manufacture a split — silently, on join, before anybody touched a
+  // control — for every user with no stored listen preference. That is the third of three places
+  // that produced a pair nobody chose (the other two: the room default in
+  // participant-language-preference.ts, and the two-question join modal), and it is the one that
+  // fired without any UI at all. A suggestion is allowed to guess; it is not allowed to guess a
+  // configuration the pickers can no longer express.
+  //
+  // `roomListen` is deliberately NOT consulted any more, for the same reason: it is a property of
+  // the room, not of this person. Only `settingsListen` — which is written by their own confirmed
+  // pick — can still separate the two.
+  const listen = firstAvailable([settingsListen], available) ?? speak;
 
   return { speak, listen, source };
 }

@@ -72,22 +72,36 @@ test("a suggestion the room does not offer is not made", () => {
   assert.equal(suggestion.source, "room");
 });
 
-test("listen is not guessed from the locale", () => {
-  // Speaking Vietnamese does not mean wanting to hear Vietnamese — defaulting both to the
-  // locale would silently turn translation off.
+test("the room's listen default does not split a suggestion", () => {
+  // The old rule preferred `roomListen` over the person's own language, so a Vietnamese speaker
+  // joining an en/vi room was silently put on speak=vi / hear=en. That is a pair they never
+  // chose, and — once one-language-per-person shipped — one no picker can any longer express.
+  // The room's default is a property of the room, not of this person.
   const suggestion = suggestLanguageProfile({
     locales: ["vi-VN"],
     roomListen: "en",
     available,
   });
   assert.equal(suggestion.speak, "vi");
-  assert.equal(suggestion.listen, "en");
+  assert.equal(suggestion.listen, "vi");
 });
 
-test("with nothing to hear specified, listen differs from speak", () => {
+test("with nothing said about hearing, listen follows speak", () => {
   const suggestion = suggestLanguageProfile({ locales: ["vi"], available: ["vi", "en"] });
   assert.equal(suggestion.speak, "vi");
-  assert.notEqual(suggestion.listen, "vi");
+  assert.equal(suggestion.listen, "vi");
+});
+
+test("a listen language the user confirmed themselves still survives", () => {
+  // The escape hatch that remains: somebody who speaks Vietnamese but follows English better
+  // has that on file in their own account settings, and a suggestion must not overwrite it.
+  const suggestion = suggestLanguageProfile({
+    settingsSpeak: "vi",
+    settingsListen: "en",
+    available,
+  });
+  assert.equal(suggestion.speak, "vi");
+  assert.equal(suggestion.listen, "en");
 });
 
 test("most chosen breaks ties by recency", () => {
