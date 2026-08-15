@@ -79,6 +79,7 @@ export function MeetingControlBar({
   voicePreference,
   voiceCatalog,
   voiceCloneEnabled,
+  voiceCloneHasAudience = false,
   voiceEnabled,
   handRaised,
   isLocked,
@@ -140,6 +141,10 @@ export function MeetingControlBar({
   voiceCatalog?: VoiceOptionDto[];
   /** Whether THIS participant has consented to have their own voice cloned for dubbing. Omit to hide the toggle. */
   voiceCloneEnabled?: boolean;
+  /** Whether anybody in the room is listening in a language other than this participant's
+   *  speak language. False means no route out of them exists, so consent changes nothing —
+   *  see lib/meeting/dub-audience.ts. */
+  voiceCloneHasAudience?: boolean;
   /** false = this listener wants transcript only, no AI/original audio played. Omit to hide the toggle. */
   voiceEnabled?: boolean;
   /** Whether THIS participant's hand is currently raised. Omit (or omit onToggleRaiseHand) to hide the control. */
@@ -495,7 +500,11 @@ export function MeetingControlBar({
                     />
                   ) : null}
                   {onChangeVoiceCloneConsent ? (
-                    <VoiceCloneRow enabled={Boolean(voiceCloneEnabled)} onToggle={onChangeVoiceCloneConsent} />
+                    <VoiceCloneRow
+                      enabled={Boolean(voiceCloneEnabled)}
+                      hasAudience={voiceCloneHasAudience}
+                      onToggle={onChangeVoiceCloneConsent}
+                    />
                   ) : null}
                   <div className="my-1 h-[1px] bg-surface-3" />
                   <SettingsRow
@@ -751,9 +760,11 @@ function HostControlRow({
 
 function VoiceCloneRow({
   enabled,
+  hasAudience,
   onToggle,
 }: {
   enabled: boolean;
+  hasAudience: boolean;
   onToggle: (next: boolean) => void;
 }) {
   const [showConsentDialog, setShowConsentDialog] = useState(false);
@@ -766,11 +777,30 @@ function VoiceCloneRow({
           Voice decides whether the dub is spoken at all, Voice Clone decides whose voice
           speaks it. Saying "Default voice" / "My voice" answers the question people were
           actually asking of this row. */}
+      {/* "My voice" is a promise, and in one very common room shape it cannot be kept.
+          Routes are generated per (speaker, listener) pair and only where the languages
+          DIFFER, so a participant nobody is listening to in another language has no outgoing
+          route at all: nothing they say is translated, so there is no dub for a cloned voice
+          to appear in. Production meeting 01a003d5 had exactly one route ever — 0002 -> 0001 —
+          and 0001 reported "đầu bên kia vẫn nghe giọng gốc của tôi" while this row read
+          "My voice" with the fingerprint filled.
+
+          Nothing was broken; the setting was saved and honoured and irrelevant. But a switch
+          that reports itself on while having no effect sends people to look for a bug in the
+          one place there isn't one. The AI side already draws this distinction — base_worker
+          reports `no_route_for_speaker` rather than `not_opted_in` for exactly this case — and
+          this is the same fact told to the person it is about. */}
       <SettingsRow
         label="Voice Clone"
-        icon={<Fingerprint className="h-4 w-4" weight={enabled ? "fill" : "regular"} />}
-        active={enabled}
-        value={enabled ? "My voice" : "Default voice"}
+        icon={<Fingerprint className="h-4 w-4" weight={enabled && hasAudience ? "fill" : "regular"} />}
+        active={enabled && hasAudience}
+        value={
+          !enabled
+            ? "Default voice"
+            : hasAudience
+              ? "My voice"
+              : "My voice · nobody to dub for"
+        }
         onClick={() => {
           if (enabled) {
             onToggle(false);
