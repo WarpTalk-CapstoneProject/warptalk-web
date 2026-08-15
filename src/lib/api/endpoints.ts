@@ -210,6 +210,13 @@ export const API = {
     base: "/admin/meetings",
     counts: "/admin/meetings/counts",
   },
+  /**
+   * The platform's own vitals, read back out of the metrics store. Query-only: nothing behind
+   * this path can silence an alert, restart a container or write a sample.
+   */
+  adminPlatformHealth: {
+    base: "/admin/platform-health",
+  },
   adminSubscriptions: {
     base: "/admin/subscriptions",
     summary: "/admin/subscriptions/summary",

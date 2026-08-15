@@ -43,6 +43,7 @@ import {
   GearSix,
   Gauge,
   Globe,
+  Heartbeat,
   House,
   Keyboard,
   MagnifyingGlass,
@@ -358,6 +359,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         section: "Operations",
         items: [
           { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
+          { icon: Heartbeat, label: "System health", href: "/admin/health" },
           { icon: Archive, label: "Audit log", href: "/admin/audit" },
           { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
         ],
