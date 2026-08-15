@@ -60,6 +60,7 @@ import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
+import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
@@ -740,6 +741,15 @@ export function PersistentMeetingSession({
   // and the participants query are in flight; isResolvedSpeakLanguage guards every place
   // that would otherwise send it onward.
   const sourceLanguage = resolveSpeakLanguage(languageSources.speak, room);
+
+  // Whether anything this participant says is actually dubbed for somebody. Routes exist per
+  // (speaker, listener) pair and only where the languages differ, so in a room where nobody
+  // listens in another language there is no route out of them and Voice Clone cannot apply.
+  // See lib/meeting/dub-audience.ts for the production case this came from.
+  const voiceCloneHasAudience = useMemo(
+    () => hasDubAudience(sourceLanguage, user?.id, participants),
+    [sourceLanguage, user?.id, participants],
+  );
   // Listen (output) language — see the media bar's language dropdown +
   // TranslationRoomHub.SetListenLanguage. Always concrete: a listener with no language has
   // nothing to receive.
@@ -2510,6 +2520,7 @@ export function PersistentMeetingSession({
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
+                    voiceCloneHasAudience={voiceCloneHasAudience}
                     voiceEnabled={voiceEnabled}
                     handRaised={handRaised}
                     onCopyText={copyText}
