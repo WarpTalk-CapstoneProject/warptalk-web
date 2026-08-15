@@ -198,6 +198,10 @@ export const API = {
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform meeting directory (translation-room). Metadata only, read-only. */
+  /** The platform audit log. Read-only; the store is append-only. */
+  adminAuditLog: {
+    base: "/admin/audit-log",
+  },
   adminMeetings: {
     base: "/admin/meetings",
     counts: "/admin/meetings/counts",
