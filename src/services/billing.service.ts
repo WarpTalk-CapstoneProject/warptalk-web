@@ -14,6 +14,7 @@ import type {
   PlanMutationDto,
   CheckoutSessionDto,
   CreateCheckoutSessionRequest,
+  WorkspaceUsageByMemberDto,
 } from "@/types/billing";
 
 export const billingService = {
@@ -25,6 +26,23 @@ export const billingService = {
   ): Promise<CreditBalanceDto> => {
     const { data } = await apiClient.get<CreditBalanceDto>(
       `/credits/workspace/${workspaceId}`,
+    );
+    return data;
+  },
+
+  /**
+   * Who in this workspace has spent what (WT-413).
+   *
+   * Owner/Admin only — the endpoint carries the same RequireWorkspaceRole gate as the balance
+   * and history endpoints, so a member calling this gets a 403 rather than a redacted list.
+   */
+  getUsageByMember: async (
+    workspaceId: string,
+    params?: { from?: string; to?: string },
+  ): Promise<WorkspaceUsageByMemberDto> => {
+    const { data } = await apiClient.get<WorkspaceUsageByMemberDto>(
+      `/credits/workspace/${workspaceId}/usage-by-member`,
+      { params },
     );
     return data;
   },

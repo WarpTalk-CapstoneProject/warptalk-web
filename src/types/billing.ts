@@ -253,3 +253,26 @@ export interface WorkspaceOverageSettingDto {
   planCapCredits: number;
   overageCreditsThisCycle: number;
 }
+
+/** WT-413: one member's share of a workspace's credit spend. */
+export interface MemberCreditUsageDto {
+  userId: string;
+  creditsConsumed: number;
+  recordCount: number;
+  lastUsedAt: string | null;
+}
+
+/**
+ * Per-member credit spend for a workspace.
+ *
+ * Members arrive as ids, not names: billing has no user directory, and the dashboard already
+ * holds the workspace member list, so the join happens here rather than by coupling billing to
+ * auth for a label.
+ */
+export interface WorkspaceUsageByMemberDto {
+  workspaceId: string;
+  from: string | null;
+  to: string | null;
+  totalCreditsConsumed: number;
+  members: MemberCreditUsageDto[];
+}
