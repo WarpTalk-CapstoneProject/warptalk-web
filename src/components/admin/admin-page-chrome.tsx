@@ -27,7 +27,20 @@ import type { ReactNode } from "react";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { cn } from "@/lib/utils";
 
-/** The measure. Wider than a document, because these pages are tables about a whole platform. */
+/**
+ * The measure. Wider than a document, because these pages are tables about a whole platform.
+ *
+ * `bg-surface-1`, not `bg-canvas`. This file set out to match the workspace pages and then
+ * diverged from them on the one thing a reader notices first: `WorkspacePage` — the frame every
+ * workspace screen uses — paints `bg-surface-1`, and `canvas` is the darker ground the app
+ * reserves for the chrome AROUND a page. So the admin portal rendered its content on the colour
+ * the sidebar uses, and read as permanently greyed out beside every other screen in the product.
+ *
+ * Kept as its own component rather than switching to `WorkspacePage`: these pages are a centred
+ * 1480px measure with their own padding, and `WorkspacePage` is a full-bleed flex column whose
+ * body scrolls independently. Same ground, different shape — the ground is the part that has to
+ * agree, and `scripts/check-admin-surface-contract.mjs` is what keeps it agreeing.
+ */
 export function AdminPage({
   children,
   className,
@@ -36,7 +49,7 @@ export function AdminPage({
   className?: string;
 }) {
   return (
-    <main className={cn("min-h-full bg-canvas text-ink", className)}>
+    <main className={cn("min-h-full bg-surface-1 text-ink", className)}>
       <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">{children}</div>
     </main>
   );

@@ -8,8 +8,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isSystemAdmin = useIsSystemAdmin();
 
   if (!isSystemAdmin) {
+    // Same ground as every other admin surface. The panel is told apart by its border and
+    // shadow, not by sitting on a darker field — which is how the rest of the product raises a
+    // card.
     return (
-      <div className="grid min-h-full place-items-center bg-canvas px-6 py-12">
+      <div className="grid min-h-full place-items-center bg-surface-1 px-6 py-12">
         <div className="max-w-md rounded-2xl border border-hairline bg-surface-1 p-8 text-center shadow-linear">
           <span className="mx-auto grid size-12 place-items-center rounded-xl bg-destructive/10 text-destructive">
             <ShieldWarning size={24} weight="duotone" />
