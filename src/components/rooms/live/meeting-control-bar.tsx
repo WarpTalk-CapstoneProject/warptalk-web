@@ -529,29 +529,16 @@ export function MeetingControlBar({
                     onClick={() => setSettingsSection("layout")}
                     hasSubmenu
                   />
-                  {onChangeListenLanguage && availableListenLanguages && availableListenLanguages.length > 1 ? (
-                    <SettingsRow
-                      label="Listening in"
-                      icon={<Translate className="h-4 w-4" />}
-                      value={getLanguageName(listenLanguage)}
-                      onClick={() => setSettingsSection("listenLanguage")}
-                      hasSubmenu
-                    />
-                  ) : null}
-                  {onChangeSpeakLanguage && availableSpeakLanguages && availableSpeakLanguages.length > 1 ? (
-                    <SettingsRow
-                      label="Speaking"
-                      icon={<Microphone className="h-4 w-4" />}
-                      value={speakLanguage && speakLanguage !== "auto" ? getLanguageName(speakLanguage) : "Auto-detect"}
-                      onClick={() => setSettingsSection("speakLanguage")}
-                      hasSubmenu
-                    />
-                  ) : null}
-                  {/* One row for one decision. This was "Voice" plus a separate "Voice Clone"
-                      toggle, which is the plumbing (three switches across two services) rather
-                      than the question — whose voice the dub is spoken in. The value now names
-                      the voice actually in use, because nothing in the meeting told anyone that,
-                      and "I hear the default" was indistinguishable from "cloning is broken". */}
+                  {/* "Listening in" and "Speaking" used to live here as two rows, four levels
+                      into a menu. The bar picker was built to replace them — its own comment says
+                      so: "NOT four levels into the settings menu, which is where they were and why
+                      'translation is broken' was the conclusion every time somebody had not set
+                      them." The move was made and the old rows were left behind.
+
+                      Two places to set one thing is the defect this whole change is about. The
+                      bar picker is always rendered whenever these handlers exist, so nothing is
+                      lost by removing the copy — including the submenus below, which only these
+                      rows could reach. */}
                   {onChangeVoiceEnabled || onChangeVoiceCloneConsent
                     || (onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0) ? (
                     <SettingsRow

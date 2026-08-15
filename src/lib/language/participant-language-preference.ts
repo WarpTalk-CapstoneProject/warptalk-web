@@ -108,11 +108,31 @@ export function resolveRoomDefaultListenLanguage(
 export function resolveListenLanguage(
   sources: MeetingLanguageSources,
   room?: RoomLanguageDefaults | null,
+  /**
+   * The speak language already resolved for this same participant.
+   *
+   * Optional so every existing caller keeps working, but passing it is what makes the default a
+   * SINGLE language rather than a split — see below.
+   */
+  resolvedSpeakLanguage?: string | null,
 ): string {
-  return (
-    firstChoice(sources.pick, sources.saved, sources.participant) ??
-    resolveRoomDefaultListenLanguage(room)
-  );
+  const chosen = firstChoice(sources.pick, sources.saved, sources.participant);
+  if (chosen) return chosen;
+
+  // Nothing was chosen, so this is a DEFAULT — and a default must not manufacture a split.
+  //
+  // This used to fall straight through to the room's first non-source target. A participant who
+  // had expressed nothing therefore got speak=vi / hear=en before touching a control, which is a
+  // configuration they never asked for and, once "one language per person" shipped, the reason
+  // nobody ever saw it: the picker reads a mismatched pair as a deliberate split and opens the
+  // two-column form for it. The merged control was live and invisible.
+  //
+  // The room's target list still decides what the picker OFFERS. What it must not do is silently
+  // put somebody in a state where they hear a language they did not pick.
+  const speaking = candidate(resolvedSpeakLanguage);
+  if (speaking) return speaking;
+
+  return resolveRoomDefaultListenLanguage(room);
 }
 
 /**
