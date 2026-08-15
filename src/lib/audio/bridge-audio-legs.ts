@@ -31,10 +31,6 @@ export interface BridgeLegHandles {
   stop: () => void;
 }
 
-interface RoutableAudio extends HTMLAudioElement {
-  setSinkId?: (sinkId: string) => Promise<void>;
-}
-
 /**
  * Sends `track` to a specific output device instead of the default one.
  *
@@ -45,10 +41,12 @@ export async function playTrackToDevice(
   track: MediaStreamTrack,
   outputDeviceId: string,
 ): Promise<HTMLAudioElement> {
-  const element = new Audio() as RoutableAudio;
+  const element = new Audio();
   element.srcObject = new MediaStream([track]);
   element.autoplay = true;
 
+  // Typed in lib.dom, but only actually implemented in Chromium — and the runtime is what
+  // decides whether this meeting can be bridged at all.
   if (typeof element.setSinkId !== "function") {
     throw new Error(
       "This browser cannot choose an audio output device, so the meeting cannot be bridged.",
