@@ -217,6 +217,11 @@ export const API = {
   adminPlatformHealth: {
     base: "/admin/platform-health",
   },
+  /** Product feedback, aggregated. Read-only; comments carry no user id. */
+  adminFeedback: {
+    summary: "/admin/feedback/summary",
+    comments: "/admin/feedback/comments",
+  },
   adminSubscriptions: {
     base: "/admin/subscriptions",
     summary: "/admin/subscriptions/summary",

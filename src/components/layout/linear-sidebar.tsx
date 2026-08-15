@@ -51,6 +51,7 @@ import {
   Plus,
   Sliders,
   SquaresFour,
+  Star,
   User,
   Users,
   Warning,
@@ -360,6 +361,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
           { icon: Heartbeat, label: "System health", href: "/admin/health" },
+          { icon: Star, label: "Feedback", href: "/admin/feedback" },
           { icon: Archive, label: "Audit log", href: "/admin/audit" },
           { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
         ],
