@@ -13,10 +13,16 @@
  *   2. What goes over the wire is `code` (bare ISO-639-1) or `locale` (tag), never `name`.
  *   3. A picker declares WHICH languages it offers with a scope, not by re-listing them.
  *
- * The rows mirror `platform.supported_languages` (see
- * warptalk-infrastructure/scripts/seed-data.sh). Keep them in step: a language seeded there
- * but missing here renders as a raw code, and one listed here but not seeded there is
- * offered to users the backend will reject.
+ * The rows mirror `translation_room.supported_languages` — NOT `platform.supported_languages`,
+ * which is what seed-data.sh still writes and what an earlier version of this comment named.
+ * Migration 036 made the translation_room table the authority for room language validation and
+ * dropped the cross-schema view, so the two have been free to diverge ever since. Keep them in
+ * step: a language present there but missing here renders as a raw code, and one listed here but
+ * absent there is offered to users the backend will reject.
+ *
+ * That drift is now checked rather than asked for. `./catalog-drift` compares this list against
+ * the live catalog, the admin Configuration screen shows the result, and its tests fail if a
+ * meeting language is added here without a matching row.
  */
 
 /**
