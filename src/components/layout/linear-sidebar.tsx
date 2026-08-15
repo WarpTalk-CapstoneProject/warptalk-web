@@ -348,7 +348,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       },
       {
         section: "Revenue",
-        items: [{ icon: CreditCard, label: "Billing ledger", href: "/admin/billing" }],
+        items: [
+          { icon: Gauge, label: "Subscriptions", href: "/admin/subscriptions" },
+          { icon: CreditCard, label: "Billing ledger", href: "/admin/billing" },
+        ],
       },
       {
         section: "Configuration",
