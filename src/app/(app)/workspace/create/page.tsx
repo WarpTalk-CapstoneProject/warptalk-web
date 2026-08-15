@@ -16,6 +16,7 @@ import {
   isPublicEmailDomain,
   slugPreviewFromName,
 } from "@/lib/workspace/email-domain";
+import { buildCreateWorkspacePayload } from "@/lib/workspace/create-workspace-payload";
 import { useCreateWorkspace, useSelectWorkspace } from "@/hooks/use-workspace";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { useAuthStore } from "@/stores/auth-store";
@@ -104,12 +105,30 @@ export default function CreateWorkspaceDemoPage() {
   }, [mounted, isAuthenticated, router]);
 
   async function onSubmit(values: CreateWorkspaceFormData) {
-    if (!emailDomain) {
+    // WT-418, and the second half of it. The rule that a public-domain account may not found a
+    // workspace was relaxed in three places and missed in two — both here.
+    //
+    // This guard read `emailDomain`, which is getDomainFromEmail and returns null for a public
+    // domain BY DESIGN. So every Gmail user was turned away with "A valid business email is
+    // required" before a request was ever sent — behind a button that had already been fixed to
+    // enable. It enabled, and then the form refused.
+    //
+    // And the payload below asked to verify the account's own domain unconditionally, which for
+    // gmail.com is the one thing the server must refuse. Two dead ends in a row.
+    //
+    // Both decisions now live in lib/workspace/create-workspace-payload.ts, so the next person
+    // changing this rule changes one thing.
+    const payload = buildCreateWorkspacePayload(user?.email, {
+      name: values.name,
+      logoUrl: values.logoUrl,
+    });
+
+    if (!payload) {
       setServerError({
         kind: "account",
         message:
           accountIssue ??
-          "A valid business email is required before creating a workspace.",
+          "A valid email address is required before creating a workspace.",
       });
       return;
     }
@@ -117,12 +136,7 @@ export default function CreateWorkspaceDemoPage() {
     setServerError(null);
 
     try {
-      const workspace = await createWorkspace.mutateAsync({
-        name: values.name.trim(),
-        logoUrl: values.logoUrl?.trim() || null,
-        verifiedDomains: [emailDomain],
-        requireVerifiedDomainForInternal: true,
-      });
+      const workspace = await createWorkspace.mutateAsync(payload);
 
       const selection = await selectWorkspace.mutateAsync(workspace.id);
       applySelectedWorkspace(selection, setActiveWorkspace);
@@ -217,14 +231,21 @@ export default function CreateWorkspaceDemoPage() {
                 {slugPreview || "workspace-name"}
               </span>
             </div>
-            {emailDomain && (
+            {/* Say which of the two workspaces this will be, rather than saying nothing for one
+                of them. A personal-domain workspace is not a degraded corporate one — it simply
+                has no domain to claim, and claiming is a separate permission from founding. */}
+            {emailDomain ? (
               <p className="text-[11px] text-ink-muted mt-1">
                 Workspace will be verified for{" "}
                 <span className="font-semibold text-foreground">
                   {emailDomain}
                 </span>
               </p>
-            )}
+            ) : isPublicDomain ? (
+              <p className="text-[11px] text-ink-muted mt-1">
+                Teammates join by invitation — a personal email domain cannot be verified.
+              </p>
+            ) : null}
           </div>
 
           {/* Submit Button */}
