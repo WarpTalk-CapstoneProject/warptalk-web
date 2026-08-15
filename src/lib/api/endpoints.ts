@@ -199,6 +199,10 @@ export const API = {
   },
   /** Platform meeting directory (translation-room). Metadata only, read-only. */
   /** The platform audit log. Read-only; the store is append-only. */
+  /** Platform announcements. Read-only in the UI; sending is its own release. */
+  adminAnnouncements: {
+    base: "/admin/notifications",
+  },
   adminAuditLog: {
     base: "/admin/audit-log",
   },

@@ -359,6 +359,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
           { icon: Archive, label: "Audit log", href: "/admin/audit" },
+          { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
         ],
       },
       {
