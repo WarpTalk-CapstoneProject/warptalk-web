@@ -74,6 +74,7 @@ import type {
   TranslationRoomStateDto,
   TranslationTextDto,
   VoiceOptionDto,
+  VoiceCloneStateDto,
 } from "@/types/realtime";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
@@ -704,7 +705,22 @@ export function PersistentMeetingSession({
   // session storage for this room: direct navigation to /room/{id}, a reload, a second tab.
   // Without it the client had nothing but the room default to fall back on, and a room
   // created as [en, vi] (WT-297) then handed everyone a listen language of "vi".
+  // WT-420: what the clone pipeline is doing to this participant's microphone. Nothing in a
+  // meeting reported this before — the worker logged it, and a whole test session concluded
+  // cloning was broken while it was logging score 1.0.
+  const [cloneCaptureState, setCloneCaptureState] = useState<VoiceCloneStateDto | null>(null);
+  // Read inside the hub callback, which is registered once and would otherwise close over the
+  // user id from the first render.
+  const currentUserIdRef = useRef<string | undefined>(undefined);
+
   const currentUserId = user?.id;
+
+  // In an effect, not during render: assigning a ref while rendering is a tearing hazard, and
+  // this one exists purely so the hub callback below — registered once — does not close over the
+  // user id from the first render.
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
   const myParticipantRecord = useMemo(
     () =>
       currentUserId
@@ -1582,6 +1598,14 @@ export function PersistentMeetingSession({
         updateParticipantSpeakLanguage(userId, speakLanguage);
       },
     );
+
+    // WT-420. Broadcast to the whole room because the payload names its own speaker and the
+    // gateway has no userId -> connection map; only the state about YOU is kept, because the only
+    // person who can act on "your microphone is too quiet" is you.
+    connection.on("VoiceCloneStateChanged", (state: VoiceCloneStateDto) => {
+      if (!state?.speakerId || state.speakerId !== currentUserIdRef.current) return;
+      setCloneCaptureState(state);
+    });
 
     // WT-04
     connection.on("RoomLockChanged", (locked: boolean) => {
@@ -2520,7 +2544,8 @@ export function PersistentMeetingSession({
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
-                    voiceCloneHasAudience={voiceCloneHasAudience}
+                    cloneCapture={cloneCaptureState}
+          voiceCloneHasAudience={voiceCloneHasAudience}
                     voiceEnabled={voiceEnabled}
                     handRaised={handRaised}
                     onCopyText={copyText}

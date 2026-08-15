@@ -11,6 +11,7 @@ import {
   describeLanguageChoice,
 } from "@/lib/meeting/language-choice";
 import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
+import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { VoiceOptionDto } from "@/types/realtime";
+import type { VoiceCloneStateDto, VoiceOptionDto } from "@/types/realtime";
 
 import { ALLOWED_REACTION_EMOJIS } from "@/constants/realtime";
 export { ALLOWED_REACTION_EMOJIS };
@@ -88,6 +89,7 @@ export function MeetingControlBar({
   voiceCatalog,
   voiceCloneEnabled,
   voiceCloneHasAudience = false,
+  cloneCapture,
   voiceEnabled,
   handRaised,
   isLocked,
@@ -156,6 +158,8 @@ export function MeetingControlBar({
    *  speak language. False means no route out of them exists, so consent changes nothing —
    *  see lib/meeting/dub-audience.ts. */
   voiceCloneHasAudience?: boolean;
+  /** WT-420: what the clone pipeline is doing to THIS participant's microphone, or null. */
+  cloneCapture?: VoiceCloneStateDto | null;
   /** false = this listener wants transcript only, no AI/original audio played. Omit to hide the toggle. */
   voiceEnabled?: boolean;
   /** Whether THIS participant's hand is currently raised. Omit (or omit onToggleRaiseHand) to hide the control. */
@@ -232,6 +236,9 @@ export function MeetingControlBar({
     // Back to the top level, so reopening does not resume a submenu nobody asked for.
     setSettingsSection("root");
   });
+
+  // WT-420: the live capture state, in the same panel as the choice it explains.
+  const cloneStatus = describeCloneCapture(cloneCapture);
 
   // What listeners will actually hear, derived in one place — see lib/meeting/voice-selection.ts.
   const voiceSelection = describeVoiceSelection({
@@ -735,6 +742,43 @@ export function MeetingControlBar({
                   <p className="px-2.5 pb-2 pt-1 text-[11px] leading-snug text-ink-muted">
                     {voiceSelection.detail}
                   </p>
+
+                  {/* WT-420. The capture itself, live. Everything below was already known to the
+                      TTS worker and written only to a log — which is why an entire test session
+                      concluded cloning was broken while the worker scored the clip 1.0. */}
+                  {cloneStatus.tone !== "idle" || cloneStatus.title ? (
+                    <div className="mx-2.5 mb-2 rounded-lg bg-surface-2 px-2.5 py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-[11px] font-medium text-ink">{cloneStatus.title}</p>
+                        {cloneStatus.quality ? (
+                          <span
+                            className={`text-[10px] uppercase tracking-wide ${
+                              cloneStatus.quality === "good"
+                                ? "text-emerald-600"
+                                : cloneStatus.quality === "fair"
+                                  ? "text-amber-600"
+                                  : "text-ink-muted"
+                            }`}
+                          >
+                            {cloneStatus.quality}
+                          </span>
+                        ) : null}
+                      </div>
+                      {cloneStatus.progress !== null ? (
+                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3">
+                          <div
+                            className={`h-full rounded-full transition-[width] duration-500 ${
+                              cloneStatus.tone === "done" ? "bg-emerald-500" : "bg-primary"
+                            }`}
+                            style={{ width: `${Math.round(cloneStatus.progress * 100)}%` }}
+                          />
+                        </div>
+                      ) : null}
+                      <p className="mt-1 text-[11px] leading-snug text-ink-muted">
+                        {cloneStatus.detail}
+                      </p>
+                    </div>
+                  ) : null}
                 </>
               ) : null}
             </motion.div>
