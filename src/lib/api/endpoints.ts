@@ -197,6 +197,11 @@ export const API = {
     rateCard: "/usages/rate-card",
     pricingConfig: "/usages/pricing-config",
   },
+  /** Platform meeting directory (translation-room). Metadata only, read-only. */
+  adminMeetings: {
+    base: "/admin/meetings",
+    counts: "/admin/meetings/counts",
+  },
   adminSubscriptions: {
     base: "/admin/subscriptions",
     summary: "/admin/subscriptions/summary",
