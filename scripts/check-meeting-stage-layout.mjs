@@ -137,9 +137,13 @@ assert.match(
   /subtitlesEnabled=\{subtitlesEnabled\}[\s\S]*onToggleSubtitles=\{\(\) =>[\s\S]*setSubtitlesEnabled/,
   "the room page must wire subtitle state into the control bar",
 );
+// The toggle must exist and carry a label for both states. WHAT the label says is pinned by
+// check-caption-toggle-honesty.mjs instead (WT-408) — this check is about the control being
+// present and accessible, and spelling the words out here made it fail for a wording change
+// that was the point of that ticket.
 assert.match(
   meetingControlBar,
-  /label=\{subtitlesEnabled \? "Hide subtitles" : "Show subtitles"\}[\s\S]*<ClosedCaptioning/,
+  /label=\{\s*subtitlesEnabled[\s\S]{0,200}?\}[\s\S]{0,200}?<ClosedCaptioning/,
   "the control bar must expose an accessible subtitle toggle",
 );
 assert.doesNotMatch(
