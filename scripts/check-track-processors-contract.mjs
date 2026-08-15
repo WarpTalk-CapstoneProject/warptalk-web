@@ -31,7 +31,27 @@ assert.match(hook, /await localAudioTrack\.setProcessor\(krisp\b/);
 assert.match(hook, /onNoiseSuppressionError\?\.\(error\)/);
 assert.match(roomPage, /onNoiseSuppressionError=\{handleNoiseSuppressionError\}/);
 assert.match(roomPage, /setNoiseSuppressionEnabled\(false\)/);
-assert.match(roomPage, /Browser noise suppression remains enabled/);
+// The GUARANTEE, not the sentence. WT-427 split one message into three, because the three ways
+// Krisp fails are different problems — and for an unentitled LiveKit project the old copy was
+// actively false, telling the user to reload when reloading cannot help.
+//
+// What must still hold is that the handler reports through the classifier rather than inventing
+// its own wording, and that every branch of the classifier says the microphone is still filtered.
+// The branches themselves are pinned in lib/meeting/__tests__/noise-suppression-failure.test.ts.
+assert.match(
+  roomPage,
+  /handleNoiseSuppressionError[\s\S]{0,400}?describeNoiseSuppressionFailure\(error\)/,
+  "the failure must be classified, not collapsed into one message for three different causes",
+);
+const failureClassifier = await readFile(
+  new URL("../src/lib/meeting/noise-suppression-failure.ts", import.meta.url),
+  "utf8",
+);
+assert.match(
+  failureClassifier,
+  /browser's own noise suppression/,
+  "every failure message must say the microphone is still filtered — this is a downgrade, not an outage",
+);
 assert.doesNotMatch(
   roomPage,
   /handleNoiseSuppressionError[\s\S]*?writeTrackEffectsPreferences\(\{\s*noiseSuppressionEnabled:\s*false\s*\}\)/,

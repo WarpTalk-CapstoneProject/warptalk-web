@@ -138,6 +138,7 @@ import {
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
+import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 
@@ -311,12 +312,21 @@ export function PersistentMeetingSession({
     });
   }
 
-  const handleNoiseSuppressionError = useCallback(() => {
+  /**
+   * Enhanced noise suppression did not start. Put the toggle back down and say WHY. WT-427.
+   *
+   * This used to take no argument, so useTrackProcessors' careful distinction between "threw
+   * while attaching" and "attached but refused to enable" was discarded one function later and
+   * everybody got the same line: "enhanced suppression will retry after reload."
+   *
+   * For an unentitled LiveKit project that sentence is false — reloading cannot change it — and a
+   * user told to reload will reload, repeatedly, and report the feature as broken. Which is the
+   * report we got.
+   */
+  const handleNoiseSuppressionError = useCallback((error: unknown) => {
     setNoiseSuppressionEnabled(false);
-    toast.error("Enhanced noise suppression is unavailable.", {
-      description:
-        "Browser noise suppression remains enabled; enhanced suppression will retry after reload.",
-    });
+    const failure = describeNoiseSuppressionFailure(error);
+    toast.error(failure.title, { description: failure.detail });
   }, []);
 
   function handleToggleBackgroundBlur() {
