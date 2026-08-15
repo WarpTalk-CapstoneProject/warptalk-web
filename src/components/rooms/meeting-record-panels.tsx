@@ -15,6 +15,11 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/api/errors";
+import {
+  ARTIFACT_WITHHELD_FALLBACK,
+  isArtifactWithheld,
+} from "@/lib/meeting/artifact-denial";
 import {
   describeSummaryAbsence,
   summaryAbsenceMessage,
@@ -109,9 +114,14 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
       openArtifactDownload(data);
       if (artifact.consentRequired) onConsentGranted?.();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not download this file.",
-      );
+      // A host-only artifact is withheld, not broken — the same distinction the history preview
+      // and the Summary tab already draw. `error.message` was also the wrong source: on an axios
+      // failure it is "Request failed with status code 403", never the server's own sentence.
+      if (isArtifactWithheld(error)) {
+        toast.info(getErrorMessage(error, ARTIFACT_WITHHELD_FALLBACK));
+        return;
+      }
+      toast.error(getErrorMessage(error, "Could not download this file."));
     } finally {
       setBusyArtifactId(null);
     }

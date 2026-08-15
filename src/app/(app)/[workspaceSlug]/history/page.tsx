@@ -9,6 +9,7 @@ import {
   Clock,
   DownloadSimple,
   FileText,
+  LockSimple,
   SpinnerGap,
   Translate,
   Users,
@@ -30,6 +31,7 @@ import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import { getErrorMessage } from "@/lib/api/errors";
+import { ARTIFACT_WITHHELD_FALLBACK, isArtifactWithheld } from "@/lib/meeting/artifact-denial";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
 
@@ -90,6 +92,18 @@ export default function HistoryPage() {
 
       setPreview({ kind: "error", title, message: "This output has no readable content stored." });
     } catch (error) {
+      // A refusal is not a failure. Room artifacts default to HOST_ONLY, so the most common way
+      // to land here is a participant opening the summary of a meeting they attended before the
+      // host shared it — and "Unauthorized to download this artifact." reported that as if the
+      // product were broken. See lib/meeting/artifact-denial.ts.
+      if (isArtifactWithheld(error)) {
+        setPreview({
+          kind: "withheld",
+          title,
+          message: getErrorMessage(error, ARTIFACT_WITHHELD_FALLBACK),
+        });
+        return;
+      }
       setPreview({ kind: "error", title, message: getErrorMessage(error, "Could not open this output.") });
     }
   }
@@ -146,6 +160,12 @@ export default function HistoryPage() {
       openArtifactDownload(data);
       if (artifact.consentRequired) await history.refetch();
     } catch (error) {
+      // Same distinction the preview draws: a withheld output is a state, not a failure, so it
+      // gets the neutral toast and the sentence that names who can change it.
+      if (isArtifactWithheld(error)) {
+        toast.info(getErrorMessage(error, ARTIFACT_WITHHELD_FALLBACK));
+        return;
+      }
       toast.error(getErrorMessage(error, "Could not download this output."));
     } finally {
       setBusyArtifactId(null);
@@ -233,6 +253,8 @@ function HistoryRow({ room, selected, onSelect }: { room: EndedRoomHistoryItem; 
 type ArtifactPreviewState =
   | { kind: "loading"; title: string }
   | { kind: "text"; title: string; body: string }
+  /** The output exists and is fine — the host has just not shared it with this viewer. */
+  | { kind: "withheld"; title: string; message: string }
   | { kind: "error"; title: string; message: string };
 
 function MeetingDetail({ room, busyArtifactId, onDownload, onOpen, openArtifactId, preview, onClosePreview }: { room: EndedRoomHistoryItem; busyArtifactId: string | null; onDownload: (artifact: RoomHistoryArtifact) => void; onOpen: (artifact: RoomHistoryArtifact) => void; openArtifactId: string | null; preview: ArtifactPreviewState | null; onClosePreview: () => void }) {
@@ -301,6 +323,14 @@ function ArtifactPreview({ state, onClose }: { state: ArtifactPreviewState | nul
       <div className="max-h-[320px] overflow-y-auto px-3 py-2.5">
         {state.kind === "loading" ? (
           <p className="flex items-center gap-2 py-4 text-[11px] text-ink-muted"><SpinnerGap size={13} className="animate-spin" />Loading…</p>
+        ) : state.kind === "withheld" ? (
+          // Its own branch rather than reusing "error": a lock reads as a state somebody controls,
+          // where the error branch's bare sentence reads as something that went wrong. Same panel,
+          // different claim about whose problem this is.
+          <p className="flex items-start gap-2 py-4 text-[11px] leading-5 text-ink-muted">
+            <LockSimple size={13} className="mt-0.5 shrink-0" />
+            <span>{state.message}</span>
+          </p>
         ) : state.kind === "error" ? (
           <p className="py-4 text-[11px] text-ink-muted">{state.message}</p>
         ) : (

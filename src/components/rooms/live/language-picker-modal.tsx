@@ -20,11 +20,24 @@ import {
 import { LanguageLabel } from "@/components/language/language-label";
 
 /**
- * Shown once, right after joining the live room (host and participant alike) —
- * lets a participant pick their speak/listen language up front instead of relying on
- * a later dropdown pick or the "auto" fallback. Skippable: closing it (Skip, backdrop,
- * Escape) leaves speak/listen language exactly as they already were (STT auto-detect +
- * the room's default listen language), the same behavior as before this modal existed.
+ * Shown once, right after joining the live room (host and participant alike) — lets a
+ * participant name THEIR language up front instead of relying on a later dropdown pick or the
+ * "auto" fallback. Skippable: closing it (Skip, backdrop, Escape) leaves speak/listen exactly as
+ * they already were (STT auto-detect + the room's default listen language), the same behavior as
+ * before this modal existed.
+ *
+ * ONE QUESTION, NOT TWO
+ *   This asked "which language will you speak?" and "which do you want to hear?" as separate
+ *   selects, defaulted from two different sources, at the moment somebody is trying to get into
+ *   a call. It is the FIRST thing a participant sees, so it is also the main way a speak/listen
+ *   split ever got created — and once created, every downstream control inherited it.
+ *
+ *   The meeting bar's picker was merged to one language for the same reason
+ *   (lib/meeting/language-choice.ts). Leaving two questions here would have meant the product
+ *   asked for a pair on the way in and refused to show one afterwards.
+ *
+ *   `onConfirm` still takes (speak, listen) — the wire format is two fields and a split
+ *   configured elsewhere still routes — but this dialog can only ever produce a matched pair.
  */
 export function LanguagePickerModal({
   open,
@@ -38,16 +51,22 @@ export function LanguagePickerModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   availableLanguages: string[];
-  /** Pre-selected in the "speak" picker — omit/undefined leaves it on the first available option. */
+  /** Pre-selection — omit/undefined leaves it on the first available option. */
   defaultSpeakLanguage?: string;
-  /** Pre-selected in the "listen" picker. */
+  /**
+   * Only consulted when there is no speak default. It is NOT a second answer any more: the
+   * dialog writes one language to both sides, and the language a participant speaks is the
+   * better guess at who they are than the language the room happened to default them to.
+   */
   defaultListenLanguage?: string;
+  /** Always called with the same value twice — see the module comment. */
   onConfirm: (speakLanguage: string, listenLanguage: string) => void;
   onSkip: () => void;
 }) {
   const fallback = availableLanguages[0] ?? "en";
-  const [speakLanguage, setSpeakLanguage] = useState(defaultSpeakLanguage || fallback);
-  const [listenLanguage, setListenLanguage] = useState(defaultListenLanguage || fallback);
+  const [language, setLanguage] = useState(
+    defaultSpeakLanguage || defaultListenLanguage || fallback,
+  );
 
   function handleOpenChange(next: boolean) {
     if (!next) onSkip();
@@ -58,18 +77,18 @@ export function LanguagePickerModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>Choose your meeting languages</DialogTitle>
+          <DialogTitle>Choose your language</DialogTitle>
           <DialogDescription className="text-ink-subtle pt-2">
-            Pick the language you&apos;ll speak and the one you want to hear — you can change
-            either at any time from the meeting control bar. Skip to stay on automatic
-            (we detect your spoken language for you).
+            Everyone else is translated into it, and it is what your microphone is transcribed
+            as. You can change it at any time from the meeting control bar. Skip to stay on
+            automatic (we detect your spoken language for you).
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           <div className="grid gap-1.5">
-            <label className="text-[13px] font-medium text-ink">Which language will you speak?</label>
-            <Select value={speakLanguage} onValueChange={(value) => setSpeakLanguage(String(value))}>
+            <label className="text-[13px] font-medium text-ink">Which language do you use?</label>
+            <Select value={language} onValueChange={(value) => setLanguage(String(value))}>
               <SelectTrigger className="w-full">
                 <SelectValue>
                   {(value) =>
@@ -78,29 +97,9 @@ export function LanguagePickerModal({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {availableLanguages.map((language) => (
-                  <SelectItem key={language} value={language}>
-                    <LanguageLabel value={language} />
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-1.5">
-            <label className="text-[13px] font-medium text-ink">Which language do you want to hear?</label>
-            <Select value={listenLanguage} onValueChange={(value) => setListenLanguage(String(value))}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {(value) =>
-                    value ? <LanguageLabel value={String(value)} /> : "Select language"
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {availableLanguages.map((language) => (
-                  <SelectItem key={language} value={language}>
-                    <LanguageLabel value={language} />
+                {availableLanguages.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    <LanguageLabel value={option} />
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -121,7 +120,10 @@ export function LanguagePickerModal({
           </Button>
           <Button
             onClick={() => {
-              onConfirm(speakLanguage, listenLanguage);
+              // The same value twice, deliberately. Both fields still travel to the gateway —
+              // the mesh reads them independently — and writing only one is the half-applied
+              // state the merge exists to remove.
+              onConfirm(language, language);
               onOpenChange(false);
             }}
           >

@@ -32,6 +32,20 @@ export interface WorkspaceSettingsDto {
   allowedTargetLanguages: string[];
   voiceCloningEnabled: boolean;
   maxActiveRooms: number;
+  /**
+   * The most concurrent rooms this workspace's PLAN permits, whatever `maxActiveRooms` says.
+   *
+   * Meeting creation enforces the tighter of the two, so when this is lower it — not the stored
+   * setting — is the real limit. A workspace whose subscription is not active resolves to the
+   * platform default of 5, which is how a settings page reading 20 sat next to "Workspace active
+   * room limit (5) has been reached." with nothing on screen connecting them.
+   *
+   * Absent when the workspace has no entitlement snapshot yet: no plan quota is in force and the
+   * stored setting is the only rule.
+   */
+  maxActiveRoomsCeiling?: number | null;
+  /** Where the ceiling came from — "plan:enterprise", "platform_default", … */
+  maxActiveRoomsCeilingSource?: string | null;
   artifactRetentionDays: number;
   invitationExpiryDays: number;
   verifiedDomains: string[];
