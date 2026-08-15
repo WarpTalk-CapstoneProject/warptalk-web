@@ -33,10 +33,22 @@ assert.match(
   /const sourceLanguage = resolveSpeakLanguage\(languageSources\.speak, room\)/,
   "Speak language must come from resolveSpeakLanguage, not an inline fallback chain.",
 );
+// The call, not its exact argument list. What this pins is that the session resolves through the
+// shared module rather than re-deriving a chain inline; the arguments are the module's business
+// and grew a third one when the default stopped manufacturing a speak/hear split.
 assert.match(
   sessionSource,
-  /const listenLanguage = resolveListenLanguage\(languageSources\.listen, room\)/,
+  /const listenLanguage = resolveListenLanguage\(\s*languageSources\.listen,\s*room/,
   "Listen language must come from resolveListenLanguage, not an inline fallback chain.",
+);
+
+// A default must not put somebody in a language pair they never chose. That is what made the
+// merged picker invisible in v100: it reads a mismatched pair as a deliberate split, and every
+// fresh participant was mismatched by construction (speak=room source, hear=room's other target).
+assert.match(
+  sessionSource,
+  /resolveListenLanguage\([^)]*sourceLanguage/s,
+  "The listen default must fall back to the speak language, or every participant starts split.",
 );
 
 // The regression this ticket exists for: a room default that outranked the user's choice.

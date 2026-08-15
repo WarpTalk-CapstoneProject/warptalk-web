@@ -769,7 +769,11 @@ export function PersistentMeetingSession({
   // Listen (output) language — see the media bar's language dropdown +
   // TranslationRoomHub.SetListenLanguage. Always concrete: a listener with no language has
   // nothing to receive.
-  const listenLanguage = resolveListenLanguage(languageSources.listen, room);
+  // sourceLanguage passed as the third argument: with nothing chosen, a participant hears the
+  // language they speak rather than the room's other target. A default must not manufacture a
+  // split — that is what made the merged picker invisible, because it reads a mismatched pair as
+  // a deliberate choice.
+  const listenLanguage = resolveListenLanguage(languageSources.listen, room, sourceLanguage);
   const targetLanguage = listenLanguage;
 
   // Read inside the TranslationTextReceived handler below instead of closing over
