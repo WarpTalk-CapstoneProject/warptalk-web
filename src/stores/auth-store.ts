@@ -11,6 +11,7 @@ import {
   resetSessionScopedStateOnLogin,
   resetSessionScopedStateOnLogout,
 } from "@/lib/auth/session-scoped-state";
+import { revokeWithRetry } from "@/lib/auth/revoke-session";
 
 const AUTH_STORAGE_KEY = "warptalk-auth";
 
@@ -27,25 +28,28 @@ const AUTH_STORAGE_KEY = "warptalk-auth";
  * The token itself is no longer passed, because this side can no longer read
  * it: it lives in the HttpOnly `warptalk_refresh` cookie. The request carries
  * the cookie instead, and the server falls back to it when the body is empty.
- * The previous version guarded on a JS-readable refresh token being present,
- * which after that move was never true — so this had silently gone back to
- * never revoking anything.
+ * The import is dynamic to keep the axios client out of this module's import
+ * cycle (lib/api/client.ts imports this store).
  *
- * Best effort, and deliberately so. A failed revoke must never keep the user
- * signed in — the local teardown runs regardless, and the request is dispatched
- * before it. The import is dynamic to keep the axios client out of this
- * module's import cycle (lib/api/client.ts imports this store).
+ * Still asynchronous to the caller — a sign-out must never wait on the network — but no
+ * longer silent. The outcome lands in the teardown breadcrumb, so "the server still thinks
+ * this session is alive" is a readable fact afterwards rather than something that has to be
+ * reconstructed from gateway logs.
  */
 function revokeSessionOnServer(accessToken: string | null) {
   if (typeof window === "undefined") return;
 
-  void import("@/services/auth.service")
-    .then(({ authService }) => authService.logout(accessToken))
-    .catch(() => {
-      // Swallowed on purpose. The server may be unreachable, the access token
-      // may already have expired, or the token may already be revoked. None of
-      // those are reasons to leave the user looking signed in.
-    });
+  void (async () => {
+    const { authService } = await import("@/services/auth.service");
+    const outcome = await revokeWithRetry(() => authService.logout(accessToken));
+
+    if (!outcome.revoked) {
+      recordSessionTeardown(`sign-out-revoke-failed(${outcome.lastFailure})`);
+    }
+  })().catch(() => {
+    // The dynamic import itself failing — a chunk that will not load — must not become an
+    // unhandled rejection on a page that is already leaving.
+  });
 }
 
 interface AuthState {
