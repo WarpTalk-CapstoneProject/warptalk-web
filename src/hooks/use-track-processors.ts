@@ -102,6 +102,21 @@ export function useTrackProcessors({
         try {
           if (localAudioTrack.getProcessor()) await localAudioTrack.stopProcessor();
         } finally {
+          // Dropped, not kept. A stopped Krisp processor has released its WASM pipeline, and
+          // re-attaching that same instance is not something the library promises — LiveKit's own
+          // documented example constructs a fresh KrispNoiseFilter() inside every
+          // LocalTrackPublished handler.
+          //
+          // This ref was created once and never cleared: not on stop, not on a track change, not
+          // on failure. So the FIRST enable of a session could work and every later one attached a
+          // spent processor, which reports itself as not enabled — and since WT-320 this hook
+          // treats "attached but not enabled" as an error, that is a toggle that refuses to stay
+          // on for the rest of the meeting.
+          //
+          // The blur processor below already does this, and its comment says why in almost these
+          // words. The lesson was learned on the newer of the two processors and never applied
+          // back to the one that had the earlier ticket.
+          krispRef.current = null;
           await setBrowserSuppression(true);
         }
         return;
@@ -149,12 +164,19 @@ export function useTrackProcessors({
         } catch {
           // Nothing further to try; the original failure is the one worth surfacing.
         }
+        // A processor that failed to enable is spent whatever the cause. Keeping it would make
+        // the next attempt fail for a reason that has nothing to do with the original one.
+        krispRef.current = null;
         if (!cancelled) onNoiseSuppressionError?.(error);
       }
     }
     void applyNoiseProcessor();
     return () => {
       cancelled = true;
+      // The effect re-runs when the microphone track changes — muting and unmuting publishes a
+      // NEW track. A processor bound to the track that just went away cannot be attached to its
+      // replacement, so it goes with it.
+      krispRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noiseSuppressionEnabled, microphoneTrackSid, onNoiseSuppressionError]);
