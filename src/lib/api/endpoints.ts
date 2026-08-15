@@ -187,6 +187,11 @@ export const API = {
     base: "/admin/users",
     detail: (id: string) => `/admin/users/${id}`,
   },
+  /** Platform subscription directory and revenue summary (billing service). Read-only. */
+  adminSubscriptions: {
+    base: "/admin/subscriptions",
+    summary: "/admin/subscriptions/summary",
+  },
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
