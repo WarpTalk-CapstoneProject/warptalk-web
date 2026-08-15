@@ -11,7 +11,11 @@ import {
   resetSessionScopedStateOnLogin,
   resetSessionScopedStateOnLogout,
 } from "@/lib/auth/session-scoped-state";
-import { revokeWithRetry } from "@/lib/auth/revoke-session";
+import {
+  resetRevokeDedupe,
+  revokeWithRetry,
+  shouldSendRevoke,
+} from "@/lib/auth/revoke-session";
 
 const AUTH_STORAGE_KEY = "warptalk-auth";
 
@@ -38,6 +42,11 @@ const AUTH_STORAGE_KEY = "warptalk-auth";
  */
 function revokeSessionOnServer(accessToken: string | null) {
   if (typeof window === "undefined") return;
+
+  // The same session asking to be revoked twice is not two sign-outs. WT-405 round 2: a caller
+  // re-entering logout() 200ms apart produced 117 POSTs in one minute in production, all
+  // refused. See shouldSendRevoke — this bounds that at one request without hiding it.
+  if (!shouldSendRevoke(accessToken)) return;
 
   void (async () => {
     const { authService } = await import("@/services/auth.service");
@@ -91,6 +100,8 @@ export const useAuthStore = create<AuthState>()(
         // an unredeemable refresh token, a sign-out in another tab, a hard refresh — are
         // exactly the paths that leave no previous user id to compare against.
         resetSessionScopedStateOnLogin();
+        // A new session must be able to sign itself out, even seconds after the last one did.
+        resetRevokeDedupe();
         set({ user, accessToken, isAuthenticated: true });
       },
       logout: () => {
