@@ -356,7 +356,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       },
       {
         section: "Operations",
-        items: [{ icon: SquaresFour, label: "Meetings", href: "/admin/meetings" }],
+        items: [
+          { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
+          { icon: Archive, label: "Audit log", href: "/admin/audit" },
+        ],
       },
       {
         section: "Configuration",
