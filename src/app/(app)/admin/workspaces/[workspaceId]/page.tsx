@@ -289,7 +289,7 @@ export default function AdminWorkspaceDetailPage() {
     const notFound =
       (detailQuery.error as { response?: { status?: number } })?.response?.status === 404;
     return (
-      <div className="min-h-full bg-canvas px-6 py-10 text-ink">
+      <div className="min-h-full bg-surface-1 px-6 py-10 text-ink">
         <div className="mx-auto max-w-lg rounded-2xl border border-hairline bg-surface-1 p-8 text-center shadow-linear">
           <span className="mx-auto grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
             <WarningCircle size={22} weight="duotone" />
@@ -321,7 +321,10 @@ export default function AdminWorkspaceDetailPage() {
   }
 
   return (
-    <div className="min-h-full bg-canvas text-ink">
+    // Hand-rolls AdminPage's measure rather than using it — 1480px, but px-5 py-5 lg:px-7 where
+    // AdminPage says px-5 py-6 lg:px-8. Left as it is here so this release changes colour and
+    // nothing else; the divergence is worth collapsing when this page is rebuilt.
+    <div className="min-h-full bg-surface-1 text-ink">
       <div className="mx-auto w-full max-w-[1480px] px-5 py-5 lg:px-7">
         <Link
           href="/admin/workspaces"

@@ -56,6 +56,8 @@ import {
   Waveform,
   X,
   Brain,
+  Buildings,
+  ShieldCheck,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
@@ -312,6 +314,140 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     pathname.includes("/settings") ||
     pathname.includes("/advanced") ||
     pathname.includes("/payment");
+
+  /**
+   * The platform admin console gets its own chrome — a third branch beside the app and Settings.
+   *
+   * Without one, /admin inherited the app's nav wholesale: Home, Meetings, Schedules, History,
+   * Voice Profiles, Members and Documents, every one of them scoped to whichever workspace the
+   * admin happened to have open. A platform administrator is not standing *inside* a workspace,
+   * so a workspace switcher and a workspace's meetings are not merely irrelevant there — they
+   * invite the reader to act on one tenant while looking at a page about all of them.
+   *
+   * Gated on isSystemAdmin as well as the path. AdminLayout already refuses the page to everyone
+   * else, and without this condition their sidebar would advertise a console beside an
+   * "Access denied" panel.
+   *
+   * SCOPE: this lists the routes that EXIST. Users, Subscriptions, Plans, Meetings, Health,
+   * Audit and Announcements each add their own entry with the release that adds the page — a nav
+   * row pointing at a 404 is the same defect as a button whose endpoint was never routed.
+   */
+  const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
+
+  if (isAdminPage && isSystemAdmin) {
+    const adminSections: Array<{ section: string; items: NavItem[] }> = [
+      {
+        section: "Platform",
+        items: [
+          // Exact, or every /admin/* page lights this row up too: NavLink treats a non-exact item
+          // as active for anything beneath its href, and every admin page is beneath /admin.
+          { icon: Gauge, label: "Overview", href: "/admin", exact: true },
+          { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
+        ],
+      },
+      {
+        section: "Revenue",
+        items: [{ icon: CreditCard, label: "Billing ledger", href: "/admin/billing" }],
+      },
+      {
+        section: "Configuration",
+        items: [{ icon: Globe, label: "Global glossary", href: "/admin/global-glossary" }],
+      },
+    ];
+
+    const backHref = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/home` : "/workspace";
+
+    if (collapsed) {
+      return (
+        <aside className="flex h-full w-16 shrink-0 select-none flex-col border-r border-border/40 bg-canvas text-ink">
+          <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
+            <Link
+              href={backHref}
+              title="Back to app"
+              aria-label="Back to app"
+              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <CaretLeft size={16} weight="bold" />
+            </Link>
+          </div>
+          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
+            {adminSections.flatMap((group, groupIndex) =>
+              group.items.map((item, itemIndex) => (
+                <div
+                  key={item.href}
+                  className={cn(
+                    groupIndex > 0 && itemIndex === 0 && "mt-3 border-t border-border/50 pt-3",
+                  )}
+                >
+                  <NavLink item={item} pathname={pathname} collapsed />
+                </div>
+              )),
+            )}
+          </nav>
+        </aside>
+      );
+    }
+
+    return (
+      <aside className="flex h-full w-[224px] shrink-0 select-none flex-col border-r border-border/40 bg-canvas font-sans text-ink antialiased">
+        <div className="flex h-[48px] shrink-0 items-center border-b border-border/30 px-3">
+          <Link
+            href={backHref}
+            className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <CaretLeft size={14} weight="bold" />
+            <span>Back to app</span>
+          </Link>
+        </div>
+
+        {/* Names the console, where the app's chrome names the workspace. Deliberately NOT a
+            switcher: there is no workspace to switch, and a control that looks like one here
+            would suggest this page is scoped to a tenant. */}
+        <div className="flex items-center gap-2.5 border-b border-border/30 px-4 py-3">
+          <span className="grid size-[22px] shrink-0 place-items-center rounded-[6px] bg-primary text-primary-foreground">
+            <ShieldCheck size={13} weight="fill" />
+          </span>
+          <span className="truncate text-[13px] font-semibold tracking-tight text-ink">
+            WarpTalk Platform
+          </span>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-3">
+          {adminSections.map((group) => (
+            <div key={group.section} className="mb-3">
+              <div className="mb-1 flex h-[24px] items-center px-2">
+                <span className="text-[12px] font-medium uppercase tracking-wider text-ink-subtle">
+                  {group.section}
+                </span>
+              </div>
+              <div className="flex flex-col gap-px">
+                {group.items.map((item) => (
+                  <NavLink key={item.href} item={item} pathname={pathname} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {user && (
+          <div className="flex items-center gap-2.5 border-t border-border/30 px-3 py-3">
+            <Avatar className="size-7 rounded-full">
+              <AvatarImage src={user.avatarUrl} alt="" />
+              <AvatarFallback className="rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-[12.5px] font-medium text-ink">
+                {user.fullName || user.email}
+              </p>
+              <p className="truncate text-[11px] text-ink-subtle">Platform admin</p>
+            </div>
+          </div>
+        )}
+      </aside>
+    );
+  }
 
   if (isSettingsPage && collapsed) {
     const appHref = activeWorkspaceSlug
