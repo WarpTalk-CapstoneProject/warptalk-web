@@ -43,6 +43,8 @@ export const API = {
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,
     invitations: (id: string) => `/translation-rooms/${id}/invitations`,
+    /** The invitee's RSVP. Not a join — the meeting is usually still ahead of them. */
+    acceptInvitation: (id: string) => `/translation-rooms/${id}/invitations/accept`,
     participantAudio: (id: string, participantId: string) =>
       `/translation-rooms/${id}/participants/${participantId}/audio`,
     admitParticipant: (id: string, participantId: string) =>

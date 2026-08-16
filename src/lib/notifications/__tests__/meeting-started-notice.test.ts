@@ -10,7 +10,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { readMeetingStartedNotice, toInternalHref } from "../meeting-started-notice.ts";
+import {
+  readMeetingInviteNotice,
+  readMeetingStartedNotice,
+  toInternalHref,
+} from "../meeting-started-notice.ts";
 
 const payload = (fields: Record<string, string>) => JSON.stringify(fields);
 
@@ -74,6 +78,59 @@ test("a malformed payload_json does not throw", () => {
 test("other notification types are not ours to render", () => {
   assert.equal(readMeetingStartedNotice({ type: "MEETING_INVITED", title: "x" }), null);
   assert.equal(readMeetingStartedNotice({ title: "no type" }), null);
+});
+
+// ── Invitations ─────────────────────────────────────────────────────────────────────────────
+//
+// The invite notice carries one field its sibling does not: `roomId`. Accept posts to
+// /translation-rooms/{roomId}/invitations/accept, and the room's UUID exists ONLY in the payload —
+// the server builds action_url from the room CODE ("/room/{roomCode}"), which that endpoint does
+// not accept. Reading the id out of the href would 404 every time, so it is pinned here.
+
+test("an invitation yields the room UUID from the payload, not from the link", () => {
+  const notice = readMeetingInviteNotice({
+    type: "MEETING_INVITED",
+    title: 'You were invited to "Sprint review"',
+    // The link is built from the room CODE — deliberately different from room_id below.
+    action_url: "https://app.warptalk.io.vn/room/ABC-123",
+    payload_json: payload({
+      room_id: "019ff9e1-e3e2-7024-99b7-6e37c6a18392",
+      room_title: "Sprint review",
+    }),
+  }, APP);
+
+  assert.equal(notice?.title, "Sprint review");
+  assert.equal(notice?.roomId, "019ff9e1-e3e2-7024-99b7-6e37c6a18392");
+  assert.equal(notice?.joinHref, "/room/ABC-123");
+});
+
+test("the REST shape (camelCase) reads the same invitation", () => {
+  const notice = readMeetingInviteNotice({
+    type: "MEETING_INVITED",
+    title: "You were invited",
+    actionUrl: "/room/XYZ-789",
+    payloadJson: payload({ roomId: "room-uuid", roomTitle: "Standup" }),
+  }, APP);
+
+  assert.equal(notice?.title, "Standup");
+  assert.equal(notice?.roomId, "room-uuid");
+});
+
+test("an invitation with no payload still informs — it just cannot be accepted here", () => {
+  // Accept needs the id; the card checks `roomId` and hides the button rather than posting to
+  // /translation-rooms/undefined/invitations/accept.
+  const notice = readMeetingInviteNotice({ type: "MEETING_INVITED", title: "You were invited" });
+
+  assert.equal(notice?.roomId, null);
+  assert.equal(notice?.joinHref, null);
+  assert.equal(notice?.title, "You were invited");
+});
+
+test("a started meeting is not an invitation, and vice versa", () => {
+  // The two cards can be on screen at once, so each reader must refuse the other's type outright.
+  assert.equal(readMeetingInviteNotice({ type: "MEETING_STARTED", title: "x" }), null);
+  assert.equal(readMeetingInviteNotice({ type: "MEETING_INVITE", title: "x" }), null);
+  assert.equal(readMeetingInviteNotice({ title: "no type" }), null);
 });
 
 test("an absolute link to our own app becomes a client-side path", () => {

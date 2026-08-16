@@ -1,12 +1,16 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { QUERY_KEYS } from "@/constants/realtime";
+import { readMeetingInviteNotice } from "@/lib/notifications/meeting-started-notice";
 import { notificationService } from "@/services/notification.service";
+import { translationRoomService } from "@/services/translation-room.service";
 import type { NotificationMessageDto } from "@/types/notification";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import {
   CalendarClock,
+  Check,
   CheckCircle2,
   CreditCard,
   Info,
@@ -16,6 +20,8 @@ import {
   Wrench,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface NotificationItemProps {
   notification: NotificationMessageDto;
@@ -36,6 +42,39 @@ export function NotificationItem({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       onRead?.();
+    },
+  });
+
+  /**
+   * An invitation can be answered from the bell, not only from the popup that appeared once.
+   *
+   * The popup is a moment — it is dismissed, or it is missed because the tab was in the background.
+   * The bell is the durable copy, so it has to carry the same Accept button; otherwise the only way
+   * to say yes was to be looking at the screen when the notification arrived.
+   *
+   * Null for every other type. The room's UUID comes from the payload, not from `actionUrl` —
+   * the server builds that link from the room CODE, which the accept endpoint does not take.
+   */
+  const invite = readMeetingInviteNotice(notification);
+  const [accepted, setAccepted] = useState(false);
+
+  const acceptMutation = useMutation({
+    mutationFn: () => translationRoomService.acceptInvitation(invite!.roomId!),
+    onSuccess: () => {
+      setAccepted(true);
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.ROOMS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.TRANSLATION_ROOMS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.WORKSPACE_ROOMS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.MEETINGS] });
+      toast.success("Invitation accepted", { description: invite?.title });
+      // Answering it is reading it. Leaving the row unread after an explicit yes would keep the
+      // badge counting a question that has been answered.
+      if (!notification.isRead) markReadMutation.mutate();
+    },
+    onError: () => {
+      toast.error("Could not accept the invitation", {
+        description: "Try again in a moment.",
+      });
     },
   });
 
@@ -119,6 +158,34 @@ export function NotificationItem({
         <p className="text-xs text-muted-foreground line-clamp-2">
           {notification.content}
         </p>
+
+        {invite?.roomId ? (
+          <div className="pt-1.5">
+            {accepted ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+                <Check className="h-3 w-3" />
+                Accepted
+              </span>
+            ) : (
+              <Button
+                size="sm"
+                // stopPropagation, because the whole row is a link to the meeting. Without it,
+                // Accept would also navigate — and a click that both answers and leaves the page
+                // makes it impossible to tell whether the answer landed.
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  acceptMutation.mutate();
+                }}
+                disabled={acceptMutation.isPending}
+                className="h-6 gap-1 rounded-full px-2.5 text-[11px]"
+              >
+                <Check className="h-3 w-3" />
+                {acceptMutation.isPending ? "Accepting…" : "Accept"}
+              </Button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {!notification.isRead && (

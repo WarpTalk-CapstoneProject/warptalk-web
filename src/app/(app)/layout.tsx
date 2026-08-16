@@ -23,6 +23,7 @@ import { NotificationSoundToggle } from "@/components/layout/notification-sound-
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
+import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
 import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
@@ -541,7 +542,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* A non-scrolling frame around the scrolling main column, so anything pinned to the
-              content area — the meeting-started banner — stays put while the page scrolls under
+              content area — the meeting notices — stays put while the page scrolls under
               it. `<main>` itself cannot serve: it IS the scroll container. */}
           <div className="relative flex min-w-0 flex-1 flex-col">
           <main className="relative min-h-0 flex-1 overflow-y-auto">
@@ -563,7 +564,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             ) : null}
           </main>
 
-            <MeetingStartedBanner />
+            {/* Both meeting notices live in ONE stack, and the stack — not either card — owns the
+                corner. They are independent (being invited to Thursday's review does not stop this
+                morning's standup going live), so both can be on screen at once; positioned
+                separately they would have been drawn on top of each other.
+
+                Bottom-RIGHT, moved from bottom-left at the owner's request. The other two things
+                that claim a corner here are the WarpBot launcher and the mini meeting dock, which
+                sit outside and below this main content box, so they no longer collide. The
+                invitation is listed first — it is the one asking a question. */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col items-end gap-2 p-4">
+              <MeetingInviteBanner />
+              <MeetingStartedBanner />
+            </div>
           </div>
 
           {/* Right Sidebar (Context/Properties) */}

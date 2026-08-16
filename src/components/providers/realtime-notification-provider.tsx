@@ -23,8 +23,13 @@ import { useRouter } from "next/navigation";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { type RawNotification, readMeetingStartedNotice } from "@/lib/notifications/meeting-started-notice";
+import {
+  type RawNotification,
+  readMeetingInviteNotice,
+  readMeetingStartedNotice,
+} from "@/lib/notifications/meeting-started-notice";
 import { playNotificationCue } from "@/lib/notifications/notification-sounds";
+import { useMeetingInviteStore } from "@/stores/meeting-invite-store";
 import { useMeetingStartedStore } from "@/stores/meeting-started-store";
 
 interface RealtimeContextType {
@@ -157,6 +162,19 @@ export function RealtimeNotificationProvider({
         if (meetingStarted) {
           playNotificationCue("meeting-started");
           useMeetingStartedStore.getState().show(meetingStarted);
+          return;
+        }
+
+        // An invitation, which is a QUESTION and gets its own card with an Accept button rather
+        // than the generic toast below. The toast branch further down was written for types
+        // ("MeetingInvite" / "MeetingInvitation") that no producer has ever sent — the server's
+        // real type is MEETING_INVITED, and until the notification service's validator learned it,
+        // none of these reached a client at all.
+        const meetingInvite = readMeetingInviteNotice(notif);
+        if (meetingInvite) {
+          playNotificationCue("meeting-invited");
+          triggerNativeDesktopNotification(title, { body: message });
+          useMeetingInviteStore.getState().show(meetingInvite);
           return;
         }
 
