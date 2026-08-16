@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
+import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
 import { getFlagEmoji } from "@/lib/language/language-flag";
 import { getLanguageName, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
 import {
@@ -933,22 +934,33 @@ function LiveKitTrackControls({
 
   return (
     <>
-      <TrackToggle
-        source={Track.Source.Microphone}
-        // `!` throughout, because `@livekit/components-styles` is imported by
-        // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
-        // own padding. Our classes named no base background at all, so LiveKit's won: two
-        // black squares sitting in a light, rounded bar next to buttons we do style.
-        className="grid h-11 w-11 place-items-center rounded-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
-      />
-      <TrackToggle
-        source={Track.Source.Camera}
-        // `!` throughout, because `@livekit/components-styles` is imported by
-        // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
-        // own padding. Our classes named no base background at all, so LiveKit's won: two
-        // black squares sitting in a light, rounded bar next to buttons we do style.
-        className="grid h-11 w-11 place-items-center rounded-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
-      />
+      {/* WT-435: toggle and device picker are one unit — rounded on the outside, square where
+          they meet, so they read as a split button rather than two controls. */}
+      <div className="flex items-center">
+        <TrackToggle
+          source={Track.Source.Microphone}
+          // `!` throughout, because `@livekit/components-styles` is imported by
+          // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
+          // own padding. Our classes named no base background at all, so LiveKit's won: two
+          // black squares sitting in a light, rounded bar next to buttons we do style.
+          //
+          // rounded-l-xl, not rounded-xl: the caret next to it supplies the right-hand corners.
+          className="grid h-11 w-11 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+        />
+        <MediaDeviceMenuButton
+          // The speaker lives on the microphone caret. To a user "my headset" is one decision,
+          // and an output picker of its own would be a third button in a full bar.
+          kinds={["audioinput", "audiooutput"]}
+          label="Choose microphone and speaker"
+        />
+      </div>
+      <div className="flex items-center">
+        <TrackToggle
+          source={Track.Source.Camera}
+          className="grid h-11 w-11 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+        />
+        <MediaDeviceMenuButton kinds={["videoinput"]} label="Choose camera" />
+      </div>
     </>
   );
 }
