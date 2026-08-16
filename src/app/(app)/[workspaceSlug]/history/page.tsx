@@ -20,6 +20,14 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { parseSummarySections } from "@/lib/meeting/meeting-summary";
+// Imported rather than restated. This file had its own one-line copies of artifactLabel and
+// artifactStatusLabel, identical to the ones in lib/meeting — which is how the archive and the
+// room page came to disagree about what a row says.
+import {
+  artifactDownloadFormat,
+  artifactLabel,
+  artifactStatusLabel,
+} from "@/lib/meeting/meeting-artifacts";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
@@ -282,7 +290,12 @@ function MeetingDetail({ room, busyArtifactId, onDownload, onOpen, openArtifactI
           <div key={artifact.id} className="group flex w-full items-center gap-3 py-3">
             <button type="button" onClick={() => onOpen(artifact)} aria-expanded={openArtifactId === artifact.id} className="flex min-w-0 flex-1 items-center gap-3 text-left">
               <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-1"><ArtifactIcon artifact={artifact} /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-medium">{artifact.title || artifactLabel(artifact.type)}</span><span className="mt-0.5 block text-[10px] text-ink-subtle">{artifact.format || artifactLabel(artifact.type)} · {artifactStatusLabel(artifact)}</span></span>
+              {/* "Transcript" then "TXT · Ready". The first line was the server's generated title
+                  ("transcript export (TXT)"), which repeats on line two what line one already said
+                  and is lowercase because it is derived from an enum name. The second line was
+                  artifact.format — the STORED format, MARKDOWN or JSON — while the download hands
+                  over plain text; see artifactDownloadFormat. */}
+              <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-medium">{artifactLabel(artifact.type)}</span><span className="mt-0.5 block text-[10px] text-ink-subtle">{artifactDownloadFormat(artifact)} · {artifactStatusLabel(artifact)}</span></span>
             </button>
             <button type="button" disabled={busyArtifactId === artifact.id} onClick={() => onDownload(artifact)} aria-label={`Download ${artifact.title || artifactLabel(artifact.type)}`} className="shrink-0 rounded p-1 disabled:opacity-50">
               {busyArtifactId === artifact.id ? <SpinnerGap size={14} className="animate-spin" /> : <DownloadSimple size={14} className="text-ink-subtle transition-colors group-hover:text-ink" />}
@@ -387,8 +400,6 @@ function LoadingState() { return <div className="grid min-h-[420px] place-items-
 function ErrorState({ onRetry }: { onRetry: () => void }) { return <div className="grid min-h-[420px] place-items-center text-center"><div><WarningCircle size={22} className="mx-auto text-ink-muted" /><p className="mt-3 text-[12px] font-medium">Meeting history could not be loaded</p><p className="mt-1 text-[11px] text-ink-muted">Check the translation-room service and try again.</p><Button variant="outline" size="sm" className="mt-4 h-8" onClick={onRetry}>Retry</Button></div></div>; }
 function EmptyState({ hasQuery }: { hasQuery: boolean }) { return <div className="grid min-h-[420px] place-items-center text-center"><div><Archive size={22} className="mx-auto text-ink-muted" /><p className="mt-3 text-[12px] font-medium">{hasQuery ? "No meetings match this search" : "No finished meetings yet"}</p><p className="mt-1 text-[11px] text-ink-muted">{hasQuery ? "Try a different title, code, host, or language." : "Meetings appear here after they end."}</p></div></div>; }
 
-function artifactLabel(type: RoomHistoryArtifact["type"]) { return ({ transcript_export: "Transcript", summary_export: "AI summary", recording: "Recording", debug_log: "Debug log", audio_sample: "Audio sample" } as const)[type]; }
-function artifactStatusLabel(artifact: RoomHistoryArtifact) { return artifact.consentRequired ? "Consent required" : artifact.status.charAt(0).toUpperCase() + artifact.status.slice(1); }
 function formatDuration(seconds: number) { if (!seconds) return "—"; const minutes = Math.floor(seconds / 60); return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }
 function formatLanguageRoute(room: EndedRoomHistoryItem) { return formatRoute(room.sourceLanguage, room.targetLanguages); }

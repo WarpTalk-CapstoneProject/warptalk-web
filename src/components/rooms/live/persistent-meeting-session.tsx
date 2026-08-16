@@ -57,7 +57,6 @@ import {
   wasLanguagePickerShown,
 } from "@/lib/meeting/language-picker-shown";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
-import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
 import { hasDubAudience } from "@/lib/meeting/dub-audience";
@@ -2180,43 +2179,18 @@ export function PersistentMeetingSession({
     });
   }
 
-  // Recording starts on its own, once, for the host.
+  // RECORDING IS NEVER STARTED FOR YOU.
   //
-  // The reason is not convenience: a summary's timestamps are only useful if there is a
-  // recording behind them, and leaving the button to whoever remembered it meant most meetings
-  // produced citations pointing at nothing. Participants are told by toast the moment it
-  // starts — see the RecordingStateChanged handler — so nobody is recorded without being told.
+  // It used to start on its own for the room's host, on the argument that a summary's timestamps
+  // need a recording to jump to. That reasoning was about the product's convenience and the cost
+  // was somebody else's: every meeting was recorded whether or not anyone had decided to record
+  // it, and the only notice was a toast that appeared after the fact. Consent to being recorded
+  // is not something a default gets to assume, and the meeting record is perfectly usable without
+  // it — the transcript and the summary come from the audio pipeline, not from the egress file.
   //
-  // The ref, not state: it must be set before the mutation resolves, or a re-render in the gap
-  // fires a second start against an egress that is already coming up.
-  const autoRecordAttemptedRef = useRef(false);
-  useEffect(() => {
-    if (
-      !shouldAutoStartRecording({
-        // isRoomHost, not isHost. Anyone may now press the button, but exactly ONE client
-        // should start a recording nobody asked for, and the room's own host is the
-        // unambiguous choice. On isHost this also fired for every workspace Owner/Admin who
-        // joined — each one racing the others into "Recording is already in progress", and,
-        // before the server was widened, into an unprompted 403 toast on every join.
-        isHost: isRoomHost,
-        isConnected: Boolean(meetingSession?.token) && !isMeetingJoining,
-        isRecording,
-        hasAttempted: autoRecordAttemptedRef.current,
-      })
-    ) {
-      return;
-    }
-    autoRecordAttemptedRef.current = true;
-    setRecordingMutation.mutate("start", {
-      onSuccess: (state) => setIsRecording(state.recording),
-      // Deliberately silent. A host who did not ask for this does not need an error about it,
-      // and the manual button still reports its own failures.
-      onError: () => {},
-    });
-    // setRecordingMutation is a fresh object on every render, so depending on it would re-run
-    // this effect forever. The ref is what makes it run once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRoomHost, meetingSession?.token, isMeetingJoining, isRecording]);
+  // The button in the host controls is now the only way a recording starts (handleToggleRecording
+  // below). Do not reintroduce an effect here: an automatic start is indistinguishable, from the
+  // outside, from a deliberate one.
 
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.

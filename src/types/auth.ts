@@ -41,6 +41,13 @@ export interface RegisterRequest {
   email: string;
   password: string;
   fullName: string;
+  /**
+   * The sign-up wizard's third step, sent with the account rather than saved afterwards:
+   * self-registration returns no session (BR-02), so there is no authenticated moment in which
+   * the client could PUT them. Omitted, the server falls back to the platform defaults.
+   */
+  defaultSpeakLanguage?: string;
+  defaultListenLanguage?: string;
 }
 
 export interface GoogleLoginRequest {

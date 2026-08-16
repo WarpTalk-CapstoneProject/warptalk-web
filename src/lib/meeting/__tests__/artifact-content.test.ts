@@ -112,20 +112,36 @@ test("legacy pre-template summaries still render", () => {
 test("neither artifact viewer stringifies JSON at the user any more", () => {
   // The defect was never in the parser — it was that two pages did not call it. A regression here
   // looks like working code, so it is asserted against the pages themselves.
+  //
+  // Each page is pinned to the viewer it actually uses, rather than to "any of these": the
+  // post-meeting page renders the summary through SummaryPanel (which reads the same parsed shape
+  // and lays it out as summary, decisions and action items), and the archive renders it through
+  // readableArtifactBody. Requiring one named component of both would be requiring a mount that
+  // neither needs. What they owe the reader is identical, and that is what the second assertion
+  // holds: never the raw payload.
+  //
+  // The standalone artifacts page — the other half of the original WT-432 pair — is gone. It was
+  // a second view of the Files tab both of these already carry, and nothing linked to it.
   const pages = [
-    "src/app/(app)/[workspaceSlug]/rooms/[id]/ended/page.tsx",
-    "src/app/(app)/[workspaceSlug]/rooms/[id]/artifacts/page.tsx",
+    {
+      path: "src/app/(app)/[workspaceSlug]/rooms/[id]/ended/page.tsx",
+      viewer: "SummaryPanel",
+    },
+    {
+      path: "src/app/(app)/[workspaceSlug]/history/page.tsx",
+      viewer: "readableArtifactBody",
+    },
   ];
 
   for (const page of pages) {
-    const source = fs.readFileSync(page, "utf8");
+    const source = fs.readFileSync(page.path, "utf8");
     assert.ok(
-      source.includes("ArtifactContentView"),
-      `${page} must render artifact content through ArtifactContentView`,
+      source.includes(page.viewer),
+      `${page.path} must render artifact content through ${page.viewer}`,
     );
     assert.ok(
       !source.includes("JSON.stringify(JSON.parse"),
-      `${page} must not pretty-print JSON at the reader`,
+      `${page.path} must not pretty-print JSON at the reader`,
     );
   }
 });
