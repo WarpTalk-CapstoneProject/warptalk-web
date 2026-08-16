@@ -4,14 +4,15 @@
  * "A meeting has started" — inside the content area, with a Join button.
  *
  * WHERE IT SITS, AND WHY
- *   Bottom-LEFT of the main column. Not the viewport corner it used to occupy: bottom-right holds
- *   the WarpBot launcher, and the mini meeting dock defaults near there too — the same corner the
- *   dock was moved out of for exactly this reason. Left of the content area is empty in every
- *   layout this app has, and it is still inside the region the notice is about.
+ *   This component no longer places itself. It renders a card and nothing else; the layout owns
+ *   the corner, because there are two of these notices now (see meeting-invite-banner.tsx) and two
+ *   independently-positioned cards would have been two cards on top of each other. They share one
+ *   stack in `app/(app)/layout.tsx`, which is the only place that can space them apart.
  *
- *   It is positioned against a wrapper AROUND `<main>` rather than inside it, because `<main>` is
- *   the scroll container: an absolutely-positioned child of a scrolling box scrolls away with the
- *   content, and a Join button that disappears when you scroll is not a Join button.
+ *   That stack sits at the bottom-RIGHT of the main column, and against a wrapper AROUND `<main>`
+ *   rather than inside it — `<main>` is the scroll container, and an absolutely-positioned child
+ *   of a scrolling box scrolls away with the content. A Join button that disappears when you
+ *   scroll is not a Join button.
  *
  * THE JOIN BUTTON IS THE POINT
  *   It shipped without one — not by omission, but because the href never arrived: the realtime
@@ -49,40 +50,38 @@ export function MeetingStartedBanner() {
   if (!notice) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-start p-4">
-      <div className="pointer-events-auto flex w-full max-w-[360px] items-start gap-3 rounded-[14px] border border-border bg-surface-1 p-3.5 shadow-lg">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--primary)]/10 text-[var(--primary)]">
-          <VideoCamera size={17} weight="fill" />
-        </span>
+    <div className="pointer-events-auto flex w-full max-w-[360px] items-start gap-3 rounded-[14px] border border-border bg-surface-1 p-3.5 shadow-lg">
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--primary)]/10 text-[var(--primary)]">
+        <VideoCamera size={17} weight="fill" />
+      </span>
 
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold leading-snug text-ink">A meeting has started</p>
-          <p className="mt-0.5 truncate text-[12px] text-ink-muted" title={notice.title}>
-            {notice.title}
-          </p>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold leading-snug text-ink">A meeting has started</p>
+        <p className="mt-0.5 truncate text-[12px] text-ink-muted" title={notice.title}>
+          {notice.title}
+        </p>
 
-          {notice.joinHref ? (
-            <Link
-              href={notice.joinHref}
-              onClick={dismiss}
-              className="mt-2.5 inline-flex h-[28px] items-center rounded-full bg-foreground px-3.5 text-[12px] font-medium text-background transition hover:opacity-90"
-            >
-              Join now
-            </Link>
-          ) : (
-            <p className="mt-2 text-[11px] text-ink-subtle">Open it from your notifications.</p>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Dismiss"
-          className="-mr-1 -mt-1 grid size-6 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink"
-        >
-          <X size={11} weight="bold" />
-        </button>
+        {notice.joinHref ? (
+          <Link
+            href={notice.joinHref}
+            onClick={dismiss}
+            className="mt-2.5 inline-flex h-[28px] items-center rounded-full bg-foreground px-3.5 text-[12px] font-medium text-background transition hover:opacity-90"
+          >
+            Join now
+          </Link>
+        ) : (
+          <p className="mt-2 text-[11px] text-ink-subtle">Open it from your notifications.</p>
+        )}
       </div>
+
+      <button
+        type="button"
+        onClick={dismiss}
+        aria-label="Dismiss"
+        className="-mr-1 -mt-1 grid size-6 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+      >
+        <X size={11} weight="bold" />
+      </button>
     </div>
   );
 }

@@ -23,7 +23,11 @@
 
 const MUTE_KEY = "warptalk.notification-sounds.muted";
 
-export type NotificationCue = "meeting-started" | "participant-joined" | "translation-started";
+export type NotificationCue =
+  | "meeting-started"
+  | "meeting-invited"
+  | "participant-joined"
+  | "translation-started";
 
 /** Frequency (Hz) and duration (s) per note, played in sequence. */
 const CUES: Record<NotificationCue, { hz: number; seconds: number }[]> = {
@@ -31,6 +35,15 @@ const CUES: Record<NotificationCue, { hz: number; seconds: number }[]> = {
   "meeting-started": [
     { hz: 587.33, seconds: 0.12 },
     { hz: 880.0, seconds: 0.18 },
+  ],
+  // Three notes, and the last one FALLS. An invitation is a question, not a summons: the meeting
+  // is usually still hours away and the only thing being asked for is an answer. The contour is
+  // what tells it apart from "meeting-started" across the room — a rising figure would be heard
+  // as "it is starting now" and send people looking for a meeting that has not opened yet.
+  "meeting-invited": [
+    { hz: 523.25, seconds: 0.1 },
+    { hz: 698.46, seconds: 0.1 },
+    { hz: 587.33, seconds: 0.16 },
   ],
   // One soft note. Somebody arriving is information, not a summons — in a twelve-person meeting
   // this fires eleven times, and anything more assertive becomes the thing people mute.

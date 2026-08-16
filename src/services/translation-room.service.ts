@@ -432,6 +432,23 @@ export const translationRoomService = {
     return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
   },
 
+  /**
+   * Accept the invitation addressed to the signed-in account's email.
+   *
+   * Takes no body: the server matches the row from the caller's own email claim, because
+   * invitations are keyed by address and an invitee may have no participant row to name. Sending
+   * an invitation id from the client would let one be accepted on somebody else's behalf.
+   *
+   * Idempotent server-side, so the same notification may be accepted from the popup and again
+   * from the bell without the second click failing.
+   */
+  async acceptInvitation(id: string) {
+    const { data } = await apiClient.post<TranslationRoomInvitationDto>(
+      API.translationRooms.acceptInvitation(id),
+    );
+    return data;
+  },
+
   async updateSettings(id: string, data: UpdateRoomSettingsRequest) {
     await apiClient.put<void>(API.translationRooms.settings(id), data);
   },
