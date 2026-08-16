@@ -1,9 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { adminUserService } from "@/services/admin-user.service";
-import type { AdminUserDirectoryQuery } from "@/types/admin-user";
+import type { AdminUserActionRequest, AdminUserDirectoryQuery } from "@/types/admin-user";
 
 export const ADMIN_USER_KEYS = {
   all: ["admin-users"] as const,
@@ -35,5 +35,51 @@ export function useAdminUserDetail(userId: string | undefined) {
     queryFn: () => adminUserService.getDetail(userId!),
     enabled: Boolean(userId),
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Every action invalidates the whole directory tree, not just the row it touched.
+ *
+ * The account's status is DERIVED — deleted beats locked beats deactivated beats unverified beats
+ * active — and the session count feeds it. Patching one row's fields would leave the list's own
+ * status filter disagreeing with the badge next to it.
+ */
+function useInvalidateAdminUsers() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ADMIN_USER_KEYS.all });
+}
+
+export function useRevokeAdminUserSessions() {
+  const invalidate = useInvalidateAdminUsers();
+  return useMutation({
+    mutationFn: ({ userId, request }: { userId: string; request: AdminUserActionRequest }) =>
+      adminUserService.revokeSessions(userId, request),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetAdminUserActive() {
+  const invalidate = useInvalidateAdminUsers();
+  return useMutation({
+    mutationFn: ({
+      userId,
+      isActive,
+      request,
+    }: {
+      userId: string;
+      isActive: boolean;
+      request: AdminUserActionRequest;
+    }) => adminUserService.setActive(userId, isActive, request),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUnlockAdminUser() {
+  const invalidate = useInvalidateAdminUsers();
+  return useMutation({
+    mutationFn: ({ userId, request }: { userId: string; request: AdminUserActionRequest }) =>
+      adminUserService.unlock(userId, request),
+    onSuccess: invalidate,
   });
 }
