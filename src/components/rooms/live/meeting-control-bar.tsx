@@ -103,6 +103,7 @@ export function MeetingControlBar({
   onToggleSubtitles,
   onChangeListenLanguage,
   onChangeSpeakLanguage,
+  onLanguagePicked,
   onChangeVoicePreference,
   onChangeVoiceCloneConsent,
   onChangeVoiceEnabled,
@@ -186,6 +187,9 @@ export function MeetingControlBar({
   onChangeListenLanguage?: (language: string) => void;
   /** Called when the participant picks the language they're speaking from the dropdown. */
   onChangeSpeakLanguage?: (language: string) => void;
+  /** WT-434: called ONCE per bar pick, after both onChange callbacks, so the session can
+   *  persist the choice as the remembered profile without double-writing. */
+  onLanguagePicked?: (language: string) => void;
   /** Called with a voice id, or "" to clear back to the automatic default. */
   onChangeVoicePreference?: (voiceId: string) => void;
   /** Called with the new consent value after the participant confirms (or turns it off). */
@@ -292,6 +296,7 @@ export function MeetingControlBar({
             // silently remove options the moment they ever diverge.
             languageOptions={mergeLanguageOptions(availableSpeakLanguages, availableListenLanguages)}
             onChangeSpeakLanguage={onChangeSpeakLanguage}
+            onLanguagePicked={onLanguagePicked}
             onChangeListenLanguage={onChangeListenLanguage}
             highlight={Boolean(warptalkStarted) && (!speakLanguage || !listenLanguage)}
           />
@@ -1046,6 +1051,7 @@ function LanguagePairPicker({
   languageOptions,
   onChangeSpeakLanguage,
   onChangeListenLanguage,
+  onLanguagePicked,
   highlight,
 }: {
   speakLanguage?: string;
@@ -1062,6 +1068,8 @@ function LanguagePairPicker({
    */
   onChangeSpeakLanguage: (language: string) => void;
   onChangeListenLanguage: (language: string) => void;
+  /** Once per pick, after both onChange calls — the persistence hook (WT-434). */
+  onLanguagePicked?: (language: string) => void;
   highlight: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -1106,6 +1114,11 @@ function LanguagePairPicker({
     const applied = applySingleLanguageChoice(language);
     onChangeSpeakLanguage(applied.speak);
     onChangeListenLanguage(applied.hear);
+    // After both halves, once: this is what makes the pick durable across meetings. Until
+    // WT-434 only the language MODAL saved the remembered profile, so a split written by the
+    // old two-column UI (speak=vi, listen=en) could never be corrected from here — the
+    // auto-apply resurrected it at the start of every later meeting.
+    onLanguagePicked?.(applied.speak);
     setOpen(false);
   }
 
