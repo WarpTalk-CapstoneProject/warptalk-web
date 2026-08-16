@@ -447,6 +447,13 @@ export function PersistentMeetingSession({
     role === "admin" ||
     role === "owner",
   );
+  // WT-428: read inside the hub's ParticipantWaiting callback, which is registered once and
+  // would otherwise close over the first render's value — where isHost is still false because
+  // the room query has not resolved. Same reasoning as currentUserIdRef.
+  const isHostRef = useRef(isHost);
+  useEffect(() => {
+    isHostRef.current = isHost;
+  }, [isHost]);
   // Only the actual host may START the room. Workspace admins/owners get host-like
   // UI privileges (isHost) but the backend rejects a start from anyone whose id != room.hostId
   // with 403, so the auto-start below must gate on true host identity — not workspace role.
@@ -1581,6 +1588,23 @@ export function PersistentMeetingSession({
         retryMeetingConnectionRef.current();
       });
     });
+
+    // WT-428 (Linear): the knock. Broadcast to the whole room group; only the HOST acts on it —
+    // a toast naming who is at the door, plus an immediate roster refetch so the People panel's
+    // Approve button appears now rather than on the next 3s poll. Non-hosts ignore it: they can
+    // neither admit nor deny, and a toast they cannot act on is noise.
+    connection.on(
+      "ParticipantWaiting",
+      (waitingUserId: string, waitingDisplayName: string) => {
+        if (!isHostRef.current || waitingUserId === currentUserIdRef.current) return;
+        toast.info(
+          `${waitingDisplayName || "Someone"} is waiting to join — approve them from the People panel.`,
+        );
+        void queryClient.invalidateQueries({
+          queryKey: ["translationRooms", roomId, "participants"],
+        });
+      },
+    );
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
       setHandRaisedInStore(userId, isRaised);
