@@ -74,7 +74,7 @@ import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { useParams } from "next/navigation";
 import AdminBillingPage from "@/app/(internal)/billing/page";
-import { formatMoney } from "@/lib/format/currency";
+import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { Metric, MetricGrid, Panel } from "./components/metric-grid";
 import { CycleSpendChart } from "./components/cycle-spend-chart";
 import { ServiceUsageTable } from "./components/service-usage-table";
@@ -274,7 +274,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const { data: cycleLedger, isLoading: isCycleLedgerLoading } = useQuery({
     queryKey: ["billing", "cycle-ledger", workspaceId, cycleStart],
     queryFn: () =>
-      billingService.getCreditHistory(workspaceId, 1, 1000, {
+      // WT-430: same 200-row server clamp as the export — a busy cycle's chart was quietly
+      // built from its newest fifth.
+      billingService.getAllCreditHistory(workspaceId, {
         fromDate: cycleStart ? new Date(cycleStart).toISOString() : undefined,
       }),
     enabled: !!workspaceId && !!cycleStart,
@@ -326,7 +328,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
       filterMaxAmount,
     ],
     queryFn: () =>
-      billingService.getCreditHistory(workspaceId, 1, 1000, {
+      // WT-430: getAllCreditHistory, not one page — the server clamps pageSize to 200, so the
+      // old (1, 1000) call silently got the newest 200 and every sum below undercounted.
+      billingService.getAllCreditHistory(workspaceId, {
         type: historyTypeFilter === "ALL" ? undefined : historyTypeFilter,
         fromDate: filterFromDate
           ? new Date(filterFromDate + "T00:00:00").toISOString()
@@ -393,8 +397,17 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   // The server's own number, not `total - current`. They agree today, but only one of them stays
   // right if a top-up mid-cycle raises the total.
   const creditsUsed = balance?.creditsUsedThisCycle ?? 0;
-  const usagePercent =
-    totalCredits > 0 ? Math.round((creditsUsed / totalCredits) * 100) : 0;
+  // WT-430 (Linear): the raw ratio survives for the ring and for "% available"; only the LABEL
+  // is rounded. Math.round alone turned 1,615 used of 1,400,000 (0.115%) into a donut reading
+  // "0% used" over an empty ring — real spend rendered as no spend — while `100 - rounded`
+  // simultaneously claimed 100% available. Sub-1% usage now shows as "<1%" and the ring paints
+  // the true fraction.
+  const usageRatioPercent = totalCredits > 0 ? (creditsUsed / totalCredits) * 100 : 0;
+  const usagePercent = Math.round(usageRatioPercent);
+  const usagePercentLabel =
+    usageRatioPercent > 0 && usageRatioPercent < 1 ? "<1" : `${usagePercent}`;
+  const availablePercentLabel =
+    usageRatioPercent > 0 && usageRatioPercent < 1 ? ">99" : `${100 - usagePercent}`;
   const renewsDate = balance?.currentPeriodEnd
     ? format(new Date(balance.currentPeriodEnd), "MMM dd, yyyy")
     : "--";
@@ -746,24 +759,24 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
       <MetricGrid>
         <Metric
           label="Credits remaining"
-          value={currentCredits.toLocaleString()}
+          value={formatAmount(currentCredits)}
           detail={
             totalCredits > 0
-              ? `${100 - usagePercent}% of ${totalCredits.toLocaleString()} available`
+              ? `${availablePercentLabel}% of ${formatAmount(totalCredits)} available`
               : "No allowance on this cycle"
           }
-          tone={totalCredits > 0 && 100 - usagePercent <= 15 ? "warn" : "default"}
+          tone={totalCredits > 0 && 100 - usageRatioPercent <= 15 ? "warn" : "default"}
         />
         <Metric
           label="Spent this cycle"
-          value={creditsUsed.toLocaleString()}
-          detail={`${usagePercent}% of this cycle's credits`}
+          value={formatAmount(creditsUsed)}
+          detail={`${usagePercentLabel}% of this cycle's credits`}
         />
         <Metric
           label="Burn rate"
           value={
             projection && projection.kind !== "unknown"
-              ? `${Math.round(projection.perDay).toLocaleString()}/day`
+              ? `${formatAmount(Math.round(projection.perDay))}/day`
               : "—"
           }
           detail={
@@ -779,7 +792,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             projection?.kind === "runs-out"
               ? `Credits run out ${format(projection.onDate, "MMM dd")} — before renewal`
               : projection?.kind === "lasts"
-                ? `${projection.creditsLeftAtRenewal.toLocaleString()} left at this rate`
+                ? `${formatAmount(projection.creditsLeftAtRenewal)} left at this rate`
                 : "Nothing spent yet this cycle"
           }
           tone={
@@ -795,7 +808,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           }
           detail={
             cycleActivity?.busiest
-              ? `${Math.round(cycleActivity.busiest.consumed).toLocaleString()} credits in one ${cycleActivity.bucketSize}`
+              ? `${formatAmount(Math.round(cycleActivity.busiest.consumed))} credits in one ${cycleActivity.bucketSize}`
               : "No spending recorded yet"
           }
         />
@@ -828,7 +841,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                 title="Credit spend"
                 description={
                   cycleActivity
-                    ? `Per ${cycleActivity.bucketSize} since ${format(cycleActivity.buckets[0].start, "MMM dd")} · ${Math.round(cycleActivity.totalConsumed).toLocaleString()} credits spent`
+                    ? `Per ${cycleActivity.bucketSize} since ${format(cycleActivity.buckets[0].start, "MMM dd")} · ${formatAmount(Math.round(cycleActivity.totalConsumed))} credits spent`
                     : "This billing cycle"
                 }
               >
@@ -910,12 +923,12 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                 <div
                   className="relative mx-auto flex h-32 w-32 items-center justify-center rounded-full"
                   style={{
-                    background: `conic-gradient(var(--primary) 0 ${usagePercent}%, var(--surface-2) ${usagePercent}% 100%)`,
+                    background: `conic-gradient(var(--primary) 0 ${usageRatioPercent}%, var(--surface-2) ${usageRatioPercent}% 100%)`,
                   }}
                 >
                   <div className="flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full bg-surface-1">
                     <p className="text-[22px] font-semibold leading-none tabular-nums text-ink">
-                      {usagePercent}%
+                      {usagePercentLabel}%
                     </p>
                     <p className="mt-1 text-[11px] text-ink-muted">used</p>
                   </div>
@@ -924,27 +937,27 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-ink-muted">Available this cycle</span>
                     <span className="font-medium tabular-nums text-ink">
-                      {totalCredits.toLocaleString()}
+                      {formatAmount(totalCredits)}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-ink-muted">Consumed</span>
                     <span className="font-medium tabular-nums text-ink">
-                      {creditsUsed.toLocaleString()}
+                      {formatAmount(creditsUsed)}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-ink-muted">Topped up this cycle</span>
                     <span className="font-medium tabular-nums text-ink">
                       {cycleActivity
-                        ? Math.round(cycleActivity.totalToppedUp).toLocaleString()
+                        ? formatAmount(Math.round(cycleActivity.totalToppedUp))
                         : "—"}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-ink-muted">Remaining</span>
                     <span className="font-semibold tabular-nums text-primary">
-                      {currentCredits.toLocaleString()}
+                      {formatAmount(currentCredits)}
                     </span>
                   </div>
                 </div>
@@ -1230,10 +1243,10 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                               className={`text-right text-xs font-semibold py-3 ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-ink"}`}
                             >
                               {sign}
-                              {tx.amount.toLocaleString()} cr
+                              {formatAmount(tx.amount)} cr
                             </TableCell>
                             <TableCell className="text-right text-xs font-mono text-ink-muted py-3">
-                              {tx.balanceAfter.toLocaleString()} cr
+                              {formatAmount(tx.balanceAfter)} cr
                             </TableCell>
                             <TableCell className="text-right text-xs pr-5 py-3">
                               {(isGrouped || tx.type === "consume") && (
@@ -1469,13 +1482,13 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               <div className="flex justify-between mb-2">
                 <span className="text-xs text-ink-muted">Total Top-Ups:</span>
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                  +{totalTopUp.toLocaleString()}
+                  +{formatAmount(totalTopUp)}
                 </span>
               </div>
               <div className="flex justify-between mb-2">
                 <span className="text-xs text-ink-muted">Total Consumed:</span>
                 <span className="text-xs font-bold text-rose-600 dark:text-rose-400">
-                  -{totalConsumed.toLocaleString()}
+                  -{formatAmount(totalConsumed)}
                 </span>
               </div>
               <div className="pt-2 mt-2 border-t border-hairline/25 flex justify-between">
@@ -1486,7 +1499,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                   className={`text-xs font-bold ${netChange > 0 ? "text-emerald-600" : netChange < 0 ? "text-rose-600" : ""}`}
                 >
                   {netChange > 0 ? "+" : ""}
-                  {netChange.toLocaleString()}
+                  {formatAmount(netChange)}
                 </span>
               </div>
             </div>
@@ -1830,7 +1843,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                       Total Deducted
                     </span>
                     <span className="text-rose-600 dark:text-rose-400 font-extrabold mt-1 block text-sm">
-                      {selectedTxGroup.amount.toLocaleString()} cr
+                      {formatAmount(selectedTxGroup.amount)} cr
                     </span>
                   </div>
                 </div>
@@ -1879,7 +1892,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                               </span>
                             </div>
                             <span className="font-extrabold text-rose-600 dark:text-rose-400">
-                              {data.cost.toLocaleString()} cr
+                              {formatAmount(data.cost)} cr
                             </span>
                           </div>
                         );
@@ -1910,7 +1923,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
                             </span>
                           </div>
                           <span className="text-rose-600 dark:text-rose-400 font-bold ml-2 shrink-0">
-                            {item.amount.toLocaleString()} cr
+                            {formatAmount(item.amount)} cr
                           </span>
                         </div>
                       ))}
