@@ -4,7 +4,11 @@ import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowsClockwise,
+  LockOpen,
   MagnifyingGlass,
+  SignOut,
+  UserCircleMinus,
+  UserCirclePlus,
   Users as UsersIcon,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
@@ -17,7 +21,16 @@ import {
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
 import { UserStatusBadge } from "@/components/admin/UserStatusBadge";
-import { useAdminUserDirectory } from "@/hooks/use-admin-users";
+import {
+  AdminUserActionDialog,
+  type AdminUserAction,
+} from "@/components/admin/user-action-dialog";
+import {
+  useAdminUserDirectory,
+  useRevokeAdminUserSessions,
+  useSetAdminUserActive,
+  useUnlockAdminUser,
+} from "@/hooks/use-admin-users";
 import { cn } from "@/lib/utils";
 import type {
   AdminUserSort,
@@ -149,6 +162,33 @@ function UsersDirectory() {
   );
 
   const directoryQuery = useAdminUserDirectory(query);
+  const revokeSessions = useRevokeAdminUserSessions();
+  const setActive = useSetAdminUserActive();
+  const unlock = useUnlockAdminUser();
+
+  // The row and the verb together, so the dialog's wording and the endpoint it calls cannot
+  // disagree with each other while it closes.
+  const [pending, setPending] = useState<{
+    user: AdminUserSummaryDto;
+    action: AdminUserAction;
+  } | null>(null);
+
+  const runPendingAction = (reason: string) => {
+    if (!pending) return Promise.resolve();
+    const { user, action } = pending;
+    const request = { reason };
+
+    switch (action) {
+      case "revoke-sessions":
+        return revokeSessions.mutateAsync({ userId: user.id, request });
+      case "unlock":
+        return unlock.mutateAsync({ userId: user.id, request });
+      case "deactivate":
+        return setActive.mutateAsync({ userId: user.id, isActive: false, request });
+      case "reactivate":
+        return setActive.mutateAsync({ userId: user.id, isActive: true, request });
+    }
+  };
   const items = directoryQuery.data?.items ?? [];
   const total = directoryQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -278,12 +318,25 @@ function UsersDirectory() {
           <ul>
             {items.map((user) => (
               <li key={user.id}>
-                <UserRow user={user} />
+                <UserRow
+                  user={user}
+                  onAction={(target, action) => setPending({ user: target, action })}
+                />
               </li>
             ))}
           </ul>
         )}
       </AdminPanel>
+
+      <AdminUserActionDialog
+        user={pending?.user ?? null}
+        action={pending?.action ?? "revoke-sessions"}
+        onOpenChange={(open) => {
+          if (!open) setPending(null);
+        }}
+        onSubmit={runPendingAction}
+        isSaving={revokeSessions.isPending || setActive.isPending || unlock.isPending}
+      />
 
       {totalPages > 1 ? (
         <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
@@ -314,7 +367,13 @@ function UsersDirectory() {
   );
 }
 
-function UserRow({ user }: { user: AdminUserSummaryDto }) {
+function UserRow({
+  user,
+  onAction,
+}: {
+  user: AdminUserSummaryDto;
+  onAction: (user: AdminUserSummaryDto, action: AdminUserAction) => void;
+}) {
   return (
     <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
       <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -347,6 +406,41 @@ function UserRow({ user }: { user: AdminUserSummaryDto }) {
 
       <div className="w-[150px] shrink-0 md:text-right">
         <LastLoginCell value={user.lastLoginAt} />
+      </div>
+
+      {/* A deleted account offers nothing: every action here would be acting on somebody who is
+          already gone, and the endpoints refuse it. Unlock appears only while there is a lockout
+          to clear, so the row never offers a no-op. */}
+      <div className="flex shrink-0 items-center justify-end gap-1.5 md:ml-3">
+        {user.status === "deleted" ? (
+          <span className="text-[11px] text-ink-subtle">—</span>
+        ) : (
+          <>
+            {user.status === "locked" ? (
+              <Button variant="outline" size="sm" onClick={() => onAction(user, "unlock")}>
+                <LockOpen size={13} />
+                Unlock
+              </Button>
+            ) : null}
+            {user.activeSessionCount > 0 ? (
+              <Button variant="outline" size="sm" onClick={() => onAction(user, "revoke-sessions")}>
+                <SignOut size={13} />
+                Sign out
+              </Button>
+            ) : null}
+            {user.status === "deactivated" ? (
+              <Button variant="outline" size="sm" onClick={() => onAction(user, "reactivate")}>
+                <UserCirclePlus size={13} />
+                Reactivate
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => onAction(user, "deactivate")}>
+                <UserCircleMinus size={13} />
+                Deactivate
+              </Button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

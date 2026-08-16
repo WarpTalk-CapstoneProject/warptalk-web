@@ -188,6 +188,20 @@ export const API = {
   adminUsers: {
     base: "/admin/users",
     detail: (id: string) => `/admin/users/${id}`,
+    /**
+     * The three privileged actions, all POST and all requiring a reason.
+     *
+     * POST rather than DELETE on revoke-sessions because nothing is removed: the refresh tokens
+     * stay as rows carrying a revocation time, which is what lets the account's history still
+     * show it was signed in and when that stopped.
+     *
+     * There is still no delete. A user's rows reach transcripts, voice profiles and billing
+     * across four services — removing one is a data-lifecycle decision, not a button on a table.
+     */
+    revokeSessions: (id: string) => `/admin/users/${id}/revoke-sessions`,
+    deactivate: (id: string) => `/admin/users/${id}/deactivate`,
+    reactivate: (id: string) => `/admin/users/${id}/reactivate`,
+    unlock: (id: string) => `/admin/users/${id}/unlock`,
   },
   /** Platform subscription directory and revenue summary (billing service). Read-only. */
   /**

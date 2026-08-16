@@ -71,6 +71,17 @@ export interface AdminUserDetailDto {
   activeSessions: AdminUserSessionDto[];
 }
 
+/**
+ * What every privileged action on an account carries.
+ *
+ * The reason is required by the server, not just by this form. It is written to the platform
+ * audit log alongside the actor taken from the token, and the action is refused if that record
+ * cannot be written — so a blank reason is not a nicety to skip, it is the request failing.
+ */
+export interface AdminUserActionRequest {
+  reason: string;
+}
+
 export interface AdminUserDirectoryQuery {
   page?: number;
   pageSize?: number;
