@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Download, FileText, Spinner } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
+import { ArtifactContentView } from "@/components/rooms/artifact-content";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,8 +118,8 @@ export default function RoomArtifactsPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {artifact.content ? (
-                    <div className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border bg-muted/30 p-3 text-sm">
-                      {formatContent(artifact.content)}
+                    <div className="max-h-64 overflow-auto">
+                      <ArtifactContentView content={artifact.content} />
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -152,10 +153,3 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatContent(content: string) {
-  try {
-    return JSON.stringify(JSON.parse(content), null, 2);
-  } catch {
-    return content;
-  }
-}

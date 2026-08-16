@@ -8,7 +8,9 @@
  */
 
 import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
-import { parseSummarySections } from "@/lib/meeting/meeting-summary";
+// Relative on purpose: the node test runner resolves no path aliases, so a VALUE imported
+// through "@/" makes this module — and everything that parses a summary — untestable.
+import { parseSummarySections } from "../lib/meeting/meeting-summary.ts";
 
 export interface MeetingSummaryActionItem {
   owner: string;

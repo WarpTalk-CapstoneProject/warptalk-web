@@ -30,6 +30,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 
+import { ArtifactContentView } from "@/components/rooms/artifact-content";
 import { Badge } from "@/components/ui/badge";
 import {
   WorkspaceBody,
@@ -257,12 +258,14 @@ function ArtifactPreview({ artifactId }: { artifactId: string }) {
   }
 
   return (
-    <div className="px-1 pb-3">
+    <div className="max-h-[420px] overflow-auto px-1 pb-3">
       {/* Capped and scrollable. A ninety-minute transcript is thousands of lines, and a preview
-          that pushes every other artifact off the page is not a preview. */}
-      <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md border border-hairline bg-surface-1 p-3 font-sans text-[12px] leading-relaxed text-ink-muted">
-        {data.content}
-      </pre>
+          that pushes every other artifact off the page is not a preview.
+
+          WT-432: this used to be a <pre> around data.content, which for the summary export meant
+          the reader was shown its raw JSON — the app has parsed that into prose since WT-13, just
+          never here. */}
+      <ArtifactContentView content={data.content} />
     </div>
   );
 }
