@@ -44,6 +44,7 @@ interface TranslationRoomStoreState {
   removeParticipant: (userId: string) => void;
   updateParticipantMute: (userId: string, isMuted: boolean) => void;
   updateParticipantSpeakLanguage: (userId: string, speakLanguage: string) => void;
+  updateParticipantListenLanguage: (userId: string, listenLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
   addSuggestion: (suggestion: AiSuggestionDto, preferredLanguage?: string) => void;
@@ -102,6 +103,20 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
     set((s) => ({
       participants: s.participants.map((p) =>
         p.userId === userId ? { ...p, speakLanguage } : p
+      ),
+    })),
+
+  // The listen half of the pair above, and it was missing — with a consequence bigger than a
+  // stale roster row. hasDubAudience() answers "is anyone listening in another language?" from
+  // each OTHER participant's listenLanguage, and that sentence is what the Voice panel shows
+  // ("Nobody is listening in another language right now, so nothing is being dubbed"). With no
+  // live update, a partner switching languages mid-meeting never changed the sentence: in the
+  // 16 Aug test both users sat on "nobody is listening" while the mesh had already built their
+  // routes, and concluded voice clone was broken.
+  updateParticipantListenLanguage: (userId, listenLanguage) =>
+    set((s) => ({
+      participants: s.participants.map((p) =>
+        p.userId === userId ? { ...p, listenLanguage } : p
       ),
     })),
 
