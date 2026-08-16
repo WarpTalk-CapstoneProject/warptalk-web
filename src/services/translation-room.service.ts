@@ -5,6 +5,7 @@ import type {
   CreateRecurringRoomResponse,
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
+  JoinTranslationRoomRequest,
   JoinTranslationRoomResultDto,
   SubmitTranslationRoomFeedbackRequest,
   TranslationRoomArtifactDto,
@@ -264,6 +265,20 @@ export const translationRoomService = {
 
   async leave(id: string) {
     return apiClient.put<void>(API.translationRooms.leave(id));
+  },
+
+  /**
+   * WT-433 (Linear): join by room ID — what a shared LINK produces. Server-gated on membership
+   * of the room's workspace; a requires-approval room lands the caller in the waiting room, so
+   * this is how an uninvited teammate asks to join instead of dead-ending on the detail page.
+   */
+  async joinById(roomId: string, data: JoinTranslationRoomRequest) {
+    return apiClient.post<BackendJoinResponse>(`/translation-rooms/${roomId}/join`, {
+      translationRoomCode: "",
+      displayName: data.displayName.trim(),
+      speakLanguage: data.speakLanguage,
+      listenLanguage: data.listenLanguage,
+    });
   },
 
   async joinByCode(data: JoinTranslationRoomByCodeRequest) {
