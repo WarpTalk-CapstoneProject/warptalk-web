@@ -64,19 +64,24 @@ import { formatMoney } from "@/lib/format/currency";
  *     A button that takes money and grants nothing cannot stay reachable while the handler is
  *     written. Turning it off is the smallest change that stops the harm.
  *
- * WHY THE PRICE IS ONE NUMBER
- *     The ladder here was 10 / 9 / 8.5 / 8 VND per credit with volume discounts. None of it is
- *     real: docs/credit-economics.md §4.2 sets retail at 4.00 VND per credit with no discount,
- *     and the backend already agrees (CreditValueVnd = 4m). The frontend was overcharging by
- *     2–2.5×; a 1,500-credit minimum was quoted at 15,000 VND against a true 6,000 VND.
+ * WT-429 — THE HANDLER NOW EXISTS, SO THIS IS BACK ON.
+ *     CreditTopUpPaymentEventHandler is registered and claims "CreditTopUp"; the credit count
+ *     travels on the Stripe session metadata; and PaymentAppService logs loudly when a PAID
+ *     payment type matches no handler, so the silent version of this incident cannot recur.
  *
- *     It is stated, not hardcoded into a calculation: 4 VND is an admin-editable parameter in
- *     billing_pricing_config, so once the handler exists this panel must READ the configured
- *     value rather than carry its own copy — even a copy that happens to be right today.
+ * WHY THE PRICE IS NO LONGER OURS TO QUOTE
+ *     The ladder here was 10 / 9 / 8.5 / 8 VND per credit with volume discounts. None of it was
+ *     real: docs/credit-economics.md §4.2 sets retail at 4.00 VND with no discount, and the
+ *     backend agreed (CreditValueVnd = 4m) — the frontend was overcharging by 2–2.5×.
+ *
+ *     The fix is not a corrected constant. The request now carries the CREDIT COUNT and the
+ *     server prices it against billing_pricing_config, overwriting whatever amount we sent, so
+ *     this page cannot drift from the real rate again. DOCUMENTED_VND_PER_CREDIT survives for
+ *     the on-screen estimate ONLY; the charge is whatever the server computes.
  */
-const TOP_UP_ENABLED = false;
+const TOP_UP_ENABLED = true;
 
-/** Retail rate from docs/credit-economics.md §4.2. Display only — see above. */
+/** Retail rate from docs/credit-economics.md §4.2. Display only — the server sets the price. */
 /** Stripe refuses a charge under 15,000 VND, which is 1,500 credits at the documented rate. */
 const TOP_UP_MINIMUM_CREDITS = 1500;
 
@@ -223,6 +228,8 @@ export default function WorkspacePlansPage() {
     billingCycle = "",
     /** Set once the change-plan dialog has been confirmed, so it is not shown a second time. */
     confirmed = false,
+    /** WT-429, top-ups only: the credit count. The SERVER prices it — see below. */
+    credits = 0,
   ) => {
     if (!isAuthenticated || !user) {
       router.push("/login");
@@ -275,6 +282,7 @@ export default function WorkspacePlansPage() {
         paymentType,
         planSlug: planSlug || undefined,
         billingCycle: billingCycle || undefined,
+        credits: credits > 0 ? credits : undefined,
       });
       if (url) window.location.assign(url);
     } catch {
@@ -776,7 +784,7 @@ export default function WorkspacePlansPage() {
                 type="button"
                 disabled={isProcessing || topUpCredits < TOP_UP_MINIMUM_CREDITS}
                 onClick={() =>
-                  handleCheckout(topUpTotal, "CreditTopUp", "", "")
+                  handleCheckout(topUpTotal, "CreditTopUp", "", "", false, topUpCredits)
                 }
                 className="inline-flex items-center justify-center w-full rounded-xl h-14 text-base font-semibold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 bg-primary hover:bg-primary-hover text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
               >

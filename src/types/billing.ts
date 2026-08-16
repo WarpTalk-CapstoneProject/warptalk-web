@@ -36,6 +36,16 @@ export interface CreateCheckoutSessionRequest {
   paymentType: string;
   planSlug?: string;
   billingCycle?: string;
+  /**
+   * WT-429, credit top-ups only: how many credits to buy.
+   *
+   * This — not `amount` — is the authoritative field for a top-up. The server prices it against
+   * the admin-editable `credit_value_vnd` and overwrites `amount` with the result, so the
+   * browser can no longer name its own exchange rate (the old panel quoted from a hardcoded
+   * constant that had drifted 2–2.5× off the real rate). The same count rides on the Stripe
+   * session so the completion handler grants exactly what was paid for.
+   */
+  credits?: number;
 }
 
 export interface CheckoutSessionDto {
