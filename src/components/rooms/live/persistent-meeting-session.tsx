@@ -104,6 +104,7 @@ import {
   resolveListenLanguage,
   resolveSpeakLanguage,
 } from "@/lib/language/participant-language-preference";
+import { waitForReadyConnection } from "@/lib/meeting/wait-for-hub-connection";
 import {
   MINI_MEETING_IDLE_WARNING_MS,
   evaluateIdleMeeting,
@@ -848,25 +849,21 @@ export function PersistentMeetingSession({
     (async () => {
       // The hub connection may still be mid-handshake (e.g. this is the freshly-resolved
       // room default, arriving a beat after the SignalR connection kicked off) — retry
-      // briefly rather than silently dropping the language on the floor. Same backoff
-      // shape as the join retry below.
-      for (const delay of [0, 300, 800, 1500]) {
-        if (cancelled) return;
-        if (delay)
-          await new Promise((resolve) => window.setTimeout(resolve, delay));
-        const connection = translationConnectionRef.current;
-        if (connection?.state === HubConnectionState.Connected) {
-          try {
-            await connection.invoke(
-              "SetListenLanguage",
-              roomId,
-              listenLanguage,
-            );
-          } catch {
-            toast.error("Could not update listen language.");
-          }
-          return;
-        }
+      // briefly rather than silently dropping the language on the floor.
+      //
+      // WT-434: through the shared helper, whose cancellation survives the sleep. The
+      // inlined loop here checked `cancelled` only before sleeping, so a value superseded
+      // mid-wait was still sent — 300ms after mount, over the newer one.
+      const connection = await waitForReadyConnection({
+        getConnection: () => translationConnectionRef.current,
+        isReady: (hub) => hub.state === HubConnectionState.Connected,
+        isCancelled: () => cancelled,
+      });
+      if (!connection || cancelled) return;
+      try {
+        await connection.invoke("SetListenLanguage", roomId, listenLanguage);
+      } catch {
+        toast.error("Could not update listen language.");
       }
     })();
 
@@ -900,19 +897,18 @@ export function PersistentMeetingSession({
 
     let cancelled = false;
     (async () => {
-      for (const delay of [0, 300, 800, 1500]) {
-        if (cancelled) return;
-        if (delay)
-          await new Promise((resolve) => window.setTimeout(resolve, delay));
-        const connection = translationConnectionRef.current;
-        if (connection?.state === HubConnectionState.Connected) {
-          try {
-            await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
-          } catch {
-            toast.error("Could not update speak language.");
-          }
-          return;
-        }
+      // WT-434: see the listen effect above — this is the side whose stale resend put
+      // speak=en on a Vietnamese speaker's row and fed STT the wrong hint.
+      const connection = await waitForReadyConnection({
+        getConnection: () => translationConnectionRef.current,
+        isReady: (hub) => hub.state === HubConnectionState.Connected,
+        isCancelled: () => cancelled,
+      });
+      if (!connection || cancelled) return;
+      try {
+        await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
+      } catch {
+        toast.error("Could not update speak language.");
       }
     })();
 
@@ -962,29 +958,26 @@ export function PersistentMeetingSession({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      for (const delay of [0, 300, 800, 1500]) {
-        if (cancelled) return;
-        if (delay)
-          await new Promise((resolve) => window.setTimeout(resolve, delay));
-        const connection = translationConnectionRef.current;
-        if (connection?.state === HubConnectionState.Connected) {
-          try {
-            const catalog = await connection.invoke<VoiceOptionDto[]>(
-              "GetVoiceCatalog",
-              targetLanguage,
-            );
-            if (!cancelled) {
-              setVoiceCatalogState({
-                language: targetLanguage,
-                items: catalog ?? [],
-              });
-            }
-          } catch {
-            // Non-critical — the picker just shows no extra options; the automatic
-            // per-speaker default voice keeps working regardless.
-          }
-          return;
+      const connection = await waitForReadyConnection({
+        getConnection: () => translationConnectionRef.current,
+        isReady: (hub) => hub.state === HubConnectionState.Connected,
+        isCancelled: () => cancelled,
+      });
+      if (!connection || cancelled) return;
+      try {
+        const catalog = await connection.invoke<VoiceOptionDto[]>(
+          "GetVoiceCatalog",
+          targetLanguage,
+        );
+        if (!cancelled) {
+          setVoiceCatalogState({
+            language: targetLanguage,
+            items: catalog ?? [],
+          });
         }
+      } catch {
+        // Non-critical — the picker just shows no extra options; the automatic
+        // per-speaker default voice keeps working regardless.
       }
     })();
 
@@ -1005,23 +998,22 @@ export function PersistentMeetingSession({
 
     let cancelled = false;
     (async () => {
-      for (const delay of [0, 300, 800, 1500]) {
-        if (cancelled) return;
-        if (delay)
-          await new Promise((resolve) => window.setTimeout(resolve, delay));
-        const connection = translationConnectionRef.current;
-        if (connection?.state === HubConnectionState.Connected) {
-          try {
-            await connection.invoke(
-              "SetVoicePreference",
-              roomId,
-              voicePreference || "",
-            );
-          } catch {
-            toast.error("Could not update voice preference.");
-          }
-          return;
-        }
+      // WT-434: same stale-resend hazard as the language effects — a voice pick superseded
+      // during the handshake wait must not be sent late over the newer one.
+      const connection = await waitForReadyConnection({
+        getConnection: () => translationConnectionRef.current,
+        isReady: (hub) => hub.state === HubConnectionState.Connected,
+        isCancelled: () => cancelled,
+      });
+      if (!connection || cancelled) return;
+      try {
+        await connection.invoke(
+          "SetVoicePreference",
+          roomId,
+          voicePreference || "",
+        );
+      } catch {
+        toast.error("Could not update voice preference.");
       }
     })();
 
@@ -2599,6 +2591,17 @@ export function PersistentMeetingSession({
                     }
                     onChangeListenLanguage={handleChangeListenLanguage}
                     onChangeSpeakLanguage={handleChangeSpeakLanguage}
+                    // WT-434: a bar pick becomes the remembered profile. Only the language
+                    // MODAL saved settings before, so a profile written by the old two-column
+                    // UI (speak=vi, listen=en) was fossilized — every later meeting's
+                    // remembered-language auto-apply resurrected the split however many times
+                    // the user picked one language in the bar.
+                    onLanguagePicked={(language) =>
+                      updateUserSettings.mutate({
+                        defaultSpeakLanguage: language,
+                        defaultListenLanguage: language,
+                      })
+                    }
                     onChangeVoicePreference={handleChangeVoicePreference}
                     onChangeVoiceCloneConsent={handleChangeVoiceCloneConsent}
                     onChangeVoiceEnabled={handleChangeVoiceEnabled}
