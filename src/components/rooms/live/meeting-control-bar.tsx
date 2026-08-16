@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/meeting/language-choice";
 import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
+import { Switch } from "@/components/ui/switch";
 // Button, Dialog* and the Fingerprint icon were imported and never used — dead since whatever
 // removed their last call site, and invisible because unused imports are a warning here rather
 // than an error. `Plus` joined them when AddLanguageRow went.
@@ -259,7 +260,16 @@ export function MeetingControlBar({
   }
 
   return (
-    <div className="flex h-[60px] items-center gap-2 rounded-full border border-border/50 bg-surface-1/80 px-3 shadow-sm backdrop-blur-xl">
+    <div className="relative flex h-[60px] items-center gap-2 rounded-full border border-border/50 bg-surface-1/80 px-3 shadow-sm backdrop-blur-xl">
+      {/* The clone capture, OUTSIDE the settings menu.
+          The progress block below (inside the Voice section) only exists while that menu is
+          open — and recording a voice reference takes twenty seconds of talking, which nobody
+          does while holding a menu open. Close the menu and the one live signal that capture
+          was working disappeared; "ủa nó ko tự thu hở" was the reasonable reading of that
+          silence, and asking people to keep a settings panel open to watch a progress bar is
+          not an answer. This card floats above the bar for as long as there is a state worth
+          reporting, whatever the menu is doing. */}
+      <CloneCaptureCard status={cloneStatus} suppressed={isSettingsMenuOpen && settingsSection === "voice"} />
       {isHost && onStartWarptalk && onStopWarptalk ? (
         <>
           <button
@@ -587,13 +597,30 @@ export function MeetingControlBar({
                 <>
                   <SettingsPanelHeader title="Voice" onBack={() => setSettingsSection("root")} />
                   {onChangeVoiceEnabled ? (
-                    <SettingsRow
-                      label={voiceEnabled === false ? "Transcript only" : "Voice on"}
-                      icon={voiceEnabled === false ? <SpeakerSlash className="h-4 w-4" /> : <SpeakerHigh className="h-4 w-4" />}
-                      active={voiceEnabled !== false}
-                      value={voiceEnabled === false ? "Tap to hear voice" : "Tap for transcript only"}
-                      onClick={() => onChangeVoiceEnabled(voiceEnabled === false)}
-                    />
+                    // A switch, not a tap-row. The old row was a button whose LABEL was the
+                    // current state and whose VALUE was an instruction to invert it ("Voice on ·
+                    // Tap for transcript only") — three phrases a reader has to reconcile before
+                    // knowing which state they are in, for what is a boolean. A switch carries
+                    // its state and its affordance in one control, and cannot be misread as a
+                    // caption.
+                    <div className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">
+                        {voiceEnabled === false ? <SpeakerSlash className="h-4 w-4" /> : <SpeakerHigh className="h-4 w-4" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-ink">Voice</span>
+                        <span className="block truncate text-[11px] text-ink-muted">
+                          {voiceEnabled === false
+                            ? "Off — you read translations instead of hearing them."
+                            : "On — translations are spoken to you."}
+                        </span>
+                      </span>
+                      <Switch
+                        checked={voiceEnabled !== false}
+                        onCheckedChange={(checked) => onChangeVoiceEnabled(checked)}
+                        aria-label="Hear translated voice"
+                      />
+                    </div>
                   ) : null}
                   {voiceEnabled !== false ? (
                     <>
@@ -706,6 +733,88 @@ export function MeetingControlBar({
           ) : null}
         </AnimatePresence>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The floating clone-capture card — the Voice section's progress block, freed from the menu.
+ *
+ * `suppressed` while the Voice section itself is open, because the identical information is
+ * already on screen there and two synchronized progress bars read as a rendering bug.
+ *
+ * "done" shows briefly and dismisses itself: the completed state is a fact worth a glance, not
+ * a card worth keeping. "working" and "blocked" stay — one is a bar filling, the other needs
+ * the user to act (speak up, move closer) and hiding it would re-create the silence this
+ * exists to end. Both can be dismissed by hand; a new reason from the worker brings it back.
+ */
+function CloneCaptureCard({
+  status,
+  suppressed,
+}: {
+  status: ReturnType<typeof describeCloneCapture>;
+  suppressed: boolean;
+}) {
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  // What makes this occurrence "the same one" for dismissal: the tone plus the title. Progress
+  // ticks within a capture keep the key stable, so dismissing "Recording your voice" does not
+  // resurface on every chunk — but a rejection, or completion, is a new key and shows again.
+  const occurrenceKey = `${status.tone}:${status.title}`;
+
+  const [doneExpired, setDoneExpired] = useState(false);
+  useEffect(() => {
+    if (status.tone !== "done") {
+      setDoneExpired(false);
+      return;
+    }
+    const timer = setTimeout(() => setDoneExpired(true), 6000);
+    return () => clearTimeout(timer);
+  }, [status.tone, status.title]);
+
+  if (suppressed) return null;
+  if (status.tone === "idle") return null;
+  if (dismissedKey === occurrenceKey) return null;
+  if (status.tone === "done" && doneExpired) return null;
+
+  return (
+    <div className="absolute bottom-[calc(100%+10px)] right-0 z-40 w-72 rounded-xl border border-border bg-surface-1 p-3 shadow-lg">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <p className="min-w-0 truncate text-[12px] font-medium text-ink">{status.title}</p>
+          {status.quality ? (
+            <span
+              className={`shrink-0 text-[10px] uppercase tracking-wide ${
+                status.quality === "good"
+                  ? "text-emerald-600"
+                  : status.quality === "fair"
+                    ? "text-amber-600"
+                    : "text-ink-muted"
+              }`}
+            >
+              {status.quality}
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setDismissedKey(occurrenceKey)}
+          aria-label="Dismiss voice capture status"
+          className="shrink-0 rounded p-0.5 text-ink-subtle transition-colors hover:text-ink"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {status.progress !== null ? (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-3">
+          <div
+            className={`h-full rounded-full transition-[width] duration-500 ${
+              status.tone === "done" ? "bg-emerald-500" : "bg-primary"
+            }`}
+            style={{ width: `${Math.round(status.progress * 100)}%` }}
+          />
+        </div>
+      ) : null}
+      <p className="mt-1.5 text-[11px] leading-snug text-ink-muted">{status.detail}</p>
     </div>
   );
 }

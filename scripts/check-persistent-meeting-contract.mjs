@@ -226,4 +226,25 @@ assert.match(
   "TranslationRoomStarted must only re-join clients that hold no live session — a re-join disconnects LiveKit and stops published tracks",
 );
 
+// --- Both halves of a partner's language change must land live -----------------------------
+// The hub broadcasts speak ("ParticipantSpeakLanguageChanged") and listen
+// ("ParticipantLanguageChanged" — the event predates the split, hence the unqualified name).
+// Only the speak half was handled, and the miss was not cosmetic: hasDubAudience() answers
+// "is anyone listening in another language?" from the OTHERS' listen languages, and that
+// sentence is the Voice panel's whole explanation of whether cloning is doing anything. In the
+// 16 Aug production test it sat frozen on "Nobody is listening in another language" through
+// every switch the partner made, while the backend had already rebuilt the routes — and the
+// team concluded voice clone was broken. One handler existing without the other is exactly the
+// kind of half-wiring this file exists to pin.
+assert.match(
+  meetingSession,
+  /connection\.on\(\s*\n?\s*"ParticipantSpeakLanguageChanged"[\s\S]{0,400}?updateParticipantSpeakLanguage\(/,
+  "a partner's live speak-language change must update the roster without a refetch",
+);
+assert.match(
+  meetingSession,
+  /connection\.on\(\s*\n?\s*"ParticipantLanguageChanged"[\s\S]{0,700}?updateParticipantListenLanguage\(/,
+  "a partner's live listen-language change must update the roster — hasDubAudience reads it, and without this the Voice panel's audience line freezes at join-time state",
+);
+
 console.log("Persistent meeting contract passed.");

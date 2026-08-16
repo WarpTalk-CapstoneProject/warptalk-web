@@ -382,6 +382,9 @@ export function PersistentMeetingSession({
   const updateParticipantSpeakLanguage = useTranslationRoomStore(
     (state) => state.updateParticipantSpeakLanguage,
   );
+  const updateParticipantListenLanguage = useTranslationRoomStore(
+    (state) => state.updateParticipantListenLanguage,
+  );
   const { rightSidebarOpen, setLeftSidebarOpen, setRightSidebarOpen } =
     useUIStore();
 
@@ -1626,6 +1629,20 @@ export function PersistentMeetingSession({
       "ParticipantSpeakLanguageChanged",
       (userId: string, speakLanguage: string) => {
         updateParticipantSpeakLanguage(userId, speakLanguage);
+      },
+    );
+    // The listen half. The hub has broadcast this ("ParticipantLanguageChanged" — the event
+    // predates the speak/listen split, hence the unqualified name) for as long as the speak
+    // one, and nothing here listened. hasDubAudience() reads the OTHERS' listen languages, so
+    // without this handler the Voice panel's "Nobody is listening in another language" line
+    // was frozen at whatever the participants query returned at join — in the 16 Aug test it
+    // sat on "nobody is listening" through every language change the partner made, while the
+    // backend had already regenerated the routes. The one fact that would have told the team
+    // the mesh was fine was the one fact that never updated.
+    connection.on(
+      "ParticipantLanguageChanged",
+      (userId: string, listenLanguage: string) => {
+        updateParticipantListenLanguage(userId, listenLanguage);
       },
     );
 
