@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowsClockwise, Megaphone, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { ArrowsClockwise, Megaphone, PaperPlaneTilt, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
 import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
-import { useAdminAnnouncements } from "@/hooks/use-admin-announcements";
+import { AnnouncementComposer } from "@/components/admin/announcement-composer";
+import { useAdminAnnouncements, useSendAdminAnnouncement } from "@/hooks/use-admin-announcements";
 import { cn } from "@/lib/utils";
 import type { AdminAnnouncementSummaryDto } from "@/types/admin-announcement";
 
@@ -32,6 +33,8 @@ function AnnouncementsList() {
 
   const query = useMemo(() => ({ page, pageSize: PAGE_SIZE }), [page]);
   const listQuery = useAdminAnnouncements(query);
+  const sendAnnouncement = useSendAdminAnnouncement();
+  const [isComposing, setIsComposing] = useState(false);
 
   const items = listQuery.data?.items ?? [];
   // totalCount, not total — this endpoint predates the shared admin envelope, and reading the
@@ -55,15 +58,21 @@ function AnnouncementsList() {
         title="Announcements"
         description="Platform-wide notices that have been sent to users."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void listQuery.refetch()}
-            disabled={listQuery.isFetching}
-          >
-            <ArrowsClockwise size={14} className={cn(listQuery.isFetching && "animate-spin")} />
-            Refresh
-          </Button>
+          <>
+            <Button size="sm" onClick={() => setIsComposing(true)}>
+              <PaperPlaneTilt size={14} weight="fill" />
+              Compose
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void listQuery.refetch()}
+              disabled={listQuery.isFetching}
+            >
+              <ArrowsClockwise size={14} className={cn(listQuery.isFetching && "animate-spin")} />
+              Refresh
+            </Button>
+          </>
         }
       />
 
@@ -139,13 +148,21 @@ function AnnouncementsList() {
         </div>
       ) : null}
 
-      {/* No compose button, deliberately. POST /admin/notifications delivers to every targeted
-          user at once and there is no undo — an outward-facing send deserves its own release and
-          its own confirmation design, not a button on a list nobody has reviewed yet. */}
+      {/* Compose goes through a review step rather than straight from the form. The send is
+          irreversible — the service publishes delivery events onto a stream a live consumer is
+          reading — so the confirmation naming the recipients is the design, not decoration. */}
       <p className="mt-4 text-[12px] text-ink-muted">
-        Read-only. Sending an announcement reaches every targeted user at once and cannot be
-        recalled, so composing one is deliberately not wired up here yet.
+        An announcement is delivered once to the people it names and cannot be edited, recalled or
+        deleted afterwards. There is no &ldquo;everyone&rdquo; audience: the service accepts a
+        named list until a segment resolver is configured.
       </p>
+
+      <AnnouncementComposer
+        open={isComposing}
+        onOpenChange={setIsComposing}
+        onSend={(request) => sendAnnouncement.mutateAsync(request)}
+        isSending={sendAnnouncement.isPending}
+      />
     </AdminPage>
   );
 }

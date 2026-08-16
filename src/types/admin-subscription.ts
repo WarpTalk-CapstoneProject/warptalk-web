@@ -79,6 +79,17 @@ export interface AdminSubscriptionSummaryTotalsDto {
   endingWithin14Days: number;
 }
 
+/**
+ * Why a subscription was cancelled or brought back.
+ *
+ * Required by this UI even though the server takes it as optional. The action is visible to the
+ * workspace — cancelling republishes entitlements and notifies the owner — so "somebody at
+ * WarpTalk did this" needs to come with a because, and an optional box is one nobody fills in.
+ */
+export interface AdminSubscriptionLifecycleRequest {
+  reason: string;
+}
+
 export interface AdminSubscriptionDirectoryQuery {
   page?: number;
   pageSize?: number;
