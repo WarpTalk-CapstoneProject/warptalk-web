@@ -13,6 +13,8 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const client = await readFile(path.join(root, "src/lib/api/client.ts"), "utf8");
+const proxy = await readFile(path.join(root, "src/proxy.ts"), "utf8");
+const authStore = await readFile(path.join(root, "src/stores/auth-store.ts"), "utf8");
 
 const requestInterceptor = client.slice(
   client.indexOf("apiClient.interceptors.request.use"),
@@ -69,6 +71,34 @@ const checks = [
     client.includes("function describeRefreshFailure")
       && client.includes("`client-declared-session-dead(${cause})`")
       && client.includes('return `http-${error.response.status}`'),
+  ],
+  // The logout storm, 16 Aug. endDeadSession() escapes with window.location.href, which destroys
+  // every module-level guard in the tab — the sessionEnded latch and the revoke dedupe both — and
+  // proxy.ts then bounced the visitor back into the app on the strength of an HttpOnly cookie
+  // only it can see. Each bounce was a fresh page with a clean latch and one more logout POST:
+  // 240 refusals in a single minute from one address. Three earlier fixes held inside a page and
+  // none of them survived a navigation, so these four pin the parts that do.
+  [
+    "the dead-session latch survives a page load",
+    client.includes("markSessionDead()")
+      && client.includes("return sessionEnded || isSessionDeadMarked()"),
+  ],
+  [
+    "the latch is checked, not just the module flag, before ending a session again",
+    client.slice(client.indexOf("export function endDeadSession"))
+      .includes("if (isSessionEnded()) {"),
+  ],
+  [
+    "the middleware stops redirecting a visitor whose client gave up",
+    proxy.includes("SESSION_DEAD_COOKIE")
+      && proxy.includes("const clientDeclaredSessionDead")
+      && proxy.includes("isLiveAccessToken(accessToken) && !clientDeclaredSessionDead")
+      && proxy.includes("!clientDeclaredSessionDead"),
+  ],
+  [
+    "signing in clears the mark, so it cannot strand the next session",
+    client.includes("clearSessionDeadMarker()")
+      && authStore.includes("clearSessionDeadMarker()"),
   ],
 ];
 

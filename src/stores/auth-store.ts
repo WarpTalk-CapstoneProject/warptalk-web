@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type { UserDto } from "@/types/auth";
 import {
   clearSessionCookies,
+  clearSessionDeadMarker,
   hasRedeemableSession,
   isLiveAccessToken,
   recordSessionTeardown,
@@ -102,6 +103,11 @@ export const useAuthStore = create<AuthState>()(
         resetSessionScopedStateOnLogin();
         // A new session must be able to sign itself out, even seconds after the last one did.
         resetRevokeDedupe();
+        // And it must not inherit the previous one's obituary. The dead-session mark is what
+        // stops the middleware redirecting a signed-out visitor back into the app; left behind
+        // after a successful sign-in it would do the same thing in reverse, and bounce a working
+        // session back to /login on its first navigation.
+        clearSessionDeadMarker();
         set({ user, accessToken, isAuthenticated: true });
       },
       logout: () => {

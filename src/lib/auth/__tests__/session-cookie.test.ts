@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ACCESS_TOKEN_COOKIE,
+  SESSION_DEAD_COOKIE,
   buildAccessTokenCookie,
+  clearSessionDeadMarker,
   isLiveAccessToken,
+  isSessionDeadMarked,
+  markSessionDead,
   resolveAccessTokenExpiryMs,
   setAccessTokenCookie,
 } from "../session-cookie.ts";
@@ -124,4 +128,88 @@ test("an access token that arrives already expired clears only itself", () => {
     /warptalk_session=;/,
     "the session marker must survive an expired access token",
   );
+});
+
+// ── The dead-session mark ───────────────────────────────────────────────────────────────────
+//
+// The logout storm of 16 Aug, in one sentence: `endDeadSession()` leaves by reassigning
+// window.location, which destroys every module-level guard in the tab, and `proxy.ts` then
+// bounced the visitor straight back into the app on the strength of an HttpOnly cookie only it
+// could see. Each bounce was a fresh page with a clean latch and one more POST /auth/logout —
+// 240 refusals in a minute from one address. The latch therefore has to outlive a page load,
+// and the middleware has to be able to read it.
+
+/** sessionStorage and document.cookie, for a runner that has neither. */
+function withBrowserStorage<T>(run: (written: string[]) => T): T {
+  const written: string[] = [];
+  const store = new Map<string, string>();
+
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      set cookie(value: string) {
+        written.push(value);
+      },
+      get cookie() {
+        return "";
+      },
+    },
+  });
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    },
+  });
+
+  try {
+    return run(written);
+  } finally {
+    // @ts-expect-error the test environment had neither before this
+    delete globalThis.document;
+    // @ts-expect-error the test environment had neither before this
+    delete globalThis.sessionStorage;
+  }
+}
+
+test("the dead-session mark survives where a module variable cannot", () => {
+  withBrowserStorage(() => {
+    assert.equal(isSessionDeadMarked(), false);
+    markSessionDead();
+    // sessionStorage outlives the full page navigation endDeadSession() performs; the module
+    // flag it used to rely on does not, which is why the loop came back round every time.
+    assert.equal(isSessionDeadMarked(), true);
+  });
+});
+
+test("the mark is also a cookie, because the middleware cannot read sessionStorage", () => {
+  withBrowserStorage((written) => {
+    markSessionDead();
+    const cookie = written.join("\n");
+    assert.match(cookie, new RegExp(`${SESSION_DEAD_COOKIE}=1`));
+    // Short-lived on purpose: a stale one must never become a second way to strand somebody.
+    assert.match(cookie, /max-age=120/);
+  });
+});
+
+test("signing in clears both halves, or the trap just points the other way", () => {
+  withBrowserStorage((written) => {
+    markSessionDead();
+    clearSessionDeadMarker();
+
+    assert.equal(isSessionDeadMarked(), false);
+    assert.match(written.join("\n"), new RegExp(`${SESSION_DEAD_COOKIE}=;`));
+  });
+});
+
+test("nothing throws when storage is unavailable", () => {
+  // Private mode, or a blocked third-party context. Losing the cross-load half of the latch is
+  // survivable; throwing inside a sign-out is not.
+  assert.doesNotThrow(() => {
+    markSessionDead();
+    clearSessionDeadMarker();
+  });
+  assert.equal(isSessionDeadMarked(), false);
 });

@@ -4,6 +4,7 @@ import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { isPlatformAdminToken } from "@/lib/api/token-lifecycle";
 import {
   ACCESS_TOKEN_COOKIE,
+  SESSION_DEAD_COOKIE,
   SESSION_MARKER_COOKIE,
   isLiveAccessToken,
 } from "@/lib/auth/session-cookie";
@@ -44,15 +45,39 @@ export function proxy(request: NextRequest) {
   // token inside it lived thirty minutes, so a dead token read as a live session — which
   // both let the user into an app that could only 401 and, worse, bounced them off /login,
   // leaving no route back to a working state.
-  const hasLiveAccessToken = isLiveAccessToken(accessToken);
+  /**
+   * The client has declared this session dead and cannot prove it by deleting cookies.
+   *
+   * This middleware reads cookies SERVER-SIDE, so it sees the three the auth service writes with
+   * `HttpOnly = true` — and no script can delete an HttpOnly cookie. The only thing that clears
+   * them is a `POST /auth/logout` that succeeds, which is exactly the request that fails when a
+   * session dies badly (429 from the gateway, or 401 because the credential is already spent).
+   *
+   * So the browser ends up signed out in JavaScript and signed in here, and this file was the
+   * half that turned that disagreement into a loop: it saw a still-live `access_token`, decided
+   * the visitor belonged in the app, and redirected `/login` back to `/workspace` — where the
+   * client found no readable credential, gave up again, and posted another logout. Roughly twice
+   * a second, each iteration a fresh page load with every in-memory guard wiped.
+   *
+   * This cookie is the client's side of the conversation. It is script-visible on purpose (it
+   * carries nothing) and expires in two minutes, so a stale one can never strand anybody.
+   */
+  const clientDeclaredSessionDead = Boolean(request.cookies.get(SESSION_DEAD_COOKIE)?.value);
+
+  const hasLiveAccessToken = isLiveAccessToken(accessToken) && !clientDeclaredSessionDead;
   const hasStaleAccessToken = Boolean(accessToken) && !hasLiveAccessToken;
 
   // An expired access token does not mean the session is over: the refresh token outlives
   // it by days, and the client refreshes silently. The marker is what says a refresh is
   // still worth attempting. Gating route access on the access token alone would have
   // turned every 7-day session into a 30-minute one.
+  //
+  // The dead-session mark overrides the marker for the same reason it overrides the access
+  // token: the marker is also HttpOnly and also survives a failed sign-out, so honouring it here
+  // would send a visitor whose client has given up straight back into an app that can only 401.
   const hasSession =
-    hasLiveAccessToken || Boolean(request.cookies.get(SESSION_MARKER_COOKIE)?.value);
+    !clientDeclaredSessionDead
+    && (hasLiveAccessToken || Boolean(request.cookies.get(SESSION_MARKER_COOKIE)?.value));
 
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
