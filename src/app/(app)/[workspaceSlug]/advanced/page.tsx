@@ -146,7 +146,17 @@ export default function AdvancedSettingsPage() {
               setTransferConfirmation("");
             }}>
               <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
-                <SelectValue placeholder="Choose a member..." />
+                {/* WT-436 (Linear): a function child, not a bare placeholder. Base UI's
+                    Select.Value does not look up the selected item's rendered children the way
+                    Radix does — with no function child it stringifies the raw value, and the
+                    value here is the member's GUID. Same pattern as the settings page. */}
+                <SelectValue>
+                  {(value) => {
+                    if (!value) return "Choose a member...";
+                    const member = membersList.find((m) => m.userId === value);
+                    return member ? `${member.fullName} (${member.email})` : "Choose a member...";
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {membersList

@@ -19,7 +19,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Check, Minus, Warning } from "@phosphor-icons/react";
 
-import { formatMoney } from "@/lib/format/currency";
+import { formatAmount, formatMoney } from "@/lib/format/currency";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 
 function formatDay(value: string | Date): string {
@@ -68,7 +68,10 @@ export function PlanPanel({
   const cancelling = subscription?.cancelAtPeriodEnd === true;
 
   return (
-    <section className="overflow-hidden rounded-[14px] border border-border bg-surface-1">
+    // WT-430 (Linear): overflow-clip, not overflow-hidden — same corner clipping for the child
+    // hairlines, but no scroll container, so the "Change" control (and any menu later anchored
+    // to this header) cannot be sheared off at the card edge.
+    <section className="overflow-clip rounded-[14px] border border-border bg-surface-1">
       <div className="flex items-start justify-between gap-3 border-b border-hairline px-4 py-3">
         <div className="min-w-0">
           <p className="text-[12px] text-ink-muted">Current plan</p>
@@ -92,7 +95,7 @@ export function PlanPanel({
 
       {subscription ? (
         <div className="space-y-2.5 border-b border-hairline px-4 py-3.5">
-          <Limit label="Credits per cycle" value={(plan?.creditsPerCycle ?? 0).toLocaleString()} />
+          <Limit label="Credits per cycle" value={(formatAmount(plan?.creditsPerCycle ?? 0))} />
           <Limit
             label="Participants per meeting"
             value={plan ? String(plan.maxParticipants) : "—"}

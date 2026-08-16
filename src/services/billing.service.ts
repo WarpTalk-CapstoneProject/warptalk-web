@@ -91,6 +91,38 @@ export const billingService = {
     );
     return data;
   },
+
+  /**
+   * WT-430 (Linear): every transaction the filter matches, paged until the server's own
+   * totalCount is satisfied.
+   *
+   * The repository clamps pageSize to 200, so a single "give me 1000" call silently returned
+   * the newest 200 rows — the export preview summed a fifth of the cycle (-252 credits) while
+   * the server-aggregated service breakdown beside it said 1,615, and the XLSX shipped the
+   * same truncated fifth. The clamp is right (it protects the DB); the export just has to
+   * keep asking. Capped at 50 pages (10,000 rows) so a pathological cycle cannot loop forever
+   * — if that cap is ever hit, totalCount still tells the caller the export is partial.
+   */
+  getAllCreditHistory: async (
+    workspaceId: string,
+    filters?: CreditHistoryFilters,
+  ): Promise<PagedResult<CreditTransactionDto>> => {
+    const pageSize = 200;
+    const first = await billingService.getCreditHistory(workspaceId, 1, pageSize, filters);
+    const items = [...first.items];
+    const totalCount = first.totalCount ?? items.length;
+
+    let page = 2;
+    while (items.length < totalCount && page <= 50) {
+      const next = await billingService.getCreditHistory(workspaceId, page, pageSize, filters);
+      if (next.items.length === 0) break;
+      items.push(...next.items);
+      page += 1;
+    }
+
+    return { items, totalCount };
+  },
+
   /**
    * Paginated global credit transaction history for admins.
    */
