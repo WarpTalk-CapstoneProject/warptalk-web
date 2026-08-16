@@ -196,6 +196,13 @@ export const API = {
    */
   adminPricing: {
     allPlans: "/plans/all",
+    /**
+     * PUT only. The plans controller has no POST and no DELETE — a plan still names itself on
+     * every invoice ever issued against it, so the catalogue grows by migration and a retired
+     * plan is deactivated in place rather than removed.
+     */
+    plan: (id: string) => `/plans/${id}`,
+    /** GET reads the active cards; PUT upserts one, matched on its identity columns. */
     rateCard: "/usages/rate-card",
     pricingConfig: "/usages/pricing-config",
   },
@@ -238,6 +245,20 @@ export const API = {
   adminSubscriptions: {
     base: "/admin/subscriptions",
     summary: "/admin/subscriptions/summary",
+    /**
+     * Lifecycle actions are NOT under /admin. They live on the ordinary subscriptions controller,
+     * keyed by workspace rather than by subscription id, and this is deliberate rather than an
+     * oversight to tidy up: `SubscriptionService.CancelSubscriptionAsync` also cancels the Stripe
+     * subscription, republishes entitlements and notifies the owner. A parallel admin-only route
+     * would be a second, thinner path through the same commercial act — and the untested one.
+     *
+     * A platform admin is already allowed through: `RequireWorkspaceRoleFilter` short-circuits on
+     * the platform "admin" role before it ever asks the workspace service about membership.
+     */
+    cancel: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+    resume: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/resume`,
+    contractTerms: (workspaceId: string) =>
+      `/subscriptions/workspace/${workspaceId}/contract-terms`,
   },
   adminWorkspaces: {
     base: "/admin/workspaces",
