@@ -5,11 +5,13 @@ const createRoom = fs.readFileSync("src/components/rooms/create-room-dialog.tsx"
 const optionsMenu = fs.readFileSync("src/components/rooms/create/options-menu.tsx", "utf8");
 const mockArtifactsPage = "src/app/(app)/workspace/artifacts/page.tsx";
 const assistantPage = fs.readFileSync("src/app/(app)/[workspaceSlug]/ai-chat/page.tsx", "utf8");
-const feedbackPage = fs.readFileSync("src/app/(app)/[workspaceSlug]/feedback/page.tsx", "utf8");
-const artifactsPage = fs.readFileSync(
-  "src/app/(app)/[workspaceSlug]/rooms/[id]/artifacts/page.tsx",
-  "utf8",
-);
+// Feedback is a dialog, not a route: four score rows never needed a page of their own, a query
+// string to carry the meeting id, or an empty state for arriving without one. The surface it must
+// not fabricate is the same either way, so the check follows the component.
+const feedbackDialog = fs.readFileSync("src/components/rooms/feedback-dialog.tsx", "utf8");
+// There is no separate artifacts page any more. It was a second, worse view of the Files tab that
+// the room page and the post-meeting page already carry, and nothing linked to it once the
+// post-meeting page grew its own tabs — an unreachable route is not a surface worth checking.
 const waitingPage = fs.readFileSync(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/waiting/page.tsx",
   "utf8",
@@ -68,10 +70,11 @@ for (const marker of ["initialConversations", "Preview response", "warptalk-ai-c
   }
 }
 for (const [name, source, required, forbidden] of [
-  ["feedback", feedbackPage, "useSubmitTranslationRoomFeedback", ["Submit preview", "recentFeedback"]],
-  ["artifacts", artifactsPage, "translationRoomService.artifacts", ["Ready preview", "Visual preview"]],
+  ["feedback", feedbackDialog, "useSubmitTranslationRoomFeedback", ["Submit preview", "recentFeedback"]],
   ["waiting room", waitingPage, "useTranslationRoomParticipants", ["Preview fallback", "const participants = ["]],
-  ["ended room", endedPage, "translationRoomService.artifacts", ["const jobs = ["]],
+  // The post-meeting page reads the shared room-history record now — the same query the room page
+  // and the archive use — instead of fetching the artifact list a second time under its own key.
+  ["ended room", endedPage, "useEndedRoomRecord", ["const jobs = ["]],
   ["voice profiles", voiceProfilesPage, "useVoiceProfiles", ["FEATURED_VOICES", "Trending voice presets"]],
 ]) {
   if (!source.includes(required)) {

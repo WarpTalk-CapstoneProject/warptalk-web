@@ -27,6 +27,7 @@ import {
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { resolveSummaryState } from "@/lib/meeting/room-history-mapping";
 import {
+  artifactDownloadFormat,
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
@@ -467,12 +468,14 @@ export function ArtifactsPanel({
               <ArtifactIcon artifact={artifact} />
             </span>
             <span className="min-w-0 flex-1">
+              {/* "Transcript", not "transcript export (TXT)". The server's title is generated
+                  from the type and repeats on the second line what the first line already
+                  said — and it is lowercase, because it is derived from an enum name. */}
               <span className="block truncate text-[12px] font-medium text-ink">
-                {artifact.title || artifactLabel(artifact.type)}
+                {artifactLabel(artifact.type)}
               </span>
               <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                {artifactLabel(artifact.type)} · {artifact.format || "—"} ·{" "}
-                {artifactStatusLabel(artifact)}
+                {artifactDownloadFormat(artifact)} · {artifactStatusLabel(artifact)}
               </span>
             </span>
             {busyArtifactId === artifact.id ? (
