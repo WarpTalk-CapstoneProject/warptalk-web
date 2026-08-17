@@ -9,14 +9,16 @@ import {
   Funnel,
   Microphone,
   Plus,
+  ShieldCheck,
   SlidersHorizontal,
   Trash,
   Waveform,
-} from "@phosphor-icons/react/dist/ssr";
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import {
   Dialog,
@@ -56,6 +58,23 @@ const LANGUAGE_OPTIONS = languagesInScope("voiceProfile").map((language) => ({
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
 
+const CONSENT_ITEMS = [
+  { key: "ownVoiceConfirmed", label: "I confirm this is my own voice sample." },
+  { key: "aiUseConfirmed", label: "I allow WarpTalk to use this voice profile for AI speech translation." },
+  { key: "syntheticVoiceAcknowledged", label: "I understand generated speech may sound like me in supported languages." },
+  { key: "noImpersonationConfirmed", label: "I will not use this voice profile to impersonate, deceive, or mislead others." },
+  { key: "retentionAcknowledged", label: "I understand I can delete or revoke this voice profile later." },
+] as const;
+
+type ConsentKey = (typeof CONSENT_ITEMS)[number]["key"];
+const EMPTY_CONSENT: Record<ConsentKey, boolean> = {
+  ownVoiceConfirmed: false,
+  aiUseConfirmed: false,
+  syntheticVoiceAcknowledged: false,
+  noImpersonationConfirmed: false,
+  retentionAcknowledged: false,
+};
+
 export default function VoiceProfilesPage() {
   const { data: profiles, isLoading } = useVoiceProfiles();
   const createMutation = useCreateVoiceProfile();
@@ -69,6 +88,7 @@ export default function VoiceProfilesPage() {
   const [sampleFilter, setSampleFilter] = useState<"all" | "ready" | "missing">("all");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [sampleAssessment, setSampleAssessment] = useState<string | null>(null);
+  const [consent, setConsent] = useState<Record<ConsentKey, boolean>>(EMPTY_CONSENT);
   const [isCheckingSample, setIsCheckingSample] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +125,9 @@ export default function VoiceProfilesPage() {
     });
   }, [languageFilter, profileList, sampleFilter, searchQuery]);
 
+  const consentComplete = CONSENT_ITEMS.every((item) => consent[item.key]);
+  const canSaveProfile = Boolean(displayName.trim() && sampleFile && consentComplete && !isCheckingSample && !isRecording);
+
   function resetForm() {
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.onstop = null;
@@ -119,6 +142,7 @@ export default function VoiceProfilesPage() {
     setLanguage("vi-VN");
     setSampleFile(null);
     setSampleAssessment(null);
+    setConsent(EMPTY_CONSENT);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -213,21 +237,22 @@ export default function VoiceProfilesPage() {
       toast.error("Record or upload a clear voice sample first.");
       return;
     }
+    if (!consentComplete) {
+      toast.error("Complete consent to continue.");
+      return;
+    }
 
     try {
       await createMutation.mutateAsync({
         displayName: displayName.trim(),
         language,
         sample: sampleFile,
+        ...consent,
       });
-      toast.success("Voice profile created");
+      toast.success("Voice profile saved");
       setIsCreateOpen(false);
       resetForm();
     } catch (error) {
-      // The server's own sentence, not a generic failure. This catch used to bind nothing and
-      // show "Failed to create voice profile" for every cause, which is how WT-372 was reported:
-      // the API answered "Unsupported audio format." — naming the defect exactly — and the page
-      // threw that away, so the bug report could only say "API/status code: Chưa xác định".
       toast.error(getErrorMessage(error, "Failed to create voice profile"));
     }
   }
@@ -437,13 +462,47 @@ export default function VoiceProfilesPage() {
               <p className="text-xs text-neutral-500">WAV, MP3, M4A, OGG or WebM, 5–120 seconds, up to 20 MB.</p>
               {sampleAssessment ? <p className="text-xs text-ink-muted">{sampleAssessment}</p> : null}
             </div>
+            <div className="grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={18} weight="fill" className="text-primary shrink-0" />
+                <div>
+                  <p className="text-[13px] font-semibold text-ink">Voice consent & biometric security</p>
+                  <p className="text-[11px] leading-tight text-ink-muted">
+                    Required before WarpTalk can securely process and save your voice model.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-2 pt-1">
+                {CONSENT_ITEMS.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-start gap-2.5 rounded-lg border border-border/60 bg-surface-1 p-2.5 text-xs leading-relaxed text-ink-muted transition-colors hover:border-primary/40 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={consent[item.key]}
+                      onCheckedChange={(checked) =>
+                        setConsent((current) => ({
+                          ...current,
+                          [item.key]: checked === true,
+                        }))
+                      }
+                      className="mt-0.5 shrink-0"
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                ))}
+              </div>
+              {!consentComplete && (
+                <p className="text-[11px] font-medium text-amber-600">Please complete all 5 consent agreements to continue.</p>
+              )}
+            </div>
             <DialogFooter className="pt-2">
               <Button
                 type="submit"
-                disabled={createMutation.isPending || isCheckingSample || isRecording}
-                className="min-w-[80px] text-white"
+                disabled={createMutation.isPending || !canSaveProfile}
+                className="min-w-[170px] text-white"
               >
-                {createMutation.isPending ? "Creating..." : "Create"}
+                {createMutation.isPending ? "Saving..." : "Agree & save voice profile"}
               </Button>
             </DialogFooter>
           </form>
