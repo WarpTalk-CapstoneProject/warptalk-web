@@ -207,7 +207,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     queryKey: ["billing", "balance", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId),
     enabled: !!workspaceId,
-    retry: 1,
+    // WT-451: the provider's retry policy already declines every 4xx. A workspace with no
+    // subscription answers 404 here, and asking twice only doubles the console noise.
   });
 
   const {
