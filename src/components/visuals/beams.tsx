@@ -230,7 +230,6 @@ export function Beams({
     let cleanup: (() => void) | undefined;
 
     async function mount() {
-      // @ts-expect-error - optional three package
       const THREE = await import("three");
       if (cancelled || !containerRef.current) return;
 
