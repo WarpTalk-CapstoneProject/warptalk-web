@@ -189,6 +189,32 @@ export function meetingLanguagesForPolicy(allowedTargetLanguages?: string[] | nu
 }
 
 /**
+ * The languages a pre-join screen may offer for one room: the meeting scope, narrowed by BOTH
+ * limits that apply.
+ *
+ * WT-490 — offering only what the workspace permits is not enough. A workspace permitting
+ * vi/en/ja/ko and a room declaring vi/en offered all four, so a joiner could pick a language
+ * nobody in the room would ever speak, and the pick was accepted. A room is defined by the set of
+ * languages that will be spoken in it, so that set narrows the picker too.
+ *
+ * Each limit is applied through `isLanguageAllowedByPolicy`, which is what keeps an EMPTY list
+ * meaning "unrestricted from this source" rather than "permit nothing". Both arrive empty for a
+ * code that resolves to no room — the endpoint answers that way for a code still being typed — and
+ * the screen must show the full set then, not an empty picker.
+ *
+ * Deliberately intersected here rather than server-side, for that reason: two empties have to stay
+ * distinguishable from "the answer is nothing".
+ */
+export function meetingLanguagesForRoom(
+  allowedTargetLanguages?: string[] | null,
+  roomLanguages?: string[] | null,
+) {
+  return meetingLanguagesForPolicy(allowedTargetLanguages).filter((language) =>
+    isLanguageAllowedByPolicy(language.code, roomLanguages),
+  );
+}
+
+/**
  * Trim a picked meeting-language set down to what the workspace permits, in the same value
  * shape it was given (rooms store locale tags).
  *
