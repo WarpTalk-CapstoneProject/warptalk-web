@@ -1,11 +1,13 @@
 /**
- * The admin Knowledge tab reads a workspace the caller is not a member of.
+ * The admin portal reads NO tenant content — decided 2026-08-17.
  *
- * That makes two properties worth pinning in source rather than trusting to review: the admin
- * surface must go through the admin-gated endpoint, and the two surfaces that read this index
- * must keep sharing one implementation. Both failures are silent — the member endpoint would
- * 403 only for workspaces the admin happens not to belong to, and a copied table drifts without
- * ever breaking a build.
+ * This file used to pin the opposite: an admin Knowledge tab reading a workspace's index
+ * through an admin-gated endpoint. That surface was removed on purpose (the portal sees a
+ * workspace's operational facts — membership, billing, lifecycle — never its content), and
+ * the failure mode this contract now guards against is the tab quietly coming back: each of
+ * these hooks/endpoints is a one-line re-add that no build would ever refuse.
+ *
+ * The member-scoped Knowledge page is untouched and keeps its own invariants below.
  */
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -30,60 +32,52 @@ const [endpoints, service, hooks, table, filters, view, adminDetail, workspacePa
     source("src/app/(app)/[workspaceSlug]/knowledge/page.tsx"),
   ]);
 
-// The admin read has its own endpoint, gated by the platform admin policy.
-assert.match(
-  endpoints,
-  /adminWorkspaces:[\s\S]*knowledge: \(id: string\) => `\/admin\/workspaces\/\$\{id\}\/knowledge`/,
-  "the admin knowledge endpoint must live under /admin/workspaces/{id}/knowledge",
-);
-assert.match(
-  service,
-  /API\.adminWorkspaces\.knowledge/,
-  "the admin service must read the index through the admin-gated endpoint",
-);
-
-// Both surfaces render the same table, and neither reimplements it.
-for (const [name, page] of [
-  ["admin workspace detail", adminDetail],
-  ["workspace knowledge page", workspacePage],
+// The admin surface has no route into the index, at any layer.
+for (const [name, text] of [
+  ["endpoints", endpoints],
+  ["admin workspace service", service],
+  ["admin workspace hooks", hooks],
+  ["admin workspace detail page", adminDetail],
 ]) {
-  assert.match(
-    page,
-    /KnowledgeTable/,
-    `${name} must render the shared KnowledgeTable rather than its own copy`,
-  );
-  assert.match(
-    page,
-    /useKnowledgeFilters/,
-    `${name} must take its filter and cursor state from the shared hook`,
+  assert.doesNotMatch(
+    text,
+    /admin\/workspaces\/\$\{id\}\/knowledge|useAdminWorkspaceKnowledge|listKnowledge|GetKnowledgeForAdmin/i,
+    `${name} must not reference an admin knowledge read — tenant content stays out of the portal`,
   );
 }
-assert.match(
-  adminDetail,
-  /<KnowledgeTab workspaceId=\{workspace\.id\}/,
-  "the knowledge tab must be scoped to the workspace being viewed",
-);
-
-// Each surface reads through its own authorization, and never through the other's.
-assert.match(
-  adminDetail,
-  /useAdminWorkspaceKnowledge/,
-  "the admin tab must use the admin-scoped query hook",
-);
 assert.doesNotMatch(
   adminDetail,
-  /useWorkspaceKnowledge\b/,
-  "the admin tab must not read through the member-scoped hook",
+  /KnowledgeTable|KnowledgeTab/,
+  "the admin detail page must not render the knowledge table",
 );
+
+// What the admin detail page DOES show: operational facts.
+assert.match(
+  adminDetail,
+  /<MembersTab workspaceId=\{workspace\.id\}/,
+  "the admin detail page must show the member roster",
+);
+assert.match(
+  adminDetail,
+  /useAdminWorkspaceAnalytics/,
+  "the admin detail page must read usage from the billing analytics endpoint",
+);
+
+// The member-scoped page keeps its gate and the shared implementation.
 assert.match(
   workspacePage,
   /useWorkspaceKnowledge\b/,
   "the workspace page must keep reading through the member-scoped hook",
 );
-assert.doesNotMatch(
+assert.match(
   workspacePage,
-  /useAdminWorkspaceKnowledge/,
-  "the workspace page must not read through the admin-scoped hook",
+  /KnowledgeTable/,
+  "the workspace page must render the shared KnowledgeTable rather than its own copy",
+);
+assert.match(
+  workspacePage,
+  /useKnowledgeFilters/,
+  "the workspace page must take its filter and cursor state from the shared hook",
 );
 assert.match(
   workspacePage,
@@ -91,30 +85,13 @@ assert.match(
   "the workspace page must keep its owner/admin gate",
 );
 
-// The query key includes the filters, or paging in one tab would serve another tab's page.
-assert.match(
-  hooks,
-  /knowledge: \(id: string, query: WorkspaceKnowledgeQuery\) =>/,
-  "the admin knowledge query key must include the query, not just the workspace id",
-);
-assert.match(
-  hooks,
-  /placeholderData: \(previous\) => previous/,
-  "paging must not blank the table while the next cursor page loads",
-);
-
-// States the tab cannot silently drop: an empty index and a failed read are different answers.
+// States the member page cannot silently drop, unchanged from the original contract.
 assert.match(table, /Could not read the index/, "the table must implement an error state");
 assert.match(table, /Nothing indexed yet/, "the table must implement an empty state");
 assert.match(
   table,
   /emptyHint/,
   "the empty state must be caller-supplied: it differs by audience",
-);
-assert.match(
-  adminDetail,
-  /Nothing here means nothing stored — not a failed read/,
-  "the admin empty state must distinguish an empty index from a failed read",
 );
 
 // A filter change invalidates the cursor trail; otherwise page 3 of one filter is requested
@@ -134,4 +111,4 @@ assert.match(
 assert.doesNotMatch(view, /^import (?!type )/m, "knowledge-view must only import types");
 assert.doesNotMatch(view, /"use client"/, "knowledge-view must stay free of React");
 
-console.log("Admin knowledge contract passed.");
+console.log("Admin knowledge contract passed (portal reads no tenant content).");

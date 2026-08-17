@@ -1,9 +1,16 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowsClockwise, CreditCard, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowCounterClockwise,
+  ArrowsClockwise,
+  ArrowsLeftRight,
+  CreditCard,
+  Prohibit,
+  WarningCircle,
+} from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +19,18 @@ import {
   AdminPageHeader,
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
-import { useAdminSubscriptionDirectory, useAdminSubscriptionSummary } from "@/hooks/use-admin-subscriptions";
+import {
+  SubscriptionLifecycleDialog,
+  type SubscriptionLifecycleAction,
+} from "@/components/admin/subscription-lifecycle-dialog";
+import { ChangePlanDialog } from "@/components/admin/change-plan-dialog";
+import {
+  useAdminSubscriptionDirectory,
+  useAdminSubscriptionSummary,
+  useCancelAdminSubscription,
+  useChangeAdminSubscriptionPlan,
+  useResumeAdminSubscription,
+} from "@/hooks/use-admin-subscriptions";
 import {
   formatMonthlyRecurring,
   formatSubscriptionValue,
@@ -118,6 +136,18 @@ function SubscriptionsDirectory() {
 
   const directoryQuery = useAdminSubscriptionDirectory(query);
   const summaryQuery = useAdminSubscriptionSummary();
+  const cancelSubscription = useCancelAdminSubscription();
+  const resumeSubscription = useResumeAdminSubscription();
+  const changePlan = useChangeAdminSubscriptionPlan();
+
+  // The row and the verb travel together: the dialog's wording, its confirm label and the endpoint
+  // it calls all follow from the action, and keeping them in one piece of state means they cannot
+  // disagree with each other mid-animation as the dialog closes.
+  const [pending, setPending] = useState<{
+    subscription: AdminSubscriptionSummaryDto;
+    action: SubscriptionLifecycleAction;
+  } | null>(null);
+  const [changingPlanFor, setChangingPlanFor] = useState<AdminSubscriptionSummaryDto | null>(null);
 
   const items = directoryQuery.data?.items ?? [];
   const total = directoryQuery.data?.total ?? 0;
@@ -267,12 +297,53 @@ function SubscriptionsDirectory() {
           <ul>
             {items.map((subscription) => (
               <li key={subscription.id}>
-                <SubscriptionRow subscription={subscription} />
+                <SubscriptionRow
+                  subscription={subscription}
+                  onAction={(target, action) => setPending({ subscription: target, action })}
+                  onChangePlan={(target) => setChangingPlanFor(target)}
+                />
               </li>
             ))}
           </ul>
         )}
       </AdminPanel>
+
+      <ChangePlanDialog
+        subscription={changingPlanFor}
+        onOpenChange={(open) => {
+          if (!open) setChangingPlanFor(null);
+        }}
+        onSubmit={(planId) => {
+          if (!changingPlanFor) return Promise.resolve();
+          return changePlan.mutateAsync({
+            workspaceId: changingPlanFor.workspaceId,
+            planId,
+          });
+        }}
+        isSaving={changePlan.isPending}
+      />
+
+      <SubscriptionLifecycleDialog
+        subscription={pending?.subscription ?? null}
+        action={pending?.action ?? "cancel"}
+        onOpenChange={(open) => {
+          if (!open) setPending(null);
+        }}
+        onSubmit={(reason) => {
+          if (!pending) return Promise.resolve();
+          const request = { reason };
+          return pending.action === "cancel"
+            ? cancelSubscription.mutateAsync({
+                workspaceId: pending.subscription.workspaceId,
+                request,
+              })
+            : resumeSubscription.mutateAsync({
+                workspaceId: pending.subscription.workspaceId,
+                request,
+              });
+        }}
+        isSaving={cancelSubscription.isPending || resumeSubscription.isPending}
+      />
 
       {totalPages > 1 ? (
         <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
@@ -303,7 +374,18 @@ function SubscriptionsDirectory() {
   );
 }
 
-function SubscriptionRow({ subscription }: { subscription: AdminSubscriptionSummaryDto }) {
+function SubscriptionRow({
+  subscription,
+  onAction,
+  onChangePlan,
+}: {
+  subscription: AdminSubscriptionSummaryDto;
+  onAction: (
+    subscription: AdminSubscriptionSummaryDto,
+    action: SubscriptionLifecycleAction,
+  ) => void;
+  onChangePlan: (subscription: AdminSubscriptionSummaryDto) => void;
+}) {
   const isTrial =
     subscription.trialEndsAt != null && new Date(subscription.trialEndsAt) > new Date();
   const isCancelled = subscription.cancelledAt != null;
@@ -365,6 +447,30 @@ function SubscriptionRow({ subscription }: { subscription: AdminSubscriptionSumm
         {!subscription.autoRenew ? (
           <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400">no renew</span>
         ) : null}
+      </div>
+
+      {/* One action per row, chosen by where the subscription actually is. A cancelled row offers
+          Resume and an active one offers Cancel; an expired one offers neither, because the
+          endpoint would refuse — it looks for an ACTIVE subscription and answers 404 otherwise. */}
+      <div className="flex w-[220px] shrink-0 justify-end gap-1.5 md:ml-3">
+        {/* Change plan only where the endpoint would act: it looks for the ACTIVE subscription. */}
+        {!isCancelled && subscription.status !== "expired" ? (
+          <Button variant="outline" size="sm" onClick={() => onChangePlan(subscription)}>
+            <ArrowsLeftRight size={13} />
+            Change plan
+          </Button>
+        ) : null}
+        {isCancelled ? (
+          <Button variant="outline" size="sm" onClick={() => onAction(subscription, "resume")}>
+            <ArrowCounterClockwise size={13} />
+            Resume
+          </Button>
+        ) : subscription.status === "expired" ? null : (
+          <Button variant="outline" size="sm" onClick={() => onAction(subscription, "cancel")}>
+            <Prohibit size={13} />
+            Cancel
+          </Button>
+        )}
       </div>
     </div>
   );

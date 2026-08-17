@@ -69,6 +69,23 @@ export interface PlanDto {
   currency: string;
   billingCycle: string;
   creditsPerCycle: number;
+  /**
+   * The overage, rollover and invoicing columns.
+   *
+   * These were absent from this interface while every screen only read plans, and the API has
+   * always returned them. They are declared now because `PUT /plans/{id}` takes a WHOLE plan and
+   * writes all twenty-two columns from it — so an edit form built on a seventeen-field type would
+   * have silently reset the five it could not see, on every save, to the service's defaults
+   * (overage cap 0, overage price 4.0, low balance 0, rollover 0, terms 15d, grace 360h).
+   *
+   * See lib/billing/plan-request.ts, which is where the round-trip is enforced and tested.
+   */
+  overageCapCredits: number;
+  overagePricePerCredit: number;
+  lowBalanceThresholdCredits: number;
+  rolloverCapCredits: number;
+  invoiceTermsDays: number;
+  invoiceGraceHours: number;
   features: string;
   sortOrder: number;
   isActive: boolean;
@@ -238,15 +255,6 @@ export interface UsageAlertDto {
   workspaceName: string;
   consumedCreditsIn24h: number;
   reason: string;
-}
-
-export interface ServiceRatesDto {
-  sttPerMinute: number;
-  translationPerMinute: number;
-  standardTtsPerMinute: number;
-  voiceClonePerMinute: number;
-  aiSummaryPerRequest: number;
-  aiChatPerRequest: number;
 }
 
 /**

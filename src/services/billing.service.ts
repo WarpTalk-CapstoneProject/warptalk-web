@@ -445,17 +445,7 @@ export const billingService = {
     return data;
   },
 
-  /**
-   * Get current AI service credit rates (Admin only).
-   */
-  getServiceRates: async (): Promise<
-    import("@/types/billing").ServiceRatesDto
-  > => {
-    const { data } =
-      await apiClient.get<import("@/types/billing").ServiceRatesDto>(
-        `/usages/rates`,
-      );
-    return data;
-  },
-
+  // getServiceRates is gone: it called /usages/rates, a route that never existed (the real one
+  // is /usages/rate-card), so the card it fed rendered zeros forever. Rate cards live on
+  // /admin/plans now, where they are editable.
 };

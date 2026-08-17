@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowsClockwise, Tag, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { ArrowsClockwise, PencilSimple, Plus, Tag, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,21 @@ import {
   AdminPageHeader,
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
-import { useAdminPlans, useAdminRateCards } from "@/hooks/use-admin-pricing";
+import {
+  PlanCreateDialog,
+  PlanEditDialog,
+  PricingConfigDialog,
+  RateCardEditDialog,
+} from "@/components/admin/pricing-editors";
+import {
+  useAdminPlans,
+  useAdminPricingConfig,
+  useAdminRateCards,
+  useCreateAdminPlan,
+  useUpdateAdminPlan,
+  useUpdateAdminPricingConfig,
+  useUpsertAdminRateCard,
+} from "@/hooks/use-admin-pricing";
 import { formatAdminMoney } from "@/lib/billing/admin-money";
 import {
   marginLabel,
@@ -24,6 +38,7 @@ import type { PlanDto } from "@/types/billing";
 const TABS = [
   { value: "plans", label: "Plans" },
   { value: "rate-cards", label: "Rate cards" },
+  { value: "configuration", label: "Configuration" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["value"];
@@ -92,7 +107,7 @@ function PanelState({
   return <>{children}</>;
 }
 
-function PlanRow({ plan }: { plan: PlanDto }) {
+function PlanRow({ plan, onEdit }: { plan: PlanDto; onEdit: (plan: PlanDto) => void }) {
   return (
     <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
       <div className="min-w-0 flex-1">
@@ -109,7 +124,8 @@ function PlanRow({ plan }: { plan: PlanDto }) {
       </div>
       <div className="w-[90px] shrink-0 md:text-right">
         {/* Hidden, not deleted. A deactivated plan still appears on old invoices, so removing it
-            would break history — which is why the API has no delete and this has no button. */}
+            would break history — which is why the API has no delete and this has no button. The
+            Active switch inside the editor is how a plan is retired. */}
         <span
           className={cn(
             "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
@@ -121,11 +137,24 @@ function PlanRow({ plan }: { plan: PlanDto }) {
           {plan.isActive ? "Active" : "Hidden"}
         </span>
       </div>
+
+      <div className="shrink-0 md:ml-3">
+        <Button variant="outline" size="sm" onClick={() => onEdit(plan)}>
+          <PencilSimple size={13} />
+          Edit
+        </Button>
+      </div>
     </div>
   );
 }
 
-function RateCardRow({ card }: { card: UsageRateCardDto }) {
+function RateCardRow({
+  card,
+  onEdit,
+}: {
+  card: UsageRateCardDto;
+  onEdit: (card: UsageRateCardDto) => void;
+}) {
   const margin = resolveRateCardMargin(card);
   const tone = marginTone(margin);
 
@@ -179,6 +208,30 @@ function RateCardRow({ card }: { card: UsageRateCardDto }) {
       <div className="w-[150px] shrink-0 text-[12px] text-ink-muted md:text-right">
         from {formatDate(card.effectiveFrom)}
       </div>
+
+      <div className="shrink-0 md:ml-3">
+        <Button variant="outline" size="sm" onClick={() => onEdit(card)}>
+          <PencilSimple size={13} />
+          Edit
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The platform-wide knobs, read straight down the page rather than into a table.
+ *
+ * Thirteen scalars with no shared unit — an FX rate beside a weight beside a day count — so a
+ * table with one value column would be a table of unrelated things. The two the endpoint will not
+ * take are shown last and labelled as derived, so their absence from the editor reads as a fact
+ * about them rather than as an omission.
+ */
+function ConfigRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-hairline/60 px-4 py-2.5 last:border-b-0">
+      <span className="text-[13px] text-ink-muted">{label}</span>
+      <span className="text-[13px] tabular-nums text-ink">{value}</span>
     </div>
   );
 }
@@ -187,11 +240,31 @@ export default function AdminPlansPage() {
   const [tab, setTab] = useState<Tab>("plans");
   const plansQuery = useAdminPlans();
   const rateCardsQuery = useAdminRateCards();
+  const configQuery = useAdminPricingConfig();
+
+  const updatePlan = useUpdateAdminPlan();
+  const createPlan = useCreateAdminPlan();
+  const upsertRateCard = useUpsertAdminRateCard();
+  const updateConfig = useUpdateAdminPricingConfig();
+
+  /**
+   * The row being edited, held as the row itself rather than as an id.
+   *
+   * The dialog seeds its draft from the WHOLE record so the columns it does not show survive the
+   * save. Holding an id and looking it up again would work until a refetch swapped the array
+   * underneath an open dialog, which is exactly when the two would disagree.
+   */
+  const [editingPlan, setEditingPlan] = useState<PlanDto | null>(null);
+  const [editingCard, setEditingCard] = useState<UsageRateCardDto | null>(null);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isCreatingPlan, setIsCreatingPlan] = useState(false);
 
   const plans = plansQuery.data ?? [];
   const rateCards = rateCardsQuery.data ?? [];
+  const config = configQuery.data ?? null;
 
-  const active = tab === "plans" ? plansQuery : rateCardsQuery;
+  const active =
+    tab === "plans" ? plansQuery : tab === "rate-cards" ? rateCardsQuery : configQuery;
 
   return (
     <AdminPage>
@@ -201,15 +274,29 @@ export default function AdminPlansPage() {
         title="Plans & pricing"
         description="What the platform sells, and what each unit of it costs to serve."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void active.refetch()}
-            disabled={active.isFetching}
-          >
-            <ArrowsClockwise size={14} className={cn(active.isFetching && "animate-spin")} />
-            Refresh
-          </Button>
+          <>
+            {tab === "plans" ? (
+              <Button size="sm" onClick={() => setIsCreatingPlan(true)}>
+                <Plus size={14} />
+                New plan
+              </Button>
+            ) : null}
+            {tab === "configuration" ? (
+              <Button size="sm" onClick={() => setIsConfigOpen(true)} disabled={config === null}>
+                <PencilSimple size={14} />
+                Edit configuration
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void active.refetch()}
+              disabled={active.isFetching}
+            >
+              <ArrowsClockwise size={14} className={cn(active.isFetching && "animate-spin")} />
+              Refresh
+            </Button>
+          </>
         }
       />
 
@@ -223,9 +310,13 @@ export default function AdminPlansPage() {
             ? plansQuery.isPending
               ? "Loading…"
               : `${plans.length} plan${plans.length === 1 ? "" : "s"}`
-            : rateCardsQuery.isPending
-              ? "Loading…"
-              : `${rateCards.length} rate card${rateCards.length === 1 ? "" : "s"}`
+            : tab === "rate-cards"
+              ? rateCardsQuery.isPending
+                ? "Loading…"
+                : `${rateCards.length} rate card${rateCards.length === 1 ? "" : "s"}`
+              : configQuery.isPending
+                ? "Loading…"
+                : "Platform-wide"
         }
       />
 
@@ -250,12 +341,12 @@ export default function AdminPlansPage() {
             <ul>
               {plans.map((plan) => (
                 <li key={plan.id}>
-                  <PlanRow plan={plan} />
+                  <PlanRow plan={plan} onEdit={setEditingPlan} />
                 </li>
               ))}
             </ul>
           </PanelState>
-        ) : (
+        ) : tab === "rate-cards" ? (
           <PanelState
             isError={rateCardsQuery.isError}
             isPending={rateCardsQuery.isPending}
@@ -267,19 +358,119 @@ export default function AdminPlansPage() {
             <ul>
               {rateCards.map((card) => (
                 <li key={card.id}>
-                  <RateCardRow card={card} />
+                  <RateCardRow card={card} onEdit={setEditingCard} />
                 </li>
               ))}
             </ul>
+          </PanelState>
+        ) : (
+          <PanelState
+            isError={configQuery.isError}
+            isPending={configQuery.isPending}
+            isEmpty={config === null}
+            errorText="Pricing configuration could not be loaded."
+            emptyText="No pricing configuration is stored."
+            onRetry={() => void configQuery.refetch()}
+          >
+            {config ? (
+              <div>
+                <ConfigRow
+                  label="FX rate USD→VND"
+                  value={numberFormatter.format(config.fxRateUsdVnd)}
+                />
+                <ConfigRow
+                  label="Credit value (VND)"
+                  value={numberFormatter.format(config.creditValueVnd)}
+                />
+                <ConfigRow
+                  label="Minimum price per credit (VND)"
+                  value={numberFormatter.format(config.minimumPricePerCreditVnd)}
+                />
+                <ConfigRow
+                  label="Minimum contract price"
+                  value={`${formatAdminMoney({ amount: config.minimumContractPriceVnd, currency: "VND" })} · ${formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}`}
+                />
+                <ConfigRow label="Sales weight · usage" value={config.salesUsageWeight} />
+                <ConfigRow label="Sales weight · members" value={config.salesMembersWeight} />
+                <ConfigRow label="Sales weight · languages" value={config.salesLanguagesWeight} />
+                <ConfigRow
+                  label="Sales weight · AI services"
+                  value={config.salesAiServicesWeight}
+                />
+                <ConfigRow
+                  label="Default overage cap ratio"
+                  value={config.defaultOverageCapRatio}
+                />
+                <ConfigRow
+                  label="Default invoice terms"
+                  value={`${config.defaultInvoiceTermsDays} days`}
+                />
+                <ConfigRow
+                  label="Default invoice grace"
+                  value={`${config.defaultInvoiceGraceHours} hours`}
+                />
+                {/* The two the write endpoint does not take. Shown so their absence from the
+                    editor reads as a property of the field, not as a gap in the form. */}
+                <ConfigRow
+                  label="Formula (derived)"
+                  value={<span className="font-mono text-[11px]">{config.formula}</span>}
+                />
+                <ConfigRow
+                  label="Resolver key (derived)"
+                  value={<span className="font-mono text-[11px]">{config.resolverKey}</span>}
+                />
+              </div>
+            ) : null}
           </PanelState>
         )}
       </AdminPanel>
 
       <p className="mt-4 text-[12px] text-ink-muted">
-        Read-only. The write endpoints exist — <code className="font-mono">PUT /plans/{"{id}"}</code>{" "}
-        and <code className="font-mono">PUT /usages/rate-card</code> — and editing money is worth
-        its own release rather than arriving as a side effect of building a table.
+        Editable, within what the API allows. There is no create and no delete on this screen
+        because there is none on the API: a plan is named on every invoice ever raised against it,
+        so it is retired with its Active switch rather than removed. A new rate-card identity
+        still arrives with the migration that registers it.
       </p>
+
+      <PlanCreateDialog
+        open={isCreatingPlan}
+        onOpenChange={setIsCreatingPlan}
+        onSubmit={(request) => createPlan.mutateAsync(request)}
+        isSaving={createPlan.isPending}
+      />
+
+      <PlanEditDialog
+        plan={editingPlan}
+        open={editingPlan !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingPlan(null);
+        }}
+        onSubmit={(request) => {
+          // The dialog only submits while a plan is open, but the id is read here rather than
+          // asserted: a closed dialog resolving is a no-op, not a crash.
+          if (!editingPlan) return Promise.resolve();
+          return updatePlan.mutateAsync({ id: editingPlan.id, request });
+        }}
+        isSaving={updatePlan.isPending}
+      />
+
+      <RateCardEditDialog
+        card={editingCard}
+        open={editingCard !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingCard(null);
+        }}
+        onSubmit={(request) => upsertRateCard.mutateAsync(request)}
+        isSaving={upsertRateCard.isPending}
+      />
+
+      <PricingConfigDialog
+        config={isConfigOpen ? config : null}
+        open={isConfigOpen}
+        onOpenChange={setIsConfigOpen}
+        onSubmit={(request) => updateConfig.mutateAsync(request)}
+        isSaving={updateConfig.isPending}
+      />
     </AdminPage>
   );
 }

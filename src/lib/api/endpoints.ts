@@ -182,12 +182,27 @@ export const API = {
     skills: "/assistant/skills",
   },
   /**
-   * The platform user directory (auth service). Read-only: there is no revoke-sessions call,
-   * because auditing one would need a message bus the auth service deliberately does not have.
+   * The platform user directory (auth service). The account actions below audit over gRPC to
+   * the workspace service's audit store — the transport that can refuse — which is what ended
+   * the "no bus, so no privileged actions" era.
    */
   adminUsers: {
     base: "/admin/users",
     detail: (id: string) => `/admin/users/${id}`,
+    /**
+     * The three privileged actions, all POST and all requiring a reason.
+     *
+     * POST rather than DELETE on revoke-sessions because nothing is removed: the refresh tokens
+     * stay as rows carrying a revocation time, which is what lets the account's history still
+     * show it was signed in and when that stopped.
+     *
+     * There is still no delete. A user's rows reach transcripts, voice profiles and billing
+     * across four services — removing one is a data-lifecycle decision, not a button on a table.
+     */
+    revokeSessions: (id: string) => `/admin/users/${id}/revoke-sessions`,
+    deactivate: (id: string) => `/admin/users/${id}/deactivate`,
+    reactivate: (id: string) => `/admin/users/${id}/reactivate`,
+    unlock: (id: string) => `/admin/users/${id}/unlock`,
   },
   /** Platform subscription directory and revenue summary (billing service). Read-only. */
   /**
@@ -195,7 +210,14 @@ export const API = {
    * /admin — they predate the portal and are gated per-route on the platform admin role.
    */
   adminPricing: {
+    /** Platform billing policy — today a single knob, the VAT rate. GET/PUT, admin-gated. */
+    billingPolicy: "/billing-policy",
     allPlans: "/plans/all",
+    /** POST creates a plan (2026-08-17). Still no DELETE — a plan names itself on every invoice
+     * ever issued against it, so a retired plan is deactivated in place rather than removed. */
+    plans: "/plans",
+    plan: (id: string) => `/plans/${id}`,
+    /** GET reads the active cards; PUT upserts one, matched on its identity columns. */
     rateCard: "/usages/rate-card",
     pricingConfig: "/usages/pricing-config",
   },
@@ -238,16 +260,42 @@ export const API = {
   adminSubscriptions: {
     base: "/admin/subscriptions",
     summary: "/admin/subscriptions/summary",
+    /**
+     * Lifecycle actions are NOT under /admin. They live on the ordinary subscriptions controller,
+     * keyed by workspace rather than by subscription id, and this is deliberate rather than an
+     * oversight to tidy up: `SubscriptionService.CancelSubscriptionAsync` also cancels the Stripe
+     * subscription, republishes entitlements and notifies the owner. A parallel admin-only route
+     * would be a second, thinner path through the same commercial act — and the untested one.
+     *
+     * A platform admin is already allowed through: `RequireWorkspaceRoleFilter` short-circuits on
+     * the platform "admin" role before it ever asks the workspace service about membership.
+     */
+    cancel: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+    resume: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/resume`,
+    /**
+     * The one action that IS admin-only (2026-08-17): customers change plans through checkout,
+     * which is exactly the step an administrative move must not require. Credits are untouched
+     * by design — compensation is an explicit credit adjustment with its own audit row.
+     */
+    changePlan: (workspaceId: string) =>
+      `/admin/subscriptions/workspace/${workspaceId}/change-plan`,
+    contractTerms: (workspaceId: string) =>
+      `/subscriptions/workspace/${workspaceId}/contract-terms`,
+  },
+  /** Per-workspace analytics + ledger, served by the billing service (WT-206). */
+  adminWorkspaceAnalytics: {
+    analytics: (id: string) => `/admin/billing/workspaces/${id}/analytics`,
+    creditTransactions: (id: string) => `/admin/billing/workspaces/${id}/credit-transactions`,
   },
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
     suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
     reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
-    // Separate from `workspaces.knowledge` on purpose: same page shape, different
-    // authorization. This one is gated by the platform "admin" role and reads a workspace
-    // the caller is not a member of.
-    knowledge: (id: string) => `/admin/workspaces/${id}/knowledge`,
+    delete: (id: string) => `/admin/workspaces/${id}/delete`,
+    // Membership facts only. The knowledge route that used to sit beside these is gone:
+    // tenant content stays out of the admin portal (2026-08-17).
+    members: (id: string) => `/admin/workspaces/${id}/members`,
   },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",
