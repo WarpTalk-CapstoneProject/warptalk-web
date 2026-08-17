@@ -414,12 +414,15 @@ export const billingService = {
     return data;
   },
 
-  /**
-   * Deactivate a subscription plan (Admin only).
-   */
-  deactivatePlan: async (id: string): Promise<void> => {
-    await apiClient.delete(`/plans/${id}`);
-  },
+  // WT-481: `deactivatePlan` was here, calling DELETE /plans/{id}. That route does not exist and
+  // never has — PlansController exposes GET, POST and PUT only — so the call could only ever have
+  // 404'd. Nothing referenced it, which is the only reason nobody found out.
+  //
+  // Nor should it exist: a plan is named on every invoice raised against it, so retiring one means
+  // `isActive: false` and leaving the row where the history can still point at it. That is what
+  // admin-pricing.service.ts says in its own header, and what the admin Plans screen already does
+  // — it renders a plan as "Hidden" and offers no delete button at all. This function was the last
+  // thing suggesting otherwise.
 
   /**
    * Get all global invoices (Admin only)
