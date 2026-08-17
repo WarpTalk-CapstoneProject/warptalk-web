@@ -289,9 +289,15 @@ export const translationRoomService = {
    * painting an error over an incomplete code or momentarily emptying a picker.
    */
   async getJoinLanguagePolicy(code: string) {
-    const response = await apiClient.get<{ allowedTargetLanguages: string[] }>(
-      API.translationRooms.joinLanguagePolicy(code),
-    );
+    // WT-490: `roomLanguages` is the set the ROOM declares (source + targets). Both lists arrive
+    // separately and are intersected client-side by meetingLanguagesForRoom, because an empty list
+    // means "unrestricted from this source" and pre-intersecting would make either empty read as
+    // "offer nothing". Optional in the type so a web build in front of an older backend degrades to
+    // the previous behaviour instead of offering an empty picker.
+    const response = await apiClient.get<{
+      allowedTargetLanguages: string[];
+      roomLanguages?: string[];
+    }>(API.translationRooms.joinLanguagePolicy(code));
     return response.data;
   },
 

@@ -25,7 +25,9 @@ import {
 import { useJoinLanguagePolicy, useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, meetingLanguagesForPolicy } from "@/lib/language/languages";
+import { getLanguageName } from "@/lib/language/languages";
+import { resolvePreJoinLanguages, snapPairIntoOptions } from "@/lib/language/prejoin";
+import { useUserSettings } from "@/hooks/use-user-settings";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
 import { cn } from "@/lib/utils";
@@ -107,36 +109,64 @@ function JoinMeetingContent() {
   // unrestricted — so a partially typed code shows the full set rather than an error or a
   // momentarily empty picker.
   const { data: joinLanguagePolicy } = useJoinLanguagePolicy(roomCode);
-  const languages = useMemo(
+  // WT-434 was honoured by the setup modal and ignored here: this screen preset a hardcoded
+  // vi-VN / en-US pair, so the same person joining the same meeting got different languages
+  // depending on whether they came through /join or through the modal. Both read the saved pair now.
+  const { data: userSettings } = useUserSettings();
+
+  // WT-494 + WT-490 — one rule for both entry points, and it narrows by the ROOM as well as by
+  // the workspace. See lib/language/prejoin.ts for why the two limits stay separate on the wire.
+  const preJoin = useMemo(
     () =>
-      meetingLanguagesForPolicy(joinLanguagePolicy?.allowedTargetLanguages).map(
-        (language) => ({ value: language.locale, label: language.name }),
-      ),
-    [joinLanguagePolicy?.allowedTargetLanguages],
+      resolvePreJoinLanguages({
+        allowedTargetLanguages: joinLanguagePolicy?.allowedTargetLanguages,
+        roomLanguages: joinLanguagePolicy?.roomLanguages,
+        savedSpeakLanguage: userSettings?.defaultSpeakLanguage,
+        savedListenLanguage: userSettings?.defaultListenLanguage,
+      }),
+    [
+      joinLanguagePolicy?.allowedTargetLanguages,
+      joinLanguagePolicy?.roomLanguages,
+      userSettings?.defaultSpeakLanguage,
+      userSettings?.defaultListenLanguage,
+    ],
+  );
+  const languages = useMemo(
+    () => preJoin.options.map((language) => ({ value: language.locale, label: language.name })),
+    [preJoin.options],
   );
 
-  const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
-  const [listenLanguage, setListenLanguage] = useState("en-US");
+  const [speakLanguage, setSpeakLanguage] = useState("");
+  const [listenLanguage, setListenLanguage] = useState("");
+  const [languagesTouched, setLanguagesTouched] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
 
-  // WT-438: the hardcoded defaults above can name a language the policy forbids — a workspace
-  // restricted to JA/EN would still preset speak=vi-VN, and submitting it is a server-side 403
-  // the user never chose. Snapped to the first offered option the moment the policy resolves,
-  // derived during render like create-room-dialog's reconcile (an effect would flash the
-  // forbidden value first). Keyed by the resolved option set so a mid-session policy change
-  // re-applies, while the user's own later picks are left alone.
+  // WT-438: a preset can name a language the policy forbids, and submitting it is a server-side
+  // 403 the user never chose. Applied during render rather than in an effect, like
+  // create-room-dialog's reconcile — an effect would paint the forbidden value first.
+  //
+  // WT-468: gated on the ROOM's policy having resolved. Seeding before it arrives would pin the
+  // pair against the unfiltered list and then leave it there, because this only re-runs when the
+  // offered set changes.
+  //
+  // Two behaviours, and the difference is whether the user has touched the dropdowns. Untouched,
+  // the whole seed applies (their saved pair, else the room's, else the first offered). Once they
+  // have chosen for themselves, only an option that is no longer offered moves — overwriting a
+  // deliberate pick because a policy refreshed is its own bug.
   const [appliedLanguagePolicyKey, setAppliedLanguagePolicyKey] = useState<string | null>(null);
-  // WT-468: gated on the ROOM's policy having resolved. Snapping before it arrives would pin the
-  // pair to the unfiltered list and then leave it there, because this only re-runs when the
-  // offered set changes — the user would keep a language the room's workspace forbids.
   const languagePolicyKey = joinLanguagePolicy
     ? languages.map((language) => language.value).join(",")
     : null;
   if (languagePolicyKey && appliedLanguagePolicyKey !== languagePolicyKey) {
     setAppliedLanguagePolicyKey(languagePolicyKey);
-    const offered = new Set(languages.map((language) => language.value));
-    if (!offered.has(speakLanguage) && languages[0]) setSpeakLanguage(languages[0].value);
-    if (!offered.has(listenLanguage) && languages[0]) setListenLanguage(languages[0].value);
+    if (languagesTouched) {
+      const snapped = snapPairIntoOptions({ speakLanguage, listenLanguage }, preJoin.options);
+      if (snapped.speakLanguage !== speakLanguage) setSpeakLanguage(snapped.speakLanguage);
+      if (snapped.listenLanguage !== listenLanguage) setListenLanguage(snapped.listenLanguage);
+    } else {
+      setSpeakLanguage(preJoin.speakLanguage);
+      setListenLanguage(preJoin.listenLanguage);
+    }
   }
 
   const [cameraEnabled, setCameraEnabled] = useState(true);
@@ -552,7 +582,13 @@ function JoinMeetingContent() {
               <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
                 <Select
                   value={speakLanguage}
-                  onValueChange={(val) => val && setSpeakLanguage(val)}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    // Marks the pair as the user's own, so a later policy refresh snaps it only
+                    // if it stops being offered instead of re-seeding over their choice.
+                    setLanguagesTouched(true);
+                    setSpeakLanguage(val);
+                  }}
                 >
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">
@@ -586,7 +622,11 @@ function JoinMeetingContent() {
 
                 <Select
                   value={listenLanguage}
-                  onValueChange={(val) => val && setListenLanguage(val)}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    setLanguagesTouched(true);
+                    setListenLanguage(val);
+                  }}
                 >
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">
