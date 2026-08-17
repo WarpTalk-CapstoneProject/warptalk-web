@@ -182,8 +182,9 @@ export const API = {
     skills: "/assistant/skills",
   },
   /**
-   * The platform user directory (auth service). Read-only: there is no revoke-sessions call,
-   * because auditing one would need a message bus the auth service deliberately does not have.
+   * The platform user directory (auth service). The account actions below audit over gRPC to
+   * the workspace service's audit store — the transport that can refuse — which is what ended
+   * the "no bus, so no privileged actions" era.
    */
   adminUsers: {
     base: "/admin/users",
