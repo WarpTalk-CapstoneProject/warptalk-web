@@ -46,6 +46,29 @@ export function useAdminWorkspaceMembers(workspaceId: string | undefined) {
   });
 }
 
+export function useAdminWorkspaceAnalytics(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-workspaces", "analytics", workspaceId ?? ""] as const,
+    queryFn: () => adminWorkspaceService.getAnalytics(workspaceId!),
+    enabled: Boolean(workspaceId),
+    staleTime: 30_000,
+  });
+}
+
+export function useAdminWorkspaceCreditTransactions(
+  workspaceId: string | undefined,
+  page: number,
+) {
+  return useQuery({
+    queryKey: ["admin-workspaces", "credit-transactions", workspaceId ?? "", page] as const,
+    queryFn: () =>
+      adminWorkspaceService.getCreditTransactions(workspaceId!, { page, pageSize: 20 }),
+    enabled: Boolean(workspaceId),
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
+  });
+}
+
 /**
  * Lifecycle mutations refetch both the detail and the directory: suspending a workspace
  * changes which status tab it belongs to, so a stale list would keep showing it as active.

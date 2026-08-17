@@ -7,6 +7,10 @@ import type {
   AdminWorkspaceMemberDto,
   AdminWorkspaceSummaryDto,
 } from "@/types/admin-workspace";
+import type {
+  AdminCreditTransactionDto,
+  AdminWorkspaceAnalyticsDto,
+} from "@/types/admin-workspace-analytics";
 
 /**
  * System-admin workspace directory. Every call is platform-wide and gated server-side by the
@@ -59,6 +63,25 @@ export const adminWorkspaceService = {
   getMembers: async (workspaceId: string): Promise<AdminWorkspaceMemberDto[]> => {
     const { data } = await apiClient.get<AdminWorkspaceMemberDto[]>(
       API.adminWorkspaces.members(workspaceId),
+    );
+    return data;
+  },
+
+  /** Billing-side analytics (WT-206). Default window is the server's: the last 30 days. */
+  getAnalytics: async (workspaceId: string): Promise<AdminWorkspaceAnalyticsDto> => {
+    const { data } = await apiClient.get<AdminWorkspaceAnalyticsDto>(
+      API.adminWorkspaceAnalytics.analytics(workspaceId),
+    );
+    return data;
+  },
+
+  getCreditTransactions: async (
+    workspaceId: string,
+    query: { page?: number; pageSize?: number } = {},
+  ): Promise<AdminPagedResult<AdminCreditTransactionDto>> => {
+    const { data } = await apiClient.get<AdminPagedResult<AdminCreditTransactionDto>>(
+      API.adminWorkspaceAnalytics.creditTransactions(workspaceId),
+      { params: query },
     );
     return data;
   },

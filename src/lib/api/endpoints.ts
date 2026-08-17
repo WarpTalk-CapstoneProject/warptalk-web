@@ -274,6 +274,11 @@ export const API = {
     contractTerms: (workspaceId: string) =>
       `/subscriptions/workspace/${workspaceId}/contract-terms`,
   },
+  /** Per-workspace analytics + ledger, served by the billing service (WT-206). */
+  adminWorkspaceAnalytics: {
+    analytics: (id: string) => `/admin/billing/workspaces/${id}/analytics`,
+    creditTransactions: (id: string) => `/admin/billing/workspaces/${id}/credit-transactions`,
+  },
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
