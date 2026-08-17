@@ -80,21 +80,21 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     locale: "ko-KR",
     name: "Korean",
     region: "KR",
-    scopes: ["meeting", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     code: "fr",
     locale: "fr-FR",
     name: "French",
     region: "FR",
-    scopes: ["meeting", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     code: "es",
     locale: "es-ES",
     name: "Spanish",
     region: "ES",
-    scopes: ["meeting", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     // Seeded and translatable, but deliberately not a meeting language — no scope puts it in

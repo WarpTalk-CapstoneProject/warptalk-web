@@ -41,7 +41,29 @@ import {
   useUpdateGlobalGlossaryTerm,
 } from "@/hooks/use-global-glossary";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { languagesInScope } from "@/lib/language/languages";
 import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
+
+/**
+ * WT-461: the languages a global glossary term may name.
+ *
+ * From the shared registry rather than a list written here, because that registry is the one
+ * checked against the live catalogue by `./catalog-drift` — a hardcoded array in this file is
+ * exactly the drift that check exists to catch.
+ *
+ * Empty/absent is legal and means "applies to every language"; only a NON-empty value has to be
+ * a language the system knows.
+ */
+const glossaryLanguages = languagesInScope("glossary");
+const glossaryLanguageCodes = new Set(glossaryLanguages.map((language) => language.code));
+
+/** Empty (all languages) or a known code — nothing else. */
+const glossaryLanguageField = z
+  .string()
+  .optional()
+  .refine((value) => !value || glossaryLanguageCodes.has(value), {
+    message: "Choose a language the system supports, or leave it as All languages.",
+  });
 
 const termSchema = z.object({
   term: z
@@ -53,8 +75,8 @@ const termSchema = z.object({
   preferredTranslation: z
     .string()
     .min(1, "Preferred translation cannot be empty"),
-  sourceLanguage: z.string().optional(),
-  targetLanguage: z.string().optional(),
+  sourceLanguage: glossaryLanguageField,
+  targetLanguage: glossaryLanguageField,
   businessDomain: z.string().optional(),
   definition: z.string().optional(),
   usageNote: z.string().optional(),
@@ -262,6 +284,25 @@ export default function AdminGlobalGlossaryPage() {
 
     if (rows.length === 0) {
       toast.error("No valid rows found.");
+      return;
+    }
+
+    // WT-461: the CSV path bypasses the form, so it needs the same rule stated again here.
+    // Rejecting the whole file rather than dropping the offending rows: a partial import that
+    // silently skipped lines would leave the admin believing terms exist that do not, and a bad
+    // language is not visibly broken — it stores fine and simply never matches.
+    const badLanguages = Array.from(
+      new Set(
+        rows
+          .flatMap((row) => [row.sourceLanguage, row.targetLanguage])
+          .filter((value): value is string => Boolean(value))
+          .filter((value) => !glossaryLanguageCodes.has(value)),
+      ),
+    );
+    if (badLanguages.length > 0) {
+      toast.error(
+        `Unknown language code(s): ${badLanguages.join(", ")}. Use ${[...glossaryLanguageCodes].join(", ")}, or leave the column blank for all languages.`,
+      );
       return;
     }
 
@@ -500,26 +541,43 @@ export default function AdminGlobalGlossaryPage() {
                 </p>
               )}
             </div>
+            {/* WT-461. Chosen, not typed.
+                These were free-text inputs, and a language the system does not know is not a
+                harmless typo here: GlossaryStartedEventConsumer selects terms BY language, so a
+                term saved as "Vietnamese" or "vn" instead of "vi" is stored, listed, and matches
+                nothing for the rest of its life. It looks saved and silently never applies.
+                The options come from the shared registry's `glossary` scope — the same source
+                every other picker uses — so this cannot drift from what the pipeline accepts. */}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold">
-                  Source Lang (opt.)
-                </label>
-                <Input
-                  className="h-8 border-hairline text-xs"
-                  placeholder="agnostic"
+                <label className="text-xs font-semibold">Source Lang (opt.)</label>
+                <select
+                  className="h-8 rounded-md border border-hairline bg-surface-1 px-2 text-xs text-ink"
                   {...register("sourceLanguage")}
-                />
+                >
+                  {/* Empty is a real, meaningful choice: a term with no language applies to
+                      ALL of them. Named so nobody has to guess what a blank row means. */}
+                  <option value="">All languages</option>
+                  {glossaryLanguages.map((language) => (
+                    <option key={language.code} value={language.code}>
+                      {language.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold">
-                  Target Lang (opt.)
-                </label>
-                <Input
-                  className="h-8 border-hairline text-xs"
-                  placeholder="agnostic"
+                <label className="text-xs font-semibold">Target Lang (opt.)</label>
+                <select
+                  className="h-8 rounded-md border border-hairline bg-surface-1 px-2 text-xs text-ink"
                   {...register("targetLanguage")}
-                />
+                >
+                  <option value="">All languages</option>
+                  {glossaryLanguages.map((language) => (
+                    <option key={language.code} value={language.code}>
+                      {language.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex flex-col gap-1">
