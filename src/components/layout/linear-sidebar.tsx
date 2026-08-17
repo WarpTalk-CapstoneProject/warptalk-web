@@ -39,6 +39,8 @@ import {
   CaretLeft,
   Check,
   CreditCard,
+  ChartLine,
+  Receipt,
   BookOpen,
   FileText,
   GearSix,
@@ -537,7 +539,21 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       settingsItems.push({
         icon: CreditCard,
         label: "Billing",
+        // Exact now that Usage and Invoices live BELOW it. Without this, NavLink's
+        // treat-descendants-as-active rule lights Billing up while the reader is on either child,
+        // and two rows in the same group read as selected at once.
+        exact: true,
         href: `/${activeWorkspaceSlug}/settings/billing`,
+      });
+      settingsItems.push({
+        icon: ChartLine,
+        label: "Usage",
+        href: `/${activeWorkspaceSlug}/settings/billing/usage`,
+      });
+      settingsItems.push({
+        icon: Receipt,
+        label: "Invoices",
+        href: `/${activeWorkspaceSlug}/settings/billing/invoices`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
@@ -667,9 +683,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 {/* WT-380 — Billing belongs here, not on the app's main nav. `startsWith` rather
                     than `===` so the row stays lit while the reader is off buying a plan at
                     /payment/plans, which is where this page's primary action sends them. */}
+                {/* Billing is EXACT now that Usage and Invoices sit below it. `startsWith` would
+                    light this row while the reader is on either child, so two rows in the group
+                    would read as selected at once. `/payment` still counts as Billing: it is where
+                    the plan grid sends a buyer, and losing the highlight there is the one moment
+                    they most need the way back. */}
                 <div className={cn(
                   "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname.startsWith(`/${activeWorkspaceSlug}/settings/billing`) ||
+                  pathname === `/${activeWorkspaceSlug}/settings/billing` ||
                     pathname.startsWith(`/${activeWorkspaceSlug}/payment`)
                     ? "bg-surface-2"
                     : "hover:bg-surface-2"
@@ -678,6 +699,28 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       Billing
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/billing/usage` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing/usage`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <ChartLine size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Usage
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/billing/invoices` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing/invoices`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <Receipt size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Invoices
                     </span>
                   </Link>
                 </div>

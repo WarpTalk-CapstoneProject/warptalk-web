@@ -33,9 +33,7 @@ import {
 } from "@/hooks/use-workspace-role";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import {
-  ArrowRight,
   CaretLeft,
-  Lightning,
   Lock,
   X,
 } from "@phosphor-icons/react";
@@ -79,21 +77,12 @@ import { formatMoney } from "@/lib/format/currency";
  *     this page cannot drift from the real rate again. DOCUMENTED_VND_PER_CREDIT survives for
  *     the on-screen estimate ONLY; the charge is whatever the server computes.
  */
-const TOP_UP_ENABLED = true;
-
-/** Retail rate from docs/credit-economics.md §4.2. Display only — the server sets the price. */
-/** Stripe refuses a charge under 15,000 VND, which is 1,500 credits at the documented rate. */
-const TOP_UP_MINIMUM_CREDITS = 1500;
-
-/** The offered sizes. Round numbers a person recognises, not a ladder of discounts we do not give. */
-const TOP_UP_PACKAGES = [
-  { credits: 10_000, label: "10,000 credits" },
-  { credits: 25_000, label: "25,000 credits" },
-  { credits: 50_000, label: "50,000 credits" },
-  { credits: 100_000, label: "100,000 credits" },
-] as const;
-
-const DOCUMENTED_VND_PER_CREDIT = 4;
+/*
+ * WT-464: TOP_UP_ENABLED, TOP_UP_MINIMUM_CREDITS, TOP_UP_PACKAGES and
+ * DOCUMENTED_VND_PER_CREDIT moved with the form to
+ * settings/billing/components/top-up-modal.tsx. The reasoning above about the server owning the
+ * price moved with them, because that is where it now applies.
+ */
 
 /** One date format for the page, so "until 14 September 2026" reads the same wherever it appears. */
 const formatPlanDate = (date: Date) =>
@@ -131,7 +120,6 @@ export default function WorkspacePlansPage() {
   const [pendingPlanSlug, setPendingPlanSlug] = useState("");
   const [pendingPlanName, setPendingPlanName] = useState("");
   const [pendingPlanTotal, setPendingPlanTotal] = useState(0);
-  const [topUpCredits, setTopUpCredits] = useState<number>(0);
   // Fetch plans from backend
   const { data: plansData = [], isLoading: loadingPlans } = useQuery({
     queryKey: ["plans"],
@@ -336,7 +324,6 @@ export default function WorkspacePlansPage() {
     return { label: "Downgrade", variant: "downgrade", disabled: false };
   };
 
-  const topUpTotal = topUpCredits * DOCUMENTED_VND_PER_CREDIT;
 
   if (!isRoleLoaded) {
     return (
@@ -665,167 +652,17 @@ export default function WorkspacePlansPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 w-full max-w-3xl">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <div className="flex size-8 rounded-full bg-primary/10 items-center justify-center">
-              <Lightning className="h-4 w-4 text-primary" weight="fill" />
-            </div>
-            <h2 className="text-3xl font-bold tracking-tight text-ink">
-              Need more credits?
-            </h2>
-          </div>
-          <p className="text-base text-muted-foreground">
-            Pick a package, or enter your own amount. One rate whatever the
-            size — there is no volume discount.
-          </p>
-        </div>
+      {/*
+        WT-464: the credit top-up form used to live here, stacked under the plan cards.
 
-        <Card className="rounded-2xl border-2 border-hairline bg-surface-1 shadow-md overflow-hidden">
-          <CardContent className="p-8">
-            <div className="flex flex-col gap-8">
-              <div>
-                <label className="text-base font-semibold text-ink mb-3 block">
-                  How many credits do you need?
-                </label>
-                {/* Packages first, a number second — the shape OpenAI's top-up uses, for the
-                    reason it uses it: most people want "enough for a while", not a figure they
-                    have to derive from a per-credit rate. The old control opened with an empty
-                    number field and a 1,500-credit minimum that only announced itself after you
-                    typed something too small.
+        It made buying credits something you found by SCROLLING PAST a plan comparison — two
+        unrelated questions on one page, and the second one below the fold. Top-up is an
+        errand: it is now a modal opened from the balance it changes, on Settings -> Billing.
 
-                    NO "Save 10%" BADGES. The panel below says in as many words that there is one
-                    rate whatever the amount, and dressing these as volume tiers would be a
-                    discount that does not exist. Each tile shows what it costs instead, which is
-                    the honest version of the same help. */}
-                <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  {TOP_UP_PACKAGES.map((pkg) => {
-                    const selected = topUpCredits === pkg.credits;
-                    return (
-                      <button
-                        key={pkg.credits}
-                        type="button"
-                        onClick={() => setTopUpCredits(pkg.credits)}
-                        aria-pressed={selected}
-                        className={`flex flex-col items-start gap-1 rounded-[14px] border p-4 text-left transition-colors ${
-                          selected
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-ink/30"
-                        }`}
-                      >
-                        <span className="text-[15px] font-semibold text-ink">{pkg.label}</span>
-                        <span className="text-[12px] text-ink-muted">
-                          {formatMoney(pkg.credits * DOCUMENTED_VND_PER_CREDIT, "VND")}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-3 flex items-center gap-3">
-                  <label htmlFor="topup-other" className="text-[13px] text-ink-muted">
-                    Other
-                  </label>
-                  <input
-                    id="topup-other"
-                    type="number"
-                    min="1"
-                    step="1000"
-                    value={topUpCredits || ""}
-                    onChange={(e) =>
-                      setTopUpCredits(Math.max(0, parseInt(e.target.value) || 0))
-                    }
-                    placeholder={`${TOP_UP_MINIMUM_CREDITS.toLocaleString()} minimum`}
-                    className="h-10 w-44 rounded-md border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-primary"
-                  />
-                  <span className="text-[13px] text-ink-muted">credits</span>
-                </div>
-              </div>
-
-              <div className="bg-surface-2/50 rounded-xl p-5 border border-hairline">
-                <p className="text-sm font-semibold text-ink">
-                  {DOCUMENTED_VND_PER_CREDIT} VND per credit
-                </p>
-                <p className="text-xs text-ink-muted mt-1">
-                  One rate, whatever the amount. There is no volume discount.
-                </p>
-              </div>
-
-              {topUpCredits > 0 && (
-                <div className="rounded-xl bg-surface-2 border border-hairline p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink-muted">
-                      Rate applied
-                    </span>
-                    <span className="text-sm font-semibold text-ink">
-                      {DOCUMENTED_VND_PER_CREDIT} VND / credit
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink-muted">
-                      Credits to add
-                    </span>
-                    <span className="text-sm font-semibold text-ink">
-                      {topUpCredits.toLocaleString()} credits
-                    </span>
-                  </div>
-                  <div className="border-t border-hairline pt-3 mt-1 flex items-center justify-between">
-                    <span className="text-base font-bold text-ink">Total</span>
-                    <span className="text-2xl font-bold text-ink tracking-tight">
-                      {formatMoney(topUpTotal, "VND")}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {topUpCredits > 0 && topUpCredits < TOP_UP_MINIMUM_CREDITS && (
-                <p className="text-xs font-semibold text-rose-500 mt-2 bg-rose-500/10 p-3 rounded-lg">
-                  ⚠️ Minimum top-up amount is 1,500 credits (equivalent to
-                  15,000 VND Stripe transaction limit).
-                </p>
-              )}
-
-              {TOP_UP_ENABLED ? (
-              <button
-                type="button"
-                disabled={isProcessing || topUpCredits < TOP_UP_MINIMUM_CREDITS}
-                onClick={() =>
-                  handleCheckout(topUpTotal, "CreditTopUp", "", "", false, topUpCredits)
-                }
-                className="inline-flex items-center justify-center w-full rounded-xl h-14 text-base font-semibold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 bg-primary hover:bg-primary-hover text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-              >
-                {isProcessing ? (
-                  "Processing..."
-                ) : topUpCredits >= TOP_UP_MINIMUM_CREDITS ? (
-                  <>
-                    <span>
-                      Complete Top Up of {topUpCredits.toLocaleString()} credits
-                    </span>
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </>
-                ) : (
-                  "Enter credit amount above (Min 1,500)"
-                )}
-              </button>
-              ) : (
-                /* Says why, and does not pretend the button is merely busy. Somebody who came
-                   here to buy credit needs to know it will not arrive, not to be left guessing
-                   whether they clicked wrong. */
-                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
-                  <p className="text-sm font-semibold text-ink">
-                    Credit top-up is temporarily unavailable
-                  </p>
-                  <p className="mt-1 text-xs text-ink-muted">
-                    Payment would be taken without the credits being added, so the purchase is
-                    switched off until that is fixed. Your subscription still renews its credits
-                    on schedule. Contact support if you need a balance adjustment.
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        Nothing about the purchase changed. The same createCheckoutSession call, carrying the
+        credit COUNT so the server prices it against billing_pricing_config, is in
+        settings/billing/components/top-up-modal.tsx.
+      */}
       </div>
       {/* Cancel Subscription confirmation dialog */}
       <Dialog

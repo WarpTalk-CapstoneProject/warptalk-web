@@ -40,6 +40,16 @@ export const API = {
     /** WT-333 — the caller's own meetings in one workspace, past and upcoming (UC 25). */
     myMeetings: "/translation-rooms/my-meetings",
     join: "/translation-rooms/join",
+    /**
+     * WT-468 — the languages the pre-join screen may offer for a room CODE, decided by the
+     * workspace that OWNS the room rather than by whichever workspace the joiner has selected.
+     *
+     * Always 200. An unknown or half-typed code answers with an empty list, which means
+     * "unrestricted" here exactly as it does everywhere else a policy list travels — so this is
+     * safe to call on every keystroke and is not a room-existence probe.
+     */
+    joinLanguagePolicy: (code: string) =>
+      `/translation-rooms/join-language-policy/${encodeURIComponent(code)}`,
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,
     invitations: (id: string) => `/translation-rooms/${id}/invitations`,
