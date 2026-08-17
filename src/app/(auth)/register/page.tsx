@@ -206,14 +206,20 @@ function RegisterForm() {
     if (previous) setStep(previous);
   }
 
+  // WT-456: only ever reached on the LAST step. The earlier steps are intercepted in the form's
+  // onSubmit below and never get here.
+  //
+  // This used to open with `if (step !== "languages") { await goForward(); return; }`, which read
+  // as the step-advance path and was in fact unreachable on step 1. `handleSubmit` validates the
+  // WHOLE resolver schema before it calls this function, and the schema requires `fullName` and
+  // `password` — fields that belong to step 2 and are still empty while the user is on step 1. So
+  // pressing Continue failed validation, this function was never invoked, goForward() never ran,
+  // and the errors were attached to two fields that step 1 does not render. The button did
+  // nothing and said nothing.
+  //
+  // Step 2 -> 3 worked, which is why the bug looked intermittent: by then all three fields hold
+  // values, so the full-schema check passes and the old guard did run.
   const onSubmit = async (data: RegisterFormData) => {
-    // Enter on an earlier step advances rather than submits — the form is one <form> across all
-    // three panels, so without this the first press would post a half-filled account.
-    if (step !== "languages") {
-      await goForward();
-      return;
-    }
-
     try {
       const profile = {
         password: data.password,
@@ -288,7 +294,31 @@ function RegisterForm() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="w-full" noValidate>
+        {/*
+          WT-456: the earlier steps must NOT go through handleSubmit.
+
+          One <form> spans all three panels and every Continue is a submit button, so a press on
+          step 1 ran handleSubmit, which validates the entire schema — including the step-2 fields
+          the user has not reached yet. Validation failed, onSubmit was never called, and the
+          resulting errors belonged to inputs step 1 does not render: a dead button with no
+          message, which is exactly how the bug was reported.
+
+          goForward() validates only the fields of the step being left (`trigger("email")`,
+          `trigger(["fullName","password"])`), so each error lands on an input the user can
+          actually see. Enter and the button take the same path, because both raise submit.
+        */}
+        <form
+          onSubmit={(event) => {
+            if (step !== "languages") {
+              event.preventDefault();
+              void goForward();
+              return;
+            }
+            void handleSubmit(onSubmit)(event);
+          }}
+          className="w-full"
+          noValidate
+        >
           <AnimatePresence mode="wait">
             {step === "email" ? (
               <motion.div
