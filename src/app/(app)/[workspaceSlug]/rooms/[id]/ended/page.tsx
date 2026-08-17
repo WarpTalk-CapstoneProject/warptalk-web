@@ -53,6 +53,7 @@ import {
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
+import { useTranslationRoomFeedbackState } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/api/errors";
 import { formatMeetingDuration, resolveMeetingDurationSeconds } from "@/lib/meeting/room-history-mapping";
 import { translationRoomService } from "@/services/translation-room.service";
@@ -66,7 +67,36 @@ export default function RoomEndedPage() {
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
 
   const [tab, setTab] = useState<RecordTab>("summary");
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
+
+  // WT-449: ask for the rating rather than waiting to be asked for it.
+  //
+  // The dialog was reachable only through the "Rate this meeting" button on this page, which
+  // meant it was reachable only by someone who had already decided to look for it — and until
+  // the fix in persistent-meeting-session, only the host reached this page at all. Feedback
+  // that has to be hunted for is feedback nobody leaves.
+  //
+  // DERIVED, not synchronized: opening it from an effect that watches the query would be a
+  // setState cascade (and the repo's lint says so). The dialog is simply open whenever this
+  // meeting is unrated and the reader has not waved it away, which is a fact about the current
+  // render, not an event to react to.
+  //
+  // `dismissed` is deliberately not persisted. Someone who closes the prompt and comes back may
+  // have changed their mind, and the button below is still there either way; what must not
+  // happen is re-prompting a meeting they already rated, and `hasSubmitted` settles that.
+  const feedbackState = useTranslationRoomFeedbackState(roomId);
+  const [feedbackDismissed, setFeedbackDismissed] = useState(false);
+  const [feedbackRequested, setFeedbackRequested] = useState(false);
+  // `=== false` rather than `!hasSubmitted`: while the query is still in flight the value is
+  // undefined, and treating "not known yet" as "unrated" would flash the dialog open and then
+  // shut on every load of a meeting that was already rated.
+  const feedbackOpen =
+    feedbackRequested ||
+    (feedbackState.data?.hasSubmitted === false && !feedbackDismissed);
+
+  function setFeedbackOpen(open: boolean) {
+    setFeedbackRequested(open);
+    if (!open) setFeedbackDismissed(true);
+  }
 
   const roomQuery = useQuery({
     queryKey: ["translationRooms", roomId],
