@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assistantService } from "@/services/assistant.service";
+import type { ChatAttachment } from "@/lib/assistant/attachments";
 import type { AssistantMentionDto, AssistantPageContextDto } from "@/types/assistant";
 
 export const ASSISTANT_KEYS = {
@@ -74,16 +75,16 @@ export function useSendAssistantMessage() {
       content,
       pageContext,
       mentions,
-      images,
+      attachments,
     }: {
       conversationId: string;
       content: string;
       pageContext?: AssistantPageContextDto | null;
       mentions?: AssistantMentionDto[];
-      /** WT-474: pasted screenshots for this turn only. Not persisted. */
-      images?: string[];
+      /** WT-474: attachments for this turn only. Not persisted. */
+      attachments?: ChatAttachment[];
     }) => {
-      const { data } = await assistantService.sendMessage(conversationId, content, pageContext, mentions, images);
+      const { data } = await assistantService.sendMessage(conversationId, content, pageContext, mentions, attachments);
       return data;
     },
     onSuccess: (_data, variables) => {

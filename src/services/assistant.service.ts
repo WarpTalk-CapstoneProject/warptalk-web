@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import type { ChatAttachment } from "@/lib/assistant/attachments";
 import type {
   AssistantConversationDetailDto,
   AssistantConversationDto,
@@ -30,19 +31,23 @@ export const assistantService = {
     pageContext?: AssistantPageContextDto | null,
     mentions?: AssistantMentionDto[],
     /**
-     * WT-474 — screenshots pasted into the composer, as `data:image/...;base64,...` strings.
+     * WT-474 — files pasted, picked or dropped into the composer: images AND documents.
      *
-     * They belong to THIS TURN. Nothing stores them, so a follow-up question cannot see the
-     * picture — the composer says so, because a user who pastes once and then asks "and the red
-     * box?" would otherwise get a confident answer about nothing.
+     * They belong to THIS TURN. Nothing stores them, so a follow-up question cannot see them — the
+     * composer says so, because a user who attaches once and then asks "and the red box?" would
+     * otherwise get a confident answer about a file the model never received.
+     *
+     * `size` is dropped on the way out: it is only there for the chip's label.
      */
-    images?: string[]
+    attachments?: ChatAttachment[]
   ) {
     return apiClient.post<SendAssistantMessageResponse>(API.assistant.sendMessage(conversationId), {
       content,
       pageContext: pageContext ?? undefined,
       mentions: mentions?.length ? mentions : undefined,
-      images: images?.length ? images : undefined,
+      attachments: attachments?.length
+        ? attachments.map(({ dataUrl, name, mimeType }) => ({ dataUrl, name, mimeType }))
+        : undefined,
     });
   },
 
