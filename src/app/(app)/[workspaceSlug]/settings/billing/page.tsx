@@ -330,7 +330,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               ? `${activePlan.maxParticipants} participants · ${activePlan.maxLanguages} languages per meeting.`
               : "Plan limits unavailable.",
             subscription?.cancelAtPeriodEnd
-              ? `Cancelled — translation stops ${renewsDate}.`
+              ? `Cancelled — translation stops ${renewsDate}. Resubscribe from Manage subscription.`
               : `Renews ${renewsDate}.`,
           ]}
         />

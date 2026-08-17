@@ -107,6 +107,29 @@ export function ManageSubscriptionModal({
       toast.error(getErrorMessage(error, "Could not cancel the subscription.")),
   });
 
+  /**
+   * WT-471: the way back into a plan.
+   *
+   * There was none. Cancel existed, auto-renew was deliberately never built, and nothing reversed
+   * a cancellation — so every cancelled workspace was a dead end inside the product. Two
+   * reasonable decisions that together made a trap.
+   *
+   * This is not a purchase: the period is already paid for, so it restores renewal on the row that
+   * is still live. A workspace whose period has already ended is refused by the server and told to
+   * choose a plan, which is the Checkout flow.
+   */
+  const reactivateMutation = useMutation({
+    mutationFn: () => billingService.reactivateSubscription(workspaceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing"] });
+      toast.success("Renewal is back on. This plan will continue past the current period.");
+    },
+    // The server's own words matter here: "period has already ended" sends the reader somewhere
+    // else entirely than "not cancelled" does.
+    onError: (error) =>
+      toast.error(getErrorMessage(error, "Could not reactivate the subscription.")),
+  });
+
   const cancelling = subscription?.cancelAtPeriodEnd === true;
 
   return (
@@ -185,7 +208,18 @@ export function ManageSubscriptionModal({
                 </Link>
                 {/* Cancel asks twice, in place. A confirm dialog stacked on a dialog is worse:
                     the thing being cancelled leaves the screen at the moment of decision. */}
-                {confirmingCancel ? (
+                {/* A cancelled plan offers the reverse, not a dead "Cancelled" label. That label
+                    was the whole problem: it stated the state and gave no way out of it. */}
+                {cancelling ? (
+                  <BillingButton
+                    tone="primary"
+                    className="w-auto"
+                    disabled={reactivateMutation.isPending}
+                    onClick={() => reactivateMutation.mutate()}
+                  >
+                    {reactivateMutation.isPending ? "Reactivating…" : "Resubscribe"}
+                  </BillingButton>
+                ) : confirmingCancel ? (
                   <BillingButton
                     tone="outline"
                     className="w-auto border-destructive/40 text-destructive hover:bg-destructive/5"
@@ -198,10 +232,10 @@ export function ManageSubscriptionModal({
                   <BillingButton
                     tone="outline"
                     className="w-auto"
-                    disabled={!subscription || cancelling}
+                    disabled={!subscription}
                     onClick={() => setConfirmingCancel(true)}
                   >
-                    {cancelling ? "Cancelled" : "Cancel plan"}
+                    Cancel plan
                   </BillingButton>
                 )}
               </div>
@@ -223,7 +257,8 @@ export function ManageSubscriptionModal({
           {cancelling && subscription ? (
             <p className="mt-4 text-[12px] text-amber-500">
               Translation stops for this workspace on{" "}
-              {formatDay(subscription.currentPeriodEnd)}.
+              {formatDay(subscription.currentPeriodEnd)}. Resubscribe before then to keep it
+              running — the current period is already paid for, so it costs nothing.
             </p>
           ) : null}
         </div>
