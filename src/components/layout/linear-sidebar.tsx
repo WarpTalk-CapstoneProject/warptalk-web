@@ -853,14 +853,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[230px] bg-popover border border-border shadow-md rounded-xl p-1 text-ink text-[13px]">
-            {/* 1. Settings */}
-            <DropdownMenuItem
-              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : "/workspace")}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
-            >
-              <span>Settings</span>
-              <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">G then S</DropdownMenuShortcut>
-            </DropdownMenuItem>
+            {/* 1. Settings (Owner & Admin only) */}
+            {isOwnerOrAdmin && (
+              <DropdownMenuItem
+                onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : "/workspace")}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+              >
+                <span>Settings</span>
+                <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">G then S</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
 
             {/* 2. Invite and manage members */}
             <DropdownMenuItem
