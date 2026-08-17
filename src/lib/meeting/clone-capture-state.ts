@@ -140,13 +140,43 @@ export function describeCloneCapture(event?: CloneCaptureEvent | null): CloneCap
     };
   }
 
-  if (reason.startsWith("cloned_")) {
+  // The clone is live. WHICH clone is the part this used to leave out.
+  //
+  // `cloned`, `cloned_best_possible` and `cloned_upgrades_exhausted` all used to render the
+  // identical sentence "Your voice is ready" with `quality: null` — so a reference clip that
+  // covers the speaker's full range and one that barely covers a single note were reported in
+  // the same words, with no grade beside them. That is the bug: "luôn hiển thị voice ready
+  // trong khi voice chưa acceptable".
+  //
+  // Acceptance and quality are separate gates upstream and stay separate here. A clip is
+  // ACCEPTED on hard floors (level, speech ratio, energy variation); a monotone or narrow
+  // delivery clears all of them and is scored low on purpose rather than refused, because a
+  // narrow clone of your own voice still beats a stranger's. So "accepted" never meant "good",
+  // and only the score can tell them apart.
+  if (reason.startsWith("cloned")) {
+    const grade = gradeScore(event.score);
+    // A weak likeness is said plainly and names the way out. It is not toned "blocked" — the
+    // clone IS in use and listeners do hear it — but it must not read as a finished success
+    // either, or nobody ever learns there was something to improve.
+    if (grade === "weak" || grade === "fair") {
+      return {
+        tone: "working",
+        title: "Your voice is cloned, but it is a weak match",
+        detail:
+          "The reference clip covers little of your range, so the dub will sound flat. Keep talking with your natural intonation and it will re-clone from a better sample.",
+        progress: 1,
+        quality: grade,
+      };
+    }
     return {
       tone: "done",
       title: "Your voice is ready",
       detail: "Listeners in other languages hear your translated speech in your own voice.",
       progress: 1,
-      quality: null,
+      // Null when the worker had no score to send — `cloned_elsewhere_kept` is a clone made by
+      // another replica, which this process genuinely cannot grade. Absent, not zero: see the
+      // DTO's note on why a fabricated 0 would be worse than a gap.
+      quality: grade,
     };
   }
 

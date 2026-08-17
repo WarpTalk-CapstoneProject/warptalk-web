@@ -86,6 +86,47 @@ test("translation not running says so instead of blaming the microphone", () => 
   }
 });
 
+// WT-452. "Accepted" is not "good", and for a long time the UI could not tell you which one it
+// meant: every cloned_* state rendered "Your voice is ready" with no grade. A clip that clears
+// the hard floors but covers one note of the speaker's range is exactly the case the report was
+// about — "luôn hiển thị voice ready trong khi voice chưa acceptable".
+test("a live clone is graded, not just announced", () => {
+  const good = describeCloneCapture({ speakerId: "s1", reason: "cloned", score: 0.9 });
+  assert.equal(good.tone, "done");
+  assert.equal(good.quality, "good");
+  assert.match(good.title, /ready/);
+});
+
+test("a weak clone says it is weak instead of claiming to be ready", () => {
+  for (const score of [0.2, 0.6]) {
+    const view = describeCloneCapture({ speakerId: "s1", reason: "cloned", score });
+    assert.notEqual(view.quality, "good");
+    assert.doesNotMatch(view.title, /ready/);
+    assert.match(view.title, /weak match/);
+    // Still in use — this is not a failure state, and toning it as one would be its own lie.
+    assert.equal(view.tone, "working");
+    assert.match(view.detail, /Keep talking/);
+  }
+});
+
+test("the state a speaker is stuck in carries its grade", () => {
+  const view = describeCloneCapture({
+    speakerId: "s1",
+    reason: "cloned_upgrades_exhausted",
+    score: 0.2,
+  });
+  assert.equal(view.quality, "weak");
+  assert.match(view.title, /weak match/);
+});
+
+test("a clone this process cannot grade claims no grade", () => {
+  // cloned_elsewhere_kept is made by another replica and has no local score. Absent, not zero:
+  // a fabricated 0 would render as "weak" and accuse a clone nobody here has measured.
+  const view = describeCloneCapture({ speakerId: "s1", reason: "cloned_elsewhere_kept" });
+  assert.equal(view.quality, null);
+  assert.equal(view.tone, "done");
+});
+
 test("an unrecognised state is surfaced rather than swallowed", () => {
   const view = describeCloneCapture({ speakerId: "s1", reason: "some_future_state" });
   assert.match(view.detail, /some_future_state/);
