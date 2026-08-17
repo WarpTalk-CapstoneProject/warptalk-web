@@ -483,16 +483,8 @@ function getAccountIssue(
 ): string | null {
   if (!email) return "Signed-in account email is missing.";
   if (!rawDomain) return "Signed-in account email is invalid.";
-<<<<<<< HEAD
   if (isPublicDomain && wantsVerifiedDomain)
     return `${rawDomain} is a public email domain and cannot be verified as a company domain. Choose "Assign members manually" instead, or sign in with a work address.`;
-=======
-  // WT-417: a public domain no longer blocks creation. It still cannot be system-VERIFIED —
-  // verifying gmail.com would make every Gmail address Internal to the workspace — and the
-  // server refuses that separately, so the only thing this screen needs to stop is a missing
-  // or malformed account email.
-  void isPublicDomain;
->>>>>>> origin/feature/wt-418-public-domain-and-admin-onboarding
   return null;
 }
 
