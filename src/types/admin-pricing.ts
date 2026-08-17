@@ -128,3 +128,8 @@ export interface PricingConfigDto {
   formula: string;
   resolverKey: string;
 }
+
+/** Platform billing policy. One knob today; the endpoint replaces the whole record. */
+export interface BillingPolicyDto {
+  vatRate: number;
+}

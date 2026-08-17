@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowsClockwise, PencilSimple, Tag, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { ArrowsClockwise, PencilSimple, Plus, Tag, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,7 @@ import {
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
 import {
+  PlanCreateDialog,
   PlanEditDialog,
   PricingConfigDialog,
   RateCardEditDialog,
@@ -19,6 +20,7 @@ import {
   useAdminPlans,
   useAdminPricingConfig,
   useAdminRateCards,
+  useCreateAdminPlan,
   useUpdateAdminPlan,
   useUpdateAdminPricingConfig,
   useUpsertAdminRateCard,
@@ -241,6 +243,7 @@ export default function AdminPlansPage() {
   const configQuery = useAdminPricingConfig();
 
   const updatePlan = useUpdateAdminPlan();
+  const createPlan = useCreateAdminPlan();
   const upsertRateCard = useUpsertAdminRateCard();
   const updateConfig = useUpdateAdminPricingConfig();
 
@@ -254,6 +257,7 @@ export default function AdminPlansPage() {
   const [editingPlan, setEditingPlan] = useState<PlanDto | null>(null);
   const [editingCard, setEditingCard] = useState<UsageRateCardDto | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isCreatingPlan, setIsCreatingPlan] = useState(false);
 
   const plans = plansQuery.data ?? [];
   const rateCards = rateCardsQuery.data ?? [];
@@ -271,6 +275,12 @@ export default function AdminPlansPage() {
         description="What the platform sells, and what each unit of it costs to serve."
         actions={
           <>
+            {tab === "plans" ? (
+              <Button size="sm" onClick={() => setIsCreatingPlan(true)}>
+                <Plus size={14} />
+                New plan
+              </Button>
+            ) : null}
             {tab === "configuration" ? (
               <Button size="sm" onClick={() => setIsConfigOpen(true)} disabled={config === null}>
                 <PencilSimple size={14} />
@@ -418,9 +428,16 @@ export default function AdminPlansPage() {
       <p className="mt-4 text-[12px] text-ink-muted">
         Editable, within what the API allows. There is no create and no delete on this screen
         because there is none on the API: a plan is named on every invoice ever raised against it,
-        so it is retired with its Active switch rather than removed, and a new plan or a new
-        rate-card identity arrives with the migration that registers it.
+        so it is retired with its Active switch rather than removed. A new rate-card identity
+        still arrives with the migration that registers it.
       </p>
+
+      <PlanCreateDialog
+        open={isCreatingPlan}
+        onOpenChange={setIsCreatingPlan}
+        onSubmit={(request) => createPlan.mutateAsync(request)}
+        isSaving={createPlan.isPending}
+      />
 
       <PlanEditDialog
         plan={editingPlan}

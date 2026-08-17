@@ -64,6 +64,15 @@ export function useCancelAdminSubscription() {
   });
 }
 
+export function useChangeAdminSubscriptionPlan() {
+  const invalidate = useInvalidateAdminSubscriptions();
+  return useMutation({
+    mutationFn: ({ workspaceId, planId }: { workspaceId: string; planId: string }) =>
+      adminSubscriptionService.changePlan(workspaceId, planId),
+    onSuccess: invalidate,
+  });
+}
+
 export function useResumeAdminSubscription() {
   const invalidate = useInvalidateAdminSubscriptions();
   return useMutation({

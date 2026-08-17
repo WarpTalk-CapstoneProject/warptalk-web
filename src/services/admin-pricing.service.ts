@@ -2,6 +2,7 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { PlanDto } from "@/types/billing";
 import type {
+  BillingPolicyDto,
   PlanRequest,
   PricingConfigDto,
   UpdatePricingConfigRequest,
@@ -17,9 +18,6 @@ import type {
  *
  * What it cannot do is as load-bearing as what it can:
  *
- *   - There is no `createPlan`. `PlansController` has no POST. A new plan arrives with the
- *     migration that seeds it, because pricing that no invoice has ever referenced is a database
- *     change, not a form submission.
  *   - There is no `deletePlan`. There is no DELETE either, and there should not be: a plan is
  *     named on every invoice raised against it, so retiring one means `isActive: false` and
  *     leaving the row where the history can still point at it.
@@ -44,6 +42,19 @@ export const adminPricingService = {
     return data;
   },
 
+  getBillingPolicy: async (): Promise<BillingPolicyDto> => {
+    const { data } = await apiClient.get<BillingPolicyDto>(API.adminPricing.billingPolicy);
+    return data;
+  },
+
+  updateBillingPolicy: async (request: BillingPolicyDto): Promise<BillingPolicyDto> => {
+    const { data } = await apiClient.put<BillingPolicyDto>(
+      API.adminPricing.billingPolicy,
+      request,
+    );
+    return data;
+  },
+
   /**
    * Replace a plan.
    *
@@ -53,6 +64,12 @@ export const adminPricingService = {
    */
   updatePlan: async (id: string, request: PlanRequest): Promise<PlanDto> => {
     const { data } = await apiClient.put<PlanDto>(API.adminPricing.plan(id), request);
+    return data;
+  },
+
+  /** Create a catalogue entry. Same validation as the PUT; duplicate slugs are refused. */
+  createPlan: async (request: PlanRequest): Promise<PlanDto> => {
+    const { data } = await apiClient.post<PlanDto>(API.adminPricing.plans, request);
     return data;
   },
 

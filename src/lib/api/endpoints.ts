@@ -209,12 +209,12 @@ export const API = {
    * /admin — they predate the portal and are gated per-route on the platform admin role.
    */
   adminPricing: {
+    /** Platform billing policy — today a single knob, the VAT rate. GET/PUT, admin-gated. */
+    billingPolicy: "/billing-policy",
     allPlans: "/plans/all",
-    /**
-     * PUT only. The plans controller has no POST and no DELETE — a plan still names itself on
-     * every invoice ever issued against it, so the catalogue grows by migration and a retired
-     * plan is deactivated in place rather than removed.
-     */
+    /** POST creates a plan (2026-08-17). Still no DELETE — a plan names itself on every invoice
+     * ever issued against it, so a retired plan is deactivated in place rather than removed. */
+    plans: "/plans",
     plan: (id: string) => `/plans/${id}`,
     /** GET reads the active cards; PUT upserts one, matched on its identity columns. */
     rateCard: "/usages/rate-card",
@@ -271,6 +271,13 @@ export const API = {
      */
     cancel: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
     resume: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/resume`,
+    /**
+     * The one action that IS admin-only (2026-08-17): customers change plans through checkout,
+     * which is exactly the step an administrative move must not require. Credits are untouched
+     * by design — compensation is an explicit credit adjustment with its own audit row.
+     */
+    changePlan: (workspaceId: string) =>
+      `/admin/subscriptions/workspace/${workspaceId}/change-plan`,
     contractTerms: (workspaceId: string) =>
       `/subscriptions/workspace/${workspaceId}/contract-terms`,
   },

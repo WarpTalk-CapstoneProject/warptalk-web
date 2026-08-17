@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { adminPricingService } from "@/services/admin-pricing.service";
 import type {
+  BillingPolicyDto,
   PlanRequest,
   UpdatePricingConfigRequest,
   UpsertUsageRateCardRequest,
@@ -59,6 +60,31 @@ export function useUpdateAdminPlan() {
   return useMutation({
     mutationFn: ({ id, request }: { id: string; request: PlanRequest }) =>
       adminPricingService.updatePlan(id, request),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAdminBillingPolicy() {
+  return useQuery({
+    queryKey: ["admin-pricing", "billing-policy"] as const,
+    queryFn: () => adminPricingService.getBillingPolicy(),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useUpdateAdminBillingPolicy() {
+  const invalidate = useInvalidateAdminPricing();
+  return useMutation({
+    mutationFn: (request: BillingPolicyDto) =>
+      adminPricingService.updateBillingPolicy(request),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateAdminPlan() {
+  const invalidate = useInvalidateAdminPricing();
+  return useMutation({
+    mutationFn: (request: PlanRequest) => adminPricingService.createPlan(request),
     onSuccess: invalidate,
   });
 }

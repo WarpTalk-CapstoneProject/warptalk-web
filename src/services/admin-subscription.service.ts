@@ -69,4 +69,9 @@ export const adminSubscriptionService = {
   ): Promise<void> => {
     await apiClient.post(API.adminSubscriptions.resume(workspaceId), request);
   },
+
+  /** Move the workspace's live subscription onto another plan. Refuses deactivated targets. */
+  changePlan: async (workspaceId: string, planId: string): Promise<void> => {
+    await apiClient.post(API.adminSubscriptions.changePlan(workspaceId), { planId });
+  },
 };

@@ -10,9 +10,9 @@
  *   RateCardEditDialog    price and margin only — the identity columns are the upsert key
  *   PricingConfigDialog   the twelve knobs the endpoint accepts, not the two it computes
  *
- * None of them creates anything. There is no POST behind any of these screens: plans and rate-card
- * identities arrive by migration, and a form that offered to add one would be offering something
- * the API refuses.
+ * PlanCreateDialog is the one creator: POST /plans exists as of 2026-08-17, with the same
+ * validation as the PUT. Rate-card identities still arrive by migration; a retired plan is
+ * `isActive: false`, never deleted, because it keeps appearing on old invoices.
  */
 
 import { useMemo, useState } from "react";
@@ -243,6 +243,75 @@ export function PlanEditDialog({
           <PlanEditForm
             key={plan.id}
             plan={plan}
+            onCancel={() => onOpenChange(false)}
+            onSubmit={onSubmit}
+            onSaved={() => onOpenChange(false)}
+            isSaving={isSaving}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * The seed a brand-new plan starts from. Passing a PlanDto (not a blank form) keeps
+ * PlanEditForm's contract — the request is always built from a whole plan with edits laid over
+ * it — so create and edit cannot drift apart field-by-field. The numbers mirror the server's own
+ * PlanRequest defaults; name and slug are empty on purpose and blocked client-side until typed.
+ */
+const NEW_PLAN_SEED: PlanDto = {
+  id: "",
+  name: "",
+  slug: "",
+  tier: "standard",
+  price: 0,
+  currency: "VND",
+  billingCycle: PLAN_BILLING_CYCLE,
+  creditsPerCycle: 0,
+  overageCapCredits: 0,
+  overagePricePerCredit: 4,
+  lowBalanceThresholdCredits: 0,
+  rolloverCapCredits: 0,
+  invoiceTermsDays: 15,
+  invoiceGraceHours: 360,
+  features: "{}",
+  sortOrder: 0,
+  isActive: true,
+  maxParticipants: 10,
+  maxLanguages: 4,
+  voiceCloneEnabled: false,
+  aiAssistantEnabled: false,
+  glossaryEnabled: false,
+  dedicatedGpu: false,
+};
+
+export function PlanCreateDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  isSaving,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (request: PlanRequest) => Promise<unknown>;
+  isSaving: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>New plan</DialogTitle>
+          <DialogDescription>
+            Creates a catalogue entry. Nobody is subscribed to it until a subscription is moved
+            onto it or a checkout sells it; leave it hidden to stage it.
+          </DialogDescription>
+        </DialogHeader>
+
+        {open ? (
+          <PlanEditForm
+            key="new-plan"
+            plan={NEW_PLAN_SEED}
             onCancel={() => onOpenChange(false)}
             onSubmit={onSubmit}
             onSaved={() => onOpenChange(false)}

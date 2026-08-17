@@ -48,6 +48,7 @@ import {
   Keyboard,
   MagnifyingGlass,
   PaperPlaneTilt,
+  SignOut,
   Plus,
   Sliders,
   SquaresFour,
@@ -369,6 +370,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       {
         section: "Configuration",
         items: [
+          { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
           { icon: Sliders, label: "Platform config", href: "/admin/configuration" },
           { icon: Globe, label: "Global glossary", href: "/admin/global-glossary" },
         ],
@@ -404,6 +406,19 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               )),
             )}
           </nav>
+          {/* The exit. The expanded branch hangs it off the user card; collapsed has no card,
+              so the button stands alone — an admin console with no way to sign out is how the
+              portal shipped once already. */}
+          <div className="grid shrink-0 place-items-center border-t border-border/30 py-3">
+            <button
+              onClick={() => logout()}
+              title="Log out"
+              aria-label="Log out"
+              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <SignOut size={16} weight="duotone" />
+            </button>
+          </div>
         </aside>
       );
     }
@@ -450,19 +465,29 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         </nav>
 
         {user && (
-          <div className="flex items-center gap-2.5 border-t border-border/30 px-3 py-3">
+          <div className="group flex items-center gap-2.5 border-t border-border/30 px-3 py-3">
             <Avatar className="size-7 rounded-full">
               <AvatarImage src={user.avatarUrl} alt="" />
               <AvatarFallback className="rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
                 {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
               </AvatarFallback>
             </Avatar>
-            <div className="min-w-0 leading-tight">
+            <div className="min-w-0 flex-1 leading-tight">
               <p className="truncate text-[12.5px] font-medium text-ink">
                 {user.fullName || user.email}
               </p>
               <p className="truncate text-[11px] text-ink-subtle">Platform admin</p>
             </div>
+            {/* Always visible, not hover-revealed: this card is the ONLY exit from the portal,
+                and a control nobody can see shipped once already as "no way to sign out". */}
+            <button
+              onClick={() => logout()}
+              title="Log out"
+              aria-label="Log out"
+              className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <SignOut size={16} weight="duotone" />
+            </button>
           </div>
         )}
       </aside>

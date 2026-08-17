@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowCounterClockwise,
   ArrowsClockwise,
+  ArrowsLeftRight,
   CreditCard,
   Prohibit,
   WarningCircle,
@@ -22,10 +23,12 @@ import {
   SubscriptionLifecycleDialog,
   type SubscriptionLifecycleAction,
 } from "@/components/admin/subscription-lifecycle-dialog";
+import { ChangePlanDialog } from "@/components/admin/change-plan-dialog";
 import {
   useAdminSubscriptionDirectory,
   useAdminSubscriptionSummary,
   useCancelAdminSubscription,
+  useChangeAdminSubscriptionPlan,
   useResumeAdminSubscription,
 } from "@/hooks/use-admin-subscriptions";
 import {
@@ -135,6 +138,7 @@ function SubscriptionsDirectory() {
   const summaryQuery = useAdminSubscriptionSummary();
   const cancelSubscription = useCancelAdminSubscription();
   const resumeSubscription = useResumeAdminSubscription();
+  const changePlan = useChangeAdminSubscriptionPlan();
 
   // The row and the verb travel together: the dialog's wording, its confirm label and the endpoint
   // it calls all follow from the action, and keeping them in one piece of state means they cannot
@@ -143,6 +147,7 @@ function SubscriptionsDirectory() {
     subscription: AdminSubscriptionSummaryDto;
     action: SubscriptionLifecycleAction;
   } | null>(null);
+  const [changingPlanFor, setChangingPlanFor] = useState<AdminSubscriptionSummaryDto | null>(null);
 
   const items = directoryQuery.data?.items ?? [];
   const total = directoryQuery.data?.total ?? 0;
@@ -295,12 +300,28 @@ function SubscriptionsDirectory() {
                 <SubscriptionRow
                   subscription={subscription}
                   onAction={(target, action) => setPending({ subscription: target, action })}
+                  onChangePlan={(target) => setChangingPlanFor(target)}
                 />
               </li>
             ))}
           </ul>
         )}
       </AdminPanel>
+
+      <ChangePlanDialog
+        subscription={changingPlanFor}
+        onOpenChange={(open) => {
+          if (!open) setChangingPlanFor(null);
+        }}
+        onSubmit={(planId) => {
+          if (!changingPlanFor) return Promise.resolve();
+          return changePlan.mutateAsync({
+            workspaceId: changingPlanFor.workspaceId,
+            planId,
+          });
+        }}
+        isSaving={changePlan.isPending}
+      />
 
       <SubscriptionLifecycleDialog
         subscription={pending?.subscription ?? null}
@@ -356,12 +377,14 @@ function SubscriptionsDirectory() {
 function SubscriptionRow({
   subscription,
   onAction,
+  onChangePlan,
 }: {
   subscription: AdminSubscriptionSummaryDto;
   onAction: (
     subscription: AdminSubscriptionSummaryDto,
     action: SubscriptionLifecycleAction,
   ) => void;
+  onChangePlan: (subscription: AdminSubscriptionSummaryDto) => void;
 }) {
   const isTrial =
     subscription.trialEndsAt != null && new Date(subscription.trialEndsAt) > new Date();
@@ -429,7 +452,14 @@ function SubscriptionRow({
       {/* One action per row, chosen by where the subscription actually is. A cancelled row offers
           Resume and an active one offers Cancel; an expired one offers neither, because the
           endpoint would refuse — it looks for an ACTIVE subscription and answers 404 otherwise. */}
-      <div className="w-[110px] shrink-0 md:ml-3 md:text-right">
+      <div className="flex w-[220px] shrink-0 justify-end gap-1.5 md:ml-3">
+        {/* Change plan only where the endpoint would act: it looks for the ACTIVE subscription. */}
+        {!isCancelled && subscription.status !== "expired" ? (
+          <Button variant="outline" size="sm" onClick={() => onChangePlan(subscription)}>
+            <ArrowsLeftRight size={13} />
+            Change plan
+          </Button>
+        ) : null}
         {isCancelled ? (
           <Button variant="outline" size="sm" onClick={() => onAction(subscription, "resume")}>
             <ArrowCounterClockwise size={13} />
