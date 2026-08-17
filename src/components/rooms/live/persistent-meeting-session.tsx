@@ -286,6 +286,7 @@ export function PersistentMeetingSession({
   // the mini bar — and these values follow it.
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
+
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] =
     useState(false);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
@@ -729,6 +730,8 @@ export function PersistentMeetingSession({
   // meeting reported this before — the worker logged it, and a whole test session concluded
   // cloning was broken while it was logging score 1.0.
   const [cloneCaptureState, setCloneCaptureState] = useState<VoiceCloneStateDto | null>(null);
+  // See VoiceCloneStateChanged: how long a clip refusal owns the status panel.
+  const cloneRejectionHoldUntilRef = useRef(0);
   // Read inside the hub callback, which is registered once and would otherwise close over the
   // user id from the first render.
   const currentUserIdRef = useRef<string | undefined>(undefined);
@@ -845,6 +848,22 @@ export function PersistentMeetingSession({
   const translationConnectionRef = useRef<
     import("@microsoft/signalr").HubConnection | null
   >(null);
+
+  // Publish the REAL mic state to the roster, whenever it changes and however it changed.
+  //
+  // Keyed on `microphoneEnabled` on purpose: LocalMediaController mirrors that state from the
+  // LiveKit track itself (TrackMuted/TrackUnmuted), so a mute that arrived by any route — the
+  // button, ForceMuted, the browser revoking the device — flows through here identically. This
+  // is the missing publisher for the hub's ToggleMute: without it ParticipantMuteChanged never
+  // fired and every roster showed the join-time icon forever.
+  useEffect(() => {
+    const connection = translationConnectionRef.current;
+    if (!roomId || connection?.state !== HubConnectionState.Connected) return;
+    connection.invoke("ToggleMute", roomId, !microphoneEnabled).catch(() => {
+      // The roster icon is a courtesy; a failed sync must not surface as a meeting error.
+    });
+  }, [microphoneEnabled, roomId]);
+
   // Last listen language actually sent to the hub — skips a redundant SetListenLanguage
   // call when this effect re-runs without the value having changed.
   const appliedListenLanguageRef = useRef<string | null>(null);
@@ -1511,6 +1530,14 @@ export function PersistentMeetingSession({
       addLiveParticipant(participant);
       void refetchParticipants();
     });
+    // The other half of a wire that was never connected. The hub has carried ToggleMute /
+    // ParticipantMuteChanged for months, and the store has carried updateParticipantMute — with
+    // zero callers on either side. So the roster's mic icon showed whatever was true at join
+    // (always unmuted) for the rest of the meeting: "e tắt mic a Tuấn nma icon vẫn là có". The
+    // publisher for our own state is the effect on microphoneEnabled below.
+    connection.on("ParticipantMuteChanged", (userId: string, isMuted: boolean) => {
+      useTranslationRoomStore.getState().updateParticipantMute(userId, isMuted);
+    });
     connection.on("ParticipantLeft", (userId: string) => {
       removeLiveParticipant(userId);
       void refetchParticipants();
@@ -1650,6 +1677,20 @@ export function PersistentMeetingSession({
     // person who can act on "your microphone is too quiet" is you.
     connection.on("VoiceCloneStateChanged", (state: VoiceCloneStateDto) => {
       if (!state?.speakerId || state.speakerId !== currentUserIdRef.current) return;
+      // A rejection must survive long enough to be read. The worker's sliding window keeps
+      // capturing after it refuses a clip, so the very next `capturing` event — often under a
+      // second later — replaced the refusal on screen. What the speaker saw was the bar filling
+      // to 20s, snapping back and filling again, with the reason flashing by unreadably: "thu
+      // xong 1 lần 20s r, r revert lại thu lại tiếp". The refusal holds the panel for a few
+      // seconds; the capture that continues underneath catches the display up afterwards.
+      if (state.reason?.startsWith("clip_rejected:")) {
+        cloneRejectionHoldUntilRef.current = Date.now() + 6_000;
+        setCloneCaptureState(state);
+        return;
+      }
+      if (state.reason === "capturing" && Date.now() < cloneRejectionHoldUntilRef.current) {
+        return;
+      }
       setCloneCaptureState(state);
     });
 
