@@ -138,7 +138,7 @@ export default function AdminWorkspaceBillingPage({
     queryKey: ["billing", "balance", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId),
     enabled: !!workspaceId,
-    retry: 1,
+    // WT-451: see account-menu — the provider already declines to repeat a 4xx.
   });
 
   const { data: workspaceInfo } = useQuery({

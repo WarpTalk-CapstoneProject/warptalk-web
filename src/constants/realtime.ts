@@ -40,6 +40,8 @@ export const SIGNALR_EVENTS = {
   REACTION_RECEIVED: "ReactionReceived",
   COLLABORATIVE_NOTE_UPDATED: "CollaborativeNoteUpdated",
   PARTICIPANT_ADMITTED: "ParticipantAdmitted",
+  // WT-428: the knock — somebody just landed in the waiting room. Only hosts act on it.
+  PARTICIPANT_WAITING: "ParticipantWaiting",
 } as const;
 
 export const QUERY_KEYS = {

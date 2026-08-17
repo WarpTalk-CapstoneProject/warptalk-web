@@ -99,7 +99,7 @@ function SuccessContent() {
   const cancelledRef = useRef(false);
 
   const returnLink = activeWorkspaceSlug
-    ? `/${activeWorkspaceSlug}/billing`
+    ? `/${activeWorkspaceSlug}/settings/billing`
     : "/workspace";
 
   const confirm = useCallback(async () => {

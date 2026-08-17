@@ -18,10 +18,8 @@
 import {
   ArrowFatDown,
   ArrowFatUp,
-  ArrowRight,
   CheckCircle,
   Crown,
-  Lightning,
   Warning,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,6 +49,7 @@ import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildFeatureList, getPlanDescription } from "@/lib/utils";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import { formatMoney } from "@/lib/format/currency";
 
@@ -66,17 +65,19 @@ export default function PaymentPlansPage() {
 
   // Dialogs
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [changePlanDialog, setChangePlanDialog] = useState<{
-    open: boolean;
-    plan: PlanDto | null;
-    direction: "upgrade" | "downgrade";
-  }>({
-    open: false,
-    plan: null,
-    direction: "upgrade",
-  });
-
-  const workspaceId = user?.id ?? "";
+  /**
+   * WT-370, applied here at last. This read `user?.id`, so every request on this page asked the
+   * billing service about a workspace whose id is a USER id: the subscription lookup could only
+   * 404, "Cancel subscription" cancelled nothing, and — the one that costs money — the checkout
+   * below sent that id as `WorkspaceId` in the Stripe metadata. It is a well-formed Guid, so it
+   * passes every validation downstream and fails on the workspace foreign key four layers away,
+   * after the card has been charged.
+   *
+   * The slugged plans page was fixed for exactly this in WT-370. This copy was missed because
+   * nothing in the app links here — Stripe does.
+   */
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId) ?? "";
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
 
   // SignalR for real-time plan updates
   useEffect(() => {
@@ -144,21 +145,12 @@ export default function PaymentPlansPage() {
     },
   });
 
-  // Change plan mutation
-  const changePlanMutation = useMutation({
-    mutationFn: (newPlanId: string) =>
-      billingService.changeSubscription(workspaceId, newPlanId),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: ["subscription", workspaceId],
-      });
-      setChangePlanDialog({ open: false, plan: null, direction: "upgrade" });
-      toast.success(`Successfully switched to ${data.planName} plan!`);
-    },
-    onError: () => {
-      toast.error("Failed to change plan. Please try again.");
-    },
-  });
+  /*
+   * WT-381 — a `changePlanMutation` calling `/subscriptions/workspace/{id}/change-plan` stood
+   * here. That route has never existed in the billing service. Changing plans is a purchase, and
+   * it needs the dialog that explains the charge; that dialog lives on the workspace's own plans
+   * page, which is where the buttons below now lead.
+   */
 
   const handleCheckout = async (
     amount: number,
@@ -170,11 +162,18 @@ export default function PaymentPlansPage() {
       router.push("/login");
       return;
     }
+    if (!workspaceId) {
+      toast.error(
+        "Open a workspace before choosing a plan — a subscription belongs to a workspace.",
+      );
+      return;
+    }
+
     try {
       setIsCheckoutProcessing(true);
       const url = await billingService.createCheckoutSession({
         userId: user.id,
-        workspaceId: user.id,
+        workspaceId,
         amount,
         currency: "vnd",
         paymentType,
@@ -266,7 +265,6 @@ export default function PaymentPlansPage() {
             const isUpgrade = plan.sortOrder > currentPlanOrder && hasActiveSub;
             const isDowngrade =
               plan.sortOrder < currentPlanOrder && hasActiveSub;
-            const backendPlanId = plan.id;
 
             const featureList = buildFeatureList(plan);
             const isFeatured = plan.sortOrder > 1;
@@ -359,42 +357,26 @@ export default function PaymentPlansPage() {
                         </button>
                       )}
                     </>
-                  ) : isUpgrade ? (
-                    <button
-                      type="button"
-                      disabled={changePlanMutation.isPending || !backendPlanId}
-                      onClick={() =>
-                        setChangePlanDialog({
-                          open: true,
-                          plan:
-                            backendPlans.find((p) => p.name === planName) ??
-                            null,
-                          direction: "upgrade",
-                        })
+                  ) : isUpgrade || isDowngrade ? (
+                    /* Changing plans charges in full and restarts the billing period today. That
+                       needs saying before the checkout opens, and the dialog that says it lives on
+                       the workspace's own plans page — so this points there rather than carrying a
+                       second copy of the explanation. */
+                    <a
+                      href={
+                        activeWorkspaceSlug
+                          ? `/${activeWorkspaceSlug}/payment/plans`
+                          : "/workspace"
                       }
-                      className="inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors bg-primary hover:bg-primary-hover text-primary-foreground cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors bg-surface-2 hover:bg-surface-3 text-ink border border-hairline cursor-pointer"
                     >
-                      <ArrowFatUp className="mr-2 h-4 w-4" weight="fill" />
-                      Upgrade Plan
-                    </button>
-                  ) : isDowngrade ? (
-                    <button
-                      type="button"
-                      disabled={changePlanMutation.isPending || !backendPlanId}
-                      onClick={() =>
-                        setChangePlanDialog({
-                          open: true,
-                          plan:
-                            backendPlans.find((p) => p.name === planName) ??
-                            null,
-                          direction: "downgrade",
-                        })
-                      }
-                      className="inline-flex items-center justify-center w-full rounded-md h-10 text-sm font-medium transition-colors bg-surface-2 hover:bg-surface-3 text-ink border border-hairline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ArrowFatDown className="mr-2 h-4 w-4" />
-                      Downgrade Plan
-                    </button>
+                      {isUpgrade ? (
+                        <ArrowFatUp className="mr-2 h-4 w-4" weight="fill" />
+                      ) : (
+                        <ArrowFatDown className="mr-2 h-4 w-4" />
+                      )}
+                      Manage plan
+                    </a>
                   ) : (
                     // No active subscription — show checkout
                     <button
@@ -423,100 +405,28 @@ export default function PaymentPlansPage() {
           })}
       </div>
 
-      {/* Top-up Section */}
-      <div className="mt-16 w-full max-w-4xl px-4">
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <Lightning className="h-5 w-5 text-primary" weight="fill" />
-            <h2 className="text-2xl font-semibold tracking-tight text-ink">
-              Need more credits?
-            </h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Top up your AI credits without changing your plan. Rate: 1 credit =
-            10 VND. Volume discounts applied automatically.
-          </p>
-        </div>
+      {/* Top-up Section — switched off, and it says why.
 
-        <div className="grid md:grid-cols-3 gap-4">
-          {[
-            {
-              credits: "10,000",
-              creditsNum: 10000,
-              price: "90,000 VND",
-              priceNum: 90000,
-              perCredit: "9 VND/credit",
-              discount: "Save 10%",
-              label: "Standard",
-            },
-            {
-              credits: "25,000",
-              creditsNum: 25000,
-              price: "212,500 VND",
-              priceNum: 212500,
-              perCredit: "8.5 VND/credit",
-              discount: "Save 15%",
-              label: "Popular",
-            },
-            {
-              credits: "50,000",
-              creditsNum: 50000,
-              price: "400,000 VND",
-              priceNum: 400000,
-              perCredit: "8 VND/credit",
-              discount: "Save 20%",
-              label: "Best Value",
-            },
-          ].map((pkg) => (
-            <Card
-              key={pkg.credits}
-              className="relative flex flex-col rounded-xl border-hairline bg-surface-1 shadow-linear hover:-translate-y-0.5 transition-transform duration-200"
-            >
-              {pkg.discount && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-semantic-success/90 hover:bg-semantic-success/90 text-white border-none shadow-sm rounded-full px-3 py-0.5 text-xs">
-                    {pkg.discount}
-                  </Badge>
-                </div>
-              )}
-              <CardHeader className="p-5 pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-medium text-ink-muted">
-                    {pkg.label}
-                  </CardTitle>
-                </div>
-                <div className="mt-2">
-                  <span className="text-3xl font-semibold tracking-tight text-ink">
-                    {pkg.credits}
-                  </span>
-                  <span className="text-sm text-muted-foreground ml-1">
-                    credits
-                  </span>
-                </div>
-                <p className="text-xs text-ink-muted mt-1">{pkg.perCredit}</p>
-              </CardHeader>
-              <CardFooter className="p-5 pt-0 flex flex-col gap-2 mt-auto">
-                <div className="text-xl font-semibold text-ink">
-                  {pkg.price}
-                </div>
-                <button
-                  type="button"
-                  disabled={isCheckoutProcessing}
-                  onClick={() => handleCheckout(pkg.priceNum, "CreditTopUp")}
-                  className="inline-flex items-center justify-center w-full rounded-md h-9 text-sm font-medium transition-colors bg-surface-2 hover:bg-surface-3 text-ink border border-hairline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isCheckoutProcessing ? (
-                    "Processing..."
-                  ) : (
-                    <>
-                      <ArrowRight className="mr-2 h-4 w-4" />
-                      Top up {pkg.credits} credits
-                    </>
-                  )}
-                </button>
-              </CardFooter>
-            </Card>
-          ))}
+          Three separate problems, each enough on its own. The button posted
+          `paymentType: "CreditTopUp"`, which is not one of the backend's payment types
+          (Subscription / SubscriptionRenewal / SubscriptionUpdate / InvoicePayment), so no handler
+          matched: the customer was charged, an invoice was issued, and the balance never moved.
+          The prices were a 9 / 8.5 / 8 VND-per-credit ladder against a documented retail rate of
+          4 VND (docs/credit-economics.md §4.2) — a 2x overcharge. And the "Save 10/15/20%" badges
+          advertised volume discounts WarpTalk does not offer.
+
+          The slugged plans page turned this off for the first of those reasons. This copy was
+          missed, and it is the page Stripe returns an abandoned checkout to. */}
+      <div className="mt-16 w-full max-w-4xl px-4">
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+          <p className="text-sm font-semibold text-ink">
+            Credit top-up is temporarily unavailable
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            Payment would be taken without the credits being added, so the purchase is switched
+            off until that is fixed. Your subscription still renews its credits on schedule.
+            Contact support if you need a balance adjustment.
+          </p>
         </div>
       </div>
 
@@ -559,83 +469,6 @@ export default function PaymentPlansPage() {
       </Dialog>
 
       {/* Upgrade / Downgrade Dialog */}
-      <Dialog
-        open={changePlanDialog.open}
-        onOpenChange={(open) =>
-          !open && setChangePlanDialog((prev) => ({ ...prev, open: false }))
-        }
-      >
-        <DialogContent className="sm:max-w-[440px] border-hairline bg-surface-1">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-ink">
-              {changePlanDialog.direction === "upgrade" ? (
-                <>
-                  <ArrowFatUp className="h-5 w-5 text-primary" weight="fill" />{" "}
-                  Upgrade to Enterprise
-                </>
-              ) : (
-                <>
-                  <ArrowFatDown className="h-5 w-5 text-ink-muted" /> Downgrade
-                  to Startup
-                </>
-              )}
-            </DialogTitle>
-            <DialogDescription className="text-ink-muted">
-              {changePlanDialog.direction === "upgrade" ? (
-                <>
-                  You&apos;re switching from <strong>{currentPlanName}</strong>{" "}
-                  to <strong>Enterprise</strong>. Stripe will automatically
-                  calculate a prorated charge for the remaining days in your
-                  billing cycle.
-                </>
-              ) : (
-                <>
-                  You&apos;re switching from <strong>{currentPlanName}</strong>{" "}
-                  to <strong>Startup</strong>. The change will take effect
-                  immediately. Unused credits will carry over.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div
-            className={`rounded-lg p-3 text-xs my-2 border ${changePlanDialog.direction === "upgrade" ? "bg-primary/5 border-primary/20 text-primary" : "bg-surface-2 border-hairline text-ink-muted"}`}
-          >
-            {changePlanDialog.direction === "upgrade"
-              ? "⚡ Upgrade takes effect immediately. You'll have access to Enterprise features right away."
-              : "📋 Downgrade takes effect immediately. Some Enterprise features will become unavailable."}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <button
-              onClick={() =>
-                setChangePlanDialog((prev) => ({ ...prev, open: false }))
-              }
-              className="flex-1 inline-flex h-9 items-center justify-center rounded-md border border-hairline bg-surface-1 hover:bg-surface-2 px-3 text-sm font-medium text-ink cursor-pointer transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                const planId = changePlanDialog.plan?.id;
-                if (planId) changePlanMutation.mutate(planId);
-              }}
-              disabled={changePlanMutation.isPending || !changePlanDialog.plan}
-              className={`flex-1 inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium text-white cursor-pointer transition-colors disabled:opacity-50 ${
-                changePlanDialog.direction === "upgrade"
-                  ? "bg-primary hover:bg-primary-hover"
-                  : "bg-surface-3 hover:bg-surface-2 !text-ink border border-hairline"
-              }`}
-            >
-              {changePlanMutation.isPending
-                ? "Processing..."
-                : changePlanDialog.direction === "upgrade"
-                  ? "Confirm Upgrade"
-                  : "Confirm Downgrade"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

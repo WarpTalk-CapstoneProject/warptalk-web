@@ -36,12 +36,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
+import { MyDubVoicePicker } from "@/components/voice/my-dub-voice-picker";
 import { VoiceConsentCard } from "@/components/voice/voice-consent-card";
 import {
   WorkspaceEmptyState,
   WorkspacePrimaryButton,
 } from "@/components/workspace/page-chrome";
 import { useCreateVoiceProfile, useDeleteVoiceProfile, useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import { getErrorMessage } from "@/lib/api/errors";
 import { analyzeVoiceSample } from "@/lib/voice/voice-sample-quality";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
@@ -221,8 +223,12 @@ export default function VoiceProfilesPage() {
       toast.success("Voice profile created");
       setIsCreateOpen(false);
       resetForm();
-    } catch {
-      toast.error("Failed to create voice profile");
+    } catch (error) {
+      // The server's own sentence, not a generic failure. This catch used to bind nothing and
+      // show "Failed to create voice profile" for every cause, which is how WT-372 was reported:
+      // the API answered "Unsupported audio format." — naming the defect exactly — and the page
+      // threw that away, so the bug report could only say "API/status code: Chưa xác định".
+      toast.error(getErrorMessage(error, "Failed to create voice profile"));
     }
   }
 
@@ -230,8 +236,8 @@ export default function VoiceProfilesPage() {
     try {
       await deleteMutation.mutateAsync(id);
       toast.success("Voice profile deleted");
-    } catch {
-      toast.error("Failed to delete voice profile");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to delete voice profile"));
     }
   }
 
@@ -308,6 +314,8 @@ export default function VoiceProfilesPage() {
           <Metric icon={<Waveform size={16} weight="bold" />} label="Default language" value="vi-VN" />
         </section>
 
+        <MyDubVoicePicker profiles={profileList} />
+
         <LibraryVoicePicker profiles={profileList} />
 
         {/* No section title and no sentence explaining what a voice profile is: the page is
@@ -327,7 +335,7 @@ export default function VoiceProfilesPage() {
           </div>
 
           {isLoading ? (
-            <div className="rounded-[14px] border border-border bg-canvas px-5 py-6 text-[13px] text-ink-muted">
+            <div className="rounded-[14px] border border-border bg-surface-1 px-5 py-6 text-[13px] text-ink-muted">
               Loading voice profiles…
             </div>
           ) : profileList.length === 0 ? (
@@ -351,7 +359,7 @@ export default function VoiceProfilesPage() {
               description="Try a different language or clear the search."
             />
           ) : (
-            <div className="divide-y divide-border rounded-[14px] border border-border bg-canvas">
+            <div className="divide-y divide-border rounded-[14px] border border-border bg-surface-1">
               {filteredProfiles.map((profile, index) => (
                 <VoiceProfileRow
                   key={profile.id}

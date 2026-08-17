@@ -175,3 +175,67 @@ test("room default listen language prefers a target that is not the room source"
     "en",
   );
 });
+
+/**
+ * One language per person, from the first render.
+ *
+ * The merged picker shipped in v100 and nobody saw it. The reason was here, not there: a
+ * participant who had chosen nothing was given speak=<room source> and hear=<room's other
+ * target> — a split they never asked for — and the picker correctly reads a mismatched pair as a
+ * deliberate split and opens the two-column form for it. The control was live and invisible.
+ */
+
+test("with nothing chosen, you hear the language you speak", () => {
+  const listen = resolveListenLanguage(
+    {},
+    { sourceLanguage: "vi", targetLanguages: ["vi", "en"] },
+    "vi",
+  );
+
+  assert.equal(listen, "vi", "the room default manufactured a split nobody asked for");
+});
+
+test("an explicit choice still outranks the speak language", () => {
+  // The negative control. Somebody who deliberately picked a different listen language must keep
+  // it — that capability is the whole reason the disclosure survived.
+  const listen = resolveListenLanguage(
+    { pick: "en" },
+    { sourceLanguage: "vi", targetLanguages: ["vi", "en"] },
+    "vi",
+  );
+
+  assert.equal(listen, "en");
+});
+
+test("a saved or participant-row choice also outranks it", () => {
+  assert.equal(
+    resolveListenLanguage({ saved: "ja" }, { sourceLanguage: "vi", targetLanguages: ["vi", "en"] }, "vi"),
+    "ja",
+  );
+  assert.equal(
+    resolveListenLanguage({ participant: "ko" }, { sourceLanguage: "vi", targetLanguages: ["vi", "en"] }, "vi"),
+    "ko",
+  );
+});
+
+test("an unresolved speak language falls through to the room default", () => {
+  // The speak side can still be resolving during the first seconds of a join. "auto" is not a
+  // language, and echoing it would send the sentinel to the gateway as a listen language.
+  assert.equal(
+    resolveListenLanguage({}, { sourceLanguage: "vi", targetLanguages: ["vi", "en"] }, "auto"),
+    "en",
+  );
+  assert.equal(
+    resolveListenLanguage({}, { sourceLanguage: "vi", targetLanguages: ["vi", "en"] }, null),
+    "en",
+  );
+});
+
+test("omitting the speak language keeps the previous behaviour", () => {
+  // The parameter is optional so every existing caller compiles unchanged; a caller that does not
+  // pass it must get exactly what it got before.
+  assert.equal(
+    resolveListenLanguage({}, { sourceLanguage: "vi", targetLanguages: ["vi", "en"] }),
+    "en",
+  );
+});

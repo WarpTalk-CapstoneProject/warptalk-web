@@ -22,10 +22,10 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
+import { useJoinLanguagePolicy, useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageName, meetingLanguagesForPolicy } from "@/lib/language/languages";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
 import { cn } from "@/lib/utils";
@@ -33,13 +33,14 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toast } from "sonner";
 
-// Was a hardcoded three — English, Vietnamese, Japanese — while a meeting can be created in
-// six. A room declaring Korean, French or Spanish could not be joined in the language it was
-// created for, because this screen simply never offered it.
-const languages = languagesInScope("meeting").map((language) => ({
-  value: language.locale,
-  label: language.name,
-}));
+// WT-438 (Linear): the list moved INSIDE the component, filtered by the workspace's
+// allowedTargetLanguages policy. As a module-level constant it was computed once at import
+// time, could not see any workspace, and offered every meeting-scope language — so a
+// workspace whose Owner had restricted meetings to JA/VI/EN still showed Korean, French and
+// Spanish on the pre-join screen. See languageOptions in JoinMeetingContent.
+//
+// (The previous fix here went the other way: a hardcoded three prevented joining rooms
+// created in the other legitimate languages. The policy filter is the middle both needed.)
 
 type SinkVideoElement = HTMLVideoElement & {
   setSinkId?: (sinkId: string) => Promise<void>;
@@ -66,7 +67,9 @@ function JoinMeetingContent() {
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
-
+  // WT-468 removed the last reader of activeWorkspaceId on this screen. The joiner's own
+  // workspace has no say in which languages a room offers — that belongs to the workspace that
+  // owns the room, which useJoinLanguagePolicy resolves from the code below.
   const videoRef = useRef<SinkVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -89,9 +92,52 @@ function JoinMeetingContent() {
   const codeFromUrl = searchParams.get("code") ?? "";
   const [typedCode, setTypedCode] = useState<string | null>(null);
   const roomCode = typedCode ?? codeFromUrl;
+  // WT-468: the languages this screen offers belong to the workspace that OWNS THE ROOM.
+  //
+  // This used to read `useWorkspaceSettings(activeWorkspaceId)` — the joiner's own currently
+  // selected workspace — and the file carried the approximation as a known one. It is not a
+  // harmless approximation: someone in workspace A joining a room in workspace B was offered A's
+  // languages. Too few, when B permits more (the reported symptom: only EN and VI, and no way
+  // forward); or too many, when A restricts nothing and B does, in which case the server refuses
+  // the pick only after it has been made. An external guest, who belongs to no workspace at all,
+  // got the policy of nothing.
+  //
+  // Keyed by the room code, so it re-resolves as the user finishes typing one. The endpoint
+  // answers 200 with an empty list for an unknown or half-typed code, and empty means
+  // unrestricted — so a partially typed code shows the full set rather than an error or a
+  // momentarily empty picker.
+  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(roomCode);
+  const languages = useMemo(
+    () =>
+      meetingLanguagesForPolicy(joinLanguagePolicy?.allowedTargetLanguages).map(
+        (language) => ({ value: language.locale, label: language.name }),
+      ),
+    [joinLanguagePolicy?.allowedTargetLanguages],
+  );
+
   const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
   const [listenLanguage, setListenLanguage] = useState("en-US");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+
+  // WT-438: the hardcoded defaults above can name a language the policy forbids — a workspace
+  // restricted to JA/EN would still preset speak=vi-VN, and submitting it is a server-side 403
+  // the user never chose. Snapped to the first offered option the moment the policy resolves,
+  // derived during render like create-room-dialog's reconcile (an effect would flash the
+  // forbidden value first). Keyed by the resolved option set so a mid-session policy change
+  // re-applies, while the user's own later picks are left alone.
+  const [appliedLanguagePolicyKey, setAppliedLanguagePolicyKey] = useState<string | null>(null);
+  // WT-468: gated on the ROOM's policy having resolved. Snapping before it arrives would pin the
+  // pair to the unfiltered list and then leave it there, because this only re-runs when the
+  // offered set changes — the user would keep a language the room's workspace forbids.
+  const languagePolicyKey = joinLanguagePolicy
+    ? languages.map((language) => language.value).join(",")
+    : null;
+  if (languagePolicyKey && appliedLanguagePolicyKey !== languagePolicyKey) {
+    setAppliedLanguagePolicyKey(languagePolicyKey);
+    const offered = new Set(languages.map((language) => language.value));
+    if (!offered.has(speakLanguage) && languages[0]) setSpeakLanguage(languages[0].value);
+    if (!offered.has(listenLanguage) && languages[0]) setListenLanguage(languages[0].value);
+  }
 
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);

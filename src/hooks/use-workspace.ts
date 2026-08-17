@@ -616,6 +616,24 @@ export function useAddGlossaryTerm(glossaryId: string) {
   });
 }
 
+/**
+ * WT-472 — import a spreadsheet of terms in one request.
+ *
+ * Invalidates the same key as useAddGlossaryTerm, so the dictionary re-reads once when the file
+ * lands rather than once per row.
+ */
+export function useBulkImportGlossaryTerms(glossaryId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (terms: Parameters<typeof WorkspaceService.bulkImportTerms>[1]) =>
+      WorkspaceService.bulkImportTerms(glossaryId, terms),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.terms(glossaryId) });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "glossaries"] });
+    },
+  });
+}
+
 export function useGlossaryTerms(glossaryId: string) {
   return useQuery({
     queryKey: WORKSPACE_KEYS.terms(glossaryId),

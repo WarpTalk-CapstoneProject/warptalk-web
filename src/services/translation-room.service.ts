@@ -5,6 +5,7 @@ import type {
   CreateRecurringRoomResponse,
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
+  JoinTranslationRoomRequest,
   JoinTranslationRoomResultDto,
   SubmitTranslationRoomFeedbackRequest,
   TranslationRoomArtifactDto,
@@ -266,6 +267,34 @@ export const translationRoomService = {
     return apiClient.put<void>(API.translationRooms.leave(id));
   },
 
+  /**
+   * WT-433 (Linear): join by room ID — what a shared LINK produces. Server-gated on membership
+   * of the room's workspace; a requires-approval room lands the caller in the waiting room, so
+   * this is how an uninvited teammate asks to join instead of dead-ending on the detail page.
+   */
+  async joinById(roomId: string, data: JoinTranslationRoomRequest) {
+    return apiClient.post<BackendJoinResponse>(`/translation-rooms/${roomId}/join`, {
+      translationRoomCode: "",
+      displayName: data.displayName.trim(),
+      speakLanguage: data.speakLanguage,
+      listenLanguage: data.listenLanguage,
+    });
+  },
+
+  /**
+   * WT-468 — the language whitelist of the workspace that OWNS the room behind this code.
+   *
+   * Always resolves. The server answers 200 with an empty list for an unknown or half-typed
+   * code, and empty means unrestricted, so a caller may poll this as the user types without
+   * painting an error over an incomplete code or momentarily emptying a picker.
+   */
+  async getJoinLanguagePolicy(code: string) {
+    const response = await apiClient.get<{ allowedTargetLanguages: string[] }>(
+      API.translationRooms.joinLanguagePolicy(code),
+    );
+    return response.data;
+  },
+
   async joinByCode(data: JoinTranslationRoomByCodeRequest) {
     const response = await apiClient.post<BackendJoinResponse>(API.translationRooms.join, {
       translationRoomCode: data.translationRoomCode.trim(),
@@ -415,6 +444,23 @@ export const translationRoomService = {
 
   async invitations(id: string) {
     return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
+  },
+
+  /**
+   * Accept the invitation addressed to the signed-in account's email.
+   *
+   * Takes no body: the server matches the row from the caller's own email claim, because
+   * invitations are keyed by address and an invitee may have no participant row to name. Sending
+   * an invitation id from the client would let one be accepted on somebody else's behalf.
+   *
+   * Idempotent server-side, so the same notification may be accepted from the popup and again
+   * from the bell without the second click failing.
+   */
+  async acceptInvitation(id: string) {
+    const { data } = await apiClient.post<TranslationRoomInvitationDto>(
+      API.translationRooms.acceptInvitation(id),
+    );
+    return data;
   },
 
   async updateSettings(id: string, data: UpdateRoomSettingsRequest) {

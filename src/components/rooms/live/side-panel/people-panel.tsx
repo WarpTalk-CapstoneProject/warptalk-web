@@ -270,9 +270,11 @@ function ParticipantRow({
                 </span>
               )}
               {/* WT-308: presence comes from the shared resolver, not an inline if/else
-                  chain. The chain this replaced had no CONNECTED arm, so the host's own
-                  row — seeded CONNECTED the moment the room is created — fell through to
-                  the `else` and read "Left" while the host was sitting in the meeting. */}
+                  chain. The chain this replaced had no CONNECTED arm, so the host's own row
+                  fell through to the `else` and read "Left" while the host was sitting in
+                  the meeting. (WT-450 later stopped seeding that row CONNECTED at creation —
+                  it is INVITED until they actually join, which the resolver reads as
+                  "Not in room". The CONNECTED arm still matters the moment they do join.) */}
               <PresenceBadge
                 presence={participantPresence(participant.status, { isInRoom })}
               />

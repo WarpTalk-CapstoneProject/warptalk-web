@@ -18,8 +18,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getErrorMessage } from "@/lib/api/errors";
 import { createHubConnection } from "@/lib/realtime/signalr";
+import {
+  canCancelRenewal,
+  describeSubscription,
+  hasPaidEntitlement,
+} from "@/lib/billing/subscription-state";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -29,9 +33,7 @@ import {
 } from "@/hooks/use-workspace-role";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import {
-  ArrowRight,
   CaretLeft,
-  Lightning,
   Lock,
   X,
 } from "@phosphor-icons/react";
@@ -60,20 +62,31 @@ import { formatMoney } from "@/lib/format/currency";
  *     A button that takes money and grants nothing cannot stay reachable while the handler is
  *     written. Turning it off is the smallest change that stops the harm.
  *
- * WHY THE PRICE IS ONE NUMBER
- *     The ladder here was 10 / 9 / 8.5 / 8 VND per credit with volume discounts. None of it is
- *     real: docs/credit-economics.md §4.2 sets retail at 4.00 VND per credit with no discount,
- *     and the backend already agrees (CreditValueVnd = 4m). The frontend was overcharging by
- *     2–2.5×; a 1,500-credit minimum was quoted at 15,000 VND against a true 6,000 VND.
+ * WT-429 — THE HANDLER NOW EXISTS, SO THIS IS BACK ON.
+ *     CreditTopUpPaymentEventHandler is registered and claims "CreditTopUp"; the credit count
+ *     travels on the Stripe session metadata; and PaymentAppService logs loudly when a PAID
+ *     payment type matches no handler, so the silent version of this incident cannot recur.
  *
- *     It is stated, not hardcoded into a calculation: 4 VND is an admin-editable parameter in
- *     billing_pricing_config, so once the handler exists this panel must READ the configured
- *     value rather than carry its own copy — even a copy that happens to be right today.
+ * WHY THE PRICE IS NO LONGER OURS TO QUOTE
+ *     The ladder here was 10 / 9 / 8.5 / 8 VND per credit with volume discounts. None of it was
+ *     real: docs/credit-economics.md §4.2 sets retail at 4.00 VND with no discount, and the
+ *     backend agreed (CreditValueVnd = 4m) — the frontend was overcharging by 2–2.5×.
+ *
+ *     The fix is not a corrected constant. The request now carries the CREDIT COUNT and the
+ *     server prices it against billing_pricing_config, overwriting whatever amount we sent, so
+ *     this page cannot drift from the real rate again. DOCUMENTED_VND_PER_CREDIT survives for
+ *     the on-screen estimate ONLY; the charge is whatever the server computes.
  */
-const TOP_UP_ENABLED = false;
+/*
+ * WT-464: TOP_UP_ENABLED, TOP_UP_MINIMUM_CREDITS, TOP_UP_PACKAGES and
+ * DOCUMENTED_VND_PER_CREDIT moved with the form to
+ * settings/billing/components/top-up-modal.tsx. The reasoning above about the server owning the
+ * price moved with them, because that is where it now applies.
+ */
 
-/** Retail rate from docs/credit-economics.md §4.2. Display only — see above. */
-const DOCUMENTED_VND_PER_CREDIT = 4;
+/** One date format for the page, so "until 14 September 2026" reads the same wherever it appears. */
+const formatPlanDate = (date: Date) =>
+  date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 export default function WorkspacePlansPage() {
   const router = useRouter();
@@ -106,7 +119,7 @@ export default function WorkspacePlansPage() {
   const [showChangePlanDialog, setShowChangePlanDialog] = useState(false);
   const [pendingPlanSlug, setPendingPlanSlug] = useState("");
   const [pendingPlanName, setPendingPlanName] = useState("");
-  const [topUpCredits, setTopUpCredits] = useState<number>(0);
+  const [pendingPlanTotal, setPendingPlanTotal] = useState(0);
   // Fetch plans from backend
   const { data: plansData = [], isLoading: loadingPlans } = useQuery({
     queryKey: ["plans"],
@@ -163,54 +176,37 @@ export default function WorkspacePlansPage() {
     ? activePlans.findIndex((p) => p.id === activePlanId)
     : -1;
 
-  const pendingPlanTierIndex = pendingPlanSlug
-    ? activePlans.findIndex((p) => p.slug === pendingPlanSlug)
-    : -1;
-  const isUpgrade =
-    activePlanTierIndex === -1 ||
-    (pendingPlanTierIndex > -1 && pendingPlanTierIndex > activePlanTierIndex);
-  const isDowngrade =
-    activePlanTierIndex !== -1 &&
-    pendingPlanTierIndex > -1 &&
-    pendingPlanTierIndex < activePlanTierIndex;
+  /**
+   * One reading of the subscription, for the whole page.
+   *
+   * `subscription?.status === "active"` was the test here, in three places, and it is the bug:
+   * a renewal cancelled at period end sets Status to "cancelled" while the plan stays fully in
+   * force, so the page reported no plan on a workspace that had one.
+   *
+   * The clock is read once per mount rather than per render — this decides which controls exist,
+   * and a moving `Date.now()` would let them change under a reader mid-session.
+   */
+  const [subscriptionClock] = useState(() => Date.now());
+  const subscriptionState = describeSubscription(subscription, subscriptionClock);
+  const planEndsOn =
+    subscriptionState.kind === "cancellation-scheduled" ? subscriptionState.endsOn : null;
 
-  const confirmChangePlan = async () => {
-    if (!pendingPlanSlug || !activeWorkspaceId) return;
-    try {
-      setIsProcessing(true);
-      setShowChangePlanDialog(false);
-      const plansList = await billingService.getPlans().catch(() => []);
-      const targetPlan = plansList.find((p) => p.slug === pendingPlanSlug);
-      if (targetPlan) {
-        const updatedSub = await billingService.changeSubscription(
-          activeWorkspaceId,
-          targetPlan.id,
-        );
-        toast.success(`Successfully updated your plan to ${targetPlan.name}!`);
-        queryClient.setQueryData(
-          ["subscription", activeWorkspaceId],
-          updatedSub,
-        );
-        // Invalidate billing query cache so billing page shows updated plan
-        queryClient.invalidateQueries({ queryKey: ["billing"] });
-      }
-    } catch (error) {
-      // PUT /subscriptions/workspace/{id}/change-plan does not exist: there is no `change-plan`
-      // route anywhere in the billing service, so this always 404s for a workspace that already
-      // has a subscription — which is every workspace that reaches this button. Until the endpoint
-      // is built, say what is true. "Please contact support" reads as a transient fault and sends
-      // the user to ask about a feature that was never wired up.
-      toast.error(
-        getErrorMessage(
-          error,
-          "Changing an existing plan is not available yet. Contact sales to move between plans.",
-        ),
-      );
-    } finally {
-      setIsProcessing(false);
-      setPendingPlanSlug("");
-      setPendingPlanName("");
-    }
+  /**
+   * WT-381 — this used to PUT `/subscriptions/workspace/{id}/change-plan`, a route that does not
+   * exist anywhere in the billing service. Every owner who reached this button got a 404 dressed
+   * up as "contact sales", and the dialog they got it from promised a pro-rated credit for their
+   * unused time, which nothing in the system has ever calculated.
+   *
+   * Checkout is the path that works, and it has worked all along. `SubscriptionPaymentEventHandler`
+   * writes `Subscription.PlanId = plan.Id` when a payment arrives for a workspace that already has
+   * a subscription — so paying for a different plan IS the plan change. What it does not do is
+   * pro-rate: it sets `CurrentPeriodStart` to now, moves the period end a full cycle out, and adds
+   * the new plan's credits to the balance. The dialog now says that, because that is what happens.
+   */
+  const confirmChangePlan = () => {
+    if (!pendingPlanSlug) return;
+    setShowChangePlanDialog(false);
+    void handleCheckout(pendingPlanTotal, "Subscription", pendingPlanSlug, billingInterval, true);
   };
 
   const handleCheckout = async (
@@ -218,24 +214,29 @@ export default function WorkspacePlansPage() {
     paymentType: string,
     planSlug = "",
     billingCycle = "",
+    /** Set once the change-plan dialog has been confirmed, so it is not shown a second time. */
+    confirmed = false,
+    /** WT-429, top-ups only: the credit count. The SERVER prices it — see below. */
+    credits = 0,
   ) => {
     if (!isAuthenticated || !user) {
       router.push("/login");
       return;
     }
 
-    // If upgrading/downgrading and user already has an active subscription, call direct changeSubscription API instead of Stripe Checkout
+    // Moving between plans charges in full and restarts the billing period today — see
+    // confirmChangePlan. Nobody should discover that on a Stripe page, so it is said first.
     if (
       paymentType === "Subscription" &&
-      subscription &&
-      subscription.status === "active"
+      !confirmed &&
+      hasPaidEntitlement(subscriptionState)
     ) {
-      const plansList = await billingService.getPlans().catch(() => []);
-      const targetPlan = plansList.find((p) => p.slug === planSlug);
+      const targetPlan = activePlans.find((p) => p.slug === planSlug);
 
       if (targetPlan) {
         setPendingPlanSlug(planSlug);
         setPendingPlanName(targetPlan.name);
+        setPendingPlanTotal(amount);
         setShowChangePlanDialog(true);
         return;
       }
@@ -269,6 +270,7 @@ export default function WorkspacePlansPage() {
         paymentType,
         planSlug: planSlug || undefined,
         billingCycle: billingCycle || undefined,
+        credits: credits > 0 ? credits : undefined,
       });
       if (url) window.location.assign(url);
     } catch {
@@ -290,7 +292,14 @@ export default function WorkspacePlansPage() {
       toast.success(
         "Subscription cancelled. You will retain access until the end of your billing period.",
       );
-      queryClient.setQueryData(["subscription", activeWorkspaceId], null);
+      // WT-381 — this wrote `null` here, and the page then showed a workspace with no plan at all.
+      // The backend had done no such thing: `Cancel()` sets AutoRenew=false and Status=cancelled
+      // and leaves IsActive=true on purpose, so the workspace keeps Enterprise to the end of the
+      // period it paid for. Refetching asks the only party that knows.
+      await queryClient.invalidateQueries({
+        queryKey: ["subscription", activeWorkspaceId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["billing"] });
       setShowCancelDialog(false);
       setCancelReason("");
       setCancelReasonOther("");
@@ -315,7 +324,6 @@ export default function WorkspacePlansPage() {
     return { label: "Downgrade", variant: "downgrade", disabled: false };
   };
 
-  const topUpTotal = topUpCredits * DOCUMENTED_VND_PER_CREDIT;
 
   if (!isRoleLoaded) {
     return (
@@ -354,16 +362,23 @@ export default function WorkspacePlansPage() {
       <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-[260px] flex-1 items-center gap-3">
           <Link
-            href={`/${slug}/billing`}
+            href={`/${slug}/settings/billing`}
             className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
           >
             <CaretLeft className="h-3.5 w-3.5" />
             <span>Billing</span>
           </Link>
+          {/* WT-381 — this said "No active plan on this workspace" to anyone who had cancelled
+              their renewal, which was the plainest form of the lie: the workspace is on the plan,
+              paid for, until the date now printed beside it. */}
           <span className="truncate text-[13px] text-ink-muted">
-            {subscription?.status === "active"
-              ? `Currently on ${subscription.planName}.`
-              : "No active plan on this workspace."}
+            {subscriptionState.kind === "active" &&
+              `Currently on ${subscriptionState.planName}.`}
+            {subscriptionState.kind === "cancellation-scheduled" &&
+              `${subscriptionState.planName} until ${formatPlanDate(subscriptionState.endsOn)} — renewal cancelled.`}
+            {subscriptionState.kind === "lapsed" &&
+              `${subscriptionState.planName} ended on ${formatPlanDate(subscriptionState.endedOn)}.`}
+            {subscriptionState.kind === "none" && "No active plan on this workspace."}
           </span>
         </div>
 
@@ -392,17 +407,13 @@ export default function WorkspacePlansPage() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-8">
-      <div
-        className={`grid grid-cols-1 gap-6 lg:gap-8 w-full mx-auto justify-center ${
-          activePlans.length === 1
-            ? "max-w-[380px] md:grid-cols-1"
-            : activePlans.length === 2
-              ? "max-w-[780px] md:grid-cols-2"
-              : activePlans.length === 3
-                ? "max-w-[1150px] md:grid-cols-3"
-                : "max-w-[1400px] md:grid-cols-2 lg:grid-cols-4"
-        }`}
-      >
+      {/* One container width for the whole page, and one card width whatever the plan count.
+          The grid used to resize itself around however many plans existed — max-w-[380px] for
+          one, 1150px for three — so a workspace with a single plan got one narrow card floating
+          in the middle of an empty screen, directly above a full-width "Need more credits?"
+          panel. Two blocks, two different pages. The columns are fixed now and a short row is
+          simply a short row. */}
+      <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {loadingPlans ? (
           <div className="col-span-1 md:col-span-3 flex w-full items-center justify-center p-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -446,7 +457,7 @@ export default function WorkspacePlansPage() {
                  that appears nowhere else in the app. */
               <Card
                 key={plan.id}
-                className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-canvas p-5 shadow-linear transition-colors ${
+                className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-surface-1 p-5 shadow-linear transition-colors ${
                   isCurrent
                     ? "border-primary"
                     : isFeatured
@@ -481,7 +492,13 @@ export default function WorkspacePlansPage() {
                   <div className="mt-4 flex w-full flex-col items-start">
                     <div className="flex items-baseline whitespace-nowrap">
                       <span className="text-[24px] font-semibold tracking-tight text-ink">
-                        {displayPrice > 0 ? formatMoney(displayPrice, "VND") : "Free"}
+                        {/* WT-459: the plan's OWN currency, not a hardcoded "VND".
+                            An admin priced a plan at 200 USD and this rendered "200 VND" —
+                            a number three orders of magnitude out, stated with total
+                            confidence. `PlanDto.currency` has always carried the answer;
+                            formatMoney already falls back to VND when it is absent, so
+                            nothing changes for the VND plans that make up the catalogue. */}
+                        {displayPrice > 0 ? formatMoney(displayPrice, plan.currency) : "Free"}
                       </span>
                       <span className="ml-1 text-[12px] text-ink-muted">/mo</span>
                     </div>
@@ -510,34 +527,22 @@ export default function WorkspacePlansPage() {
                         className={`inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                           action.variant === "upgrade" ||
                           action.variant === "get-started"
-                            ? "bg-[#7F1DFF] hover:bg-[#6c17db] text-white shadow-sm"
-                            : "bg-[#00E58F] hover:bg-[#00cf81] text-gray-900 shadow-sm"
+                            ? "bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm"
+                            : "bg-foreground text-background hover:opacity-90 shadow-sm"
                         }`}
                       >
                         {isProcessing ? "Processing..." : "Get Started"}
                       </button>
                     )}
-                    {isCurrent && subscription?.status === "active" && (
-                      <button
-                        type="button"
-                        disabled={isCancelling}
-                        onClick={() => setShowCancelDialog(true)}
-                        className="inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all border border-gray-300 hover:border-red-300 hover:bg-red-50 hover:text-red-600 bg-white text-gray-600 cursor-pointer disabled:opacity-50"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancel Subscription
-                      </button>
-                    )}
-                    {isCurrent && subscription?.status === "cancelled" && (
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all border border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancelled (Ends soon)
-                      </button>
-                    )}
+                    {/* No cancel button inside the plan card.
+                        It sat where every other card shows "Get started", so the primary action on
+                        the plan you already have was to leave — the loudest thing on the page
+                        pointed at the exit. Ending a subscription is also not a per-plan choice:
+                        it belongs to the account, once, and it now lives under the grid.
+
+                        The disabled "Cancelled (Ends soon)" button that replaced it was worse
+                        still: a button-shaped thing that cannot be pressed, occupying the slot a
+                        reader looks to for what they can do. The state is on the badge above. */}
                   </div>
 
                   <ul className="space-y-3">
@@ -603,7 +608,7 @@ export default function WorkspacePlansPage() {
                   )}
                   {billingInterval === "yearly" && (
                     <p className="text-[11px] text-[#7F1DFF] font-semibold text-center w-full">
-                      Billed yearly: {formatMoney(displayTotal, "VND")}
+                      Billed yearly: {formatMoney(displayTotal, plan.currency)}
                     </p>
                   )}
                 </CardFooter>
@@ -613,153 +618,51 @@ export default function WorkspacePlansPage() {
         )}
       </div>
 
-      <div className="mt-8 w-full max-w-3xl">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <div className="flex size-8 rounded-full bg-primary/10 items-center justify-center">
-              <Lightning className="h-4 w-4 text-primary" weight="fill" />
-            </div>
-            <h2 className="text-3xl font-bold tracking-tight text-ink">
-              Need more credits?
-            </h2>
-          </div>
-          <p className="text-base text-muted-foreground">
-            Enter the number of credits you want. Volume discounts apply
-            automatically.
+      {/* Cancel RENEWAL, not the subscription.
+          The old wording and the old endpoint said "Cancel Subscription", which reads as "end it
+          now" — and an owner who wanted to stop paying next month had no way to say so without
+          fearing they would cut translation off mid-cycle for everybody. What the API actually
+          does is set cancelAtPeriodEnd: the plan runs to the date it was paid for. The label now
+          says that, and the confirmation dialog says the date out loud. */}
+      {canCancelRenewal(subscriptionState) ? (
+        <div className="mt-6 flex w-full max-w-3xl justify-center">
+          <button
+            type="button"
+            disabled={isCancelling}
+            onClick={() => setShowCancelDialog(true)}
+            className="text-[12px] text-ink-muted underline-offset-4 transition-colors hover:text-ink hover:underline disabled:opacity-50"
+          >
+            Cancel renewal
+          </button>
+        </div>
+      ) : null}
+
+      {/* Once it has been done, say so — and say what is still true. Silence here was read as the
+          cancellation not having worked, which is what sent owners back to press it again.
+          Resuming a scheduled cancellation needs a backend endpoint that does not exist yet
+          (WT-381), so this does not offer a button it cannot honour. */}
+      {planEndsOn ? (
+        <div className="mt-6 flex w-full max-w-3xl justify-center">
+          <p className="max-w-md text-center text-[12px] leading-5 text-ink-muted">
+            Renewal is cancelled. Everything keeps working until{" "}
+            <span className="font-medium text-ink">{formatPlanDate(planEndsOn)}</span>, and you
+            will not be charged again. To keep the plan beyond that date, contact WarpTalk before
+            it ends.
           </p>
         </div>
+      ) : null}
 
-        <Card className="rounded-2xl border-2 border-hairline bg-surface-1 shadow-md overflow-hidden">
-          <CardContent className="p-8">
-            <div className="flex flex-col gap-8">
-              <div>
-                <label className="text-base font-semibold text-ink mb-3 block">
-                  How many credits do you need?
-                </label>
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1">
-                    <input
-                      type="number"
-                      min="1"
-                      step="1000"
-                      value={topUpCredits || ""}
-                      onChange={(e) =>
-                        setTopUpCredits(
-                          Math.max(0, parseInt(e.target.value) || 0),
-                        )
-                      }
-                      placeholder="e.g. 10000"
-                      className="w-full h-14 rounded-xl border-2 border-hairline bg-surface-1 px-5 text-xl font-medium text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
-                    />
-                  </div>
-                  <span className="text-base font-medium text-ink-muted shrink-0">
-                    credits
-                  </span>
-                </div>
+      {/*
+        WT-464: the credit top-up form used to live here, stacked under the plan cards.
 
-                <div className="flex gap-2.5 mt-4 flex-wrap">
-                  {[
-                    { label: "10k", value: 10000 },
-                    { label: "25k", value: 25000 },
-                    { label: "50k", value: 50000 },
-                    { label: "100k", value: 100000 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => setTopUpCredits(preset.value)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all cursor-pointer ${topUpCredits === preset.value ? "bg-primary/10 text-primary border-primary shadow-sm" : "bg-surface-1 text-ink-muted border-hairline hover:border-ink-muted/30 hover:text-ink"}`}
-                    >
-                      {preset.label} credits
-                    </button>
-                  ))}
-                </div>
-              </div>
+        It made buying credits something you found by SCROLLING PAST a plan comparison — two
+        unrelated questions on one page, and the second one below the fold. Top-up is an
+        errand: it is now a modal opened from the balance it changes, on Settings -> Billing.
 
-              <div className="bg-surface-2/50 rounded-xl p-5 border border-hairline">
-                <p className="text-sm font-semibold text-ink">
-                  {DOCUMENTED_VND_PER_CREDIT} VND per credit
-                </p>
-                <p className="text-xs text-ink-muted mt-1">
-                  One rate, whatever the amount. There is no volume discount.
-                </p>
-              </div>
-
-              {topUpCredits > 0 && (
-                <div className="rounded-xl bg-surface-2 border border-hairline p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink-muted">
-                      Rate applied
-                    </span>
-                    <span className="text-sm font-semibold text-ink">
-                      {DOCUMENTED_VND_PER_CREDIT} VND / credit
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink-muted">
-                      Credits to add
-                    </span>
-                    <span className="text-sm font-semibold text-ink">
-                      {topUpCredits.toLocaleString()} credits
-                    </span>
-                  </div>
-                  <div className="border-t border-hairline pt-3 mt-1 flex items-center justify-between">
-                    <span className="text-base font-bold text-ink">Total</span>
-                    <span className="text-2xl font-bold text-ink tracking-tight">
-                      {formatMoney(topUpTotal, "VND")}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {topUpCredits > 0 && topUpCredits < 1500 && (
-                <p className="text-xs font-semibold text-rose-500 mt-2 bg-rose-500/10 p-3 rounded-lg">
-                  ⚠️ Minimum top-up amount is 1,500 credits (equivalent to
-                  15,000 VND Stripe transaction limit).
-                </p>
-              )}
-
-              {TOP_UP_ENABLED ? (
-              <button
-                type="button"
-                disabled={isProcessing || topUpCredits < 1500}
-                onClick={() =>
-                  handleCheckout(topUpTotal, "CreditTopUp", "", "")
-                }
-                className="inline-flex items-center justify-center w-full rounded-xl h-14 text-base font-semibold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 bg-primary hover:bg-primary-hover text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-              >
-                {isProcessing ? (
-                  "Processing..."
-                ) : topUpCredits >= 1500 ? (
-                  <>
-                    <span>
-                      Complete Top Up of {topUpCredits.toLocaleString()} credits
-                    </span>
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </>
-                ) : (
-                  "Enter credit amount above (Min 1,500)"
-                )}
-              </button>
-              ) : (
-                /* Says why, and does not pretend the button is merely busy. Somebody who came
-                   here to buy credit needs to know it will not arrive, not to be left guessing
-                   whether they clicked wrong. */
-                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
-                  <p className="text-sm font-semibold text-ink">
-                    Credit top-up is temporarily unavailable
-                  </p>
-                  <p className="mt-1 text-xs text-ink-muted">
-                    Payment would be taken without the credits being added, so the purchase is
-                    switched off until that is fixed. Your subscription still renews its credits
-                    on schedule. Contact support if you need a balance adjustment.
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        Nothing about the purchase changed. The same createCheckoutSession call, carrying the
+        credit COUNT so the server prices it against billing_pricing_config, is in
+        settings/billing/components/top-up-modal.tsx.
+      */}
       </div>
       {/* Cancel Subscription confirmation dialog */}
       <Dialog
@@ -775,7 +678,7 @@ export default function WorkspacePlansPage() {
         <DialogContent className="sm:max-w-[460px] border-hairline bg-surface-1 shadow-lg rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-ink">
-              Cancel subscription?
+              Cancel renewal?
             </DialogTitle>
             <DialogDescription className="text-sm text-ink-muted mt-1">
               Your workspace will remain on the{" "}
@@ -867,33 +770,33 @@ export default function WorkspacePlansPage() {
         <DialogContent className="sm:max-w-[440px] border-hairline bg-surface-1 shadow-lg rounded-xl text-ink">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold">
-              {isUpgrade
-                ? "Upgrade workspace plan?"
-                : isDowngrade
-                  ? "Downgrade workspace plan?"
-                  : "Change workspace plan?"}
+              Move to {pendingPlanName}?
             </DialogTitle>
             <DialogDescription className="text-sm text-ink-muted mt-1">
-              {isUpgrade
-                ? "Are you sure you want to upgrade your workspace plan to "
-                : isDowngrade
-                  ? "Are you sure you want to downgrade your workspace plan to "
-                  : "Are you sure you want to change your workspace plan to "}
-              <strong>{pendingPlanName}</strong>?
+              This workspace is already on{" "}
+              <strong>
+                {subscriptionState.kind === "none" ? "a plan" : subscriptionState.planName}
+              </strong>
+              . Moving is a new purchase, not an adjustment to the current one.
             </DialogDescription>
           </DialogHeader>
+          {/* Every line here is what SubscriptionPaymentEventHandler actually does on payment.
+              The three it replaced were written for an endpoint that did not exist, and the
+              middle one — "any unused time will be credited to this change" — promised a
+              pro-rated refund that nothing in the billing service has ever calculated. */}
           <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1.5 my-2">
             <p>
-              • <strong>Billing updates today</strong>: Your billing cycle and
-              price will update immediately.
+              • <strong>You pay in full today</strong>:{" "}
+              {formatMoney(pendingPlanTotal, "VND")} for one{" "}
+              {billingInterval === "yearly" ? "year" : "month"}.
             </p>
             <p>
-              • <strong>Pro-rated credit</strong>: Any unused time on your
-              current plan will be credited to this change.
+              • <strong>The billing period restarts</strong>: it runs from today, and time
+              remaining on the current plan is not refunded or pro-rated.
             </p>
             <p>
-              • <strong>Credits carried over</strong>: All your remaining
-              credits will roll over to your new plan.
+              • <strong>Credits are added, not replaced</strong>: the new plan&apos;s allowance
+              is added to the balance you already have.
             </p>
           </div>
           <DialogFooter className="flex gap-2 flex-row justify-end">
@@ -902,7 +805,7 @@ export default function WorkspacePlansPage() {
               onClick={() => setShowChangePlanDialog(false)}
               className="inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 hover:bg-surface-3 px-4 text-sm font-medium text-ink cursor-pointer transition"
             >
-              Cancel
+              Keep current plan
             </button>
             <button
               type="button"
@@ -910,13 +813,7 @@ export default function WorkspacePlansPage() {
               onClick={confirmChangePlan}
               className="inline-flex h-9 items-center gap-2 rounded-md bg-primary hover:bg-primary-hover text-primary-foreground px-4 text-sm font-medium cursor-pointer transition disabled:opacity-60"
             >
-              {isProcessing
-                ? "Updating..."
-                : isUpgrade
-                  ? "Confirm Upgrade"
-                  : isDowngrade
-                    ? "Confirm Downgrade"
-                    : "Confirm Change"}
+              {isProcessing ? "Opening checkout..." : "Continue to payment"}
             </button>
           </DialogFooter>
         </DialogContent>

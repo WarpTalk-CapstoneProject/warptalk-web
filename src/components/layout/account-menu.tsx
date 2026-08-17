@@ -50,7 +50,13 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
     queryKey: ["billing", "balance", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId),
     enabled: Boolean(workspaceId),
-    retry: 1,
+    // No local retry override — the provider's policy already refuses to repeat any 4xx, and
+    // this is the query that most needs it. WT-451: a guest sitting in another workspace's room
+    // is the OWNER of their own personal workspace, so this bar renders and asks about a
+    // workspace that has no subscription. The server answers 404 (BillingSubscriptionNotFound)
+    // — a settled, correct answer, handled a few lines below as the non-event it is. `retry: 1`
+    // asked again anyway, so every guest logged the same 404 twice for a state the UI had
+    // already accepted. A 4xx cannot change its mind on the second ask.
   });
 
   if (status === "pending") {
@@ -204,7 +210,7 @@ export function AccountMenu({
                     onNavigate={close}
                   />
                   <MenuLink
-                    href={`${base}/billing`}
+                    href={`${base}/settings/billing`}
                     icon={<CreditCard className="h-4 w-4" />}
                     label="Billing"
                     onNavigate={close}

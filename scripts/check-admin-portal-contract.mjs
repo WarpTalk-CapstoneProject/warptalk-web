@@ -19,9 +19,12 @@ const [layout, overview, sidebar, appLayout] = await Promise.all([
 assert.match(layout, /useIsSystemAdmin/, "admin layout must enforce the system-admin gate");
 assert.match(layout, /Access denied/, "admin layout must render a safe forbidden state");
 assert.match(overview, /billingService\.getGlobalMetrics/, "overview must load real platform metrics");
-assert.match(overview, /<UsageChart/, "overview must include the approved usage chart");
-assert.match(overview, /<TopWorkspacesChart/, "overview must include top workspace activity");
-assert.match(overview, /<FeatureBreakdownChart/, "overview must show service adoption");
+// Redesigned 2026-08-17 to the hairline-sectioned reference: the recharts card components are
+// gone from this page, but each data surface must still be drawn from its real endpoint.
+assert.match(overview, /getGlobalUsageChart/, "overview must chart real monthly usage");
+assert.match(overview, /getTopWorkspaces/, "overview must include top workspace activity");
+assert.match(overview, /getGlobalUsageBreakdown/, "overview must show service adoption");
+assert.match(overview, /getUsageAlerts/, "overview must surface the operations feed");
 assert.match(sidebar, /label: "Overview"[\s\S]*href: "\/admin"/, "platform navigation must lead with Overview");
 assert.match(sidebar, /label: "Overview"[\s\S]*href: "\/admin"[\s\S]*exact: true/, "Overview must not stay active on every nested admin route");
 assert.match(sidebar, /label: "Workspaces"[\s\S]*href: "\/admin\/workspaces"/, "platform navigation must expose Workspaces");

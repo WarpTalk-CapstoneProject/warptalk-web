@@ -30,6 +30,33 @@ export function isScheduledOn(room: TranslationRoomDto, day: Date): boolean {
   return isSameDay(new Date(room.scheduledAt), day);
 }
 
+/**
+ * The day this meeting belongs to on a calendar.
+ *
+ * `isScheduledOn` answers "was it BOOKED for this day", and returns false for an instant
+ * meeting because an instant meeting was never booked for anything. That is the right answer
+ * to that question and the wrong one for "what happened on Saturday": an instant meeting is
+ * still a meeting, it still has a transcript, and it still happened on a specific day.
+ * Filtering the meetings list by `isScheduledOn` alone made every ad-hoc room vanish the
+ * moment a day was selected — including the live one the user was looking at.
+ *
+ * `scheduledAt` first, because a meeting booked for Tuesday belongs to Tuesday even if it
+ * actually ran late on Wednesday — that is the day everyone has in their calendar. Then
+ * `startedAt` for an instant meeting, and `createdAt` for one that was never started.
+ */
+export function meetingDayOf(room: TranslationRoomDto): Date | null {
+  const stamp = room.scheduledAt ?? room.startedAt ?? room.createdAt;
+  if (!stamp) return null;
+  const date = new Date(stamp);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Whether this meeting belongs to the given calendar day — booked for it, or held on it. */
+export function belongsToDay(room: TranslationRoomDto, day: Date): boolean {
+  const at = meetingDayOf(room);
+  return at ? isSameDay(at, day) : false;
+}
+
 /** Monday. The strip is a working week, and a week that starts on Sunday reads wrong here. */
 const WEEK_STARTS_ON = 1;
 
@@ -70,22 +97,25 @@ export function shiftWeeks(anchor: Date, weeks: number): Date {
 export function daysWithMeetings(rooms: readonly TranslationRoomDto[]): Set<number> {
   const days = new Set<number>();
   for (const room of rooms) {
-    if (room.scheduledAt) days.add(startOfDay(new Date(room.scheduledAt)));
+    // meetingDayOf, not scheduledAt: a mark the list cannot honour is worse than no mark. The
+    // strip and the list have to be asking the same question, or a day marked as busy opens
+    // onto "No meetings found."
+    const at = meetingDayOf(room);
+    if (at) days.add(startOfDay(at));
   }
   return days;
 }
 
-/** The rooms booked for `day`, earliest first. */
+/** The meetings belonging to `day`, earliest first. */
 export function meetingsOn(
   rooms: readonly TranslationRoomDto[],
   day: Date,
 ): TranslationRoomDto[] {
   return rooms
-    .filter((room) => isScheduledOn(room, day))
+    .filter((room) => belongsToDay(room, day))
     .sort(
       (a, b) =>
-        new Date(a.scheduledAt as string).getTime()
-        - new Date(b.scheduledAt as string).getTime(),
+        (meetingDayOf(a)?.getTime() ?? 0) - (meetingDayOf(b)?.getTime() ?? 0),
     );
 }
 

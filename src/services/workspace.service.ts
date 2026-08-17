@@ -446,6 +446,34 @@ export const WorkspaceService = {
     await apiClient.post(API.glossaries.terms(glossaryId), request);
   },
 
+  /**
+   * WT-472 — import many terms in one request.
+   *
+   * The server skips terms already in the glossary and REPORTS how many it skipped, so a caller
+   * must show both numbers. "100 imported" when 60 were written is how somebody comes to believe a
+   * term exists that does not.
+   */
+  async bulkImportTerms(
+    glossaryId: string,
+    terms: {
+      sourceTerm: string;
+      targetTerm: string;
+      context?: string | null;
+      domain?: string | null;
+      definition?: string | null;
+      usageNote?: string | null;
+      partOfSpeech?: string | null;
+      priority?: number;
+    }[],
+  ): Promise<{ imported: number; skipped: number; errors: string[] }> {
+    const { data } = await apiClient.post<{
+      imported: number;
+      skipped: number;
+      errors: string[];
+    }>(API.glossaries.bulkTerms(glossaryId), { terms });
+    return data;
+  },
+
   async getTerms(glossaryId: string): Promise<GlossaryTermDto[]> {
     const { data } = await apiClient.get<GlossaryTermDto[]>(API.glossaries.terms(glossaryId));
     return data;

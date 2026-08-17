@@ -217,6 +217,13 @@ export default function WorkspaceSettingsPage() {
 
   const watchAll = watch();
 
+  // What the plan actually permits, and what the box currently says — the two numbers the
+  // "Max Active Rooms" hint below compares. Read from the query rather than the form, because it
+  // is not editable: it is the ceiling the server resolved from this workspace's entitlements.
+  const settings = settingsQuery.data;
+  const planRoomCeiling = settings?.maxActiveRoomsCeiling ?? null;
+  const watchedMaxActiveRooms = watchAll.maxActiveRooms;
+
   const saveWorkspacePatch = useCallback(async (patch: Partial<WorkspaceSettingsDto>) => {
     const saved = await patchSettingsMutation.mutateAsync(patch);
     if (Object.prototype.hasOwnProperty.call(patch, "defaultLanguage")) {
@@ -628,6 +635,21 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Max Active Rooms</span>
                 <span className="text-[11px] text-ink-muted">Maximum concurrent translation rooms allowed for this workspace.</span>
+                {/* The number in the box is not always the number that applies.
+                    A workspace may tighten its own cap and may never raise it above what the plan
+                    sells, so meeting creation enforces the LOWER of the two. Saying so here is the
+                    missing half of the reported bug: this field read 20 while room creation
+                    refused at 5, and the page offered no way to find out why. */}
+                {planRoomCeiling !== null && planRoomCeiling < watchedMaxActiveRooms ? (
+                  <span className="text-[11px] text-amber-600">
+                    Your plan allows {planRoomCeiling} concurrent rooms
+                    {settings?.maxActiveRoomsCeilingSource
+                      ? ` (${settings.maxActiveRoomsCeilingSource})`
+                      : ""}
+                    , so {planRoomCeiling} is what applies. A higher number here has no effect —
+                    this setting can only lower the limit.
+                  </span>
+                ) : null}
               </div>
               <Input
                 type="number"

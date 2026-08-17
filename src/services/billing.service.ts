@@ -14,6 +14,7 @@ import type {
   PlanMutationDto,
   CheckoutSessionDto,
   CreateCheckoutSessionRequest,
+  WorkspaceUsageByMemberDto,
 } from "@/types/billing";
 
 export const billingService = {
@@ -25,6 +26,23 @@ export const billingService = {
   ): Promise<CreditBalanceDto> => {
     const { data } = await apiClient.get<CreditBalanceDto>(
       `/credits/workspace/${workspaceId}`,
+    );
+    return data;
+  },
+
+  /**
+   * Who in this workspace has spent what (WT-413).
+   *
+   * Owner/Admin only — the endpoint carries the same RequireWorkspaceRole gate as the balance
+   * and history endpoints, so a member calling this gets a 403 rather than a redacted list.
+   */
+  getUsageByMember: async (
+    workspaceId: string,
+    params?: { from?: string; to?: string },
+  ): Promise<WorkspaceUsageByMemberDto> => {
+    const { data } = await apiClient.get<WorkspaceUsageByMemberDto>(
+      `/credits/workspace/${workspaceId}/usage-by-member`,
+      { params },
     );
     return data;
   },
@@ -73,6 +91,38 @@ export const billingService = {
     );
     return data;
   },
+
+  /**
+   * WT-430 (Linear): every transaction the filter matches, paged until the server's own
+   * totalCount is satisfied.
+   *
+   * The repository clamps pageSize to 200, so a single "give me 1000" call silently returned
+   * the newest 200 rows — the export preview summed a fifth of the cycle (-252 credits) while
+   * the server-aggregated service breakdown beside it said 1,615, and the XLSX shipped the
+   * same truncated fifth. The clamp is right (it protects the DB); the export just has to
+   * keep asking. Capped at 50 pages (10,000 rows) so a pathological cycle cannot loop forever
+   * — if that cap is ever hit, totalCount still tells the caller the export is partial.
+   */
+  getAllCreditHistory: async (
+    workspaceId: string,
+    filters?: CreditHistoryFilters,
+  ): Promise<PagedResult<CreditTransactionDto>> => {
+    const pageSize = 200;
+    const first = await billingService.getCreditHistory(workspaceId, 1, pageSize, filters);
+    const items = [...first.items];
+    const totalCount = first.totalCount ?? items.length;
+
+    let page = 2;
+    while (items.length < totalCount && page <= 50) {
+      const next = await billingService.getCreditHistory(workspaceId, page, pageSize, filters);
+      if (next.items.length === 0) break;
+      items.push(...next.items);
+      page += 1;
+    }
+
+    return { items, totalCount };
+  },
+
   /**
    * Paginated global credit transaction history for admins.
    */
@@ -207,6 +257,30 @@ export const billingService = {
     return data;
   },
 
+  /** Whether this workspace runs past zero credits, and how far its plan lets it. */
+  getOverageSetting: async (
+    workspaceId: string,
+  ): Promise<import("@/types/billing").WorkspaceOverageSettingDto> => {
+    const { data } = await apiClient.get<
+      import("@/types/billing").WorkspaceOverageSettingDto
+    >(`/subscriptions/workspace/${workspaceId}/overage`);
+    return data;
+  },
+
+  /**
+   * Turn it on or off. The server refuses `true` on a plan with no allowance rather than
+   * accepting it as a no-op, so the error is worth showing verbatim.
+   */
+  setOverage: async (
+    workspaceId: string,
+    enabled: boolean,
+  ): Promise<import("@/types/billing").WorkspaceOverageSettingDto> => {
+    const { data } = await apiClient.put<
+      import("@/types/billing").WorkspaceOverageSettingDto
+    >(`/subscriptions/workspace/${workspaceId}/overage`, { enabled });
+    return data;
+  },
+
   /**
    * Get paginated invoices for a workspace.
    */
@@ -227,9 +301,29 @@ export const billingService = {
   /**
    * Get all active subscription plans from the backend.
    */
+  /**
+   * The customer catalogue: active plans only (BR-74).
+   *
+   * The server filters now. It did not, so a plan an administrator had deactivated stayed
+   * selectable on the landing page and in every checkout flow — right up to the point where
+   * SubscriptionService refused to create the subscription.
+   */
   getPlans: async (): Promise<import("@/types/billing").PlanDto[]> => {
     const { data } =
       await apiClient.get<import("@/types/billing").PlanDto[]>(`/plans`);
+    return data;
+  },
+
+  /**
+   * Every plan, deactivated ones included. System Admin only — the route is authorized.
+   *
+   * The plan-management page must NOT use `getPlans`: deactivating a plan through the edit form
+   * would drop it out of the only list that page has, and there would be no way to switch it back
+   * on. Deactivation would be a one-way door.
+   */
+  getAllPlansForAdmin: async (): Promise<import("@/types/billing").PlanDto[]> => {
+    const { data } =
+      await apiClient.get<import("@/types/billing").PlanDto[]>(`/plans/all`);
     return data;
   },
 
@@ -255,6 +349,24 @@ export const billingService = {
   /**
    * Cancel the active subscription for a workspace at period end.
    */
+  /**
+   * WT-471 — switch renewal back on for a subscription that was cancelled but has not expired.
+   *
+   * NOT `/resume`, which clears a ServiceState suspension caused by running past the overage cap.
+   * Cancellation and suspension are independent axes: a subscription can be healthy and cancelled,
+   * or suspended and renewing. Calling `/resume` on a cancelled-but-healthy subscription is
+   * refused with "AI service is not suspended", which is true and answers a question nobody asked.
+   *
+   * Creates no charge — the period is already paid for. A workspace whose period has already ended
+   * is refused and has to go through Checkout instead.
+   */
+  reactivateSubscription: async (workspaceId: string): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.post<SubscriptionDto>(
+      `/subscriptions/workspace/${workspaceId}/reactivate`,
+    );
+    return data;
+  },
+
   cancelSubscription: async (
     workspaceId: string,
     reason?: string,
@@ -264,21 +376,16 @@ export const billingService = {
     });
   },
 
-  /**
-   * Upgrade or downgrade the active subscription plan for a workspace.
+  /*
+   * WT-381 — `changeSubscription` used to live here and PUT
+   * `/subscriptions/workspace/{id}/change-plan`. That route does not exist in the billing service
+   * and never did, so the call 404'd for every workspace that had a subscription, which is every
+   * workspace that could reach it.
+   *
+   * There is no replacement to write, because the working path was already here. A payment for a
+   * different plan sets `Subscription.PlanId` in SubscriptionPaymentEventHandler — so
+   * `createCheckoutSession` above IS the plan change, and the plans page routes through it.
    */
-  changeSubscription: async (
-    workspaceId: string,
-    newPlanId: string,
-  ): Promise<import("@/types/billing").SubscriptionDto> => {
-    const { data } = await apiClient.put<
-      import("@/types/billing").SubscriptionDto
-    >(`/subscriptions/workspace/${workspaceId}/change-plan`, {
-      workspaceId,
-      planId: newPlanId,
-    });
-    return data;
-  },
 
   /**
    * Create a new subscription plan (Admin only).
@@ -356,17 +463,7 @@ export const billingService = {
     return data;
   },
 
-  /**
-   * Get current AI service credit rates (Admin only).
-   */
-  getServiceRates: async (): Promise<
-    import("@/types/billing").ServiceRatesDto
-  > => {
-    const { data } =
-      await apiClient.get<import("@/types/billing").ServiceRatesDto>(
-        `/usages/rates`,
-      );
-    return data;
-  },
-
+  // getServiceRates is gone: it called /usages/rates, a route that never existed (the real one
+  // is /usages/rate-card), so the card it fed rendered zeros forever. Rate cards live on
+  // /admin/plans now, where they are editable.
 };

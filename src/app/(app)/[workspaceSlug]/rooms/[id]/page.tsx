@@ -160,6 +160,8 @@ export default function RoomInformationPage() {
   const router = useRouter();
   const roomId = params.id;
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  // WT-433: the "Ask to join" button's in-flight state.
+  const [askingToJoin, setAskingToJoin] = useState(false);
 
   const roomQuery = useTranslationRoom(roomId);
   const participantsQuery = useTranslationRoomParticipants(roomId);
@@ -257,11 +259,52 @@ export default function RoomInformationPage() {
   }
 
   if (!room) {
+    // WT-433 (Linear): one blanket sentence used to cover loading, refusal AND network error.
+    // The refusal case is the important one — the detail read answers 404 for a workspace
+    // member who was never invited (deliberately indistinguishable from a missing room, WT-334),
+    // and this page rendered that as a dead end. The waiting-room path exists; this hands them
+    // the door instead of the wall.
+    if (roomQuery.isLoading) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <p className="text-[13px] text-muted-foreground">Loading room…</p>
+        </div>
+      );
+    }
+
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-[13px] text-muted-foreground">
-          Room information is unavailable.
-        </p>
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <p className="text-[13px] text-muted-foreground">
+            You don&rsquo;t have access to this room yet. If a teammate shared this link with
+            you, you can ask the host to let you in.
+          </p>
+          <Button
+            size="sm"
+            disabled={askingToJoin}
+            onClick={async () => {
+              setAskingToJoin(true);
+              try {
+                await translationRoomService.joinById(roomId, {
+                  displayName: user?.fullName || user?.email || "Participant",
+                  speakLanguage: "vi",
+                  listenLanguage: "vi",
+                });
+                router.push(`/${workspaceSlug}/rooms/${roomId}/waiting`);
+              } catch (error) {
+                // A non-member of the workspace gets the same 404 the detail read gave — the
+                // room genuinely is not theirs to knock on.
+                toast.error(
+                  getErrorMessage(error, "This room is not available to join."),
+                );
+              } finally {
+                setAskingToJoin(false);
+              }
+            }}
+          >
+            {askingToJoin ? "Asking…" : "Ask to join"}
+          </Button>
+        </div>
       </div>
     );
   }

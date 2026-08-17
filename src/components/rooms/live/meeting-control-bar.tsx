@@ -1,21 +1,23 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, Fingerprint, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Plus, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
+import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
 import { getFlagEmoji } from "@/lib/language/language-flag";
 import { getLanguageName, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import type { VoiceOptionDto } from "@/types/realtime";
+  applySingleLanguageChoice,
+  describeLanguageChoice,
+} from "@/lib/meeting/language-choice";
+import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
+import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
+import { Switch } from "@/components/ui/switch";
+// Button, Dialog* and the Fingerprint icon were imported and never used — dead since whatever
+// removed their last call site, and invisible because unused imports are a warning here rather
+// than an error. `Plus` joined them when AddLanguageRow went.
+import type { VoiceCloneStateDto, VoiceOptionDto } from "@/types/realtime";
 
 import { ALLOWED_REACTION_EMOJIS } from "@/constants/realtime";
 export { ALLOWED_REACTION_EMOJIS };
@@ -59,6 +61,9 @@ function useFlyoutDismiss(open: boolean, close: () => void) {
   return containerRef;
 }
 
+/** Sentinel for the "use my own cloned voice" entry, which is not a provider voice id. */
+const MY_VOICE_OPTION = "__my_voice__";
+
 export function MeetingControlBar({
   meetingEnabled,
   cameraEnabled,
@@ -79,6 +84,8 @@ export function MeetingControlBar({
   voicePreference,
   voiceCatalog,
   voiceCloneEnabled,
+  voiceCloneHasAudience = false,
+  cloneCapture,
   voiceEnabled,
   handRaised,
   isLocked,
@@ -97,6 +104,7 @@ export function MeetingControlBar({
   onToggleSubtitles,
   onChangeListenLanguage,
   onChangeSpeakLanguage,
+  onLanguagePicked,
   onChangeVoicePreference,
   onChangeVoiceCloneConsent,
   onChangeVoiceEnabled,
@@ -122,7 +130,10 @@ export function MeetingControlBar({
   isHost?: boolean;
   /** Whether the AI translation pipeline is currently running for this room. */
   warptalkStarted?: boolean;
-  /** Whether live subtitles are visible in the reserved caption lane. */
+  /** Whether live subtitles are visible in the reserved caption lane.
+   *
+   *  Visibility ONLY. This does not gate transcript capture, receipt or persistence — see the
+   *  CC control below and WT-408. */
   subtitlesEnabled: boolean;
   /** The language this participant currently hears translations/captions in. */
   listenLanguage?: string;
@@ -140,6 +151,12 @@ export function MeetingControlBar({
   voiceCatalog?: VoiceOptionDto[];
   /** Whether THIS participant has consented to have their own voice cloned for dubbing. Omit to hide the toggle. */
   voiceCloneEnabled?: boolean;
+  /** Whether anybody in the room is listening in a language other than this participant's
+   *  speak language. False means no route out of them exists, so consent changes nothing —
+   *  see lib/meeting/dub-audience.ts. */
+  voiceCloneHasAudience?: boolean;
+  /** WT-420: what the clone pipeline is doing to THIS participant's microphone, or null. */
+  cloneCapture?: VoiceCloneStateDto | null;
   /** false = this listener wants transcript only, no AI/original audio played. Omit to hide the toggle. */
   voiceEnabled?: boolean;
   /** Whether THIS participant's hand is currently raised. Omit (or omit onToggleRaiseHand) to hide the control. */
@@ -163,12 +180,17 @@ export function MeetingControlBar({
   onStartWarptalk?: () => void;
   /** Stops the AI translation pipeline for the room. Host-only; omit to hide the control. */
   onStopWarptalk?: () => void;
-  /** Toggles the local live-subtitle lane without changing transcript collection. */
+  /** Toggles the local live-subtitle lane without changing transcript collection.
+   *  The tooltip says so out loud (WT-408) — users were reading the CC glyph as a recording
+   *  switch. */
   onToggleSubtitles: () => void;
   /** Called when the participant picks a different listen language from the dropdown. */
   onChangeListenLanguage?: (language: string) => void;
   /** Called when the participant picks the language they're speaking from the dropdown. */
   onChangeSpeakLanguage?: (language: string) => void;
+  /** WT-434: called ONCE per bar pick, after both onChange callbacks, so the session can
+   *  persist the choice as the remembered profile without double-writing. */
+  onLanguagePicked?: (language: string) => void;
   /** Called with a voice id, or "" to clear back to the automatic default. */
   onChangeVoicePreference?: (voiceId: string) => void;
   /** Called with the new consent value after the participant confirms (or turns it off). */
@@ -185,19 +207,12 @@ export function MeetingControlBar({
   onToggleMuteOnEntry?: (enabled: boolean) => void;
   /** WT-04, host-only: force-mutes every other participant (they can unmute themselves). */
   onMuteAll?: () => void;
-  /** WT-06, host-only: starts/stops LiveKit Egress recording for the room. Omit to hide the record button. */
+  /** WT-06: starts/stops LiveKit Egress recording for the room. Any participant may — the room
+   * is told by toast either way. Omit to hide the record button. */
   onToggleRecording?: () => void;
 }) {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<
-    | "root"
-    | "layout"
-    | "listenLanguage"
-    | "speakLanguage"
-    | "listenLanguageAll"
-    | "speakLanguageAll"
-    | "voice"
-  >("root");
+  const [settingsSection, setSettingsSection] = useState<"root" | "layout" | "voice">("root");
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
   const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
   // WT-272 wrote this hook and then attached it to one flyout of three. The reaction picker
@@ -215,13 +230,46 @@ export function MeetingControlBar({
     setSettingsSection("root");
   });
 
+  // WT-420: the live capture state, in the same panel as the choice it explains.
+  const cloneStatus = describeCloneCapture(cloneCapture);
+
+  // What listeners will actually hear, derived in one place — see lib/meeting/voice-selection.ts.
+  const voiceSelection = describeVoiceSelection({
+    voiceEnabled,
+    voiceCloneEnabled,
+    voicePreference,
+    voiceCatalog,
+    hasAudience: voiceCloneHasAudience,
+  });
+
+  /**
+   * Picking a provider voice means "do not use mine", so consent is withdrawn alongside it.
+   *
+   * They were independent switches and the clone silently won, which is how somebody could select
+   * a voice from the catalog, see it ticked, and hear something else. Revoking is also the safe
+   * direction for a biometric permission: the only way to turn cloning back on is to ask for it.
+   */
+  function selectProviderVoice(voiceId: string) {
+    onChangeVoicePreference?.(voiceId);
+    if (voiceCloneEnabled) onChangeVoiceCloneConsent?.(false);
+  }
+
   function closeSettingsMenu() {
     setIsSettingsMenuOpen(false);
     setSettingsSection("root");
   }
 
   return (
-    <div className="flex h-[60px] items-center gap-2 rounded-full border border-border/50 bg-surface-1/80 px-3 shadow-sm backdrop-blur-xl">
+    <div className="relative flex h-[60px] items-center gap-2 rounded-full border border-border/50 bg-surface-1/80 px-3 shadow-sm backdrop-blur-xl">
+      {/* The clone capture, OUTSIDE the settings menu.
+          The progress block below (inside the Voice section) only exists while that menu is
+          open — and recording a voice reference takes twenty seconds of talking, which nobody
+          does while holding a menu open. Close the menu and the one live signal that capture
+          was working disappeared; "ủa nó ko tự thu hở" was the reasonable reading of that
+          silence, and asking people to keep a settings panel open to watch a progress bar is
+          not an answer. This card floats above the bar for as long as there is a state worth
+          reporting, whatever the menu is doing. */}
+      <CloneCaptureCard status={cloneStatus} suppressed={isSettingsMenuOpen && settingsSection === "voice"} />
       {isHost && onStartWarptalk && onStopWarptalk ? (
         <>
           <button
@@ -252,9 +300,13 @@ export function MeetingControlBar({
           <LanguagePairPicker
             speakLanguage={speakLanguage}
             listenLanguage={listenLanguage}
-            availableSpeakLanguages={availableSpeakLanguages ?? availableListenLanguages}
-            availableListenLanguages={availableListenLanguages}
+            // Union, not one or the other. The two props are the same array today (the room's
+            // language set), but the picker now writes BOTH sides from one pick, so a language
+            // offered on either side has to be offerable at all — dropping to one list would
+            // silently remove options the moment they ever diverge.
+            languageOptions={mergeLanguageOptions(availableSpeakLanguages, availableListenLanguages)}
             onChangeSpeakLanguage={onChangeSpeakLanguage}
+            onLanguagePicked={onLanguagePicked}
             onChangeListenLanguage={onChangeListenLanguage}
             highlight={Boolean(warptalkStarted) && (!speakLanguage || !listenLanguage)}
           />
@@ -329,7 +381,10 @@ export function MeetingControlBar({
         </div>
       ) : null}
 
-      {isHost && onToggleRecording ? (
+      {/* No isHost clause, unlike Host controls above: recording is open to everyone in the
+          meeting (MeetingRoomService.IsInMeetingAsync), and every participant is toasted when it
+          starts or stops. The caller decides who sees this by passing onToggleRecording or not. */}
+      {onToggleRecording ? (
         <MeetControl
           label={
             recordingPending
@@ -358,8 +413,24 @@ export function MeetingControlBar({
         onToggleMicrophone={onToggleMicrophone}
       />
 
+      {/* WT-408. The label is the tooltip AND the aria-label, and it is the only thing telling
+          anyone what this button does. A CC glyph is conventionally read as "captions and
+          transcript", so turning it off was being understood as "stop recording what I say" —
+          a privacy expectation the code has never met. This control hides the floating subtitle
+          lane and nothing else: TranscriptSegmentReceived still fires, the transcript panel
+          still fills, and the meeting transcript is still persisted and exportable.
+          Saying so in the tooltip is the smallest honest fix.
+
+          NOT a decision that CC should only ever mean this. WT-408 offers a second option where
+          CC becomes a real consent control that gates receiving and persisting a participant's
+          speech; that needs backend work and a product call, and is deliberately not taken here.
+          What this removes is the gap between what the button claims and what it does. */}
       <MeetControl
-        label={subtitlesEnabled ? "Hide subtitles" : "Show subtitles"}
+        label={
+          subtitlesEnabled
+            ? "Hide captions (transcript keeps recording)"
+            : "Show captions"
+        }
         active={subtitlesEnabled}
         icon={
           <ClosedCaptioning
@@ -467,35 +538,25 @@ export function MeetingControlBar({
                     onClick={() => setSettingsSection("layout")}
                     hasSubmenu
                   />
-                  {onChangeListenLanguage && availableListenLanguages && availableListenLanguages.length > 1 ? (
-                    <SettingsRow
-                      label="Listening in"
-                      icon={<Translate className="h-4 w-4" />}
-                      value={getLanguageName(listenLanguage)}
-                      onClick={() => setSettingsSection("listenLanguage")}
-                      hasSubmenu
-                    />
-                  ) : null}
-                  {onChangeSpeakLanguage && availableSpeakLanguages && availableSpeakLanguages.length > 1 ? (
-                    <SettingsRow
-                      label="Speaking"
-                      icon={<Microphone className="h-4 w-4" />}
-                      value={speakLanguage && speakLanguage !== "auto" ? getLanguageName(speakLanguage) : "Auto-detect"}
-                      onClick={() => setSettingsSection("speakLanguage")}
-                      hasSubmenu
-                    />
-                  ) : null}
-                  {onChangeVoiceEnabled || (onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0) ? (
+                  {/* "Listening in" and "Speaking" used to live here as two rows, four levels
+                      into a menu. The bar picker was built to replace them — its own comment says
+                      so: "NOT four levels into the settings menu, which is where they were and why
+                      'translation is broken' was the conclusion every time somebody had not set
+                      them." The move was made and the old rows were left behind.
+
+                      Two places to set one thing is the defect this whole change is about. The
+                      bar picker is always rendered whenever these handlers exist, so nothing is
+                      lost by removing the copy — including the submenus below, which only these
+                      rows could reach. */}
+                  {onChangeVoiceEnabled || onChangeVoiceCloneConsent
+                    || (onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0) ? (
                     <SettingsRow
                       label="Voice"
                       icon={<SpeakerHigh className="h-4 w-4" />}
-                      value={voiceEnabled === false ? "Transcript only" : "On"}
+                      value={voiceSelection.label}
                       onClick={() => setSettingsSection("voice")}
                       hasSubmenu
                     />
-                  ) : null}
-                  {onChangeVoiceCloneConsent ? (
-                    <VoiceCloneRow enabled={Boolean(voiceCloneEnabled)} onToggle={onChangeVoiceCloneConsent} />
                   ) : null}
                   <div className="my-1 h-[1px] bg-surface-3" />
                   <SettingsRow
@@ -521,97 +582,73 @@ export function MeetingControlBar({
                 </>
               ) : null}
 
-              {settingsSection === "listenLanguage" && onChangeListenLanguage && availableListenLanguages ? (
-                <>
-                  <SettingsPanelHeader title="Listening in" onBack={() => setSettingsSection("root")} />
-                  {availableListenLanguages.map((language) => (
-                    <LanguageOption
-                      key={language}
-                      label={getLanguageName(language)}
-                      value={language}
-                      active={listenLanguage === language}
-                      onSelect={onChangeListenLanguage}
-                      close={closeSettingsMenu}
-                    />
-                  ))}
-                  <AddLanguageRow onClick={() => setSettingsSection("listenLanguageAll")} />
-                </>
-              ) : null}
+              {/* "Listening in" / "Speaking" and their two "All languages" submenus used to sit
+                  here. The root rows that reached them were removed when LanguagePairPicker
+                  replaced this whole flow, and these four branches were left behind — reachable
+                  only from each other, so nothing could open any of them. Dead code that still
+                  reads as a feature is worse than no code: it is why "the language menu" kept
+                  being described as if it existed.
 
-              {settingsSection === "speakLanguage" && onChangeSpeakLanguage && availableSpeakLanguages ? (
-                <>
-                  <SettingsPanelHeader title="Speaking" onBack={() => setSettingsSection("root")} />
-                  {availableSpeakLanguages.map((language) => (
-                    <LanguageOption
-                      key={language}
-                      label={getLanguageName(language)}
-                      value={language}
-                      active={speakLanguage === language}
-                      onSelect={onChangeSpeakLanguage}
-                      close={closeSettingsMenu}
-                    />
-                  ))}
-                  <AddLanguageRow onClick={() => setSettingsSection("speakLanguageAll")} />
-                </>
-              ) : null}
-
-              {/* The room's configuration is what gets OFFERED, not what a person is limited
-                  to. Somebody who speaks Korean in a Vietnamese/Japanese room should be able
-                  to say so and be understood; the room was configured by whoever booked it,
-                  before they knew who would turn up. */}
-              {settingsSection === "listenLanguageAll" && onChangeListenLanguage ? (
-                <>
-                  <SettingsPanelHeader
-                    title="All languages"
-                    onBack={() => setSettingsSection("listenLanguage")}
-                  />
-                  {languagesNotAlreadyOffered(availableListenLanguages).map((language) => (
-                    <LanguageOption
-                      key={language.code}
-                      label={language.name}
-                      value={language.code}
-                      active={listenLanguage === language.code}
-                      onSelect={onChangeListenLanguage}
-                      close={closeSettingsMenu}
-                    />
-                  ))}
-                </>
-              ) : null}
-
-              {settingsSection === "speakLanguageAll" && onChangeSpeakLanguage ? (
-                <>
-                  <SettingsPanelHeader
-                    title="All languages"
-                    onBack={() => setSettingsSection("speakLanguage")}
-                  />
-                  {languagesNotAlreadyOffered(availableSpeakLanguages).map((language) => (
-                    <LanguageOption
-                      key={language.code}
-                      label={language.name}
-                      value={language.code}
-                      active={speakLanguage === language.code}
-                      onSelect={onChangeSpeakLanguage}
-                      close={closeSettingsMenu}
-                    />
-                  ))}
-                </>
-              ) : null}
+                  The one rule they carried that the bar picker did NOT have — a person may choose
+                  a language the room does not offer — moved into LanguagePairPicker's "Another
+                  language" disclosure rather than going away with them. */}
 
               {settingsSection === "voice" ? (
                 <>
                   <SettingsPanelHeader title="Voice" onBack={() => setSettingsSection("root")} />
                   {onChangeVoiceEnabled ? (
-                    <SettingsRow
-                      label={voiceEnabled === false ? "Transcript only" : "Voice on"}
-                      icon={voiceEnabled === false ? <SpeakerSlash className="h-4 w-4" /> : <SpeakerHigh className="h-4 w-4" />}
-                      active={voiceEnabled !== false}
-                      value={voiceEnabled === false ? "Tap to hear voice" : "Tap for transcript only"}
-                      onClick={() => onChangeVoiceEnabled(voiceEnabled === false)}
-                    />
+                    // A switch, not a tap-row. The old row was a button whose LABEL was the
+                    // current state and whose VALUE was an instruction to invert it ("Voice on ·
+                    // Tap for transcript only") — three phrases a reader has to reconcile before
+                    // knowing which state they are in, for what is a boolean. A switch carries
+                    // its state and its affordance in one control, and cannot be misread as a
+                    // caption.
+                    <div className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">
+                        {voiceEnabled === false ? <SpeakerSlash className="h-4 w-4" /> : <SpeakerHigh className="h-4 w-4" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-ink">Voice</span>
+                        <span className="block truncate text-[11px] text-ink-muted">
+                          {voiceEnabled === false
+                            ? "Off — you read translations instead of hearing them."
+                            : "On — translations are spoken to you."}
+                        </span>
+                      </span>
+                      <Switch
+                        checked={voiceEnabled !== false}
+                        onCheckedChange={(checked) => onChangeVoiceEnabled(checked)}
+                        aria-label="Hear translated voice"
+                      />
+                    </div>
                   ) : null}
-                  {onChangeVoicePreference && voiceCatalog && voiceCatalog.length > 0 && voiceEnabled !== false ? (
+                  {voiceEnabled !== false ? (
                     <>
                       <div className="my-1 h-[1px] bg-surface-3" />
+
+                      {/* Right here in the list, not a switch somewhere else. Choosing a voice and
+                          choosing YOUR voice are the same question, and separating them is what
+                          made a whole test session conclude cloning was broken while the worker
+                          was scoring clone samples 1.0.
+
+                          The detail line carries the two facts that were previously unknowable
+                          from inside a meeting: whether this is even reaching anyone, and that
+                          consent is what turns it on. */}
+                      {onChangeVoiceCloneConsent ? (
+                        <VoiceOption
+                          label="My voice"
+                          detail={
+                            voiceCloneHasAudience
+                              ? "Cloned from how you sound in this meeting"
+                              : "Nobody is listening in another language yet"
+                          }
+                          value={MY_VOICE_OPTION}
+                          active={Boolean(voiceCloneEnabled)}
+                          onSelect={() => onChangeVoiceCloneConsent(true)}
+                          close={closeSettingsMenu}
+                        />
+                      ) : null}
+
                       {/* "Assigned, not matched" is the honest description of the default: the
                           worker picks deterministically from this language's catalog by hashing
                           the speaker id, so everyone keeps a stable voice and no two people
@@ -621,14 +658,14 @@ export function MeetingControlBar({
                         label="Automatic"
                         detail="Assigned, not matched to your voice"
                         value=""
-                        active={!voicePreference}
-                        onSelect={onChangeVoicePreference}
+                        active={!voicePreference && !voiceCloneEnabled}
+                        onSelect={(value) => selectProviderVoice(value)}
                         close={closeSettingsMenu}
                       />
                       {/* Grouped by gender, then by name. The label alone still leaves six
                           mixed rows to read one at a time; clustering them is what turns the
                           list into "here are the masculine ones". */}
-                      {[...voiceCatalog]
+                      {[...(voiceCatalog ?? [])]
                         .sort(
                           (a, b) =>
                             (a.gender || "").localeCompare(b.gender || "") ||
@@ -640,12 +677,55 @@ export function MeetingControlBar({
                           label={voice.name}
                           detail={voice.gender || undefined}
                           value={voice.id}
-                          active={voicePreference === voice.id}
-                          onSelect={onChangeVoicePreference}
+                          active={!voiceCloneEnabled && voicePreference === voice.id}
+                          onSelect={(value) => selectProviderVoice(value)}
                           close={closeSettingsMenu}
                         />
                       ))}
                     </>
+                  ) : null}
+                  {/* What listeners actually get, spelled out under the list. The choice above is
+                      stored either way; this is the only place that says whether it is reaching
+                      anybody. */}
+                  <p className="px-2.5 pb-2 pt-1 text-[11px] leading-snug text-ink-muted">
+                    {voiceSelection.detail}
+                  </p>
+
+                  {/* WT-420. The capture itself, live. Everything below was already known to the
+                      TTS worker and written only to a log — which is why an entire test session
+                      concluded cloning was broken while the worker scored the clip 1.0. */}
+                  {cloneStatus.tone !== "idle" || cloneStatus.title ? (
+                    <div className="mx-2.5 mb-2 rounded-lg bg-surface-2 px-2.5 py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-[11px] font-medium text-ink">{cloneStatus.title}</p>
+                        {cloneStatus.quality ? (
+                          <span
+                            className={`text-[10px] uppercase tracking-wide ${
+                              cloneStatus.quality === "good"
+                                ? "text-emerald-600"
+                                : cloneStatus.quality === "fair"
+                                  ? "text-amber-600"
+                                  : "text-ink-muted"
+                            }`}
+                          >
+                            {cloneStatus.quality}
+                          </span>
+                        ) : null}
+                      </div>
+                      {cloneStatus.progress !== null ? (
+                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3">
+                          <div
+                            className={`h-full rounded-full transition-[width] duration-500 ${
+                              cloneStatus.tone === "done" ? "bg-emerald-500" : "bg-primary"
+                            }`}
+                            style={{ width: `${Math.round(cloneStatus.progress * 100)}%` }}
+                          />
+                        </div>
+                      ) : null}
+                      <p className="mt-1 text-[11px] leading-snug text-ink-muted">
+                        {cloneStatus.detail}
+                      </p>
+                    </div>
                   ) : null}
                 </>
               ) : null}
@@ -653,6 +733,88 @@ export function MeetingControlBar({
           ) : null}
         </AnimatePresence>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The floating clone-capture card — the Voice section's progress block, freed from the menu.
+ *
+ * `suppressed` while the Voice section itself is open, because the identical information is
+ * already on screen there and two synchronized progress bars read as a rendering bug.
+ *
+ * "done" shows briefly and dismisses itself: the completed state is a fact worth a glance, not
+ * a card worth keeping. "working" and "blocked" stay — one is a bar filling, the other needs
+ * the user to act (speak up, move closer) and hiding it would re-create the silence this
+ * exists to end. Both can be dismissed by hand; a new reason from the worker brings it back.
+ */
+function CloneCaptureCard({
+  status,
+  suppressed,
+}: {
+  status: ReturnType<typeof describeCloneCapture>;
+  suppressed: boolean;
+}) {
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  // What makes this occurrence "the same one" for dismissal: the tone plus the title. Progress
+  // ticks within a capture keep the key stable, so dismissing "Recording your voice" does not
+  // resurface on every chunk — but a rejection, or completion, is a new key and shows again.
+  const occurrenceKey = `${status.tone}:${status.title}`;
+
+  const [doneExpired, setDoneExpired] = useState(false);
+  useEffect(() => {
+    if (status.tone !== "done") {
+      setDoneExpired(false);
+      return;
+    }
+    const timer = setTimeout(() => setDoneExpired(true), 6000);
+    return () => clearTimeout(timer);
+  }, [status.tone, status.title]);
+
+  if (suppressed) return null;
+  if (status.tone === "idle") return null;
+  if (dismissedKey === occurrenceKey) return null;
+  if (status.tone === "done" && doneExpired) return null;
+
+  return (
+    <div className="absolute bottom-[calc(100%+10px)] right-0 z-40 w-72 rounded-xl border border-border bg-surface-1 p-3 shadow-lg">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <p className="min-w-0 truncate text-[12px] font-medium text-ink">{status.title}</p>
+          {status.quality ? (
+            <span
+              className={`shrink-0 text-[10px] uppercase tracking-wide ${
+                status.quality === "good"
+                  ? "text-emerald-600"
+                  : status.quality === "fair"
+                    ? "text-amber-600"
+                    : "text-ink-muted"
+              }`}
+            >
+              {status.quality}
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setDismissedKey(occurrenceKey)}
+          aria-label="Dismiss voice capture status"
+          className="shrink-0 rounded p-0.5 text-ink-subtle transition-colors hover:text-ink"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {status.progress !== null ? (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-3">
+          <div
+            className={`h-full rounded-full transition-[width] duration-500 ${
+              status.tone === "done" ? "bg-emerald-500" : "bg-primary"
+            }`}
+            style={{ width: `${Math.round(status.progress * 100)}%` }}
+          />
+        </div>
+      ) : null}
+      <p className="mt-1.5 text-[11px] leading-snug text-ink-muted">{status.detail}</p>
     </div>
   );
 }
@@ -749,81 +911,6 @@ function HostControlRow({
   );
 }
 
-function VoiceCloneRow({
-  enabled,
-  onToggle,
-}: {
-  enabled: boolean;
-  onToggle: (next: boolean) => void;
-}) {
-  const [showConsentDialog, setShowConsentDialog] = useState(false);
-
-  return (
-    <>
-      {/* The value names the voice, it does not report a switch position.
-          "Voice Clone: Off" was read as "nothing will be spoken", because the row directly
-          above it is "Voice: On" and both looked like the same kind of switch. They are not:
-          Voice decides whether the dub is spoken at all, Voice Clone decides whose voice
-          speaks it. Saying "Default voice" / "My voice" answers the question people were
-          actually asking of this row. */}
-      <SettingsRow
-        label="Voice Clone"
-        icon={<Fingerprint className="h-4 w-4" weight={enabled ? "fill" : "regular"} />}
-        active={enabled}
-        value={enabled ? "My voice" : "Default voice"}
-        onClick={() => {
-          if (enabled) {
-            onToggle(false);
-          } else {
-            setShowConsentDialog(true);
-          }
-        }}
-      />
-
-      <Dialog open={showConsentDialog} onOpenChange={setShowConsentDialog}>
-        <DialogContent className="bg-surface-1 border-border text-ink rounded-xl sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Use your own voice?</DialogTitle>
-            <DialogDescription className="text-ink-subtle pt-2">
-              WarpTalk will record about 10 seconds of your voice in this meeting to build a voice
-              clone through Cartesia, then use it to read your translations instead of the default
-              AI voice. The sample is used for this session only — you can turn it off at any time.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowConsentDialog(false)}
-              className="bg-surface-2 hover:bg-surface-3 text-ink border-border"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                onToggle(true);
-                setShowConsentDialog(false);
-              }}
-            >
-              Use my voice
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-/**
- * One voice in the in-meeting picker.
- *
- * `detail` carries the voice's gender, and it is the whole reason this row has two lines.
- * Cartesia names its library voices things like "Skylar - Friendly Guide" and "Corey -
- * Supportive Buddy" — nothing in that tells you whether you are about to be dubbed as a man or
- * a woman, so choosing was a guess you could only check by speaking and listening to yourself.
- * The catalog has carried `gender` since it was built (VoiceOptionDto), the Voice Profiles page
- * already showed it, and this menu — the one people actually meet, mid-meeting, having just
- * heard themselves in the wrong voice — was the only place that dropped it.
- */
 function VoiceOption({
   label,
   detail,
@@ -867,64 +954,37 @@ function VoiceOption({
  * ROOM; here the choice is this participant's own listen (or speak) language, of which there
  * is exactly one.
  */
+/**
+ * The one list the merged language picker offers, from the two the bar is given.
+ *
+ * Deduped by normalized code but returning the ORIGINAL values, because the options are locale
+ * tags ("vi-VN") in some call paths and bare codes ("vi") in others, and handing a normalized
+ * code back to `onChangeSpeakLanguage` would change what gets written to the gateway.
+ */
+function mergeLanguageOptions(
+  speakOptions: string[] | undefined,
+  listenOptions: string[] | undefined,
+): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const language of [...(speakOptions ?? []), ...(listenOptions ?? [])]) {
+    const code = normalizeLanguageCode(language);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    merged.push(language);
+  }
+  return merged;
+}
+
 /** Every meeting language this product knows, minus the ones the room already offers. */
 function languagesNotAlreadyOffered(offered: string[] | undefined) {
   const already = new Set((offered ?? []).map(normalizeLanguageCode));
   return languagesInScope("meeting").filter((language) => !already.has(language.code));
 }
 
-function AddLanguageRow({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="mt-1 flex w-full items-center gap-2 border-t border-border px-2.5 py-2 text-left text-[13px] text-ink-muted hover:bg-surface-2 hover:text-ink"
-    >
-      <Plus className="h-3.5 w-3.5 shrink-0" weight="bold" aria-hidden />
-      Add another language
-    </button>
-  );
-}
-
-function LanguageOption({
-  label,
-  value,
-  active,
-  onSelect,
-  close,
-}: {
-  label: string;
-  value: string;
-  active: boolean;
-  onSelect: (language: string) => void;
-  close: () => void;
-}) {
-  const flag = getFlagEmoji(value);
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onSelect(value);
-        close();
-      }}
-      aria-pressed={active}
-      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
-    >
-      <span className="flex min-w-0 items-center gap-2">
-        {flag ? (
-          <span aria-hidden className="text-[14px] leading-none">
-            {flag}
-          </span>
-        ) : null}
-        <span className="truncate">{label}</span>
-      </span>
-      {active ? (
-        <CheckCircle className="h-4 w-4 shrink-0 text-primary" weight="fill" />
-      ) : null}
-    </button>
-  );
-}
+// AddLanguageRow and LanguageOption lived here to serve the settings menu's four language
+// submenus. Those submenus were unreachable and are gone; LanguageColumn is the one row renderer
+// now, and it is the picker's own.
 
 function LayoutOption({
   label,
@@ -988,22 +1048,33 @@ function LiveKitTrackControls({
 
   return (
     <>
-      <TrackToggle
-        source={Track.Source.Microphone}
-        // `!` throughout, because `@livekit/components-styles` is imported by
-        // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
-        // own padding. Our classes named no base background at all, so LiveKit's won: two
-        // black squares sitting in a light, rounded bar next to buttons we do style.
-        className="grid h-11 w-11 place-items-center rounded-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
-      />
-      <TrackToggle
-        source={Track.Source.Camera}
-        // `!` throughout, because `@livekit/components-styles` is imported by
-        // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
-        // own padding. Our classes named no base background at all, so LiveKit's won: two
-        // black squares sitting in a light, rounded bar next to buttons we do style.
-        className="grid h-11 w-11 place-items-center rounded-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
-      />
+      {/* WT-435: toggle and device picker are one unit — rounded on the outside, square where
+          they meet, so they read as a split button rather than two controls. */}
+      <div className="flex items-center">
+        <TrackToggle
+          source={Track.Source.Microphone}
+          // `!` throughout, because `@livekit/components-styles` is imported by
+          // persistent-meeting-session and its `.lk-button` rule sets a dark background and its
+          // own padding. Our classes named no base background at all, so LiveKit's won: two
+          // black squares sitting in a light, rounded bar next to buttons we do style.
+          //
+          // rounded-l-xl, not rounded-xl: the caret next to it supplies the right-hand corners.
+          className="grid h-11 w-11 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+        />
+        <MediaDeviceMenuButton
+          // The speaker lives on the microphone caret. To a user "my headset" is one decision,
+          // and an output picker of its own would be a third button in a full bar.
+          kinds={["audioinput", "audiooutput"]}
+          label="Choose microphone and speaker"
+        />
+      </div>
+      <div className="flex items-center">
+        <TrackToggle
+          source={Track.Source.Camera}
+          className="grid h-11 w-11 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+        />
+        <MediaDeviceMenuButton kinds={["videoinput"]} label="Choose camera" />
+      </div>
     </>
   );
 }
@@ -1054,32 +1125,111 @@ function MeetControl({
 }
 
 /**
- * "English → Vietnamese", with the two pickers one click away.
+ * One language per person. One list, one pick, both sides written.
  *
- * Both values already existed on this bar and were only reachable through Settings → Speaking /
- * Listening in. Nobody found them, so a room where a participant had never chosen looked like a
- * room where translation did not work. `highlight` rings the control while translation is
- * running and one of the two is still unset — the one moment the choice is urgent.
+ * WHY IT COLLAPSED TO ONE
+ *   This asked for "I speak" and "I hear" separately, which is the routing plumbing rather than
+ *   the one fact a participant knows about themselves. In the 15 Aug test the team worked through
+ *   every combination they could think of trying to make voice clone work, concluded it was
+ *   broken, and were reading a healthy pipeline the whole time — the pairs they had built simply
+ *   had no routes between them. Two controls that must agree are two chances to disagree.
+ *
+ *   Nothing about the mesh changes: a route still exists for (speaker.speak -> listener.hear)
+ *   whenever those differ, so one language each derives a VN/EN/JP room's six directions on its
+ *   own, and two people sharing a language still correctly hear each other unprocessed.
+ *
+ * WHY THE SPLIT IS GONE, AND NOT MERELY HIDDEN
+ *   It used to live behind a "Hear a different language" disclosure, which opened itself whenever
+ *   the stored pair happened to be mismatched. That is how the merged control shipped and was
+ *   never seen: a room default of speak=vi / hear=en put people in a split they had not chosen,
+ *   the picker read that as deliberate, and everyone got the two-column form anyway. A disclosure
+ *   that opens on state nobody selected is not a disclosure.
+ *
+ *   So the control now offers exactly one decision and RECONCILES what it finds: an inherited
+ *   mismatch is corrected on the next pick rather than preserved. The wire format is unchanged —
+ *   speak and listen are still two fields, still written independently — so a split configured
+ *   elsewhere still routes correctly; there is simply no longer a control in the meeting bar that
+ *   can create one.
+ *
+ * `highlight` rings the button while translation runs and nothing has been chosen — the one
+ * moment the choice is urgent.
  */
 function LanguagePairPicker({
   speakLanguage,
   listenLanguage,
-  availableSpeakLanguages,
-  availableListenLanguages,
+  languageOptions,
   onChangeSpeakLanguage,
   onChangeListenLanguage,
+  onLanguagePicked,
   highlight,
 }: {
   speakLanguage?: string;
   listenLanguage?: string;
-  availableSpeakLanguages: string[];
-  availableListenLanguages: string[];
+  /**
+   * The one list this control offers. It was two — speak options and listen options — which the
+   * only call site has always fed from the same array anyway; a single pick cannot honour two
+   * lists, so taking two would just be a way for them to disagree later.
+   */
+  languageOptions: string[];
+  /**
+   * Still two callbacks, because the wire format is still two fields. Every pick writes both:
+   * see the onSelect below.
+   */
   onChangeSpeakLanguage: (language: string) => void;
   onChangeListenLanguage: (language: string) => void;
+  /** Once per pick, after both onChange calls — the persistence hook (WT-434). */
+  onLanguagePicked?: (language: string) => void;
   highlight: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Whether the languages the ROOM does not offer are showing.
+  //
+  // Behind a disclosure rather than in the main list because the room's set is the right answer
+  // for almost everybody, and a menu of every language WarpTalk knows buries the two that matter.
+  // Opened for somebody already on an off-menu language, so the panel shows the state they are in.
+  const [showOtherLanguages, setShowOtherLanguages] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const choice = describeLanguageChoice(speakLanguage, listenLanguage);
+  // The face of the control is ONE language even when the stored pair disagrees.
+  //
+  // `choice.speak` is what this participant's microphone is transcribed as, and that is the
+  // language they would name if asked. Showing "vi → en" for an inherited mismatch made the
+  // control look like a two-part decision — the exact reading this merge exists to remove — and
+  // the mismatch is corrected the moment they pick anything, so displaying it as a split would
+  // advertise a state the control can no longer produce.
+  const shownLanguage = choice.speak || choice.hear;
+
+  // Every meeting language the room does NOT offer, as plain codes so the list below can treat
+  // both halves the same way.
+  const otherLanguages = languagesNotAlreadyOffered(languageOptions).map((language) => language.code);
+
+  // Somebody whose current language is not on the room's list is already off-menu — collapsing
+  // the section that contains their own selection would hide the state they are in.
+  //
+  // Derived, not synced through an effect. Writing this into state on mount would be a cascading
+  // render for a value that is a pure function of the props, and it would also LATCH: once open it
+  // could never close again for a user who then picked a room language.
+  const onAnOffMenuLanguage =
+    shownLanguage.length > 0 &&
+    otherLanguages.some((code) => code === normalizeLanguageCode(shownLanguage));
+  const otherLanguagesVisible = showOtherLanguages || onAnOffMenuLanguage;
+
+  // Both sides, always, wherever the language came from. The mesh reads speak and listen
+  // independently, so writing one would leave exactly the half-applied state this control exists
+  // to remove — and writing both is also what repairs a pair that arrived mismatched from a room
+  // default or an older session.
+  function pick(language: string) {
+    const applied = applySingleLanguageChoice(language);
+    onChangeSpeakLanguage(applied.speak);
+    onChangeListenLanguage(applied.hear);
+    // After both halves, once: this is what makes the pick durable across meetings. Until
+    // WT-434 only the language MODAL saved the remembered profile, so a split written by the
+    // old two-column UI (speak=vi, listen=en) could never be corrected from here — the
+    // auto-apply resurrected it at the start of every later meeting.
+    onLanguagePicked?.(applied.speak);
+    setOpen(false);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -1104,7 +1254,7 @@ function LanguagePairPicker({
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Choose the language you speak and the one you hear"
+        title="Choose your language"
         className={`flex h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors ${
           highlight
             ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/40 hover:bg-amber-500/15"
@@ -1112,11 +1262,11 @@ function LanguagePairPicker({
         }`}
       >
         <Translate className="h-4 w-4" />
-        <span className="tabular-nums">
-          {speakLanguage ? getLanguageName(speakLanguage) : "Set language"}
-        </span>
-        <CaretRight className="h-3 w-3 rotate-90 opacity-60" weight="bold" />
-        <span>{listenLanguage ? getLanguageName(listenLanguage) : "—"}</span>
+        {choice.mode === "unset" ? (
+          <span>Set language</span>
+        ) : (
+          <span>{getLanguageName(shownLanguage)}</span>
+        )}
         <CaretDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} weight="bold" />
       </button>
 
@@ -1126,26 +1276,45 @@ function LanguagePairPicker({
           className="absolute bottom-[calc(100%+10px)] left-1/2 z-50 w-64 -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-surface-1 p-1.5 shadow-lg"
         >
           <LanguageColumn
-            title="I speak"
-            hint="What the microphone is transcribed as."
-            options={availableSpeakLanguages}
-            selected={speakLanguage}
-            onSelect={(language) => {
-              onChangeSpeakLanguage(language);
-              setOpen(false);
-            }}
+            title="My language"
+            hint="What you speak, and what everyone else is translated into for you."
+            options={languageOptions}
+            selected={choice.mode === "unset" ? undefined : shownLanguage}
+            onSelect={pick}
           />
-          <div className="my-1 h-[1px] bg-border" />
-          <LanguageColumn
-            title="I hear"
-            hint="What everyone else is translated into, for you."
-            options={availableListenLanguages}
-            selected={listenLanguage}
-            onSelect={(language) => {
-              onChangeListenLanguage(language);
-              setOpen(false);
-            }}
-          />
+
+          {/* The room's configuration is what gets OFFERED, not what a person is limited to.
+              Somebody who speaks Korean in a Vietnamese/Japanese room should be able to say so and
+              be understood; the room was configured by whoever booked it, before they knew who
+              would turn up.
+
+              That rule used to live four levels into the settings menu ("Listening in" → "All
+              languages"). Those rows were removed when this picker replaced them and the submenus
+              were left behind — unreachable, because nothing navigated to them any more. The rule
+              is worth keeping, so it moved here rather than being deleted with the dead code. */}
+          {otherLanguages.length > 0 ? (
+            <>
+              <div className="my-1 h-[1px] bg-border" />
+              {otherLanguagesVisible ? (
+                <LanguageColumn
+                  title="Other languages"
+                  hint="Not offered by this room, but still translated for you."
+                  options={otherLanguages}
+                  selected={choice.mode === "unset" ? undefined : shownLanguage}
+                  onSelect={pick}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowOtherLanguages(true)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                >
+                  <CaretRight className="h-3 w-3" weight="bold" />
+                  <span>Another language</span>
+                </button>
+              )}
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>

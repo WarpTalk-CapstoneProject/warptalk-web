@@ -96,7 +96,7 @@ export function CycleSummary({
   const willRunOut = projection.kind === "runs-out";
 
   return (
-    <div className="rounded-[14px] border border-border bg-canvas">
+    <div className="rounded-[14px] border border-border bg-surface-1">
       {/* Four cells on one hairline-divided row. Rounded tiles with their own borders would draw
           four more boxes inside a box, and the numbers are meant to be read across, not as
           separate cards. */}

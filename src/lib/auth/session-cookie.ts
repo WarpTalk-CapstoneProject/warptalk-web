@@ -214,8 +214,92 @@ export function clearAccessTokenCookie() {
   writeCookie(`${ACCESS_TOKEN_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`);
 }
 
-/** Remove every trace of the session from cookies. */
+/**
+ * Remove every trace of the session from cookies **that this side is able to remove**.
+ *
+ * THAT QUALIFIER IS THE WHOLE PROBLEM, SO IT IS STATED HERE RATHER THAN DISCOVERED AGAIN.
+ * The authoritative cookies are written by the server (`AuthSessionCookies.Write`) with
+ * `HttpOnly = true` and `Domain = .warptalk.io.vn`. No script can delete an HttpOnly cookie —
+ * that is the point of it — so in production this function clears only the host-only, script
+ * -visible copies this client writes for itself, and the server's three survive it untouched.
+ *
+ * The only thing that clears the server's copies is a `POST /auth/logout` that actually
+ * succeeds. When that request fails — 429 from the gateway, or 401 because the credential is
+ * already gone — the browser is left signed out in JavaScript and signed in to Next's
+ * middleware, which reads cookies server-side and therefore CAN see the HttpOnly ones. That
+ * disagreement is what produced the logout storm; see `markSessionDead`.
+ */
 export function clearSessionCookies() {
   clearAccessTokenCookie();
   writeCookie(`${SESSION_MARKER_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`);
+}
+
+/**
+ * "This browser has given up on its session" — a fact that has to outlive a page load.
+ *
+ * WHY THIS EXISTS (the logout storm, and why three previous fixes did not hold)
+ *   `endDeadSession()` escapes a dead session with `window.location.href = "/login"`. That is a
+ *   FULL PAGE NAVIGATION, and it destroys every piece of module state in the tab — including the
+ *   `sessionEnded` latch that is supposed to make one dead session produce one logout, and the
+ *   revoke dedupe in revoke-session.ts that bounds it to one POST per credential. Both were
+ *   written as module variables, so both evaporate at exactly the moment they are needed.
+ *
+ *   On its own that would cost one extra request. It became a storm because the navigation does
+ *   not end anywhere: `proxy.ts` reads cookies SERVER-SIDE, so it sees the server's surviving
+ *   HttpOnly `access_token`, decides the visitor is signed in, and bounces `/login` straight back
+ *   to `/workspace`. The app loads fresh with no readable credential, 401s, declares the session
+ *   dead, POSTs another logout, redirects to `/login`, and is bounced back again — about twice a
+ *   second. Production, 16 Aug: 240 refused logouts inside one minute from a single address, and
+ *   a gateway log that reads `GET /workspaces 401` / `POST /auth/logout 401` over and over.
+ *
+ * SO THE LATCH HAS TO LIVE WHERE THE LOOP LIVES: ACROSS PAGE LOADS.
+ *   sessionStorage survives navigation within the tab and dies with the tab, which is exactly the
+ *   scope of "this browsing session has already given up". The cookie beside it is for the other
+ *   half of the disagreement — it is script-visible on purpose, so `proxy.ts` can see what the
+ *   client concluded and stop redirecting a signed-out visitor back into the app.
+ *
+ * Short-lived by design. Two minutes is long enough to survive the redirect that follows it and
+ * short enough that it can never become a second stale session marker of its own.
+ */
+export const SESSION_DEAD_COOKIE = "warptalk_session_dead";
+export const SESSION_DEAD_MAX_AGE_SECONDS = 120;
+export const SESSION_DEAD_KEY = "warptalk.session.dead";
+
+export function markSessionDead() {
+  writeCookie(
+    `${SESSION_DEAD_COOKIE}=1; path=/; max-age=${SESSION_DEAD_MAX_AGE_SECONDS}${cookieSuffix()}`,
+  );
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(SESSION_DEAD_KEY, "1");
+  } catch {
+    // Blocked storage costs us the cross-page-load half of the latch, not correctness: the
+    // cookie above still stops the middleware bounce, which is what closes the loop.
+  }
+}
+
+/** Whether this tab has already declared its session dead, including before a page load. */
+export function isSessionDeadMarked(): boolean {
+  if (typeof sessionStorage === "undefined") return false;
+  try {
+    return sessionStorage.getItem(SESSION_DEAD_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A new session is alive, so the mark must go — both halves of it.
+ *
+ * Called on sign-in. Without this the marker would outlive the failure it describes and send a
+ * freshly signed-in user straight back to /login, which is the same trap in the other direction.
+ */
+export function clearSessionDeadMarker() {
+  writeCookie(`${SESSION_DEAD_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`);
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.removeItem(SESSION_DEAD_KEY);
+  } catch {
+    // Nothing to do — the cookie is the half the middleware reads.
+  }
 }
