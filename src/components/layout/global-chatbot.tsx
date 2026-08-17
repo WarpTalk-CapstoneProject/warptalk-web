@@ -233,6 +233,17 @@ const ASSISTANT_RESPONSE_TIMEOUT_MS = 90_000;
 /** Matches chat-panel.tsx: within this many px of the bottom counts as "following along". */
 const AUTOSCROLL_THRESHOLD_PX = 80;
 
+/**
+ * WT-474 — caps on pasted screenshots.
+ *
+ * These are a courtesy to the user: they turn a refusal that would otherwise come back from the
+ * server into an immediate message. AssistantService and the Python worker enforce the same limits
+ * independently, because a caller that skipped this UI must not be able to reach the real limits of
+ * a Redis Stream field or an OpenAI request.
+ */
+const MAX_PASTED_IMAGES = 4;
+const MAX_PASTED_IMAGE_BYTES = 5 * 1024 * 1024;
+
 function formatConversationTimestamp(value?: string | null) {
   if (!value) return "";
   const parsed = new Date(value);
@@ -258,6 +269,8 @@ export function GlobalChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  /** WT-474: pasted screenshots for the NEXT message only — cleared on send, like @mentions. */
+  const [pastedImages, setPastedImages] = useState<string[]>([]);
   const [selectedContexts, setSelectedContexts] = useState<
     AssistantContextOption[]
   >([]);
@@ -860,9 +873,59 @@ export function GlobalChatbot() {
     );
   };
 
+  /**
+   * WT-474: screenshots pasted into the composer.
+   *
+   * A person debugging asks "what is wrong with this screen", and the screen IS the question.
+   * Describing a screenshot in words is exactly the work the model could have done.
+   *
+   * PER-TURN, LIKE @MENTIONS. Nothing stores these: they are sent with one message and cleared,
+   * so a follow-up cannot see the picture. The hint under the strip says so, because a user who
+   * pastes once and then asks "and the red box?" would otherwise get a confident answer about a
+   * picture the model never received.
+   */
+  const attachImage = async (file: File) => {
+    if (pastedImages.length >= MAX_PASTED_IMAGES) {
+      toast.error(`WarpBot takes up to ${MAX_PASTED_IMAGES} images in one question.`);
+      return;
+    }
+    if (file.size > MAX_PASTED_IMAGE_BYTES) {
+      toast.error("That image is too large — under 5MB, please.");
+      return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      if (!dataUrl.startsWith("data:image/")) return;
+      setPastedImages((prev) => [...prev, dataUrl]);
+    } catch {
+      toast.error("That image could not be read.");
+    }
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    // Only intercept when the clipboard actually carries an image. Pasting TEXT must stay
+    // completely untouched, including text copied out of an app that also puts an image flavour
+    // on the clipboard — hence checking the item kind rather than just `files.length`.
+    const images = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+
+    if (images.length === 0) return;
+    event.preventDefault();
+    for (const file of images) void attachImage(file);
+  };
+
   const sendMessage = async (overrideContent?: string) => {
     const content = (overrideContent ?? inputValue).trim();
-    if (!content || !activeWorkspaceId) return;
+    // WT-474: an image on its own is a question ("what is this?"), so a turn carrying only
+    // screenshots is allowed to go. Text-only and image-only both need a workspace.
+    if ((!content && pastedImages.length === 0) || !activeWorkspaceId) return;
 
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
@@ -882,9 +945,14 @@ export function GlobalChatbot() {
         label: ctx.title,
       }));
 
+    // Captured before the state is cleared, for the same reason mentions are: this handler runs
+    // against pre-update state and the request is built further down.
+    const images = pastedImages;
+
     setInputValue("");
     setMentionMenuOpen(false);
     setSelectedContexts([]);
+    setPastedImages([]);
 
     let convId = conversationId;
     if (!convId) {
@@ -929,6 +997,7 @@ export function GlobalChatbot() {
         content,
         pageContext: effectivePageContext,
         mentions,
+        images,
       });
       // The assistant's reply streams in over AssistantHub — see the connection effect above.
     } catch {
@@ -1323,6 +1392,7 @@ export function GlobalChatbot() {
                       value={inputValue}
                       onChange={handleInput}
                       onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
                       placeholder={
                         selectedContexts.length > 0
                           ? ""
@@ -1334,6 +1404,45 @@ export function GlobalChatbot() {
                       rows={1}
                     />
                   </div>
+
+                  {/* WT-474: the pasted screenshots, and the fact that they are per-message.
+                      Saying "this message only" out loud matters — a user who pastes once and then
+                      asks "and the red box?" would otherwise get a confident answer about a
+                      picture the model never received. */}
+                  {pastedImages.length > 0 ? (
+                    <div className="px-1.5 pb-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {pastedImages.map((image, index) => (
+                          <div
+                            key={`${index}-${image.slice(-16)}`}
+                            className="group relative size-12 overflow-hidden rounded-[6px] border border-border"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- a base64 data
+                                URL that never leaves this component; next/image would need a loader
+                                and a remote pattern for something with no URL at all. */}
+                            <img
+                              src={image}
+                              alt={`Pasted image ${index + 1}`}
+                              className="size-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPastedImages((prev) => prev.filter((_, i) => i !== index))
+                              }
+                              className="absolute right-0.5 top-0.5 grid size-4 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                              title="Remove"
+                            >
+                              <X size={8} weight="bold" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-[10px] text-ink-subtle">
+                        Sent with this message only — WarpBot cannot see it in later questions.
+                      </p>
+                    </div>
+                  ) : null}
 
                   <div className="flex items-center justify-between px-1.5 pb-1.5">
                     <Popover

@@ -28,12 +28,21 @@ export const assistantService = {
     conversationId: string,
     content: string,
     pageContext?: AssistantPageContextDto | null,
-    mentions?: AssistantMentionDto[]
+    mentions?: AssistantMentionDto[],
+    /**
+     * WT-474 — screenshots pasted into the composer, as `data:image/...;base64,...` strings.
+     *
+     * They belong to THIS TURN. Nothing stores them, so a follow-up question cannot see the
+     * picture — the composer says so, because a user who pastes once and then asks "and the red
+     * box?" would otherwise get a confident answer about nothing.
+     */
+    images?: string[]
   ) {
     return apiClient.post<SendAssistantMessageResponse>(API.assistant.sendMessage(conversationId), {
       content,
       pageContext: pageContext ?? undefined,
       mentions: mentions?.length ? mentions : undefined,
+      images: images?.length ? images : undefined,
     });
   },
 

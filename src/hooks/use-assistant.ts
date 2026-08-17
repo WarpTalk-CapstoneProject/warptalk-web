@@ -74,13 +74,16 @@ export function useSendAssistantMessage() {
       content,
       pageContext,
       mentions,
+      images,
     }: {
       conversationId: string;
       content: string;
       pageContext?: AssistantPageContextDto | null;
       mentions?: AssistantMentionDto[];
+      /** WT-474: pasted screenshots for this turn only. Not persisted. */
+      images?: string[];
     }) => {
-      const { data } = await assistantService.sendMessage(conversationId, content, pageContext, mentions);
+      const { data } = await assistantService.sendMessage(conversationId, content, pageContext, mentions, images);
       return data;
     },
     onSuccess: (_data, variables) => {
