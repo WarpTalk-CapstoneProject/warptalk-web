@@ -80,7 +80,11 @@ export function PlanPanel({
           </p>
           <p className="mt-0.5 text-[12px] text-ink-muted">
             {subscription
-              ? `${formatMoney(subscription.price, "VND")} / ${plan?.billingCycle?.toLowerCase() === "yearly" || plan?.billingCycle?.toLowerCase() === "year" ? "year" : "month"}`
+              ? // WT-459: from the PLAN, because SubscriptionDto carries a price with no
+                // currency beside it. `plan` is already in scope for the billing cycle below,
+                // and formatMoney falls back to VND when it is absent — so a workspace whose
+                // plan has not loaded yet reads exactly as it did before.
+                `${formatMoney(subscription.price, plan?.currency)} / ${plan?.billingCycle?.toLowerCase() === "yearly" || plan?.billingCycle?.toLowerCase() === "year" ? "year" : "month"}`
               : "Meetings translate against a credit balance."}
           </p>
         </div>

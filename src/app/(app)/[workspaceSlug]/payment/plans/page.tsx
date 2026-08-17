@@ -505,7 +505,13 @@ export default function WorkspacePlansPage() {
                   <div className="mt-4 flex w-full flex-col items-start">
                     <div className="flex items-baseline whitespace-nowrap">
                       <span className="text-[24px] font-semibold tracking-tight text-ink">
-                        {displayPrice > 0 ? formatMoney(displayPrice, "VND") : "Free"}
+                        {/* WT-459: the plan's OWN currency, not a hardcoded "VND".
+                            An admin priced a plan at 200 USD and this rendered "200 VND" —
+                            a number three orders of magnitude out, stated with total
+                            confidence. `PlanDto.currency` has always carried the answer;
+                            formatMoney already falls back to VND when it is absent, so
+                            nothing changes for the VND plans that make up the catalogue. */}
+                        {displayPrice > 0 ? formatMoney(displayPrice, plan.currency) : "Free"}
                       </span>
                       <span className="ml-1 text-[12px] text-ink-muted">/mo</span>
                     </div>
@@ -615,7 +621,7 @@ export default function WorkspacePlansPage() {
                   )}
                   {billingInterval === "yearly" && (
                     <p className="text-[11px] text-[#7F1DFF] font-semibold text-center w-full">
-                      Billed yearly: {formatMoney(displayTotal, "VND")}
+                      Billed yearly: {formatMoney(displayTotal, plan.currency)}
                     </p>
                   )}
                 </CardFooter>
