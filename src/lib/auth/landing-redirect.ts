@@ -8,12 +8,15 @@ import {
   normalizeWorkspaceSlug,
   WORKSPACE_GATEWAY_PATH,
 } from "../workspace/workspace-slug.ts";
+import { withCheckoutIntent } from "../billing/checkout-intent.ts";
 
 interface LandingRedirectState {
   isAuthenticated: boolean;
   user: unknown | null;
   hasRememberedSession?: boolean;
   activeWorkspaceSlug?: string | null;
+  /** WT-491: the plan a guest clicked in the pricing section, carried through sign-up. */
+  planSlug?: string | null;
 }
 
 function getBrowserCookieSource() {
@@ -63,15 +66,28 @@ export function hasRememberedAccessToken(cookieSource = getBrowserCookieSource()
   return Boolean(getCookieValue(cookieSource, SESSION_MARKER_COOKIE));
 }
 
+/**
+ * Where the landing page's primary call to action goes.
+ *
+ * WT-491: `planSlug` is the plan a GUEST clicked in the pricing section. It rides inside the
+ * `callbackUrl` for a signed-out visitor — so it survives login, and any detour through register
+ * and email verification — and on the destination itself for someone already signed in. Without
+ * it the choice was dropped at the first redirect and the visitor arrived somewhere with no sign
+ * they had asked to buy anything.
+ */
 export function getLandingGetStartedHref({
   isAuthenticated,
   user,
   hasRememberedSession = false,
   activeWorkspaceSlug,
+  planSlug,
 }: LandingRedirectState) {
   if ((!isAuthenticated || !user) && !hasRememberedSession) {
-    return `/login?callbackUrl=${encodeURIComponent(WORKSPACE_GATEWAY_PATH)}`;
+    // Attached to the callback BEFORE encoding, so it arrives as part of the path the login page
+    // will navigate to rather than as a sibling parameter of /login that nothing would forward.
+    const callback = withCheckoutIntent(WORKSPACE_GATEWAY_PATH, planSlug);
+    return `/login?callbackUrl=${encodeURIComponent(callback)}`;
   }
 
-  return getWorkspaceEntryPath(activeWorkspaceSlug);
+  return withCheckoutIntent(getWorkspaceEntryPath(activeWorkspaceSlug), planSlug);
 }
