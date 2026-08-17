@@ -1596,7 +1596,14 @@ export function PersistentMeetingSession({
       if (endedByMeRef.current) return;
       toast.info("This meeting has ended.");
       onMeetingClosed();
-      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+      // WT-449: the same wrap-up page the host lands on, not the rooms list.
+      //
+      // Ending a meeting used to send the host to /ended — recording, summary, artifacts and
+      // the feedback dialog — and everybody ELSE to a list of rooms. So the one screen built to
+      // close a meeting out was shown only to the person who least needed asking, and every
+      // other participant's meeting simply vanished mid-sentence. The artifacts on that page
+      // are readable by every participant, and the feedback being collected is theirs.
+      router.replace(buildMeetingEndedPath(activeWorkspaceSlug, roomId));
     });
 
     // The host's Approve in the People panel is a REST call (PATCH .../participants/{id}/admit)
