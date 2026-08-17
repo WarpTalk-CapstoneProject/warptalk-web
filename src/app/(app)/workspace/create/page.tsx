@@ -2,12 +2,16 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Globe, Plus, Spinner, Trash, Warning } from "@phosphor-icons/react/dist/ssr";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import {
+  checkoutContinuationPath,
+  readCheckoutIntent,
+} from "@/lib/billing/checkout-intent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -71,6 +75,9 @@ interface ApiErrorShape {
 
 export default function CreateWorkspaceDemoPage() {
   const router = useRouter();
+  // WT-491: the plan a guest picked on the landing page, carried here through login.
+  const searchParams = useSearchParams();
+  const checkoutPlanSlug = readCheckoutIntent(searchParams);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const setActiveWorkspace = useWorkspaceStore(
@@ -191,7 +198,16 @@ export default function CreateWorkspaceDemoPage() {
       const selection = await selectWorkspace.mutateAsync(workspace.id);
       applySelectedWorkspace(selection, setActiveWorkspace);
       toast.success(`Workspace "${workspace.name}" created successfully.`);
-      router.push(`/${selection.slug}/home`);
+      // WT-479/WT-491: a visitor who came here to BUY goes to the plan grid, not to Home. Landing
+      // them on an empty dashboard is what produced the report — a workspace created, "No active
+      // subscription" on its Billing page, and nothing connecting the two. Somebody who arrived
+      // without a plan in hand still goes to Home, because for them there is nothing to pay for
+      // yet and a pricing page would be an interruption.
+      router.push(
+        checkoutPlanSlug
+          ? checkoutContinuationPath(selection.slug, checkoutPlanSlug)
+          : `/${selection.slug}/home`,
+      );
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);
