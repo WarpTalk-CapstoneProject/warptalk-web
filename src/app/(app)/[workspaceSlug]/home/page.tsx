@@ -147,7 +147,7 @@ export default function WorkspaceHomePage() {
       {
         title: "Billing",
         icon: CreditCard,
-        href: `/${slug}/billing`,
+        href: `/${slug}/settings/billing`,
       },
       {
         title: "Dashboard",

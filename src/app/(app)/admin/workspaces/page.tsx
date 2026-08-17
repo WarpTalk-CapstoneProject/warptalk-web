@@ -529,8 +529,11 @@ function SortableColumnHeader({
 }
 
 export default function AdminWorkspacesPage() {
+  // The fallback paints the same ground as the page it stands in for. On the chrome's grey it
+  // flashed that grey across the whole content area on every load — the greyed-out look this
+  // release removes. Wrong for a frame is still wrong.
   return (
-    <Suspense fallback={<div className="min-h-full bg-canvas" />}>
+    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
       <WorkspacesDirectory />
     </Suspense>
   );

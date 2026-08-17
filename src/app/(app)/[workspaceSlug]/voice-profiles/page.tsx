@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
+import { MyDubVoicePicker } from "@/components/voice/my-dub-voice-picker";
 import { VoiceConsentCard } from "@/components/voice/voice-consent-card";
 import {
   useCreateVoiceProfile,
@@ -54,6 +55,11 @@ import {
   useVoiceProfiles,
 } from "@/hooks/use-voice-profiles";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import {
+  WorkspaceEmptyState,
+  WorkspacePrimaryButton,
+} from "@/components/workspace/page-chrome";
+import { getErrorMessage } from "@/lib/api/errors";
 import { analyzeVoiceSample } from "@/lib/voice/voice-sample-quality";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -564,10 +570,24 @@ export default function VoiceProfilesPage() {
       toast.success("Voice profile saved");
       setIsCreateOpen(false);
       resetForm();
-    } catch {
-      toast.error("Failed to create voice profile");
+    } catch (error) {
+      // The server's own sentence, not a generic failure. This catch used to bind nothing and
+      // show "Failed to create voice profile" for every cause, which is how WT-372 was reported:
+      // the API answered "Unsupported audio format." — naming the defect exactly — and the page
+      // threw that away, so the bug report could only say "API/status code: Chưa xác định".
+      toast.error(getErrorMessage(error, "Failed to create voice profile"));
     }
   }
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteMutation.mutateAsync(id);
+      toast.success("Voice profile deleted");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to delete voice profile"));
+    }
+  }
+
 
   return (
     <div className="flex h-full flex-col bg-surface-1 text-ink">
@@ -676,6 +696,8 @@ export default function VoiceProfilesPage() {
             )}
           />
         </section>
+
+        <MyDubVoicePicker profiles={profileList} />
 
         <LibraryVoicePicker profiles={profileList} />
 

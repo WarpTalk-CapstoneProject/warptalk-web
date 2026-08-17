@@ -17,10 +17,36 @@ import { Textarea } from "@/components/ui/textarea";
 
 const MAX_REASON_LENGTH = 500;
 
+export type WorkspaceLifecycleAction = "suspend" | "reactivate" | "delete";
+
+const COPY: Record<
+  WorkspaceLifecycleAction,
+  { title: string; confirm: string; busy: string; placeholder: string }
+> = {
+  suspend: {
+    title: "Suspend workspace",
+    confirm: "Suspend workspace",
+    busy: "Suspending…",
+    placeholder: "e.g. Abuse report confirmed by customer success on 2026-08-03",
+  },
+  reactivate: {
+    title: "Reactivate workspace",
+    confirm: "Reactivate workspace",
+    busy: "Reactivating…",
+    placeholder: "e.g. Customer remediated the reported content",
+  },
+  delete: {
+    title: "Delete workspace",
+    confirm: "Delete workspace permanently",
+    busy: "Deleting…",
+    placeholder: "e.g. Tenant offboarded — contract ended 2026-07-31",
+  },
+};
+
 /**
- * Confirmation for a workspace lifecycle change. Suspending is disruptive for every member of
- * the tenant, so the reason is mandatory here as well as server-side and is stored on the
- * immutable admin action trail.
+ * Confirmation for a workspace lifecycle change. Every one of these is disruptive for the whole
+ * tenant, so the reason is mandatory here as well as server-side and is stored on the immutable
+ * admin action trail. Delete is the only irreversible one, and its copy says so.
  */
 export function WorkspaceLifecycleDialog({
   open,
@@ -32,7 +58,7 @@ export function WorkspaceLifecycleDialog({
   onConfirm,
 }: {
   open: boolean;
-  action: "suspend" | "reactivate";
+  action: WorkspaceLifecycleAction;
   workspaceName: string;
   pending: boolean;
   error: string | null;
@@ -51,6 +77,8 @@ export function WorkspaceLifecycleDialog({
   }
 
   const isSuspend = action === "suspend";
+  const isDelete = action === "delete";
+  const copy = COPY[action];
   const trimmedReason = reason.trim();
   const canSubmit = trimmedReason.length > 0 && trimmedReason.length <= MAX_REASON_LENGTH && !pending;
 
@@ -58,11 +86,16 @@ export function WorkspaceLifecycleDialog({
     <Dialog open={open} onOpenChange={(next) => (pending ? undefined : onOpenChange(next))}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            {isSuspend ? "Suspend workspace" : "Reactivate workspace"}
-          </DialogTitle>
+          <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>
-            {isSuspend ? (
+            {isDelete ? (
+              <>
+                <span className="font-medium text-ink">{workspaceName}</span> will be deleted and
+                every membership removed with it. This cannot be undone from the portal — a
+                deleted workspace has left the lifecycle. Billing history and the audit trail
+                survive.
+              </>
+            ) : isSuspend ? (
               <>
                 <span className="font-medium text-ink">{workspaceName}</span> will be suspended
                 for every member. No workspace data, meeting history, or billing record is
@@ -88,11 +121,7 @@ export function WorkspaceLifecycleDialog({
             rows={3}
             maxLength={MAX_REASON_LENGTH}
             autoFocus
-            placeholder={
-              isSuspend
-                ? "e.g. Abuse report confirmed by customer success on 2026-08-03"
-                : "e.g. Customer remediated the reported content"
-            }
+            placeholder={copy.placeholder}
           />
           <p className="text-xs text-ink-muted">
             Recorded against your admin account and attached to this workspace permanently.{" "}
@@ -112,19 +141,17 @@ export function WorkspaceLifecycleDialog({
             Cancel
           </Button>
           <Button
-            variant={isSuspend ? "destructive" : "default"}
+            variant={isSuspend || isDelete ? "destructive" : "default"}
             disabled={!canSubmit}
             onClick={() => onConfirm(trimmedReason)}
           >
             {pending ? (
               <>
                 <Spinner size={14} className="animate-spin" />
-                {isSuspend ? "Suspending…" : "Reactivating…"}
+                {copy.busy}
               </>
-            ) : isSuspend ? (
-              "Suspend workspace"
             ) : (
-              "Reactivate workspace"
+              copy.confirm
             )}
           </Button>
         </DialogFooter>

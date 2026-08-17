@@ -42,10 +42,14 @@ export default function InvitationAcceptPage({ params }: PageProps) {
 
   const handleAccept = async () => {
     if (!isAuthenticated) {
-      // Redirect to register/login with callback
-      toast.info("Please log in or register to accept this invitation.");
+      // WT-435 (Linear): /login, not /register. The button says "Sign In to Accept", and most
+      // people clicking an emailed invitation already have the account it was sent to — routing
+      // them into "Create New Profile" read as the product not knowing them. The login page
+      // forwards the same callbackUrl to its own Register link, so a genuinely new invitee is
+      // one click away rather than the default.
+      toast.info("Please sign in to accept this invitation.");
       router.push(
-        `/register?callbackUrl=${encodeURIComponent(window.location.pathname)}`,
+        `/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`,
       );
       return;
     }

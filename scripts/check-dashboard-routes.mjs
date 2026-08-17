@@ -14,7 +14,7 @@ const privateRoutes = [
   "/acme/dashboard",
   "/acme/members",
   "/acme/rooms",
-  "/acme/billing",
+  "/acme/settings/billing",
   "/billing",
   "/acme/ai-chat",
   "/acme/rooms/00000000-0000-0000-0000-000000000000/live",
@@ -26,7 +26,7 @@ const authenticatedRoutes = [
   "/acme/dashboard",
   "/acme/members",
   "/acme/rooms",
-  "/acme/billing",
+  "/acme/settings/billing",
   "/billing",
   "/billing/plans",
   "/acme/ai-chat",
@@ -35,6 +35,14 @@ const authenticatedRoutes = [
   // The old address still answers: it forwards to the slugged one rather than 404ing a
   // link somebody already has open.
   "/room/00000000-0000-0000-0000-000000000000",
+];
+
+/**
+ * Addresses that must forward rather than 404. `/{slug}/billing` was the Billing page's home until
+ * WT-380 moved it under Workspace Settings; bookmarks and pasted links still point at it.
+ */
+const authenticatedRedirectRoutes = [
+  ["/acme/billing", "/acme/settings/billing"],
 ];
 
 const authenticatedNotFoundRoutes = [
@@ -97,6 +105,15 @@ async function main() {
     assert(
       response.status === 200,
       `${route} exists for authenticated users (got ${response.status})`,
+    );
+  }
+
+  for (const [route, destination] of authenticatedRedirectRoutes) {
+    const response = await request(route, true);
+    const location = response.headers.get("location") ?? "";
+    assert(
+      [307, 308].includes(response.status) && location.includes(destination),
+      `${route} forwards to ${destination} (got ${response.status} ${location})`,
     );
   }
 

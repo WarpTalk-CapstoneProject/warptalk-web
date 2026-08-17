@@ -16,6 +16,7 @@ import {
 import Image from "next/image";
 
 import { useAuthStore } from "@/stores/auth-store";
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   extractEmailDomain,
@@ -45,6 +46,11 @@ export default function WorkspaceOnboardingGatePage() {
 
   const publicDomainLabel = extractEmailDomain(user?.email);
   const hasPublicEmailDomain = isPublicEmailDomain(publicDomainLabel);
+  // WT-417: a public email domain no longer blocks creating a workspace, so this screen has
+  // nothing left to disable. What a public domain still cannot do is have itself system-
+  // VERIFIED — verifying gmail.com would make every Gmail address Internal to that workspace —
+  // and the server enforces that separately, on the surface where it is actually decided.
+  const isSystemAdmin = useIsSystemAdmin();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
 
@@ -56,12 +62,10 @@ export default function WorkspaceOnboardingGatePage() {
   const workspaces = workspacesData?.items ?? EMPTY_WORKSPACES;
   const primaryInternalWorkspace = getPrimaryInternalWorkspace(workspaces);
   const hasPrimaryInternalWorkspace = Boolean(primaryInternalWorkspace);
-  const isCreateWorkspaceLocked = hasPrimaryInternalWorkspace || hasPublicEmailDomain;
+  const isCreateWorkspaceLocked = hasPrimaryInternalWorkspace;
   const createWorkspaceReason = hasPrimaryInternalWorkspace
     ? `You already have one internal workspace membership in ${primaryInternalWorkspace?.name || "a workspace"}. Open it, or join another workspace by request or invitation.`
-    : hasPublicEmailDomain
-      ? `Needs a work email. ${publicDomainLabel} addresses can join by invitation.`
-      : "Start a workspace for your organization.";
+    : "Start a workspace for your organization.";
   const createWorkspaceTitle = hasPrimaryInternalWorkspace
     ? "Workspace creation locked"
     : "Create workspace";
@@ -94,6 +98,23 @@ export default function WorkspaceOnboardingGatePage() {
   useEffect(() => {
     if (!isAuthenticated) router.replace("/login");
   }, [isAuthenticated, router]);
+
+  /**
+   * A platform admin does not belong on this screen at all. WT-417.
+   *
+   * This page is the onboarding gate: "you have no workspace, join or create one". A system
+   * admin administers the platform the workspaces live in — they have no workspace of their own
+   * and need none — so landing here told the master account it had signed up by mistake, and
+   * the only way onward was to create a workspace nobody wanted.
+   *
+   * (app)/layout.tsx already sends them to /admin for this exact reason, but it hands
+   * /workspace straight through as an `isOnboardingRoute` before that branch can run, so this
+   * screen was the one place the rule did not reach. Same destination, same reasoning, applied
+   * where the gap was.
+   */
+  useEffect(() => {
+    if (isAuthenticated && isSystemAdmin) router.replace("/admin");
+  }, [isAuthenticated, isSystemAdmin, router]);
 
   useEffect(() => {
     if (selectWorkspace.isPending) {
@@ -414,6 +435,109 @@ export default function WorkspaceOnboardingGatePage() {
               </div>
             )}
           </section>
+
+          {joinRequests.length > 0 && (
+            <div className="mt-8 rounded-lg border border-border bg-surface-1 text-left shadow-sm">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                <div>
+                  <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+                    <Clock size={18} />
+                    Join requests
+                  </div>
+                  <p className="mt-1 text-[12px] text-ink-muted">
+                    Each request is tracked independently. Your active workspace stays available while another request is reviewed.
+                  </p>
+                </div>
+                <button type="button" onClick={() => refetchJoinRequests()} className="text-[11px] font-semibold text-primary hover:underline">
+                  Refresh
+                </button>
+              </div>
+              <div className="divide-y divide-border">
+                {joinRequests.map((request: WorkspaceInvitationDto) => {
+                  const status = request.status.toUpperCase();
+                  const isApproved = status === "ACCEPTED";
+                  const isRejected = status === "REJECTED";
+                  return (
+                    <div key={request.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                      <div className="flex min-w-0 items-start gap-3">
+                        {isApproved ? <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-600" /> : isRejected ? <XCircle size={18} className="mt-0.5 shrink-0 text-destructive" /> : <Clock size={18} className="mt-0.5 shrink-0 text-amber-600" />}
+                        <div className="min-w-0">
+                          <div className="truncate text-[14px] font-medium text-foreground">{request.workspaceName || request.workspaceSlug || "Workspace"}</div>
+                          <div className="mt-1 text-[12px] text-ink-muted">
+                            {isApproved ? "Approved" : isRejected ? "Rejected" : "Waiting for Owner/Admin approval"} · {request.membershipType} provisional
+                          </div>
+                        </div>
+                      </div>
+                      {isApproved && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenWorkspace(request.workspaceId, request.workspaceSlug)}
+                          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[11px] font-semibold text-white hover:bg-primary-hover"
+                        >
+                          Open workspace <ArrowRight size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Join Workspace */}
+            <button
+              type="button"
+              onClick={() => router.push("/workspace/join")}
+              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all hover:bg-surface-2 hover:border-hairline-strong shadow-sm hover:shadow-md cursor-pointer h-[160px]"
+            >
+              <div className="flex size-9 items-center justify-center rounded-[6px] border border-border bg-surface-2 text-ink group-hover:bg-surface-3 transition-colors">
+                <SignIn weight="duotone" size={18} />
+              </div>
+              <div>
+                <span className="block text-[15px] font-semibold text-foreground">
+                  Join workspace
+                </span>
+                <span className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty">
+                  Enter a workspace URL or slug.
+                </span>
+              </div>
+            </button>
+
+            {/*
+              Create Workspace — unavailable on a public email domain.
+
+              The server refuses this unconditionally (WorkspaceService.CreateWorkspaceAsync):
+              founding a workspace claims a domain, and a public domain cannot be claimed by
+              anyone. Presenting the two cards as equals meant a Gmail user picked Create,
+              filled in a form, and only then learned it was never going to work — while the
+              path that IS open to them sat beside it looking no more relevant.
+
+              Stated here rather than enforced here: this is the reason shown to the user, not
+              the check. The server remains the authority.
+            */}
+            <button
+              type="button"
+              onClick={() => router.push("/workspace/create")}
+              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all shadow-sm h-[160px] enabled:hover:bg-surface-2 enabled:hover:border-hairline-strong enabled:hover:shadow-md enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <div
+                className="flex size-9 items-center justify-center rounded-[6px] bg-primary text-white"
+              >
+                <Plus weight="bold" size={18} />
+              </div>
+              <div>
+                <span className="block text-[15px] font-semibold text-foreground">
+                  Create workspace
+                </span>
+                <span
+                  className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty"
+                >
+                  Create a new workspace for your organization.
+                </span>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </main>

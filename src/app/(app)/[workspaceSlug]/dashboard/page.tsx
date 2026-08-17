@@ -59,6 +59,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 
 import { DashboardHero } from "./components/dashboard-hero";
 import { CycleSummary } from "./components/cycle-summary";
+import { MemberUsage } from "./components/member-usage";
 import { UsageBreakdown } from "./components/usage-breakdown";
 import { UsageTrend } from "./components/usage-trend";
 
@@ -107,6 +108,17 @@ export default function WorkspaceAdminDashboardPage() {
     workspaceId: activeWorkspaceId ?? undefined,
   });
 
+  // WT-413: who is spending it. Same owner/admin `enabled` gate as its neighbours — the
+  // endpoint refuses a member outright, so asking would only produce a 403 in the console.
+  const memberUsageQuery = useQuery({
+    queryKey: ["workspace-usage-by-member", activeWorkspaceId, breakdownDays],
+    queryFn: () =>
+      billingService.getUsageByMember(activeWorkspaceId!, {
+        from: new Date(Date.now() - breakdownDays * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    enabled,
+  });
+
   const creditsQuery = useQuery({
     queryKey: ["workspace-credits", activeWorkspaceId],
     queryFn: () => billingService.getWorkspaceCredits(activeWorkspaceId!),
@@ -143,7 +155,7 @@ export default function WorkspaceAdminDashboardPage() {
     );
   }
 
-  const billingHref = `/${activeWorkspaceSlug}/billing`;
+  const billingHref = `/${activeWorkspaceSlug}/settings/billing`;
   const plansHref = `/${activeWorkspaceSlug}/payment/plans`;
 
   // 404 is the account state "this workspace has no plan", not a fault. Anything else genuinely
@@ -318,6 +330,24 @@ export default function WorkspaceAdminDashboardPage() {
           </WorkspaceSection>
         </div>
 
+        <div className="grid gap-4">
+          <WorkspaceSection title="Who is spending it">
+            {memberUsageQuery.isPending ? (
+              <BlockSpinner height="h-[220px]" bare />
+            ) : memberUsageQuery.isError ? (
+              <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
+                Member usage could not be loaded.
+              </p>
+            ) : (
+              <MemberUsage
+                rows={memberUsageQuery.data?.members ?? []}
+                members={members?.items ?? []}
+                total={memberUsageQuery.data?.totalCreditsConsumed ?? 0}
+              />
+            )}
+          </WorkspaceSection>
+        </div>
+
         <div className="grid gap-4 lg:grid-cols-2">
           <WorkspaceSection title="Needs a decision">
             {isLoadingAttention ? (
@@ -397,7 +427,7 @@ export default function WorkspaceAdminDashboardPage() {
 
         {/* The counts, kept because "how big is this workspace" is a fair question — just not the
             one the page opens with. One line, not four tiles. */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[14px] border border-border bg-canvas px-4 py-3.5 text-[13px]">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[14px] border border-border bg-surface-1 px-4 py-3.5 text-[13px]">
           <CountLink
             href={`/${activeWorkspaceSlug}/members`}
             icon={<Users className="h-4 w-4" />}
@@ -429,7 +459,7 @@ function BlockSpinner({ height, bare = false }: { height: string; bare?: boolean
   return (
     <div
       className={`flex ${height} items-center justify-center gap-2 text-[13px] text-ink-muted ${
-        bare ? "" : "rounded-[14px] border border-border bg-canvas"
+        bare ? "" : "rounded-[14px] border border-border bg-surface-1"
       }`}
     >
       <Spinner className="h-4 w-4 animate-spin" />
@@ -448,7 +478,7 @@ function PanelNotice({
   onRetry: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-border bg-canvas px-4 py-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-border bg-surface-1 px-4 py-4">
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
           <Warning className="h-4 w-4 text-amber-500" />

@@ -40,24 +40,30 @@ import {
   CaretLeft,
   Check,
   CreditCard,
+  BookOpen,
   FileText,
   GearSix,
   Gauge,
   Globe,
+  Heartbeat,
   House,
   Keyboard,
   MagnifyingGlass,
   Monitor,
   PaperPlaneTilt,
+  SignOut,
   Plus,
   Sliders,
   SquaresFour,
+  Star,
   User,
   Users,
   Warning,
   Waveform,
   X,
   Brain,
+  Buildings,
+  ShieldCheck,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
@@ -225,7 +231,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           : [])
       ]
     },
-    { icon: CalendarBlank, label: "My Meetings", href: `/${slug}/my-meetings` },
+    { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
     { icon: Archive, label: "History", href: `/${slug}/history` },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
@@ -293,7 +299,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const workspaceNav: NavItem[] = [];
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members`, tourId: "nav-members" },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" }
+    { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" },
+    // Directly under Documents, and visible to every member — the two are constantly mistaken for
+    // each other, and sitting them together is what makes the difference legible: Documents is
+    // content the assistant retrieves from afterwards, Glossary is terminology applied to speech
+    // and translation while the meeting is happening.
+    //
+    // Its absence from this list is the whole reason the page was deleted as dead code, and the
+    // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
+    // can navigate to is indistinguishable from one that was never built.
+    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" }
   );
 
   if (isOwnerOrAdmin) {
@@ -302,12 +317,200 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // What the system has indexed from this workspace's documents and meetings. Owner/Admin
     // only, because the view crosses per-document access policies.
     workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
-    workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
+    // No Billing entry: WT-380 moved it inside Workspace Settings, where a plan, an invoice and a
+    // credit balance belong. It is reached through Settings now, not from the app's main nav.
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
     workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard`, tourId: "nav-dashboard" });
   }
 
-  const isSettingsPage = pathname.includes("/settings") || pathname.includes("/advanced");
+  /**
+   * Which of the two sidebars this screen gets.
+   *
+   * `/payment` is in the list because Billing lives under Settings now (WT-380) and its primary
+   * action — choosing or changing a plan — navigates to `/{slug}/payment/plans`. Without this the
+   * chrome would flip to the main app nav on the way, dropping the reader out of Settings at the
+   * one moment they most need the way back to Billing.
+   */
+  const isSettingsPage =
+    pathname.includes("/settings") ||
+    pathname.includes("/advanced") ||
+    pathname.includes("/payment");
+
+  /**
+   * The platform admin console gets its own chrome — a third branch beside the app and Settings.
+   *
+   * Without one, /admin inherited the app's nav wholesale: Home, Meetings, Schedules, History,
+   * Voice Profiles, Members and Documents, every one of them scoped to whichever workspace the
+   * admin happened to have open. A platform administrator is not standing *inside* a workspace,
+   * so a workspace switcher and a workspace's meetings are not merely irrelevant there — they
+   * invite the reader to act on one tenant while looking at a page about all of them.
+   *
+   * Gated on isSystemAdmin as well as the path. AdminLayout already refuses the page to everyone
+   * else, and without this condition their sidebar would advertise a console beside an
+   * "Access denied" panel.
+   *
+   * SCOPE: this lists the routes that EXIST. Users, Subscriptions, Plans, Meetings, Health,
+   * Audit and Announcements each add their own entry with the release that adds the page — a nav
+   * row pointing at a 404 is the same defect as a button whose endpoint was never routed.
+   */
+  const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
+
+  if (isAdminPage && isSystemAdmin) {
+    const adminSections: Array<{ section: string; items: NavItem[] }> = [
+      {
+        section: "Platform",
+        items: [
+          // Exact, or every /admin/* page lights this row up too: NavLink treats a non-exact item
+          // as active for anything beneath its href, and every admin page is beneath /admin.
+          { icon: Gauge, label: "Overview", href: "/admin", exact: true },
+          { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
+          { icon: Users, label: "Users", href: "/admin/users" },
+        ],
+      },
+      {
+        section: "Revenue",
+        items: [
+          { icon: Gauge, label: "Subscriptions", href: "/admin/subscriptions" },
+          { icon: FileText, label: "Plans & pricing", href: "/admin/plans" },
+          { icon: CreditCard, label: "Billing ledger", href: "/admin/billing" },
+        ],
+      },
+      {
+        section: "Operations",
+        items: [
+          { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
+          { icon: Heartbeat, label: "System health", href: "/admin/health" },
+          { icon: Star, label: "Feedback", href: "/admin/feedback" },
+          { icon: Archive, label: "Audit log", href: "/admin/audit" },
+          { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
+        ],
+      },
+      {
+        section: "Configuration",
+        items: [
+          { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
+          { icon: Sliders, label: "Platform config", href: "/admin/configuration" },
+          { icon: Globe, label: "Global glossary", href: "/admin/global-glossary" },
+        ],
+      },
+    ];
+
+    const backHref = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/home` : "/workspace";
+
+    if (collapsed) {
+      return (
+        <aside className="flex h-full w-16 shrink-0 select-none flex-col border-r border-border/40 bg-canvas text-ink">
+          <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
+            <Link
+              href={backHref}
+              title="Back to app"
+              aria-label="Back to app"
+              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <CaretLeft size={16} weight="bold" />
+            </Link>
+          </div>
+          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
+            {adminSections.flatMap((group, groupIndex) =>
+              group.items.map((item, itemIndex) => (
+                <div
+                  key={item.href}
+                  className={cn(
+                    groupIndex > 0 && itemIndex === 0 && "mt-3 border-t border-border/50 pt-3",
+                  )}
+                >
+                  <NavLink item={item} pathname={pathname} collapsed />
+                </div>
+              )),
+            )}
+          </nav>
+          {/* The exit. The expanded branch hangs it off the user card; collapsed has no card,
+              so the button stands alone — an admin console with no way to sign out is how the
+              portal shipped once already. */}
+          <div className="grid shrink-0 place-items-center border-t border-border/30 py-3">
+            <button
+              onClick={() => logout()}
+              title="Log out"
+              aria-label="Log out"
+              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <SignOut size={16} weight="duotone" />
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    return (
+      <aside className="flex h-full w-[224px] shrink-0 select-none flex-col border-r border-border/40 bg-canvas font-sans text-ink antialiased">
+        <div className="flex h-[48px] shrink-0 items-center border-b border-border/30 px-3">
+          <Link
+            href={backHref}
+            className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <CaretLeft size={14} weight="bold" />
+            <span>Back to app</span>
+          </Link>
+        </div>
+
+        {/* Names the console, where the app's chrome names the workspace. Deliberately NOT a
+            switcher: there is no workspace to switch, and a control that looks like one here
+            would suggest this page is scoped to a tenant. */}
+        <div className="flex items-center gap-2.5 border-b border-border/30 px-4 py-3">
+          <span className="grid size-[22px] shrink-0 place-items-center rounded-[6px] bg-primary text-primary-foreground">
+            <ShieldCheck size={13} weight="fill" />
+          </span>
+          <span className="truncate text-[13px] font-semibold tracking-tight text-ink">
+            WarpTalk Platform
+          </span>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-3">
+          {adminSections.map((group) => (
+            <div key={group.section} className="mb-3">
+              <div className="mb-1 flex h-[24px] items-center px-2">
+                <span className="text-[12px] font-medium uppercase tracking-wider text-ink-subtle">
+                  {group.section}
+                </span>
+              </div>
+              <div className="flex flex-col gap-px">
+                {group.items.map((item) => (
+                  <NavLink key={item.href} item={item} pathname={pathname} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {user && (
+          <div className="group flex items-center gap-2.5 border-t border-border/30 px-3 py-3">
+            <Avatar className="size-7 rounded-full">
+              <AvatarImage src={user.avatarUrl} alt="" />
+              <AvatarFallback className="rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-[12.5px] font-medium text-ink">
+                {user.fullName || user.email}
+              </p>
+              <p className="truncate text-[11px] text-ink-subtle">Platform admin</p>
+            </div>
+            {/* Always visible, not hover-revealed: this card is the ONLY exit from the portal,
+                and a control nobody can see shipped once already as "no way to sign out". */}
+            <button
+              onClick={() => logout()}
+              title="Log out"
+              aria-label="Log out"
+              className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <SignOut size={16} weight="duotone" />
+            </button>
+          </div>
+        )}
+      </aside>
+    );
+  }
 
   if (isSettingsPage && collapsed) {
     const appHref = activeWorkspaceSlug
@@ -334,7 +537,15 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       settingsItems.push({
         icon: GearSix,
         label: "Workspace settings",
+        // Exact, or `/settings/billing` would light this row up too — NavLink treats a nav item as
+        // active for anything below its href, and every settings page is below this one.
+        exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
+      });
+      settingsItems.push({
+        icon: CreditCard,
+        label: "Billing",
+        href: `/${activeWorkspaceSlug}/settings/billing`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
@@ -458,6 +669,23 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       Workspace Settings
+                    </span>
+                  </Link>
+                </div>
+                {/* WT-380 — Billing belongs here, not on the app's main nav. `startsWith` rather
+                    than `===` so the row stays lit while the reader is off buying a plan at
+                    /payment/plans, which is where this page's primary action sends them. */}
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname.startsWith(`/${activeWorkspaceSlug}/settings/billing`) ||
+                    pathname.startsWith(`/${activeWorkspaceSlug}/payment`)
+                    ? "bg-surface-2"
+                    : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Billing
                     </span>
                   </Link>
                 </div>

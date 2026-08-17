@@ -136,3 +136,48 @@ export function readMeetingStartedNotice(
     joinHref: toInternalHref(actionUrl, appOrigin) ?? (roomId ? `/room/${roomId}` : null),
   };
 }
+
+/**
+ * The type string the SERVER sends for an invitation. Past tense, and not the same string as the
+ * notification service's long-unused `MEETING_INVITE` constant — which is why every invitation
+ * notification was rejected at validation until MEETING_INVITED was registered there too.
+ */
+export const MEETING_INVITED_TYPE = "MEETING_INVITED";
+
+export type MeetingInviteNotice = {
+  /** The room's own title when the payload carried one; otherwise the server's sentence. */
+  title: string;
+  /**
+   * The room's UUID, which is what the accept endpoint is keyed by — NOT what `joinHref` points
+   * at. The server builds the link from the room CODE (`/room/{roomCode}`, the string a person can
+   * be told over the phone), so the id has to come from the payload or Accept has nothing to post.
+   * Null when the payload did not survive: the notice still informs and can still be opened.
+   */
+  roomId: string | null;
+  /** Where "Join" goes, once accepted. Same rules as the meeting-started notice. */
+  joinHref: string | null;
+};
+
+/**
+ * What to show for a MEETING_INVITED notification, or null if this is not one.
+ *
+ * Separate from <see cref="readMeetingStartedNotice"/> rather than one reader with a type
+ * parameter, because the two notices ask for different things: a meeting that is RUNNING wants one
+ * click to join, while an invitation wants an answer — the meeting is usually still hours away, so
+ * Join alone would be a button that leads to an empty room.
+ */
+export function readMeetingInviteNotice(
+  raw: RawNotification,
+  appOrigin: string | null = currentOrigin(),
+): MeetingInviteNotice | null {
+  if (raw.type !== MEETING_INVITED_TYPE) return null;
+
+  const { roomId, roomTitle } = readPayload(raw);
+  const actionUrl = firstString(raw.action_url, raw.actionUrl, raw.data?.actionUrl);
+
+  return {
+    title: roomTitle ?? firstString(raw.title, raw.content, raw.message) ?? "A meeting",
+    roomId: roomId ?? null,
+    joinHref: toInternalHref(actionUrl, appOrigin) ?? (roomId ? `/room/${roomId}` : null),
+  };
+}

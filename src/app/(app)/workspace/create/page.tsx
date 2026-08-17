@@ -17,6 +17,7 @@ import {
   slugPreviewFromName,
 } from "@/lib/workspace/email-domain";
 import { getPrimaryInternalWorkspace } from "@/lib/workspace/workspace-membership";
+import { buildCreateWorkspacePayload } from "@/lib/workspace/create-workspace-payload";
 import {
   useCreateWorkspace,
   useSelectWorkspace,
@@ -120,9 +121,11 @@ export default function CreateWorkspaceDemoPage() {
   const internalWorkspaceIssue = hasPrimaryInternalWorkspace
     ? `Your account already has one internal workspace membership in ${primaryInternalWorkspace?.name || "a workspace"}. Open it, or join another workspace by request or invitation instead.`
     : null;
+  // rawDomain, not emailDomain: getDomainFromEmail deliberately returns null for a public
+  // domain, so gating on it would keep refusing gmail.com after WT-417 removed the rule.
   const canCreate =
     isAuthenticated &&
-    !!emailDomain &&
+    !!rawDomain &&
     !accountIssue &&
     !internalWorkspaceIssue &&
     !workspacesLoading;
@@ -152,12 +155,19 @@ export default function CreateWorkspaceDemoPage() {
       return;
     }
 
-    if (!emailDomain) {
+    // WT-418, and the second half of it. The rule that a public-domain account may not found a
+    // workspace was relaxed in three places and missed in two — both here.
+    const payload = buildCreateWorkspacePayload(user?.email, {
+      name: values.name,
+      logoUrl: values.logoUrl,
+    });
+
+    if (!payload) {
       setServerError({
         kind: "account",
         message:
           accountIssue ??
-          "A valid business email is required before creating a workspace.",
+          "A valid email address is required before creating a workspace.",
       });
       return;
     }
@@ -165,12 +175,7 @@ export default function CreateWorkspaceDemoPage() {
     setServerError(null);
 
     try {
-      const workspace = await createWorkspace.mutateAsync({
-        name: values.name.trim(),
-        logoUrl: values.logoUrl?.trim() || null,
-        verifiedDomains: [emailDomain],
-        requireVerifiedDomainForInternal: true,
-      });
+      const workspace = await createWorkspace.mutateAsync(payload);
 
       const selection = await selectWorkspace.mutateAsync(workspace.id);
       applySelectedWorkspace(selection, setActiveWorkspace);
@@ -270,14 +275,21 @@ export default function CreateWorkspaceDemoPage() {
                 {slugPreview || "workspace-name"}
               </span>
             </div>
-            {emailDomain && (
+            {/* Say which of the two workspaces this will be, rather than saying nothing for one
+                of them. A personal-domain workspace is not a degraded corporate one — it simply
+                has no domain to claim, and claiming is a separate permission from founding. */}
+            {emailDomain ? (
               <p className="text-[11px] text-ink-muted mt-1">
                 Workspace will be verified for{" "}
                 <span className="font-semibold text-foreground">
                   {emailDomain}
                 </span>
               </p>
-            )}
+            ) : isPublicDomain ? (
+              <p className="text-[11px] text-ink-muted mt-1">
+                Teammates join by invitation — a personal email domain cannot be verified.
+              </p>
+            ) : null}
           </div>
 
           {/* Submit Button */}
@@ -305,8 +317,11 @@ function getAccountIssue(
 ): string | null {
   if (!email) return "Signed-in account email is missing.";
   if (!rawDomain) return "Signed-in account email is invalid.";
-  if (isPublicDomain)
-    return "Use a business email or join by invitation. Public email domains cannot be system-verified for an Enterprise Workspace.";
+  // WT-417: a public domain no longer blocks creation. It still cannot be system-VERIFIED —
+  // verifying gmail.com would make every Gmail address Internal to the workspace — and the
+  // server refuses that separately, so the only thing this screen needs to stop is a missing
+  // or malformed account email.
+  void isPublicDomain;
   return null;
 }
 

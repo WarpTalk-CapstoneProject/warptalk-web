@@ -4,6 +4,7 @@ import type {
   VoiceProfileDto,
   CreateVoiceProfileRequest,
   VoiceCatalogItemDto,
+  SetDubVoiceRequest,
   SetPreferredVoiceRequest,
   VoiceConsentStatusDto,
 } from "@/types/voice-profile";
@@ -55,6 +56,21 @@ export const VoiceProfileService = {
       request,
     );
     return status === 204 || !data ? null : (data as VoiceProfileDto);
+  },
+
+  /** WT-396 — the voice this user is DUBBED IN. Null means clone them live in the meeting. */
+  async dubVoice(): Promise<string | null> {
+    const { data } = await apiClient.get<{ voiceId: string | null }>(API.voiceProfiles.dubVoice);
+    return data.voiceId ?? null;
+  },
+
+  /** Pass a null voiceId to clear the choice and go back to live cloning. */
+  async setDubVoice(request: SetDubVoiceRequest): Promise<string | null> {
+    const { data } = await apiClient.put<{ voiceId: string | null }>(
+      API.voiceProfiles.dubVoice,
+      request,
+    );
+    return data.voiceId ?? null;
   },
 
 };

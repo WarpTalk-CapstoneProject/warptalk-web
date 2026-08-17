@@ -57,6 +57,18 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
 
+/**
+ * The six columns below are carried, not edited, on this screen.
+ *
+ * `PUT /plans/{id}` replaces the whole plan — `UpdateFromRequest` assigns every column from the
+ * body — so a field this form never sent was not "left alone". It arrived as the C# record's
+ * default and overwrote what was stored: overage cap and rollover to 0, overage price to 4.0,
+ * invoice terms to 15 days, grace to 360 hours. Renaming a plan here silently rewrote its overage
+ * economics.
+ *
+ * They are held in form state and written straight back so that stops happening. The editor for
+ * them is /admin/plans, which is the portal page this screen predates.
+ */
 interface PlanFormState {
   name: string;
   slug: string;
@@ -65,6 +77,12 @@ interface PlanFormState {
   currency: string;
   billingCycle: string;
   creditsPerCycle: number;
+  overageCapCredits: number;
+  overagePricePerCredit: number;
+  lowBalanceThresholdCredits: number;
+  rolloverCapCredits: number;
+  invoiceTermsDays: number;
+  invoiceGraceHours: number;
   maxParticipants: number;
   maxLanguages: number;
   voiceCloneEnabled: boolean;
@@ -85,6 +103,14 @@ const initialFormState: PlanFormState = {
   currency: "VND",
   billingCycle: "monthly",
   creditsPerCycle: 1000,
+  // Mirrors SubscriptionConstants.PlanDefaults, so a plan created here starts where the server
+  // would have put it rather than somewhere this file invented.
+  overageCapCredits: 0,
+  overagePricePerCredit: 4,
+  lowBalanceThresholdCredits: 0,
+  rolloverCapCredits: 0,
+  invoiceTermsDays: 15,
+  invoiceGraceHours: 360,
   maxParticipants: 5,
   maxLanguages: 3,
   voiceCloneEnabled: false,
@@ -135,7 +161,8 @@ export default function AdminPlansPage() {
   // Queries
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["admin-plans"],
-    queryFn: () => billingService.getPlans(),
+    // Admin list: deactivated plans must stay visible here or they can never be re-enabled.
+    queryFn: () => billingService.getAllPlansForAdmin(),
   });
 
   // Mutations
@@ -193,6 +220,13 @@ export default function AdminPlansPage() {
       currency: plan.currency || "VND",
       billingCycle: plan.billingCycle || "monthly",
       creditsPerCycle: plan.creditsPerCycle || 0,
+      // Read as stored and written back unchanged — see the note on PlanFormState.
+      overageCapCredits: plan.overageCapCredits,
+      overagePricePerCredit: plan.overagePricePerCredit,
+      lowBalanceThresholdCredits: plan.lowBalanceThresholdCredits,
+      rolloverCapCredits: plan.rolloverCapCredits,
+      invoiceTermsDays: plan.invoiceTermsDays,
+      invoiceGraceHours: plan.invoiceGraceHours,
       maxParticipants: plan.maxParticipants || 0,
       maxLanguages: plan.maxLanguages || 0,
       voiceCloneEnabled: plan.voiceCloneEnabled || false,

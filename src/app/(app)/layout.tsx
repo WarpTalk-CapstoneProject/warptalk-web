@@ -25,6 +25,7 @@ import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 // No WorkspaceTabs here. The tab strip was deliberately removed from the app header (see
 // "fix(layout): remove workspace tabs from app header"); development still carries it, and that
 // removal is kept. The banner below is new and is kept.
+import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
 import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
 import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
@@ -580,7 +581,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               ) : null}
               </main>
 
-              <MeetingStartedBanner />
+              {/* Both meeting notices live in ONE stack, and the stack — not either card — owns the
+                  corner. They are independent (being invited to Thursday's review does not stop this
+                  morning's standup going live), so both can be on screen at once; positioned
+                  separately they would have been drawn on top of each other. */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col items-end gap-2 p-4">
+                <MeetingInviteBanner />
+                <MeetingStartedBanner />
+              </div>
             </div>
 
             {/* Right Sidebar (Context/Properties) */}

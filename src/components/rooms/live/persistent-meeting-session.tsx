@@ -57,9 +57,9 @@ import {
   wasLanguagePickerShown,
 } from "@/lib/meeting/language-picker-shown";
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
-import { shouldAutoStartRecording } from "@/lib/meeting/auto-recording";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
+import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
@@ -73,6 +73,7 @@ import type {
   TranslationRoomStateDto,
   TranslationTextDto,
   VoiceOptionDto,
+  VoiceCloneStateDto,
 } from "@/types/realtime";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
@@ -102,6 +103,7 @@ import {
   resolveListenLanguage,
   resolveSpeakLanguage,
 } from "@/lib/language/participant-language-preference";
+import { waitForReadyConnection } from "@/lib/meeting/wait-for-hub-connection";
 import {
   MINI_MEETING_IDLE_WARNING_MS,
   evaluateIdleMeeting,
@@ -136,6 +138,7 @@ import {
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
+import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
 
@@ -283,6 +286,7 @@ export function PersistentMeetingSession({
   // the mini bar — and these values follow it.
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
+
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] =
     useState(false);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
@@ -309,12 +313,21 @@ export function PersistentMeetingSession({
     });
   }
 
-  const handleNoiseSuppressionError = useCallback(() => {
+  /**
+   * Enhanced noise suppression did not start. Put the toggle back down and say WHY. WT-427.
+   *
+   * This used to take no argument, so useTrackProcessors' careful distinction between "threw
+   * while attaching" and "attached but refused to enable" was discarded one function later and
+   * everybody got the same line: "enhanced suppression will retry after reload."
+   *
+   * For an unentitled LiveKit project that sentence is false — reloading cannot change it — and a
+   * user told to reload will reload, repeatedly, and report the feature as broken. Which is the
+   * report we got.
+   */
+  const handleNoiseSuppressionError = useCallback((error: unknown) => {
     setNoiseSuppressionEnabled(false);
-    toast.error("Enhanced noise suppression is unavailable.", {
-      description:
-        "Browser noise suppression remains enabled; enhanced suppression will retry after reload.",
-    });
+    const failure = describeNoiseSuppressionFailure(error);
+    toast.error(failure.title, { description: failure.detail });
   }, []);
 
   function handleToggleBackgroundBlur() {
@@ -368,6 +381,9 @@ export function PersistentMeetingSession({
   );
   const updateParticipantSpeakLanguage = useTranslationRoomStore(
     (state) => state.updateParticipantSpeakLanguage,
+  );
+  const updateParticipantListenLanguage = useTranslationRoomStore(
+    (state) => state.updateParticipantListenLanguage,
   );
   const { rightSidebarOpen, setLeftSidebarOpen, setRightSidebarOpen } =
     useUIStore();
@@ -434,6 +450,13 @@ export function PersistentMeetingSession({
     role === "admin" ||
     role === "owner",
   );
+  // WT-428: read inside the hub's ParticipantWaiting callback, which is registered once and
+  // would otherwise close over the first render's value — where isHost is still false because
+  // the room query has not resolved. Same reasoning as currentUserIdRef.
+  const isHostRef = useRef(isHost);
+  useEffect(() => {
+    isHostRef.current = isHost;
+  }, [isHost]);
   // Only the actual host may START the room. Workspace admins/owners get host-like
   // UI privileges (isHost) but the backend rejects a start from anyone whose id != room.hostId
   // with 403, so the auto-start below must gate on true host identity — not workspace role.
@@ -703,7 +726,24 @@ export function PersistentMeetingSession({
   // session storage for this room: direct navigation to /room/{id}, a reload, a second tab.
   // Without it the client had nothing but the room default to fall back on, and a room
   // created as [en, vi] (WT-297) then handed everyone a listen language of "vi".
+  // WT-420: what the clone pipeline is doing to this participant's microphone. Nothing in a
+  // meeting reported this before — the worker logged it, and a whole test session concluded
+  // cloning was broken while it was logging score 1.0.
+  const [cloneCaptureState, setCloneCaptureState] = useState<VoiceCloneStateDto | null>(null);
+  // See VoiceCloneStateChanged: how long a clip refusal owns the status panel.
+  const cloneRejectionHoldUntilRef = useRef(0);
+  // Read inside the hub callback, which is registered once and would otherwise close over the
+  // user id from the first render.
+  const currentUserIdRef = useRef<string | undefined>(undefined);
+
   const currentUserId = user?.id;
+
+  // In an effect, not during render: assigning a ref while rendering is a tearing hazard, and
+  // this one exists purely so the hub callback below — registered once — does not close over the
+  // user id from the first render.
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
   const myParticipantRecord = useMemo(
     () =>
       currentUserId
@@ -740,10 +780,23 @@ export function PersistentMeetingSession({
   // and the participants query are in flight; isResolvedSpeakLanguage guards every place
   // that would otherwise send it onward.
   const sourceLanguage = resolveSpeakLanguage(languageSources.speak, room);
+
+  // Whether anything this participant says is actually dubbed for somebody. Routes exist per
+  // (speaker, listener) pair and only where the languages differ, so in a room where nobody
+  // listens in another language there is no route out of them and Voice Clone cannot apply.
+  // See lib/meeting/dub-audience.ts for the production case this came from.
+  const voiceCloneHasAudience = useMemo(
+    () => hasDubAudience(sourceLanguage, user?.id, participants),
+    [sourceLanguage, user?.id, participants],
+  );
   // Listen (output) language — see the media bar's language dropdown +
   // TranslationRoomHub.SetListenLanguage. Always concrete: a listener with no language has
   // nothing to receive.
-  const listenLanguage = resolveListenLanguage(languageSources.listen, room);
+  // sourceLanguage passed as the third argument: with nothing chosen, a participant hears the
+  // language they speak rather than the room's other target. A default must not manufacture a
+  // split — that is what made the merged picker invisible, because it reads a mismatched pair as
+  // a deliberate choice.
+  const listenLanguage = resolveListenLanguage(languageSources.listen, room, sourceLanguage);
   const targetLanguage = listenLanguage;
 
   // Read inside the TranslationTextReceived handler below instead of closing over
@@ -795,6 +848,22 @@ export function PersistentMeetingSession({
   const translationConnectionRef = useRef<
     import("@microsoft/signalr").HubConnection | null
   >(null);
+
+  // Publish the REAL mic state to the roster, whenever it changes and however it changed.
+  //
+  // Keyed on `microphoneEnabled` on purpose: LocalMediaController mirrors that state from the
+  // LiveKit track itself (TrackMuted/TrackUnmuted), so a mute that arrived by any route — the
+  // button, ForceMuted, the browser revoking the device — flows through here identically. This
+  // is the missing publisher for the hub's ToggleMute: without it ParticipantMuteChanged never
+  // fired and every roster showed the join-time icon forever.
+  useEffect(() => {
+    const connection = translationConnectionRef.current;
+    if (!roomId || connection?.state !== HubConnectionState.Connected) return;
+    connection.invoke("ToggleMute", roomId, !microphoneEnabled).catch(() => {
+      // The roster icon is a courtesy; a failed sync must not surface as a meeting error.
+    });
+  }, [microphoneEnabled, roomId]);
+
   // Last listen language actually sent to the hub — skips a redundant SetListenLanguage
   // call when this effect re-runs without the value having changed.
   const appliedListenLanguageRef = useRef<string | null>(null);
@@ -808,25 +877,21 @@ export function PersistentMeetingSession({
     (async () => {
       // The hub connection may still be mid-handshake (e.g. this is the freshly-resolved
       // room default, arriving a beat after the SignalR connection kicked off) — retry
-      // briefly rather than silently dropping the language on the floor. Same backoff
-      // shape as the join retry below.
-      for (const delay of [0, 300, 800, 1500]) {
-        if (cancelled) return;
-        if (delay)
-          await new Promise((resolve) => window.setTimeout(resolve, delay));
-        const connection = translationConnectionRef.current;
-        if (connection?.state === HubConnectionState.Connected) {
-          try {
-            await connection.invoke(
-              "SetListenLanguage",
-              roomId,
-              listenLanguage,
-            );
-          } catch {
-            toast.error("Could not update listen language.");
-          }
-          return;
-        }
+      // briefly rather than silently dropping the language on the floor.
+      //
+      // WT-434: through the shared helper, whose cancellation survives the sleep. The
+      // inlined loop here checked `cancelled` only before sleeping, so a value superseded
+      // mid-wait was still sent — 300ms after mount, over the newer one.
+      const connection = await waitForReadyConnection({
+        getConnection: () => translationConnectionRef.current,
+        isReady: (hub) => hub.state === HubConnectionState.Connected,
+        isCancelled: () => cancelled,
+      });
+      if (!connection || cancelled) return;
+      try {
+        await connection.invoke("SetListenLanguage", roomId, listenLanguage);
+      } catch {
+        toast.error("Could not update listen language.");
       }
     })();
 
@@ -860,19 +925,18 @@ export function PersistentMeetingSession({
 
     let cancelled = false;
     (async () => {
-      for (const delay of [0, 300, 800, 1500]) {
-        if (cancelled) return;
-        if (delay)
-          await new Promise((resolve) => window.setTimeout(resolve, delay));
-        const connection = translationConnectionRef.current;
-        if (connection?.state === HubConnectionState.Connected) {
-          try {
-            await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
-          } catch {
-            toast.error("Could not update speak language.");
-          }
-          return;
-        }
+      // WT-434: see the listen effect above — this is the side whose stale resend put
+      // speak=en on a Vietnamese speaker's row and fed STT the wrong hint.
+      const connection = await waitForReadyConnection({
+        getConnection: () => translationConnectionRef.current,
+        isReady: (hub) => hub.state === HubConnectionState.Connected,
+        isCancelled: () => cancelled,
+      });
+      if (!connection || cancelled) return;
+      try {
+        await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
+      } catch {
+        toast.error("Could not update speak language.");
       }
     })();
 
@@ -922,29 +986,26 @@ export function PersistentMeetingSession({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      for (const delay of [0, 300, 800, 1500]) {
-        if (cancelled) return;
-        if (delay)
-          await new Promise((resolve) => window.setTimeout(resolve, delay));
-        const connection = translationConnectionRef.current;
-        if (connection?.state === HubConnectionState.Connected) {
-          try {
-            const catalog = await connection.invoke<VoiceOptionDto[]>(
-              "GetVoiceCatalog",
-              targetLanguage,
-            );
-            if (!cancelled) {
-              setVoiceCatalogState({
-                language: targetLanguage,
-                items: catalog ?? [],
-              });
-            }
-          } catch {
-            // Non-critical — the picker just shows no extra options; the automatic
-            // per-speaker default voice keeps working regardless.
-          }
-          return;
+      const connection = await waitForReadyConnection({
+        getConnection: () => translationConnectionRef.current,
+        isReady: (hub) => hub.state === HubConnectionState.Connected,
+        isCancelled: () => cancelled,
+      });
+      if (!connection || cancelled) return;
+      try {
+        const catalog = await connection.invoke<VoiceOptionDto[]>(
+          "GetVoiceCatalog",
+          targetLanguage,
+        );
+        if (!cancelled) {
+          setVoiceCatalogState({
+            language: targetLanguage,
+            items: catalog ?? [],
+          });
         }
+      } catch {
+        // Non-critical — the picker just shows no extra options; the automatic
+        // per-speaker default voice keeps working regardless.
       }
     })();
 
@@ -965,23 +1026,22 @@ export function PersistentMeetingSession({
 
     let cancelled = false;
     (async () => {
-      for (const delay of [0, 300, 800, 1500]) {
-        if (cancelled) return;
-        if (delay)
-          await new Promise((resolve) => window.setTimeout(resolve, delay));
-        const connection = translationConnectionRef.current;
-        if (connection?.state === HubConnectionState.Connected) {
-          try {
-            await connection.invoke(
-              "SetVoicePreference",
-              roomId,
-              voicePreference || "",
-            );
-          } catch {
-            toast.error("Could not update voice preference.");
-          }
-          return;
-        }
+      // WT-434: same stale-resend hazard as the language effects — a voice pick superseded
+      // during the handshake wait must not be sent late over the newer one.
+      const connection = await waitForReadyConnection({
+        getConnection: () => translationConnectionRef.current,
+        isReady: (hub) => hub.state === HubConnectionState.Connected,
+        isCancelled: () => cancelled,
+      });
+      if (!connection || cancelled) return;
+      try {
+        await connection.invoke(
+          "SetVoicePreference",
+          roomId,
+          voicePreference || "",
+        );
+      } catch {
+        toast.error("Could not update voice preference.");
       }
     })();
 
@@ -1470,6 +1530,14 @@ export function PersistentMeetingSession({
       addLiveParticipant(participant);
       void refetchParticipants();
     });
+    // The other half of a wire that was never connected. The hub has carried ToggleMute /
+    // ParticipantMuteChanged for months, and the store has carried updateParticipantMute — with
+    // zero callers on either side. So the roster's mic icon showed whatever was true at join
+    // (always unmuted) for the rest of the meeting: "e tắt mic a Tuấn nma icon vẫn là có". The
+    // publisher for our own state is the effect on microphoneEnabled below.
+    connection.on("ParticipantMuteChanged", (userId: string, isMuted: boolean) => {
+      useTranslationRoomStore.getState().updateParticipantMute(userId, isMuted);
+    });
     connection.on("ParticipantLeft", (userId: string) => {
       removeLiveParticipant(userId);
       void refetchParticipants();
@@ -1528,7 +1596,14 @@ export function PersistentMeetingSession({
       if (endedByMeRef.current) return;
       toast.info("This meeting has ended.");
       onMeetingClosed();
-      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+      // WT-449: the same wrap-up page the host lands on, not the rooms list.
+      //
+      // Ending a meeting used to send the host to /ended — recording, summary, artifacts and
+      // the feedback dialog — and everybody ELSE to a list of rooms. So the one screen built to
+      // close a meeting out was shown only to the person who least needed asking, and every
+      // other participant's meeting simply vanished mid-sentence. The artifacts on that page
+      // are readable by every participant, and the feedback being collected is theirs.
+      router.replace(buildMeetingEndedPath(activeWorkspaceSlug, roomId));
     });
 
     // The host's Approve in the People panel is a REST call (PATCH .../participants/{id}/admit)
@@ -1549,6 +1624,23 @@ export function PersistentMeetingSession({
         retryMeetingConnectionRef.current();
       });
     });
+
+    // WT-428 (Linear): the knock. Broadcast to the whole room group; only the HOST acts on it —
+    // a toast naming who is at the door, plus an immediate roster refetch so the People panel's
+    // Approve button appears now rather than on the next 3s poll. Non-hosts ignore it: they can
+    // neither admit nor deny, and a toast they cannot act on is noise.
+    connection.on(
+      "ParticipantWaiting",
+      (waitingUserId: string, waitingDisplayName: string) => {
+        if (!isHostRef.current || waitingUserId === currentUserIdRef.current) return;
+        toast.info(
+          `${waitingDisplayName || "Someone"} is waiting to join — approve them from the People panel.`,
+        );
+        void queryClient.invalidateQueries({
+          queryKey: ["translationRooms", roomId, "participants"],
+        });
+      },
+    );
 
     connection.on("HandRaised", (userId: string, isRaised: boolean) => {
       setHandRaisedInStore(userId, isRaised);
@@ -1572,6 +1664,42 @@ export function PersistentMeetingSession({
         updateParticipantSpeakLanguage(userId, speakLanguage);
       },
     );
+    // The listen half. The hub has broadcast this ("ParticipantLanguageChanged" — the event
+    // predates the speak/listen split, hence the unqualified name) for as long as the speak
+    // one, and nothing here listened. hasDubAudience() reads the OTHERS' listen languages, so
+    // without this handler the Voice panel's "Nobody is listening in another language" line
+    // was frozen at whatever the participants query returned at join — in the 16 Aug test it
+    // sat on "nobody is listening" through every language change the partner made, while the
+    // backend had already regenerated the routes. The one fact that would have told the team
+    // the mesh was fine was the one fact that never updated.
+    connection.on(
+      "ParticipantLanguageChanged",
+      (userId: string, listenLanguage: string) => {
+        updateParticipantListenLanguage(userId, listenLanguage);
+      },
+    );
+
+    // WT-420. Broadcast to the whole room because the payload names its own speaker and the
+    // gateway has no userId -> connection map; only the state about YOU is kept, because the only
+    // person who can act on "your microphone is too quiet" is you.
+    connection.on("VoiceCloneStateChanged", (state: VoiceCloneStateDto) => {
+      if (!state?.speakerId || state.speakerId !== currentUserIdRef.current) return;
+      // A rejection must survive long enough to be read. The worker's sliding window keeps
+      // capturing after it refuses a clip, so the very next `capturing` event — often under a
+      // second later — replaced the refusal on screen. What the speaker saw was the bar filling
+      // to 20s, snapping back and filling again, with the reason flashing by unreadably: "thu
+      // xong 1 lần 20s r, r revert lại thu lại tiếp". The refusal holds the panel for a few
+      // seconds; the capture that continues underneath catches the display up afterwards.
+      if (state.reason?.startsWith("clip_rejected:")) {
+        cloneRejectionHoldUntilRef.current = Date.now() + 6_000;
+        setCloneCaptureState(state);
+        return;
+      }
+      if (state.reason === "capturing" && Date.now() < cloneRejectionHoldUntilRef.current) {
+        return;
+      }
+      setCloneCaptureState(state);
+    });
 
     // WT-04
     connection.on("RoomLockChanged", (locked: boolean) => {
@@ -2099,38 +2227,18 @@ export function PersistentMeetingSession({
     });
   }
 
-  // Recording starts on its own, once, for the host.
+  // RECORDING IS NEVER STARTED FOR YOU.
   //
-  // The reason is not convenience: a summary's timestamps are only useful if there is a
-  // recording behind them, and leaving the button to whoever remembered it meant most meetings
-  // produced citations pointing at nothing. Participants are told by toast the moment it
-  // starts — see the RecordingStateChanged handler — so nobody is recorded without being told.
+  // It used to start on its own for the room's host, on the argument that a summary's timestamps
+  // need a recording to jump to. That reasoning was about the product's convenience and the cost
+  // was somebody else's: every meeting was recorded whether or not anyone had decided to record
+  // it, and the only notice was a toast that appeared after the fact. Consent to being recorded
+  // is not something a default gets to assume, and the meeting record is perfectly usable without
+  // it — the transcript and the summary come from the audio pipeline, not from the egress file.
   //
-  // The ref, not state: it must be set before the mutation resolves, or a re-render in the gap
-  // fires a second start against an egress that is already coming up.
-  const autoRecordAttemptedRef = useRef(false);
-  useEffect(() => {
-    if (
-      !shouldAutoStartRecording({
-        isHost,
-        isConnected: Boolean(meetingSession?.token) && !isMeetingJoining,
-        isRecording,
-        hasAttempted: autoRecordAttemptedRef.current,
-      })
-    ) {
-      return;
-    }
-    autoRecordAttemptedRef.current = true;
-    setRecordingMutation.mutate("start", {
-      onSuccess: (state) => setIsRecording(state.recording),
-      // Deliberately silent. A host who did not ask for this does not need an error about it,
-      // and the manual button still reports its own failures.
-      onError: () => {},
-    });
-    // setRecordingMutation is a fresh object on every render, so depending on it would re-run
-    // this effect forever. The ref is what makes it run once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, meetingSession?.token, isMeetingJoining, isRecording]);
+  // The button in the host controls is now the only way a recording starts (handleToggleRecording
+  // below). Do not reintroduce an effect here: an automatic start is indistinguishable, from the
+  // outside, from a deliberate one.
 
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
@@ -2510,6 +2618,8 @@ export function PersistentMeetingSession({
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
+                    cloneCapture={cloneCaptureState}
+          voiceCloneHasAudience={voiceCloneHasAudience}
                     voiceEnabled={voiceEnabled}
                     handRaised={handRaised}
                     onCopyText={copyText}
@@ -2544,6 +2654,17 @@ export function PersistentMeetingSession({
                     }
                     onChangeListenLanguage={handleChangeListenLanguage}
                     onChangeSpeakLanguage={handleChangeSpeakLanguage}
+                    // WT-434: a bar pick becomes the remembered profile. Only the language
+                    // MODAL saved settings before, so a profile written by the old two-column
+                    // UI (speak=vi, listen=en) was fossilized — every later meeting's
+                    // remembered-language auto-apply resurrected the split however many times
+                    // the user picked one language in the bar.
+                    onLanguagePicked={(language) =>
+                      updateUserSettings.mutate({
+                        defaultSpeakLanguage: language,
+                        defaultListenLanguage: language,
+                      })
+                    }
                     onChangeVoicePreference={handleChangeVoicePreference}
                     onChangeVoiceCloneConsent={handleChangeVoiceCloneConsent}
                     onChangeVoiceEnabled={handleChangeVoiceEnabled}
@@ -2558,9 +2679,15 @@ export function PersistentMeetingSession({
                       isHost ? handleToggleMuteOnEntry : undefined
                     }
                     onMuteAll={isHost ? handleMuteAll : undefined}
-                    onToggleRecording={
-                      isHost ? handleToggleRecording : undefined
-                    }
+                    // Not gated on isHost, unlike the three host controls above it.
+                    //
+                    // Recording belongs to the room rather than to whoever booked it: the person
+                    // who needs the transcript timestamped is usually not the person who created
+                    // the meeting. MeetingRoomService.SetRecordingAsync accepts any participant
+                    // (IsInMeetingAsync), and every participant is told the moment it starts or
+                    // stops by the RecordingStateChanged toast above — that notice, not the
+                    // permission check, is what makes this safe to open up.
+                    onToggleRecording={handleToggleRecording}
                   />
                 </div>
                 <div data-meeting-exit-control className="shrink-0">

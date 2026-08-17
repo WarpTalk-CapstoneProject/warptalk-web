@@ -73,14 +73,20 @@ assert.match(
   "rows must link to the detail route",
 );
 
-// Detail tabs required by the approved design.
-for (const tab of ["overview", "knowledge", "members", "usage", "billing", "audit"]) {
+// Detail tabs. Knowledge was removed on purpose (2026-08-17): the portal reads a workspace's
+// operational facts, never its content — check-admin-knowledge-contract.mjs pins the absence.
+for (const tab of ["overview", "members", "usage", "billing", "audit"]) {
   assert.match(
     detail,
     new RegExp(`TabsTrigger value="${tab}"`),
     `workspace detail must expose the ${tab} tab`,
   );
 }
+assert.doesNotMatch(
+  detail,
+  /TabsTrigger value="knowledge"/,
+  "the knowledge tab must not come back — tenant content stays out of the portal",
+);
 
 // Lifecycle actions: explicit confirmation plus a mandatory reason.
 assert.match(detail, /WorkspaceLifecycleDialog/, "lifecycle actions must be confirmed");

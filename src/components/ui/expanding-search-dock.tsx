@@ -29,7 +29,9 @@ export function ExpandingSearchDock({
   inputClassName,
   iconButtonClassName,
   clearButtonClassName,
-  collapsedWidth = 36,
+  // 28, so the collapsed pill is the same circle as WorkspaceIconButton — 36 made it a
+  // visibly wider lozenge sitting between two round buttons.
+  collapsedWidth = 28,
   expandedWidth = 292,
 }: ExpandingSearchDockProps) {
   const [open, setOpen] = React.useState(Boolean(value));
@@ -48,7 +50,15 @@ export function ExpandingSearchDock({
       animate={{ width: open ? expandedWidth : collapsedWidth }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       className={cn(
-        "relative flex h-9 shrink-0 items-center overflow-hidden rounded-full border border-border bg-canvas/80 text-ink shadow-[0_8px_20px_rgba(15,15,15,0.04)] backdrop-blur-md",
+        // Collapsed, this has to be indistinguishable from the WorkspaceIconButton pair beside it —
+        // same 28px circle, same hairline, same absence of fill. It carried `bg-canvas/80`, a grey
+        // disc, so the search button read as a filled/selected state next to two outlined ones and
+        // the row looked like three controls from two different products.
+        //
+        // The fill returns only once there is text to read against, which is what focus-within and
+        // the open width already mark.
+        "relative flex h-[28px] shrink-0 items-center overflow-hidden rounded-full border border-border/60 text-ink shadow-sm transition-colors",
+        open ? "bg-surface-1" : "bg-transparent hover:bg-surface-2",
         "focus-within:border-neutral-400 focus-within:bg-surface-1",
         className
       )}
@@ -60,7 +70,7 @@ export function ExpandingSearchDock({
         aria-label={open ? "Focus search" : ariaLabel}
         onClick={() => setOpen(true)}
         className={cn(
-          "ml-1 size-7 rounded-full text-ink-muted hover:bg-neutral-100 hover:text-ink",
+          "ml-0.5 size-6 rounded-full text-muted-foreground hover:bg-transparent hover:text-foreground",
           iconButtonClassName
         )}
       >

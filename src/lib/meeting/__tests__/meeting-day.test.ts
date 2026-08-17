@@ -13,7 +13,9 @@ import {
   daysWithMeetings,
   isMeetingOver,
   isSameDay,
+  belongsToDay,
   isScheduledOn,
+  meetingDayOf,
   meetingsOn,
   shiftWeeks,
   startOfDay,
@@ -208,4 +210,85 @@ test("endOfMonth includes the last day's meetings, not midnight that morning", (
   const end = endOfMonth(new Date(2026, 7, 5));
   assert.equal(end.getHours(), 23);
   assert.equal(end.getMinutes(), 59);
+});
+
+// ── Which day a meeting belongs to ────────────────────────────────────────────
+//
+// `isScheduledOn` answers "was it BOOKED for this day" and says no for an instant meeting,
+// which is correct for that question. Using it as the meetings list's day filter meant every
+// ad-hoc room vanished the moment a day was selected — including one that was live right then.
+
+/** Only the fields these helpers read. */
+function held(
+  stamps: { scheduledAt?: string; startedAt?: string; createdAt?: string },
+) {
+  return { id: "r", ...stamps } as unknown as Parameters<typeof belongsToDay>[0];
+}
+
+const aug15 = new Date(2026, 7, 15);
+
+test("a booked meeting belongs to the day it was booked for", () => {
+  assert.equal(
+    belongsToDay(held({ scheduledAt: "2026-08-15T09:00:00", createdAt: "2026-08-01T09:00:00" }), aug15),
+    true,
+  );
+});
+
+test("an instant meeting belongs to the day it ran, not to no day at all", () => {
+  // The contrast with `isScheduledOn` above is the point: both answers are right, and the
+  // meetings list was asking the wrong question.
+  const instant = held({ startedAt: "2026-08-15T14:00:00", createdAt: "2026-08-15T13:59:00" });
+
+  assert.equal(isScheduledOn(instant, aug15), false);
+  assert.equal(belongsToDay(instant, aug15), true);
+});
+
+test("a meeting that was never started falls back to the day it was created", () => {
+  assert.equal(belongsToDay(held({ createdAt: "2026-08-15T08:00:00" }), aug15), true);
+});
+
+test("the booked day wins over the day it actually ran", () => {
+  // A meeting booked for Saturday that overran into Sunday is still everyone's Saturday
+  // meeting — that is the day it sits on in their calendar.
+  const late = held({ scheduledAt: "2026-08-15T23:30:00", startedAt: "2026-08-16T00:10:00" });
+
+  assert.equal(belongsToDay(late, aug15), true);
+  assert.equal(belongsToDay(late, new Date(2026, 7, 16)), false);
+});
+
+test("a meeting belongs to exactly one day", () => {
+  const room15 = held({ scheduledAt: "2026-08-15T09:00:00" });
+
+  assert.equal(belongsToDay(room15, new Date(2026, 7, 14)), false);
+  assert.equal(belongsToDay(room15, new Date(2026, 7, 16)), false);
+});
+
+test("an unparseable timestamp is no day rather than the epoch", () => {
+  // new Date("nonsense") is Invalid Date, and startOfDay of that is NaN — which would quietly
+  // land the room in a day bucket nothing can select.
+  assert.equal(meetingDayOf(held({ createdAt: "not-a-date" })), null);
+  assert.equal(belongsToDay(held({ createdAt: "not-a-date" }), aug15), false);
+});
+
+test("the strip marks the day an instant meeting ran, so the list can honour the mark", () => {
+  // A marked day that opens onto "No meetings found." is worse than no mark: the strip and the
+  // list have to be answering the same question.
+  const marked = daysWithMeetings([held({ startedAt: "2026-08-15T14:00:00" })]);
+
+  assert.equal(marked.has(startOfDay(aug15)), true);
+});
+
+test("a day's meetings include the instant ones, earliest first", () => {
+  const ordered = meetingsOn(
+    [
+      held({ startedAt: "2026-08-15T14:00:00" }),
+      held({ scheduledAt: "2026-08-15T09:00:00" }),
+    ],
+    aug15,
+  );
+
+  assert.deepEqual(
+    ordered.map((r) => (r as { scheduledAt?: string; startedAt?: string }).scheduledAt ?? null),
+    ["2026-08-15T09:00:00", null],
+  );
 });

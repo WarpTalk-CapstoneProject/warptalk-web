@@ -1,6 +1,6 @@
 import { translationRoomService } from "@/services/translation-room.service";
 import { mapArtifact } from "@/services/room-history.service";
-import { calculateMeetingDurationSeconds } from "@/lib/meeting/meeting-duration";
+import { resolveMeetingDurationSeconds } from "@/lib/meeting/room-history-mapping";
 import type { MeetingTimeState, MyMeetingItem, MyMeetingsResponse } from "@/types/myMeetings";
 import type { TranslationRoomDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
 
@@ -51,9 +51,22 @@ function mapMeeting(item: TranslationRoomHistoryItemDto): MyMeetingItem {
     endedAt: room.endedAt,
     // Null rather than 0 for anything unfinished. A meeting that has not ended has no duration, and
     // 0 would render as a real "0m" next to meetings that genuinely lasted no time.
-    durationSeconds: room.endedAt
-      ? calculateMeetingDurationSeconds(room.startedAt ?? room.createdAt, room.endedAt)
-      : null,
+    //
+    // WT-407: this used to fall back to `room.startedAt ?? room.createdAt`, which is the exact
+    // mistake resolveMeetingDurationSeconds was written to stop — its own docstring calls out
+    // "14h for a 20-minute meeting". createdAt is when the ROW was inserted, and a recurring
+    // occurrence is created days before its scheduled slot; cancelling it stamps endedAt without
+    // ever stamping startedAt, so the subtraction measured the wait, not the meeting. Production
+    // has rooms in exactly that shape (started_at NULL, ended_at set, status CANCELLED) and QA
+    // saw "50h 8m" on one.
+    //
+    // The history service already routed through the shared resolver. This is the second reader
+    // of the same rooms, and it was still on the old arithmetic — so the two screens disagreed
+    // about the same meeting.
+    //
+    // A meeting that never started keeps null rather than 0: "no duration" is the honest answer
+    // for something that never ran, and it matches the convention this field already uses above.
+    durationSeconds: resolveEndedMeetingDurationSeconds(room),
     sourceLanguage: room.sourceLanguage ?? "en",
     targetLanguages: room.targetLanguages,
     participants: item.participants.map((participant) => ({
@@ -69,6 +82,32 @@ function mapMeeting(item: TranslationRoomHistoryItemDto): MyMeetingItem {
     artifacts: item.artifacts.map(mapArtifact),
     isHost: room.isHost === true,
   };
+}
+
+
+/**
+ * Duration for a room that has finished, or null when there is nothing honest to report.
+ *
+ * Null covers two different "no duration" cases on purpose: a meeting still running, and a
+ * meeting that was cancelled before it ever started. Both would otherwise render as "0m", which
+ * reads as "it ran for no time" rather than "it never ran".
+ */
+function resolveEndedMeetingDurationSeconds(room: {
+  startedAt?: string | null;
+  endedAt?: string | null;
+  durationSeconds?: number | null;
+}): number | null {
+  if (!room.endedAt) return null;
+
+  const seconds = resolveMeetingDurationSeconds({
+    durationSeconds: room.durationSeconds,
+    startedAt: room.startedAt,
+    endedAt: room.endedAt,
+  });
+
+  // resolveMeetingDurationSeconds returns 0 for a room with no usable start. Here that is not a
+  // measurement, it is the absence of one.
+  return seconds > 0 ? seconds : null;
 }
 
 export const myMeetingsService = {

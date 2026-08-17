@@ -26,6 +26,11 @@ export interface WorkspaceKnowledgeChunkDto {
   aiRetrieval: boolean;
   /** A meeting's title on its summary, the term on a glossary entry. Null for documents. */
   sourceTitle: string | null;
+  /**
+   * When this chunk was indexed, epoch milliseconds. Null for anything stored before the
+   * indexer began stamping it — the listing sorts those last rather than guessing a time.
+   */
+  indexedAtMs: number | null;
 }
 
 /**

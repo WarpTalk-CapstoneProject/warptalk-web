@@ -117,7 +117,10 @@ export default function PersonalPreferencesPage() {
         ...DEFAULT_PREFERENCES,
         defaultSpeakLanguage: settingsData.defaultSpeakLanguage || DEFAULT_PREFERENCES.defaultSpeakLanguage,
         defaultListenLanguage: settingsData.defaultListenLanguage || DEFAULT_PREFERENCES.defaultListenLanguage,
-        voiceCloneEnabled: settingsData.voiceCloneEnabled ?? DEFAULT_PREFERENCES.voiceCloneEnabled,
+        // Off, not on, when the server did not say. This is biometric processing, and a
+        // fallback that shows a switch ON while the stored value is OFF tells the user their
+        // voice is being cloned when it is not (WT-401). AuthService's own default is false.
+        voiceCloneEnabled: settingsData.voiceCloneEnabled ?? false,
         micNoiseSuppression: settingsData.micNoiseSuppression ?? DEFAULT_PREFERENCES.micNoiseSuppression,
         defaultTranslationRoomType:
           settingsData.defaultTranslationRoomType || DEFAULT_PREFERENCES.defaultTranslationRoomType,

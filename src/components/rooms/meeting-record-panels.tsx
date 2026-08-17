@@ -15,9 +15,19 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/api/errors";
+import {
+  ARTIFACT_WITHHELD_FALLBACK,
+  isArtifactWithheld,
+} from "@/lib/meeting/artifact-denial";
+import {
+  describeSummaryAbsence,
+  summaryAbsenceMessage,
+} from "@/lib/meeting/summary-absence";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { resolveSummaryState } from "@/lib/meeting/room-history-mapping";
 import {
+  artifactDownloadFormat,
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
@@ -105,9 +115,14 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
       openArtifactDownload(data);
       if (artifact.consentRequired) onConsentGranted?.();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not download this file.",
-      );
+      // A host-only artifact is withheld, not broken — the same distinction the history preview
+      // and the Summary tab already draw. `error.message` was also the wrong source: on an axios
+      // failure it is "Request failed with status code 403", never the server's own sentence.
+      if (isArtifactWithheld(error)) {
+        toast.info(getErrorMessage(error, ARTIFACT_WITHHELD_FALLBACK));
+        return;
+      }
+      toast.error(getErrorMessage(error, "Could not download this file."));
     } finally {
       setBusyArtifactId(null);
     }
@@ -283,10 +298,20 @@ export function SummaryPanel({
     insufficientData: summary?.insufficientData,
     recentlyEnded,
   });
-  const isGenerating =
-    forceGenerating ||
-    isRewriting ||
-    summaryState === "generating";
+  const isGenerating = summaryState === "generating";
+
+  // "Not shared with you" is not "does not exist". The ROW existing is the fact this panel could
+  // not see: room artifacts default to HOST_ONLY and the history projection omits `content` for
+  // anyone the access policy refuses, while still listing the artifact. See
+  // lib/meeting/summary-absence.ts.
+  const summaryAbsence = describeSummaryAbsence({
+    isGenerating,
+    summaryState,
+    hasSummaryArtifact: Boolean(artifact),
+    hasParsedSummary: Boolean(summary),
+    insufficientData: summary?.insufficientData,
+  });
+
 
   useEffect(() => {
     // A rewrite that never lands must not leave the picker spinning forever — the summary
@@ -442,16 +467,30 @@ export function SummaryPanel({
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center">
           <div className="max-w-[360px]">
-            <ChatCircleText size={28} className="mx-auto text-ink-muted" />
+            {isGenerating ? (
+              <SpinnerGap
+                size={28}
+                className="mx-auto animate-spin text-ink-muted"
+              />
+            ) : (
+              <ChatCircleText size={28} className="mx-auto text-ink-muted" />
+            )}
+            {/* "Not shared with you" is not "does not exist".
+                A meeting listed `summary export · Ready` under Artifacts while this panel said the
+                meeting ended without one. The summary existed; room artifacts default to HOST_ONLY
+                and the history projection omits `content` for anyone the access policy refuses,
+                while still listing the row. This panel saw a body-less artifact and reported the
+                meeting as having produced none — sending the reader after a broken generator
+                instead of the host. See lib/meeting/summary-absence.ts. */}
             <h3 className="mt-4 text-[15px] font-semibold">
-              No summary output
+              {isGenerating
+                ? "Generating summary…"
+                : summaryAbsence === "withheld"
+                  ? "Summary not shared with you"
+                  : "No summary output"}
             </h3>
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
-              {summaryState === "failed"
-                ? "Summary generation did not complete for this meeting. The transcript is still available."
-                : summary?.insufficientData
-                  ? "There wasn't enough transcript content in this meeting to generate a summary."
-                  : "This meeting ended without a summary artifact."}
+              {summaryAbsenceMessage(summaryAbsence)}
             </p>
           </div>
         </div>
@@ -527,12 +566,14 @@ export function ArtifactsPanel({
               <ArtifactIcon artifact={artifact} />
             </span>
             <span className="min-w-0 flex-1">
+              {/* "Transcript", not "transcript export (TXT)". The server's title is generated
+                  from the type and repeats on the second line what the first line already
+                  said — and it is lowercase, because it is derived from an enum name. */}
               <span className="block truncate text-[12px] font-medium text-ink">
-                {artifact.title || artifactLabel(artifact.type)}
+                {artifactLabel(artifact.type)}
               </span>
               <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                {artifactLabel(artifact.type)} · {artifact.format || "—"} ·{" "}
-                {artifactStatusLabel(artifact)}
+                {artifactDownloadFormat(artifact)} · {artifactStatusLabel(artifact)}
               </span>
             </span>
             {busyArtifactId === artifact.id ? (

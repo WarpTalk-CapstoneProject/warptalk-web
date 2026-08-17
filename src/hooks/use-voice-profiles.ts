@@ -5,6 +5,7 @@ import { VoiceProfileService } from "@/services/voice-profile.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
   CreateVoiceProfileRequest,
+  SetDubVoiceRequest,
   SetPreferredVoiceRequest,
 } from "@/types/voice-profile";
 
@@ -13,6 +14,7 @@ export const VOICE_PROFILE_KEYS = {
   list: (userId: string | null | undefined) =>
     ["voiceProfiles", "list", userId ?? "anonymous"] as const,
   catalog: (language: string) => ["voiceProfiles", "catalog", language] as const,
+  dubVoice: () => ["voiceProfiles", "dubVoice"] as const,
 };
 
 export function useVoiceProfiles() {
@@ -57,6 +59,26 @@ export function useVoiceCatalog(language: string, enabled = true) {
     queryFn: () => VoiceProfileService.catalog(language),
     enabled: enabled && Boolean(language),
     staleTime: 60_000,
+  });
+}
+
+export function useDubVoice() {
+  return useQuery({
+    queryKey: VOICE_PROFILE_KEYS.dubVoice(),
+    queryFn: () => VoiceProfileService.dubVoice(),
+    staleTime: 60_000,
+  });
+}
+
+export function useSetDubVoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: SetDubVoiceRequest) => VoiceProfileService.setDubVoice(request),
+    onSuccess: () => {
+      // Both: the choice itself, and the profile list that shows which one is in use.
+      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.dubVoice() });
+      queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.lists() });
+    },
   });
 }
 

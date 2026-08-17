@@ -27,6 +27,7 @@ import {
   shouldEnterWaitingRoom,
 } from "@/lib/meeting/translation-room-access";
 import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
+import { useUserSettings } from "@/hooks/use-user-settings";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,10 @@ export function SetupRoomModal() {
   const setIsOpen = useUIStore((state) => state.setSetupRoomModalOpen);
   const user = useAuthStore((state) => state.user);
 
+  // WT-434: the join payload seeds from the user's remembered languages (see handleConfirm).
+  // Loading tolerated — an unresolved query only means the room-default fallback, which is
+  // exactly what this modal always sent before.
+  const { data: userSettings } = useUserSettings();
   const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(
     roomId ?? "",
   );
@@ -292,10 +297,20 @@ export function SetupRoomModal() {
     }
     const displayName = (user?.fullName || user?.email || "Participant").trim();
 
-    // Room configuration, not a user choice — see the note where the language state used
-    // to live. `resolveRoomDefaultListenLanguage` prefers a target that is not the source.
-    const speakLanguage = normalizeLanguageCode(room.sourceLanguage) || "en";
-    const listenLanguage = resolveRoomDefaultListenLanguage(room);
+    // WT-434: the USER's remembered languages, with the room's configuration only as the
+    // last resort. This used to send the room defaults unconditionally — "Room configuration,
+    // not a user choice" — which meant every join RESET the participant row: a Vietnamese
+    // speaker who had picked Vietnamese in an earlier meeting rejoined as speak=en, and STT,
+    // hinted "en", hallucinated English over their speech until they picked again. What goes
+    // on the wire here is also what lands in sessionStorage as this room's saved preference,
+    // so a wrong value here poisons every later in-meeting resolution too.
+    const speakLanguage =
+      normalizeLanguageCode(userSettings?.defaultSpeakLanguage) ||
+      normalizeLanguageCode(room.sourceLanguage) ||
+      "en";
+    const listenLanguage =
+      normalizeLanguageCode(userSettings?.defaultListenLanguage) ||
+      resolveRoomDefaultListenLanguage(room);
 
     setIsJoining(true);
     try {

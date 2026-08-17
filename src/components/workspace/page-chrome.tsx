@@ -258,6 +258,13 @@ export function WorkspaceEmptyState({
  * A titled block INSIDE a page — Billing's "Payment method", the dashboard's charts. Distinct from
  * a page header: it is a card with a 15px heading, not a 30px page title, so a page made of four
  * of them does not read as four pages stacked.
+ *
+ * The card is `bg-surface-1` — the SAME white as the page under it, separated by its border alone.
+ * It was `bg-canvas`, a grey fill, and the owner's complaint was that the cards read as grey
+ * patches on a white page. White-on-white with a hairline is the shape every reference surface
+ * uses; it also keeps a card from looking like a disabled input. Nested boxes INSIDE a card
+ * (hint blocks, icon tiles, progress tracks) still take a grey — that contrast is what gives them
+ * their level, and it only works while the card itself is white.
  */
 export function WorkspaceSection({
   title,
@@ -275,7 +282,7 @@ export function WorkspaceSection({
   return (
     <section
       className={cn(
-        "rounded-[14px] border border-border bg-canvas p-4 shadow-linear",
+        "rounded-[14px] border border-border bg-surface-1 p-4 shadow-linear",
         className,
       )}
     >

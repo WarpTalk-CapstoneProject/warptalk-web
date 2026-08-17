@@ -16,7 +16,8 @@ type BeamsProps = {
   className?: string;
 };
 
-type ThreeModule = typeof import("three");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ThreeModule = any;
 
 const noiseGLSL = `
 float random (in vec2 st) { return fract(sin(dot(st.xy,vec2(12.9898,78.233)))*43758.5453123); }
@@ -229,6 +230,7 @@ export function Beams({
     let cleanup: (() => void) | undefined;
 
     async function mount() {
+      // @ts-expect-error - optional three package
       const THREE = await import("three");
       if (cancelled || !containerRef.current) return;
 
@@ -249,7 +251,8 @@ export function Beams({
 
       const directionalLight = new THREE.DirectionalLight(lightColor, 1);
       directionalLight.position.set(0, 3, 10);
-      const shadowCamera = directionalLight.shadow.camera as import("three").OrthographicCamera;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const shadowCamera = directionalLight.shadow.camera as any;
       shadowCamera.top = 24;
       shadowCamera.bottom = -24;
       shadowCamera.left = -24;

@@ -8,6 +8,7 @@ import {
   hasAnyFact,
   initialCursorStack,
   KNOWLEDGE_PAGE_SIZE,
+  orderKnowledgeChunks,
   popCursor,
   pushCursor,
   shouldShowPager,
@@ -31,6 +32,7 @@ const chunk = (over: Partial<WorkspaceKnowledgeChunkDto> = {}): WorkspaceKnowled
   deletionState: null,
   aiRetrieval: true,
   sourceTitle: null,
+  indexedAtMs: null,
   ...over,
 });
 
@@ -177,4 +179,124 @@ test("hasAnyFact separates 'no facts on these rows' from 'no rows'", () => {
 
 test("an empty-string fact does not count as a fact", () => {
   assert.equal(hasAnyFact([chunk({ fact: "" })]), false);
+});
+
+// ── Ordering ──────────────────────────────────────────────────────────────────
+//
+// The defect these cover: the page sorted sources by NAME, so the Source column read
+// "a", "â", "ac", "ac", "ac" and the meeting that had just finished was somewhere in the
+// middle of an alphabet. A page read to answer "what do we know now" has to start at the top.
+
+const meeting = (title: string, indexedAtMs: number | null, chunkId: string) =>
+  chunk({
+    chunkId,
+    sourceType: "meeting_summary",
+    documentId: null,
+    documentName: null,
+    sourceTitle: title,
+    chunkIndex: null,
+    indexedAtMs,
+  });
+
+test("the newest source comes first, not the alphabetically first one", () => {
+  // "a" would win on a localeCompare and lose on a clock, which is the whole bug.
+  const ordered = orderKnowledgeChunks([
+    meeting("a", 1_000, "old"),
+    meeting("zulu", 9_000, "new"),
+  ]);
+
+  assert.deepEqual(
+    ordered.map((row) => row.chunkId),
+    ["new", "old"],
+  );
+});
+
+test("a source's facts stay together even when another source was indexed between them", () => {
+  const ordered = orderKnowledgeChunks([
+    meeting("standup", 5_000, "standup-1"),
+    meeting("retro", 7_000, "retro-1"),
+    meeting("standup", 5_000, "standup-2"),
+  ]);
+
+  assert.deepEqual(
+    ordered.map((row) => row.chunkId),
+    ["retro-1", "standup-1", "standup-2"],
+  );
+});
+
+test("a group is as new as its newest chunk, not as its first one", () => {
+  // If the group's stamp were taken from whichever row arrived first in the page, "slow"
+  // would sort below "quick" despite holding the most recent fact on the page.
+  const ordered = orderKnowledgeChunks([
+    meeting("slow", 1_000, "slow-old"),
+    meeting("quick", 4_000, "quick-only"),
+    meeting("slow", 9_000, "slow-new"),
+  ]);
+
+  assert.equal(ordered[0]?.sourceTitle, "slow");
+  assert.equal(ordered[2]?.sourceTitle, "quick");
+});
+
+test("undated rows sort last rather than being treated as brand new or ancient", () => {
+  // Everything indexed before the producer stamped a time is genuinely undated. Calling that
+  // 0 buries it under rows it may well be newer than; calling it now floats stale rows to the
+  // top of a list whose entire purpose is recency. Last, as a block, is the honest answer.
+  const ordered = orderKnowledgeChunks([
+    meeting("legacy", null, "legacy-1"),
+    meeting("today", 8_000, "today-1"),
+    meeting("older", 2_000, "older-1"),
+  ]);
+
+  assert.deepEqual(
+    ordered.map((row) => row.chunkId),
+    ["today-1", "older-1", "legacy-1"],
+  );
+});
+
+test("undated rows keep a stable order among themselves", () => {
+  const ordered = orderKnowledgeChunks([
+    meeting("beta", null, "beta-1"),
+    meeting("alpha", null, "alpha-1"),
+  ]);
+
+  assert.deepEqual(
+    ordered.map((row) => row.chunkId),
+    ["alpha-1", "beta-1"],
+  );
+});
+
+test("a document's own chunks still read in their own order inside the group", () => {
+  const page = (chunkIndex: number, chunkId: string) =>
+    chunk({ chunkId, chunkIndex, indexedAtMs: 3_000 });
+
+  const ordered = orderKnowledgeChunks([page(2, "c3"), page(0, "c1"), page(1, "c2")]);
+
+  assert.deepEqual(
+    ordered.map((row) => row.chunkId),
+    ["c1", "c2", "c3"],
+  );
+});
+
+test("two meetings sharing a title are not merged into one group", () => {
+  // Grouping on the visible label alone would file two different meetings under one heading,
+  // which is why the key carries documentId when there is one.
+  const ordered = orderKnowledgeChunks([
+    chunk({ chunkId: "a1", documentId: "doc-a", documentName: "Notes", indexedAtMs: 1_000 }),
+    chunk({ chunkId: "b1", documentId: "doc-b", documentName: "Notes", indexedAtMs: 9_000 }),
+  ]);
+
+  assert.deepEqual(
+    ordered.map((row) => row.chunkId),
+    ["b1", "a1"],
+  );
+});
+
+test("ordering does not mutate the page it was given", () => {
+  const rows = [meeting("a", 1_000, "old"), meeting("z", 9_000, "new")];
+  orderKnowledgeChunks(rows);
+
+  assert.deepEqual(
+    rows.map((row) => row.chunkId),
+    ["old", "new"],
+  );
 });

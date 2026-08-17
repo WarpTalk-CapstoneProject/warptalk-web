@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  artifactDownloadFormat,
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
@@ -55,4 +56,25 @@ test("only a ready artifact is downloadable", () => {
       `${status} must not offer a download`,
     );
   }
+});
+
+// The row used to print `artifact.format`, which is the STORED format: MARKDOWN for the
+// transcript, JSON for the summary. Both are correct for the code that reads them and both were
+// wrong on screen, because the server serves those two as plain text — so a row labelled JSON
+// handed over a .txt when clicked. This is the only thing that decides what the row claims.
+test("the two text exports are reported as TXT, whatever they are stored as", () => {
+  assert.equal(
+    artifactDownloadFormat(artifact({ type: "summary_export", format: "JSON" })),
+    "TXT",
+  );
+  assert.equal(
+    artifactDownloadFormat(artifact({ type: "transcript_export", format: "MARKDOWN" })),
+    "TXT",
+  );
+});
+
+test("anything that is a real file keeps its own format", () => {
+  // A recording is not rendered to text on the way out — it is the file it says it is.
+  assert.equal(artifactDownloadFormat(artifact({ type: "recording", format: "MP4" })), "MP4");
+  assert.equal(artifactDownloadFormat(artifact({ type: "recording", format: undefined })), "—");
 });
