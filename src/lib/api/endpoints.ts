@@ -156,7 +156,11 @@ export const API = {
     memberRoleChangePreview: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role-change-preview`,
     memberRoleChange: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role-change`,
     transferOwnership: (workspaceId: string) => `/workspaces/${workspaceId}/members/transfer-ownership`,
+    verifiedDomains: (workspaceId: string) => `/workspaces/${workspaceId}/verified-domains`,
+    verifiedDomainDetail: (workspaceId: string, domainId: string) =>
+      `/workspaces/${workspaceId}/verified-domains/${domainId}`,
     invitations: (workspaceId: string) => `/workspaces/${workspaceId}/invitations`,
+    invitationPolicy: (workspaceId: string) => `/workspaces/${workspaceId}/invitations/policy`,
     retryInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}/retry-delivery`,
     revokeInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}`,
     previewInvitation: (token: string) => `/workspaces/invitations/preview?token=${encodeURIComponent(token)}`,

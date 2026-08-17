@@ -13,7 +13,31 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useInviteWorkspaceMember } from "@/hooks/use-workspace";
+import { useInviteWorkspaceMember, useInvitationPolicy } from "@/hooks/use-workspace";
+
+/**
+ * The one control for both role and access type.
+ *
+ * Role (Owner/Admin/Member) and membership type (Internal/External) are two independent
+ * fields on the wire, but the server only ever accepts three combinations: an External
+ * member is always Member (ExternalMemberMustHaveMemberRole), so "External + Admin" is not
+ * a real option to offer. A single three-way choice makes that structurally impossible to
+ * pick, instead of exposing two controls and disabling one combination of them.
+ *
+ * Values match the wire's roleName/membershipType strings directly — no separate mapping
+ * table to keep in sync.
+ */
+type AccessChoice = "Member" | "Admin" | "External";
+
+function toRequestFields(choice: AccessChoice): {
+  roleName: string;
+  membershipType: "Internal" | "External";
+} {
+  return {
+    roleName: choice === "Admin" ? "Admin" : "Member",
+    membershipType: choice === "External" ? "External" : "Internal",
+  };
+}
 
 /**
  * The one dialog for inviting somebody into a workspace.
@@ -43,7 +67,7 @@ export function InviteMemberDialog({
   canGrantAdmin: boolean;
 }) {
   const [email, setEmail] = useState("");
-  const [roleName, setRoleName] = useState("Member");
+  const [access, setAccess] = useState<AccessChoice>("Member");
   // Set once the server returns the token. The row keeps only a hash, so this is the single
   // moment the link exists — the dialog stays on it until the inviter dismisses it.
   const [link, setLink] = useState<string | null>(null);
@@ -51,10 +75,43 @@ export function InviteMemberDialog({
   const [delivered, setDelivered] = useState(true);
 
   const inviteMutation = useInviteWorkspaceMember(workspaceId);
+  const policyQuery = useInvitationPolicy(workspaceId, email);
+  const policy = policyQuery.data;
+
+  // What the workspace currently permits for this address, before the server has confirmed
+  // anything. Undefined (policy not loaded yet, e.g. email too short) means "don't know" —
+  // treated as allowed so the form is usable before the first keystroke settles, not locked
+  // by default.
+  const internalAllowed = policy ? policy.allowedMembershipTypes.includes("Internal") : true;
+  const externalAllowed = policy ? policy.allowedMembershipTypes.includes("External") : true;
+
+  const optionState: Record<AccessChoice, { disabled: boolean; reason?: string | null }> = {
+    Member: { disabled: !internalAllowed, reason: policy?.internalDisabledReason },
+    Admin: {
+      disabled: !canGrantAdmin || !internalAllowed,
+      reason: !canGrantAdmin
+        ? "Only the workspace owner can grant Admin."
+        : policy?.internalDisabledReason,
+    },
+    External: { disabled: !externalAllowed, reason: policy?.externalDisabledReason },
+  };
+
+  // What is actually in effect. `access` is the inviter's last explicit click; this is what
+  // gets submitted and shown selected. Derived rather than synced back into `access` via an
+  // effect, so a policy response that arrives mid-typing corrects the selection on the same
+  // render instead of flashing the disabled choice for a frame first.
+  //
+  // Internal is preferred as the fallback because it is the more common invite; External is
+  // the only other legal option once it is ruled out too.
+  const effectiveAccess: AccessChoice = !optionState[access].disabled
+    ? access
+    : !optionState.Member.disabled
+      ? "Member"
+      : "External";
 
   const reset = () => {
     setEmail("");
-    setRoleName("Member");
+    setAccess("Member");
     setLink(null);
     setLinkEmail("");
     setDelivered(true);
@@ -68,7 +125,7 @@ export function InviteMemberDialog({
     try {
       const response = await inviteMutation.mutateAsync({
         email: trimmed,
-        roleName,
+        ...toRequestFields(effectiveAccess),
       });
 
       // Delivery can fail while the invitation itself is perfectly valid — the server says
@@ -222,17 +279,38 @@ export function InviteMemberDialog({
               </Label>
               <select
                 id="invite-role"
-                value={roleName}
-                onChange={(e) => setRoleName(e.target.value)}
+                value={effectiveAccess}
+                onChange={(e) => setAccess(e.target.value as AccessChoice)}
                 className="w-full h-9 rounded-md border border-border bg-surface-1 px-3 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="Member">Member</option>
+                <option value="Member" disabled={optionState.Member.disabled}>Member</option>
                 {canGrantAdmin && <option value="Admin">Admin</option>}
+                <option value="External" disabled={optionState.External.disabled}>External</option>
               </select>
-              <p className="text-[11px] leading-4 text-ink-muted">
-                Internal or External access is assigned automatically from the
-                workspace&apos;s verified domains.
-              </p>
+
+              {effectiveAccess === "External" ? (
+                <p className="text-[11px] leading-4 text-ink-muted">
+                  External members are always assigned the Member role. They
+                  cannot see the full member directory, and can only access
+                  resources tied to meetings they participate in.
+                  {optionState.External.disabled && optionState.External.reason && (
+                    <span className="mt-1 block text-destructive">
+                      {optionState.External.reason}
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-[11px] leading-4 text-ink-muted">
+                  {policy?.requireVerifiedDomainForInternal
+                    ? "Internal member. This address must be on a verified domain of this workspace."
+                    : "Internal member. This workspace does not constrain internal access by domain."}
+                  {optionState[effectiveAccess].disabled && optionState[effectiveAccess].reason && (
+                    <span className="mt-1 block text-destructive">
+                      {optionState[effectiveAccess].reason}
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
             <DialogFooter className="pt-2">
               <Button

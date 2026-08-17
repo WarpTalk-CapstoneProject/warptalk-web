@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,7 +12,6 @@ import {
   Copy,
   Plus,
   Trash,
-  Globe,
   Checks,
   Warning,
 } from "@phosphor-icons/react";
@@ -25,8 +25,6 @@ import {
   useWorkspaceSettings,
   usePatchWorkspaceSettings,
   useVerifiedDomains,
-  useAddVerifiedDomain,
-  useRevokeVerifiedDomain,
 } from "@/hooks/use-workspace";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -176,12 +174,8 @@ export default function WorkspaceSettingsPage() {
   const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
   const patchSettingsMutation = usePatchWorkspaceSettings(activeWorkspaceId || "");
   const verifiedDomainsQuery = useVerifiedDomains(activeWorkspaceId || "");
-  const addDomainMutation = useAddVerifiedDomain(activeWorkspaceId || "");
-  const revokeDomainMutation = useRevokeVerifiedDomain(activeWorkspaceId || "");
 
-  const [newDomain, setNewDomain] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
-  const [domainError, setDomainError] = useState(false);
   const initializedWorkspaceRef = useRef<string | null>(null);
   const lastQueuedValuesRef = useRef<Record<string, string>>({});
 
@@ -355,51 +349,6 @@ export default function WorkspaceSettingsPage() {
   const verifiedDomainList = verifiedDomainsQuery.data || [];
   const activeDomains = verifiedDomainList.map((vd: { domain: string }) => vd.domain);
 
-  const handleAddDomain = async () => {
-    const trimmed = newDomain.trim().toLowerCase();
-    if (!trimmed) return;
-    if (!trimmed.includes(".") || trimmed.startsWith(".") || trimmed.endsWith(".")) {
-      toast.error("Invalid domain format.");
-      return;
-    }
-    const publicDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"];
-    if (publicDomains.includes(trimmed)) {
-      toast.error("Cannot verify public domain names.");
-      return;
-    }
-    if (activeDomains.includes(trimmed)) {
-      toast.error("Domain already added.");
-      return;
-    }
-    setDomainError(false);
-    try {
-      await addDomainMutation.mutateAsync(trimmed);
-      toast.success(`Domain "${trimmed}" verified & added successfully.`);
-      setNewDomain("");
-    } catch (err: unknown) {
-      setDomainError(true);
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || "Failed to add verified domain.";
-      toast.error(errorMsg);
-    }
-  };
-
-  const handleRemoveDomain = async (domainString: string) => {
-    const target = verifiedDomainList.find((vd: { id: string; domain: string }) => vd.domain.toLowerCase() === domainString.toLowerCase());
-    if (!target) return;
-
-    setDomainError(false);
-    try {
-      await revokeDomainMutation.mutateAsync(target.id);
-      toast.success(`Domain "${domainString}" revoked successfully.`);
-    } catch (err: unknown) {
-      setDomainError(true);
-      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || "Failed to revoke verified domain.";
-      toast.error(errorMsg);
-    }
-  };
-
   const keywords = watchAll.aiUsagePolicy?.dlp?.keywordsBlacklist || [];
   const handleAddKeyword = () => {
     const trimmed = newKeyword.trim();
@@ -430,11 +379,7 @@ export default function WorkspaceSettingsPage() {
     commitPolicy("aiUsagePolicy.dlp.keywordsBlacklist", policy);
   };
 
-  const effectiveSaveStatus = domainError
-    ? "error"
-    : addDomainMutation.isPending || revokeDomainMutation.isPending
-      ? "saving"
-      : autoSave.status;
+  const effectiveSaveStatus = autoSave.status;
 
   return (
     <div className="w-full max-w-2xl mx-auto py-8 px-4 flex flex-col gap-8 text-ink">
@@ -448,7 +393,7 @@ export default function WorkspaceSettingsPage() {
         <AutoSaveStatusBadge
           status={effectiveSaveStatus}
           invalid={Object.keys(errors).length > 0}
-          onRetry={Object.keys(errors).length === 0 && !domainError ? autoSave.retry : undefined}
+          onRetry={Object.keys(errors).length === 0 ? autoSave.retry : undefined}
         />
       </div>
 
@@ -771,72 +716,52 @@ export default function WorkspaceSettingsPage() {
               />
             </div>
 
-            {/* Require Verified Domain */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Require Verified Domain for Internal Members</span>
-                <span className="text-[11px] text-ink-muted">Enforce internal members to use verified domains.</span>
-              </div>
-              <Switch
-                checked={watchAll.requireVerifiedDomainForInternal}
-                onCheckedChange={(val) => commitTopLevel("requireVerifiedDomainForInternal", val)}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              />
-            </div>
+            {/*
+              How membership is decided — a status, not a switch.
 
-            {/* Verified Email Domains */}
-            <div className="py-4 px-4 flex flex-col gap-3">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Verified Domains</span>
-                <span className="text-[11px] text-ink-muted">Manage specific corporate email domains allowed in this workspace.</span>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  placeholder="Enter a domain (e.g., company.com)"
-                  value={newDomain}
-                  onChange={(e) => setNewDomain(e.target.value)}
-                  disabled={isSubmitting || !isOwnerOrAdmin || addDomainMutation.isPending}
-                  className="h-8 text-xs bg-surface-2 border-hairline flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddDomain();
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleAddDomain}
-                  disabled={isSubmitting || !isOwnerOrAdmin || addDomainMutation.isPending || !newDomain.trim()}
-                  className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink disabled:opacity-50"
-                >
-                  {addDomainMutation.isPending ? <Spinner className="h-3 w-3 animate-spin" /> : <Plus size={12} />} Add Domain
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {verifiedDomainsQuery.isPending ? (
-                  <span className="text-[10px] text-ink-muted flex items-center gap-1"><Spinner className="h-3 w-3 animate-spin" /> Loading domains...</span>
-                ) : activeDomains.length === 0 ? (
-                  <span className="text-[10px] text-ink-muted italic">No verified domains. Add one above.</span>
-                ) : (
-                  activeDomains.map((d: string) => (
-                    <div key={d} className="flex items-center gap-1.5 bg-surface-2 border border-hairline px-2 py-0.5 rounded text-xs">
-                      <Globe size={11} className="text-primary" />
-                      <span className="font-mono text-[10px] text-ink">{d}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveDomain(d)}
-                        disabled={isSubmitting || !isOwnerOrAdmin || revokeDomainMutation.isPending}
-                        className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer disabled:opacity-50"
-                        title={`Revoke domain ${d}`}
-                      >
-                        <Trash size={11} />
-                      </button>
-                    </div>
-                  ))
+              This was a toggle. It could not be one: the value is derived from whether the
+              workspace holds a verified domain, so a switch offered a second way to set one fact
+              and let a workspace claim to require a domain while holding none. Adding the first
+              domain below turns this on; revoking the last one turns it off.
+            */}
+            {/*
+              How membership is decided — a status, not a control.
+
+              This was a toggle. It could not be one: the value is derived from whether the
+              workspace holds a verified domain, so a switch offered a second way to set one fact
+              and let a workspace claim to require a domain while holding none.
+
+              The domains themselves are managed in Advanced settings, not here. Adding one hands
+              whoever holds this workspace the power to classify every future joiner on that
+              domain as Internal — too much to sit one click away from the default language.
+              Admins can read this summary; only the owner can change what it reports.
+            */}
+            <div className="py-3.5 px-4 flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-ink">Internal membership</span>
+                <span className="text-[11px] text-ink-muted">
+                  {activeDomains.length > 0
+                    ? `Decided by verified domain — ${activeDomains.join(", ")}. Only addresses on these domains can be invited as internal members.`
+                    : "Assigned by hand. You choose internal or external for each person you invite."}
+                </span>
+                {isOwner && (
+                  <Link
+                    href={`/${activeWorkspaceSlug}/advanced`}
+                    className="mt-0.5 w-fit text-[11px] font-medium text-primary hover:underline"
+                  >
+                    Manage verified domains in Advanced settings →
+                  </Link>
                 )}
               </div>
+              <span
+                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  activeDomains.length > 0
+                    ? "border-primary/20 bg-primary/10 text-primary"
+                    : "border-hairline bg-surface-2 text-ink-muted"
+                }`}
+              >
+                {activeDomains.length > 0 ? "Domain-verified" : "Manual"}
+              </span>
             </div>
 
           </div>
