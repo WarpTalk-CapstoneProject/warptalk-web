@@ -39,6 +39,7 @@ import {
   CaretLeft,
   Check,
   CreditCard,
+  BookOpen,
   FileText,
   GearSix,
   Gauge,
@@ -290,7 +291,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const workspaceNav: NavItem[] = [];
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members`, tourId: "nav-members" },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" }
+    { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" },
+    // Directly under Documents, and visible to every member — the two are constantly mistaken for
+    // each other, and sitting them together is what makes the difference legible: Documents is
+    // content the assistant retrieves from afterwards, Glossary is terminology applied to speech
+    // and translation while the meeting is happening.
+    //
+    // Its absence from this list is the whole reason the page was deleted as dead code, and the
+    // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
+    // can navigate to is indistinguishable from one that was never built.
+    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" }
   );
 
   if (isOwnerOrAdmin) {
