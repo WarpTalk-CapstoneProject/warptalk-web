@@ -35,7 +35,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { BookOpen, Plus, Trash, MagnifyingGlass, Translate } from "@phosphor-icons/react";
+import { BookOpen, FileArrowUp, Plus, Trash, MagnifyingGlass, Translate } from "@phosphor-icons/react";
 
 import {
   WorkspaceBody,
@@ -67,6 +67,7 @@ import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useAddGlossaryTerm,
+  useBulkImportGlossaryTerms,
   useCreateGlossary,
   useDeleteGlossary,
   useDeleteGlossaryTerm,
@@ -74,6 +75,10 @@ import {
   useGlossaryTerms,
 } from "@/hooks/use-workspace";
 import type { GlossaryDto } from "@/types/workspace";
+import {
+  GlossaryImportDialog,
+  type ParsedGlossaryRow,
+} from "@/components/glossary/glossary-import-dialog";
 
 const glossarySchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -112,12 +117,14 @@ export default function WorkspaceGlossaryPage() {
   const [search, setSearch] = useState("");
   const [glossaryDialogOpen, setGlossaryDialogOpen] = useState(false);
   const [termDialogOpen, setTermDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const termsQuery = useGlossaryTerms(selected?.id ?? "");
   const createGlossary = useCreateGlossary(workspaceId ?? "");
   const deleteGlossary = useDeleteGlossary(workspaceId ?? "");
   const addTerm = useAddGlossaryTerm(selected?.id ?? "");
   const deleteTerm = useDeleteGlossaryTerm(selected?.id ?? "");
+  const bulkImport = useBulkImportGlossaryTerms(selected?.id ?? "");
 
   const glossaryForm = useForm<GlossaryForm>({
     resolver: zodResolver(glossarySchema),
@@ -147,6 +154,59 @@ export default function WorkspaceGlossaryPage() {
   }, [termsQuery.data, search]);
 
   const languageOptions = useMemo(() => languagesInScope("meeting"), []);
+
+  /**
+   * WT-472: the terms as a DICTIONARY — grouped by initial letter, alphabetical within each group.
+   *
+   * A flat table sorted by insertion order is a log of what somebody typed. A vocabulary is looked
+   * up, not scrolled: you arrive knowing the word and wanting the entry. Grouping by letter and
+   * offering the letters as an index is what makes that a jump instead of a scan.
+   *
+   * `localeCompare` rather than `<`, because Vietnamese is a first-class source language here and
+   * codepoint order puts every accented letter after "z" — "Đ" would sort past "Z" and "ế" would
+   * not sit with "e". The `#` bucket catches digits and symbols, which is where acronyms with
+   * leading numbers land.
+   */
+  const groupedTerms = useMemo(() => {
+    const groups = new Map<string, typeof terms>();
+    for (const term of terms) {
+      const first = term.sourceTerm.trim().charAt(0).toLocaleUpperCase("vi");
+      const letter = /\p{Letter}/u.test(first) ? first : "#";
+      const bucket = groups.get(letter);
+      if (bucket) bucket.push(term);
+      else groups.set(letter, [term]);
+    }
+    for (const bucket of groups.values()) {
+      bucket.sort((a, b) => a.sourceTerm.localeCompare(b.sourceTerm, "vi"));
+    }
+    return [...groups.entries()].sort(([a], [b]) => {
+      // "#" last: a reader scanning the index wants the letters first.
+      if (a === "#") return 1;
+      if (b === "#") return -1;
+      return a.localeCompare(b, "vi");
+    });
+  }, [terms]);
+
+  /**
+   * WT-472. Reports BOTH numbers, because the server skips terms already present and only one of
+   * "imported 40" and "imported 40, skipped 60" is true of the same file.
+   */
+  async function importTerms(rows: ParsedGlossaryRow[]) {
+    if (!selected) return;
+    try {
+      const result = await bulkImport.mutateAsync(rows);
+      if (result.skipped > 0) {
+        toast.success(
+          `Imported ${result.imported} term${result.imported === 1 ? "" : "s"}, skipped ${result.skipped} already in this glossary.`,
+        );
+      } else {
+        toast.success(`Imported ${result.imported} term${result.imported === 1 ? "" : "s"}.`);
+      }
+      setImportDialogOpen(false);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not import the file."));
+    }
+  }
 
   async function submitGlossary(values: GlossaryForm) {
     try {
@@ -262,10 +322,19 @@ export default function WorkspaceGlossaryPage() {
                   New glossary
                 </WorkspacePrimaryButton>
                 {selected ? (
-                  <WorkspacePrimaryButton onClick={() => setTermDialogOpen(true)}>
-                    <Plus className="h-3.5 w-3.5" />
-                    Add term
-                  </WorkspacePrimaryButton>
+                  <>
+                    {/* Import sits BESIDE Add term, not inside a menu. A domain vocabulary
+                        arrives as a spreadsheet far more often than it is typed word by word,
+                        so the bulk path is the primary one for anyone setting a glossary up. */}
+                    <WorkspacePrimaryButton onClick={() => setImportDialogOpen(true)}>
+                      <FileArrowUp className="h-3.5 w-3.5" />
+                      Import
+                    </WorkspacePrimaryButton>
+                    <WorkspacePrimaryButton onClick={() => setTermDialogOpen(true)}>
+                      <Plus className="h-3.5 w-3.5" />
+                      Add term
+                    </WorkspacePrimaryButton>
+                  </>
                 ) : null}
               </>
             ) : null}
@@ -301,60 +370,92 @@ export default function WorkspaceGlossaryPage() {
             }
           />
         ) : (
-          <div className="overflow-hidden rounded-lg border border-hairline">
-            <table className="w-full text-left text-[13px]">
-              <thead className="bg-surface-2 text-[11px] uppercase tracking-wide text-ink-muted">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Term</th>
-                  <th className="px-3 py-2 font-medium">Translate as</th>
-                  <th className="px-3 py-2 font-medium">Field</th>
-                  <th className="px-3 py-2 font-medium">Definition</th>
-                  {canManage ? <th className="w-10 px-3 py-2" /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {terms.map((term) => (
-                  <tr key={term.id} className="border-t border-hairline align-top">
-                    <td className="px-3 py-2">
-                      <span className="font-medium text-ink">{term.sourceTerm}</span>
-                      {term.partOfSpeech ? (
-                        <span className="ml-1.5 text-[11px] italic text-ink-subtle">
-                          {term.partOfSpeech}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-ink">{term.targetTerm}</td>
-                    <td className="px-3 py-2">
-                      {term.domain ? (
-                        <Badge variant="secondary" className="text-[10px]">
-                          {term.domain}
-                        </Badge>
-                      ) : (
-                        <span className="text-ink-subtle">—</span>
-                      )}
-                    </td>
-                    <td className="max-w-[320px] px-3 py-2 text-[12px] text-ink-muted">
-                      {term.definition || term.context || (
-                        <span className="text-ink-subtle">—</span>
-                      )}
-                    </td>
-                    {canManage ? (
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => removeTerm(term.id)}
-                          disabled={deleteTerm.isPending}
-                          className="grid h-6 w-6 place-items-center rounded-sm text-ink-subtle hover:bg-surface-2 hover:text-red-600"
-                          title="Remove term"
-                        >
-                          <Trash className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    ) : null}
-                  </tr>
+          /* WT-472: a dictionary, not a table.
+             The letters are an index you click, and each entry reads term → translation with its
+             definition underneath, the way a lexicon does. The previous flat table was sorted by
+             insertion order, which is the order somebody happened to type things in and is of no
+             use to a reader who arrives already knowing the word. */
+          <div className="flex flex-col gap-3">
+            {groupedTerms.length > 1 ? (
+              <nav className="flex flex-wrap gap-1" aria-label="Jump to letter">
+                {groupedTerms.map(([letter]) => (
+                  <a
+                    key={letter}
+                    href={`#glossary-letter-${letter}`}
+                    className="grid h-6 min-w-6 place-items-center rounded-[5px] border border-hairline px-1 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                  >
+                    {letter}
+                  </a>
                 ))}
-              </tbody>
-            </table>
+              </nav>
+            ) : null}
+
+            <div className="overflow-clip rounded-lg border border-hairline">
+              {groupedTerms.map(([letter, letterTerms]) => (
+                <section key={letter}>
+                  {/* Sticky so the letter stays visible while its entries scroll — otherwise a
+                      long section leaves the reader with no idea where they are. */}
+                  <h3
+                    id={`glossary-letter-${letter}`}
+                    className="sticky top-0 z-10 scroll-mt-2 border-b border-hairline bg-surface-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted"
+                  >
+                    {letter}
+                    <span className="ml-1.5 font-normal normal-case tracking-normal text-ink-subtle">
+                      {letterTerms.length}
+                    </span>
+                  </h3>
+                  <ul className="divide-y divide-hairline">
+                    {letterTerms.map((term) => (
+                      <li
+                        key={term.id}
+                        className="group flex items-start justify-between gap-3 px-3 py-2.5"
+                      >
+                        <div className="min-w-0">
+                          <p className="flex flex-wrap items-baseline gap-1.5">
+                            <span className="text-[13px] font-medium text-ink">
+                              {term.sourceTerm}
+                            </span>
+                            {term.partOfSpeech ? (
+                              <span className="text-[11px] italic text-ink-subtle">
+                                {term.partOfSpeech}
+                              </span>
+                            ) : null}
+                            <span className="text-ink-subtle">→</span>
+                            <span className="text-[13px] text-ink">{term.targetTerm}</span>
+                            {term.domain ? (
+                              <Badge variant="secondary" className="text-[10px]">
+                                {term.domain}
+                              </Badge>
+                            ) : null}
+                          </p>
+                          {term.definition || term.context ? (
+                            <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
+                              {term.definition || term.context}
+                            </p>
+                          ) : null}
+                          {term.usageNote ? (
+                            <p className="mt-0.5 text-[11px] italic text-ink-subtle">
+                              {term.usageNote}
+                            </p>
+                          ) : null}
+                        </div>
+                        {canManage ? (
+                          <button
+                            type="button"
+                            onClick={() => removeTerm(term.id)}
+                            disabled={deleteTerm.isPending}
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-sm text-ink-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+                            title="Remove term"
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
           </div>
         )}
 
@@ -495,6 +596,16 @@ export default function WorkspaceGlossaryPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {selected ? (
+        <GlossaryImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          glossaryName={selected.name}
+          isImporting={bulkImport.isPending}
+          onImport={importTerms}
+        />
+      ) : null}
     </WorkspacePage>
   );
 }

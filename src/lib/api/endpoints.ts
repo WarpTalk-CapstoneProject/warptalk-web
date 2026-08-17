@@ -182,6 +182,12 @@ export const API = {
     get: (id: string) => `/glossaries/${id}`,
     byWorkspace: (workspaceId: string) => `/glossaries/workspace/${workspaceId}`,
     terms: (id: string) => `/glossaries/${id}/terms`,
+    /**
+     * WT-472 — a whole spreadsheet in one request. Adding terms one POST at a time made a
+     * hundred-row import a hundred round trips, and left `Glossary.TermCount` describing a
+     * glossary that did not exist if the client died halfway.
+     */
+    bulkTerms: (id: string) => `/glossaries/${id}/terms/bulk`,
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
     global: "/glossaries/global",
   },
