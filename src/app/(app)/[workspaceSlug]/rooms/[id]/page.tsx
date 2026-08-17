@@ -82,6 +82,11 @@ import {
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
+import {
+  describeRecordSharing,
+  isRecordShared,
+  nextArtifactAccess,
+} from "@/lib/meeting/record-sharing";
 import type { EndedRoomHistoryItem } from "@/types/roomHistory";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import { isFinishedStatus } from "@/lib/meeting/room-occupancy";
@@ -91,6 +96,7 @@ import {
 } from "@/hooks/use-transcripts";
 import {
   useEndTranslationRoom,
+  useSetArtifactAccess,
   useStartTranslationRoom,
   useTranslationRoom,
   useTranslationRoomInvitations,
@@ -511,6 +517,9 @@ export default function RoomInformationPage() {
 
             {isEnded || transcriptSegments.length > 0 ? (
               <MeetingRecordSection
+                roomId={room.id}
+                isHost={isHost}
+                artifactAccess={room.settings?.artifactAccess}
                 endedRecord={endedRecordQuery.data ?? null}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
@@ -694,12 +703,20 @@ function RoomEntryButton({
  * live during a meeting — it has its own data, its own corrections, and its own actions.
  */
 function MeetingRecordSection({
+  roomId,
+  isHost,
+  artifactAccess,
   transcript,
   transcriptCount,
   endedRecord,
   onRecordChanged,
   onJumpToMoment,
 }: {
+  roomId: string;
+  /** WT-480: only the host may change who the record is shared with. */
+  isHost: boolean;
+  /** WT-480: the room's stored `artifactAccess`. Absent reads as not shared. */
+  artifactAccess?: string | null;
   transcript: React.ReactNode;
   transcriptCount: number;
   endedRecord: EndedRoomHistoryItem | null;
@@ -713,6 +730,9 @@ function MeetingRecordSection({
     useArtifactDownload(onRecordChanged);
   // WT-492: null when the meeting was not recorded, or the file is not ready yet.
   const recording = findPlayableRecording(endedRecord?.artifacts);
+  // WT-480: who may read this record. One derivation feeds the badge, the banner and the button.
+  const setArtifactAccess = useSetArtifactAccess(roomId);
+  const sharing = describeRecordSharing({ artifactAccess, isHost });
 
   // Read inside the polling interval, which closes over the render that started it and
   // would otherwise never see the rewritten summary arrive.
@@ -741,7 +761,61 @@ function MeetingRecordSection({
 
   return (
     <section className="mt-8 border-b border-border/60 pb-7">
-      <h2 className="text-[15px] font-semibold text-ink">Meeting record</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-[15px] font-semibold text-ink">Meeting record</h2>
+          {/* WT-480: the badge and the banner below come from one call, so they cannot end up
+              disagreeing — a "Draft" chip beside a banner saying everyone can read it is worse
+              than either alone. */}
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              sharing.tone === "shared"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+            )}
+          >
+            {sharing.badge}
+          </span>
+        </div>
+
+        {sharing.action ? (
+          <button
+            type="button"
+            onClick={() => void setArtifactAccess.mutateAsync(nextArtifactAccess(artifactAccess))
+              .then(() => {
+                toast.success(
+                  isRecordShared(artifactAccess)
+                    ? "Record unpublished. Only you can see it now."
+                    : "Record published. Everyone who took part can read it.",
+                );
+                onRecordChanged();
+              })
+              .catch((error: unknown) =>
+                toast.error(getErrorMessage(error, "Could not change who this record is shared with.")),
+              )}
+            disabled={setArtifactAccess.isPending}
+            className="rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-60"
+          >
+            {setArtifactAccess.isPending ? "Saving…" : sharing.action}
+          </button>
+        ) : null}
+      </div>
+
+      {sharing.message ? (
+        <div
+          className={cn(
+            "mt-3 rounded-[8px] border px-3.5 py-2.5 text-[13px] leading-relaxed",
+            sharing.tone === "shared"
+              ? "border-emerald-500/25 bg-emerald-500/5 text-ink"
+              : sharing.tone === "draft"
+                ? "border-amber-500/25 bg-amber-500/5 text-ink"
+                : "border-border bg-surface-2 text-ink-muted",
+          )}
+        >
+          {sharing.message}
+        </div>
+      ) : null}
 
       {hasRecord ? (
         <div

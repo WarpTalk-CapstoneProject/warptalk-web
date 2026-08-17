@@ -2,6 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
   CreateTranslationRoomRequest,
   RecurrenceRequest,
@@ -164,6 +165,27 @@ export function useJoinTranslationRoomByCode() {
     mutationFn: async (data: JoinTranslationRoomByCodeRequest) => {
       const { data: joinResult } = await translationRoomService.joinByCode(data);
       return joinResult;
+    },
+  });
+}
+
+/**
+ * WT-480: publish or unpublish a finished meeting's record.
+ *
+ * Invalidates the room so the banner, the badge and the button all re-derive from the stored
+ * setting rather than from local optimism — the whole point of this control is that the screen
+ * tells the truth about who can read the record.
+ */
+export function useSetArtifactAccess(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (level: ArtifactAccessLevel) => {
+      await translationRoomService.setArtifactAccess(roomId, level);
+      return level;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId] });
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
   });
 }

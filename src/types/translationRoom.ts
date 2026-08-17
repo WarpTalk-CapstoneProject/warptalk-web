@@ -38,6 +38,15 @@ export interface TranslationRoomDto {
   createdAt: string;
   settings?: {
     requiresApproval: boolean;
+    /**
+     * WT-480: who besides the host may read this meeting's record — its transcript, AI summary
+     * and recording, governed together. One of `ArtifactAccessLevels`; absent reads as host-only.
+     *
+     * The server has always sent this (`RoomSettingsResponse` carries it straight from the
+     * settings blob); this type simply never declared it, so no screen could read the state it
+     * was already being told.
+     */
+    artifactAccess?: string;
     /** WT-371: whether anyone in the room may start translation, or only the host. */
     participantsCanStartTranslation?: boolean;
   };
