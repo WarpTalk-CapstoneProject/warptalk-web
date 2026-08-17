@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
 import type {
   CreateTranslationRoomRequest,
@@ -131,6 +131,30 @@ export function useUpdateTranslationRoomSettings() {
       queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, id] });
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
+  });
+}
+
+/**
+ * WT-468 — which languages the pre-join screen may offer for a room code.
+ *
+ * The policy belongs to the workspace that OWNS the room, not to whichever workspace the joiner
+ * has selected. The screen holds only a code and cannot resolve the room until the join itself,
+ * which is why it used to fall back to the joiner's own workspace settings and offer the wrong
+ * list to anyone joining across workspaces.
+ *
+ * Disabled below 4 characters, the same threshold the join button uses, so typing a code does not
+ * fire a request per keystroke. Data is kept while a longer code is being typed
+ * (`placeholderData: keepPreviousData`) so the picker does not flicker back to the full list
+ * mid-edit.
+ */
+export function useJoinLanguagePolicy(code: string) {
+  const trimmed = code.trim();
+  return useQuery({
+    queryKey: ["translationRooms", "joinLanguagePolicy", trimmed],
+    queryFn: () => translationRoomService.getJoinLanguagePolicy(trimmed),
+    enabled: trimmed.length >= 4,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 }
 

@@ -281,6 +281,20 @@ export const translationRoomService = {
     });
   },
 
+  /**
+   * WT-468 — the language whitelist of the workspace that OWNS the room behind this code.
+   *
+   * Always resolves. The server answers 200 with an empty list for an unknown or half-typed
+   * code, and empty means unrestricted, so a caller may poll this as the user types without
+   * painting an error over an incomplete code or momentarily emptying a picker.
+   */
+  async getJoinLanguagePolicy(code: string) {
+    const response = await apiClient.get<{ allowedTargetLanguages: string[] }>(
+      API.translationRooms.joinLanguagePolicy(code),
+    );
+    return response.data;
+  },
+
   async joinByCode(data: JoinTranslationRoomByCodeRequest) {
     const response = await apiClient.post<BackendJoinResponse>(API.translationRooms.join, {
       translationRoomCode: data.translationRoomCode.trim(),
