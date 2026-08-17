@@ -77,9 +77,11 @@ import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
 import {
   ArtifactsPanel,
   MeetingRecordTabButton,
+  MeetingRecordingPlayer,
   SummaryPanel,
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
+import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
 import type { EndedRoomHistoryItem } from "@/types/roomHistory";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import { isFinishedStatus } from "@/lib/meeting/room-occupancy";
@@ -709,6 +711,8 @@ function MeetingRecordSection({
   );
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
+  // WT-492: null when the meeting was not recorded, or the file is not ready yet.
+  const recording = findPlayableRecording(endedRecord?.artifacts);
 
   // Read inside the polling interval, which closes over the render that started it and
   // would otherwise never see the rewritten summary arrive.
@@ -770,6 +774,17 @@ function MeetingRecordSection({
         <div className="mt-3" />
       )}
 
+      {/* WT-492: above the transcript, and only in that tab — the two are read together, and it
+          is the pairing the ticket asks for. On Summary and Artifacts it would push the panel the
+          reader came for down the page for no reason; Artifacts still lists the same file to
+          download. Rendered only when a ready recording exists, so a meeting nobody recorded shows
+          no empty frame promising one. */}
+      {activeTab === "transcript" ? (
+        <MeetingRecordingPlayer
+          artifact={recording}
+          onConsentGranted={onRecordChanged}
+        />
+      ) : null}
       {activeTab === "transcript" ? transcript : null}
       {activeTab === "summary" && endedRecord ? (
         <SummaryPanel
