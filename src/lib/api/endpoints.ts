@@ -244,10 +244,10 @@ export const API = {
     detail: (id: string) => `/admin/workspaces/${id}`,
     suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
     reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
-    // Separate from `workspaces.knowledge` on purpose: same page shape, different
-    // authorization. This one is gated by the platform "admin" role and reads a workspace
-    // the caller is not a member of.
-    knowledge: (id: string) => `/admin/workspaces/${id}/knowledge`,
+    delete: (id: string) => `/admin/workspaces/${id}/delete`,
+    // Membership facts only. The knowledge route that used to sit beside these is gone:
+    // tenant content stays out of the admin portal (2026-08-17).
+    members: (id: string) => `/admin/workspaces/${id}/members`,
   },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",

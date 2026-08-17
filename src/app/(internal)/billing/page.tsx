@@ -3,7 +3,6 @@
 import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
 import { AdminAlertsTab } from "@/components/admin/AdminAlertsTab";
 import { AdminInvoicesTab } from "@/components/admin/AdminInvoicesTab";
-import { AdminServiceRatesCard } from "@/components/admin/AdminServiceRatesCard";
 import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
@@ -536,10 +535,6 @@ export default function AdminBillingPage() {
 
           <section>
             <TopWorkspacesChart />
-          </section>
-
-          <section>
-            <AdminServiceRatesCard />
           </section>
         </TabsContent>
 

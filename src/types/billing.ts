@@ -240,15 +240,6 @@ export interface UsageAlertDto {
   reason: string;
 }
 
-export interface ServiceRatesDto {
-  sttPerMinute: number;
-  translationPerMinute: number;
-  standardTtsPerMinute: number;
-  voiceClonePerMinute: number;
-  aiSummaryPerRequest: number;
-  aiChatPerRequest: number;
-}
-
 /**
  * Whether this workspace keeps translating after its credits reach zero.
  *
