@@ -285,6 +285,7 @@ export default function MyMeetingsPage() {
                 className="w-full"
                 classNames={{
                   month_caption: "hidden",
+                  nav: "hidden",
                 }}
                 modifiers={{
                   hasMeeting: daysWithMeetings,
@@ -512,16 +513,26 @@ function MonthGrid({
                           ? onOpenPast(meeting.id)
                           : onNavigate(meeting.id)
                       }
+                      title={meeting.title}
                       className={cn(
                         "group cursor-pointer rounded border px-1.5 py-1 text-[10px] transition-colors",
                         rowToneClass(meeting),
                       )}
                     >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="truncate font-medium">{meeting.title}</span>
-                        <span className="shrink-0 text-[9px] tabular-nums text-ink-subtle">
+                      <div className="flex items-center gap-1">
+                        <span className={cn("h-2.5 w-0.5 shrink-0 rounded-full", spineClass(meeting))} />
+                        <span className={cn("truncate font-medium", meeting.status === "cancelled" && "line-through text-ink-muted")}>
+                          {meeting.title}
+                        </span>
+                        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
                           {formatTime(meeting.occursAt)}
                         </span>
+                        {meeting.timeState === "live" ? (
+                          <span className="relative flex size-1.5 shrink-0">
+                            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
+                            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   ))}
