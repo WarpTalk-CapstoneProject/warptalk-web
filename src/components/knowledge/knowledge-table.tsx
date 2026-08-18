@@ -20,6 +20,10 @@ import {
   Buildings,
   FileText,
   Sparkle,
+  Lightning,
+  Prohibit,
+  Warning,
+  Clock,
 } from "@phosphor-icons/react/dist/ssr";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 
@@ -87,7 +91,7 @@ function StateCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
     return (
       <div className="flex flex-col items-start gap-1">
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
           AI Ready
         </span>
       </div>
@@ -96,27 +100,34 @@ function StateCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
 
   // Disabled State with Reason
   let reasonLabel = "Disabled by Owner";
-  let icon = "🔇";
+  let ReasonIcon = Prohibit;
+  let iconColor = "text-ink-subtle";
 
   const failureReason = chunk.ingestionFailureReason?.toLowerCase();
   if (failureReason === "dlp_detected") {
     reasonLabel = "DLP Restricted";
-    icon = "⛔";
+    ReasonIcon = Prohibit;
+    iconColor = "text-rose-500";
   } else if (failureReason === "security_scan_timeout") {
     reasonLabel = "Scan Timeout";
-    icon = "⏱️";
+    ReasonIcon = Clock;
+    iconColor = "text-amber-500";
   } else if (failureReason === "security_scan_failed") {
     reasonLabel = "Scan Failed";
-    icon = "⚠️";
+    ReasonIcon = Warning;
+    iconColor = "text-amber-500";
   } else if (failureReason === "embedding_failed" || failureReason === "embedding_publish_failed") {
     reasonLabel = "VectorDB Fail";
-    icon = "⚠️";
+    ReasonIcon = Warning;
+    iconColor = "text-rose-500";
   } else if (failureReason === "pii_unmasked") {
     reasonLabel = "Unmasked PII";
-    icon = "⚠️";
+    ReasonIcon = Warning;
+    iconColor = "text-amber-500";
   } else if (isExpired || failureReason === "retention_expired") {
     reasonLabel = "Retention Expired";
-    icon = "⌛";
+    ReasonIcon = Clock;
+    iconColor = "text-ink-subtle";
   }
 
   return (
@@ -126,7 +137,8 @@ function StateCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
         Disabled
       </span>
       <span className="text-[10px] text-ink-subtle flex items-center gap-1">
-        <span>{icon}</span> {reasonLabel}
+        <ReasonIcon size={11} className={cn("shrink-0", iconColor)} />
+        <span>{reasonLabel}</span>
       </span>
     </div>
   );
@@ -199,25 +211,27 @@ export function KnowledgeTable({
           type="button"
           onClick={() => filters.setRetrievalTab("enabled")}
           className={cn(
-            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1",
+            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1.5",
             filters.retrievalTab === "enabled"
               ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold"
               : "text-ink-muted hover:text-emerald-600 hover:bg-surface-2",
           )}
         >
-          <span>⚡</span> Enabled in WarpBot
+          <Lightning size={12} weight="fill" className="text-emerald-500 shrink-0" />
+          <span>Enabled in WarpBot</span>
         </button>
         <button
           type="button"
           onClick={() => filters.setRetrievalTab("disabled")}
           className={cn(
-            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1",
+            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1.5",
             filters.retrievalTab === "disabled"
               ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 font-semibold"
               : "text-ink-muted hover:text-rose-600 hover:bg-surface-2",
           )}
         >
-          <span>🚫</span> Disabled in WarpBot
+          <Prohibit size={12} className="text-rose-500 shrink-0" />
+          <span>Disabled in WarpBot</span>
         </button>
       </div>
 
