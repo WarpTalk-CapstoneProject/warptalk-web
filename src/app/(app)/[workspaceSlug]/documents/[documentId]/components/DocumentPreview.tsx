@@ -72,6 +72,48 @@ function previewKind(fileExtension: string): PreviewKind {
   return "unsupported";
 }
 
+/** Auto-detects UTF-16LE/BE and UTF-8 BOMs/null byte ratios to decode text files cleanly. */
+export async function decodeTextBlob(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  if (bytes.length >= 2) {
+    // UTF-16LE BOM (\xFF\xFE)
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return new TextDecoder("utf-16le").decode(buffer);
+    }
+    // UTF-16BE BOM (\xFE\xFF)
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+      return new TextDecoder("utf-16be").decode(buffer);
+    }
+    // UTF-8 BOM (\xEF\xBB\xBF)
+    if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+      return new TextDecoder("utf-8").decode(buffer.slice(3));
+    }
+  }
+
+  // BOM-less heuristic: count null bytes in even vs odd positions
+  if (bytes.length >= 4) {
+    let nullsEven = 0;
+    let nullsOdd = 0;
+    const sampleSize = Math.min(bytes.length, 1024);
+    for (let i = 0; i < sampleSize; i++) {
+      if (bytes[i] === 0x00) {
+        if (i % 2 === 0) nullsEven++;
+        else nullsOdd++;
+      }
+    }
+    if (nullsOdd > sampleSize * 0.15) {
+      return new TextDecoder("utf-16le").decode(buffer);
+    }
+    if (nullsEven > sampleSize * 0.15) {
+      return new TextDecoder("utf-16be").decode(buffer);
+    }
+  }
+
+  return new TextDecoder("utf-8").decode(buffer);
+}
+
 export function DocumentPreview({
   workspaceId,
   documentId,
@@ -109,7 +151,7 @@ export function DocumentPreview({
   useEffect(() => {
     if (!blob || !isTextual) return;
     let cancelled = false;
-    void blob.text().then((value) => {
+    void decodeTextBlob(blob).then((value) => {
       if (!cancelled) setText(value);
     });
     return () => {
