@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { looksLikeRoomCode } from "../room-code-guess.ts";
+import { looksLikeRoomCode, looksLikeRoomId } from "../room-code-guess.ts";
 
 /**
  * This decides whether the palette offers "Join meeting <code>" above the navigation results.
@@ -43,4 +43,44 @@ test("rejects anything carrying path or query syntax", () => {
 
 test("rejects a leading dash so a typo does not look joinable", () => {
   assert.equal(looksLikeRoomCode("-abc-def"), false);
+});
+
+// ── looksLikeRoomId — WT-528 ───────────────────────────────────────────────────────────────
+
+test("recognises the room ids the API actually issues", () => {
+  // uuid v7 (what the backend mints) and v4, both cases.
+  for (const value of [
+    "01a01542-874f-7971-b0ff-1dca73667d6e",
+    "01A01542-874F-7971-B0FF-1DCA73667D6E",
+    "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+  ]) {
+    assert.equal(looksLikeRoomId(value), true, value);
+  }
+});
+
+test("does not mistake a room code for a room id", () => {
+  // The case the ticket was about: `/rooms/spa-lyec-jga` reached a page that reads its segment
+  // as an id, and reported the room as inaccessible rather than the link as stale.
+  for (const value of ["spa-lyec-jga", "syo-kpru-lag", "abc-defg-hij"]) {
+    assert.equal(looksLikeRoomId(value), false, value);
+  }
+});
+
+test("is not the negation of looksLikeRoomCode", () => {
+  // Both return true for a uuid, which is exactly why the loose code test cannot be inverted
+  // to answer this question.
+  const id = "01a01542-874f-7971-b0ff-1dca73667d6e";
+  assert.equal(looksLikeRoomCode(id), true);
+  assert.equal(looksLikeRoomId(id), true);
+});
+
+test("rejects a truncated or padded id rather than guessing", () => {
+  for (const value of [
+    "01a01542-874f-7971-b0ff-1dca73667d6",
+    "01a01542-874f-7971-b0ff-1dca73667d6ee",
+    "01a01542874f7971b0ff1dca73667d6e",
+    "",
+  ]) {
+    assert.equal(looksLikeRoomId(value), false, JSON.stringify(value));
+  }
 });
