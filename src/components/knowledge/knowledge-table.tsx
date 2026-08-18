@@ -178,7 +178,18 @@ export function KnowledgeTable({
     return allItems;
   }, [allItems, filters.retrievalTab]);
 
-  const { factCategory, cursorStack } = filters;
+  const availableCategories = useMemo(() => {
+    const catSet = new Set<string>(FACT_CATEGORIES);
+    if (filters.factCategory) {
+      catSet.add(filters.factCategory);
+    }
+    for (const item of data?.items ?? []) {
+      if (item.factCategory && item.factCategory.trim()) {
+        catSet.add(item.factCategory.trim());
+      }
+    }
+    return Array.from(catSet);
+  }, [data?.items, filters.factCategory]);
 
   return (
     <>
@@ -242,7 +253,7 @@ export function KnowledgeTable({
         >
           All facts
         </FilterChip>
-        {FACT_CATEGORIES.map((category) => (
+        {availableCategories.map((category) => (
           <FilterChip
             key={category}
             selected={factCategory === category}
