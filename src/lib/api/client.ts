@@ -8,8 +8,12 @@ import {
   PROACTIVE_REFRESH_MARGIN_MS,
   PROACTIVE_REFRESH_WINDOW_MS,
 } from "@/lib/api/token-lifecycle";
+import { normalizeResponseRoles } from "@/lib/api/normalize-response";
 import {
+  clearSessionDeadMarker,
   hasRedeemableSession,
+  isSessionDeadMarked,
+  markSessionDead,
   recordSessionTeardown,
   resolveAccessTokenExpiryMs,
   setAccessTokenCookie,
@@ -379,9 +383,17 @@ let sessionEnded = false;
  * Whether the session has already been declared dead. Callers use this to stop issuing work
  * that can only 401 — a dashboard mounts dozens of queries, several of them on a 3s poll, and
  * every one of them would otherwise keep hitting the gateway until the navigation commits.
+ *
+ * It asks sessionStorage as well as this module's own flag, and that is the fix for the logout
+ * storm rather than a refinement of it. `endDeadSession()` leaves by reassigning
+ * `window.location`, which destroys module state — so a latch that lives only here is guaranteed
+ * to be empty on the very next load, which is precisely when the loop comes back round. See
+ * markSessionDead().
+ *
+ * Read lazily, never at module scope: this module must perform no work when it is imported.
  */
 export function isSessionEnded(): boolean {
-  return sessionEnded;
+  return sessionEnded || isSessionDeadMarked();
 }
 
 // A new access token means the session is alive again, so the latch has to lift.
@@ -393,6 +405,9 @@ export function isSessionEnded(): boolean {
 useAuthStore.subscribe((state, previousState) => {
   if (state.accessToken && state.accessToken !== previousState.accessToken) {
     sessionEnded = false;
+    // The persistent half too, or a tab that recovered would keep the mark and be sent back to
+    // /login by the middleware on its next navigation — the same trap, pointing the other way.
+    clearSessionDeadMarker();
   }
   if (state.accessToken !== previousState.accessToken) {
     scheduleProactiveRefresh(state.accessToken);
@@ -427,10 +442,16 @@ export function startProactiveRefresh() {
  * logout and one redirect, however many requests noticed it.
  */
 export function endDeadSession(cause: string = "unknown") {
-  if (sessionEnded) {
+  if (isSessionEnded()) {
     return;
   }
   sessionEnded = true;
+  // Before logout() and before the redirect. This is what makes the latch survive the full page
+  // navigation two lines down — and what tells proxy.ts to stop bouncing this visitor back into
+  // the app on the strength of an HttpOnly cookie only it can see. Without it, every iteration
+  // of that bounce arrives with a clean module state and sends one more POST /auth/logout;
+  // production measured 240 refusals in a minute from one address.
+  markSessionDead();
 
   useAuthStore.getState().logout();
   // AFTER logout, deliberately. logout() writes "user-sign-out", which is what it is when a
@@ -549,30 +570,18 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
 });
 
 // ─── Response interceptor: refresh on 401 ───
-function normalizeResponseRoles(data: unknown): unknown {
-  if (!data || typeof data !== "object") return data;
-  if (Array.isArray(data)) return data.map(normalizeResponseRoles);
-
-  const obj = data as Record<string, unknown>;
-  const result: Record<string, unknown> = {};
-  for (const key of Object.keys(obj)) {
-    const val = obj[key];
-    if (
-      (key === "role" || key === "roleName" || key === "currentRole" || key === "workspaceRole") &&
-      typeof val === "string"
-    ) {
-      result[key] = val.toLowerCase();
-    } else if (typeof val === "object" && val !== null) {
-      result[key] = normalizeResponseRoles(val);
-    } else {
-      result[key] = val;
-    }
-  }
-  return result;
-}
-
 apiClient.interceptors.response.use(
   (response) => {
+    // A response the caller asked for as bytes has no roles in it to normalise, and walking it
+    // can only do harm. `isPlainObject` already refuses to rebuild a Blob, but stating the rule
+    // here as well is what stops the next binary response type from having to rediscover it:
+    // a file download crashed the document page with "x.text is not a function", and the same
+    // `{}` was being handed to every artifact and transcript download in the app.
+    const responseType = response.config?.responseType;
+    if (responseType && responseType !== "json") {
+      return response;
+    }
+
     if (response.data) {
       response.data = normalizeResponseRoles(response.data);
     }

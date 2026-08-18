@@ -10,17 +10,30 @@ export interface WorkspaceDto {
   defaultLanguage?: string;
 }
 
+export interface InitialWorkspaceInvitation {
+  email: string;
+  roleName: string;
+  membershipType: string;
+}
+
 export interface CreateWorkspaceRequest {
   name: string;
   logoUrl?: string | null;
   verifiedDomains?: string[];
   requireVerifiedDomainForInternal?: boolean;
+  initialInvitations?: InitialWorkspaceInvitation[];
 }
 
 export interface VerifiedDomainDto {
   id: string;
   domain: string;
   status: string;
+  /**
+   * What backs this claim: `owner_email` (matches the claiming account's own address, so the
+   * account is the evidence) or `self_asserted` (any other domain, recorded with the owner's
+   * consent since nothing else can attest to it). `dns_txt` is reserved for real verification.
+   */
+  verificationMethod: string;
   verificationToken?: string | null;
   createdAt: string;
   verifiedAt?: string | null;
@@ -32,6 +45,20 @@ export interface WorkspaceSettingsDto {
   allowedTargetLanguages: string[];
   voiceCloningEnabled: boolean;
   maxActiveRooms: number;
+  /**
+   * The most concurrent rooms this workspace's PLAN permits, whatever `maxActiveRooms` says.
+   *
+   * Meeting creation enforces the tighter of the two, so when this is lower it — not the stored
+   * setting — is the real limit. A workspace whose subscription is not active resolves to the
+   * platform default of 5, which is how a settings page reading 20 sat next to "Workspace active
+   * room limit (5) has been reached." with nothing on screen connecting them.
+   *
+   * Absent when the workspace has no entitlement snapshot yet: no plan quota is in force and the
+   * stored setting is the only rule.
+   */
+  maxActiveRoomsCeiling?: number | null;
+  /** Where the ceiling came from — "plan:enterprise", "platform_default", … */
+  maxActiveRoomsCeilingSource?: string | null;
   artifactRetentionDays: number;
   invitationExpiryDays: number;
   verifiedDomains: string[];
@@ -139,6 +166,22 @@ export interface ApproveJoinRequestResponse {
   approvalEmailError?: string | null;
 }
 
+/**
+ * What the workspace currently permits for one candidate address — the inviter still picks
+ * the access type, this only says which choices are legal and why one might be disabled.
+ */
+export interface InvitationPolicyResponse {
+  suggestedMembershipType: "Internal" | "External";
+  allowedMembershipTypes: ("Internal" | "External")[];
+  requireVerifiedDomainForInternal: boolean;
+  allowExternalCollaboration: boolean;
+  allowSubdomains: boolean;
+  isEmailDomainVerified: boolean;
+  isPublicEmailDomain: boolean;
+  internalDisabledReason?: string | null;
+  externalDisabledReason?: string | null;
+}
+
 export interface InviteMemberResponse {
   invitation: WorkspaceInvitationDto;
   /**
@@ -240,7 +283,15 @@ export interface SelectWorkspaceResponse {
   selectedWorkspaceId: string;
   name: string;
   slug: string;
+  role: string;
+  membershipType: string;
   defaultLanguage?: string;
+  /**
+   * This member's own meeting-creation permission in the selected workspace. Optional because a
+   * backend older than WT-371 #2 does not send it; treat `undefined` as allowed, which is how the
+   * app behaved before the field existed.
+   */
+  canCreateMeetings?: boolean;
 }
 
 export interface ExtractedPageDto {

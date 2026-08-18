@@ -1,7 +1,9 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
+import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
   CreateTranslationRoomRequest,
   RecurrenceRequest,
@@ -134,12 +136,57 @@ export function useUpdateTranslationRoomSettings() {
   });
 }
 
+/**
+ * WT-468 — which languages the pre-join screen may offer for a room code.
+ *
+ * The policy belongs to the workspace that OWNS the room, not to whichever workspace the joiner
+ * has selected. The screen holds only a code and cannot resolve the room until the join itself,
+ * which is why it used to fall back to the joiner's own workspace settings and offer the wrong
+ * list to anyone joining across workspaces.
+ *
+ * Disabled below 4 characters, the same threshold the join button uses, so typing a code does not
+ * fire a request per keystroke. Data is kept while a longer code is being typed
+ * (`placeholderData: keepPreviousData`) so the picker does not flicker back to the full list
+ * mid-edit.
+ */
+export function useJoinLanguagePolicy(code: string) {
+  const trimmed = code.trim();
+  return useQuery({
+    queryKey: ["translationRooms", "joinLanguagePolicy", trimmed],
+    queryFn: () => translationRoomService.getJoinLanguagePolicy(trimmed),
+    enabled: trimmed.length >= 4,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+}
+
 /** Join translationRoom by room code for the web preflight flow */
 export function useJoinTranslationRoomByCode() {
   return useMutation({
     mutationFn: async (data: JoinTranslationRoomByCodeRequest) => {
       const { data: joinResult } = await translationRoomService.joinByCode(data);
       return joinResult;
+    },
+  });
+}
+
+/**
+ * WT-480: publish or unpublish a finished meeting's record.
+ *
+ * Invalidates the room so the banner, the badge and the button all re-derive from the stored
+ * setting rather than from local optimism — the whole point of this control is that the screen
+ * tells the truth about who can read the record.
+ */
+export function useSetArtifactAccess(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (level: ArtifactAccessLevel) => {
+      await translationRoomService.setArtifactAccess(roomId, level);
+      return level;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId] });
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
   });
 }
@@ -229,6 +276,87 @@ export function useSetVoiceCloneConsent(roomId: string) {
   return useMutation({
     mutationFn: async (enabled: boolean) => {
       await translationRoomService.setVoiceCloneConsent(roomId, enabled);
+    },
+  });
+}
+
+/**
+ * Make a dub-voice change taken in AuthService reach THIS meeting now.
+ *
+ * Called after VoiceProfileService.setDubVoice, never instead of it: the setting lives in
+ * AuthService, which knows nothing about rooms, and the AI pipeline learns it only from a route
+ * payload TranslationRoomService builds. Without this the change is correct everywhere except
+ * the meeting the person is standing in.
+ */
+export function useRefreshDubVoice(roomId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      await translationRoomService.refreshDubVoice(roomId);
+    },
+  });
+}
+
+/**
+ * WT-B "flash mode" for THIS room — read by anyone in it, written by the host.
+ *
+ * Read on an interval as well as on mount, because the host can move it from another client and
+ * a guest looking at a stale switch has no way to tell. Cheap: one small GET, and only while the
+ * meeting UI is mounted.
+ */
+export function useFlashMode(roomId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["translation-room", roomId, "flash-mode"],
+    queryFn: () => translationRoomService.getFlashMode(roomId),
+    enabled: enabled && Boolean(roomId),
+    refetchInterval: 30_000,
+    // A room that cannot answer is not an error worth showing anybody: the AI side falls back to
+    // the deployment default, and "off" is the honest thing to render.
+    retry: false,
+    initialData: false,
+  });
+}
+
+export function useSetFlashMode(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => translationRoomService.setFlashMode(roomId, enabled),
+    onSuccess: (enabled) => {
+      // Seeded from what the SERVER returned, not from what was asked for. A 403 never reaches
+      // here, so the switch cannot show a state the room does not actually have.
+      queryClient.setQueryData(["translation-room", roomId, "flash-mode"], enabled);
+    },
+  });
+}
+
+/**
+ * How much the STT provider denoises THIS user's own microphone in this meeting.
+ *
+ * No polling interval, unlike useFlashMode above, and the difference is not an oversight: flash
+ * mode is a ROOM setting somebody else can change under you, so a guest's switch has to keep
+ * catching up. This is the caller's own microphone and nobody else can move it, so the only writer
+ * is the mutation below — which seeds the cache itself.
+ */
+export function useNoiseReduction(roomId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["translation-room", roomId, "noise-reduction"],
+    queryFn: () => translationRoomService.getNoiseReduction(roomId),
+    enabled: enabled && Boolean(roomId),
+    // A room that cannot answer is not an error worth showing anybody: the STT worker falls back
+    // when it cannot read the key, and "off" is the honest thing to render.
+    retry: false,
+    initialData: "off" as NoiseReductionMode,
+  });
+}
+
+export function useSetNoiseReduction(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mode: NoiseReductionMode) =>
+      translationRoomService.setNoiseReduction(roomId, mode),
+    onSuccess: (mode) => {
+      // Seeded from what the SERVER returned, not from what was asked for — the endpoint refuses
+      // an unusable mode, and the menu must never show a mode the pipeline did not accept.
+      queryClient.setQueryData(["translation-room", roomId, "noise-reduction"], mode);
     },
   });
 }

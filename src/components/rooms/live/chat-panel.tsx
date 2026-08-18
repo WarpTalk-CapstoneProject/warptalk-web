@@ -12,6 +12,7 @@ import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName } from "@/lib/language/languages";
 import { downloadAuthenticatedFile } from "@/lib/ui/download-artifact";
 import { API } from "@/lib/api/endpoints";
+import { getErrorMessage } from "@/lib/api/errors";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
@@ -19,6 +20,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
+import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -44,6 +46,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface MessageTranslationState {
   text?: string;
+  targetLanguage?: string;
   loading: boolean;
   visible: boolean;
   error?: string;
@@ -138,6 +141,7 @@ export function ChatPanel({
             ...prev,
             [messageId]: {
               text: dto.translatedText,
+              targetLanguage: dto.targetLanguage || suggestedTargetLanguage,
               loading: false,
               visible: true,
             },
@@ -368,8 +372,13 @@ export function ChatPanel({
           addChatMessage(message);
           editor.commands.clearContent(true);
         },
-        onError: () => {
-          setSendError("Message could not be sent. Try again.");
+        onError: (error) => {
+          // WT-365: "Try again." was advice that could not work. A 403 here means the server is
+          // REFUSING the message — the room no longer counts this client as an active
+          // participant — and retrying refuses it again, forever. The backend now sends its
+          // reason with the 403 (see MeetingChatController.ForbiddenWithReason), so say that;
+          // the generic line stays for the faults where trying again genuinely is the answer.
+          setSendError(getErrorMessage(error, "Message could not be sent. Try again."));
           // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
           // seconds and then blame WarpBot for a message that never reached it.
           if (asksTheAgent) {
@@ -548,9 +557,19 @@ export function ChatPanel({
                       </span>
                       <Download className="h-3.5 w-3.5 shrink-0 text-ink-subtle" />
                     </button>
+                  ) : isAssistant ? (
+                    // WarpBot answers in markdown here too, and this rendered the source of
+                    // it — "**transcript hiện tại**" reached the reader as those characters.
+                    // Left-aligned unconditionally: a bulleted list right-aligned to match a
+                    // chat bubble is unreadable, and WarpBot's messages are never "mine".
+                    <div
+                      className={`mt-0.5 max-w-full break-words text-left text-[13px] font-medium leading-relaxed text-primary`}
+                    >
+                      <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
+                    </div>
                   ) : (
                     <p
-                      className={`mt-0.5 max-w-full text-[13px] leading-relaxed whitespace-pre-wrap break-words ${isAssistant ? "text-primary font-medium" : "text-ink-muted"} ${isMine ? "text-right" : "text-left"}`}
+                      className={`mt-0.5 max-w-full text-[13px] leading-relaxed whitespace-pre-wrap break-words text-ink-muted ${isMine ? "text-right" : "text-left"}`}
                     >
                       {message.originalText}
                     </p>
@@ -562,7 +581,7 @@ export function ChatPanel({
                     >
                       {translations[message.id]!.text}
                       <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
-                        {getLanguageName(suggestedTargetLanguage)}
+                        {getLanguageName(translations[message.id]?.targetLanguage || suggestedTargetLanguage)}
                       </span>
                     </p>
                   ) : null}

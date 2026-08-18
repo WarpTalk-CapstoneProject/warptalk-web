@@ -26,6 +26,13 @@ export interface WorkspaceKnowledgeChunkDto {
   aiRetrieval: boolean;
   /** A meeting's title on its summary, the term on a glossary entry. Null for documents. */
   sourceTitle: string | null;
+  /**
+   * When this chunk was indexed, epoch milliseconds. Null for anything stored before the
+   * indexer began stamping it — the listing sorts those last rather than guessing a time.
+   */
+  indexedAtMs: number | null;
+  /** Why AI ingestion failed or was disabled, if available. */
+  ingestionFailureReason?: string | null;
 }
 
 /**
@@ -70,3 +77,17 @@ export const FACT_CATEGORIES = [
 ] as const;
 
 export type FactCategory = (typeof FACT_CATEGORIES)[number];
+
+/**
+ * What an Owner may correct about a chunk.
+ *
+ * Three fields, not the whole DTO. The indexed text is the only thing the vector was computed
+ * from and the provenance is a record of where the text came from — neither is the reader's to
+ * revise. Both nullable strings are meaningful when null: clearing a wrong fact is itself a
+ * correction, and is not the same as declining to change it.
+ */
+export interface UpdateKnowledgeChunkRequest {
+  fact: string | null;
+  factCategory: string | null;
+  aiRetrieval: boolean;
+}

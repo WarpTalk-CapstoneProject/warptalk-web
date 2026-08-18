@@ -23,39 +23,50 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
-import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
+import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { INVITE_SNOOZE_DAYS, shouldSuggestInvite } from "@/lib/onboarding/invite-suggestion";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useUIStore } from "@/stores/ui-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { IconProps } from "@phosphor-icons/react";
 import {
+  Archive,
+  CalendarBlank,
   CaretDown,
   CaretLeft,
   Check,
   CreditCard,
-  Desktop,
+  ChartLine,
+  Receipt,
+  BookOpen,
   FileText,
   GearSix,
   Gauge,
   Globe,
+  Heartbeat,
   House,
   Keyboard,
   MagnifyingGlass,
   PaperPlaneTilt,
-  Plus,
   SignOut,
+  Plus,
   Sliders,
   SquaresFour,
+  Star,
   User,
-  UserPlus,
   Users,
   Warning,
   Waveform,
+  X,
   Brain,
+  Buildings,
+  ShieldCheck,
 } from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
-import { AccountMenuDialog } from "@/components/layout/account-menu-dialog";
+import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -68,11 +79,17 @@ interface NavItem {
   label: string;
   href: string;
   exact?: boolean;
+  /**
+   * Names this row for the product tour. An attribute rather than a CSS selector, so a layout
+   * change moves the tour's target with the element instead of silently detaching it.
+   */
+  tourId?: string;
   actions?: Array<{
     icon: IconType;
     href?: string;
     onClick?: () => void;
     title?: string;
+    tourId?: string;
   }>;
 }
 
@@ -90,6 +107,7 @@ function NavLink({
     (!item.exact && pathname.startsWith(item.href + "/"));
   return (
     <div
+      data-tour={item.tourId}
       className={cn(
         "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
         collapsed && "mx-auto size-9 justify-center rounded-full px-0",
@@ -131,6 +149,7 @@ function NavLink({
                 key={i}
                 type="button"
                 title={action.title}
+                data-tour={action.tourId}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-border/50 text-ink-muted hover:text-ink shrink-0 ml-1"
                 onClick={(e) => {
                   e.preventDefault();
@@ -161,6 +180,7 @@ function NavLink({
 export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const canCreateMeetings = useCanCreateMeetings();
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -188,14 +208,28 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       icon: SquaresFour,
       label: "Meetings",
       href: `/${slug}/rooms`,
+      tourId: "nav-meetings",
       actions: [
         { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: "Join by code" },
-        { icon: Plus, onClick: () => setCreateRoomModalOpen(true), title: "Create Meeting" }
+        // Join by code stays for everyone — an external collaborator is invited INTO meetings, they
+        // just may not open them. WT-371 #2.
+        ...(canCreateMeetings
+          ? [
+              {
+                icon: Plus,
+                onClick: () => setCreateRoomModalOpen(true),
+                title: "Create Meeting",
+                tourId: "nav-create-meeting",
+              },
+            ]
+          : [])
       ]
     },
+    { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
+    { icon: Archive, label: "History", href: `/${slug}/history` },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
-    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles` },
+    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -207,14 +241,40 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
   const { data: workspacesData } = useWorkspaces(1, 100);
   const workspaces = workspacesData?.items ?? [];
+
+  /**
+   * Whether to suggest inviting people, this visit.
+   *
+   * Page size 1: only `total` is read, and this query mounts on every screen in the app — the
+   * sidebar is always there. The rule itself is in lib/onboarding/invite-suggestion.ts, seeded
+   * so the answer holds still for a day rather than being re-rolled on every render.
+   */
+  const { data: memberPage } = useWorkspaceMembers(
+    isOwnerOrAdmin && activeWorkspaceId ? activeWorkspaceId : undefined,
+    1,
+    1,
+  );
+  const inviteDismissedAt = useOnboardingStore((state) => state.inviteDismissedAt);
+  const dismissInviteSuggestion = useOnboardingStore((state) => state.dismissInviteSuggestion);
+  // The clock is read once per mount, not per render: `Date.now()` in the condition would make
+  // the decision a moving target and defeat the point of seeding it by day.
+  const [suggestionClock] = useState(() => Date.now());
+  const suggestsInvite =
+    Boolean(activeWorkspaceId) &&
+    shouldSuggestInvite({
+      workspaceId: activeWorkspaceId ?? "",
+      memberCount: memberPage?.total ?? memberPage?.items?.length ?? 0,
+      dismissedAtMs: inviteDismissedAt[activeWorkspaceId ?? ""] ?? null,
+      nowMs: suggestionClock,
+    });
   const selectWorkspaceMutation = useSelectWorkspace();
 
-  const handleSelectWorkspace = async (workspaceId: string, name: string, slug: string, roleName: string, membershipType: string, defaultLanguage: string) => {
+  const handleSelectWorkspace = async (workspaceId: string) => {
     try {
       const res = await selectWorkspaceMutation.mutateAsync(workspaceId);
-      setActiveWorkspace(workspaceId, name, slug, roleName, membershipType, res.defaultLanguage || defaultLanguage);
-      toast.success(`Switched to workspace "${name}"`);
-      router.push(`/${slug}/home`);
+      applySelectedWorkspace(res, setActiveWorkspace);
+      toast.success(`Switched to workspace "${res.name}"`);
+      router.push(`/${res.slug}/home`);
     } catch {
       toast.error("Failed to switch workspace");
     }
@@ -232,8 +292,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
   const workspaceNav: NavItem[] = [];
   workspaceNav.push(
-    { icon: Users, label: "Members", href: `/${slug}/members` },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents` }
+    { icon: Users, label: "Members", href: `/${slug}/members`, tourId: "nav-members" },
+    { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" },
+    // Directly under Documents, and visible to every member — the two are constantly mistaken for
+    // each other, and sitting them together is what makes the difference legible: Documents is
+    // content the assistant retrieves from afterwards, Glossary is terminology applied to speech
+    // and translation while the meeting is happening.
+    //
+    // Its absence from this list is the whole reason the page was deleted as dead code, and the
+    // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
+    // can navigate to is indistinguishable from one that was never built.
+    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" }
   );
 
   if (isOwnerOrAdmin) {
@@ -241,13 +310,201 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // "who is in this workspace" and "who is on the way in" were never two questions.
     // What the system has indexed from this workspace's documents and meetings. Owner/Admin
     // only, because the view crosses per-document access policies.
-    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge` });
-    workspaceNav.push({ icon: CreditCard, label: "Billing", href: `/${slug}/billing` });
+    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
+    // No Billing entry: WT-380 moved it inside Workspace Settings, where a plan, an invoice and a
+    // credit balance belong. It is reached through Settings now, not from the app's main nav.
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
-    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard` });
+    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard`, tourId: "nav-dashboard" });
   }
 
-  const isSettingsPage = pathname.includes("/settings") || pathname.includes("/advanced");
+  /**
+   * Which of the two sidebars this screen gets.
+   *
+   * `/payment` is in the list because Billing lives under Settings now (WT-380) and its primary
+   * action — choosing or changing a plan — navigates to `/{slug}/payment/plans`. Without this the
+   * chrome would flip to the main app nav on the way, dropping the reader out of Settings at the
+   * one moment they most need the way back to Billing.
+   */
+  const isSettingsPage =
+    pathname.includes("/settings") ||
+    pathname.includes("/advanced") ||
+    pathname.includes("/payment");
+
+  /**
+   * The platform admin console gets its own chrome — a third branch beside the app and Settings.
+   *
+   * Without one, /admin inherited the app's nav wholesale: Home, Meetings, Schedules, History,
+   * Voice Profiles, Members and Documents, every one of them scoped to whichever workspace the
+   * admin happened to have open. A platform administrator is not standing *inside* a workspace,
+   * so a workspace switcher and a workspace's meetings are not merely irrelevant there — they
+   * invite the reader to act on one tenant while looking at a page about all of them.
+   *
+   * Gated on isSystemAdmin as well as the path. AdminLayout already refuses the page to everyone
+   * else, and without this condition their sidebar would advertise a console beside an
+   * "Access denied" panel.
+   *
+   * SCOPE: this lists the routes that EXIST. Users, Subscriptions, Plans, Meetings, Health,
+   * Audit and Announcements each add their own entry with the release that adds the page — a nav
+   * row pointing at a 404 is the same defect as a button whose endpoint was never routed.
+   */
+  const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
+
+  if (isAdminPage && isSystemAdmin) {
+    const adminSections: Array<{ section: string; items: NavItem[] }> = [
+      {
+        section: "Platform",
+        items: [
+          // Exact, or every /admin/* page lights this row up too: NavLink treats a non-exact item
+          // as active for anything beneath its href, and every admin page is beneath /admin.
+          { icon: Gauge, label: "Overview", href: "/admin", exact: true },
+          { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
+          { icon: Users, label: "Users", href: "/admin/users" },
+        ],
+      },
+      {
+        section: "Revenue",
+        items: [
+          { icon: Gauge, label: "Subscriptions", href: "/admin/subscriptions" },
+          { icon: FileText, label: "Plans & pricing", href: "/admin/plans" },
+          { icon: CreditCard, label: "Billing ledger", href: "/admin/billing" },
+        ],
+      },
+      {
+        section: "Operations",
+        items: [
+          { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
+          { icon: Heartbeat, label: "System health", href: "/admin/health" },
+          { icon: Star, label: "Feedback", href: "/admin/feedback" },
+          { icon: Archive, label: "Audit log", href: "/admin/audit" },
+          { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
+        ],
+      },
+      {
+        section: "Configuration",
+        items: [
+          { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
+          { icon: Sliders, label: "Platform config", href: "/admin/configuration" },
+          { icon: Globe, label: "Global glossary", href: "/admin/global-glossary" },
+        ],
+      },
+    ];
+
+    const backHref = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/home` : "/workspace";
+
+    if (collapsed) {
+      return (
+        <aside className="flex h-full w-16 shrink-0 select-none flex-col border-r border-border/40 bg-canvas text-ink">
+          <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
+            <Link
+              href={backHref}
+              title="Back to app"
+              aria-label="Back to app"
+              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <CaretLeft size={16} weight="bold" />
+            </Link>
+          </div>
+          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
+            {adminSections.flatMap((group, groupIndex) =>
+              group.items.map((item, itemIndex) => (
+                <div
+                  key={item.href}
+                  className={cn(
+                    groupIndex > 0 && itemIndex === 0 && "mt-3 border-t border-border/50 pt-3",
+                  )}
+                >
+                  <NavLink item={item} pathname={pathname} collapsed />
+                </div>
+              )),
+            )}
+          </nav>
+          {/* The exit. The expanded branch hangs it off the user card; collapsed has no card,
+              so the button stands alone — an admin console with no way to sign out is how the
+              portal shipped once already. */}
+          <div className="grid shrink-0 place-items-center border-t border-border/30 py-3">
+            <button
+              onClick={() => logout()}
+              title="Log out"
+              aria-label="Log out"
+              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <SignOut size={16} weight="duotone" />
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    return (
+      <aside className="flex h-full w-[224px] shrink-0 select-none flex-col border-r border-border/40 bg-canvas font-sans text-ink antialiased">
+        <div className="flex h-[48px] shrink-0 items-center border-b border-border/30 px-3">
+          <Link
+            href={backHref}
+            className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <CaretLeft size={14} weight="bold" />
+            <span>Back to app</span>
+          </Link>
+        </div>
+
+        {/* Names the console, where the app's chrome names the workspace. Deliberately NOT a
+            switcher: there is no workspace to switch, and a control that looks like one here
+            would suggest this page is scoped to a tenant. */}
+        <div className="flex items-center gap-2.5 border-b border-border/30 px-4 py-3">
+          <span className="grid size-[22px] shrink-0 place-items-center rounded-[6px] bg-primary text-primary-foreground">
+            <ShieldCheck size={13} weight="fill" />
+          </span>
+          <span className="truncate text-[13px] font-semibold tracking-tight text-ink">
+            WarpTalk Platform
+          </span>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-3">
+          {adminSections.map((group) => (
+            <div key={group.section} className="mb-3">
+              <div className="mb-1 flex h-[24px] items-center px-2">
+                <span className="text-[12px] font-medium uppercase tracking-wider text-ink-subtle">
+                  {group.section}
+                </span>
+              </div>
+              <div className="flex flex-col gap-px">
+                {group.items.map((item) => (
+                  <NavLink key={item.href} item={item} pathname={pathname} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {user && (
+          <div className="group flex items-center gap-2.5 border-t border-border/30 px-3 py-3">
+            <Avatar className="size-7 rounded-full">
+              <AvatarImage src={user.avatarUrl} alt="" />
+              <AvatarFallback className="rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                {user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-[12.5px] font-medium text-ink">
+                {user.fullName || user.email}
+              </p>
+              <p className="truncate text-[11px] text-ink-subtle">Platform admin</p>
+            </div>
+            {/* Always visible, not hover-revealed: this card is the ONLY exit from the portal,
+                and a control nobody can see shipped once already as "no way to sign out". */}
+            <button
+              onClick={() => logout()}
+              title="Log out"
+              aria-label="Log out"
+              className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <SignOut size={16} weight="duotone" />
+            </button>
+          </div>
+        )}
+      </aside>
+    );
+  }
 
   if (isSettingsPage && collapsed) {
     const appHref = activeWorkspaceSlug
@@ -274,7 +531,29 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       settingsItems.push({
         icon: GearSix,
         label: "Workspace settings",
+        // Exact, or `/settings/billing` would light this row up too — NavLink treats a nav item as
+        // active for anything below its href, and every settings page is below this one.
+        exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
+      });
+      settingsItems.push({
+        icon: CreditCard,
+        label: "Billing",
+        // Exact now that Usage and Invoices live BELOW it. Without this, NavLink's
+        // treat-descendants-as-active rule lights Billing up while the reader is on either child,
+        // and two rows in the same group read as selected at once.
+        exact: true,
+        href: `/${activeWorkspaceSlug}/settings/billing`,
+      });
+      settingsItems.push({
+        icon: ChartLine,
+        label: "Usage",
+        href: `/${activeWorkspaceSlug}/settings/billing/usage`,
+      });
+      settingsItems.push({
+        icon: Receipt,
+        label: "Invoices",
+        href: `/${activeWorkspaceSlug}/settings/billing/invoices`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
@@ -398,6 +677,50 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       Workspace Settings
+                    </span>
+                  </Link>
+                </div>
+                {/* WT-380 — Billing belongs here, not on the app's main nav. `startsWith` rather
+                    than `===` so the row stays lit while the reader is off buying a plan at
+                    /payment/plans, which is where this page's primary action sends them. */}
+                {/* Billing is EXACT now that Usage and Invoices sit below it. `startsWith` would
+                    light this row while the reader is on either child, so two rows in the group
+                    would read as selected at once. `/payment` still counts as Billing: it is where
+                    the plan grid sends a buyer, and losing the highlight there is the one moment
+                    they most need the way back. */}
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/billing` ||
+                    pathname.startsWith(`/${activeWorkspaceSlug}/payment`)
+                    ? "bg-surface-2"
+                    : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Billing
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/billing/usage` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing/usage`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <ChartLine size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Usage
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/billing/invoices` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing/invoices`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <Receipt size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Invoices
                     </span>
                   </Link>
                 </div>
@@ -530,14 +853,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[230px] bg-popover border border-border shadow-md rounded-xl p-1 text-ink text-[13px]">
-            {/* 1. Settings */}
-            <DropdownMenuItem
-              onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : "/workspace")}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
-            >
-              <span>Settings</span>
-              <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">G then S</DropdownMenuShortcut>
-            </DropdownMenuItem>
+            {/* 1. Settings (Owner & Admin only) */}
+            {isOwnerOrAdmin && (
+              <DropdownMenuItem
+                onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : "/workspace")}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+              >
+                <span>Settings</span>
+                <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">G then S</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
 
             {/* 2. Invite and manage members */}
             <DropdownMenuItem
@@ -576,16 +901,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 {/* Workspace list */}
                 <div className="max-h-[200px] overflow-y-auto flex flex-col gap-0.5">
                   {workspaces.map((ws, idx) => {
-                    const membershipType =
-                      "membershipType" in ws && typeof ws.membershipType === "string"
-                        ? ws.membershipType
-                        : "Internal";
                     const isSelected = ws.id === activeWorkspaceId;
 
                     return (
                       <DropdownMenuItem
                         key={ws.id}
-                        onClick={() => handleSelectWorkspace(ws.id, ws.name, ws.slug, ws.role || "Member", membershipType, ws.defaultLanguage || "en")}
+                        onClick={() => handleSelectWorkspace(ws.id)}
                         className={cn(
                           "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-[13px]",
                           isSelected ? "bg-surface-2 font-medium text-ink" : "hover:bg-surface-2 text-ink"
@@ -606,8 +927,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 <div className="px-2.5 py-1 text-[11px] font-medium text-ink-subtle">
                   Account
                 </div>
+                {/*
+                  The gateway, not the create form. The label has always promised BOTH, and
+                  creating now starts at the plan grid rather than at a name field — so the one
+                  screen that offers join alongside the plan-first create route is the honest
+                  destination for it.
+                */}
                 <DropdownMenuItem
-                  onClick={() => router.push("/workspace/create")}
+                  onClick={() => router.push("/workspace")}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
                 >
                   <span>Create or join a workspace...</span>
@@ -744,21 +1071,45 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         )}
       </nav>
 
-      {isOwnerOrAdmin && activeWorkspaceId && !collapsed && (
+      {/*
+        A suggestion, not furniture.
+        It used to render for every Owner and Admin on every screen forever, with no way to send
+        it away — including for workspaces whose team was invited months ago. Now it appears on
+        some days and not others (seeded by workspace and date, so it holds still rather than
+        flickering), stops entirely once the workspace has a team, and has a dismiss that is
+        remembered.
+
+        The dismiss is a sibling of the card's button rather than a child: a button inside a
+        button is invalid HTML, and browsers resolve it by dropping one of them.
+      */}
+      {isOwnerOrAdmin && activeWorkspaceId && suggestsInvite && !collapsed && (
         <div className="px-3 pb-2 pt-3">
-          <button
-            type="button"
-            onClick={() => setIsInviteModalOpen(true)}
-            className="group w-full rounded-[14px] border border-border bg-surface-1 p-3 text-left shadow-linear transition hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
-            <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
-              <PaperPlaneTilt size={17} weight="duotone" />
-            </span>
-            <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
-            <span className="mt-1 block text-[12px] leading-5 text-ink-muted">
-              Bring your team in to collaborate and share workspace rooms.
-            </span>
-          </button>
+          <div className="group relative">
+            <button
+              type="button"
+              onClick={() => setIsInviteModalOpen(true)}
+              className="w-full rounded-[14px] border border-border bg-surface-1 p-3 text-left shadow-linear transition hover:-translate-y-0.5 hover:border-hairline-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
+                <PaperPlaneTilt size={17} weight="duotone" />
+              </span>
+              <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
+              <span className="mt-1 block pr-5 text-[12px] leading-5 text-ink-muted">
+                Bring your team in to collaborate and share workspace rooms.
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                dismissInviteSuggestion(activeWorkspaceId, Date.now())
+              }
+              title={`Dismiss for ${INVITE_SNOOZE_DAYS} days`}
+              aria-label="Dismiss the invite suggestion"
+              className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-md text-ink-subtle opacity-0 transition hover:bg-surface-3 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover:opacity-100"
+            >
+              <X size={11} weight="bold" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -779,8 +1130,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       {/* User Account Panel */}
       {user && (
         <div className="mt-auto shrink-0 p-3">
+          <AccountMenu
+            open={accountMenuOpen}
+            onOpenChange={setAccountMenuOpen}
+            user={user}
+            workspaceId={activeWorkspaceId}
+            workspaceSlug={activeWorkspaceSlug}
+            role={role}
+            membershipType={membershipType}
+            onSignOut={logout}
+            trigger={
           <div
-            onClick={() => setAccountMenuOpen(true)}
             title={collapsed ? user.fullName || "Profile" : undefined}
             aria-label={collapsed ? user.fullName || "Profile" : undefined}
             className={cn(
@@ -839,6 +1199,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </button>
             )}
           </div>
+            }
+          />
         </div>
         )}
 
@@ -876,19 +1238,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           </form>
         </DialogContent>
       </Dialog>
-
-      {user ? (
-        <AccountMenuDialog
-          open={accountMenuOpen}
-          onOpenChange={setAccountMenuOpen}
-          user={user}
-          workspaceId={activeWorkspaceId}
-          workspaceSlug={activeWorkspaceSlug}
-          role={role}
-          membershipType={membershipType}
-          onSignOut={logout}
-        />
-      ) : null}
 
       <InviteMemberDialog
         open={isInviteModalOpen}

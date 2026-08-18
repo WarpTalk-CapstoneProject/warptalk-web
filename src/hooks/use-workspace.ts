@@ -1,9 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorkspaceService } from "@/services/workspace.service";
-import type { WorkspaceKnowledgeQuery } from "@/types/workspace-knowledge";
-import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto, VerifiedDomainDto } from "@/types/workspace";
+import type {
+  UpdateKnowledgeChunkRequest,
+  WorkspaceKnowledgeQuery,
+} from "@/types/workspace-knowledge";
+import type { ApplyWorkspaceRoleChangeRequest, WorkspaceSettingsDto } from "@/types/workspace";
 import { WORKSPACE_DOCUMENT_INGESTION_STATUS } from "@/constants/workspace-document";
 
 // Query Keys
@@ -11,6 +15,7 @@ export const WORKSPACE_KEYS = {
   list: (page: number, pageSize: number, search: string) => ["workspaces", "list", { page, pageSize, search }] as const,
   detail: (id: string) => ["workspaces", "detail", id] as const,
   settings: (id: string) => ["workspaces", "settings", id] as const,
+  verifiedDomains: (id: string) => ["workspaces", "verified-domains", id] as const,
   members: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "members", workspaceId, { page, pageSize, search }] as const,
   invitations: (workspaceId: string, page: number, pageSize: number, search: string) =>
@@ -109,34 +114,32 @@ export function usePatchWorkspaceSettings(workspaceId: string) {
   });
 }
 
+/**
+ * Verified domains come from `workspace_verified_domains`, through the endpoints that own it.
+ *
+ * All three of these used to work by PATCHing the `verifiedDomains` array inside the settings
+ * JSON — a display mirror the backend refreshes from that table and ignores on write. Reads
+ * showed whatever the mirror last happened to contain, and writes did nothing whatsoever.
+ *
+ * Both queries are invalidated together on every mutation: the domain list decides the
+ * workspace's membership policy, so a change here also changes what /settings reports.
+ */
 export function useVerifiedDomains(workspaceId: string) {
-  const settings = useWorkspaceSettings(workspaceId);
-  return {
-    ...settings,
-    data: (settings.data?.verifiedDomains || []).map((domain) => ({
-      id: domain,
-      domain,
-      status: "Verified",
-      createdAt: new Date().toISOString(),
-    })) as VerifiedDomainDto[],
-  };
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId),
+    queryFn: () => WorkspaceService.listVerifiedDomains(workspaceId),
+    enabled: !!workspaceId,
+  });
 }
 
 export function useAddVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
-  const settingsQuery = useWorkspaceSettings(workspaceId);
-  const patchSettings = usePatchWorkspaceSettings(workspaceId);
 
   return useMutation({
-    mutationFn: async (domain: string) => {
-      if (!settingsQuery.data) throw new Error("Settings not loaded");
-      const currentDomains = settingsQuery.data.verifiedDomains || [];
-      if (currentDomains.includes(domain)) return;
-      // Only the domain list travels. Spreading the whole cached document used to make this
-      // a blind full-document overwrite of everything else in the settings JSON.
-      await patchSettings.mutateAsync({ verifiedDomains: [...currentDomains, domain] });
-    },
+    mutationFn: ({ domain, consentVersion }: { domain: string; consentVersion?: string }) =>
+      WorkspaceService.addVerifiedDomain(workspaceId, domain, consentVersion),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId) });
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
@@ -144,20 +147,11 @@ export function useAddVerifiedDomain(workspaceId: string) {
 
 export function useRevokeVerifiedDomain(workspaceId: string) {
   const queryClient = useQueryClient();
-  const settingsQuery = useWorkspaceSettings(workspaceId);
-  const patchSettings = usePatchWorkspaceSettings(workspaceId);
 
   return useMutation({
-    mutationFn: async (domainIdOrName: string) => {
-      if (!settingsQuery.data) throw new Error("Settings not loaded");
-      const currentDomains = settingsQuery.data.verifiedDomains || [];
-      await patchSettings.mutateAsync({
-        verifiedDomains: currentDomains.filter(
-          (d) => d.toLowerCase() !== domainIdOrName.toLowerCase()
-        ),
-      });
-    },
+    mutationFn: (domainId: string) => WorkspaceService.revokeVerifiedDomain(workspaceId, domainId),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.verifiedDomains(workspaceId) });
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.settings(workspaceId) });
     },
   });
@@ -250,11 +244,45 @@ export function useUpdateWorkspaceMember(workspaceId: string) {
 export function useInviteWorkspaceMember(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ email, roleName }: { email: string; roleName: string }) =>
-      WorkspaceService.invite(workspaceId, email, roleName),
+    mutationFn: ({
+      email,
+      roleName,
+      membershipType,
+    }: {
+      email: string;
+      roleName: string;
+      membershipType: "Internal" | "External";
+    }) => WorkspaceService.invite(workspaceId, email, roleName, membershipType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
     },
+  });
+}
+
+/**
+ * What Internal/External access this workspace currently permits for `email`, so the invite
+ * form can pre-select and disable options instead of guessing at the rules client-side and
+ * finding out it guessed wrong from a 4xx after submit.
+ *
+ * Debounced by hand — email is typed character by character and every keystroke would
+ * otherwise fire a request. `enabled` requires a syntactically complete address so the
+ * server never sees "a", "al", "ali"...
+ */
+export function useInvitationPolicy(workspaceId: string, email: string) {
+  const [debouncedEmail, setDebouncedEmail] = useState(email);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedEmail(email), 350);
+    return () => clearTimeout(handle);
+  }, [email]);
+
+  const isLikelyCompleteEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail.trim());
+
+  return useQuery({
+    queryKey: ["workspaces", "invitation-policy", workspaceId, debouncedEmail.trim().toLowerCase()],
+    queryFn: () => WorkspaceService.getInvitationPolicy(workspaceId, debouncedEmail.trim()),
+    enabled: !!workspaceId && isLikelyCompleteEmail,
+    staleTime: 10_000,
   });
 }
 
@@ -353,6 +381,38 @@ export function useRejectWorkspaceJoinRequest(workspaceId: string) {
 
 export const useApproveJoinRequest = useApproveWorkspaceJoinRequest;
 export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
+
+export function useCreateLeaveRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => WorkspaceService.createLeaveRequest(workspaceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
+    },
+  });
+}
+
+export function useApproveLeaveRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (leaveRequestId: string) => WorkspaceService.approveLeaveRequest(workspaceId, leaveRequestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
+    },
+  });
+}
+
+export function useRejectLeaveRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (leaveRequestId: string) => WorkspaceService.rejectLeaveRequest(workspaceId, leaveRequestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+    },
+  });
+}
 
 export function useMyJoinRequests() {
   return useQuery({
@@ -588,6 +648,24 @@ export function useAddGlossaryTerm(glossaryId: string) {
   });
 }
 
+/**
+ * WT-472 — import a spreadsheet of terms in one request.
+ *
+ * Invalidates the same key as useAddGlossaryTerm, so the dictionary re-reads once when the file
+ * lands rather than once per row.
+ */
+export function useBulkImportGlossaryTerms(glossaryId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (terms: Parameters<typeof WorkspaceService.bulkImportTerms>[1]) =>
+      WorkspaceService.bulkImportTerms(glossaryId, terms),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.terms(glossaryId) });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "glossaries"] });
+    },
+  });
+}
+
 export function useGlossaryTerms(glossaryId: string) {
   return useQuery({
     queryKey: WORKSPACE_KEYS.terms(glossaryId),
@@ -660,5 +738,44 @@ export function useWorkspaceKnowledge(
     enabled: !!workspaceId,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
+  });
+}
+
+/**
+ * Corrects one indexed chunk.
+ *
+ * Invalidates every page of this workspace's listing rather than patching the one row: the
+ * fact-category filter is part of the query key, so recategorising a chunk changes which
+ * filtered pages it belongs to — and a surgical cache write would leave it on the page for
+ * the category it just left.
+ */
+export function useUpdateKnowledgeChunk(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      chunkId,
+      update,
+    }: {
+      chunkId: string;
+      update: UpdateKnowledgeChunkRequest;
+    }) => WorkspaceService.updateKnowledgeChunk(workspaceId, chunkId, update),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["workspaces", "knowledge", workspaceId],
+      });
+    },
+  });
+}
+
+export function useDeleteKnowledgeChunk(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (chunkId: string) =>
+      WorkspaceService.deleteKnowledgeChunk(workspaceId, chunkId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["workspaces", "knowledge", workspaceId],
+      });
+    },
   });
 }

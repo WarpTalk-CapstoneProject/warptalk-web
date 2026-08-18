@@ -124,7 +124,6 @@ checks.push([
 // components/layout/header-search.tsx, which has no sign-out of its own.
 const LOGOUT_CALL_SITES = [
   "src/components/layout/linear-sidebar.tsx",
-  "src/app/invitations/[token]/page.tsx",
 ];
 for (const rel of LOGOUT_CALL_SITES) {
   const source = await read(rel);
@@ -169,7 +168,12 @@ checks.push([
 ]);
 checks.push([
   "the create and join surfaces are still reachable, so the gate did not simply delete the empty state",
-  workspacePage.includes('router.push("/workspace/create")') &&
+  // Creating a workspace now begins at the plan grid: the Create card is disabled with the
+  // reason on it and /workspace/plans is the route onward. This check exists to catch the
+  // empty state being GUTTED — both ways out of it must still be offered — so it follows the
+  // create path to where it moved rather than pinning the old href, which would have failed
+  // for a change that added a step instead of removing a door.
+  workspacePage.includes('router.push("/workspace/plans")') &&
     workspacePage.includes('router.push("/workspace/join")'),
 ]);
 

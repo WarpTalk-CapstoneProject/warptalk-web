@@ -131,3 +131,87 @@ export function sourceLabel(
 export function hasAnyFact(items: readonly Pick<WorkspaceKnowledgeChunkDto, "fact">[]): boolean {
   return items.some((chunk) => Boolean(chunk.fact));
 }
+
+/**
+ * Facts, newest source first, with each source's facts kept together.
+ *
+ * Two rules, and the order they are applied in is the whole point.
+ *
+ * GROUPING exists because the API returns a page in whatever order the query produced, so two
+ * facts from the SAME meeting could sit rows apart with other meetings in between. Someone
+ * scanning the Source column could not tell where one meeting's knowledge ended.
+ *
+ * ORDERING exists because grouping alone was originally done with `groupKey.localeCompare`,
+ * which sorts sources by their NAME. That is what made the page read "a", "â", "ac", "ac",
+ * "ac" — an alphabetical index of meeting titles, in which the meeting that just finished is
+ * somewhere in the middle. This page is read to answer "what do we know now", and the answer
+ * has to start at the top.
+ *
+ * So groups are ordered by their most recent `indexedAtMs`, descending, and only the rows
+ * WITHIN a group fall back to chunkIndex — a document still reads in its own order.
+ *
+ * Rows with no `indexedAtMs` — everything indexed before the producer began stamping one —
+ * sort last as a block, still grouped, still alphabetical among themselves. They are genuinely
+ * undated, and floating them to the top by treating null as 0 or as now would both be lies.
+ *
+ * SCOPE: this orders the page you are looking at. The server paginates at 50, so a source split
+ * across a page boundary stays split, and page two is not necessarily older than page one —
+ * ordering across pages means moving this into the Qdrant query, which needs a payload index on
+ * `indexed_at` and a different pagination model than the opaque cursor the API returns today.
+ */
+export function orderKnowledgeChunks<
+  T extends Pick<
+    WorkspaceKnowledgeChunkDto,
+    | "sourceType"
+    | "sourceTitle"
+    | "documentName"
+    | "documentId"
+    | "chunkIndex"
+    | "indexedAtMs"
+  >,
+>(chunks: readonly T[]): T[] {
+  // documentId before the label: two meetings can share a title, and grouping on the label
+  // alone would file knowledge from different meetings under one heading.
+  const groupKey = (chunk: T) =>
+    `${chunk.sourceType} ${chunk.documentId ?? sourceLabel(chunk)}`;
+
+  // A group is as new as its newest chunk. Using the first row's stamp instead would order
+  // groups by whichever of their chunks happened to arrive first in the page.
+  const newestByGroup = new Map<string, number>();
+  for (const chunk of chunks) {
+    const key = groupKey(chunk);
+    const stamp = chunk.indexedAtMs;
+    if (typeof stamp !== "number") continue;
+    const known = newestByGroup.get(key);
+    if (known === undefined || stamp > known) newestByGroup.set(key, stamp);
+  }
+
+  return [...chunks].sort((left, right) => {
+    const leftKey = groupKey(left);
+    const rightKey = groupKey(right);
+
+    if (leftKey !== rightKey) {
+      const leftStamp = newestByGroup.get(leftKey);
+      const rightStamp = newestByGroup.get(rightKey);
+
+      // Undated groups as a block at the bottom, in a stable order of their own rather than an
+      // arbitrary one.
+      if (leftStamp === undefined && rightStamp === undefined) {
+        return leftKey.localeCompare(rightKey);
+      }
+      if (leftStamp === undefined) return 1;
+      if (rightStamp === undefined) return -1;
+
+      if (leftStamp !== rightStamp) return rightStamp - leftStamp;
+      // Same millisecond — indexed by the same batch. Fall through to a stable tiebreak so the
+      // order does not depend on the engine's sort implementation.
+      return leftKey.localeCompare(rightKey);
+    }
+
+    // Nulls last: a chunk with no index is not "index 0", and treating it as one would push a
+    // document's real opening chunk down the list.
+    const leftIndex = left.chunkIndex ?? Number.MAX_SAFE_INTEGER;
+    const rightIndex = right.chunkIndex ?? Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex;
+  });
+}

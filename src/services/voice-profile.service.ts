@@ -4,7 +4,9 @@ import type {
   VoiceProfileDto,
   CreateVoiceProfileRequest,
   VoiceCatalogItemDto,
+  SetDubVoiceRequest,
   SetPreferredVoiceRequest,
+  PreviewVoiceRequest,
   VoiceConsentStatusDto,
 } from "@/types/voice-profile";
 
@@ -20,6 +22,21 @@ export const VoiceProfileService = {
     formData.append("language", request.language);
     if (request.sample) {
       formData.append("sample", request.sample);
+    }
+    if (request.ownVoiceConfirmed !== undefined) {
+      formData.append("ownVoiceConfirmed", String(request.ownVoiceConfirmed));
+    }
+    if (request.aiUseConfirmed !== undefined) {
+      formData.append("aiUseConfirmed", String(request.aiUseConfirmed));
+    }
+    if (request.syntheticVoiceAcknowledged !== undefined) {
+      formData.append("syntheticVoiceAcknowledged", String(request.syntheticVoiceAcknowledged));
+    }
+    if (request.noImpersonationConfirmed !== undefined) {
+      formData.append("noImpersonationConfirmed", String(request.noImpersonationConfirmed));
+    }
+    if (request.retentionAcknowledged !== undefined) {
+      formData.append("retentionAcknowledged", String(request.retentionAcknowledged));
     }
 
     const { data } = await apiClient.post<VoiceProfileDto>(API.voiceProfiles.create, formData, {
@@ -50,6 +67,38 @@ export const VoiceProfileService = {
       request,
     );
     return status === 204 || !data ? null : (data as VoiceProfileDto);
+  },
+
+  /** WT-396 — the voice this user is DUBBED IN. Null means clone them live in the meeting. */
+  async dubVoice(): Promise<string | null> {
+    const { data } = await apiClient.get<{ voiceId: string | null }>(API.voiceProfiles.dubVoice);
+    return data.voiceId ?? null;
+  },
+
+  /** Pass a null voiceId to clear the choice and go back to live cloning. */
+  async setDubVoice(request: SetDubVoiceRequest): Promise<string | null> {
+    const { data } = await apiClient.put<{ voiceId: string | null }>(
+      API.voiceProfiles.dubVoice,
+      request,
+    );
+    return data.voiceId ?? null;
+  },
+
+  /**
+   * WAV audio of `voiceId` speaking one sentence in `language`.
+   *
+   * The language is required and is not cosmetic — the sample is SPOKEN in it, and the same
+   * voice is a different judgement in Vietnamese than in English.
+   *
+   * Rendered with the same speed the meeting uses, so what you hear here is what the dub will
+   * sound like. The first call for a voice waits on a real synthesis; every call after it is
+   * served from the AI side's cache.
+   */
+  async preview(request: PreviewVoiceRequest): Promise<Blob> {
+    const { data } = await apiClient.post<Blob>(API.voiceProfiles.preview, request, {
+      responseType: "blob",
+    });
+    return data;
   },
 
 };

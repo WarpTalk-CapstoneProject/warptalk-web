@@ -7,7 +7,13 @@ import { Spinner } from "@phosphor-icons/react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useAuthStore } from "@/stores/auth-store";
-import { useWorkspaceMembers, useTransferWorkspaceOwnership, useDeleteWorkspace } from "@/hooks/use-workspace";
+import {
+  useWorkspaceMembers,
+  useTransferWorkspaceOwnership,
+  useDeleteWorkspace,
+  useVerifiedDomains,
+} from "@/hooks/use-workspace";
+import { VerifiedDomainsManager } from "@/components/workspace/verified-domains-manager";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,6 +34,8 @@ export default function AdvancedSettingsPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
+  const verifiedDomainsQuery = useVerifiedDomains(activeWorkspaceId || "");
+  const activeDomainCount = verifiedDomainsQuery.data?.length ?? 0;
   const transferOwnershipMutation = useTransferWorkspaceOwnership(activeWorkspaceId || "");
   const deleteWorkspaceMutation = useDeleteWorkspace();
 
@@ -80,11 +88,31 @@ export default function AdvancedSettingsPage() {
     <div className="flex min-h-full flex-col gap-6 px-4 py-4 pb-6 text-ink max-w-7xl mx-auto w-full">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-destructive">Advanced Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-ink">Advanced Settings</h1>
         <p className="text-sm text-ink-muted mt-1">
-          Perform high-risk operations for this workspace. Proceed with caution.
+          Owner-only controls that change who can reach this workspace, and what happens to it.
         </p>
       </div>
+
+      {/*
+        Not in the Danger zone: adding a verified domain is a normal thing for an owner to do and
+        is reversible. It is here rather than in Settings because of what it decides — anyone
+        invited on a verified domain can be made an internal member, so it does not belong among
+        preferences like default language, one click away from everyone who can edit those.
+      */}
+      <Card className="border-hairline bg-surface-1 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold text-ink">Verified domains</CardTitle>
+          <CardDescription className="text-xs text-ink-muted">
+            {activeDomainCount > 0
+              ? `Membership is decided by domain — ${activeDomainCount} verified. Only addresses on these domains can be invited as internal members.`
+              : "No verified domains, so you assign internal and external membership by hand when inviting. Add one to decide it by email domain instead."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <VerifiedDomainsManager workspaceId={activeWorkspaceId} />
+        </CardContent>
+      </Card>
 
       {/* Danger Zone */}
       <Card className="border-destructive/20 bg-destructive/5 shadow-sm">
@@ -146,7 +174,17 @@ export default function AdvancedSettingsPage() {
               setTransferConfirmation("");
             }}>
               <SelectTrigger className="h-9 text-xs bg-surface-2 border-hairline">
-                <SelectValue placeholder="Choose a member..." />
+                {/* WT-436 (Linear): a function child, not a bare placeholder. Base UI's
+                    Select.Value does not look up the selected item's rendered children the way
+                    Radix does — with no function child it stringifies the raw value, and the
+                    value here is the member's GUID. Same pattern as the settings page. */}
+                <SelectValue>
+                  {(value) => {
+                    if (!value) return "Choose a member...";
+                    const member = membersList.find((m) => m.userId === value);
+                    return member ? `${member.fullName} (${member.email})` : "Choose a member...";
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {membersList

@@ -36,6 +36,16 @@ export interface CreateCheckoutSessionRequest {
   paymentType: string;
   planSlug?: string;
   billingCycle?: string;
+  /**
+   * WT-429, credit top-ups only: how many credits to buy.
+   *
+   * This — not `amount` — is the authoritative field for a top-up. The server prices it against
+   * the admin-editable `credit_value_vnd` and overwrites `amount` with the result, so the
+   * browser can no longer name its own exchange rate (the old panel quoted from a hardcoded
+   * constant that had drifted 2–2.5× off the real rate). The same count rides on the Stripe
+   * session so the completion handler grants exactly what was paid for.
+   */
+  credits?: number;
 }
 
 export interface CheckoutSessionDto {
@@ -59,6 +69,23 @@ export interface PlanDto {
   currency: string;
   billingCycle: string;
   creditsPerCycle: number;
+  /**
+   * The overage, rollover and invoicing columns.
+   *
+   * These were absent from this interface while every screen only read plans, and the API has
+   * always returned them. They are declared now because `PUT /plans/{id}` takes a WHOLE plan and
+   * writes all twenty-two columns from it — so an edit form built on a seventeen-field type would
+   * have silently reset the five it could not see, on every save, to the service's defaults
+   * (overage cap 0, overage price 4.0, low balance 0, rollover 0, terms 15d, grace 360h).
+   *
+   * See lib/billing/plan-request.ts, which is where the round-trip is enforced and tested.
+   */
+  overageCapCredits: number;
+  overagePricePerCredit: number;
+  lowBalanceThresholdCredits: number;
+  rolloverCapCredits: number;
+  invoiceTermsDays: number;
+  invoiceGraceHours: number;
   features: string;
   sortOrder: number;
   isActive: boolean;
@@ -230,11 +257,40 @@ export interface UsageAlertDto {
   reason: string;
 }
 
-export interface ServiceRatesDto {
-  sttPerMinute: number;
-  translationPerMinute: number;
-  standardTtsPerMinute: number;
-  voiceClonePerMinute: number;
-  aiSummaryPerRequest: number;
-  aiChatPerRequest: number;
+/**
+ * Whether this workspace keeps translating after its credits reach zero.
+ *
+ * `planCapCredits` is the difference between "switched off" and "not available": a plan whose
+ * cap is 0 offers no allowance at all, and the page must not present a switch that cannot do
+ * anything. The cap itself is not the Owner's to change — see
+ * SubscriptionsController.SetOverage, which only moves between 0 and the plan's own figure.
+ */
+export interface WorkspaceOverageSettingDto {
+  enabled: boolean;
+  effectiveCapCredits: number;
+  planCapCredits: number;
+  overageCreditsThisCycle: number;
+}
+
+/** WT-413: one member's share of a workspace's credit spend. */
+export interface MemberCreditUsageDto {
+  userId: string;
+  creditsConsumed: number;
+  recordCount: number;
+  lastUsedAt: string | null;
+}
+
+/**
+ * Per-member credit spend for a workspace.
+ *
+ * Members arrive as ids, not names: billing has no user directory, and the dashboard already
+ * holds the workspace member list, so the join happens here rather than by coupling billing to
+ * auth for a label.
+ */
+export interface WorkspaceUsageByMemberDto {
+  workspaceId: string;
+  from: string | null;
+  to: string | null;
+  totalCreditsConsumed: number;
+  members: MemberCreditUsageDto[];
 }

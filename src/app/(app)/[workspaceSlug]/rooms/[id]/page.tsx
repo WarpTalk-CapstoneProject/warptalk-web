@@ -77,17 +77,27 @@ import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
 import {
   ArtifactsPanel,
   MeetingRecordTabButton,
+  MeetingRecordingPlayer,
   SummaryPanel,
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
+import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
+import {
+  describeRecordSharing,
+  isRecordShared,
+  nextArtifactAccess,
+} from "@/lib/meeting/record-sharing";
 import type { EndedRoomHistoryItem } from "@/types/roomHistory";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
+import { isFinishedStatus } from "@/lib/meeting/room-occupancy";
+import { looksLikeRoomId } from "@/lib/meeting/room-code-guess";
 import {
   useTranscriptByRoom,
   useTranscriptSegments,
 } from "@/hooks/use-transcripts";
 import {
   useEndTranslationRoom,
+  useSetArtifactAccess,
   useStartTranslationRoom,
   useTranslationRoom,
   useTranslationRoomInvitations,
@@ -159,6 +169,8 @@ export default function RoomInformationPage() {
   const router = useRouter();
   const roomId = params.id;
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  // WT-433: the "Ask to join" button's in-flight state.
+  const [askingToJoin, setAskingToJoin] = useState(false);
 
   const roomQuery = useTranslationRoom(roomId);
   const participantsQuery = useTranslationRoomParticipants(roomId);
@@ -256,11 +268,79 @@ export default function RoomInformationPage() {
   }
 
   if (!room) {
+    // WT-433 (Linear): one blanket sentence used to cover loading, refusal AND network error.
+    // The refusal case is the important one — the detail read answers 404 for a workspace
+    // member who was never invited (deliberately indistinguishable from a missing room, WT-334),
+    // and this page rendered that as a dead end. The waiting-room path exists; this hands them
+    // the door instead of the wall.
+    if (roomQuery.isLoading) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <p className="text-[13px] text-muted-foreground">Loading room…</p>
+        </div>
+      );
+    }
+
+    // WT-528: an OLD LINK is not a refusal, and must not be reported as one.
+    //
+    // `/room/{x}` and `/rooms/{x}` forward their segment here verbatim, and server-built
+    // invitation and reminder links used to carry the room CODE. A code can never resolve on
+    // this page, so the room read failed and this branch blamed the viewer's access — the room
+    // was fine and only the identifier was of the wrong kind. It then offered "Ask to join",
+    // which POSTs the code to an endpoint whose Guid binding answers 400 in a shape the client
+    // cannot parse, so the toast fell back to "This room is not available to join." — the
+    // sentence in the report.
+    //
+    // The links are fixed at the source, but ones already sent still carry codes.
+    if (!looksLikeRoomId(roomId)) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+            <p className="text-[13px] text-muted-foreground">
+              This meeting link is out of date, so we can&rsquo;t open the room from it. Open the
+              meeting from your Meetings list, or ask whoever invited you to share it again.
+            </p>
+            <Button size="sm" onClick={() => router.push(`/${workspaceSlug}/rooms`)}>
+              Go to Meetings
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-[13px] text-muted-foreground">
-          Room information is unavailable.
-        </p>
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <p className="text-[13px] text-muted-foreground">
+            You don&rsquo;t have access to this room yet. If a teammate shared this link with
+            you, you can ask the host to let you in.
+          </p>
+          <Button
+            size="sm"
+            disabled={askingToJoin}
+            onClick={async () => {
+              setAskingToJoin(true);
+              try {
+                await translationRoomService.joinById(roomId, {
+                  displayName: user?.fullName || user?.email || "Participant",
+                  speakLanguage: "vi",
+                  listenLanguage: "vi",
+                });
+                router.push(`/${workspaceSlug}/rooms/${roomId}/waiting`);
+              } catch (error) {
+                // A non-member of the workspace gets the same 404 the detail read gave — the
+                // room genuinely is not theirs to knock on.
+                toast.error(
+                  getErrorMessage(error, "This room is not available to join."),
+                );
+              } finally {
+                setAskingToJoin(false);
+              }
+            }}
+          >
+            {askingToJoin ? "Asking…" : "Ask to join"}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -398,6 +478,7 @@ export default function RoomInformationPage() {
                     room={room}
                     apiParticipants={apiParticipants}
                     occupancyLabel={occupancy.label}
+                    occupancyNoun={isFinishedStatus(room.status) ? "attended" : "in room"}
                     user={user}
                     onCopy={handleCopy}
                   />
@@ -464,6 +545,9 @@ export default function RoomInformationPage() {
 
             {isEnded || transcriptSegments.length > 0 ? (
               <MeetingRecordSection
+                roomId={room.id}
+                isHost={isHost}
+                artifactAccess={room.settings?.artifactAccess}
                 endedRecord={endedRecordQuery.data ?? null}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
@@ -647,12 +731,20 @@ function RoomEntryButton({
  * live during a meeting — it has its own data, its own corrections, and its own actions.
  */
 function MeetingRecordSection({
+  roomId,
+  isHost,
+  artifactAccess,
   transcript,
   transcriptCount,
   endedRecord,
   onRecordChanged,
   onJumpToMoment,
 }: {
+  roomId: string;
+  /** WT-480: only the host may change who the record is shared with. */
+  isHost: boolean;
+  /** WT-480: the room's stored `artifactAccess`. Absent reads as not shared. */
+  artifactAccess?: string | null;
   transcript: React.ReactNode;
   transcriptCount: number;
   endedRecord: EndedRoomHistoryItem | null;
@@ -664,6 +756,11 @@ function MeetingRecordSection({
   );
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
+  // WT-492: null when the meeting was not recorded, or the file is not ready yet.
+  const recording = findPlayableRecording(endedRecord?.artifacts);
+  // WT-480: who may read this record. One derivation feeds the badge, the banner and the button.
+  const setArtifactAccess = useSetArtifactAccess(roomId);
+  const sharing = describeRecordSharing({ artifactAccess, isHost });
 
   // Read inside the polling interval, which closes over the render that started it and
   // would otherwise never see the rewritten summary arrive.
@@ -692,7 +789,61 @@ function MeetingRecordSection({
 
   return (
     <section className="mt-8 border-b border-border/60 pb-7">
-      <h2 className="text-[15px] font-semibold text-ink">Meeting record</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-[15px] font-semibold text-ink">Meeting record</h2>
+          {/* WT-480: the badge and the banner below come from one call, so they cannot end up
+              disagreeing — a "Draft" chip beside a banner saying everyone can read it is worse
+              than either alone. */}
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              sharing.tone === "shared"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+            )}
+          >
+            {sharing.badge}
+          </span>
+        </div>
+
+        {sharing.action ? (
+          <button
+            type="button"
+            onClick={() => void setArtifactAccess.mutateAsync(nextArtifactAccess(artifactAccess))
+              .then(() => {
+                toast.success(
+                  isRecordShared(artifactAccess)
+                    ? "Record unpublished. Only you can see it now."
+                    : "Record published. Everyone who took part can read it.",
+                );
+                onRecordChanged();
+              })
+              .catch((error: unknown) =>
+                toast.error(getErrorMessage(error, "Could not change who this record is shared with.")),
+              )}
+            disabled={setArtifactAccess.isPending}
+            className="rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-60"
+          >
+            {setArtifactAccess.isPending ? "Saving…" : sharing.action}
+          </button>
+        ) : null}
+      </div>
+
+      {sharing.message ? (
+        <div
+          className={cn(
+            "mt-3 rounded-[8px] border px-3.5 py-2.5 text-[13px] leading-relaxed",
+            sharing.tone === "shared"
+              ? "border-emerald-500/25 bg-emerald-500/5 text-ink"
+              : sharing.tone === "draft"
+                ? "border-amber-500/25 bg-amber-500/5 text-ink"
+                : "border-border bg-surface-2 text-ink-muted",
+          )}
+        >
+          {sharing.message}
+        </div>
+      ) : null}
 
       {hasRecord ? (
         <div
@@ -725,6 +876,17 @@ function MeetingRecordSection({
         <div className="mt-3" />
       )}
 
+      {/* WT-492: above the transcript, and only in that tab — the two are read together, and it
+          is the pairing the ticket asks for. On Summary and Artifacts it would push the panel the
+          reader came for down the page for no reason; Artifacts still lists the same file to
+          download. Rendered only when a ready recording exists, so a meeting nobody recorded shows
+          no empty frame promising one. */}
+      {activeTab === "transcript" ? (
+        <MeetingRecordingPlayer
+          artifact={recording}
+          onConsentGranted={onRecordChanged}
+        />
+      ) : null}
       {activeTab === "transcript" ? transcript : null}
       {activeTab === "summary" && endedRecord ? (
         <SummaryPanel

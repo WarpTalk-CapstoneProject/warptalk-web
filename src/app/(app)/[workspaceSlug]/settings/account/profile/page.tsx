@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Spinner, PencilSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useRemoveWorkspaceMember } from "@/hooks/use-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
@@ -29,7 +28,6 @@ export default function SettingsPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const updateUser = useAuthStore((s) => s.updateUser);
   const {
-    activeWorkspaceId,
     activeWorkspaceName,
     role,
     membershipType,
@@ -40,7 +38,6 @@ export default function SettingsPage() {
   const displayMembershipType = membershipType
     ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
     : "Internal";
-  const isOwner = role?.toLowerCase() === "owner";
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -70,11 +67,9 @@ export default function SettingsPage() {
       : [timezone, ...options];
   }, [timezone]);
 
-  // Leave workspace mutation
-  const removeMember = useRemoveWorkspaceMember(activeWorkspaceId || "");
-
   useEffect(() => {
-    setMounted(true);
+    const handle = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(handle);
   }, []);
 
   useEffect(() => {
@@ -160,24 +155,6 @@ export default function SettingsPage() {
     if (field === "fullName") setFullName(value);
     else setPhone(value);
     queueProfileField(field, value);
-  };
-
-  const handleLeaveWorkspace = async () => {
-    if (!user || !activeWorkspaceId) return;
-
-    const confirmLeave = window.confirm(
-      "Are you sure you want to leave this workspace? This action cannot be undone."
-    );
-
-    if (confirmLeave) {
-      try {
-        await removeMember.mutateAsync(user.id);
-        toast.success("You have left the workspace.");
-        router.push("/workspace");
-      } catch {
-        toast.error("Failed to leave workspace.");
-      }
-    }
   };
 
   // Get initials for avatar fallback
@@ -383,20 +360,6 @@ export default function SettingsPage() {
               <span className="rounded-[4px] border border-primary/20 bg-primary/5 px-2 py-1 text-[11px] font-semibold text-primary">
                 {displayMembershipType}
               </span>
-            </div>
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Remove yourself from workspace</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleLeaveWorkspace}
-                disabled={autoSave.hasPendingChanges || isOwner}
-                title={isOwner ? "Transfer workspace ownership before leaving" : "Leave workspace"}
-                className="text-xs font-semibold text-destructive hover:text-red-600 transition-colors cursor-pointer"
-              >
-                {isOwner ? "Transfer ownership first" : "Leave workspace"}
-              </button>
             </div>
           </div>
         </div>

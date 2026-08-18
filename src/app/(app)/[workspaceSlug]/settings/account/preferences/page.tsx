@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Spinner } from "@phosphor-icons/react";
 
+import { useTheme } from "next-themes";
+
 import { languagesInScope } from "@/lib/language/languages";
 import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
@@ -17,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import type { UpdateUserSettingsRequest } from "@/types/auth";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
+import { AudioBridgePanel } from "@/components/desktop/audio-bridge-panel";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
 
 const preferencesSchema = z.object({
@@ -29,11 +32,6 @@ const preferencesSchema = z.object({
   autoGenerateSummary: z.boolean(),
   defaultMaxParticipants: z.number().int("Must be a whole number").min(1, "At least 1 participant").max(500, "Max 500"),
   theme: z.string().min(1, "Required"),
-  transcriptFontSize: z.number().int("Must be a whole number").min(10, "Min 10px").max(32, "Max 32px"),
-  showOriginalTranscript: z.boolean(),
-  showTranslatedTranscript: z.boolean(),
-  highContrast: z.boolean(),
-  screenReaderMode: z.boolean(),
 });
 
 type PreferencesFormData = z.infer<typeof preferencesSchema>;
@@ -46,6 +44,7 @@ const languages = languagesInScope("meeting").map((language) => ({
 
 export default function PersonalPreferencesPage() {
   const queryClient = useQueryClient();
+  const { setTheme } = useTheme();
   const initializedRef = useRef(false);
   const lastQueuedValuesRef = useRef<Record<string, string>>({});
 
@@ -95,18 +94,16 @@ export default function PersonalPreferencesPage() {
       const initialValues: PreferencesFormData = {
         defaultSpeakLanguage: settingsData.defaultSpeakLanguage || "en",
         defaultListenLanguage: settingsData.defaultListenLanguage || "en",
-        voiceCloneEnabled: settingsData.voiceCloneEnabled ?? true,
+        // Off, not on, when the server did not say. This is biometric processing, and a
+        // fallback that shows a switch ON while the stored value is OFF tells the user their
+        // voice is being cloned when it is not (WT-401). AuthService's own default is false.
+        voiceCloneEnabled: settingsData.voiceCloneEnabled ?? false,
         micNoiseSuppression: settingsData.micNoiseSuppression ?? true,
         defaultTranslationRoomType: settingsData.defaultTranslationRoomType || "instant",
         autoRecordTranslationRooms: settingsData.autoRecordTranslationRooms ?? false,
         autoGenerateSummary: settingsData.autoGenerateSummary ?? false,
         defaultMaxParticipants: settingsData.defaultMaxParticipants ?? 10,
         theme: settingsData.theme || "system",
-        transcriptFontSize: settingsData.transcriptFontSize ?? 14,
-        showOriginalTranscript: settingsData.showOriginalTranscript ?? true,
-        showTranslatedTranscript: settingsData.showTranslatedTranscript ?? true,
-        highContrast: settingsData.highContrast ?? false,
-        screenReaderMode: settingsData.screenReaderMode ?? false,
       };
       reset(initialValues);
       lastQueuedValuesRef.current = Object.fromEntries(
@@ -150,8 +147,8 @@ export default function PersonalPreferencesPage() {
     autoSave.enqueue({ [field]: value } as Partial<UpdateUserSettingsRequest>);
   };
 
-  const commitNumericField = (field: "defaultMaxParticipants" | "transcriptFontSize", rawValue: string) => {
-    const limits = field === "defaultMaxParticipants" ? [1, 500] : [10, 32];
+  const commitNumericField = (field: "defaultMaxParticipants", rawValue: string) => {
+    const limits = [1, 500];
     const parsedInput = parseIntegerInRange(rawValue, limits[0], limits[1]);
     const value = parsedInput.value;
     setValue(field, value, { shouldDirty: true, shouldValidate: true });
@@ -277,6 +274,17 @@ export default function PersonalPreferencesPage() {
           </div>
         </div>
 
+        {/*
+          Section 2b: the desktop audio bridge.
+
+          Renders nothing in a browser — including its own heading, which is why the label is a
+          prop rather than markup here. Placed under Audio because that is where someone goes
+          looking when a meeting has no sound, but kept out of the form above deliberately: every
+          setting there is a server-persisted account preference, whereas this describes drivers
+          installed on THIS machine and belongs to no account at all.
+        */}
+        <AudioBridgePanel label="This device" />
+
         {/* Section 3: Meeting Defaults */}
         <div className="flex flex-col gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
@@ -360,10 +368,10 @@ export default function PersonalPreferencesPage() {
           </div>
         </div>
 
-        {/* Section 4: Accessibility & Theme */}
+        {/* Section 4: Appearance & Theme */}
         <div className="flex flex-col gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
-            Accessibility & Styling
+            Appearance & Theme
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             
@@ -375,7 +383,12 @@ export default function PersonalPreferencesPage() {
               </div>
               <Select
                 value={watchAll.theme}
-                onValueChange={(val) => queuePreference("theme", val || "")}
+                onValueChange={(val) => {
+                  if (val) {
+                    setTheme(val);
+                    queuePreference("theme", val);
+                  }
+                }}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue placeholder="Select theme..." />
@@ -386,85 +399,6 @@ export default function PersonalPreferencesPage() {
                   <SelectItem value="system" className="text-xs cursor-pointer">System Default</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-
-            {/* Font Size */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Transcript Font Size (px)</span>
-                <span className="text-[11px] text-ink-muted">Adjust size parameters of subtitles and active chat bubbles.</span>
-              </div>
-              <Input
-                type="number"
-                min={10}
-                max={32}
-                className="h-8 border-hairline focus:ring-1 focus:ring-primary text-xs bg-surface-2/40 w-[80px] text-right"
-                {...register("transcriptFontSize", { valueAsNumber: true })}
-                onBlur={(event) => commitNumericField("transcriptFontSize", event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    commitNumericField("transcriptFontSize", event.currentTarget.value);
-                    event.currentTarget.blur();
-                  }
-                }}
-                disabled={isSubmitting}
-              />
-              {errors.transcriptFontSize?.message && (
-                <span className="text-[11px] text-destructive">{errors.transcriptFontSize.message}</span>
-              )}
-            </div>
-
-            {/* Original Transcripts */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Show Original Transcripts</span>
-                <span className="text-[11px] text-ink-muted">Display untranslated spoken text alongside translations.</span>
-              </div>
-              <Switch
-                checked={watchAll.showOriginalTranscript}
-                onCheckedChange={(val) => queuePreference("showOriginalTranscript", val)}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Translated Transcripts */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Show Translated Subtitles</span>
-                <span className="text-[11px] text-ink-muted">Enable translated stream outputs on the display screen.</span>
-              </div>
-              <Switch
-                checked={watchAll.showTranslatedTranscript}
-                onCheckedChange={(val) => queuePreference("showTranslatedTranscript", val)}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* High Contrast */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">High Contrast Accessibility</span>
-                <span className="text-[11px] text-ink-muted">Boost readability with deep contrast foreground ratios.</span>
-              </div>
-              <Switch
-                checked={watchAll.highContrast}
-                onCheckedChange={(val) => queuePreference("highContrast", val)}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Screen Reader */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Screen Reader Compatibility</span>
-                <span className="text-[11px] text-ink-muted">Enable optimized ARIA tag streams for assistive technology.</span>
-              </div>
-              <Switch
-                checked={watchAll.screenReaderMode}
-                onCheckedChange={(val) => queuePreference("screenReaderMode", val)}
-                disabled={isSubmitting}
-              />
             </div>
 
           </div>

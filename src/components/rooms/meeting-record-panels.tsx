@@ -9,14 +9,26 @@ import {
   CheckSquare,
   Copy,
   DownloadSimple,
+  Play,
   SpinnerGap,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { openArtifactDownload } from "@/lib/ui/download-artifact";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
+  ARTIFACT_WITHHELD_FALLBACK,
+  isArtifactWithheld,
+} from "@/lib/meeting/artifact-denial";
+import {
+  describeSummaryAbsence,
+  summaryAbsenceMessage,
+} from "@/lib/meeting/summary-absence";
+import { openArtifactDownload } from "@/lib/ui/download-artifact";
+import { resolveSummaryState } from "@/lib/meeting/room-history-mapping";
+import {
+  artifactDownloadFormat,
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
@@ -104,15 +116,121 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
       openArtifactDownload(data);
       if (artifact.consentRequired) onConsentGranted?.();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not download this file.",
-      );
+      // A host-only artifact is withheld, not broken — the same distinction the history preview
+      // and the Summary tab already draw. `error.message` was also the wrong source: on an axios
+      // failure it is "Request failed with status code 403", never the server's own sentence.
+      if (isArtifactWithheld(error)) {
+        toast.info(getErrorMessage(error, ARTIFACT_WITHHELD_FALLBACK));
+        return;
+      }
+      toast.error(getErrorMessage(error, "Could not download this file."));
     } finally {
       setBusyArtifactId(null);
     }
   }
 
   return { busyArtifactId, downloadArtifact };
+}
+
+/**
+ * Watch the meeting back, above its transcript. WT-492.
+ *
+ * The recording was reachable only as a file to download, from the Artifacts tab — so "watch what
+ * was said here" meant saving a video and leaving the page that has the transcript on it. The
+ * artifact row itself was never missing; somewhere to play it was.
+ *
+ * The URL is fetched WHEN THE USER ASKS, not on mount. It is a short-lived link to object storage,
+ * and spending one on every visit to a meeting page would mean most of them expire unwatched while
+ * the page that holds them stays open. The click is also the natural place for the consent stop,
+ * which is exactly how downloading already works — so consent is granted here by the same call,
+ * and the caller refetches afterwards so the Artifacts row stops saying "Consent required" too.
+ */
+export function MeetingRecordingPlayer({
+  artifact,
+  onConsentGranted,
+}: {
+  artifact: RoomHistoryArtifact | null;
+  onConsentGranted?: () => void;
+}) {
+  // The URL is stored WITH the artifact it belongs to, rather than being cleared by an effect when
+  // that artifact changes. A stale link then simply stops matching and is ignored — no effect can
+  // fire late and leave the previous meeting's recording playing under a new meeting's transcript.
+  const [loaded, setLoaded] = useState<{ artifactId: string; url: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const sourceUrl = artifact && loaded?.artifactId === artifact.id ? loaded.url : null;
+
+  // Nothing to watch is not an error state, and an empty player frame promising a video that does
+  // not exist is worse than no frame at all. The meeting simply was not recorded.
+  if (!artifact) return null;
+
+  async function loadRecording() {
+    if (!artifact || isLoading) return;
+    setIsLoading(true);
+    try {
+      if (artifact.consentRequired) {
+        await translationRoomService.approveArtifactConsent(artifact.id);
+      }
+      const { data } = await translationRoomService.artifactDownload(artifact.id);
+      // `content` is the inline path used by the text exports; a recording always arrives as a
+      // link, so an absent url here means the file is gone rather than that it is empty.
+      if (!data.url) {
+        toast.error("This recording is no longer available.");
+        return;
+      }
+      setLoaded({ artifactId: artifact.id, url: data.url });
+      if (artifact.consentRequired) onConsentGranted?.();
+    } catch (error) {
+      // Withheld is a policy answer, not a failure — the same distinction the download path and
+      // the Summary tab already draw.
+      if (isArtifactWithheld(error)) {
+        toast.info(getErrorMessage(error, ARTIFACT_WITHHELD_FALLBACK));
+        return;
+      }
+      toast.error(getErrorMessage(error, "Could not load this recording."));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <section className="mb-5" aria-label="Meeting recording">
+      <div className="overflow-hidden rounded-[10px] border border-border bg-black">
+        {sourceUrl ? (
+          // controls, and nothing else: autoplay on a page someone opened to read a transcript is
+          // a room full of unexpected sound.
+          <video
+            src={sourceUrl}
+            controls
+            preload="metadata"
+            className="aspect-video w-full bg-black"
+          />
+        ) : (
+          <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-surface-2/40">
+            <button
+              type="button"
+              onClick={() => void loadRecording()}
+              disabled={isLoading}
+              className="flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-surface-1 transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {isLoading ? (
+                <SpinnerGap size={16} className="animate-spin" />
+              ) : (
+                <Play size={16} weight="fill" />
+              )}
+              {isLoading ? "Loading…" : "Play recording"}
+            </button>
+            {artifact.consentRequired && (
+              // Said before the click, not after: the first press records a consent decision, and
+              // a control that does that silently is the one thing this must not be.
+              <p className="px-6 text-center text-[12px] text-ink-muted">
+                Playing this recording records your consent, the same as downloading it.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
 /**
@@ -167,7 +285,35 @@ export function SummaryPanel({
       (summary.summary || summary.decisions.length || summary.actionItems.length),
   );
   const recentlyEnded = useRecentlyEnded(room.endedAt);
-  const isGenerating = !artifact && recentlyEnded;
+
+  // WT-369 — resolveSummaryState was written, documented and unit-tested for exactly this, and
+  // then never called from anywhere. Its own doc comment describes the line it was meant to
+  // replace — `isGenerating = !artifact && recentlyEnded` — which was still sitting right here.
+  //
+  // The two are not equivalent. That flag only knows "no artifact yet", so an artifact that
+  // exists but is still `processing` fell straight through to "This meeting ended without a
+  // summary artifact" — printed directly above its own Download button — and a summary that
+  // landed after the wall-clock timer expired got the same false sentence. State belongs to the
+  // artifact, not to a clock.
+  const summaryState = resolveSummaryState({
+    artifactStatus: artifact?.status,
+    hasStructuredContent,
+    insufficientData: summary?.insufficientData,
+    recentlyEnded,
+  });
+  const isGenerating = summaryState === "generating";
+
+  // "Not shared with you" is not "does not exist". The ROW existing is the fact this panel could
+  // not see: room artifacts default to HOST_ONLY and the history projection omits `content` for
+  // anyone the access policy refuses, while still listing the artifact. See
+  // lib/meeting/summary-absence.ts.
+  const summaryAbsence = describeSummaryAbsence({
+    isGenerating,
+    summaryState,
+    hasSummaryArtifact: Boolean(artifact),
+    hasParsedSummary: Boolean(summary),
+    insufficientData: summary?.insufficientData,
+  });
 
   const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
   const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
@@ -333,21 +479,34 @@ export function SummaryPanel({
             ) : (
               <ChatCircleText size={28} className="mx-auto text-ink-muted" />
             )}
+            {/* "Not shared with you" is not "does not exist".
+                A meeting listed `summary export · Ready` under Artifacts while this panel said the
+                meeting ended without one. The summary existed; room artifacts default to HOST_ONLY
+                and the history projection omits `content` for anyone the access policy refuses,
+                while still listing the row. This panel saw a body-less artifact and reported the
+                meeting as having produced none — sending the reader after a broken generator
+                instead of the host. See lib/meeting/summary-absence.ts. */}
             <h3 className="mt-4 text-[15px] font-semibold">
-              {isGenerating ? "Generating summary…" : "No summary output"}
+              {isGenerating
+                ? "Generating summary…"
+                : summaryAbsence === "withheld"
+                  ? "Summary not shared with you"
+                  : "No summary output"}
             </h3>
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
-              {isGenerating
-                ? "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute."
-                : summary?.insufficientData
-                  ? "There wasn't enough transcript content in this meeting to generate a summary."
-                  : "This meeting ended without a summary artifact."}
+              {summaryAbsenceMessage(summaryAbsence)}
             </p>
           </div>
         </div>
       )}
 
-      {artifact ? (
+      {/* WT-369: offered only when there is a summary to download.
+          The artifact ROW existing is not the same as the summary existing — the finalizer
+          writes a SUMMARY_EXPORT row even when the AI worker produced nothing, marked
+          insufficientData. So "No summary output" was rendered with a live "Download summary
+          file" button under it, and pressing it fetched a JSON blob whose only content was a
+          sentence saying there was no summary. */}
+      {artifact && summaryState === "ready" ? (
         <div className="border-t border-border p-4">
           <Button
             size="sm"
@@ -411,12 +570,14 @@ export function ArtifactsPanel({
               <ArtifactIcon artifact={artifact} />
             </span>
             <span className="min-w-0 flex-1">
+              {/* "Transcript", not "transcript export (TXT)". The server's title is generated
+                  from the type and repeats on the second line what the first line already
+                  said — and it is lowercase, because it is derived from an enum name. */}
               <span className="block truncate text-[12px] font-medium text-ink">
-                {artifact.title || artifactLabel(artifact.type)}
+                {artifactLabel(artifact.type)}
               </span>
               <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                {artifactLabel(artifact.type)} · {artifact.format || "—"} ·{" "}
-                {artifactStatusLabel(artifact)}
+                {artifactDownloadFormat(artifact)} · {artifactStatusLabel(artifact)}
               </span>
             </span>
             {busyArtifactId === artifact.id ? (

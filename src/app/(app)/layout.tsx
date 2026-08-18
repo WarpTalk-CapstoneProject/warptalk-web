@@ -19,9 +19,12 @@ import { SearchMeetingDialog } from "@/components/rooms/search-meeting-dialog";
 import { SetupRoomModal } from "@/components/rooms/setup-room-modal";
 import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
+import { NotificationSoundToggle } from "@/components/layout/notification-sound-toggle";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
+import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
+import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
@@ -30,12 +33,15 @@ import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { ProductTour } from "@/components/onboarding/product-tour";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { getErrorStatus } from "@/lib/api/retry-policy";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 
 const PersistentMeetingSession = dynamic(
   () =>
@@ -156,12 +162,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const addWorkspaceTab = useWorkspaceTabsStore((state) => state.addTab);
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const logout = useAuthStore((state) => state.logout);
   const activeMeetingRoomId = useActiveMeetingStore(
     (state) => state.activeRoomId,
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
+  const openTour = useOnboardingStore((state) => state.openTour);
+  const tourSeenAtByUser = useOnboardingStore((state) => state.tourSeenAtByUser);
   const [mounted, setMounted] = useState(false);
   
   // `isError` and `refetch` were not read. The gate below spun on `!activeWorkspaceId`, and a
@@ -204,6 +213,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const isOnboardingRoute =
     pathname === "/workspace" ||
+    pathname === "/workspace/plans" ||
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
@@ -228,6 +238,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => cancelAnimationFrame(handle);
   }, []);
 
+  /**
+   * The first-run tour, once — and only once the shell it describes is actually on screen.
+   *
+   * Two conditions, both load-bearing. Without a workspace slug the sidebar has no destinations
+   * to point at, and the tour would open against a shell that is still a spinner. The delay
+   * covers the rest: the panel width tween runs for 420ms, and a spotlight measured mid-tween
+   * lands next to the control rather than on it.
+   *
+   * The check is repeated inside the timer rather than only in the dependency array, because
+   * The record is persisted and zustand rehydrates it after the first client render — reading
+   * it once at effect time would show a returning user the tour they finished last week.
+   */
+  useEffect(() => {
+    // Keyed by user, so signing out and back in does not re-run a tour this person already
+    // dismissed — which is exactly what the previous single flag did, because it was cleared
+    // on every sign-in for account isolation.
+    if (!currentUserId || !activeWorkspaceSlug) return;
+    if (tourSeenAtByUser[currentUserId] != null) return;
+
+    const timer = setTimeout(() => {
+      if (!useOnboardingStore.getState().hasSeenTour(currentUserId)) openTour();
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [tourSeenAtByUser, currentUserId, activeWorkspaceSlug, openTour]);
+
   useEffect(() => {
     if (mounted && !isAuthenticated) {
       router.replace("/login");
@@ -236,27 +271,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!mounted || !isAuthenticated || isOnboardingRoute || isAdminRoute || workspacesLoading) return;
+    if (selectWorkspace.isPending) return;
 
     if (!activeWorkspaceId) {
       if (workspacesData?.items && workspacesData.items.length > 0) {
         const firstWs = workspacesData.items[0];
-        const membershipType =
-          "membershipType" in firstWs && typeof firstWs.membershipType === "string"
-            ? firstWs.membershipType
-            : "Internal";
-        const defaultLanguage =
-          "defaultLanguage" in firstWs && typeof firstWs.defaultLanguage === "string"
-            ? firstWs.defaultLanguage
-            : "en";
-        selectWorkspace.mutate(firstWs.id);
-        setActiveWorkspace(
-          firstWs.id,
-          firstWs.name,
-          firstWs.slug,
-          firstWs.role || "Member",
-          membershipType,
-          defaultLanguage
-        );
+        // Hydrated from the SELECT RESPONSE, not from the list row. The list's shape varies by
+        // endpoint — hence the `"membershipType" in firstWs` guards this replaced — and the
+        // select call is the one authority on what this user's role in this workspace is. It is
+        // awaited so a failed selection redirects instead of leaving the shell holding a
+        // workspace the server never confirmed.
+        void (async () => {
+          try {
+            const selection = await selectWorkspace.mutateAsync(firstWs.id);
+            applySelectedWorkspace(selection, setActiveWorkspace);
+          } catch {
+            router.replace("/workspace");
+          }
+        })();
       } else if (isSystemAdmin) {
         // A platform admin with no workspace of their own is not a new user who has yet to make
         // one — they administer the platform the workspaces live in. Sending them to
@@ -480,8 +512,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
             <NotificationPopover />
+            <NotificationSoundToggle />
             <ThemeToggleButton />
-            <button className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"><Question size={12} weight="bold" /></button>
+            {/* This was a button with no onClick — the only affordance in the header that did
+                nothing at all. It opens the tour now, which is also where the tour's last step
+                points, so somebody who skipped it knows where it went. */}
+            <button
+              type="button"
+              data-tour="help-button"
+              onClick={openTour}
+              title="Show me around"
+              aria-label="Show me around"
+              className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
+            >
+              <Question size={12} weight="bold" />
+            </button>
             <div className="w-[1px] h-3.5 bg-border mx-1" />
             <button
               onClick={toggleRightSidebar}
@@ -494,7 +539,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {!isAdminRoute && <WorkspaceTabs />}
 
+        <ProductTour />
+
         <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* A non-scrolling frame around the scrolling main column, so anything pinned to the
+              content area — the meeting notices — stays put while the page scrolls under
+              it. `<main>` itself cannot serve: it IS the scroll container. */}
+          <div className="relative flex min-w-0 flex-1 flex-col">
           <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}
             {activeMeetingRoomId ? (
@@ -513,6 +564,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </MiniMeetingDock>
             ) : null}
           </main>
+
+            {/* Both meeting notices live in ONE stack, and the stack — not either card — owns the
+                corner. They are independent (being invited to Thursday's review does not stop this
+                morning's standup going live), so both can be on screen at once; positioned
+                separately they would have been drawn on top of each other.
+
+                Bottom-RIGHT, moved from bottom-left at the owner's request. The other two things
+                that claim a corner here are the WarpBot launcher and the mini meeting dock, which
+                sit outside and below this main content box, so they no longer collide. The
+                invitation is listed first — it is the one asking a question. */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col items-end gap-2 p-4">
+              <MeetingInviteBanner />
+              <MeetingStartedBanner />
+            </div>
+          </div>
 
           {/* Right Sidebar (Context/Properties) */}
           {!isAdminRoute && !isLiveMeetingRoute && !pathname.startsWith('/rooms/') && (

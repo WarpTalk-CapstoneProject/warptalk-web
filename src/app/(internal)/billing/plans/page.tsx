@@ -50,13 +50,24 @@ import {
   Plus,
   Shield,
   Sparkles,
-  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
 
+/**
+ * The six columns below are carried, not edited, on this screen.
+ *
+ * `PUT /plans/{id}` replaces the whole plan — `UpdateFromRequest` assigns every column from the
+ * body — so a field this form never sent was not "left alone". It arrived as the C# record's
+ * default and overwrote what was stored: overage cap and rollover to 0, overage price to 4.0,
+ * invoice terms to 15 days, grace to 360 hours. Renaming a plan here silently rewrote its overage
+ * economics.
+ *
+ * They are held in form state and written straight back so that stops happening. The editor for
+ * them is /admin/plans, which is the portal page this screen predates.
+ */
 interface PlanFormState {
   name: string;
   slug: string;
@@ -65,6 +76,12 @@ interface PlanFormState {
   currency: string;
   billingCycle: string;
   creditsPerCycle: number;
+  overageCapCredits: number;
+  overagePricePerCredit: number;
+  lowBalanceThresholdCredits: number;
+  rolloverCapCredits: number;
+  invoiceTermsDays: number;
+  invoiceGraceHours: number;
   maxParticipants: number;
   maxLanguages: number;
   voiceCloneEnabled: boolean;
@@ -85,6 +102,14 @@ const initialFormState: PlanFormState = {
   currency: "VND",
   billingCycle: "monthly",
   creditsPerCycle: 1000,
+  // Mirrors SubscriptionConstants.PlanDefaults, so a plan created here starts where the server
+  // would have put it rather than somewhere this file invented.
+  overageCapCredits: 0,
+  overagePricePerCredit: 4,
+  lowBalanceThresholdCredits: 0,
+  rolloverCapCredits: 0,
+  invoiceTermsDays: 15,
+  invoiceGraceHours: 360,
   maxParticipants: 5,
   maxLanguages: 3,
   voiceCloneEnabled: false,
@@ -103,11 +128,6 @@ export default function AdminPlansPage() {
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [formState, setFormState] = useState<PlanFormState>(initialFormState);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
-  const [deactivatingPlanId, setDeactivatingPlanId] = useState<string | null>(
-    null,
-  );
-  const [deactivatingPlanName, setDeactivatingPlanName] = useState("");
 
   // SignalR for real-time plan updates in Admin panel
   useEffect(() => {
@@ -135,7 +155,8 @@ export default function AdminPlansPage() {
   // Queries
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["admin-plans"],
-    queryFn: () => billingService.getPlans(),
+    // Admin list: deactivated plans must stay visible here or they can never be re-enabled.
+    queryFn: () => billingService.getAllPlansForAdmin(),
   });
 
   // Mutations
@@ -166,16 +187,6 @@ export default function AdminPlansPage() {
     },
   });
 
-  const deactivateMutation = useMutation({
-    mutationFn: (id: string) => billingService.deactivatePlan(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
-    },
-    onError: (err: unknown) => {
-      alert(getErrorMessage(err, "Failed to deactivate plan."));
-    },
-  });
-
   const handleOpenCreate = () => {
     setEditingPlanId(null);
     setFormState(initialFormState);
@@ -193,6 +204,13 @@ export default function AdminPlansPage() {
       currency: plan.currency || "VND",
       billingCycle: plan.billingCycle || "monthly",
       creditsPerCycle: plan.creditsPerCycle || 0,
+      // Read as stored and written back unchanged — see the note on PlanFormState.
+      overageCapCredits: plan.overageCapCredits,
+      overagePricePerCredit: plan.overagePricePerCredit,
+      lowBalanceThresholdCredits: plan.lowBalanceThresholdCredits,
+      rolloverCapCredits: plan.rolloverCapCredits,
+      invoiceTermsDays: plan.invoiceTermsDays,
+      invoiceGraceHours: plan.invoiceGraceHours,
       maxParticipants: plan.maxParticipants || 0,
       maxLanguages: plan.maxLanguages || 0,
       voiceCloneEnabled: plan.voiceCloneEnabled || false,
@@ -320,21 +338,6 @@ export default function AdminPlansPage() {
     }
   };
 
-  const handleDeactivate = (id: string, name: string) => {
-    setDeactivatingPlanId(id);
-    setDeactivatingPlanName(name);
-    setShowDeactivateDialog(true);
-  };
-
-  const confirmDeactivate = () => {
-    if (deactivatingPlanId) {
-      deactivateMutation.mutate(deactivatingPlanId);
-      setShowDeactivateDialog(false);
-      setDeactivatingPlanId(null);
-      setDeactivatingPlanName("");
-    }
-  };
-
   return (
     <div className="flex min-h-full flex-col gap-6 p-6 pb-12">
       {/* Header */}
@@ -377,7 +380,7 @@ export default function AdminPlansPage() {
         <CardHeader>
           <CardTitle>All Packages</CardTitle>
           <CardDescription>
-            View, modify, or deactivate user-facing packages.
+            View and modify user-facing packages.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -478,15 +481,6 @@ export default function AdminPlansPage() {
                           className="h-8 w-8 text-muted-foreground hover:text-ink"
                         >
                           <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          onClick={() => handleDeactivate(plan.id, plan.name)}
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                          disabled={plan.isActive === false}
-                        >
-                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -802,45 +796,6 @@ export default function AdminPlansPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Deactivate Plan confirmation dialog */}
-      <Dialog
-        open={showDeactivateDialog}
-        onOpenChange={setShowDeactivateDialog}
-      >
-        <DialogContent className="sm:max-w-[440px] border-hairline bg-surface-1 shadow-lg rounded-xl text-ink">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold">
-              Deactivate billing package?
-            </DialogTitle>
-            <DialogDescription className="text-sm text-ink-muted mt-1">
-              Are you sure you want to deactivate and soft-delete the plan{" "}
-              <strong>{deactivatingPlanName}</strong>? Active subscriptions will
-              still refer to it, but new users won’t be able to select it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2 flex-row justify-end mt-4">
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => setShowDeactivateDialog(false)}
-              className="rounded-md"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deactivateMutation.isPending}
-              onClick={confirmDeactivate}
-              className="rounded-md"
-            >
-              {deactivateMutation.isPending
-                ? "Deactivating..."
-                : "Deactivate Plan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

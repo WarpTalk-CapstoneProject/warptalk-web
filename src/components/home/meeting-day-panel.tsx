@@ -11,7 +11,7 @@ import { meetingLanguageSet } from "@/lib/language/languages";
 import { isSameDay, meetingsOn } from "@/lib/meeting/meeting-day";
 import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
 import { useUIStore } from "@/stores/ui-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 
 const LONG_DATE = new Intl.DateTimeFormat("en-US", {
@@ -141,6 +141,7 @@ export function MeetingDayPanel() {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const canCreateMeetings = useCanCreateMeetings();
 
   const [today] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
@@ -162,7 +163,7 @@ export function MeetingDayPanel() {
   return (
     <section
       aria-label="Meetings by day"
-      className="rounded-[14px] border border-border bg-canvas p-3 shadow-linear sm:p-4"
+      className="rounded-[14px] border border-border bg-surface-1 p-3 shadow-linear sm:p-4"
     >
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold text-ink">
@@ -203,17 +204,21 @@ export function MeetingDayPanel() {
                   : "No meetings scheduled for this day"}
               </p>
               <p className="mt-0.5 text-[12px] text-ink-muted">
-                Schedule one, or enjoy the quiet.
+                {canCreateMeetings
+                  ? "Schedule one, or enjoy the quiet."
+                  : "You'll see meetings here once someone invites you."}
               </p>
             </div>
-            <Button
-              type="button"
-              onClick={() => setCreateRoomModalOpen(true)}
-              className="h-8 gap-1.5 rounded-full px-3 text-[13px]"
-            >
-              <Plus size={14} weight="bold" />
-              New meeting
-            </Button>
+            {canCreateMeetings && (
+              <Button
+                type="button"
+                onClick={() => setCreateRoomModalOpen(true)}
+                className="h-8 gap-1.5 rounded-full px-3 text-[13px]"
+              >
+                <Plus size={14} weight="bold" />
+                New meeting
+              </Button>
+            )}
           </div>
         )}
       </div>

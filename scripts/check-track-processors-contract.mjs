@@ -27,11 +27,31 @@ const setupModal = await readFile(
 );
 
 assert.match(hook, /onNoiseSuppressionError\?: \(error: unknown\) => void/);
-assert.match(hook, /await localAudioTrack\.setProcessor\(krispRef\.current\)/);
+assert.match(hook, /await localAudioTrack\.setProcessor\(krisp\b/);
 assert.match(hook, /onNoiseSuppressionError\?\.\(error\)/);
 assert.match(roomPage, /onNoiseSuppressionError=\{handleNoiseSuppressionError\}/);
 assert.match(roomPage, /setNoiseSuppressionEnabled\(false\)/);
-assert.match(roomPage, /Browser noise suppression remains enabled/);
+// The GUARANTEE, not the sentence. WT-427 split one message into three, because the three ways
+// Krisp fails are different problems — and for an unentitled LiveKit project the old copy was
+// actively false, telling the user to reload when reloading cannot help.
+//
+// What must still hold is that the handler reports through the classifier rather than inventing
+// its own wording, and that every branch of the classifier says the microphone is still filtered.
+// The branches themselves are pinned in lib/meeting/__tests__/noise-suppression-failure.test.ts.
+assert.match(
+  roomPage,
+  /handleNoiseSuppressionError[\s\S]{0,400}?describeNoiseSuppressionFailure\(error\)/,
+  "the failure must be classified, not collapsed into one message for three different causes",
+);
+const failureClassifier = await readFile(
+  new URL("../src/lib/meeting/noise-suppression-failure.ts", import.meta.url),
+  "utf8",
+);
+assert.match(
+  failureClassifier,
+  /browser's own noise suppression/,
+  "every failure message must say the microphone is still filtered — this is a downgrade, not an outage",
+);
 assert.doesNotMatch(
   roomPage,
   /handleNoiseSuppressionError[\s\S]*?writeTrackEffectsPreferences\(\{\s*noiseSuppressionEnabled:\s*false\s*\}\)/,
@@ -70,14 +90,48 @@ assert.doesNotMatch(
   /getUserMedia\(/,
   "the live meeting surface must not open a capture that competes with LiveKit's own",
 );
+// The two denoisers must never run on the same audio — stacking them distorted the production
+// mic PCM — so exactly one constraint pair drives both, and it is a parameter rather than an
+// expression derived from the toggle. The previous version of this contract pinned
+// `noiseSuppression: !noiseSuppressionEnabled` at the applyConstraints call site, which is how
+// the ORDER bug survived review: it locked in *what* was set while saying nothing about *when*.
+assert.match(hook, /noiseSuppression:\s*enabled/);
+assert.match(hook, /voiceIsolation:\s*enabled/);
+assert.match(hook, /autoGainControl:\s*true/);
+assert.match(hook, /applyConstraints/);
+
+// ORDER. Krisp has to be carrying the audio before the browser's denoiser is stood down.
+// Reversed — which is what shipped — a Krisp that fails (its WASM was blocked by a CSP missing
+// 'wasm-unsafe-eval') left the microphone with NO suppression at all, making the toggle strictly
+// worse than off while the UI claimed browser suppression was still running.
+const krispAttach = hook.indexOf("setProcessor(krisp)");
+const standDownBrowser = hook.indexOf("setBrowserSuppression(false)");
+assert.ok(krispAttach !== -1, "Krisp must still be attached");
+assert.ok(standDownBrowser !== -1, "the browser denoiser must be stood down explicitly");
+assert.ok(
+  krispAttach < standDownBrowser,
+  "Krisp must be attached BEFORE the browser's noise suppression is disabled",
+);
+
+// Attaching is not running. setProcessor() resolves even on a LiveKit project that cannot run
+// Krisp — init() only fetches a public manifest, and the real gate is setEnabled(), which logs
+// and returns false rather than throwing. Catching the throw alone left that silent path
+// surrendering browser suppression to an inert filter, which is WT-320.
+const enableCall = hook.indexOf("setEnabled(true)");
+const enabledCheck = hook.indexOf("isEnabled()");
+assert.ok(enableCall !== -1, "Krisp must be explicitly enabled, not just attached");
+assert.ok(enabledCheck !== -1, "Krisp's own enabled state must be checked");
+assert.ok(
+  enabledCheck < standDownBrowser,
+  "Krisp must report itself ENABLED before the browser's suppression is given up",
+);
+
+// And the failure path must put the microphone back before anyone is told about it.
 assert.match(
   hook,
-  /noiseSuppression:\s*!noiseSuppressionEnabled/,
-  "Krisp and browser noise suppression must not run on the same audio",
+  /catch \(error\) \{[\s\S]*?setBrowserSuppression\(true\)[\s\S]*?onNoiseSuppressionError\?\.\(error\)/,
+  "a failed Krisp must restore browser suppression BEFORE reporting, or the report is a lie",
 );
-assert.match(hook, /voiceIsolation:\s*!noiseSuppressionEnabled/);
-assert.match(hook, /autoGainControl:\s*true/);
-assert.match(hook, /await mediaStreamTrack\.applyConstraints/);
 for (const prejoinSurface of [joinPage, setupModal]) {
   assert.match(
     prejoinSurface,
@@ -87,3 +141,19 @@ for (const prejoinSurface of [joinPage, setupModal]) {
 }
 
 console.log("Track processor fallback contract passed.");
+
+// WT-427. The Krisp processor is dropped whenever it can no longer be reused: after stopping, on
+// failure, and when the microphone track it was bound to goes away.
+//
+// It was created once and never cleared, so the FIRST enable of a session could work and every
+// later one attached a processor that had already released its WASM pipeline. Since WT-320 this
+// hook treats "attached but not enabled" as an error, so that is a toggle which refuses to stay on
+// for the rest of the meeting.
+//
+// The blur processor beside it already did this and says why. Three sites, because missing any one
+// of them brings the bug back through a different door.
+const krispDrops = hook.match(/krispRef\.current = null/g) ?? [];
+assert.ok(
+  krispDrops.length >= 3,
+  `The Krisp processor must be dropped after stopping, on failure, and on track change — found ${krispDrops.length} of 3. Reusing a stopped processor is how the second enable of a session silently does nothing.`,
+);

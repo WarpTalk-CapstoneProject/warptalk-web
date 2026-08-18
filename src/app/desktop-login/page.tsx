@@ -32,6 +32,7 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
+import { openInSystemBrowser } from "@/lib/desktop/bridge";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
@@ -42,9 +43,6 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 type ScreenMode = "welcome" | "login";
-type ExternalBridge = {
-  openExternal?: (url: string) => Promise<void>;
-};
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 const CONTACT_URL =
@@ -64,14 +62,11 @@ function getSafeCallbackUrl(value: string | null) {
 }
 
 function openContactPage() {
-  const bridge = window as Window & { warptalk?: ExternalBridge };
-
-  if (bridge.warptalk?.openExternal) {
-    void bridge.warptalk.openExternal(CONTACT_URL);
-    return;
-  }
-
-  window.open(CONTACT_URL, "_blank", "noopener,noreferrer");
+  // Inside the desktop shell this hands the URL to the user's real browser; in a browser tab
+  // there is no bridge and it returns false, so the ordinary window.open below still runs.
+  void openInSystemBrowser(CONTACT_URL).then((handled) => {
+    if (!handled) window.open(CONTACT_URL, "_blank", "noopener,noreferrer");
+  });
 }
 
 function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
@@ -146,7 +141,9 @@ function LoginContent() {
     searchParams.get("callbackUrl") || searchParams.get("redirect"),
   );
   const login = useAuthStore((s) => s.login);
-  const [screen, setScreen] = useState<ScreenMode>("welcome");
+  // This route is the desktop app's entry point, so it opens on the login form
+  // rather than the welcome splash, which is still reachable via Back.
+  const [screen, setScreen] = useState<ScreenMode>("login");
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "password">("email");
   const shellRef = useRef<HTMLDivElement | null>(null);

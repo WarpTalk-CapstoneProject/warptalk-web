@@ -4,12 +4,13 @@ import type {
   AdminPagedResult,
   AdminWorkspaceDetailDto,
   AdminWorkspaceDirectoryQuery,
+  AdminWorkspaceMemberDto,
   AdminWorkspaceSummaryDto,
 } from "@/types/admin-workspace";
 import type {
-  WorkspaceKnowledgePageDto,
-  WorkspaceKnowledgeQuery,
-} from "@/types/workspace-knowledge";
+  AdminCreditTransactionDto,
+  AdminWorkspaceAnalyticsDto,
+} from "@/types/admin-workspace-analytics";
 
 /**
  * System-admin workspace directory. Every call is platform-wide and gated server-side by the
@@ -49,17 +50,37 @@ export const adminWorkspaceService = {
     return data;
   },
 
-  /**
-   * What the assistant can retrieve for this workspace. The response shape is the member-scoped
-   * one (`WorkspaceKnowledgePageDto`) because both surfaces read the same index through the same
-   * service method server-side; only the authorization in front of it differs.
-   */
-  listKnowledge: async (
+  /** Irreversible from this API: a deleted workspace has left the lifecycle. */
+  delete: async (workspaceId: string, reason: string): Promise<AdminWorkspaceDetailDto> => {
+    const { data } = await apiClient.post<AdminWorkspaceDetailDto>(
+      API.adminWorkspaces.delete(workspaceId),
+      { reason },
+    );
+    return data;
+  },
+
+  /** Roster with identities resolved from Auth. Membership facts only, never tenant content. */
+  getMembers: async (workspaceId: string): Promise<AdminWorkspaceMemberDto[]> => {
+    const { data } = await apiClient.get<AdminWorkspaceMemberDto[]>(
+      API.adminWorkspaces.members(workspaceId),
+    );
+    return data;
+  },
+
+  /** Billing-side analytics (WT-206). Default window is the server's: the last 30 days. */
+  getAnalytics: async (workspaceId: string): Promise<AdminWorkspaceAnalyticsDto> => {
+    const { data } = await apiClient.get<AdminWorkspaceAnalyticsDto>(
+      API.adminWorkspaceAnalytics.analytics(workspaceId),
+    );
+    return data;
+  },
+
+  getCreditTransactions: async (
     workspaceId: string,
-    query: WorkspaceKnowledgeQuery = {},
-  ): Promise<WorkspaceKnowledgePageDto> => {
-    const { data } = await apiClient.get<WorkspaceKnowledgePageDto>(
-      API.adminWorkspaces.knowledge(workspaceId),
+    query: { page?: number; pageSize?: number } = {},
+  ): Promise<AdminPagedResult<AdminCreditTransactionDto>> => {
+    const { data } = await apiClient.get<AdminPagedResult<AdminCreditTransactionDto>>(
+      API.adminWorkspaceAnalytics.creditTransactions(workspaceId),
       { params: query },
     );
     return data;

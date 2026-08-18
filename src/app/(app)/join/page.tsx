@@ -22,10 +22,12 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
+import { useJoinLanguagePolicy, useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageName } from "@/lib/language/languages";
+import { resolvePreJoinLanguages, snapPairIntoOptions } from "@/lib/language/prejoin";
+import { useUserSettings } from "@/hooks/use-user-settings";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
 import { cn } from "@/lib/utils";
@@ -33,13 +35,14 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toast } from "sonner";
 
-// Was a hardcoded three — English, Vietnamese, Japanese — while a meeting can be created in
-// six. A room declaring Korean, French or Spanish could not be joined in the language it was
-// created for, because this screen simply never offered it.
-const languages = languagesInScope("meeting").map((language) => ({
-  value: language.locale,
-  label: language.name,
-}));
+// WT-438 (Linear): the list moved INSIDE the component, filtered by the workspace's
+// allowedTargetLanguages policy. As a module-level constant it was computed once at import
+// time, could not see any workspace, and offered every meeting-scope language — so a
+// workspace whose Owner had restricted meetings to JA/VI/EN still showed Korean, French and
+// Spanish on the pre-join screen. See languageOptions in JoinMeetingContent.
+//
+// (The previous fix here went the other way: a hardcoded three prevented joining rooms
+// created in the other legitimate languages. The policy filter is the middle both needed.)
 
 type SinkVideoElement = HTMLVideoElement & {
   setSinkId?: (sinkId: string) => Promise<void>;
@@ -66,7 +69,9 @@ function JoinMeetingContent() {
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
-
+  // WT-468 removed the last reader of activeWorkspaceId on this screen. The joiner's own
+  // workspace has no say in which languages a room offers — that belongs to the workspace that
+  // owns the room, which useJoinLanguagePolicy resolves from the code below.
   const videoRef = useRef<SinkVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -74,10 +79,95 @@ function JoinMeetingContent() {
   const animationRef = useRef<number | null>(null);
 
   const displayName = user?.fullName || user?.email || "Guest";
-  const [roomCode, setRoomCode] = useState(searchParams.get("code") ?? "");
-  const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
-  const [listenLanguage, setListenLanguage] = useState("en-US");
+  // WT-368 — the room code is DERIVED from the URL until somebody types.
+  //
+  // This was `useState(searchParams.get("code") ?? "")`. /join is a statically rendered route,
+  // so useSearchParams() is empty during the render that the initialiser runs in, and useState
+  // ignores every later initialiser value. An invite link therefore landed on a screen with an
+  // empty code box and no sign that a code had been supplied at all — the user had to read it
+  // back out of their own URL bar and retype it.
+  //
+  // Derived rather than synced in an effect: there is no moment where the two can disagree, and
+  // no render where the box is briefly empty. `typedCode` is null until the field is touched, so
+  // deliberately CLEARING it stays cleared instead of being refilled from the URL on the next
+  // render — which a `roomCode === ""` test would get wrong.
+  const codeFromUrl = searchParams.get("code") ?? "";
+  const [typedCode, setTypedCode] = useState<string | null>(null);
+  const roomCode = typedCode ?? codeFromUrl;
+  // WT-468: the languages this screen offers belong to the workspace that OWNS THE ROOM.
+  //
+  // This used to read `useWorkspaceSettings(activeWorkspaceId)` — the joiner's own currently
+  // selected workspace — and the file carried the approximation as a known one. It is not a
+  // harmless approximation: someone in workspace A joining a room in workspace B was offered A's
+  // languages. Too few, when B permits more (the reported symptom: only EN and VI, and no way
+  // forward); or too many, when A restricts nothing and B does, in which case the server refuses
+  // the pick only after it has been made. An external guest, who belongs to no workspace at all,
+  // got the policy of nothing.
+  //
+  // Keyed by the room code, so it re-resolves as the user finishes typing one. The endpoint
+  // answers 200 with an empty list for an unknown or half-typed code, and empty means
+  // unrestricted — so a partially typed code shows the full set rather than an error or a
+  // momentarily empty picker.
+  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(roomCode);
+  // WT-434 was honoured by the setup modal and ignored here: this screen preset a hardcoded
+  // vi-VN / en-US pair, so the same person joining the same meeting got different languages
+  // depending on whether they came through /join or through the modal. Both read the saved pair now.
+  const { data: userSettings } = useUserSettings();
+
+  // WT-494 + WT-490 — one rule for both entry points, and it narrows by the ROOM as well as by
+  // the workspace. See lib/language/prejoin.ts for why the two limits stay separate on the wire.
+  const preJoin = useMemo(
+    () =>
+      resolvePreJoinLanguages({
+        allowedTargetLanguages: joinLanguagePolicy?.allowedTargetLanguages,
+        roomLanguages: joinLanguagePolicy?.roomLanguages,
+        savedSpeakLanguage: userSettings?.defaultSpeakLanguage,
+        savedListenLanguage: userSettings?.defaultListenLanguage,
+      }),
+    [
+      joinLanguagePolicy?.allowedTargetLanguages,
+      joinLanguagePolicy?.roomLanguages,
+      userSettings?.defaultSpeakLanguage,
+      userSettings?.defaultListenLanguage,
+    ],
+  );
+  const languages = useMemo(
+    () => preJoin.options.map((language) => ({ value: language.locale, label: language.name })),
+    [preJoin.options],
+  );
+
+  const [speakLanguage, setSpeakLanguage] = useState("");
+  const [listenLanguage, setListenLanguage] = useState("");
+  const [languagesTouched, setLanguagesTouched] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+
+  // WT-438: a preset can name a language the policy forbids, and submitting it is a server-side
+  // 403 the user never chose. Applied during render rather than in an effect, like
+  // create-room-dialog's reconcile — an effect would paint the forbidden value first.
+  //
+  // WT-468: gated on the ROOM's policy having resolved. Seeding before it arrives would pin the
+  // pair against the unfiltered list and then leave it there, because this only re-runs when the
+  // offered set changes.
+  //
+  // Two behaviours, and the difference is whether the user has touched the dropdowns. Untouched,
+  // the whole seed applies (their saved pair, else the room's, else the first offered). Once they
+  // have chosen for themselves, only an option that is no longer offered moves — overwriting a
+  // deliberate pick because a policy refreshed is its own bug.
+  const [appliedLanguagePolicyKey, setAppliedLanguagePolicyKey] = useState<string | null>(null);
+  const languagePolicyKey = joinLanguagePolicy
+    ? languages.map((language) => language.value).join(",")
+    : null;
+  if (languagePolicyKey && appliedLanguagePolicyKey !== languagePolicyKey) {
+    setAppliedLanguagePolicyKey(languagePolicyKey);
+    if (languagesTouched) {
+      const snapped = snapPairIntoOptions({ speakLanguage, listenLanguage }, preJoin.options);
+      if (snapped.speakLanguage !== speakLanguage) setSpeakLanguage(snapped.speakLanguage);
+      if (snapped.listenLanguage !== listenLanguage) setListenLanguage(snapped.listenLanguage);
+    } else {
+      setSpeakLanguage(preJoin.speakLanguage);
+      setListenLanguage(preJoin.listenLanguage);
+    }
+  }
 
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
@@ -476,7 +566,8 @@ function JoinMeetingContent() {
               </h4>
               <Input
                 value={roomCode}
-                onChange={(event) => setRoomCode(event.target.value)}
+                // Typing takes ownership of the field from the URL. See the note above.
+                onChange={(event) => setTypedCode(event.target.value)}
                 placeholder="e.g. abc-defg-hij"
                 autoFocus={!roomCode}
                 className="h-[36px] text-[13px] font-mono"
@@ -491,7 +582,13 @@ function JoinMeetingContent() {
               <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
                 <Select
                   value={speakLanguage}
-                  onValueChange={(val) => val && setSpeakLanguage(val)}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    // Marks the pair as the user's own, so a later policy refresh snaps it only
+                    // if it stops being offered instead of re-seeding over their choice.
+                    setLanguagesTouched(true);
+                    setSpeakLanguage(val);
+                  }}
                 >
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">
@@ -525,7 +622,11 @@ function JoinMeetingContent() {
 
                 <Select
                   value={listenLanguage}
-                  onValueChange={(val) => val && setListenLanguage(val)}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    setLanguagesTouched(true);
+                    setListenLanguage(val);
+                  }}
                 >
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">

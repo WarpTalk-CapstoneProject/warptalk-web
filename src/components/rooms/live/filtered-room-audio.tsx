@@ -4,7 +4,11 @@ import { useEffect } from "react";
 import { RemoteTrackPublication, Track } from "livekit-client";
 import { AudioTrack, isTrackReference, useTracks } from "@livekit/components-react";
 
-const AI_INTERPRETER_PREFIX = "ai-interpreter-";
+import {
+  AI_INTERPRETER_PREFIX,
+  resolveInterpreterTracks,
+} from "@/lib/meeting/interpreter-track";
+
 
 /**
  * Replaces the default <RoomAudioRenderer />, which plays every subscribed audio
@@ -97,20 +101,18 @@ export function FilteredRoomAudio({
   // subscription logic runs, so nothing below ever has to special-case "is this me".
   const trackRefs = tracks.filter(isTrackReference).filter((trackRef) => !trackRef.publication.isLocal);
 
-  // Language token sits between the prefix and the speaker GUID, so match on the
-  // "ai-interpreter-{lang}-" prefix rather than a full-identity equality.
-  const languagePrefix = `${AI_INTERPRETER_PREFIX}${targetLanguageNormalized}-`;
-  const voiceSegmentPrefix = voicePreference ? `voice-${voicePreference.slice(0, 8)}-` : "";
+  // The whole rule lives in lib/meeting/interpreter-track.ts, where it can be tested: it is a
+  // WHOLE-ROOM decision (a speaker's default track is declined only if a track in this
+  // listener's voice exists for that same speaker), so it cannot be expressed as a predicate
+  // over one identity — which is exactly the mistake that discarded every cloned voice.
+  const interpreterTracks = resolveInterpreterTracks({
+    identities: trackRefs.map((trackRef) => trackRef.participant.identity),
+    targetLanguageNormalized,
+    voicePreference,
+  });
 
   /** An interpreter identity this listener would accept → the speaker it dubs, else null. */
-  const dubbedSpeakerId = (identity: string) => {
-    if (!identity.startsWith(languagePrefix)) return null;
-    const rest = identity.slice(languagePrefix.length); // "{speakerId}" or "voice-{id8}-{speakerId}"
-    if (voicePreference) {
-      return rest.startsWith(voiceSegmentPrefix) ? rest.slice(voiceSegmentPrefix.length) : null;
-    }
-    return rest.startsWith("voice-") ? null : rest;
-  };
+  const dubbedSpeakerId = (identity: string) => interpreterTracks.get(identity) ?? null;
 
   // Speakers whose dub is ACTUALLY on the wire right now. tts_worker creates an
   // interpreter bot lazily, on the first synthesized chunk for a (speaker, language,

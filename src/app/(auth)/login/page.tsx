@@ -25,6 +25,7 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
+import { WorkspaceService } from "@/services/workspace.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
@@ -45,6 +46,21 @@ function getSafeCallbackUrl(value: string | null) {
   )
     return "/workspace";
   return value;
+}
+
+async function processPendingInvitationToken(rawToken?: string | null) {
+  const token =
+    rawToken ??
+    (typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("token")
+      : null);
+  if (!token) return;
+  try {
+    await WorkspaceService.acceptInvitation(token);
+    toast.success("Joined workspace successfully!");
+  } catch {
+    // Proceed to redirect
+  }
 }
 
 function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
@@ -72,6 +88,8 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         setAccessTokenCookie(accessToken, expiresAt);
 
         toast.success("Google login successful!");
+
+        await processPendingInvitationToken();
 
         const isAdmin = user.roles?.some(
           (r: string) => r.toLowerCase() === "admin",
@@ -182,6 +200,8 @@ function LoginForm() {
       setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Login successful!");
+
+      await processPendingInvitationToken();
 
       const isAdmin = user.roles?.some(
         (r: string) => r.toLowerCase() === "admin",

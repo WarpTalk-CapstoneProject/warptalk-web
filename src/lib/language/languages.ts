@@ -13,10 +13,16 @@
  *   2. What goes over the wire is `code` (bare ISO-639-1) or `locale` (tag), never `name`.
  *   3. A picker declares WHICH languages it offers with a scope, not by re-listing them.
  *
- * The rows mirror `platform.supported_languages` (see
- * warptalk-infrastructure/scripts/seed-data.sh). Keep them in step: a language seeded there
- * but missing here renders as a raw code, and one listed here but not seeded there is
- * offered to users the backend will reject.
+ * The rows mirror `translation_room.supported_languages` — NOT `platform.supported_languages`,
+ * which is what seed-data.sh still writes and what an earlier version of this comment named.
+ * Migration 036 made the translation_room table the authority for room language validation and
+ * dropped the cross-schema view, so the two have been free to diverge ever since. Keep them in
+ * step: a language present there but missing here renders as a raw code, and one listed here but
+ * absent there is offered to users the backend will reject.
+ *
+ * That drift is now checked rather than asked for. `./catalog-drift` compares this list against
+ * the live catalog, the admin Configuration screen shows the result, and its tests fail if a
+ * meeting language is added here without a matching row.
  */
 
 /**
@@ -74,21 +80,21 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     locale: "ko-KR",
     name: "Korean",
     region: "KR",
-    scopes: ["meeting", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     code: "fr",
     locale: "fr-FR",
     name: "French",
     region: "FR",
-    scopes: ["meeting", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     code: "es",
     locale: "es-ES",
     name: "Spanish",
     region: "ES",
-    scopes: ["meeting", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     // Seeded and translatable, but deliberately not a meeting language — no scope puts it in
@@ -179,6 +185,32 @@ export function isLanguageAllowedByPolicy(
 export function meetingLanguagesForPolicy(allowedTargetLanguages?: string[] | null) {
   return languagesInScope("meeting").filter((language) =>
     isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  );
+}
+
+/**
+ * The languages a pre-join screen may offer for one room: the meeting scope, narrowed by BOTH
+ * limits that apply.
+ *
+ * WT-490 — offering only what the workspace permits is not enough. A workspace permitting
+ * vi/en/ja/ko and a room declaring vi/en offered all four, so a joiner could pick a language
+ * nobody in the room would ever speak, and the pick was accepted. A room is defined by the set of
+ * languages that will be spoken in it, so that set narrows the picker too.
+ *
+ * Each limit is applied through `isLanguageAllowedByPolicy`, which is what keeps an EMPTY list
+ * meaning "unrestricted from this source" rather than "permit nothing". Both arrive empty for a
+ * code that resolves to no room — the endpoint answers that way for a code still being typed — and
+ * the screen must show the full set then, not an empty picker.
+ *
+ * Deliberately intersected here rather than server-side, for that reason: two empties have to stay
+ * distinguishable from "the answer is nothing".
+ */
+export function meetingLanguagesForRoom(
+  allowedTargetLanguages?: string[] | null,
+  roomLanguages?: string[] | null,
+) {
+  return meetingLanguagesForPolicy(allowedTargetLanguages).filter((language) =>
+    isLanguageAllowedByPolicy(language.code, roomLanguages),
   );
 }
 

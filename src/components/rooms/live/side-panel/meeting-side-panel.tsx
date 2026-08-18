@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { ChatPanel } from "@/components/rooms/live/chat-panel";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -11,6 +11,11 @@ import type {
 } from "@/types/translationRoom";
 import { PeoplePanel } from "./people-panel";
 import { TranscriptPanel } from "./transcript-panel";
+import {
+  SIDE_PANEL_WIDTH_STORAGE_KEY,
+  clampSidePanelWidth,
+  readStoredSidePanelWidth,
+} from "@/lib/meeting/side-panel-width";
 
 export type SidePanelMode = "transcript" | "chat" | "participants";
 
@@ -84,14 +89,74 @@ export function MeetingSidePanel({
     }
   }, [mode, chatMessages.length]);
 
+  // WT test feedback, 15 Aug: "cửa sổ transcript này cho điều chỉnh kéo to ra ko ... để nhỏ quá
+  // nhìn khó". A translated transcript is the thing people READ during a call, and a fixed narrow
+  // column wraps every line two or three times. Clamping lives in lib/meeting/side-panel-width.ts
+  // — the panel is a flex sibling of the stage, so an unbounded drag would collapse the video and
+  // the control bar with it.
+  const [panelWidth, setPanelWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    const stored = readStoredSidePanelWidth(window.localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY));
+    if (stored !== null) setPanelWidth(clampSidePanelWidth(stored, window.innerWidth));
+  }, []);
+
+  function beginResize(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 340;
+
+    function onMove(move: PointerEvent) {
+      // The handle is on the LEFT edge, so dragging left (a falling clientX) widens the panel.
+      setPanelWidth(clampSidePanelWidth(startWidth + (startX - move.clientX), window.innerWidth));
+    }
+    function onUp() {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      // Read back off state rather than recomputing: the last move already clamped it, and
+      // persisting an unclamped value would restore a broken layout on the next visit.
+      setPanelWidth((current) => {
+        if (current !== null) {
+          window.localStorage.setItem(SIDE_PANEL_WIDTH_STORAGE_KEY, String(current));
+        }
+        return current;
+      });
+    }
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  }
+
+  /** Double-click hands the width back to the responsive defaults rather than to a constant. */
+  function resetWidth() {
+    window.localStorage.removeItem(SIDE_PANEL_WIDTH_STORAGE_KEY);
+    setPanelWidth(null);
+  }
+
   const unreadChatCount = mode === "chat" ? 0 : Math.max(0, chatMessages.length - seenChatCount);
 
   return (
     <aside
       data-meeting-side-panel
-      className="flex shrink-0 flex-col overflow-hidden lg:w-[300px] xl:w-[340px] max-lg:fixed max-lg:right-3 max-lg:top-3 max-lg:bottom-24 max-lg:z-50 max-lg:w-[min(340px,calc(100vw-1.5rem))]"
+      // The inline width only appears once the user has dragged. Until then the responsive
+      // classes below own it, so a first-time viewer still gets 300px at lg and 340px at xl
+      // rather than one width baked in for every screen the day this shipped.
+      style={panelWidth ? { width: `${panelWidth}px` } : undefined}
+      className={`relative flex shrink-0 flex-col overflow-hidden max-lg:fixed max-lg:right-3 max-lg:top-3 max-lg:bottom-24 max-lg:z-50 max-lg:w-[min(340px,calc(100vw-1.5rem))] ${
+        panelWidth ? "" : "lg:w-[300px] xl:w-[340px]"
+      }`}
     >
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-1 rounded-2xl border border-border shadow-sm">
+      {/* Drag to widen the transcript. Hidden below lg, where the panel is an overlay pinned to
+          the viewport and there is no stage to take width from. */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize panel"
+        onPointerDown={beginResize}
+        onDoubleClick={resetWidth}
+        title="Drag to resize · double-click to reset"
+        className="absolute left-0 top-0 z-10 hidden h-full w-1.5 -translate-x-1/2 cursor-col-resize touch-none lg:block hover:bg-primary/30 active:bg-primary/50"
+      />
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-1 rounded-2xl border border-border shadow-sm">
         <div className="flex items-center gap-3 px-3 pt-3 pb-2 shrink-0 border-b border-border overflow-x-auto">
           <TabButton
             active={mode === "transcript"}
@@ -114,7 +179,14 @@ export function MeetingSidePanel({
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
           {mode === "transcript" ? (
-            <TranscriptPanel segments={segments} roomId={roomId} baseTime={room.startedAt} missedCount={missedCount} />
+            <TranscriptPanel
+              segments={segments}
+              roomId={roomId}
+              baseTime={room.startedAt}
+              missedCount={missedCount}
+              // Same value ChatPanel already translates into — this viewer's listen language.
+              readerLanguage={chatTargetLanguage}
+            />
           ) : null}
           {mode === "chat" ? (
             <ChatPanel roomId={roomId} targetLanguage={chatTargetLanguage} />

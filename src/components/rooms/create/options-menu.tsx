@@ -7,6 +7,7 @@ import {
   DotsThree,
   Repeat,
   ShieldCheck,
+  Translate,
 } from "@phosphor-icons/react/dist/ssr";
 
 import {
@@ -44,7 +45,9 @@ export function OptionsMenu({
   daily,
   onDailyChange,
   requiresApproval,
+  participantsCanStartTranslation,
   onRequiresApprovalChange,
+  onParticipantsCanStartTranslationChange,
 }: {
   hasScheduledAt?: boolean;
   onAddScheduledAt?: () => void;
@@ -54,7 +57,10 @@ export function OptionsMenu({
   onDailyChange?: (draft: DailyRecurrenceDraft | null) => void;
   /** WT-341: whether joiners wait in the lobby for the host. */
   requiresApproval?: boolean;
+  /** WT-371: whether anyone in the room may start translation. Omit to hide the row. */
+  participantsCanStartTranslation?: boolean;
   onRequiresApprovalChange?: (next: boolean) => void;
+  onParticipantsCanStartTranslationChange?: (value: boolean) => void;
 }) {
   const now = new Date();
   const isDaily = !!daily;
@@ -334,6 +340,54 @@ export function OptionsMenu({
                 className="flex shrink-0 cursor-pointer items-center"
               >
                 {requiresApproval ? (
+                  <CheckCircle weight="fill" size={16} color="#3b82f6" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border border-border/60 transition-colors" />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* WT-371. Starting translation was host-only, full stop, and a host who is late or
+            busy therefore blocks a meeting that is otherwise ready — the same trap "Require
+            approval" above was loosened to avoid. WT-371 asked for the opposite (host-only,
+            strictly), which is right for a customer demo and wrong for a standup, so the room
+            decides rather than the product.
+
+            Off by default: the permissive branch has to be something a host actually chose.
+            Only STARTING is opened up — stopping stays host-only, because letting anyone cut
+            translation off for everybody is a different thing entirely. */}
+        {onParticipantsCanStartTranslationChange && (
+          <div className="rounded-md">
+            <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2">
+              <button
+                type="button"
+                onClick={() =>
+                  onParticipantsCanStartTranslationChange(!participantsCanStartTranslation)
+                }
+                aria-pressed={!!participantsCanStartTranslation}
+                className="flex flex-1 cursor-pointer items-center gap-2 text-left text-[13px]"
+              >
+                <Translate weight="duotone" size={16} className="shrink-0" />
+                <span className="font-medium whitespace-nowrap text-ink">
+                  Anyone can start translation
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onParticipantsCanStartTranslationChange(!participantsCanStartTranslation)
+                }
+                aria-label={
+                  participantsCanStartTranslation
+                    ? "Only the host may start translation"
+                    : "Let anyone in the room start translation"
+                }
+                className="flex shrink-0 cursor-pointer items-center"
+              >
+                {participantsCanStartTranslation ? (
                   <CheckCircle weight="fill" size={16} color="#3b82f6" />
                 ) : (
                   <div className="h-4 w-4 rounded-full border border-border/60 transition-colors" />

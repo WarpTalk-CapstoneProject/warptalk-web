@@ -18,7 +18,7 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { SeriesListSummary, TranslationRoomDto } from "@/types/translationRoom";
 import {
   describeRecurrenceWithTime,
@@ -28,7 +28,7 @@ import { LanguageLabel } from "@/components/language/language-label";
 import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
 // cannot drift the way the language chip did.
-import { isScheduledOn, startOfDay } from "@/lib/meeting/meeting-day";
+import { belongsToDay, isMeetingOver, startOfDay } from "@/lib/meeting/meeting-day";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -331,10 +331,16 @@ export default function MeetingsPageLinear() {
   );
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [today] = useState<Date>(() => new Date());
-  // Null means "no day chosen", which is not the same as "today": the tab's own filter runs
-  // untouched until somebody actually picks a day off the strip. Picking the selected day again
-  // clears it, so there is always a way back out of a day without hunting for today.
-  const [dayFilter, setDayFilter] = useState<Date | null>(null);
+  // Opens on today, and the list is filtered by it from the first render.
+  //
+  // This used to start null — "no day chosen" — while the strip still drew today as selected.
+  // So the page opened showing a highlighted SAT 15 above a list that was ignoring it, and the
+  // only way to see a day's meetings was to click the day that already looked clicked. A
+  // control that is drawn as active has to be active.
+  //
+  // Still nullable, and "Clear day" still clears it: a day narrows the tab, and there has to be
+  // a way to ask the tab's own question. Picking the selected day again also clears it.
+  const [dayFilter, setDayFilter] = useState<Date | null>(() => new Date());
   // workspaceId is what lets the server answer this question for a workspace Owner/Admin at all:
   // without it the list falls back to host-or-participant-or-invitee and an Admin sees an empty
   // page for a workspace that has meetings in it. It also stops this workspace-scoped screen from
@@ -363,6 +369,7 @@ export default function MeetingsPageLinear() {
   const setCreateRoomModalOpen = useUIStore(
     (state) => state.setCreateRoomModalOpen,
   );
+  const canCreateMeetings = useCanCreateMeetings();
 
   const rooms = useMemo(() => {
     return roomList.data?.rooms ?? [];
@@ -430,7 +437,28 @@ export default function MeetingsPageLinear() {
     // Tuesday" are contradictory questions, and answering the second under a tab labelled All is
     // how that tab came to show one row.
     if (dayFilter && !isAllView) {
-      return rooms.filter((r) => matchesSearch(r) && isScheduledOn(r, dayFilter));
+      // The day NARROWS the tab; it does not replace it. Returning here with only the date
+      // predicate dropped the tab's status rule entirely, so picking a day on Active listed
+      // every room booked that day — including cancelled and ended ones — under a heading that
+      // still read "Active Meetings". A daily series whose schedule had been stopped showed its
+      // future occurrences there as "Cancelled", which reads as the UI reporting the wrong
+      // thing about a meeting that looks perfectly fine.
+      //
+      // Active and History ask opposite questions about the same day, so each keeps its own
+      // half: Active is what is still to come or still running, History is what is over. A
+      // future date under Active is not "nothing is live right now" — it is "here is what is
+      // booked" — which is why this is a terminal-status exclusion rather than the tab's
+      // now-relative window.
+      //
+      // belongsToDay, not isScheduledOn: an instant meeting has no `scheduledAt` and so belongs
+      // to no scheduled day at all. Filtering on the booked date alone erased every ad-hoc room
+      // the moment a day was selected — including a meeting that was live right then.
+      return (activeTab === "history" ? rowSource : rooms).filter(
+        (r) =>
+          matchesSearch(r) &&
+          belongsToDay(r, dayFilter) &&
+          (activeTab === "history" ? isMeetingOver(r.status) : !isMeetingOver(r.status)),
+      );
     }
 
     if (activeTab === "active") {
@@ -519,13 +547,15 @@ export default function MeetingsPageLinear() {
           <div className="h-4 w-[1px] bg-border mx-1" />
 
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setCreateRoomModalOpen(true)}
-              className="flex items-center gap-1.5 h-[28px] pl-2.5 pr-3 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity text-[13px] font-medium shadow-sm"
-            >
-              <Plus weight="bold" size={12} />
-              New Meeting
-            </button>
+            {canCreateMeetings && (
+              <button
+                onClick={() => setCreateRoomModalOpen(true)}
+                className="flex items-center gap-1.5 h-[28px] pl-2.5 pr-3 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity text-[13px] font-medium shadow-sm"
+              >
+                <Plus weight="bold" size={12} />
+                New Meeting
+              </button>
+            )}
             <button
               onClick={() => setJoinModalOpen(true)}
               className="flex items-center justify-center w-[28px] h-[28px] rounded-full bg-surface-2 hover:bg-surface-3 text-ink transition-colors shadow-sm border border-border/60"
@@ -579,9 +609,22 @@ export default function MeetingsPageLinear() {
               ) : (
                 <CaretRight size={12} weight="bold" />
               )}
+              {/* The heading has to name the day when one is applied. "Active Meetings 2" over a
+                  list narrowed to Saturday reads as the count of everything active, and that is
+                  precisely the mismatch that made the strip look broken. */}
               <span className="font-medium text-foreground capitalize">
                 {activeTab} Meetings
               </span>
+              {dayFilter && !isAllView ? (
+                <span className="normal-case text-muted-foreground">
+                  ·{" "}
+                  {new Intl.DateTimeFormat("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  }).format(dayFilter)}
+                </span>
+              ) : null}
               <span className="tabular-nums">{filteredRooms.length}</span>
             </div>
 
@@ -599,7 +642,27 @@ export default function MeetingsPageLinear() {
                       weight="light"
                       className="mb-3 opacity-30"
                     />
-                    <p>No {activeTab} meetings found.</p>
+                    {/* Say WHY it is empty. "No active meetings found." under a day filter is
+                        the empty state claiming the workspace has nothing, when what is true is
+                        that this one day has nothing — and the fix is one click away. */}
+                    <p>
+                      {dayFilter && !isAllView
+                        ? `No ${activeTab} meetings on ${new Intl.DateTimeFormat("en-US", {
+                            weekday: "long",
+                            month: "short",
+                            day: "numeric",
+                          }).format(dayFilter)}.`
+                        : `No ${activeTab} meetings found.`}
+                    </p>
+                    {dayFilter && !isAllView ? (
+                      <button
+                        type="button"
+                        onClick={() => setDayFilter(null)}
+                        className="mt-2 text-[12px] font-medium text-primary hover:text-primary-hover"
+                      >
+                        Show every {activeTab} meeting
+                      </button>
+                    ) : null}
                   </div>
                 )}
               </div>

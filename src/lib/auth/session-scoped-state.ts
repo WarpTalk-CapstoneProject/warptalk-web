@@ -1,8 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { useActiveMeetingStore } from "../../stores/active-meeting-store.ts";
+import { useMeetingInviteStore } from "../../stores/meeting-invite-store.ts";
+import { useMeetingStartedStore } from "../../stores/meeting-started-store.ts";
 import { useAssistantContextStore } from "../../stores/assistant-context-store.ts";
 import { useNotificationStore } from "../../stores/notification-store.ts";
+import { useOnboardingStore } from "../../stores/onboarding-store.ts";
 import { usePresenceStore } from "../../stores/presence-store.ts";
 import { useTranslationRoomStore } from "../../stores/translationRoom-store.ts";
 import { useWorkspaceStore } from "../../stores/workspace-store.ts";
@@ -85,7 +88,16 @@ function resetSessionScopedStores() {
   useWorkspaceTabsStore.getState().clearAllTabs();
   useTranslationRoomStore.getState().reset();
   useActiveMeetingStore.getState().closeMeeting();
+  // A "join now" button for a meeting the PREVIOUS account was invited to. Leaving it on screen
+  // across a sign-in offers the new account a room it may have no business entering.
+  useMeetingStartedStore.getState().dismiss();
+  // And the invitation waiting for an answer, for the stronger version of the same reason: its
+  // button does not merely open a room, it accepts on behalf of whoever is signed in.
+  useMeetingInviteStore.getState().dismiss();
   useAssistantContextStore.getState().clearAllContext();
+  // "Already seen the tour" and "not now, thanks" are answers one person gave. The next
+  // account on this browser has not been shown anything and has dismissed nothing.
+  useOnboardingStore.getState().reset();
 }
 
 function resetSessionScopedBrowserStorage() {

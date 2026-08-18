@@ -48,10 +48,28 @@ export interface AdminWorkspaceSummaryDto {
 
 export interface AdminWorkspaceLifecycleEventDto {
   id: string;
-  action: "suspend" | "reactivate";
+  action: "suspend" | "reactivate" | "delete";
   reason: string;
   performedBy: string;
   performedAt: string;
+}
+
+/**
+ * One roster row: who is in the workspace and in what capacity. Operational facts only —
+ * the tenant's content (documents, knowledge, meetings) is never exposed to this portal.
+ */
+export interface AdminWorkspaceMemberDto {
+  userId: string;
+  fullName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  /** False when the Auth service could not resolve the account; render a degraded cell. */
+  resolved: boolean;
+  role: string;
+  membershipType: string;
+  status: string;
+  canCreateMeetings: boolean;
+  joinedAt: string;
 }
 
 export interface AdminWorkspaceDetailDto {

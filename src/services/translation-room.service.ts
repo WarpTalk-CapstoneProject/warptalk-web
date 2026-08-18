@@ -1,10 +1,16 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
+import {
+  normalizeNoiseReductionMode,
+  type NoiseReductionMode,
+} from "@/lib/meeting/noise-reduction";
 import type {
   CancelSeriesResult,
   CreateRecurringRoomResponse,
   CreateTranslationRoomRequest,
   JoinTranslationRoomByCodeRequest,
+  JoinTranslationRoomRequest,
   JoinTranslationRoomResultDto,
   SubmitTranslationRoomFeedbackRequest,
   TranslationRoomArtifactDto,
@@ -266,6 +272,53 @@ export const translationRoomService = {
     return apiClient.put<void>(API.translationRooms.leave(id));
   },
 
+  /**
+   * WT-433 (Linear): join by room ID — what a shared LINK produces. Server-gated on membership
+   * of the room's workspace; a requires-approval room lands the caller in the waiting room, so
+   * this is how an uninvited teammate asks to join instead of dead-ending on the detail page.
+   */
+  async joinById(roomId: string, data: JoinTranslationRoomRequest) {
+    return apiClient.post<BackendJoinResponse>(`/translation-rooms/${roomId}/join`, {
+      translationRoomCode: "",
+      displayName: data.displayName.trim(),
+      speakLanguage: data.speakLanguage,
+      listenLanguage: data.listenLanguage,
+    });
+  },
+
+  /**
+   * WT-468 — the language whitelist of the workspace that OWNS the room behind this code.
+   *
+   * Always resolves. The server answers 200 with an empty list for an unknown or half-typed
+   * code, and empty means unrestricted, so a caller may poll this as the user types without
+   * painting an error over an incomplete code or momentarily emptying a picker.
+   */
+  /**
+   * WT-480: share this meeting's record with everyone who took part, or take it back.
+   *
+   * One call covers the transcript, the AI summary and the recording — they are governed by a
+   * single room setting, which is why the button that calls this names all three.
+   *
+   * Its own route rather than the settings PUT: that endpoint refuses any room past WAITING, and
+   * a record can only be shared once the meeting has ended and the artifacts exist.
+   */
+  async setArtifactAccess(roomId: string, level: ArtifactAccessLevel) {
+    await apiClient.put<void>(API.translationRooms.artifactAccess(roomId), { level });
+  },
+
+  async getJoinLanguagePolicy(code: string) {
+    // WT-490: `roomLanguages` is the set the ROOM declares (source + targets). Both lists arrive
+    // separately and are intersected client-side by meetingLanguagesForRoom, because an empty list
+    // means "unrestricted from this source" and pre-intersecting would make either empty read as
+    // "offer nothing". Optional in the type so a web build in front of an older backend degrades to
+    // the previous behaviour instead of offering an empty picker.
+    const response = await apiClient.get<{
+      allowedTargetLanguages: string[];
+      roomLanguages?: string[];
+    }>(API.translationRooms.joinLanguagePolicy(code));
+    return response.data;
+  },
+
   async joinByCode(data: JoinTranslationRoomByCodeRequest) {
     const response = await apiClient.post<BackendJoinResponse>(API.translationRooms.join, {
       translationRoomCode: data.translationRoomCode.trim(),
@@ -296,6 +349,66 @@ export const translationRoomService = {
    * SetVoiceCloneConsent. Biometric data: only ever called from an explicit user action. */
   async setVoiceCloneConsent(id: string, enabled: boolean) {
     return apiClient.post<void>(API.translationRooms.voiceCloneConsent(id), { enabled });
+  },
+
+  /**
+   * Tell this room to re-read every speaker's chosen dub voice from AuthService and republish
+   * its routes.
+   *
+   * Called AFTER VoiceProfileService.setDubVoice, never instead of it. The setting itself lives
+   * in AuthService, which knows nothing about rooms — so without this the change is correct
+   * everywhere except the meeting the person is currently in, until somebody joins or
+   * translation is restarted and a publish happens for some other reason.
+   */
+  async refreshDubVoice(id: string) {
+    return apiClient.post<void>(API.translationRooms.refreshDubVoice(id));
+  },
+
+  /**
+   * WT-B "flash mode" — whether this ROOM streams audio to STT while a speaker is still talking.
+   *
+   * Readable by any participant, so a guest can render the switch where the host left it rather
+   * than guessing. Writing is host-only and answers 403 to anybody else, which the caller must
+   * surface rather than swallow: a switch that silently springs back is worse than one that says
+   * it is not yours to move.
+   */
+  async getFlashMode(id: string) {
+    const { data } = await apiClient.get<{ enabled: boolean }>(API.translationRooms.flashMode(id));
+    return Boolean(data?.enabled);
+  },
+
+  async setFlashMode(id: string, enabled: boolean) {
+    const { data } = await apiClient.put<{ enabled: boolean }>(
+      API.translationRooms.flashMode(id),
+      { enabled },
+    );
+    return Boolean(data?.enabled);
+  },
+
+  /**
+   * How much the STT provider denoises THIS caller's own microphone in this meeting.
+   *
+   * NOT the noise-suppression toggle in the same menu. That one is Krisp/the browser filtering the
+   * raw microphone, which changes what other people HEAR. This one changes how accurately what you
+   * say is RECOGNISED, and touches nobody else's audio — which is also why, unlike flash mode
+   * above, any participant may set it for themselves without the host.
+   *
+   * Self-service, so there is no 403 branch to think about: the only failure worth surfacing is a
+   * write that did not happen.
+   */
+  async getNoiseReduction(id: string) {
+    const { data } = await apiClient.get<{ mode: NoiseReductionMode }>(
+      API.translationRooms.noiseReduction(id),
+    );
+    return normalizeNoiseReductionMode(data?.mode);
+  },
+
+  async setNoiseReduction(id: string, mode: NoiseReductionMode) {
+    const { data } = await apiClient.put<{ mode: NoiseReductionMode }>(
+      API.translationRooms.noiseReduction(id),
+      { mode },
+    );
+    return normalizeNoiseReductionMode(data?.mode);
   },
 
   async start(id: string) {
@@ -351,6 +464,38 @@ export const translationRoomService = {
     };
   },
 
+  /**
+   * WT-333 — the caller's own meetings in one workspace, past and upcoming together (UC 25).
+   *
+   * Same response shape as `history`, and normalised the same way, so the two stay interchangeable
+   * for anything that consumes a room + roster + artifacts. What differs is on the server: this
+   * route pins the scope to the caller, carries no status filter, and orders by the booked slot.
+   *
+   * `workspaceId` is required by the server; sending nothing gets a 400 rather than every
+   * workspace, which is the intended answer.
+   */
+  async myMeetings(params: {
+    workspaceId: string;
+    from?: string;
+    to?: string;
+    search?: string;
+    status?: string;
+    pageSize?: number;
+  }) {
+    const response = await apiClient.get<TranslationRoomHistoryResponse>(API.translationRooms.myMeetings, { params });
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        rooms: response.data.rooms.map((item) => ({
+          ...item,
+          room: normalizeRoom(item.room as BackendRoom),
+          participants: item.participants.map((participant) => normalizeParticipant(participant as BackendParticipant)),
+        })),
+      },
+    };
+  },
+
   async artifacts(id: string) {
     return apiClient.get<TranslationRoomArtifactDto[]>(API.translationRooms.artifacts(id));
   },
@@ -383,6 +528,23 @@ export const translationRoomService = {
 
   async invitations(id: string) {
     return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
+  },
+
+  /**
+   * Accept the invitation addressed to the signed-in account's email.
+   *
+   * Takes no body: the server matches the row from the caller's own email claim, because
+   * invitations are keyed by address and an invitee may have no participant row to name. Sending
+   * an invitation id from the client would let one be accepted on somebody else's behalf.
+   *
+   * Idempotent server-side, so the same notification may be accepted from the popup and again
+   * from the bell without the second click failing.
+   */
+  async acceptInvitation(id: string) {
+    const { data } = await apiClient.post<TranslationRoomInvitationDto>(
+      API.translationRooms.acceptInvitation(id),
+    );
+    return data;
   },
 
   async updateSettings(id: string, data: UpdateRoomSettingsRequest) {

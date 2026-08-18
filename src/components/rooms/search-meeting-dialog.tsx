@@ -25,11 +25,13 @@ import {
 } from "@/components/ui/command";
 import { Lumidot } from "lumidot";
 import { looksLikeRoomCode } from "@/lib/meeting/room-code-guess";
+import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useTheme } from "next-themes";
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
+import { liveMeetingPath, roomDetailPath } from "@/lib/workspace/workspace-routes";
+import type { TranslationRoomDto } from "@/types/translationRoom";
 
 type QuickSearchAction = {
   title: string;
@@ -43,7 +45,9 @@ export function SearchMeetingDialog() {
   const searchMeetingModalOpen = useUIStore((state) => state.searchMeetingModalOpen);
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
+  const canCreateMeetings = useCanCreateMeetings();
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [searchQuery, setSearchQuery] = useState("");
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
@@ -76,15 +80,35 @@ export function SearchMeetingDialog() {
     if (!searchMeetingModalOpen) setSearchQuery("");
   }
 
+  // Two omissions here made ⌘K unable to find a meeting that had happened.
+  //
+  // `status`: the server defaults an absent status to SCHEDULED,WAITING,IN_PROGRESS,PAUSED
+  // (TranslationRoomService.GetTranslationRoomsAsync). A meeting that has ENDED — which is
+  // every meeting anyone is searching for after the fact — could therefore never come back,
+  // and the palette answered "No meetings found." for a room that ran an hour ago.
+  //
+  // `workspaceId`: without it the server can only match rooms this user hosted, attended or
+  // was invited to. A workspace Owner searching for a colleague's meeting got nothing, which
+  // is the same empty result and the same wrong conclusion. The meetings list already sends
+  // both for exactly these reasons.
   const { data, isLoading } = useTranslationRooms({
     search: searchQuery,
     pageSize: 10,
+    status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
+    workspaceId: activeWorkspaceId ?? undefined,
   });
 
   const meetings = data?.rooms || [];
 
-  const handleSelect = (roomId: string) => {
-    router.push(liveMeetingPath(activeWorkspaceSlug, roomId));
+  // Now that finished meetings are findable, they must not be sent through the live-meeting
+  // door. A meeting is searched for AFTER it happened at least as often as before, and what
+  // the person wants then is its transcript and summary — which live on the room page, not in
+  // a call that ended.
+  const handleSelect = (room: Pick<TranslationRoomDto, "id" | "status">) => {
+    const path = canJoinTranslationRoom(room.status)
+      ? liveMeetingPath(activeWorkspaceSlug, room.id)
+      : roomDetailPath(slug, room.id);
+    router.push(path);
     setSearchMeetingModalOpen(false);
   };
 
@@ -94,12 +118,18 @@ export function SearchMeetingDialog() {
   };
 
   const quickActions: QuickSearchAction[] = [
-    {
-      title: "Create room",
-      description: "Start a live translation room",
-      icon: Plus,
-      onSelect: () => closeAndRun(() => setCreateRoomModalOpen(true)),
-    },
+    // WT-371 #2: the command palette is a second door to the same dialog. Leaving it open for a
+    // member who cannot create meetings would mean the buttons are hidden and Ctrl-K still works.
+    ...(canCreateMeetings
+      ? [
+          {
+            title: "Create room",
+            description: "Start a live translation room",
+            icon: Plus,
+            onSelect: () => closeAndRun(() => setCreateRoomModalOpen(true)),
+          } satisfies QuickSearchAction,
+        ]
+      : []),
     {
       title: "Join by code",
       description: "Enter an invite or meeting code",
@@ -108,7 +138,9 @@ export function SearchMeetingDialog() {
     },
     {
       title: "Open meetings",
-      description: "Browse scheduled and live rooms",
+      // Not "scheduled and live rooms": that page lists finished and cancelled meetings too,
+      // and the old wording was itself an argument that search could not reach them.
+      description: "Browse every meeting in this workspace",
       icon: VideoCamera,
       onSelect: () => closeAndRun(() => router.push(`/${slug}/rooms`)),
     },
@@ -227,7 +259,7 @@ export function SearchMeetingDialog() {
                 <CommandItem
                   key={meeting.id}
                   value={meeting.id}
-                  onSelect={() => handleSelect(meeting.id)}
+                  onSelect={() => handleSelect(meeting)}
                   className="gap-3 rounded-[10px] px-3 py-2.5"
                 >
                   <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-surface-2 text-ink-muted">
@@ -238,6 +270,14 @@ export function SearchMeetingDialog() {
                     <span className="mt-0.5 flex items-center gap-2 truncate text-[12px] text-muted-foreground">
                       <span className="bg-surface-2 border border-border px-1 rounded text-[10px] font-mono">{meeting.translationRoomCode}</span>
                       <span className="flex items-center gap-1"><CalendarBlank className="w-3 h-3" />{format(new Date(meeting.createdAt), "MMM d, yyyy")}</span>
+                      {/* Results now span every status, so the row has to say which one it is:
+                          otherwise a finished meeting and a live one look identical and the
+                          only way to tell them apart is to open one. */}
+                      {!canJoinTranslationRoom(meeting.status) && (
+                        <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] capitalize">
+                          {meeting.status}
+                        </span>
+                      )}
                     </span>
                   </div>
                 </CommandItem>

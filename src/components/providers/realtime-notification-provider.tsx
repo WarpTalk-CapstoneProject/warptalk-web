@@ -23,19 +23,31 @@ import { useRouter } from "next/navigation";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  type RawNotification,
+  readMeetingInviteNotice,
+  readMeetingStartedNotice,
+} from "@/lib/notifications/meeting-started-notice";
+import { playNotificationCue } from "@/lib/notifications/notification-sounds";
+import { useMeetingInviteStore } from "@/stores/meeting-invite-store";
+import { useMeetingStartedStore } from "@/stores/meeting-started-store";
+
 interface RealtimeContextType {
   connection: signalR.HubConnection | null;
   isConnected: boolean;
 }
 
-interface NotificationEventPayload {
-  title?: string;
-  content?: string;
-  message?: string;
-  type?: string;
+/**
+ * The realtime notification, in whichever spelling arrives.
+ *
+ * `RawNotification` accepts both snake_case (the SignalR relay's RealtimeNotificationMessage) and
+ * camelCase (the REST list's NotificationMessageDto) — reading only one of them is what silently
+ * removed the Join button from the meeting-started popup.
+ */
+type NotificationEventPayload = RawNotification & {
   actionUrl?: string;
-  data?: { actionUrl?: string };
-}
+  data?: { actionUrl?: string } | null;
+};
 
 interface WorkspaceSettingsEventPayload {
   message?: string;
@@ -50,6 +62,9 @@ interface DocumentEventPayload {
   ingestionStatus?: string;
   status?: string;
   newStatus?: string;
+  eventType?: string;
+  event_type?: string;
+  aiEligible?: boolean;
 }
 
 interface MeetingEventPayload {
@@ -142,6 +157,30 @@ export function RealtimeNotificationProvider({
         const message =
           notif.content || notif.message || "You have a new update.";
         const actionUrl = notif.actionUrl || notif.data?.actionUrl;
+        // A meeting that is RUNNING is different news from an invitation: an invite can wait,
+        // a meeting in progress cannot, and the only useful response is one click. This type
+        // used to be discarded at validation before it ever reached a client
+        // (warptalk-backend#190), so the popup had nothing to show.
+        const meetingStarted = readMeetingStartedNotice(notif);
+        if (meetingStarted) {
+          playNotificationCue("meeting-started");
+          useMeetingStartedStore.getState().show(meetingStarted);
+          return;
+        }
+
+        // An invitation, which is a QUESTION and gets its own card with an Accept button rather
+        // than the generic toast below. The toast branch further down was written for types
+        // ("MeetingInvite" / "MeetingInvitation") that no producer has ever sent — the server's
+        // real type is MEETING_INVITED, and until the notification service's validator learned it,
+        // none of these reached a client at all.
+        const meetingInvite = readMeetingInviteNotice(notif);
+        if (meetingInvite) {
+          playNotificationCue("meeting-invited");
+          triggerNativeDesktopNotification(title, { body: message });
+          useMeetingInviteStore.getState().show(meetingInvite);
+          return;
+        }
+
         const isMeetingInvite =
           notif.type === "MeetingInvite" ||
           notif.type === "MeetingInvitation" ||
@@ -334,14 +373,12 @@ export function RealtimeNotificationProvider({
         invalidateDocumentQueries(payload);
 
         const title = payload?.title || payload?.documentTitle || "Document";
-        const status = (
-          payload?.ingestionStatus ||
-          payload?.status ||
-          payload?.newStatus ||
-          ""
-        ).toLowerCase();
+        const ingestionStatus = (payload?.ingestionStatus || "").toLowerCase();
+        const eventType = (payload?.eventType || payload?.event_type || "").toLowerCase();
+        const aiEligible = Boolean(payload?.aiEligible);
 
-        if (status === "ready" || status === "completed") {
+        // Only show Document Ready toast when vector ingestion is genuinely completed in Qdrant VectorDB
+        if (ingestionStatus === "completed" || eventType === "completed" || aiEligible) {
           toast.success("Document Ready", {
             description: `"${title}" has finished processing and is ready to view.`,
             icon: <FileText className="h-4 w-4 text-emerald-500" />,
@@ -474,3 +511,5 @@ export function RealtimeNotificationProvider({
     </RealtimeContext.Provider>
   );
 }
+
+

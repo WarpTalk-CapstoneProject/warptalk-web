@@ -38,8 +38,24 @@ export interface TranslationRoomDto {
   createdAt: string;
   settings?: {
     requiresApproval: boolean;
+    /**
+     * WT-480: who besides the host may read this meeting's record — its transcript, AI summary
+     * and recording, governed together. One of `ArtifactAccessLevels`; absent reads as host-only.
+     *
+     * The server has always sent this (`RoomSettingsResponse` carries it straight from the
+     * settings blob); this type simply never declared it, so no screen could read the state it
+     * was already being told.
+     */
+    artifactAccess?: string;
+    /** WT-371: whether anyone in the room may start translation, or only the host. */
+    participantsCanStartTranslation?: boolean;
   };
   participantCount?: number;
+  /**
+   * Distinct people who were ever in the room. `participantCount` is live occupancy and is 0
+   * for every finished meeting, so a room that ended showed "0/100" however many attended.
+   */
+  attendedCount?: number;
   isHost?: boolean;
   /**
    * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.
@@ -106,6 +122,7 @@ export interface CreateTranslationRoomRequest {
     muteOnEntry?: boolean;
     autoRecord?: boolean;
     breakoutsEnabled?: boolean;
+    participantsCanStartTranslation?: boolean;
   };
   scheduledAt?: string;
   invitedEmails?: string[];

@@ -9,16 +9,22 @@ import {
   X,
 } from "@phosphor-icons/react/dist/ssr";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
 import { DeviceSelect } from "@/components/rooms/setup/device-select";
 import {
-  normalizeLanguageCode,
-  resolveRoomDefaultListenLanguage,
-} from "@/lib/language/participant-language-preference";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
+import { getFlagEmoji } from "@/lib/language/language-flag";
+import { resolvePreJoinLanguages, snapPairIntoOptions } from "@/lib/language/prejoin";
+import { parseTargetLanguages } from "@/lib/language/languages";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
+  useJoinLanguagePolicy,
   useJoinTranslationRoomByCode,
   useTranslationRoom,
 } from "@/hooks/use-translationRooms";
@@ -27,6 +33,7 @@ import {
   shouldEnterWaitingRoom,
 } from "@/lib/meeting/translation-room-access";
 import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
+import { useUserSettings } from "@/hooks/use-user-settings";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 import { cn } from "@/lib/utils";
@@ -47,6 +54,10 @@ export function SetupRoomModal() {
   const setIsOpen = useUIStore((state) => state.setSetupRoomModalOpen);
   const user = useAuthStore((state) => state.user);
 
+  // WT-434: the join payload seeds from the user's remembered languages (see handleConfirm).
+  // Loading tolerated — an unresolved query only means the room-default fallback, which is
+  // exactly what this modal always sent before.
+  const { data: userSettings } = useUserSettings();
   const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(
     roomId ?? "",
   );
@@ -65,15 +76,63 @@ export function SetupRoomModal() {
   const animationRef = useRef<number | null>(null);
   const mediaGenerationRef = useRef(0);
 
-  // Language is no longer chosen here. The setup step is about devices; participants pick
-  // their speak/listen languages inside the meeting, where the picker can react to who is
-  // actually in the room. Joining therefore carries the room's own configuration, which is
-  // the lowest-precedence source in participant-language-preference.ts — so the first
-  // in-meeting pick (and only that) counts as a real user choice.
+  // WT-494 — language IS chosen here again, and by the same rule /join uses.
   //
-  // Deriving these from the room also keeps them inside the room's policy. The previous
-  // default was a hardcoded "vi", which a room without Vietnamese rejects outright at
-  // LanguagePolicy.IsAllowedToSpeak.
+  // It was removed on the argument that the setup step is about devices and the in-meeting picker
+  // can react to who is actually present. But the pair was still being DECIDED here, silently, and
+  // /join went on asking for it: the same person joining the same meeting got one pair coming
+  // through the meetings list and possibly another through /join, and only /join let them see or
+  // correct it. That is the reported bug. Deciding silently is not the same as not deciding.
+  //
+  // The offered set and the starting pair both come from lib/language/prejoin.ts, so the two
+  // surfaces cannot drift again — including WT-490's narrowing by the room's own languages.
+  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(room?.translationRoomCode ?? "");
+  const preJoin = useMemo(
+    () =>
+      resolvePreJoinLanguages({
+        allowedTargetLanguages: joinLanguagePolicy?.allowedTargetLanguages,
+        roomLanguages: joinLanguagePolicy?.roomLanguages,
+        savedSpeakLanguage: userSettings?.defaultSpeakLanguage,
+        savedListenLanguage: userSettings?.defaultListenLanguage,
+        room: room
+          ? {
+              sourceLanguage: room.sourceLanguage,
+              targetLanguages: parseTargetLanguages(room.targetLanguages),
+            }
+          : null,
+      }),
+    [
+      joinLanguagePolicy?.allowedTargetLanguages,
+      joinLanguagePolicy?.roomLanguages,
+      userSettings?.defaultSpeakLanguage,
+      userSettings?.defaultListenLanguage,
+      room,
+    ],
+  );
+
+  const [speakLanguage, setSpeakLanguage] = useState("");
+  const [listenLanguage, setListenLanguage] = useState("");
+  const [languagesTouched, setLanguagesTouched] = useState(false);
+
+  // Same seed-or-snap rule as /join, applied during render rather than in an effect so the
+  // dropdowns never paint a language the room forbids. Untouched, the whole seed applies; once
+  // the user has chosen, only a value that stopped being offered moves.
+  const [appliedLanguagePolicyKey, setAppliedLanguagePolicyKey] = useState<string | null>(null);
+  const languagePolicyKey = joinLanguagePolicy
+    ? preJoin.options.map((language) => language.locale).join(",")
+    : null;
+  if (languagePolicyKey && appliedLanguagePolicyKey !== languagePolicyKey) {
+    setAppliedLanguagePolicyKey(languagePolicyKey);
+    if (languagesTouched) {
+      const snapped = snapPairIntoOptions({ speakLanguage, listenLanguage }, preJoin.options);
+      if (snapped.speakLanguage !== speakLanguage) setSpeakLanguage(snapped.speakLanguage);
+      if (snapped.listenLanguage !== listenLanguage) setListenLanguage(snapped.listenLanguage);
+    } else {
+      setSpeakLanguage(preJoin.speakLanguage);
+      setListenLanguage(preJoin.listenLanguage);
+    }
+  }
+
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [noiseSuppression] = useState(true);
@@ -292,10 +351,15 @@ export function SetupRoomModal() {
     }
     const displayName = (user?.fullName || user?.email || "Participant").trim();
 
-    // Room configuration, not a user choice — see the note where the language state used
-    // to live. `resolveRoomDefaultListenLanguage` prefers a target that is not the source.
-    const speakLanguage = normalizeLanguageCode(room.sourceLanguage) || "en";
-    const listenLanguage = resolveRoomDefaultListenLanguage(room);
+    // WT-494: whatever the dropdowns show is what goes on the wire. It was computed here instead,
+    // by a chain that agreed with /join on its first step (the user's remembered languages —
+    // WT-434, so a rejoin does not reset a returning speaker) and differed after it, with nothing
+    // on screen either way. What goes on the wire here also lands in sessionStorage as this room's
+    // saved preference, so a value the user never saw poisons every later in-meeting resolution.
+    if (!speakLanguage || !listenLanguage) {
+      toast.error("No language is available for this meeting. Ask the host to check its settings.");
+      return;
+    }
 
     setIsJoining(true);
     try {
@@ -462,6 +526,67 @@ export function SetupRoomModal() {
 
           <div className="flex flex-col justify-between gap-4">
             <div className="space-y-4">
+              {/* WT-494: the same question /join asks, in the same words, narrowed by the same
+                  rule. Rendered whenever the room offers anything — including for the host, who
+                  used to be told their source language rather than asked, and therefore entered
+                  with speak = listen and heard undubbed audio. */}
+              {preJoin.options.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                    Language Routing
+                  </h3>
+                  <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
+                    <Select
+                      value={speakLanguage}
+                      onValueChange={(value) => {
+                        if (!value) return;
+                        setLanguagesTouched(true);
+                        setSpeakLanguage(value);
+                      }}
+                    >
+                      <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
+                        <span className="leading-none text-[14px]">
+                          {getFlagEmoji(speakLanguage)}
+                        </span>
+                        <span className="font-medium text-ink">I speak</span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {preJoin.options.map((language) => (
+                          <SelectItem key={language.locale} value={language.locale}>
+                            {getFlagEmoji(language.locale)} {language.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <span className="text-ink-subtle px-0.5">→</span>
+
+                    <Select
+                      value={listenLanguage}
+                      onValueChange={(value) => {
+                        if (!value) return;
+                        setLanguagesTouched(true);
+                        setListenLanguage(value);
+                      }}
+                    >
+                      <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
+                        <span className="leading-none text-[14px]">
+                          {getFlagEmoji(listenLanguage)}
+                        </span>
+                        <span className="font-medium text-ink">I hear</span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {preJoin.options.map((language) => (
+                          <SelectItem key={language.locale} value={language.locale}>
+                            {getFlagEmoji(language.locale)} {language.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                   Device Settings

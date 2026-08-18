@@ -140,13 +140,45 @@ export interface RoomOccupancy<T extends ParticipantLike = ParticipantLike> {
  * "nobody is seated", not "unknown". `fallbackCount` is consulted only when there is no
  * roster at all.
  */
+/**
+ * Whether this room is over, in which case occupancy is the wrong question.
+ *
+ * "0/100" on a finished meeting is arithmetically true and useless: nobody is in a meeting that
+ * ended. What a finished meeting has is an ATTENDANCE — how many people turned up — and that is
+ * what the pill should carry once the room is over.
+ */
+export function isFinishedStatus(status?: string | null): boolean {
+  const normalized = status?.toLowerCase();
+  return normalized === "ended" || normalized === "cancelled" || normalized === "timeout";
+}
+
 export function roomOccupancy<T extends ParticipantLike>(input: {
   capacity?: number | null;
   participants?: readonly T[] | null;
   fallbackCount?: number | null;
+  /** The room's status, so a finished meeting can report attendance instead of occupancy. */
+  status?: string | null;
+  /** Distinct people who were ever in the room (`attendedCount` from the API). */
+  attendedCount?: number | null;
 }): RoomOccupancy<T> {
   const capacity = Math.max(0, Math.trunc(input.capacity ?? 0));
   const roster = input.participants ?? null;
+
+  // A finished meeting answers with who came, not who is here. Everything else about the shape
+  // stays the same so callers do not have to branch.
+  if (isFinishedStatus(input.status)) {
+    const attended = Math.max(0, Math.trunc(input.attendedCount ?? 0));
+    const seated = roster?.filter((participant) => holdsSeat(participant.status)) ?? [];
+    return {
+      seated,
+      lobby: [],
+      seatCount: attended,
+      capacity,
+      label: `${attended}`,
+      isFull: false,
+      fromRoster: false,
+    };
+  }
 
   if (!roster) {
     const seatCount = Math.max(0, Math.trunc(input.fallbackCount ?? 0));

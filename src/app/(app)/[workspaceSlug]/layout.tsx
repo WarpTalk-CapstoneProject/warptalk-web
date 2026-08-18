@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useWorkspaces } from "@/hooks/use-workspace";
+import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { Spinner } from "@phosphor-icons/react";
 import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
+import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
+  const selectWorkspace = useSelectWorkspace();
+  const syncedWorkspaceIdRef = useRef<string | null>(null);
 
   const { data: workspacesData, isLoading, isError } = useWorkspaces(1, 100);
   const targetWorkspace = workspaceSlug && workspacesData?.items
@@ -36,28 +39,39 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     }
 
     if (targetWorkspace) {
+      if (selectWorkspace.isPending) {
+        return;
+      }
+
       const storedRole = useWorkspaceStore.getState().role;
       const storedId = useWorkspaceStore.getState().activeWorkspaceId;
-
-      if (
+      const storedMembershipType = useWorkspaceStore.getState().membershipType;
+      const expectedRole = normalizeWorkspaceRole(targetWorkspace.role || "Member");
+      const expectedMembershipType = targetWorkspace.membershipType || "Internal";
+      const shouldSyncSelection =
+        syncedWorkspaceIdRef.current !== targetWorkspace.id ||
         activeWorkspaceSlug !== workspaceSlug ||
         storedId !== targetWorkspace.id ||
-        // Both sides must be canonicalised: `storedRole` is normalised on write, while
-        // `targetWorkspace.role` still carries the API's capitalisation, so comparing them
-        // raw was unconditionally true and re-ran setActiveWorkspace on every pass.
-        storedRole !== normalizeWorkspaceRole(targetWorkspace.role || "Member") ||
-        useWorkspaceStore.getState().defaultLanguage !== (targetWorkspace.defaultLanguage || "en")
-      ) {
-        setActiveWorkspace(
-          targetWorkspace.id,
-          targetWorkspace.name,
-          targetWorkspace.slug,
-          targetWorkspace.role || "Member",
-          "Internal",
-          targetWorkspace.defaultLanguage || "en"
-        );
+        storedRole !== expectedRole ||
+        storedMembershipType !== expectedMembershipType ||
+        useWorkspaceStore.getState().defaultLanguage !== (targetWorkspace.defaultLanguage || "en");
+
+      if (shouldSyncSelection) {
+        void (async () => {
+          try {
+            const selection = await selectWorkspace.mutateAsync(targetWorkspace.id);
+            applySelectedWorkspace(selection, setActiveWorkspace);
+            syncedWorkspaceIdRef.current = targetWorkspace.id;
+          } catch {
+            if (useWorkspaceStore.getState().activeWorkspaceSlug === workspaceSlug) {
+              useWorkspaceStore.getState().clearActiveWorkspace();
+            }
+            router.replace("/workspace");
+          }
+        })();
       }
     } else {
+      syncedWorkspaceIdRef.current = null;
       const currentSlug = useWorkspaceStore.getState().activeWorkspaceSlug;
       if (currentSlug === workspaceSlug) {
         useWorkspaceStore.getState().clearActiveWorkspace();
@@ -71,6 +85,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     targetWorkspace,
     isLoading,
     isError,
+    selectWorkspace,
     setActiveWorkspace,
     router,
   ]);
@@ -79,6 +94,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     !isError &&
     (!workspacesData?.items ||
       !targetWorkspace ||
+      selectWorkspace.isPending ||
       activeWorkspaceSlug !== workspaceSlug ||
       activeWorkspaceId !== targetWorkspace.id);
 

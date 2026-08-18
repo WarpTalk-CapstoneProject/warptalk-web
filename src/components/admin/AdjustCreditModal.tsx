@@ -18,11 +18,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { billingService } from "@/services/billing.service";
 import { getErrorMessage } from "@/lib/api/errors";
+import { useAdminWorkspaceDirectory } from "@/hooks/use-admin-workspaces";
 
 const MAX_CREDIT_ADJUSTMENT = 1_000_000;
 
 interface CreditAdjustmentConfirmation {
   workspaceId: string;
+  workspaceName: string;
   amount: number;
   reason: string;
 }
@@ -39,6 +41,20 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
   const [confirmation, setConfirmation] =
     useState<CreditAdjustmentConfirmation | null>(null);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * The picker replaces a paste-a-UUID field: nobody carries workspace ids in their head, and a
+   * typo'd UUID silently adjusted the wrong tenant. Only fetched while the dialog is open and
+   * only when no workspaceId was pinned by the page. Suspended workspaces are listed too — a
+   * suspension is precisely when a compensating adjustment happens.
+   */
+  const directoryQuery = useAdminWorkspaceDirectory(
+    { page: 1, pageSize: 200, sort: "name_asc" },
+    { enabled: open && !workspaceId },
+  );
+  const workspaceOptions = (directoryQuery.data?.items ?? []).filter(
+    (workspace) => workspace.status !== "deleted",
+  );
 
   useEffect(
     () => () => {
@@ -83,11 +99,15 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
       return;
     }
 
-    const targetWorkspaceId = workspaceId || inputWorkspaceId.trim();
+    const targetWorkspaceId = workspaceId || inputWorkspaceId;
     if (!targetWorkspaceId) {
-      setError("Workspace ID is required.");
+      setError("Choose a workspace.");
       return;
     }
+    const selectedWorkspace = workspaceOptions.find((w) => w.id === targetWorkspaceId);
+    const workspaceName = selectedWorkspace
+      ? `${selectedWorkspace.name} (${selectedWorkspace.slug})`
+      : targetWorkspaceId;
 
     const numericAmount = Number(amount);
     if (
@@ -114,6 +134,7 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
 
     setConfirmation({
       workspaceId: targetWorkspaceId,
+      workspaceName,
       amount: numericAmount,
       reason: reason.trim(),
     });
@@ -172,7 +193,7 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
               <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-ink">
                 <p className="font-medium">Confirm this credit adjustment</p>
                 <p className="break-all text-xs text-muted-foreground">
-                  Workspace: {confirmation.workspaceId}
+                  Workspace: {confirmation.workspaceName}
                 </p>
                 <p className="text-lg font-semibold">
                   {confirmation.amount > 0 ? "+" : ""}
@@ -190,16 +211,29 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
                   htmlFor="workspaceId"
                   className="text-sm font-medium text-ink"
                 >
-                  Workspace ID
+                  Workspace
                 </Label>
-                <Input
+                <select
                   id="workspaceId"
-                  placeholder="e.g. paste workspace UUID here"
                   value={inputWorkspaceId}
                   onChange={(e) => setInputWorkspaceId(e.target.value)}
-                  disabled={Boolean(confirmation)}
-                  className={`bg-surface-2 border ${error && !inputWorkspaceId.trim() ? "border-destructive focus-visible:ring-destructive" : "border-hairline focus-visible:ring-primary-focus"} rounded-md h-10 font-mono text-sm`}
-                />
+                  disabled={Boolean(confirmation) || directoryQuery.isPending}
+                  className={`h-10 w-full rounded-md border bg-surface-2 px-3 text-sm text-ink outline-none ${error && !inputWorkspaceId ? "border-destructive focus-visible:ring-2 focus-visible:ring-destructive" : "border-hairline focus-visible:ring-2 focus-visible:ring-primary-focus"}`}
+                >
+                  <option value="">
+                    {directoryQuery.isPending
+                      ? "Loading workspaces…"
+                      : directoryQuery.isError
+                        ? "Workspaces could not be loaded"
+                        : "Choose a workspace…"}
+                  </option>
+                  {workspaceOptions.map((workspace) => (
+                    <option key={workspace.id} value={workspace.id}>
+                      {workspace.name} ({workspace.slug})
+                      {workspace.status === "suspended" ? " — suspended" : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
