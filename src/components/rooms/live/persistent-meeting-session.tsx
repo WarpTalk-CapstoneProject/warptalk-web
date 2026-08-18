@@ -2654,9 +2654,9 @@ export function PersistentMeetingSession({
 
             <div
               data-meeting-bottom-dock
-              className="relative z-40 flex min-h-12 shrink-0 items-center overflow-visible"
+              className="relative z-40 flex min-h-12 min-w-0 shrink-0 items-center justify-center overflow-visible"
             >
-              <div className="mx-auto flex w-max items-center gap-2 px-1">
+              <div className="mx-auto flex max-w-full min-w-0 items-center gap-2 px-1 overflow-x-auto no-scrollbar">
                 <div data-meeting-control-bar className="shrink-0">
                   <MeetingControlBar
                     meetingEnabled={Boolean(meetingSession?.token)}
