@@ -68,6 +68,15 @@ export function MyDubVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }) 
     [profiles],
   );
 
+  const selectedVoiceName = useMemo(() => {
+    if (!chosen || chosen === LIVE_CLONE) return "Clone my voice during the meeting (default)";
+    const ownMatch = profiles.find((p) => p.providerVoiceId === chosen);
+    if (ownMatch) return ownMatch.displayName || "My voice";
+    const catalogMatch = catalog.find((v) => v.id === chosen);
+    if (catalogMatch) return catalogMatch.name;
+    return chosen;
+  }, [chosen, profiles, catalog]);
+
   function choose(value: string) {
     const voiceId = value === LIVE_CLONE ? null : value;
     // The catalogue needs a language to validate against; a voice of your own does not.
@@ -117,7 +126,7 @@ export function MyDubVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }) 
           disabled={isLoading || setDubVoice.isPending}
         >
           <SelectTrigger className="flex-1" aria-label="The voice you are dubbed in">
-            <SelectValue />
+            <SelectValue>{selectedVoiceName}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={LIVE_CLONE}>
