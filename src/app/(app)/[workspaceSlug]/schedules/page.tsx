@@ -211,7 +211,34 @@ export default function MyMeetingsPage() {
           sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
           same word three times with documentation living in the furniture. Meetings and Members
           open straight onto their content and this now does too. */}
-      <header className="flex border-b border-border px-5 py-3 lg:items-center lg:justify-end lg:px-8">
+      <header className="flex border-b border-border px-5 py-3 lg:items-center lg:justify-between lg:px-8">
+        <div className="flex items-center gap-2">
+          {/* Timeline Filter Chips in Top Header */}
+          <div
+            className="flex h-9 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-2/60 p-0.5"
+            role="tablist"
+            aria-label="Timeline filters"
+          >
+            {timeFilters.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={filter === item.value}
+                onClick={() => setFilter(item.value)}
+                className={cn(
+                  "h-8 rounded px-3 text-[12px] font-medium capitalize transition-colors",
+                  filter === item.value
+                    ? "bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex w-full items-center gap-2 lg:w-auto">
           {/* See history/page.tsx: one search affordance across the list pages. */}
           <ExpandingSearchDock
@@ -248,7 +275,7 @@ export default function MyMeetingsPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5 lg:flex">
+        <aside className="hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3.5 py-5 lg:flex">
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
               <button
@@ -274,13 +301,13 @@ export default function MyMeetingsPage() {
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-border bg-surface-1 p-1">
+            <div className="w-full">
               <Calendar
                 mode="single"
                 month={monthAnchor}
                 onMonthChange={setMonthAnchor}
                 onSelect={(date) => date && goToDay(date)}
-                className="w-full p-0.5 [--cell-size:1.8rem]"
+                className="w-full p-0"
                 classNames={{
                   month_caption: "hidden",
                   nav: "hidden",
@@ -298,27 +325,6 @@ export default function MyMeetingsPage() {
                 }}
               />
             </div>
-          </div>
-
-          {/* 3 Filter Tabs positioned above Statistics Count Cards */}
-          <div className="flex items-center justify-around gap-1 rounded-lg border border-border bg-surface-2/50 p-1" role="tablist" aria-label="Timeline filters">
-            {timeFilters.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                role="tab"
-                aria-selected={filter === item.value}
-                onClick={() => setFilter(item.value)}
-                className={cn(
-                  "flex-1 rounded-md py-1.5 text-center text-[11px] font-medium transition-colors",
-                  filter === item.value
-                    ? "bg-surface-1 text-ink font-semibold shadow-xs"
-                    : "text-ink-muted hover:text-ink",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
           </div>
 
           <dl className="grid grid-cols-2 gap-2">
@@ -361,16 +367,67 @@ export default function MyMeetingsPage() {
               onOpenPast={setDialogMeetingId}
               onNavigate={(id) => router.push(`/${workspaceSlug}/rooms/${id}`)}
             />
+          ) : groups.length === 0 ? (
+            <EmptyState hasQuery={Boolean(query)} />
           ) : (
-            <MonthGrid
-              monthAnchor={monthAnchor}
-              meetings={visible}
-              workspaceSlug={workspaceSlug}
-              viewerUserId={viewerUserId}
-              hasQuery={Boolean(query)}
-              onOpenPast={setDialogMeetingId}
-              onNavigate={(id) => router.push(`/${workspaceSlug}/rooms/${id}`)}
-            />
+            <div className="mx-auto w-full max-w-[900px] px-4 py-5">
+              {groups.map((group, index) => (
+                <div
+                  key={group.key}
+                  ref={(node) => {
+                    if (node) dayRefs.current.set(group.key, node);
+                    else dayRefs.current.delete(group.key);
+                  }}
+                >
+                  <GapNotice previous={groups[index - 1]?.key} current={group.key} />
+
+                  <div
+                    ref={group.key === todayKey ? todayRef : undefined}
+                    className="sticky top-0 z-10 -mx-4 mb-3 border-b border-border/40 bg-surface-1/95 px-4 py-2 backdrop-blur"
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span
+                        className={cn(
+                          "text-[12px] font-semibold",
+                          group.key === todayKey ? "flex items-center gap-1.5 text-rose-600 dark:text-rose-400" : "text-ink",
+                        )}
+                      >
+                        {group.key === todayKey ? (
+                          <>
+                            <span className="relative flex size-2">
+                              <span className="absolute inline-flex size-2 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
+                              <span className="relative inline-flex size-2 rounded-full bg-rose-500" />
+                            </span>
+                            Today
+                          </>
+                        ) : (
+                          formatDayHeading(group.date)
+                        )}
+                      </span>
+                      <span className="text-[10px] text-ink-subtle">
+                        {group.date.toLocaleDateString(undefined, { weekday: "long" })}
+                      </span>
+                      <span className="ml-auto text-[10px] tabular-nums text-ink-subtle">
+                        {group.meetings.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mb-4 space-y-2">
+                    {group.meetings.map((meeting) => (
+                      <AgendaRow
+                        key={meeting.id}
+                        meeting={meeting}
+                        workspaceSlug={workspaceSlug}
+                        viewerUserId={viewerUserId}
+                        onOpenPast={() => setDialogMeetingId(meeting.id)}
+                        onNavigate={() => router.push(`/${workspaceSlug}/rooms/${meeting.id}`)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -389,165 +446,7 @@ export default function MyMeetingsPage() {
   );
 }
 
-/**
- * The month, as a 7-column calendar grid (Google Calendar style).
- *
- * Renders the full 7-column matrix for the month regardless of whether meetings exist,
- * preserving the calendar grid layout even when 0 meetings are scheduled.
- */
-function MonthGrid({
-  monthAnchor,
-  meetings,
-  workspaceSlug,
-  viewerUserId,
-  hasQuery,
-  onOpenPast,
-  onNavigate,
-}: {
-  monthAnchor: Date;
-  meetings: MyMeetingItem[];
-  workspaceSlug: string;
-  viewerUserId: string | null;
-  hasQuery: boolean;
-  onOpenPast: (id: string) => void;
-  onNavigate: (id: string) => void;
-}) {
-  const monthDays = useMemo(() => {
-    const start = startOfMonth(monthAnchor);
-    const end = endOfMonth(monthAnchor);
-    const startDate = new Date(start);
-    const dayOfWeek = startDate.getDay();
-    const offset = (dayOfWeek - 1 + 7) % 7;
-    startDate.setDate(startDate.getDate() - offset);
 
-    const days: Date[] = [];
-    const current = new Date(startDate);
-    while (days.length < 35 || (current <= end && days.length < 42)) {
-      days.push(new Date(current));
-      current.setDate(current.getDate() + 1);
-    }
-    return days;
-  }, [monthAnchor]);
-
-  const byDay = useMemo(() => {
-    const map = new Map<string, MyMeetingItem[]>();
-    for (const meeting of meetings) {
-      const key = dayKey(meeting.occursAt);
-      const bucket = map.get(key);
-      if (bucket) bucket.push(meeting);
-      else map.set(key, [meeting]);
-    }
-    for (const bucket of map.values()) {
-      bucket.sort((a, b) => Date.parse(a.occursAt) - Date.parse(b.occursAt));
-    }
-    return map;
-  }, [meetings]);
-
-  const todayKey = String(startOfDay(new Date()));
-  const currentMonth = monthAnchor.getMonth();
-
-  return (
-    <div className="flex h-full flex-col">
-      {meetings.length === 0 ? (
-        <div className="flex items-center justify-center gap-2 border-b border-border bg-surface-2/30 px-4 py-2 text-center text-[11px] text-ink-muted">
-          <FileText size={14} />
-          {hasQuery
-            ? "No meetings match this search."
-            : "Nothing on your timeline this month. Upcoming invites and attended meetings appear here."}
-        </div>
-      ) : null}
-
-      <div className="min-h-0 flex-1 overflow-x-auto">
-        <div className="grid h-full min-w-[860px] grid-cols-7 border-b border-border">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((dayName) => (
-            <div
-              key={dayName}
-              className="sticky top-0 z-10 border-b border-r border-border bg-surface-1/95 px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-ink-subtle backdrop-blur last:border-r-0"
-            >
-              {dayName}
-            </div>
-          ))}
-
-          {monthDays.map((day) => {
-            const key = String(startOfDay(day));
-            const dayMeetings = byDay.get(key) ?? EMPTY_MEETINGS;
-            const isToday = key === todayKey;
-            const isCurrentMonth = day.getMonth() === currentMonth;
-
-            return (
-              <div
-                key={key}
-                className={cn(
-                  "flex min-h-[110px] min-w-0 flex-col border-b border-r border-border p-1.5 transition-colors last:border-r-0",
-                  !isCurrentMonth && "bg-surface-2/30 text-ink-subtle",
-                  isToday && "bg-primary/[0.04]",
-                )}
-              >
-                <div className="flex items-center justify-between px-1">
-                  <span
-                    className={cn(
-                      "grid size-5 place-items-center rounded-full text-[11px] font-medium tabular-nums",
-                      isToday
-                        ? "bg-primary text-white"
-                        : isCurrentMonth
-                          ? "text-ink"
-                          : "text-ink-subtle",
-                    )}
-                  >
-                    {day.getDate()}
-                  </span>
-                  {dayMeetings.length > 0 ? (
-                    <span className="text-[9px] tabular-nums text-ink-subtle">
-                      {dayMeetings.length}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="mt-1 flex-1 space-y-1">
-                  {dayMeetings.slice(0, 3).map((meeting) => (
-                    <div
-                      key={meeting.id}
-                      onClick={() =>
-                        meeting.timeState === "past"
-                          ? onOpenPast(meeting.id)
-                          : onNavigate(meeting.id)
-                      }
-                      title={meeting.title}
-                      className={cn(
-                        "group cursor-pointer rounded border px-1.5 py-1 text-[10px] transition-colors",
-                        rowToneClass(meeting),
-                      )}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span className={cn("truncate font-medium", meeting.status === "cancelled" && "line-through text-ink-muted")}>
-                          {meeting.title}
-                        </span>
-                        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
-                          {formatTime(meeting.occursAt)}
-                        </span>
-                        {meeting.timeState === "live" ? (
-                          <span className="relative flex size-1.5 shrink-0">
-                            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
-                            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                  {dayMeetings.length > 3 ? (
-                    <div className="px-1 text-[9px] font-medium text-ink-subtle">
-                      +{dayMeetings.length - 3} more
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * The week, as seven columns.
