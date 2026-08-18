@@ -48,7 +48,12 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-async function processPendingInvitationToken(token: string | null) {
+async function processPendingInvitationToken(rawToken?: string | null) {
+  const token =
+    rawToken ??
+    (typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("token")
+      : null);
   if (!token) return;
   try {
     await WorkspaceService.acceptInvitation(token);
@@ -84,8 +89,7 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
 
         toast.success("Google login successful!");
 
-        const token = new URLSearchParams(window.location.search).get("token");
-        await processPendingInvitationToken(token);
+        await processPendingInvitationToken();
 
         const isAdmin = user.roles?.some(
           (r: string) => r.toLowerCase() === "admin",
@@ -197,8 +201,7 @@ function LoginForm() {
 
       toast.success("Login successful!");
 
-      const token = searchParams.get("token");
-      await processPendingInvitationToken(token);
+      await processPendingInvitationToken();
 
       const isAdmin = user.roles?.some(
         (r: string) => r.toLowerCase() === "admin",
