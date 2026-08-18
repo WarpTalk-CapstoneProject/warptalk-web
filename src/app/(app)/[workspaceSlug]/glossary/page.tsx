@@ -118,6 +118,9 @@ export default function WorkspaceGlossaryPage() {
   const [glossaryDialogOpen, setGlossaryDialogOpen] = useState(false);
   const [termDialogOpen, setTermDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  // Set when the reader chose "Import terms" with no glossary yet, so the create dialog they are
+  // sent through first knows to hand them back to the import rather than to an empty page.
+  const [importAfterCreate, setImportAfterCreate] = useState(false);
 
   const termsQuery = useGlossaryTerms(selected?.id ?? "");
   const createGlossary = useCreateGlossary(workspaceId ?? "");
@@ -219,6 +222,28 @@ export default function WorkspaceGlossaryPage() {
       toast.success("Glossary created.");
       setGlossaryDialogOpen(false);
       glossaryForm.reset();
+
+      /**
+       * Carry on into the import the reader actually asked for.
+       *
+       * Terms cannot be imported into nothing — a glossary is a source/target language PAIR, and
+       * the pair is what tells the importer which column is which. So "Import terms" from the
+       * empty state has to create the glossary first. Dropping the reader back on a bare page at
+       * that point loses what they came to do, which is how the import ended up looking absent:
+       * it was reachable only from inside a glossary nobody had yet.
+       *
+       * `refetch` rather than the mutation's result, which is typed `void`; and `data[0]` is
+       * unambiguous because this path is only offered when there were no glossaries at all.
+       */
+      if (importAfterCreate) {
+        setImportAfterCreate(false);
+        const { data } = await glossariesQuery.refetch();
+        const created = data?.[0];
+        if (created) {
+          setSelectedId(created.id);
+          setImportDialogOpen(true);
+        }
+      }
     } catch (error) {
       toast.error(getErrorMessage(error, "Could not create the glossary."));
     }
@@ -347,13 +372,31 @@ export default function WorkspaceGlossaryPage() {
           <WorkspaceEmptyState
             icon={<BookOpen className="h-6 w-6" />}
             title="No glossary yet"
-            description="A glossary fixes how your terms are heard and translated during a meeting — product names, acronyms, and words whose meaning depends on your field. Terms here override the platform-wide glossary."
+            description="A glossary fixes how your terms are heard and translated during a meeting — product names, acronyms, and words whose meaning depends on your field. Terms here override the platform-wide glossary. Already have a list? Import a CSV or spreadsheet instead of typing it out."
             action={
               canManage ? (
-                <WorkspacePrimaryButton onClick={() => setGlossaryDialogOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" />
-                  New glossary
-                </WorkspacePrimaryButton>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <WorkspacePrimaryButton onClick={() => setGlossaryDialogOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" />
+                    New glossary
+                  </WorkspacePrimaryButton>
+                  {/*
+                    Import is offered from the empty state as well as from inside a glossary.
+                    It only ever lived inside one, so with no glossary yet — the state every
+                    workspace starts in — the product looked like it could not import at all.
+                    This route creates the glossary first and then opens the importer, because
+                    terms need a language pair to land in.
+                  */}
+                  <WorkspacePrimaryButton
+                    onClick={() => {
+                      setImportAfterCreate(true);
+                      setGlossaryDialogOpen(true);
+                    }}
+                  >
+                    <FileArrowUp className="h-3.5 w-3.5" />
+                    Import terms
+                  </WorkspacePrimaryButton>
+                </div>
               ) : undefined
             }
           />
@@ -366,7 +409,24 @@ export default function WorkspaceGlossaryPage() {
             description={
               search
                 ? undefined
-                : "Add the words this workspace wants heard and translated a particular way."
+                : "Add the words this workspace wants heard and translated a particular way, or import a CSV or spreadsheet you already have."
+            }
+            action={
+              // Offered here too, not only in the header bar. This is the screen someone lands on
+              // straight after creating a glossary, and a vocabulary arrives as a spreadsheet far
+              // more often than it is typed in word by word.
+              !search && canManage ? (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <WorkspacePrimaryButton onClick={() => setImportDialogOpen(true)}>
+                    <FileArrowUp className="h-3.5 w-3.5" />
+                    Import terms
+                  </WorkspacePrimaryButton>
+                  <WorkspacePrimaryButton onClick={() => setTermDialogOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" />
+                    Add term
+                  </WorkspacePrimaryButton>
+                </div>
+              ) : undefined
             }
           />
         ) : (
@@ -477,7 +537,15 @@ export default function WorkspaceGlossaryPage() {
         ) : null}
       </WorkspaceBody>
 
-      <Dialog open={glossaryDialogOpen} onOpenChange={setGlossaryDialogOpen}>
+      <Dialog
+        open={glossaryDialogOpen}
+        onOpenChange={(open) => {
+          setGlossaryDialogOpen(open);
+          // Abandoning the create step abandons the import it was standing in for. Left set, the
+          // flag would fire the importer open after some unrelated glossary created later.
+          if (!open) setImportAfterCreate(false);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New glossary</DialogTitle>
