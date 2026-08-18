@@ -88,12 +88,27 @@ export function classifyDesktopAsset(file: RawReleaseFile): DesktopAsset | null 
   const base = { fileName, url, sizeBytes, arch };
 
   if (lower.endsWith(".exe")) {
-    const portable = lower.includes("portable");
+    /**
+     * Windows ships TWO .exe files and only their names tell them apart.
+     *
+     * The desktop repo builds both the `nsis` and `portable` targets. electron-builder names the
+     * NSIS installer `WarpTalk-Setup-0.3.2.exe` and the portable build `WarpTalk-0.3.2.exe` —
+     * the portable one carries NO marker at all. Keying off the word "portable", as this did at
+     * first, therefore matched neither file, labelled both "Installer", and handed every Windows
+     * visitor the PORTABLE build as the recommended download: an app that runs once from the
+     * Downloads folder, never appears in the Start menu, and never auto-updates.
+     *
+     * So "Setup" is what identifies an installer, and a bare .exe is assumed portable. That is
+     * the safer way round to be wrong. Offering an installer that is really portable strands
+     * someone on a build that cannot update itself; offering a portable build labelled portable
+     * costs at most a second download.
+     */
+    const installer = lower.includes("setup") || lower.includes("install");
     return {
       ...base,
       platform: "windows",
-      kind: portable ? "windows-portable" : "windows-installer",
-      label: portable ? "Portable (.exe)" : "Installer (.exe)",
+      kind: installer ? "windows-installer" : "windows-portable",
+      label: installer ? "Installer (.exe)" : "Portable (.exe)",
     };
   }
 

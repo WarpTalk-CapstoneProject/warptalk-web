@@ -22,6 +22,58 @@ test("electron-updater metadata never becomes a download button", () => {
   assert.equal(classifyDesktopAsset(file("WarpTalk-Setup-0.2.0.exe.blockmap")), null);
 });
 
+test("the real v0.3.2 filenames resolve to the right recommended download", () => {
+  // Taken verbatim from the first published release. The desktop repo builds both the `nsis` and
+  // `portable` Windows targets, and electron-builder gives the PORTABLE one the bare name — so a
+  // classifier keyed off the word "portable" matched neither, called both "Installer", and made
+  // the portable build the hero download for every Windows visitor. Caught only against real data.
+  const release = normalizeRelease({
+    version: "v0.3.2",
+    files: [
+      file("WarpTalk-Setup-0.3.2.exe"), // nsis target — the installer
+      file("WarpTalk-0.3.2.exe"), // portable target — no marker in the name
+      file("WarpTalk-0.3.2-arm64.dmg"),
+      file("WarpTalk-0.3.2.dmg"),
+      file("WarpTalk-0.3.2-arm64-mac.zip"),
+      file("WarpTalk-0.3.2-mac.zip"),
+      file("WarpTalk-0.3.2.AppImage"),
+      file("warptalk-desktop_0.3.2_amd64.deb"),
+      file("latest.yml"),
+      file("latest-mac.yml"),
+      file("latest-linux.yml"),
+      file("WarpTalk-Setup-0.3.2.exe.blockmap"),
+    ],
+  })!;
+
+  assert.equal(release.assets.length, 8, "the three .yml files and the .blockmap are not downloads");
+
+  const windows = classifyDesktopAsset(file("WarpTalk-Setup-0.3.2.exe"));
+  const portableExe = classifyDesktopAsset(file("WarpTalk-0.3.2.exe"));
+  assert.equal(windows?.kind, "windows-installer");
+  assert.equal(portableExe?.kind, "windows-portable", "a bare .exe is the portable target");
+
+  // The recommendation each visitor actually gets.
+  assert.equal(
+    pickPrimaryAsset(release.assets, "windows", "x64")?.fileName,
+    "WarpTalk-Setup-0.3.2.exe",
+    "a Windows visitor must be offered the installer, not the portable build",
+  );
+  assert.equal(
+    pickPrimaryAsset(release.assets, "mac", "arm64")?.fileName,
+    "WarpTalk-0.3.2-arm64.dmg",
+  );
+  assert.equal(
+    pickPrimaryAsset(release.assets, "mac", "x64")?.fileName,
+    "WarpTalk-0.3.2.dmg",
+    "an Intel Mac falls back to the un-suffixed build, not the arm64 one",
+  );
+  assert.equal(
+    pickPrimaryAsset(release.assets, "linux", "universal")?.fileName,
+    "WarpTalk-0.3.2.AppImage",
+    "AppImage outranks .deb: it runs on any distribution",
+  );
+});
+
 test("windows installer and portable builds are told apart", () => {
   const installer = classifyDesktopAsset(file("WarpTalk-Setup-0.2.0.exe"));
   const portable = classifyDesktopAsset(file("WarpTalk-0.2.0-portable.exe"));
