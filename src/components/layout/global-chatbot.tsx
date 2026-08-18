@@ -17,6 +17,7 @@ import {
   PaperPlaneTilt,
   Cube,
   CaretDown,
+  Paperclip,
   FileText,
   BookBookmark,
   VideoCamera,
@@ -58,6 +59,16 @@ import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
+
+import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
+import { cn } from "@/lib/utils";
+import {
+  ATTACHMENT_ACCEPT,
+  MAX_ATTACHMENTS,
+  rejectionReason,
+  toAttachment,
+  type ChatAttachment,
+} from "@/lib/assistant/attachments";
 
 /**
  * A row in the "@" menu. Every option must map to a real backend entity: the send path
@@ -233,6 +244,10 @@ const ASSISTANT_RESPONSE_TIMEOUT_MS = 90_000;
 /** Matches chat-panel.tsx: within this many px of the bottom counts as "following along". */
 const AUTOSCROLL_THRESHOLD_PX = 80;
 
+/* WT-474: the caps, the accepted types and the File -> data-URL conversion all live in
+   @/lib/assistant/attachments, so the paste handler, the file picker and the drop target cannot
+   drift apart on what is acceptable. */
+
 function formatConversationTimestamp(value?: string | null) {
   if (!value) return "";
   const parsed = new Date(value);
@@ -258,6 +273,11 @@ export function GlobalChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  /** WT-474: attachments for the NEXT message only — cleared on send, like @mentions. */
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  /** Drag depth, not a boolean: dragging over a child fires dragleave on the parent. */
+  const [dragDepth, setDragDepth] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedContexts, setSelectedContexts] = useState<
     AssistantContextOption[]
   >([]);
@@ -882,9 +902,68 @@ export function GlobalChatbot() {
     );
   };
 
+  /**
+   * WT-474: files pasted, picked or dropped into the composer.
+   *
+   * A person debugging asks "what is wrong with this screen" and the screen IS the question; the
+   * same person asks "does this contract allow X" and the PDF is. Describing either in words is
+   * exactly the work the model could have done.
+   *
+   * PER-TURN, LIKE @MENTIONS. Nothing stores these: they go with one message and are cleared, so a
+   * follow-up cannot see them. The strip says so out loud, because a user who attaches once and
+   * then asks "and the red box?" would otherwise get a confident answer about a file the model
+   * never received.
+   */
+  const addFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    let accepted = attachments.length;
+    for (const file of files) {
+      const reason = rejectionReason(file, accepted);
+      if (reason) {
+        toast.error(reason);
+        // `break` rather than `continue` once the COUNT is the problem: every remaining file would
+        // produce the same toast, and four identical toasts is worse than one.
+        if (accepted >= MAX_ATTACHMENTS) break;
+        continue;
+      }
+      try {
+        const attachment = await toAttachment(file);
+        setAttachments((prev) => [...prev, attachment]);
+        accepted += 1;
+      } catch {
+        toast.error(`"${file.name}" could not be read.`);
+      }
+    }
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    // Only intercept when the clipboard actually carries a FILE. Pasting TEXT must stay completely
+    // untouched, including text copied out of an app that also puts an image flavour on the
+    // clipboard — hence checking the item kind rather than just `files.length`.
+    const files = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file")
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+
+    if (files.length === 0) return;
+    event.preventDefault();
+    void addFiles(files);
+  };
+
+  const handleDrop = (event: React.DragEvent) => {
+    setDragDepth(0);
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length === 0) return;
+    event.preventDefault();
+    void addFiles(files);
+  };
+
   const sendMessage = async (overrideContent?: string) => {
     const content = (overrideContent ?? inputValue).trim();
-    if (!content || !activeWorkspaceId) return;
+    // WT-474: an attachment on its own is a question ("what is this?"), so a turn carrying only
+    // files is allowed to go. Both shapes still need a workspace.
+    if ((!content && attachments.length === 0) || !activeWorkspaceId) return;
 
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
@@ -904,9 +983,14 @@ export function GlobalChatbot() {
         label: ctx.title,
       }));
 
+    // Captured before the state is cleared, for the same reason mentions are: this handler runs
+    // against pre-update state and the request is built further down.
+    const sentAttachments = attachments;
+
     setInputValue("");
     setMentionMenuOpen(false);
     setSelectedContexts([]);
+    setAttachments([]);
 
     let convId = conversationId;
     if (!convId) {
@@ -951,6 +1035,7 @@ export function GlobalChatbot() {
         content,
         pageContext: effectivePageContext,
         mentions,
+        attachments: sentAttachments,
       });
       // The assistant's reply streams in over AssistantHub — see the connection effect above.
     } catch {
@@ -1309,7 +1394,27 @@ export function GlobalChatbot() {
                     )}
                   </AnimatePresence>
 
-                  <div className="flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[120px] bg-transparent px-2 py-1.5 overflow-y-auto">
+                  {/* WT-474: the input area is the drop target.
+                      dragDepth is a COUNTER, not a boolean: dragging across a child element fires
+                      dragleave on the parent, so a boolean flickers the highlight off mid-drag.
+                      onDragOver must preventDefault or the browser navigates to the dropped file
+                      instead of handing it over. */}
+                  <div
+                    onDragEnter={(event) => {
+                      if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+                      setDragDepth((depth) => depth + 1);
+                    }}
+                    onDragOver={(event) => {
+                      if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+                      event.preventDefault();
+                    }}
+                    onDragLeave={() => setDragDepth((depth) => Math.max(0, depth - 1))}
+                    onDrop={handleDrop}
+                    className={cn(
+                      "flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[120px] bg-transparent px-2 py-1.5 overflow-y-auto rounded-[10px] transition-colors",
+                      dragDepth > 0 && "bg-primary/5 outline-dashed outline-1 outline-primary/40",
+                    )}
+                  >
                     {selectedContexts.map((ctx) => (
                       <span
                         key={ctx.id}
@@ -1345,6 +1450,7 @@ export function GlobalChatbot() {
                       value={inputValue}
                       onChange={handleInput}
                       onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
                       placeholder={
                         selectedContexts.length > 0
                           ? ""
@@ -1357,7 +1463,38 @@ export function GlobalChatbot() {
                     />
                   </div>
 
+                  <ChatAttachmentStrip
+                    attachments={attachments}
+                    onRemove={(index) =>
+                      setAttachments((prev) => prev.filter((_, i) => i !== index))
+                    }
+                  />
+
                   <div className="flex items-center justify-between px-1.5 pb-1.5">
+                    {/* WT-474: the paperclip sits with Skills, at the left of the control row,
+                        which is where Claude and Codex put it — the composer's own actions on one
+                        side, send on the other. */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept={ATTACHMENT_ACCEPT}
+                      className="hidden"
+                      onChange={(event) => {
+                        void addFiles(Array.from(event.target.files ?? []));
+                        // Cleared so picking the SAME file twice in a row still fires onChange.
+                        event.target.value = "";
+                      }}
+                    />
+                    <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      title="Attach images or documents"
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium"
+                    >
+                      <Paperclip weight="regular" size={14} />
+                    </button>
                     <Popover
                       open={skillsMenuOpen}
                       onOpenChange={setSkillsMenuOpen}
@@ -1406,6 +1543,7 @@ export function GlobalChatbot() {
                         )}
                       </PopoverContent>
                     </Popover>
+                    </div>
 
                     <div className="flex items-center gap-1">
                       <button
@@ -1429,15 +1567,18 @@ export function GlobalChatbot() {
                           <ArrowsOutSimple size={14} />
                         )}
                       </button>
-                      {/* The paperclip that used to sit here had no handler, no type and no
-                          label: the assistant API takes content/pageContext/mentions only,
-                          there is no attachment upload to wire it to. Removed rather than
-                          left on screen as a control that cannot succeed. */}
+                      {/* WT-474: the paperclip lives on the LEFT of this row now, beside Skills.
+                          It once sat here with no handler and nothing to wire it to, and was
+                          removed rather than left on screen as a control that cannot succeed —
+                          the attachment path it needed now exists. */}
                       <button
                         type="button"
                         aria-label="Send message"
                         onClick={() => void sendMessage()}
-                        disabled={!inputValue.trim()}
+                        // WT-474: an attachment on its own is a question, so send is live for a
+                        // turn carrying only files. Matching the same rule in sendMessage and in
+                        // AssistantService — a button the server would accept must not look dead.
+                        disabled={!inputValue.trim() && attachments.length === 0}
                         className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted disabled:opacity-50 disabled:bg-surface-2 disabled:text-ink-muted transition-colors ml-1"
                       >
                         <ArrowUp weight="bold" size={13} />

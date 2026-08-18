@@ -349,6 +349,24 @@ export const billingService = {
   /**
    * Cancel the active subscription for a workspace at period end.
    */
+  /**
+   * WT-471 — switch renewal back on for a subscription that was cancelled but has not expired.
+   *
+   * NOT `/resume`, which clears a ServiceState suspension caused by running past the overage cap.
+   * Cancellation and suspension are independent axes: a subscription can be healthy and cancelled,
+   * or suspended and renewing. Calling `/resume` on a cancelled-but-healthy subscription is
+   * refused with "AI service is not suspended", which is true and answers a question nobody asked.
+   *
+   * Creates no charge — the period is already paid for. A workspace whose period has already ended
+   * is refused and has to go through Checkout instead.
+   */
+  reactivateSubscription: async (workspaceId: string): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.post<SubscriptionDto>(
+      `/subscriptions/workspace/${workspaceId}/reactivate`,
+    );
+    return data;
+  },
+
   cancelSubscription: async (
     workspaceId: string,
     reason?: string,
@@ -396,12 +414,15 @@ export const billingService = {
     return data;
   },
 
-  /**
-   * Deactivate a subscription plan (Admin only).
-   */
-  deactivatePlan: async (id: string): Promise<void> => {
-    await apiClient.delete(`/plans/${id}`);
-  },
+  // WT-481: `deactivatePlan` was here, calling DELETE /plans/{id}. That route does not exist and
+  // never has — PlansController exposes GET, POST and PUT only — so the call could only ever have
+  // 404'd. Nothing referenced it, which is the only reason nobody found out.
+  //
+  // Nor should it exist: a plan is named on every invoice raised against it, so retiring one means
+  // `isActive: false` and leaving the row where the history can still point at it. That is what
+  // admin-pricing.service.ts says in its own header, and what the admin Plans screen already does
+  // — it renders a plan as "Hidden" and offers no delete button at all. This function was the last
+  // thing suggesting otherwise.
 
   /**
    * Get all global invoices (Admin only)

@@ -40,6 +40,24 @@ export const API = {
     /** WT-333 — the caller's own meetings in one workspace, past and upcoming (UC 25). */
     myMeetings: "/translation-rooms/my-meetings",
     join: "/translation-rooms/join",
+    /**
+     * WT-468 — the languages the pre-join screen may offer for a room CODE, decided by the
+     * workspace that OWNS the room rather than by whichever workspace the joiner has selected.
+     *
+     * Always 200. An unknown or half-typed code answers with an empty list, which means
+     * "unrestricted" here exactly as it does everywhere else a policy list travels — so this is
+     * safe to call on every keystroke and is not a room-existence probe.
+     */
+    joinLanguagePolicy: (code: string) =>
+      `/translation-rooms/join-language-policy/${encodeURIComponent(code)}`,
+    /**
+     * WT-480 — who a finished meeting's record is shared with: its transcript, AI summary and
+     * recording together.
+     *
+     * Its own route rather than a field on the settings PUT, because that endpoint refuses any
+     * room past WAITING and this act only makes sense once the meeting has ended.
+     */
+    artifactAccess: (id: string) => `/translation-rooms/${id}/artifact-access`,
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,
     invitations: (id: string) => `/translation-rooms/${id}/invitations`,
@@ -146,7 +164,11 @@ export const API = {
     memberRoleChangePreview: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role-change-preview`,
     memberRoleChange: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role-change`,
     transferOwnership: (workspaceId: string) => `/workspaces/${workspaceId}/members/transfer-ownership`,
+    verifiedDomains: (workspaceId: string) => `/workspaces/${workspaceId}/verified-domains`,
+    verifiedDomainDetail: (workspaceId: string, domainId: string) =>
+      `/workspaces/${workspaceId}/verified-domains/${domainId}`,
     invitations: (workspaceId: string) => `/workspaces/${workspaceId}/invitations`,
+    invitationPolicy: (workspaceId: string) => `/workspaces/${workspaceId}/invitations/policy`,
     retryInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}/retry-delivery`,
     revokeInvitation: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/invitations/${inviteId}`,
     previewInvitation: (token: string) => `/workspaces/invitations/preview?token=${encodeURIComponent(token)}`,
@@ -172,6 +194,12 @@ export const API = {
     get: (id: string) => `/glossaries/${id}`,
     byWorkspace: (workspaceId: string) => `/glossaries/workspace/${workspaceId}`,
     terms: (id: string) => `/glossaries/${id}/terms`,
+    /**
+     * WT-472 — a whole spreadsheet in one request. Adding terms one POST at a time made a
+     * hundred-row import a hundred round trips, and left `Glossary.TermCount` describing a
+     * glossary that did not exist if the client died halfway.
+     */
+    bulkTerms: (id: string) => `/glossaries/${id}/terms/bulk`,
     termDetail: (id: string, termId: string) => `/glossaries/${id}/terms/${termId}`,
     global: "/glossaries/global",
   },

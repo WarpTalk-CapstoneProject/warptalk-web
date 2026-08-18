@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import type { UpdateUserSettingsRequest } from "@/types/auth";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
+import { AudioBridgePanel } from "@/components/desktop/audio-bridge-panel";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
 
 const preferencesSchema = z.object({
@@ -304,6 +305,17 @@ export default function PersonalPreferencesPage() {
 
           </div>
         </div>
+
+        {/*
+          Section 2b: the desktop audio bridge.
+
+          Renders nothing in a browser — including its own heading, which is why the label is a
+          prop rather than markup here. Placed under Audio because that is where someone goes
+          looking when a meeting has no sound, but kept out of the form above deliberately: every
+          setting there is a server-persisted account preference, whereas this describes drivers
+          installed on THIS machine and belongs to no account at all.
+        */}
+        <AudioBridgePanel label="This device" />
 
         {/* Section 3: Meeting Defaults */}
         <div className="flex flex-col gap-3">

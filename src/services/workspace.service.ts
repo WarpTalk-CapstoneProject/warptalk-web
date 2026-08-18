@@ -20,11 +20,13 @@ import type {
   PagedResult,
   SelectWorkspaceResponse,
   InviteMemberResponse,
+  InvitationPolicyResponse,
   PreviewInvitationResponse,
   ExtractedTextDto,
   WorkspaceRoleChangePreview,
   ApplyWorkspaceRoleChangeRequest,
-  WorkspaceRoleChangeResult
+  WorkspaceRoleChangeResult,
+  VerifiedDomainDto
 } from "@/types/workspace";
 
 export const WorkspaceService = {
@@ -132,12 +134,58 @@ export const WorkspaceService = {
   },
 
   // ─── Invitations ───
-  async invite(workspaceId: string, email: string, roleName: string): Promise<InviteMemberResponse> {
+  async invite(
+    workspaceId: string,
+    email: string,
+    roleName: string,
+    membershipType: "Internal" | "External",
+  ): Promise<InviteMemberResponse> {
     const { data } = await apiClient.post<InviteMemberResponse>(API.workspaces.invitations(workspaceId), {
       email,
       roleName,
+      membershipType,
     });
     return data;
+  },
+
+  async getInvitationPolicy(workspaceId: string, email: string): Promise<InvitationPolicyResponse> {
+    const { data } = await apiClient.get<InvitationPolicyResponse>(
+      API.workspaces.invitationPolicy(workspaceId),
+      { params: { email } },
+    );
+    return data;
+  },
+
+  /**
+   * The workspace's verified domains, from the table that owns them.
+   *
+   * These three used to go through PATCH /settings, editing the `verifiedDomains` array inside
+   * the settings JSON. That array is a display mirror which the backend refreshes from the table
+   * and ignores on write, so adding or revoking a domain that way changed nothing at all.
+   */
+  async listVerifiedDomains(workspaceId: string): Promise<VerifiedDomainDto[]> {
+    const { data } = await apiClient.get<VerifiedDomainDto[]>(API.workspaces.verifiedDomains(workspaceId));
+    return data;
+  },
+
+  /**
+   * @param consentVersion Required when the domain is not the caller's own email domain — nothing
+   * can verify such a claim, so the Owner's recorded agreement is the evidence behind it.
+   */
+  async addVerifiedDomain(
+    workspaceId: string,
+    domain: string,
+    consentVersion?: string,
+  ): Promise<VerifiedDomainDto> {
+    const { data } = await apiClient.post<VerifiedDomainDto>(
+      API.workspaces.verifiedDomains(workspaceId),
+      { domain, consentVersion },
+    );
+    return data;
+  },
+
+  async revokeVerifiedDomain(workspaceId: string, domainId: string): Promise<void> {
+    await apiClient.delete(API.workspaces.verifiedDomainDetail(workspaceId, domainId));
   },
 
   async retryInvitation(workspaceId: string, inviteId: string): Promise<WorkspaceInvitationDto> {
@@ -396,6 +444,34 @@ export const WorkspaceService = {
     priority?: number;
   }): Promise<void> {
     await apiClient.post(API.glossaries.terms(glossaryId), request);
+  },
+
+  /**
+   * WT-472 — import many terms in one request.
+   *
+   * The server skips terms already in the glossary and REPORTS how many it skipped, so a caller
+   * must show both numbers. "100 imported" when 60 were written is how somebody comes to believe a
+   * term exists that does not.
+   */
+  async bulkImportTerms(
+    glossaryId: string,
+    terms: {
+      sourceTerm: string;
+      targetTerm: string;
+      context?: string | null;
+      domain?: string | null;
+      definition?: string | null;
+      usageNote?: string | null;
+      partOfSpeech?: string | null;
+      priority?: number;
+    }[],
+  ): Promise<{ imported: number; skipped: number; errors: string[] }> {
+    const { data } = await apiClient.post<{
+      imported: number;
+      skipped: number;
+      errors: string[];
+    }>(API.glossaries.bulkTerms(glossaryId), { terms });
+    return data;
   },
 
   async getTerms(glossaryId: string): Promise<GlossaryTermDto[]> {

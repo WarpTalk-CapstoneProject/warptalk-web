@@ -12,16 +12,16 @@ import {
   Checks,
   Funnel,
   Microphone,
-  Plus,
   PaperPlaneTilt,
   PencilSimple,
-  Trash,
+  Plus,
+  ShieldCheck,
   SlidersHorizontal,
+  Trash,
   UploadSimple,
   Waveform,
   X,
-} from "@phosphor-icons/react/dist/ssr";
-import gsap from "gsap";
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -186,8 +186,7 @@ export default function VoiceProfilesPage() {
   const [language, setLanguage] = useState("vi-VN");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [sampleAssessment, setSampleAssessment] = useState<string | null>(null);
-  const [consent, setConsent] =
-    useState<Record<ConsentKey, boolean>>(EMPTY_CONSENT);
+  const [consent, setConsent] = useState<Record<ConsentKey, boolean>>(EMPTY_CONSENT);
   const [isCheckingSample, setIsCheckingSample] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
@@ -571,10 +570,6 @@ export default function VoiceProfilesPage() {
       setIsCreateOpen(false);
       resetForm();
     } catch (error) {
-      // The server's own sentence, not a generic failure. This catch used to bind nothing and
-      // show "Failed to create voice profile" for every cause, which is how WT-372 was reported:
-      // the API answered "Unsupported audio format." — naming the defect exactly — and the page
-      // threw that away, so the bug report could only say "API/status code: Chưa xác định".
       toast.error(getErrorMessage(error, "Failed to create voice profile"));
     }
   }
@@ -991,21 +986,21 @@ export default function VoiceProfilesPage() {
                   </div>
                 </div>
               </div>
-              <div className="grid content-start gap-2 px-3">
-                <div>
-                  <p className="text-base font-semibold leading-6 text-ink">
-                    Voice consent agreement
-                  </p>
-                  <p className="mt-1 text-[12px] leading-5 text-ink-muted">
-                    Required before WarpTalk can save and use this voice profile
-                    for AI speech.
-                  </p>
+              <div className="grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={18} weight="fill" className="text-primary shrink-0" />
+                  <div>
+                    <p className="text-[13px] font-semibold text-ink">Voice consent & biometric security</p>
+                    <p className="text-[11px] leading-tight text-ink-muted">
+                      Required before WarpTalk can securely process and save your voice model.
+                    </p>
+                  </div>
                 </div>
-                <div className="grid gap-1.5">
+                <div className="grid gap-2 pt-1">
                   {CONSENT_ITEMS.map((item) => (
                     <label
                       key={item.key}
-                      className="flex items-start gap-2 text-[12px] leading-5 text-ink-muted"
+                      className="flex items-start gap-2.5 rounded-lg border border-border/60 bg-surface-1 p-2.5 text-xs leading-relaxed text-ink-muted transition-colors hover:border-primary/40 cursor-pointer"
                     >
                       <Checkbox
                         checked={consent[item.key]}
@@ -1015,78 +1010,25 @@ export default function VoiceProfilesPage() {
                             [item.key]: checked === true,
                           }))
                         }
-                        className="mt-0.5 border-2 border-ink-muted/60 bg-white shadow-sm hover:border-primary focus-visible:border-primary data-checked:border-primary data-checked:bg-primary"
+                        className="mt-0.5 shrink-0"
                       />
                       <span>{item.label}</span>
                     </label>
                   ))}
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <label className="flex min-w-0 items-center gap-2 text-[12px] font-medium leading-5 text-ink">
-                    <Checkbox
-                      checked={consentComplete}
-                      onCheckedChange={(checked) => {
-                        const nextValue = checked === true;
-                        setConsent(
-                          CONSENT_ITEMS.reduce(
-                            (nextConsent, item) => ({
-                              ...nextConsent,
-                              [item.key]: nextValue,
-                            }),
-                            {} as Record<ConsentKey, boolean>,
-                          ),
-                        );
-                      }}
-                      className="border-2 border-ink-muted/60 bg-white shadow-sm hover:border-primary focus-visible:border-primary data-checked:border-primary data-checked:bg-primary"
-                    />
-                    <span className="truncate">
-                      Agree to all WarpTalk terms.
-                    </span>
-                  </label>
-                  <p
-                    className={`shrink-0 text-right text-[12px] ${
-                      consentComplete ? "text-emerald-600" : "text-ink-subtle"
-                    }`}
-                  >
-                    {consentComplete
-                      ? "Consent complete."
-                      : "Complete consent to continue."}
-                  </p>
-                </div>
+                {!consentComplete && (
+                  <p className="text-[11px] font-medium text-amber-600">Please complete all 5 consent agreements to continue.</p>
+                )}
               </div>
             </div>
-            <DialogFooter className="!mx-0 !mb-0 border-t border-border bg-transparent !p-2">
-              <div
-                className="group relative"
-                title={
-                  !canSaveProfile && !createMutation.isPending
-                    ? saveProfileRequirementMessage
-                    : undefined
-                }
+            <DialogFooter className="pt-2">
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || !canSaveProfile}
+                className="min-w-[170px] text-white"
               >
-                {!canSaveProfile && !createMutation.isPending ? (
-                  <div
-                    id="voice-profile-save-requirements"
-                    className="pointer-events-none absolute bottom-full right-0 mb-2 w-[260px] rounded-lg border border-border bg-surface-2 px-3 py-2 text-left text-[11px] leading-5 text-ink shadow-lg opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                  >
-                    {saveProfileRequirementMessage}
-                  </div>
-                ) : null}
-                <Button
-                  type="submit"
-                  disabled={createMutation.isPending || !canSaveProfile}
-                  className="min-w-[160px] text-white"
-                  aria-describedby={
-                    !canSaveProfile && !createMutation.isPending
-                      ? "voice-profile-save-requirements"
-                      : undefined
-                  }
-                >
-                  {createMutation.isPending
-                    ? "Saving..."
-                    : "Agree & save voice profile"}
-                </Button>
-              </div>
+                {createMutation.isPending ? "Saving..." : "Agree & save voice profile"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

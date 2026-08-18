@@ -9,6 +9,7 @@ import {
   CheckSquare,
   Copy,
   DownloadSimple,
+  Play,
   SpinnerGap,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
@@ -129,6 +130,107 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
   }
 
   return { busyArtifactId, downloadArtifact };
+}
+
+/**
+ * Watch the meeting back, above its transcript. WT-492.
+ *
+ * The recording was reachable only as a file to download, from the Artifacts tab — so "watch what
+ * was said here" meant saving a video and leaving the page that has the transcript on it. The
+ * artifact row itself was never missing; somewhere to play it was.
+ *
+ * The URL is fetched WHEN THE USER ASKS, not on mount. It is a short-lived link to object storage,
+ * and spending one on every visit to a meeting page would mean most of them expire unwatched while
+ * the page that holds them stays open. The click is also the natural place for the consent stop,
+ * which is exactly how downloading already works — so consent is granted here by the same call,
+ * and the caller refetches afterwards so the Artifacts row stops saying "Consent required" too.
+ */
+export function MeetingRecordingPlayer({
+  artifact,
+  onConsentGranted,
+}: {
+  artifact: RoomHistoryArtifact | null;
+  onConsentGranted?: () => void;
+}) {
+  // The URL is stored WITH the artifact it belongs to, rather than being cleared by an effect when
+  // that artifact changes. A stale link then simply stops matching and is ignored — no effect can
+  // fire late and leave the previous meeting's recording playing under a new meeting's transcript.
+  const [loaded, setLoaded] = useState<{ artifactId: string; url: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const sourceUrl = artifact && loaded?.artifactId === artifact.id ? loaded.url : null;
+
+  // Nothing to watch is not an error state, and an empty player frame promising a video that does
+  // not exist is worse than no frame at all. The meeting simply was not recorded.
+  if (!artifact) return null;
+
+  async function loadRecording() {
+    if (!artifact || isLoading) return;
+    setIsLoading(true);
+    try {
+      if (artifact.consentRequired) {
+        await translationRoomService.approveArtifactConsent(artifact.id);
+      }
+      const { data } = await translationRoomService.artifactDownload(artifact.id);
+      // `content` is the inline path used by the text exports; a recording always arrives as a
+      // link, so an absent url here means the file is gone rather than that it is empty.
+      if (!data.url) {
+        toast.error("This recording is no longer available.");
+        return;
+      }
+      setLoaded({ artifactId: artifact.id, url: data.url });
+      if (artifact.consentRequired) onConsentGranted?.();
+    } catch (error) {
+      // Withheld is a policy answer, not a failure — the same distinction the download path and
+      // the Summary tab already draw.
+      if (isArtifactWithheld(error)) {
+        toast.info(getErrorMessage(error, ARTIFACT_WITHHELD_FALLBACK));
+        return;
+      }
+      toast.error(getErrorMessage(error, "Could not load this recording."));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <section className="mb-5" aria-label="Meeting recording">
+      <div className="overflow-hidden rounded-[10px] border border-border bg-black">
+        {sourceUrl ? (
+          // controls, and nothing else: autoplay on a page someone opened to read a transcript is
+          // a room full of unexpected sound.
+          <video
+            src={sourceUrl}
+            controls
+            preload="metadata"
+            className="aspect-video w-full bg-black"
+          />
+        ) : (
+          <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-surface-2/40">
+            <button
+              type="button"
+              onClick={() => void loadRecording()}
+              disabled={isLoading}
+              className="flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-surface-1 transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {isLoading ? (
+                <SpinnerGap size={16} className="animate-spin" />
+              ) : (
+                <Play size={16} weight="fill" />
+              )}
+              {isLoading ? "Loading…" : "Play recording"}
+            </button>
+            {artifact.consentRequired && (
+              // Said before the click, not after: the first press records a consent decision, and
+              // a control that does that silently is the one thing this must not be.
+              <p className="px-6 text-center text-[12px] text-ink-muted">
+                Playing this recording records your consent, the same as downloading it.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
 /**

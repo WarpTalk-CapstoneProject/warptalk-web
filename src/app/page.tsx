@@ -953,13 +953,17 @@ function PricingSection() {
     queryFn: () => billingService.getPlans(),
   });
 
-  const handleChoosePlan = () => {
+  // WT-491: the plan the visitor clicked travels with them. It used to be dropped here — this
+  // pushed the plain get-started href — so a guest who chose a paid plan signed up, landed in an
+  // empty workspace, and had nothing on screen to say they had asked to buy anything.
+  const handleChoosePlan = (planSlug?: string) => {
     router.push(
       getLandingGetStartedHref({
         isAuthenticated,
         user,
         hasRememberedSession: hasRememberedAccessToken(),
         activeWorkspaceSlug: getRememberedWorkspaceSlug(activeWorkspaceSlug),
+        planSlug,
       }),
     );
   };
@@ -1040,7 +1044,7 @@ function PricingSection() {
                   <button
                     type="button"
                     className="c3-btn cursor-pointer"
-                    onClick={handleChoosePlan}
+                    onClick={() => handleChoosePlan(plan.slug)}
                   >
                     Choose Plan
                   </button>

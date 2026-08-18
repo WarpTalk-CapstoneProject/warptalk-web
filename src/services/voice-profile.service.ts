@@ -27,6 +27,21 @@ export const VoiceProfileService = {
     if (request.sample) {
       formData.append("sample", request.sample);
     }
+    if (request.ownVoiceConfirmed !== undefined) {
+      formData.append("ownVoiceConfirmed", String(request.ownVoiceConfirmed));
+    }
+    if (request.aiUseConfirmed !== undefined) {
+      formData.append("aiUseConfirmed", String(request.aiUseConfirmed));
+    }
+    if (request.syntheticVoiceAcknowledged !== undefined) {
+      formData.append("syntheticVoiceAcknowledged", String(request.syntheticVoiceAcknowledged));
+    }
+    if (request.noImpersonationConfirmed !== undefined) {
+      formData.append("noImpersonationConfirmed", String(request.noImpersonationConfirmed));
+    }
+    if (request.retentionAcknowledged !== undefined) {
+      formData.append("retentionAcknowledged", String(request.retentionAcknowledged));
+    }
 
     const { data } = await apiClient.post<VoiceProfileDto>(API.voiceProfiles.create, formData, {
       headers: { "Content-Type": "multipart/form-data" },

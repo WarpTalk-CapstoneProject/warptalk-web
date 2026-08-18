@@ -30,20 +30,8 @@
  * name wherever it turns up in stored data — without being offered anywhere.
  */
 export type LanguageScope =
-  /** Selectable as one of a meeting's languages when a host creates or configures it. */
+  /** Selectable as one of a meeting's languages, and on the pre-join screen. */
   | "meeting"
-  /**
-   * Selectable by a participant for themselves on the pre-join screen.
-   *
-   * Deliberately WIDER than `meeting`, and split out from it for that reason. `meeting` is a
-   * forward-looking product decision about what a host may declare on a NEW meeting; this is
-   * about rooms that already exist. Korean, French and Spanish were meeting languages until
-   * recently, so rooms declaring them are out there, and a participant who cannot pick Korean
-   * cannot join a Korean room in the language it was created for — the exact defect the
-   * pre-join picker was fixed for once already. Narrowing `meeting` must never silently
-   * strand a room that is already booked.
-   */
-  | "participantLanguage"
   /** Selectable when recording a voice profile. */
   | "voiceProfile"
   /** Has a provider voice library worth browsing. */
@@ -71,42 +59,42 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     locale: "vi-VN",
     name: "Vietnamese",
     region: "VN",
-    scopes: ["meeting", "participantLanguage", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "en",
     locale: "en-US",
     name: "English",
     region: "US",
-    scopes: ["meeting", "participantLanguage", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "ja",
     locale: "ja-JP",
     name: "Japanese",
     region: "JP",
-    scopes: ["meeting", "participantLanguage", "voiceProfile", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceProfile", "glossary", "chatTarget"],
   },
   {
     code: "ko",
     locale: "ko-KR",
     name: "Korean",
     region: "KR",
-    scopes: ["participantLanguage", "glossary", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     code: "fr",
     locale: "fr-FR",
     name: "French",
     region: "FR",
-    scopes: ["participantLanguage", "glossary", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     code: "es",
     locale: "es-ES",
     name: "Spanish",
     region: "ES",
-    scopes: ["participantLanguage", "glossary", "chatTarget"],
+    scopes: ["meeting", "glossary", "chatTarget"],
   },
   {
     // Seeded and translatable, but deliberately not a meeting language — no scope puts it in
@@ -193,39 +181,37 @@ export function isLanguageAllowedByPolicy(
   return policy.includes(normalizeLanguageCode(value));
 }
 
-/**
- * The meeting languages a workspace may use. Empty policy ⇒ the default meeting scope.
- *
- * The `meeting` scope is what the product offers by DEFAULT — currently vi/en/ja. It is not a
- * veto over a workspace that has explicitly permitted something else. Korean, French and
- * Spanish were meeting-scope until recently, so a workspace configured back then can hold
- * `allowedTargetLanguages: ["ko"]`; intersecting that with the narrowed scope yields nothing,
- * and an empty picker means that workspace cannot create ANY meeting — see the note on
- * `reconcileMeetingLanguages` below, which predicted exactly this.
- *
- * So a policy entry is honoured when it names a language that is valid in a meeting at all —
- * that is, one in `participantLanguage`, which holds today's meeting languages plus the ones
- * that used to be. Chinese is the case this must NOT widen to: it is seeded and translatable
- * but has never been a room language, so a policy naming it still yields nothing to offer.
- */
+/** The meeting-scope languages a workspace policy permits. Empty policy ⇒ the whole scope. */
 export function meetingLanguagesForPolicy(allowedTargetLanguages?: string[] | null) {
-  const policy = normalizeLanguagePolicy(allowedTargetLanguages);
-  if (policy.length === 0) return languagesInScope("meeting");
-
-  const scoped = languagesInScope("meeting").filter((language) =>
-    policy.includes(language.code),
+  return languagesInScope("meeting").filter((language) =>
+    isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
   );
-  const scopedCodes = new Set(scoped.map((language) => language.code));
+}
 
-  // Policy order, so a workspace that lists Korean first sees Korean first.
-  const grandfathered = policy
-    .filter((code) => !scopedCodes.has(code))
-    .map((code) => getLanguageByCode(code))
-    .filter((language): language is SupportedLanguage =>
-      Boolean(language?.scopes.includes("participantLanguage")),
-    );
-
-  return [...scoped, ...grandfathered];
+/**
+ * The languages a pre-join screen may offer for one room: the meeting scope, narrowed by BOTH
+ * limits that apply.
+ *
+ * WT-490 — offering only what the workspace permits is not enough. A workspace permitting
+ * vi/en/ja/ko and a room declaring vi/en offered all four, so a joiner could pick a language
+ * nobody in the room would ever speak, and the pick was accepted. A room is defined by the set of
+ * languages that will be spoken in it, so that set narrows the picker too.
+ *
+ * Each limit is applied through `isLanguageAllowedByPolicy`, which is what keeps an EMPTY list
+ * meaning "unrestricted from this source" rather than "permit nothing". Both arrive empty for a
+ * code that resolves to no room — the endpoint answers that way for a code still being typed — and
+ * the screen must show the full set then, not an empty picker.
+ *
+ * Deliberately intersected here rather than server-side, for that reason: two empties have to stay
+ * distinguishable from "the answer is nothing".
+ */
+export function meetingLanguagesForRoom(
+  allowedTargetLanguages?: string[] | null,
+  roomLanguages?: string[] | null,
+) {
+  return meetingLanguagesForPolicy(allowedTargetLanguages).filter((language) =>
+    isLanguageAllowedByPolicy(language.code, roomLanguages),
+  );
 }
 
 /**

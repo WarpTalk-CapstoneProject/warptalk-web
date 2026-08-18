@@ -33,22 +33,17 @@ import {
 } from "@/hooks/use-workspace-role";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import {
-  ArrowRight,
   CaretLeft,
-  CheckCircle,
-  CreditCard,
-  Lightning,
   Lock,
-  ShieldCheck,
-  Wallet,
   X,
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
+import { checkoutTotal, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
 
 // We fetch plans dynamically now.
 
@@ -83,65 +78,12 @@ import { formatMoney } from "@/lib/format/currency";
  *     this page cannot drift from the real rate again. DOCUMENTED_VND_PER_CREDIT survives for
  *     the on-screen estimate ONLY; the charge is whatever the server computes.
  */
-const TOP_UP_ENABLED = true;
-
-/** Retail rate from docs/credit-economics.md §4.2. Display only — the server sets the price. */
-/** Stripe refuses a charge under 15,000 VND, which is 1,500 credits at the documented rate. */
-const TOP_UP_MINIMUM_CREDITS = 1500;
-
-/** The offered sizes. Round numbers a person recognises, not a ladder of discounts we do not give. */
-const TOP_UP_PACKAGES = [
-  { credits: 10_000, label: "10,000 credits" },
-  { credits: 25_000, label: "25,000 credits" },
-  { credits: 50_000, label: "50,000 credits" },
-  { credits: 100_000, label: "100,000 credits" },
-] as const;
-
-const DOCUMENTED_VND_PER_CREDIT = 4;
-
-function isFreePlan(plan: PlanDto) {
-  const value = `${plan.name} ${plan.slug} ${plan.tier}`.toLowerCase();
-  return value.includes("free") || plan.price === 0;
-}
-
-function isEnterprisePlan(plan: PlanDto) {
-  const value = `${plan.name} ${plan.slug} ${plan.tier}`.toLowerCase();
-  return value.includes("enterprise");
-}
-
-function parsePlanFeatures(plan: PlanDto) {
-  try {
-    const parsed = JSON.parse(plan.features || "[]");
-    return Array.isArray(parsed)
-      ? parsed.filter(
-          (feature): feature is string => typeof feature === "string",
-        )
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function getPlanFeatureList(plan: PlanDto) {
-  const parsedFeatures = parsePlanFeatures(plan);
-  if (parsedFeatures.length) return parsedFeatures.slice(0, 6);
-
-  return [
-    `${plan.creditsPerCycle?.toLocaleString()} credits per cycle`,
-    `${plan.maxParticipants || "Limited"} workspace members`,
-    `${plan.maxLanguages || "Limited"} translation languages`,
-    plan.aiAssistantEnabled ? "AI assistant included" : "Basic AI access",
-    plan.voiceCloneEnabled ? "Voice profiles enabled" : "No voice profiles",
-    plan.glossaryEnabled ? "Workspace glossary included" : "No glossary",
-  ];
-}
-
-function getPlanDescription(plan: PlanDto) {
-  if (plan.description) return plan.description;
-  return isEnterprisePlan(plan)
-    ? "Advanced workspace AI, translation, voice, and governance features for teams."
-    : "Basic workspace access for getting started with meetings and collaboration.";
-}
+/*
+ * WT-464: TOP_UP_ENABLED, TOP_UP_MINIMUM_CREDITS, TOP_UP_PACKAGES and
+ * DOCUMENTED_VND_PER_CREDIT moved with the form to
+ * settings/billing/components/top-up-modal.tsx. The reasoning above about the server owning the
+ * price moved with them, because that is where it now applies.
+ */
 
 /** One date format for the page, so "until 14 September 2026" reads the same wherever it appears. */
 const formatPlanDate = (date: Date) =>
@@ -179,28 +121,13 @@ export default function WorkspacePlansPage() {
   const [pendingPlanSlug, setPendingPlanSlug] = useState("");
   const [pendingPlanName, setPendingPlanName] = useState("");
   const [pendingPlanTotal, setPendingPlanTotal] = useState(0);
-  const [topUpCredits, setTopUpCredits] = useState<number>(0);
-  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   // Fetch plans from backend
   const { data: plansData = [], isLoading: loadingPlans } = useQuery({
     queryKey: ["plans"],
     queryFn: () => billingService.getPlans(),
   });
 
-  const activePlans = useMemo(
-    () =>
-      plansData
-        .filter((p) => p.isActive !== false)
-        .sort((a, b) => a.sortOrder - b.sortOrder),
-    [plansData],
-  );
-  const comparisonPlans = useMemo(
-    () =>
-      [activePlans.find(isFreePlan), activePlans.find(isEnterprisePlan)].filter(
-        (plan): plan is PlanDto => Boolean(plan),
-      ),
-    [activePlans],
-  );
+  const activePlans = selectablePlans(plansData);
 
   useEffect(() => {
     if (!isAuthenticated || !user) router.push("/login");
@@ -247,11 +174,6 @@ export default function WorkspacePlansPage() {
   const activePlanTierIndex = activePlanId
     ? activePlans.findIndex((p) => p.id === activePlanId)
     : -1;
-  const selectedPlan =
-    comparisonPlans.find((plan) => plan.id === selectedPlanId) ??
-    comparisonPlans.find((plan) => plan.id === activePlanId) ??
-    comparisonPlans[0] ??
-    null;
 
   /**
    * One reading of the subscription, for the whole page.
@@ -401,24 +323,6 @@ export default function WorkspacePlansPage() {
     return { label: "Downgrade", variant: "downgrade", disabled: false };
   };
 
-  const topUpTotal = topUpCredits * DOCUMENTED_VND_PER_CREDIT;
-  const selectedPlanAction = selectedPlan ? getPlanAction(selectedPlan) : null;
-  const selectedPlanIsCurrent = selectedPlanAction?.variant === "current";
-  const selectedPlanIsEnterprise = selectedPlan
-    ? isEnterprisePlan(selectedPlan)
-    : false;
-  const selectedPlanPrice = selectedPlan?.price ?? 0;
-  const selectedPlanDisplayPrice =
-    billingInterval === "yearly"
-      ? Math.round(selectedPlanPrice * 0.79)
-      : selectedPlanPrice;
-  const selectedPlanCheckoutTotal =
-    billingInterval === "yearly"
-      ? Math.round(selectedPlanPrice * 12 * 0.79)
-      : selectedPlanPrice;
-  const selectedPlanFeatures = selectedPlan
-    ? getPlanFeatureList(selectedPlan)
-    : [];
 
   if (!isRoleLoaded) {
     return (
@@ -448,6 +352,11 @@ export default function WorkspacePlansPage() {
   }
 
   return (
+    /* This was a marketing landing page living inside the product: a 5xl centred headline, a
+       "Pricing & Subscriptions" badge above it, and a lead paragraph — the visual language of a
+       website's /pricing, rendered inside a workspace the user has already signed into and paid
+       attention to. It is a settings screen. It gets the settings chrome: the same toolbar row
+       every other workspace page has, with the one real choice (monthly or yearly) in it. */
     <div className="flex h-full min-h-0 flex-col bg-surface-1 text-ink">
       <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-[260px] flex-1 items-center gap-3">
@@ -475,9 +384,7 @@ export default function WorkspacePlansPage() {
         <div className="flex shrink-0 items-center gap-2 pl-4">
           <Tabs
             value={billingInterval}
-            onValueChange={(val) =>
-              setBillingInterval(val as "monthly" | "yearly")
-            }
+            onValueChange={(val) => setBillingInterval(val as "monthly" | "yearly")}
             className="w-fit"
           >
             <TabsList className="h-[28px] rounded-full border border-border/60 bg-surface-2 p-0.5">
@@ -491,7 +398,7 @@ export default function WorkspacePlansPage() {
                 value="yearly"
                 className="h-[24px] rounded-full px-3 text-[12px] data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
-                Yearly - save 21%
+                Yearly · save 21%
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -510,27 +417,33 @@ export default function WorkspacePlansPage() {
           <div className="col-span-1 md:col-span-3 flex w-full items-center justify-center p-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
-        ) : activePlans.map((plan) => {
-            const isCurrent = activePlanId === plan.id;
-            const isFeatured = isEnterprisePlan(plan);
-            const monthlyPrice = plan.price;
-            let yearlyPrice = plan.price;
-            if (plan.billingCycle?.toLowerCase() === "yearly") {
-              yearlyPrice = plan.price;
-            } else {
-              yearlyPrice = Math.round(plan.price * 0.79);
+        ) : (
+          activePlans.map((plan, index) => {
+            const action = getPlanAction(plan);
+            const isCurrent = action.variant === "current";
+            const isFeatured = index === 0; // Highlight the first plan or based on some custom logic
+
+            // The 21% yearly discount used to be a bare 0.79 written twice, right here. It now
+            // lives in lib/billing/plan-pricing because /workspace/plans quotes the same prices
+            // before a workspace exists and the create form sends the charged amount to Stripe —
+            // three copies of one rule is three chances for the quote and the charge to disagree.
+            const displayPrice = monthlyDisplayPrice(plan, billingInterval);
+            const displayTotal = checkoutTotal(plan, billingInterval);
+
+            let parsedFeatures: string[] = [];
+            try {
+              parsedFeatures = JSON.parse(plan.features || "[]");
+              if (!Array.isArray(parsedFeatures)) {
+                parsedFeatures = [];
+              }
+            } catch {
+              parsedFeatures = [];
             }
 
-            const displayPrice =
-              billingInterval === "yearly" ? yearlyPrice : monthlyPrice;
-            const displayTotal =
-              billingInterval === "yearly"
-                ? monthlyPrice * 12 * 0.79
-                : monthlyPrice;
-
-            const parsedFeatures = getPlanFeatureList(plan);
-
             return (
+              /* Palette tokens, not #7F1DFF and text-gray-900. The hardcoded pair meant the card
+                 rendered near-black text on near-black in dark mode, and its accent was a purple
+                 that appears nowhere else in the app. */
               <Card
                 key={plan.id}
                 className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-surface-1 p-5 shadow-linear transition-colors ${
@@ -562,12 +475,18 @@ export default function WorkspacePlansPage() {
                   </div>
 
                   <p className="min-h-[34px] text-[12px] leading-relaxed text-ink-muted">
-                    {plan.description || getPlanDescription(plan)}
+                    {plan.description}
                   </p>
 
                   <div className="mt-4 flex w-full flex-col items-start">
                     <div className="flex items-baseline whitespace-nowrap">
                       <span className="text-[24px] font-semibold tracking-tight text-ink">
+                        {/* WT-459: the plan's OWN currency, not a hardcoded "VND".
+                            An admin priced a plan at 200 USD and this rendered "200 VND" —
+                            a number three orders of magnitude out, stated with total
+                            confidence. `PlanDto.currency` has always carried the answer;
+                            formatMoney already falls back to VND when it is absent, so
+                            nothing changes for the VND plans that make up the catalogue. */}
                         {displayPrice > 0 ? formatMoney(displayPrice, plan.currency) : "Free"}
                       </span>
                       <span className="ml-1 text-[12px] text-ink-muted">/mo</span>
@@ -580,11 +499,12 @@ export default function WorkspacePlansPage() {
                 </CardHeader>
 
                 <CardContent className="flex-1 p-0 pb-6">
+                  {/* Styled action button inside content wrapper matching reference */}
                   <div className="mb-6">
                     {!isCurrent && (
                       <button
                         type="button"
-                        disabled={isProcessing}
+                        disabled={action.disabled || isProcessing}
                         onClick={() => {
                           handleCheckout(
                             displayTotal,
@@ -594,7 +514,8 @@ export default function WorkspacePlansPage() {
                           );
                         }}
                         className={`inline-flex items-center justify-center gap-2 w-full rounded-full h-11 text-xs font-bold transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                          isFeatured
+                          action.variant === "upgrade" ||
+                          action.variant === "get-started"
                             ? "bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm"
                             : "bg-foreground text-background hover:opacity-90 shadow-sm"
                         }`}
@@ -602,18 +523,63 @@ export default function WorkspacePlansPage() {
                         {isProcessing ? "Processing..." : "Get Started"}
                       </button>
                     )}
+                    {/* No cancel button inside the plan card.
+                        It sat where every other card shows "Get started", so the primary action on
+                        the plan you already have was to leave — the loudest thing on the page
+                        pointed at the exit. Ending a subscription is also not a per-plan choice:
+                        it belongs to the account, once, and it now lives under the grid.
+
+                        The disabled "Cancelled (Ends soon)" button that replaced it was worse
+                        still: a button-shaped thing that cannot be pressed, occupying the slot a
+                        reader looks to for what they can do. The state is on the badge above. */}
                   </div>
 
-                  {parsedFeatures.length > 0 && (
-                    <ul className="space-y-2 text-[12px] text-ink-muted">
-                      {parsedFeatures.map((feature) => (
-                        <li key={feature} className="flex items-center gap-2">
-                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-primary" weight="fill" />
-                          <span>{feature}</span>
+                  <ul className="space-y-3">
+                    {parsedFeatures.map((feature: string, i: number) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-2.5 text-[13px]"
+                      >
+                        <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
+                          ✓
+                        </span>
+                        <span className="text-gray-700 font-medium">
+                          {feature}
+                        </span>
+                      </li>
+                    ))}
+                    {!parsedFeatures.length && (
+                      <>
+                        <li className="flex items-start gap-2.5 text-[13px]">
+                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
+                            ✓
+                          </span>
+                          <span className="text-gray-700 font-medium">
+                            {plan.creditsPerCycle?.toLocaleString()} credits per
+                            cycle
+                          </span>
                         </li>
-                      ))}
-                    </ul>
-                  )}
+                        <li className="flex items-start gap-2.5 text-[13px]">
+                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
+                            ✓
+                          </span>
+                          <span className="text-gray-700 font-medium">
+                            {plan.voiceCloneEnabled
+                              ? "Voice Cloning Enabled"
+                              : "No Voice Cloning"}
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-2.5 text-[13px]">
+                          <span className="text-[#00E58F] shrink-0 mt-0.5 font-bold">
+                            ✓
+                          </span>
+                          <span className="text-gray-700 font-medium">
+                            Web access for up to {plan.maxParticipants} members
+                          </span>
+                        </li>
+                      </>
+                    )}
+                  </ul>
                 </CardContent>
 
                 <CardFooter className="p-0 mt-auto flex flex-col gap-2">
@@ -630,15 +596,17 @@ export default function WorkspacePlansPage() {
                     </p>
                   )}
                   {billingInterval === "yearly" && (
-                    <p className="text-[11px] text-primary font-semibold text-center w-full">
+                    <p className="text-[11px] text-[#7F1DFF] font-semibold text-center w-full">
                       Billed yearly: {formatMoney(displayTotal, plan.currency)}
                     </p>
                   )}
                 </CardFooter>
               </Card>
             );
-          })}
+          })
+        )}
       </div>
+
       {/* Cancel RENEWAL, not the subscription.
           The old wording and the old endpoint said "Cancel Subscription", which reads as "end it
           now" — and an owner who wanted to stop paying next month had no way to say so without
@@ -673,158 +641,17 @@ export default function WorkspacePlansPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 w-full max-w-3xl">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <div className="flex size-8 rounded-full bg-primary/10 items-center justify-center">
-              <Lightning className="h-4 w-4 text-primary" weight="fill" />
-            </div>
-            <h2 className="text-3xl font-bold tracking-tight text-ink">
-              Need more credits?
-            </h2>
-          </div>
-          <p className="text-base text-muted-foreground">
-            Pick a package, or enter your own amount. One rate whatever the
-            size — there is no volume discount.
-          </p>
-        </div>
+      {/*
+        WT-464: the credit top-up form used to live here, stacked under the plan cards.
 
-        <Card className="rounded-[14px] border border-border bg-surface-1 shadow-linear">
-          <CardContent className="relative space-y-5 p-5">
-              <div className="rounded-2xl border border-border bg-surface-1/70 p-4 backdrop-blur">
-                <label className="mb-3 block text-[13px] font-semibold text-ink">
-                  How many credits do you need?
-                </label>
-                <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  {TOP_UP_PACKAGES.map((pkg) => {
-                    const selected = topUpCredits === pkg.credits;
-                    return (
-                      <button
-                        key={pkg.credits}
-                        type="button"
-                        onClick={() => setTopUpCredits(pkg.credits)}
-                        aria-pressed={selected}
-                        className={`flex flex-col items-start gap-1 rounded-[14px] border p-4 text-left transition-colors ${
-                          selected
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-ink/30"
-                        }`}
-                      >
-                        <span className="text-[15px] font-semibold text-ink">{pkg.label}</span>
-                        <span className="text-[12px] text-ink-muted">
-                          {formatMoney(pkg.credits * DOCUMENTED_VND_PER_CREDIT, "VND")}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+        It made buying credits something you found by SCROLLING PAST a plan comparison — two
+        unrelated questions on one page, and the second one below the fold. Top-up is an
+        errand: it is now a modal opened from the balance it changes, on Settings -> Billing.
 
-                <div className="mt-3 flex items-center gap-3">
-                  <label htmlFor="topup-other" className="text-[13px] text-ink-muted">
-                    Other
-                  </label>
-                  <input
-                    id="topup-other"
-                    type="number"
-                    min="1"
-                    step="1000"
-                    value={topUpCredits || ""}
-                    onChange={(e) =>
-                      setTopUpCredits(Math.max(0, parseInt(e.target.value) || 0))
-                    }
-                    placeholder={`${TOP_UP_MINIMUM_CREDITS.toLocaleString()} minimum`}
-                    className="h-10 w-44 rounded-md border border-border bg-surface-1 px-3 text-[13px] text-ink outline-none transition focus:border-primary"
-                  />
-                  <span className="text-[13px] text-ink-muted">credits</span>
-                </div>
-              </div>
-
-              {/* This was a four-card "Volume discount tiers" grid quoting 10 / 9 / 8.5 / 8 VND
-                  per credit. None of those numbers were real: retail is 4.00 VND flat
-                  (docs/credit-economics.md §4.2, and CreditValueVnd = 4m in the backend), so the
-                  grid was overstating the price by 2–2.5× AND inventing a discount ladder that
-                  does not exist. A tier card cannot be restyled into truthfulness — there is one
-                  rate, so there is one card. */}
-              <div className="rounded-2xl border border-border bg-surface-1/70 p-4 backdrop-blur">
-                <p className="text-[13px] font-semibold text-ink">
-                  {DOCUMENTED_VND_PER_CREDIT} VND per credit
-                </p>
-                <p className="mt-1 text-[12px] text-ink-muted">
-                  One rate, whatever the amount. There is no volume discount.
-                </p>
-              </div>
-
-              {topUpCredits > 0 && (
-                <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border bg-surface-1/70 p-4 backdrop-blur sm:grid-cols-3">
-                  <div>
-                    <p className="text-[11px] text-ink-muted">Rate applied</p>
-                    <p className="mt-1 text-[13px] font-semibold text-ink">
-                      {DOCUMENTED_VND_PER_CREDIT} VND / credit
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-ink-muted">Credits to add</p>
-                    <p className="mt-1 text-[13px] font-semibold text-ink">
-                      {topUpCredits.toLocaleString()} credits
-                    </p>
-                  </div>
-                  <div className="sm:text-right">
-                    <p className="text-[11px] text-ink-muted">Total</p>
-                    <p className="mt-1 text-lg font-semibold tracking-tight text-ink">
-                      {formatMoney(topUpTotal, "VND")}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {topUpCredits > 0 && topUpCredits < TOP_UP_MINIMUM_CREDITS && (
-                <p className="text-xs font-semibold text-rose-500 mt-2 bg-rose-500/10 p-3 rounded-lg">
-                  ⚠️ Minimum top-up amount is 1,500 credits (equivalent to
-                  15,000 VND Stripe transaction limit).
-                </p>
-              )}
-
-              {TOP_UP_ENABLED ? (
-              <button
-                type="button"
-                disabled={isProcessing || topUpCredits < TOP_UP_MINIMUM_CREDITS}
-                onClick={() =>
-                  handleCheckout(topUpTotal, "CreditTopUp", "", "", false, topUpCredits)
-                }
-                className="inline-flex h-12 w-full items-center justify-center rounded-full bg-ink px-4 text-[13px] font-semibold text-canvas shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {isProcessing ? (
-                  "Processing..."
-                ) : topUpCredits >= TOP_UP_MINIMUM_CREDITS ? (
-                  <>
-                    <span>
-                      Complete Top Up of {topUpCredits.toLocaleString()} credits
-                    </span>
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </>
-                ) : (
-                  "Enter credit amount above (Min 1,500)"
-                )}
-              </button>
-              ) : (
-                /* Says why, and does not pretend the button is merely busy. Somebody who came
-                   here to buy credit needs to know it will not arrive, not to be left guessing
-                   whether they clicked wrong. */
-                <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 backdrop-blur">
-                  <p className="text-[13px] font-semibold text-ink">
-                    Credit top-up is temporarily unavailable
-                  </p>
-                  <p className="mt-1 text-[12px] text-ink-muted">
-                    Payment would be taken without the credits being added, so the
-                    purchase is switched off until that is fixed. Your subscription
-                    still renews its credits on schedule. Contact support if you need
-                    a balance adjustment.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        Nothing about the purchase changed. The same createCheckoutSession call, carrying the
+        credit COUNT so the server prices it against billing_pricing_config, is in
+        settings/billing/components/top-up-modal.tsx.
+      */}
       </div>
       {/* Cancel Subscription confirmation dialog */}
       <Dialog
@@ -895,9 +722,9 @@ export default function WorkspacePlansPage() {
           </div>
 
           <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1">
-            <p>- Credits already used this cycle will not be refunded.</p>
-            <p>- You can re-subscribe at any time.</p>
-            <p>- Active rooms and history will not be deleted.</p>
+            <p>• Credits already used this cycle will not be refunded.</p>
+            <p>• You can re-subscribe at any time.</p>
+            <p>• Active rooms and history will not be deleted.</p>
           </div>
 
           <DialogFooter className="flex gap-2 flex-row justify-end">

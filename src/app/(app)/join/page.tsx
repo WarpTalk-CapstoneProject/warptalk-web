@@ -23,11 +23,12 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
+import { useJoinLanguagePolicy, useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, meetingLanguagesForPolicy } from "@/lib/language/languages";
-import { useWorkspaceSettings } from "@/hooks/use-workspace";
+import { getLanguageName } from "@/lib/language/languages";
+import { resolvePreJoinLanguages, snapPairIntoOptions } from "@/lib/language/prejoin";
+import { useUserSettings } from "@/hooks/use-user-settings";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
 import { completeMeetingJoin } from "@/lib/meeting/meeting-join-state";
 import { cn } from "@/lib/utils";
@@ -74,26 +75,9 @@ function JoinMeetingContent() {
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
-  const activeWorkspaceId = useWorkspaceStore(
-    (state) => state.activeWorkspaceId,
-  );
-  // WT-438 (Linear): the Owner's allowedTargetLanguages policy decides what this screen
-  // offers. Same source as create-room-dialog. An unresolved query means an unfiltered list
-  // for a moment — the policy is enforced server-side regardless; this filter is about not
-  // OFFERING what the workspace forbids.
-  //
-  // Known approximation, flagged on the ticket: a room code can target a room in another
-  // workspace, whose own policy would be the authoritative one. The active workspace's policy
-  // is what this screen can know before the code is resolved.
-  const { data: joinWorkspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
-  const languages = useMemo(
-    () =>
-      meetingLanguagesForPolicy(joinWorkspaceSettings?.allowedTargetLanguages).map(
-        (language) => ({ value: language.locale, label: language.name }),
-      ),
-    [joinWorkspaceSettings?.allowedTargetLanguages],
-  );
-
+  // WT-468 removed the last reader of activeWorkspaceId on this screen. The joiner's own
+  // workspace has no say in which languages a room offers — that belongs to the workspace that
+  // owns the room, which useJoinLanguagePolicy resolves from the code below.
   const videoRef = useRef<SinkVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -116,25 +100,79 @@ function JoinMeetingContent() {
   const codeFromUrl = searchParams.get("code") ?? "";
   const [typedCode, setTypedCode] = useState<string | null>(null);
   const roomCode = typedCode ?? codeFromUrl;
-  const [speakLanguage, setSpeakLanguage] = useState("vi-VN");
-  const [listenLanguage, setListenLanguage] = useState("en-US");
+  // WT-468: the languages this screen offers belong to the workspace that OWNS THE ROOM.
+  //
+  // This used to read `useWorkspaceSettings(activeWorkspaceId)` — the joiner's own currently
+  // selected workspace — and the file carried the approximation as a known one. It is not a
+  // harmless approximation: someone in workspace A joining a room in workspace B was offered A's
+  // languages. Too few, when B permits more (the reported symptom: only EN and VI, and no way
+  // forward); or too many, when A restricts nothing and B does, in which case the server refuses
+  // the pick only after it has been made. An external guest, who belongs to no workspace at all,
+  // got the policy of nothing.
+  //
+  // Keyed by the room code, so it re-resolves as the user finishes typing one. The endpoint
+  // answers 200 with an empty list for an unknown or half-typed code, and empty means
+  // unrestricted — so a partially typed code shows the full set rather than an error or a
+  // momentarily empty picker.
+  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(roomCode);
+  // WT-434 was honoured by the setup modal and ignored here: this screen preset a hardcoded
+  // vi-VN / en-US pair, so the same person joining the same meeting got different languages
+  // depending on whether they came through /join or through the modal. Both read the saved pair now.
+  const { data: userSettings } = useUserSettings();
+
+  // WT-494 + WT-490 — one rule for both entry points, and it narrows by the ROOM as well as by
+  // the workspace. See lib/language/prejoin.ts for why the two limits stay separate on the wire.
+  const preJoin = useMemo(
+    () =>
+      resolvePreJoinLanguages({
+        allowedTargetLanguages: joinLanguagePolicy?.allowedTargetLanguages,
+        roomLanguages: joinLanguagePolicy?.roomLanguages,
+        savedSpeakLanguage: userSettings?.defaultSpeakLanguage,
+        savedListenLanguage: userSettings?.defaultListenLanguage,
+      }),
+    [
+      joinLanguagePolicy?.allowedTargetLanguages,
+      joinLanguagePolicy?.roomLanguages,
+      userSettings?.defaultSpeakLanguage,
+      userSettings?.defaultListenLanguage,
+    ],
+  );
+  const languages = useMemo(
+    () => preJoin.options.map((language) => ({ value: language.locale, label: language.name })),
+    [preJoin.options],
+  );
+
+  const [speakLanguage, setSpeakLanguage] = useState("");
+  const [listenLanguage, setListenLanguage] = useState("");
+  const [languagesTouched, setLanguagesTouched] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
 
-  // WT-438: the hardcoded defaults above can name a language the policy forbids — a workspace
-  // restricted to JA/EN would still preset speak=vi-VN, and submitting it is a server-side 403
-  // the user never chose. Snapped to the first offered option the moment the policy resolves,
-  // derived during render like create-room-dialog's reconcile (an effect would flash the
-  // forbidden value first). Keyed by the resolved option set so a mid-session policy change
-  // re-applies, while the user's own later picks are left alone.
+  // WT-438: a preset can name a language the policy forbids, and submitting it is a server-side
+  // 403 the user never chose. Applied during render rather than in an effect, like
+  // create-room-dialog's reconcile — an effect would paint the forbidden value first.
+  //
+  // WT-468: gated on the ROOM's policy having resolved. Seeding before it arrives would pin the
+  // pair against the unfiltered list and then leave it there, because this only re-runs when the
+  // offered set changes.
+  //
+  // Two behaviours, and the difference is whether the user has touched the dropdowns. Untouched,
+  // the whole seed applies (their saved pair, else the room's, else the first offered). Once they
+  // have chosen for themselves, only an option that is no longer offered moves — overwriting a
+  // deliberate pick because a policy refreshed is its own bug.
   const [appliedLanguagePolicyKey, setAppliedLanguagePolicyKey] = useState<string | null>(null);
-  const languagePolicyKey = joinWorkspaceSettings
+  const languagePolicyKey = joinLanguagePolicy
     ? languages.map((language) => language.value).join(",")
     : null;
   if (languagePolicyKey && appliedLanguagePolicyKey !== languagePolicyKey) {
     setAppliedLanguagePolicyKey(languagePolicyKey);
-    const offered = new Set(languages.map((language) => language.value));
-    if (!offered.has(speakLanguage) && languages[0]) setSpeakLanguage(languages[0].value);
-    if (!offered.has(listenLanguage) && languages[0]) setListenLanguage(languages[0].value);
+    if (languagesTouched) {
+      const snapped = snapPairIntoOptions({ speakLanguage, listenLanguage }, preJoin.options);
+      if (snapped.speakLanguage !== speakLanguage) setSpeakLanguage(snapped.speakLanguage);
+      if (snapped.listenLanguage !== listenLanguage) setListenLanguage(snapped.listenLanguage);
+    } else {
+      setSpeakLanguage(preJoin.speakLanguage);
+      setListenLanguage(preJoin.listenLanguage);
+    }
   }
 
   const [cameraEnabled, setCameraEnabled] = useState(true);
@@ -535,7 +573,13 @@ function JoinMeetingContent() {
               <div className="grid h-[34px] w-full select-none grid-cols-[minmax(0,1fr)_16px_minmax(0,1fr)] items-center gap-1 overflow-hidden rounded-[12px] border border-[#e2e3e7] bg-transparent p-1 text-[12px] dark:border-[#25272b]">
                 <Select
                   value={speakLanguage}
-                  onValueChange={(val) => val && setSpeakLanguage(val)}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    // Marks the pair as the user's own, so a later policy refresh snaps it only
+                    // if it stops being offered instead of re-seeding over their choice.
+                    setLanguagesTouched(true);
+                    setSpeakLanguage(val);
+                  }}
                 >
                   <SelectTrigger
                     size="sm"
@@ -572,7 +616,11 @@ function JoinMeetingContent() {
 
                 <Select
                   value={listenLanguage}
-                  onValueChange={(val) => val && setListenLanguage(val)}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    setLanguagesTouched(true);
+                    setListenLanguage(val);
+                  }}
                 >
                   <SelectTrigger
                     size="sm"

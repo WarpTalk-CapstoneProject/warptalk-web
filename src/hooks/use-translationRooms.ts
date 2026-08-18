@@ -1,12 +1,13 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
 import {
   getMeetingSummarySeedParticipants,
   getMeetingSummarySeedRoom,
   isMeetingSummarySeedRoomId,
 } from "@/lib/meeting/meeting-summary-seed";
+import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
   CreateTranslationRoomRequest,
   RecurrenceRequest,
@@ -141,12 +142,57 @@ export function useUpdateTranslationRoomSettings() {
   });
 }
 
+/**
+ * WT-468 — which languages the pre-join screen may offer for a room code.
+ *
+ * The policy belongs to the workspace that OWNS the room, not to whichever workspace the joiner
+ * has selected. The screen holds only a code and cannot resolve the room until the join itself,
+ * which is why it used to fall back to the joiner's own workspace settings and offer the wrong
+ * list to anyone joining across workspaces.
+ *
+ * Disabled below 4 characters, the same threshold the join button uses, so typing a code does not
+ * fire a request per keystroke. Data is kept while a longer code is being typed
+ * (`placeholderData: keepPreviousData`) so the picker does not flicker back to the full list
+ * mid-edit.
+ */
+export function useJoinLanguagePolicy(code: string) {
+  const trimmed = code.trim();
+  return useQuery({
+    queryKey: ["translationRooms", "joinLanguagePolicy", trimmed],
+    queryFn: () => translationRoomService.getJoinLanguagePolicy(trimmed),
+    enabled: trimmed.length >= 4,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+}
+
 /** Join translationRoom by room code for the web preflight flow */
 export function useJoinTranslationRoomByCode() {
   return useMutation({
     mutationFn: async (data: JoinTranslationRoomByCodeRequest) => {
       const { data: joinResult } = await translationRoomService.joinByCode(data);
       return joinResult;
+    },
+  });
+}
+
+/**
+ * WT-480: publish or unpublish a finished meeting's record.
+ *
+ * Invalidates the room so the banner, the badge and the button all re-derive from the stored
+ * setting rather than from local optimism — the whole point of this control is that the screen
+ * tells the truth about who can read the record.
+ */
+export function useSetArtifactAccess(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (level: ArtifactAccessLevel) => {
+      await translationRoomService.setArtifactAccess(roomId, level);
+      return level;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId] });
+      queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
   });
 }

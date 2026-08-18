@@ -50,7 +50,6 @@ import {
   Plus,
   Shield,
   Sparkles,
-  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -129,11 +128,6 @@ export default function AdminPlansPage() {
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [formState, setFormState] = useState<PlanFormState>(initialFormState);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
-  const [deactivatingPlanId, setDeactivatingPlanId] = useState<string | null>(
-    null,
-  );
-  const [deactivatingPlanName, setDeactivatingPlanName] = useState("");
 
   // SignalR for real-time plan updates in Admin panel
   useEffect(() => {
@@ -190,16 +184,6 @@ export default function AdminPlansPage() {
     },
     onError: (err: unknown) => {
       setErrorMsg(getErrorMessage(err, "Failed to update plan."));
-    },
-  });
-
-  const deactivateMutation = useMutation({
-    mutationFn: (id: string) => billingService.deactivatePlan(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
-    },
-    onError: (err: unknown) => {
-      alert(getErrorMessage(err, "Failed to deactivate plan."));
     },
   });
 
@@ -354,21 +338,6 @@ export default function AdminPlansPage() {
     }
   };
 
-  const handleDeactivate = (id: string, name: string) => {
-    setDeactivatingPlanId(id);
-    setDeactivatingPlanName(name);
-    setShowDeactivateDialog(true);
-  };
-
-  const confirmDeactivate = () => {
-    if (deactivatingPlanId) {
-      deactivateMutation.mutate(deactivatingPlanId);
-      setShowDeactivateDialog(false);
-      setDeactivatingPlanId(null);
-      setDeactivatingPlanName("");
-    }
-  };
-
   return (
     <div className="flex min-h-full flex-col gap-6 p-6 pb-12">
       {/* Header */}
@@ -411,7 +380,7 @@ export default function AdminPlansPage() {
         <CardHeader>
           <CardTitle>All Packages</CardTitle>
           <CardDescription>
-            View, modify, or deactivate user-facing packages.
+            View and modify user-facing packages.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -512,15 +481,6 @@ export default function AdminPlansPage() {
                           className="h-8 w-8 text-muted-foreground hover:text-ink"
                         >
                           <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          onClick={() => handleDeactivate(plan.id, plan.name)}
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                          disabled={plan.isActive === false}
-                        >
-                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -836,45 +796,6 @@ export default function AdminPlansPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Deactivate Plan confirmation dialog */}
-      <Dialog
-        open={showDeactivateDialog}
-        onOpenChange={setShowDeactivateDialog}
-      >
-        <DialogContent className="sm:max-w-[440px] border-hairline bg-surface-1 shadow-lg rounded-xl text-ink">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold">
-              Deactivate billing package?
-            </DialogTitle>
-            <DialogDescription className="text-sm text-ink-muted mt-1">
-              Are you sure you want to deactivate and soft-delete the plan{" "}
-              <strong>{deactivatingPlanName}</strong>? Active subscriptions will
-              still refer to it, but new users won’t be able to select it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2 flex-row justify-end mt-4">
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => setShowDeactivateDialog(false)}
-              className="rounded-md"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deactivateMutation.isPending}
-              onClick={confirmDeactivate}
-              className="rounded-md"
-            >
-              {deactivateMutation.isPending
-                ? "Deactivating..."
-                : "Deactivate Plan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
