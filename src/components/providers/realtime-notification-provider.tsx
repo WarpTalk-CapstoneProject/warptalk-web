@@ -62,6 +62,9 @@ interface DocumentEventPayload {
   ingestionStatus?: string;
   status?: string;
   newStatus?: string;
+  eventType?: string;
+  event_type?: string;
+  aiEligible?: boolean;
 }
 
 interface MeetingEventPayload {
