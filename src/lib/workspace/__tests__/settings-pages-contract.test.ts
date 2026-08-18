@@ -16,6 +16,9 @@ test("workspace settings use queued auto-save and commit numeric values on blur 
   assert.match(source, /if \(!parsedInput\.ok\) return;/);
   assert.match(source, /if \(lastQueuedValuesRef\.current\[key\] === serializedValue\) return;/);
   assert.doesNotMatch(source, /Save Settings/);
+  assert.doesNotMatch(source, /translationTone/);
+  assert.doesNotMatch(source, /vietnameseHonorificStyle/);
+  assert.doesNotMatch(source, /japaneseHonorificStyle/);
 });
 
 test("personal preferences match the backend room-type contract, auto-save controls, and error retry state", () => {
@@ -25,6 +28,7 @@ test("personal preferences match the backend room-type contract, auto-save contr
 
   assert.match(source, /useAutoSaveQueue/);
   assert.match(source, /AutoSaveStatusBadge/);
+  assert.match(source, /useTheme/);
   assert.match(source, /value=\"instant\"/);
   assert.match(source, /value=\"scheduled\"/);
   assert.match(source, /commitNumericField/);
@@ -35,6 +39,11 @@ test("personal preferences match the backend room-type contract, auto-save contr
   assert.doesNotMatch(source, /value=\"webrtc\"/);
   assert.doesNotMatch(source, /value=\"hls\"/);
   assert.doesNotMatch(source, /Save Preferences/);
+  assert.doesNotMatch(source, /transcriptFontSize/);
+  assert.doesNotMatch(source, /showOriginalTranscript/);
+  assert.doesNotMatch(source, /showTranslatedTranscript/);
+  assert.doesNotMatch(source, /highContrast/);
+  assert.doesNotMatch(source, /screenReaderMode/);
 });
 
 test("profile settings auto-save text fields and select fields without a manual save button", () => {

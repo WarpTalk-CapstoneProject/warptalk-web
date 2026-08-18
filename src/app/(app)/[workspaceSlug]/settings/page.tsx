@@ -57,13 +57,6 @@ const settingsSchema = z.object({
       enabled: z.boolean(),
       keywordsBlacklist: z.array(z.string()),
     }),
-    translationProfile: z.object({
-      translationTone: z.string(),
-      languageSpecificRules: z.object({
-        vietnameseHonorificStyle: z.string(),
-        japaneseHonorificStyle: z.string(),
-      }),
-    }),
   }),
 });
 
@@ -110,13 +103,6 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
       enabled: false,
       keywordsBlacklist: [],
     },
-    translationProfile: {
-      translationTone: "professional",
-      languageSpecificRules: {
-        vietnameseHonorificStyle: "formal_hierarchical",
-        japaneseHonorificStyle: "keigo_teineigo",
-      },
-    },
   },
 };
 
@@ -145,19 +131,6 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
       dlp: {
         enabled: settings.aiUsagePolicy?.dlp?.enabled ?? DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.dlp.enabled,
         keywordsBlacklist: settings.aiUsagePolicy?.dlp?.keywordsBlacklist || [],
-      },
-      translationProfile: {
-        translationTone:
-          settings.aiUsagePolicy?.translationProfile?.translationTone
-          || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.translationTone,
-        languageSpecificRules: {
-          vietnameseHonorificStyle:
-            settings.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle
-            || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle,
-          japaneseHonorificStyle:
-            settings.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle
-            || DEFAULT_SETTINGS_FORM_DATA.aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle,
-        },
       },
     },
   };
@@ -872,114 +845,6 @@ export default function WorkspaceSettingsPage() {
                 </div>
               </div>
             )}
-
-            {/* Translation Tone */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Translation Tone</span>
-                <span className="text-[11px] text-ink-muted">Tone profile applied to real-time LLM translation prompts.</span>
-              </div>
-              <Select
-                value={watchAll.aiUsagePolicy?.translationProfile?.translationTone || "professional"}
-                onValueChange={(val) =>
-                  val && commitPolicy(
-                    "aiUsagePolicy.translationProfile.translationTone",
-                    {
-                      ...watchAll.aiUsagePolicy,
-                      translationProfile: { ...watchAll.aiUsagePolicy.translationProfile, translationTone: val },
-                    },
-                  )
-                }
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              >
-                <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select tone" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="professional" className="text-xs">Professional</SelectItem>
-                  <SelectItem value="formal" className="text-xs">Formal</SelectItem>
-                  <SelectItem value="casual" className="text-xs">Casual</SelectItem>
-                  <SelectItem value="technical" className="text-xs">Technical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Vietnamese Honorific Style */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Vietnamese Honorific Style</span>
-                <span className="text-[11px] text-ink-muted">Honorific style for Vietnamese translation generation.</span>
-              </div>
-              <Select
-                value={
-                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.vietnameseHonorificStyle ||
-                  "formal_hierarchical"
-                }
-                onValueChange={(val) =>
-                  val && commitPolicy(
-                    "aiUsagePolicy.translationProfile.languageSpecificRules.vietnameseHonorificStyle",
-                    {
-                      ...watchAll.aiUsagePolicy,
-                      translationProfile: {
-                        ...watchAll.aiUsagePolicy.translationProfile,
-                        languageSpecificRules: {
-                          ...watchAll.aiUsagePolicy.translationProfile.languageSpecificRules,
-                          vietnameseHonorificStyle: val,
-                        },
-                      },
-                    },
-                  )
-                }
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              >
-                <SelectTrigger className="w-[160px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select style" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="formal_hierarchical" className="text-xs">Formal Hierarchical</SelectItem>
-                  <SelectItem value="neutral" className="text-xs">Neutral</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Japanese Honorific Style */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Japanese Keigo / Honorific Style</span>
-                <span className="text-[11px] text-ink-muted">Politeness level for Japanese LLM translation outputs.</span>
-              </div>
-              <Select
-                value={
-                  watchAll.aiUsagePolicy?.translationProfile?.languageSpecificRules?.japaneseHonorificStyle ||
-                  "keigo_teineigo"
-                }
-                onValueChange={(val) =>
-                  val && commitPolicy(
-                    "aiUsagePolicy.translationProfile.languageSpecificRules.japaneseHonorificStyle",
-                    {
-                      ...watchAll.aiUsagePolicy,
-                      translationProfile: {
-                        ...watchAll.aiUsagePolicy.translationProfile,
-                        languageSpecificRules: {
-                          ...watchAll.aiUsagePolicy.translationProfile.languageSpecificRules,
-                          japaneseHonorificStyle: val,
-                        },
-                      },
-                    },
-                  )
-                }
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              >
-                <SelectTrigger className="w-[160px] h-8 text-xs bg-surface-2 border-hairline">
-                  <SelectValue placeholder="Select style" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="keigo_teineigo" className="text-xs">Teineigo (Polite)</SelectItem>
-                  <SelectItem value="sonkeigo_kenjougo" className="text-xs">Sonkeigo/Kenjougo (Honorific/Humble)</SelectItem>
-                  <SelectItem value="plain" className="text-xs">Plain (Informal)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
           </div>
         </div>
