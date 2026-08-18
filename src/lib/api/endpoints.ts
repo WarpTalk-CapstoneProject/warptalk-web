@@ -178,6 +178,9 @@ export const API = {
     joinRequests: "/workspaces/join-requests",
     approveJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/approve`,
     rejectJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/reject`,
+    leaveRequests: (workspaceId: string) => `/workspaces/${workspaceId}/leave-requests`,
+    approveLeaveRequest: (workspaceId: string, leaveRequestId: string) => `/workspaces/${workspaceId}/leave-requests/${leaveRequestId}/approve`,
+    rejectLeaveRequest: (workspaceId: string, leaveRequestId: string) => `/workspaces/${workspaceId}/leave-requests/${leaveRequestId}/reject`,
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
     knowledge: (workspaceId: string) => `/workspaces/${workspaceId}/knowledge`,
     knowledgeChunk: (workspaceId: string, chunkId: string) =>

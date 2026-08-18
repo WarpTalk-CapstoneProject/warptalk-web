@@ -29,6 +29,9 @@ import {
   useRevokeWorkspaceInvitation,
   useApproveJoinRequest,
   useRejectJoinRequest,
+  useCreateLeaveRequest,
+  useApproveLeaveRequest,
+  useRejectLeaveRequest,
 } from "@/hooks/use-workspace";
 import {
   buildMemberDirectory,
@@ -77,6 +80,8 @@ export default function WorkspaceMembersPage() {
     Record<string, "Internal" | "External">
   >({});
   const [isExporting, setIsExporting] = useState(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
 
   // TanStack Query Hooks
   const membersQuery = useWorkspaceMembers(
@@ -110,6 +115,9 @@ export default function WorkspaceMembersPage() {
   const revokeMutation = useRevokeWorkspaceInvitation(activeWorkspaceId || "");
   const approveJoinRequest = useApproveJoinRequest(activeWorkspaceId || "");
   const rejectJoinRequest = useRejectJoinRequest(activeWorkspaceId || "");
+  const createLeaveRequest = useCreateLeaveRequest(activeWorkspaceId || "");
+  const approveLeaveRequest = useApproveLeaveRequest(activeWorkspaceId || "");
+  const rejectLeaveRequest = useRejectLeaveRequest(activeWorkspaceId || "");
 
 
   const membersList = membersQuery.data?.items || [];
@@ -124,9 +132,7 @@ export default function WorkspaceMembersPage() {
   const isOwner = currentRole === "owner";
   const isAdmin = currentRole === "admin";
   const isOwnerOrAdmin = isOwner || isAdmin;
-  const memberGridClass = isOwnerOrAdmin
-    ? "grid-cols-[2.5fr_100px_100px_100px_120px_110px_92px]"
-    : "grid-cols-[2.5fr_100px_100px_100px_120px]";
+  const memberGridClass = "grid-cols-[2.5fr_100px_100px_100px_120px_110px_92px]";
 
   // Only Owners and Admins may see who has been invited or who is asking to get in — the
   // invitation endpoints refuse everyone else, and a table of permanently failing rows is
@@ -273,6 +279,23 @@ export default function WorkspaceMembersPage() {
     }
   };
 
+  const handleConfirmLeaveRequest = async () => {
+    if (!currentUser || !activeWorkspaceId) return;
+    try {
+      setIsSubmittingLeave(true);
+      await createLeaveRequest.mutateAsync();
+      toast.success("Leave request submitted. Awaiting Admin/Owner approval.");
+      setIsLeaveModalOpen(false);
+    } catch (err) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(
+        error?.response?.data?.error || "Failed to submit leave request.",
+      );
+    } finally {
+      setIsSubmittingLeave(false);
+    }
+  };
+
   const handleRevoke = async () => {
     if (!inviteToRevoke) return;
     try {
@@ -287,7 +310,20 @@ export default function WorkspaceMembersPage() {
     }
   };
 
-  const handleApprove = async (inviteId: string, provisionalType: string) => {
+  const handleApprove = async (inviteId: string, provisionalType: string, status?: string) => {
+    if (status?.toUpperCase() === "LEAVE_REQUESTED") {
+      try {
+        await approveLeaveRequest.mutateAsync(inviteId);
+        toast.success("Leave request approved.");
+      } catch (err) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(
+          error?.response?.data?.error || "Failed to approve leave request",
+        );
+      }
+      return;
+    }
+
     const membershipType =
       approvalType[inviteId] ||
       (provisionalType.toLowerCase() === "internal" ? "Internal" : "External");
@@ -309,7 +345,20 @@ export default function WorkspaceMembersPage() {
     }
   };
 
-  const handleReject = async (invitationId: string) => {
+  const handleReject = async (invitationId: string, status?: string) => {
+    if (status?.toUpperCase() === "LEAVE_REQUESTED") {
+      try {
+        await rejectLeaveRequest.mutateAsync(invitationId);
+        toast.success("Leave request rejected.");
+      } catch (err) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(
+          error?.response?.data?.error || "Failed to reject leave request",
+        );
+      }
+      return;
+    }
+
     try {
       await rejectJoinRequest.mutateAsync(invitationId);
       toast.success("Join request rejected.");
@@ -466,8 +515,8 @@ export default function WorkspaceMembersPage() {
               <span>Role</span>
               <span>Membership Type</span>
               <span>Status</span>
-              <span>Date</span>
-              {isOwnerOrAdmin && <><span className="text-center">Host meetings</span><span className="text-right">Actions</span></>}
+              <span className="text-center">Host meetings</span>
+              <span className="text-right">Actions</span>
             </div>
 
             {/* Data rows */}
@@ -609,89 +658,119 @@ export default function WorkspaceMembersPage() {
                       : "—"}
                   </span>
 
-                  {isOwnerOrAdmin && (
-                    <>
-                      {/* Meeting host toggle */}
-                      <div className="flex justify-center">
-                        {member ? (
-                          <Switch
-                            checked={member.canCreateMeetings}
-                            disabled={isSelf || memberRole === "owner"}
-                            onCheckedChange={() =>
-                              handleToggleCanCreateMeetings(
-                                member.userId,
-                                member.canCreateMeetings,
+                  {/* Meeting host toggle */}
+                  <div className="flex justify-center">
+                    {member && isOwnerOrAdmin ? (
+                      <Switch
+                        checked={member.canCreateMeetings}
+                        disabled={isSelf || memberRole === "owner"}
+                        onCheckedChange={() =>
+                          handleToggleCanCreateMeetings(
+                            member.userId,
+                            member.canCreateMeetings,
+                          )
+                        }
+                      />
+                    ) : (
+                      <span className="text-xs text-ink-muted">—</span>
+                    )}
+                  </div>
+
+                  {/* What can be done about this row */}
+                  <div className="flex justify-end gap-1">
+                    {isOwnerOrAdmin ? (
+                      member ? (
+                        <button
+                          onClick={() =>
+                            setMemberToRemove({
+                              id: member.userId,
+                              name: row.name,
+                            })
+                          }
+                          disabled={
+                            isSelf ||
+                            memberRole === "owner" ||
+                            (isAdmin && memberRole === "admin")
+                          }
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
+                          title="Remove from workspace"
+                          aria-label={`Remove ${row.name} from workspace`}
+                        >
+                          <UserMinus className="h-4 w-4" />
+                        </button>
+                      ) : row.status === "invited" && invite ? (
+                        <button
+                          onClick={() =>
+                            setInviteToRevoke({
+                              id: invite.id,
+                              email: invite.email,
+                            })
+                          }
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
+                          title="Revoke invitation"
+                          aria-label={`Revoke the invitation for ${row.email}`}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </button>
+                      ) : invite ? (
+                        <>
+                          <button
+                            onClick={() =>
+                              handleApprove(
+                                invite.id,
+                                invite.membershipType,
+                                invite.status,
                               )
                             }
-                          />
-                        ) : (
-                          // Nothing to grant until they are actually in the workspace.
-                          <span className="text-xs text-ink-muted">—</span>
-                        )}
-                      </div>
-
-                      {/* What can be done about this row */}
-                      <div className="flex justify-end gap-1">
-                        {member ? (
+                            disabled={reviewBusy}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors disabled:opacity-40 cursor-pointer"
+                            title={
+                              invite.status?.toUpperCase() === "LEAVE_REQUESTED"
+                                ? "Approve leave request"
+                                : "Approve join request"
+                            }
+                            aria-label={`${
+                              invite.status?.toUpperCase() === "LEAVE_REQUESTED"
+                                ? "Approve leave request"
+                                : "Approve join request"
+                            } from ${row.email}`}
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() =>
-                              setMemberToRemove({
-                                id: member.userId,
-                                name: row.name,
-                              })
+                              handleReject(invite.id, invite.status)
                             }
-                            disabled={
-                              isSelf ||
-                              memberRole === "owner" ||
-                              (isAdmin && memberRole === "admin")
+                            disabled={reviewBusy}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 cursor-pointer"
+                            title={
+                              invite.status?.toUpperCase() === "LEAVE_REQUESTED"
+                                ? "Reject leave request"
+                                : "Reject join request"
                             }
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
-                            title="Remove from workspace"
-                            aria-label={`Remove ${row.name} from workspace`}
+                            aria-label={`${
+                              invite.status?.toUpperCase() === "LEAVE_REQUESTED"
+                                ? "Reject leave request"
+                                : "Reject join request"
+                            } from ${row.email}`}
                           >
-                            <UserMinus className="h-4 w-4" />
+                            <XCircle className="h-4 w-4" />
                           </button>
-                        ) : row.status === "invited" && invite ? (
-                          <button
-                            onClick={() =>
-                              setInviteToRevoke({
-                                id: invite.id,
-                                email: invite.email,
-                              })
-                            }
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
-                            title="Revoke invitation"
-                            aria-label={`Revoke the invitation for ${row.email}`}
-                          >
-                            <Trash className="h-4 w-4" />
-                          </button>
-                        ) : invite ? (
-                          <>
-                            <button
-                              onClick={() =>
-                                handleApprove(invite.id, invite.membershipType)
-                              }
-                              disabled={reviewBusy}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors disabled:opacity-40 cursor-pointer"
-                              title="Approve join request"
-                              aria-label={`Approve the join request from ${row.email}`}
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleReject(invite.id)}
-                              disabled={reviewBusy}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 cursor-pointer"
-                              title="Reject join request"
-                              aria-label={`Reject the join request from ${row.email}`}
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
-                    </>
-                  )}
+                        </>
+                      ) : null
+                    ) : isSelf && member ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsLeaveModalOpen(true)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 transition-colors cursor-pointer"
+                        title="Request to leave workspace"
+                      >
+                        <span>Leave</span>
+                      </button>
+                    ) : (
+                      <span className="text-xs text-ink-muted">—</span>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -809,6 +888,44 @@ export default function WorkspaceMembersPage() {
               ) : (
                 "Revoke"
               )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Leave Request Confirmation Dialog */}
+      <Dialog
+        open={isLeaveModalOpen}
+        onOpenChange={setIsLeaveModalOpen}
+      >
+        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+          <DialogHeader className="flex flex-col gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mx-auto">
+              <Warning className="h-5 w-5" />
+            </div>
+            <DialogTitle className="text-center font-bold text-base text-foreground">
+              Request to Leave Workspace?
+            </DialogTitle>
+            <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
+              Your request to leave <span className="font-semibold text-ink">{activeWorkspaceName}</span> will be submitted to the Workspace Administrator for approval.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={() => setIsLeaveModalOpen(false)}
+              className="flex-1 h-9 rounded-md border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmLeaveRequest}
+              disabled={isSubmittingLeave}
+              className="flex-1 h-9 rounded-md bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition disabled:opacity-50 cursor-pointer"
+            >
+              {isSubmittingLeave ? "Submitting..." : "Submit Request"}
             </button>
           </DialogFooter>
         </DialogContent>

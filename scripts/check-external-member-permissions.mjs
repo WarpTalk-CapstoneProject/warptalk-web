@@ -62,7 +62,7 @@ function walk(dir) {
 
 // ---- Rule 1: every creation surface consults the permission --------------------------------
 for (const file of walk(SRC)) {
-  const rel = relative(root, file);
+  const rel = relative(root, file).replace(/\\/g, "/");
   const source = readFileSync(file, "utf8");
 
   if (!/setCreateRoomModalOpen\(true\)/.test(source)) continue;
