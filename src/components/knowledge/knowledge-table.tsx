@@ -50,18 +50,83 @@ const SOURCE_ICONS: Record<string, typeof FileText> = {
 
 function SourceCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
   const Icon = SOURCE_ICONS[chunk.sourceType] ?? Brain;
+  const typeLabel = SOURCE_FALLBACK_LABELS[chunk.sourceType] || chunk.sourceType;
 
   return (
-    <div className="flex items-start gap-2 min-w-0">
-      <Icon size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
-      <div className="min-w-0">
-        <div className="truncate text-[12px] text-ink">{sourceLabel(chunk)}</div>
-        {chunk.sourceType === "document" && chunk.chunkIndex != null ? (
-          <div className="text-[10px] tabular-nums text-ink-subtle">
-            chunk {chunk.chunkIndex}
-          </div>
-        ) : null}
+    <div className="flex items-start gap-2.5 min-w-0">
+      <div className="mt-0.5 p-1 rounded bg-surface-2 shrink-0">
+        <Icon size={14} className="text-ink" />
       </div>
+      <div className="min-w-0">
+        {/* Line 1: Source Title */}
+        <div className="truncate text-[12px] font-medium text-ink" title={sourceLabel(chunk)}>
+          {sourceLabel(chunk)}
+        </div>
+        {/* Line 2: Subtitle for Source Type & Chunk Index */}
+        <div className="text-[10px] text-ink-subtle truncate flex items-center gap-1 mt-0.5">
+          <span>{typeLabel}</span>
+          {chunk.chunkIndex != null ? (
+            <>
+              <span>•</span>
+              <span className="tabular-nums">Chunk #{chunk.chunkIndex}</span>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StateCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
+  const isExpired = chunk.retentionState === "expired";
+  const isDeleted = chunk.deletionState === "deleted";
+  const isEnabled = chunk.aiRetrieval && !isExpired && !isDeleted;
+
+  if (isEnabled) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          AI Ready
+        </span>
+      </div>
+    );
+  }
+
+  // Disabled State with Reason
+  let reasonLabel = "Disabled by Owner";
+  let icon = "🔇";
+
+  const failureReason = chunk.ingestionFailureReason?.toLowerCase();
+  if (failureReason === "dlp_detected") {
+    reasonLabel = "DLP Restricted";
+    icon = "⛔";
+  } else if (failureReason === "security_scan_timeout") {
+    reasonLabel = "Scan Timeout";
+    icon = "⏱️";
+  } else if (failureReason === "security_scan_failed") {
+    reasonLabel = "Scan Failed";
+    icon = "⚠️";
+  } else if (failureReason === "embedding_failed" || failureReason === "embedding_publish_failed") {
+    reasonLabel = "VectorDB Fail";
+    icon = "⚠️";
+  } else if (failureReason === "pii_unmasked") {
+    reasonLabel = "Unmasked PII";
+    icon = "⚠️";
+  } else if (isExpired || failureReason === "retention_expired") {
+    reasonLabel = "Retention Expired";
+    icon = "⌛";
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-600 dark:text-rose-400 border border-rose-500/20">
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+        Disabled
+      </span>
+      <span className="text-[10px] text-ink-subtle flex items-center gap-1">
+        <span>{icon}</span> {reasonLabel}
+      </span>
     </div>
   );
 }
@@ -73,15 +138,7 @@ interface KnowledgeTableProps {
   isError: boolean;
   isFetching: boolean;
   onRetry: () => void;
-  /**
-   * Opens a row. Optional because the admin portal renders this same table with nothing to
-   * open — its rows belong to a workspace the platform admin does not administer.
-   */
   onSelect?: (chunk: WorkspaceKnowledgeChunkDto) => void;
-  /**
-   * The empty state differs by audience: an Owner is told how to put something in the index, an
-   * admin is told what the absence means. Same fact, different next step.
-   */
   emptyHint: string;
 }
 
@@ -95,9 +152,19 @@ export function KnowledgeTable({
   onSelect,
   emptyHint,
 }: KnowledgeTableProps) {
-  // Grouped by source so a meeting's facts read as one block instead of being scattered
-  // through the page. See orderKnowledgeChunks for why the server's order was not enough.
-  const items = useMemo(() => orderKnowledgeChunks(data?.items ?? []), [data?.items]);
+  const allItems = useMemo(() => orderKnowledgeChunks(data?.items ?? []), [data?.items]);
+  
+  // Apply Retrieval Filter (All / Enabled / Disabled)
+  const items = useMemo(() => {
+    if (filters.retrievalTab === "enabled") {
+      return allItems.filter((c) => c.aiRetrieval && c.retentionState !== "expired");
+    }
+    if (filters.retrievalTab === "disabled") {
+      return allItems.filter((c) => !c.aiRetrieval || c.retentionState === "expired");
+    }
+    return allItems;
+  }, [allItems, filters.retrievalTab]);
+
   const { factCategory, cursorStack } = filters;
 
   return (
@@ -110,7 +177,50 @@ export function KnowledgeTable({
         trailing={items.length ? `${items.length} on this page` : undefined}
       />
 
-      <FilterChipGroup label="Filter facts by category" className="py-3">
+      {/* Quick Tab Filter for Retrieval State */}
+      <div className="py-2 flex items-center gap-2 border-b border-border/40 mb-2">
+        <span className="text-[11px] font-medium text-ink-subtle uppercase tracking-wider mr-1">
+          WarpBot Retrieval:
+        </span>
+        <button
+          type="button"
+          onClick={() => filters.setRetrievalTab("all")}
+          className={cn(
+            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+            filters.retrievalTab === "all"
+              ? "bg-surface-3 text-ink shadow-xs"
+              : "text-ink-muted hover:text-ink hover:bg-surface-2",
+          )}
+        >
+          All Knowledge
+        </button>
+        <button
+          type="button"
+          onClick={() => filters.setRetrievalTab("enabled")}
+          className={cn(
+            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1",
+            filters.retrievalTab === "enabled"
+              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold"
+              : "text-ink-muted hover:text-emerald-600 hover:bg-surface-2",
+          )}
+        >
+          <span>⚡</span> Enabled in WarpBot
+        </button>
+        <button
+          type="button"
+          onClick={() => filters.setRetrievalTab("disabled")}
+          className={cn(
+            "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1",
+            filters.retrievalTab === "disabled"
+              ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 font-semibold"
+              : "text-ink-muted hover:text-rose-600 hover:bg-surface-2",
+          )}
+        >
+          <span>🚫</span> Disabled in WarpBot
+        </button>
+      </div>
+
+      <FilterChipGroup label="Filter facts by category" className="pb-3">
         <FilterChip
           selected={factCategory === null}
           onClick={() => filters.setFactCategory(null)}
@@ -130,8 +240,6 @@ export function KnowledgeTable({
 
       <AdminPanel>
         {isError ? (
-          // Distinct from the empty state on purpose. "We could not read the index" and
-          // "nothing is indexed" lead a reader to opposite conclusions about their upload.
           <div className="px-5 py-12 text-center">
             <p className="text-[13px] text-ink">Could not read the index.</p>
             <p className="mt-1 text-[12px] text-ink-muted">
@@ -163,8 +271,6 @@ export function KnowledgeTable({
                 {items.map((chunk) => (
                   <tr
                     key={chunk.chunkId}
-                    // The whole row opens it, not a trailing "…" button: every cell here is
-                    // part of the same one thing, and there is nothing else a click could mean.
                     onClick={onSelect ? () => onSelect(chunk) : undefined}
                     onKeyDown={
                       onSelect
@@ -184,10 +290,10 @@ export function KnowledgeTable({
                         "cursor-pointer transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none",
                     )}
                   >
-                    <td className="w-[190px] px-4 py-3">
+                    <td className="w-[210px] px-4 py-3">
                       <SourceCell chunk={chunk} />
                     </td>
-                    <td className="w-[280px] px-4 py-3">
+                    <td className="w-[260px] px-4 py-3">
                       {chunk.fact ? (
                         <>
                           <p className="text-[12px] leading-relaxed text-ink">{chunk.fact}</p>
@@ -212,13 +318,8 @@ export function KnowledgeTable({
                         </span>
                       )}
                     </td>
-                    <td className="w-[110px] px-4 py-3">
-                      <span className="text-[11px] capitalize text-ink-muted">
-                        {chunk.retentionState || "—"}
-                      </span>
-                      {!chunk.aiRetrieval ? (
-                        <div className="mt-1 text-[10px] text-ink-subtle">not retrievable</div>
-                      ) : null}
+                    <td className="w-[140px] px-4 py-3">
+                      <StateCell chunk={chunk} />
                     </td>
                   </tr>
                 ))}

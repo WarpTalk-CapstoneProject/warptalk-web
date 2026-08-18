@@ -22,12 +22,16 @@ import type { WorkspaceKnowledgeQuery } from "@/types/workspace-knowledge";
  * the top level of the calling component is also what keeps this lint-clean: a render prop that
  * called the query hook for us would be calling a hook from a callback.
  */
+export type RetrievalTab = "all" | "enabled" | "disabled";
+
 export interface KnowledgeFilters {
   sourceTab: SourceTab;
+  retrievalTab: RetrievalTab;
   factCategory: string | null;
   cursorStack: CursorStack;
   query: WorkspaceKnowledgeQuery;
   setSourceTab: (tab: SourceTab) => void;
+  setRetrievalTab: (tab: RetrievalTab) => void;
   setFactCategory: (category: string | null) => void;
   goBack: () => void;
   goNext: (nextCursor: string | null) => void;
@@ -35,6 +39,7 @@ export interface KnowledgeFilters {
 
 export function useKnowledgeFilters(): KnowledgeFilters {
   const [sourceTab, setSourceTabState] = useState<SourceTab>("all");
+  const [retrievalTab, setRetrievalTabState] = useState<RetrievalTab>("all");
   const [factCategory, setFactCategoryState] = useState<string | null>(null);
   const [cursorStack, setCursorStack] = useState<CursorStack>(initialCursorStack);
 
@@ -49,11 +54,16 @@ export function useKnowledgeFilters(): KnowledgeFilters {
   // anywhere meaningful in another's result set.
   return {
     sourceTab,
+    retrievalTab,
     factCategory,
     cursorStack,
     query,
     setSourceTab: (tab) => {
       setSourceTabState(tab);
+      setCursorStack(initialCursorStack());
+    },
+    setRetrievalTab: (tab) => {
+      setRetrievalTabState(tab);
       setCursorStack(initialCursorStack());
     },
     setFactCategory: (category) => {
