@@ -696,8 +696,20 @@ function WeekCard({
         <span className="text-[10px] font-medium tabular-nums text-ink-muted">
           {formatTime(meeting.occursAt)}
         </span>
+        <span
+          className={cn(
+            "ml-auto rounded px-1 py-0.5 text-[9px] font-medium capitalize",
+            stateBadgeClass(meeting),
+          )}
+        >
+          {meeting.timeState === "live"
+            ? "Live"
+            : meeting.timeState === "upcoming"
+            ? "Upcoming"
+            : "Attended"}
+        </span>
         {meeting.timeState === "live" ? (
-          <span className="relative ml-auto flex size-1.5 shrink-0">
+          <span className="relative flex size-1.5 shrink-0">
             <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
             <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
           </span>
