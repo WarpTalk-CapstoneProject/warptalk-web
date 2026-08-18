@@ -400,7 +400,7 @@ export default function VoiceProfilesPage() {
       </div>
 
       <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto hide-scrollbar flex flex-col">
           <DialogHeader>
             <DialogTitle>Create voice profile</DialogTitle>
             <DialogDescription>
