@@ -46,7 +46,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MyMeetingItem } from "@/types/myMeetings";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
-type TimeFilter = "all" | "upcoming" | "past" | "with_outputs";
+type TimeFilter = "all" | "upcoming" | "past";
 
 /**
  * Month or week.
@@ -62,7 +62,6 @@ const timeFilters: Array<{ value: TimeFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "upcoming", label: "Upcoming" },
   { value: "past", label: "Attended" },
-  { value: "with_outputs", label: "With outputs" },
 ];
 const EMPTY_MEETINGS: MyMeetingItem[] = [];
 
@@ -121,7 +120,6 @@ export default function MyMeetingsPage() {
     return allMeetings.filter((meeting) => {
       if (filter === "upcoming") return meeting.timeState !== "past";
       if (filter === "past") return meeting.timeState === "past";
-      if (filter === "with_outputs") return meeting.artifacts.length > 0;
       return true;
     });
   }, [allMeetings, filter]);
@@ -213,27 +211,7 @@ export default function MyMeetingsPage() {
           sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
           same word three times with documentation living in the furniture. Meetings and Members
           open straight onto their content and this now does too. */}
-      <header className="flex flex-col gap-3 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar" role="tablist" aria-label="Timeline filters">
-          {timeFilters.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              role="tab"
-              aria-selected={filter === item.value}
-              onClick={() => setFilter(item.value)}
-              className={cn(
-                "h-8 rounded-full px-3.5 text-[12px] font-medium transition-colors shrink-0",
-                filter === item.value
-                  ? "bg-ink text-surface-1 font-semibold shadow-xs"
-                  : "text-ink-muted hover:bg-surface-2 hover:text-ink",
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
+      <header className="flex border-b border-border px-5 py-3 lg:items-center lg:justify-end lg:px-8">
         <div className="flex w-full items-center gap-2 lg:w-auto">
           {/* See history/page.tsx: one search affordance across the list pages. */}
           <ExpandingSearchDock
@@ -320,6 +298,27 @@ export default function MyMeetingsPage() {
                 }}
               />
             </div>
+          </div>
+
+          {/* 3 Filter Tabs positioned above Statistics Count Cards */}
+          <div className="flex items-center justify-around gap-1 rounded-lg border border-border bg-surface-2/50 p-1" role="tablist" aria-label="Timeline filters">
+            {timeFilters.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={filter === item.value}
+                onClick={() => setFilter(item.value)}
+                className={cn(
+                  "flex-1 rounded-md py-1.5 text-center text-[11px] font-medium transition-colors",
+                  filter === item.value
+                    ? "bg-surface-1 text-ink font-semibold shadow-xs"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
 
           <dl className="grid grid-cols-2 gap-2">
