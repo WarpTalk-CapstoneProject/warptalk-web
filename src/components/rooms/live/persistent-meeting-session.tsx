@@ -94,6 +94,8 @@ import {
 } from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
+import { isExternalBridge } from "@/lib/meeting/meeting-types";
+import { findBridgeDeviceIds, OUTBOUND_DEVICE_LABEL } from "@/lib/audio/virtual-bridge-check";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
@@ -206,6 +208,47 @@ export function PersistentMeetingSession({
   const [wasConnectable, setWasConnectable] = useState(false);
 
   const roomQuery = useTranslationRoom(roomId);
+
+  // WT-525. An external-bridge meeting runs on Google Meet with WarpTalk beside it, so the dub
+  // meant for the far side has to leave through the virtual microphone Meet is listening to
+  // rather than through the host's headphones. Resolving the device is a device-list read, not
+  // the wizard's tone probe: a device that is present but not carrying is something the wizard
+  // diagnoses, and refusing to route because of it would turn a fixable setup problem into no
+  // audio path at all.
+  const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
+  const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
+
+  // A bridge that is not carrying is indistinguishable from a bridge that is, from inside
+  // WarpTalk: the transcript still scrolls and the meeting still looks healthy while the far
+  // side hears nothing. So this is a toast, not a state nobody renders.
+  const handleBridgeOutboundError = useCallback((message: string) => {
+    toast.error("The far side is not hearing the translation.", { description: message });
+  }, []);
+
+  useEffect(() => {
+    // Not cleared on the way out: the value is only ever READ through `isBridgeRoom` below, so
+    // clearing it here would be a synchronous setState in an effect body for no observable
+    // difference — a cascading render to reach a state nothing can see.
+    if (!isBridgeRoom) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { outboundDeviceId } = await findBridgeDeviceIds();
+        if (cancelled) return;
+        setBridgeOutboundDeviceId(outboundDeviceId);
+        if (!outboundDeviceId) {
+          toast.error("This meeting cannot reach Google Meet yet.", {
+            description: `${OUTBOUND_DEVICE_LABEL} is not installed, so the far side will not hear the translation.`,
+          });
+        }
+      } catch {
+        if (!cancelled) setBridgeOutboundDeviceId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isBridgeRoom]);
   // The LiveKit disconnect is only half of what an abandoned tab costs. This query polls every
   // 3s — 20 requests a minute against a gateway that rate-limits an IP at 100/min and answers
   // rejections with a bodyless 503 that reads exactly like an outage. An idle-reaped session
@@ -2496,6 +2539,8 @@ export function PersistentMeetingSession({
           // against — it muted mismatched speakers for a pipeline that had not been started.
           translationActive={translationStarted}
           localUserId={user?.id}
+          bridgeOutboundDeviceId={isBridgeRoom ? bridgeOutboundDeviceId : null}
+          onBridgeOutboundError={handleBridgeOutboundError}
         />
         <TrackProcessorsController
           noiseSuppressionEnabled={noiseSuppressionEnabled}
