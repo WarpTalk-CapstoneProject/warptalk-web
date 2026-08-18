@@ -40,6 +40,8 @@ import {
   useRefreshDubVoice,
   useFlashMode,
   useSetFlashMode,
+  useNoiseReduction,
+  useSetNoiseReduction,
   useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
@@ -227,6 +229,11 @@ export function PersistentMeetingSession({
   // only by the room host, which is what the server enforces too.
   const { data: flashModeEnabled = false } = useFlashMode(roomId);
   const setFlashMode = useSetFlashMode(roomId);
+  // The caller's OWN microphone, not the room's. No host check anywhere on this one, deliberately:
+  // it changes how this person is transcribed and nobody else's audio, and the server agrees — see
+  // IMicrophoneNoiseReductionService for why gating it would be the bug.
+  const { data: noiseReductionMode = "off" } = useNoiseReduction(roomId);
+  const setNoiseReduction = useSetNoiseReduction(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } =
     useJoinMeeting();
   const { mutateAsync: registerParticipantAsync } = useJoinTranslationRoomByCode();
@@ -2696,6 +2703,11 @@ export function PersistentMeetingSession({
                     onChangeFlashMode={
                       isRoomHost ? (enabled) => setFlashMode.mutate(enabled) : undefined
                     }
+                    noiseReductionMode={noiseReductionMode}
+                    // No isRoomHost gate, unlike flash mode directly above. This one is the
+                    // caller's own microphone; the endpoint requires membership and writes only
+                    // under the caller's own id, so every participant gets a working control.
+                    onChangeNoiseReductionMode={(mode) => setNoiseReduction.mutate(mode)}
                     voiceEnabled={voiceEnabled}
                     handRaised={handRaised}
                     onCopyText={copyText}

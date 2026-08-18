@@ -97,6 +97,8 @@ export const API = {
     // GET is open to any participant so a guest renders the switch in the host's position, PUT
     // is host-only and answers 403 to anyone else.
     flashMode: (id: string) => `/translation-rooms/${id}/audio-routes/flash-mode`,
+    noiseReduction: (id: string) =>
+      `/translation-rooms/${id}/audio-routes/noise-reduction`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },

@@ -1,6 +1,10 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
+import {
+  normalizeNoiseReductionMode,
+  type NoiseReductionMode,
+} from "@/lib/meeting/noise-reduction";
 import type {
   CancelSeriesResult,
   CreateRecurringRoomResponse,
@@ -379,6 +383,32 @@ export const translationRoomService = {
       { enabled },
     );
     return Boolean(data?.enabled);
+  },
+
+  /**
+   * How much the STT provider denoises THIS caller's own microphone in this meeting.
+   *
+   * NOT the noise-suppression toggle in the same menu. That one is Krisp/the browser filtering the
+   * raw microphone, which changes what other people HEAR. This one changes how accurately what you
+   * say is RECOGNISED, and touches nobody else's audio — which is also why, unlike flash mode
+   * above, any participant may set it for themselves without the host.
+   *
+   * Self-service, so there is no 403 branch to think about: the only failure worth surfacing is a
+   * write that did not happen.
+   */
+  async getNoiseReduction(id: string) {
+    const { data } = await apiClient.get<{ mode: NoiseReductionMode }>(
+      API.translationRooms.noiseReduction(id),
+    );
+    return normalizeNoiseReductionMode(data?.mode);
+  },
+
+  async setNoiseReduction(id: string, mode: NoiseReductionMode) {
+    const { data } = await apiClient.put<{ mode: NoiseReductionMode }>(
+      API.translationRooms.noiseReduction(id),
+      { mode },
+    );
+    return normalizeNoiseReductionMode(data?.mode);
   },
 
   async start(id: string) {
