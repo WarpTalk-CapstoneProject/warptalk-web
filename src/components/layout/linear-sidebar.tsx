@@ -925,8 +925,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 <div className="px-2.5 py-1 text-[11px] font-medium text-ink-subtle">
                   Account
                 </div>
+                {/*
+                  The gateway, not the create form. The label has always promised BOTH, and
+                  creating now starts at the plan grid rather than at a name field — so the one
+                  screen that offers join alongside the plan-first create route is the honest
+                  destination for it.
+                */}
                 <DropdownMenuItem
-                  onClick={() => router.push("/workspace/create")}
+                  onClick={() => router.push("/workspace")}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
                 >
                   <span>Create or join a workspace...</span>

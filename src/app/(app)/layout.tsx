@@ -213,6 +213,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const isOnboardingRoute =
     pathname === "/workspace" ||
+    pathname === "/workspace/plans" ||
     pathname === "/workspace/create" ||
     pathname === "/workspace/join";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
