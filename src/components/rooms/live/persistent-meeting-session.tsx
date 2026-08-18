@@ -2669,8 +2669,8 @@ export function PersistentMeetingSession({
               data-meeting-bottom-dock
               className="relative z-40 flex min-h-12 min-w-0 shrink-0 items-center justify-center overflow-visible"
             >
-              <div className="mx-auto flex max-w-full min-w-0 items-center gap-2 px-1 overflow-x-auto no-scrollbar">
-                <div data-meeting-control-bar className="shrink-0">
+              <div className="mx-auto flex max-w-full min-w-0 items-center gap-2 px-1 overflow-visible">
+                <div data-meeting-control-bar className="shrink-0 overflow-visible">
                   <MeetingControlBar
                     meetingEnabled={Boolean(meetingSession?.token)}
                     cameraEnabled={cameraEnabled}
