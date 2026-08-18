@@ -15,6 +15,7 @@ import {
   readCheckoutIntent,
 } from "@/lib/billing/checkout-intent";
 import {
+  checkoutCurrency,
   checkoutTotal,
   readBillingInterval,
   selectablePlans,
@@ -260,7 +261,8 @@ export default function CreateWorkspaceDemoPage() {
        * gap where that used to happen.
        *
        * The amount comes from the shared pricing rule, so it is the same figure quoted on the
-       * plan grid one screen ago. `currency: "vnd"` matches every other checkout in this app.
+       * plan grid one screen ago, in the plan's OWN currency — see checkoutCurrency, and
+       * WT-518, which is what happens when only the displayed half of that is fixed.
        */
       if (!chosenPlan) {
         // The plan list has not resolved, or the slug names a plan that is no longer sold. The
@@ -276,7 +278,7 @@ export default function CreateWorkspaceDemoPage() {
           userId: user!.id,
           workspaceId: workspace.id,
           amount: checkoutTotal(chosenPlan, billingInterval),
-          currency: "vnd",
+          currency: checkoutCurrency(chosenPlan),
           paymentType: "Subscription",
           planSlug: chosenPlan.slug,
           billingCycle: billingInterval,

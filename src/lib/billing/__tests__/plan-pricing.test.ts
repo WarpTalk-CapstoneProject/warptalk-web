@@ -15,6 +15,7 @@ import { test } from "node:test";
 
 import {
   YEARLY_PRICE_MULTIPLIER,
+  checkoutCurrency,
   checkoutTotal,
   monthlyDisplayPrice,
   readBillingInterval,
@@ -83,4 +84,23 @@ test("only active plans are selectable, in the platform's order", () => {
     selectablePlans(plans).map((p) => p.slug),
     ["a", "c"],
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WT-518 — the currency the buyer is CHARGED in, not just the one they read.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("a plan priced in USD is charged in USD", () => {
+  assert.equal(checkoutCurrency({ currency: "USD" }), "usd");
+});
+
+test("the currency is lowercased, because Stripe's vocabulary is", () => {
+  assert.equal(checkoutCurrency({ currency: "VND" }), "vnd");
+  assert.equal(checkoutCurrency({ currency: " Usd " }), "usd");
+});
+
+test("no plan means a credit top-up, which the server prices in VND", () => {
+  assert.equal(checkoutCurrency(null), "vnd");
+  assert.equal(checkoutCurrency(undefined), "vnd");
+  assert.equal(checkoutCurrency({ currency: "" }), "vnd");
 });

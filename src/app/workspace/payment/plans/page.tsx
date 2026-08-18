@@ -52,6 +52,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
 import { formatMoney } from "@/lib/format/currency";
+import { checkoutCurrency } from "@/lib/billing/plan-pricing";
 
 export default function PaymentPlansPage() {
   const router = useRouter();
@@ -175,7 +176,8 @@ export default function PaymentPlansPage() {
         userId: user.id,
         workspaceId,
         amount,
-        currency: "vnd",
+        // WT-518 — the plan's own currency, the same rule the slugged copy of this page uses.
+        currency: checkoutCurrency(backendPlans.find((plan) => plan.slug === planSlug)),
         paymentType,
         planSlug: planSlug || undefined,
         billingCycle: billingCycle || undefined,

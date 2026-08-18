@@ -43,7 +43,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
-import { checkoutTotal, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
+import { checkoutCurrency, checkoutTotal, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
 
 // We fetch plans dynamically now.
 
@@ -265,7 +265,10 @@ export default function WorkspacePlansPage() {
         userId: user.id,
         workspaceId: activeWorkspaceId,
         amount,
-        currency: "vnd",
+        // The plan's own currency. Hardcoding "vnd" here is WT-518: the card one screen up
+        // already reads plan.currency (WT-459), so a USD plan was quoted in USD and charged in
+        // VND, and every screen downstream repeated the currency this call had chosen.
+        currency: checkoutCurrency(activePlans.find((plan) => plan.slug === planSlug)),
         paymentType,
         planSlug: planSlug || undefined,
         billingCycle: billingCycle || undefined,
@@ -776,7 +779,14 @@ export default function WorkspacePlansPage() {
           <div className="rounded-lg border border-hairline bg-surface-2 p-4 text-xs text-ink-muted space-y-1.5 my-2">
             <p>
               • <strong>You pay in full today</strong>:{" "}
-              {formatMoney(pendingPlanTotal, "VND")} for one{" "}
+              {/* The plan's own currency, like the card and the checkout call. This dialog is
+                  the LAST figure a buyer reads before Stripe, so a hardcoded VND here would
+                  restate WT-518 at the one point where it is least recoverable. */}
+              {formatMoney(
+                pendingPlanTotal,
+                activePlans.find((plan) => plan.slug === pendingPlanSlug)?.currency,
+              )}{" "}
+              for one{" "}
               {billingInterval === "yearly" ? "year" : "month"}.
             </p>
             <p>

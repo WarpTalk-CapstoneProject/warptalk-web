@@ -75,3 +75,27 @@ export function readBillingInterval(
 ): BillingInterval {
   return params?.get("billingCycle")?.trim().toLowerCase() === "yearly" ? "yearly" : "monthly";
 }
+
+/**
+ * The currency to charge a plan in — the plan's own, never a constant. WT-518.
+ *
+ * WT-459 fixed the half of this that is visible: the plan CARD reads `plan.currency`, so a plan
+ * priced at 200 USD stopped rendering as "200 VND". What it did not touch was the checkout call
+ * three lines away, which hardcoded `currency: "vnd"` at all three call sites. The buyer read USD
+ * and was charged VND — 200 VND instead of 200 USD, about four orders of magnitude out — and then
+ * the success page and the invoice both said "200 VND", because both read the currency back off
+ * the Stripe session that was created with the wrong one. Nothing in that chain was lying; every
+ * screen faithfully reported the currency the checkout had chosen.
+ *
+ * Lowercased because that is Stripe's own vocabulary and what `PaymentConstants.Currencies` holds.
+ * The server already handles the minor-unit difference — VND is zero-decimal and passes through,
+ * everything else is multiplied by 100 (StripePaymentService) — so sending the true currency is
+ * the whole fix on this side.
+ *
+ * Defaults to VND for a purchase with no plan behind it. That is not a guess: the only such
+ * purchase is a credit top-up, which the server prices itself against `credit_value_vnd`.
+ */
+export function checkoutCurrency(plan?: Pick<PlanDto, "currency"> | null): string {
+  const currency = plan?.currency?.trim();
+  return currency ? currency.toLowerCase() : "vnd";
+}
