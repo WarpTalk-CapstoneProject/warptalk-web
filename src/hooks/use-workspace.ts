@@ -286,11 +286,26 @@ export function useInvitationPolicy(workspaceId: string, email: string) {
   });
 }
 
-export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string) {
+/**
+ * @param enabled pass `false` for a viewer the invitation endpoints refuse. WT-521.
+ *
+ * The Members page already declined to RENDER these rows for a plain Member, and asked for them
+ * anyway — so every Member who opened the page fired two requests that could only 403, and the
+ * console filled with them under a toast saying their leave request had been submitted. Filtering
+ * the response is not the same as not asking for it.
+ */
+export function useWorkspaceInvitations(
+  workspaceId: string,
+  page = 1,
+  pageSize = 10,
+  search = "",
+  category?: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: [...WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search), category],
     queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search, category),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && enabled,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
   });

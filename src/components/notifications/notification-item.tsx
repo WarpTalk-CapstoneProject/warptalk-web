@@ -15,7 +15,9 @@ import {
   CreditCard,
   Info,
   Megaphone,
+  UserMinus,
   UserPlus,
+  Users as UsersThree,
   Video,
   Wrench,
 } from "lucide-react";
@@ -96,6 +98,16 @@ export function NotificationItem({
         return <UserPlus className="h-5 w-5 text-blue-500" />;
       case "MEETING_STARTED":
         return <Video className="h-5 w-5 text-emerald-500" />;
+      // WT-521. Membership changes are about a PERSON, not a meeting or a payment, and falling
+      // through to the megaphone put them beside marketing announcements. Leave requests are the
+      // only one of these that asks the reader to do something, so it is the one that stands out.
+      case "WORKSPACE_LEAVE_REQUESTED":
+        return <UserMinus className="h-5 w-5 text-amber-500" />;
+      case "WORKSPACE_LEAVE_APPROVED":
+      case "WORKSPACE_LEAVE_REJECTED":
+      case "WORKSPACE_MEMBER_REMOVED":
+      case "WORKSPACE_ROLE_CHANGED":
+        return <UsersThree className="h-5 w-5 text-blue-500" />;
       case "BILLING_PAYMENT_SUCCEEDED":
       case "BILLING_PAYMENT_FAILED":
       case "BILLING_PAYMENT_REFUNDED":

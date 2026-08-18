@@ -92,12 +92,20 @@ export default function WorkspaceMembersPage() {
   );
   // Pending invitations and join requests are small, complete sets — one page of 100 covers
   // any workspace this product serves, so they are not paginated alongside the members.
+  //
+  // NOT FETCHED AT ALL for a plain Member (WT-521). The page already refused to render these
+  // rows for one — see `pendingInvitations` below — but it asked the server for them regardless,
+  // so opening Members as a Member fired two requests that could only ever 403. The visible
+  // symptom was a console full of Forbidden underneath a toast saying the leave request had gone
+  // through, which reads as the leave request having failed.
+  const canReadInvitations = currentRole === "owner" || currentRole === "admin";
   const invitationsQuery = useWorkspaceInvitations(
     activeWorkspaceId || "",
     1,
     100,
     query,
     "outbound",
+    canReadInvitations,
   );
   const joinRequestsQuery = useWorkspaceInvitations(
     activeWorkspaceId || "",
@@ -105,6 +113,7 @@ export default function WorkspaceMembersPage() {
     100,
     query,
     "join-request",
+    canReadInvitations,
   );
   const removeMemberMutation = useRemoveWorkspaceMember(
     activeWorkspaceId || "",
