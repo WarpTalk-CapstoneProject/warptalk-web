@@ -226,7 +226,7 @@ export default function WorkspaceGlossaryPage() {
       const created = data?.[0];
       if (created) {
         setSelectedId(created.id);
-        const result = await WorkspaceService.bulkImportGlossaryTerms(created.id, { terms: rows });
+        const result = await WorkspaceService.bulkImportTerms(created.id, rows);
         if (result.skipped > 0) {
           toast.success(
             `Glossary created & imported ${result.imported} term${result.imported === 1 ? "" : "s"}, skipped ${result.skipped} already present.`,
