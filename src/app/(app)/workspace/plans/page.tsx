@@ -125,7 +125,7 @@ export default function ChoosePlanBeforeWorkspacePage() {
             </p>
           </div>
         ) : (
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 flex flex-wrap justify-center gap-6 max-w-5xl mx-auto">
             {plans.map((plan) => {
               const perMonth = monthlyDisplayPrice(plan, interval);
               const total = checkoutTotal(plan, interval);
@@ -135,7 +135,7 @@ export default function ChoosePlanBeforeWorkspacePage() {
               return (
                 <div
                   key={plan.id}
-                  className={`flex flex-col rounded-lg border bg-surface-1 p-5 shadow-sm ${
+                  className={`flex flex-col w-full sm:w-[340px] md:w-[360px] shrink-0 rounded-lg border bg-surface-1 p-5 shadow-sm ${
                     isPreselected ? "border-primary ring-1 ring-primary" : "border-border"
                   }`}
                 >

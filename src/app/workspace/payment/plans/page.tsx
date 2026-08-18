@@ -283,7 +283,7 @@ export default function PaymentPlansPage() {
       </div>
 
       {/* Plan Cards */}
-      <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl px-4">
+      <div className="flex flex-wrap justify-center gap-6 w-full max-w-5xl px-4">
         {backendPlans
           .filter((p) => p.isActive !== false)
           .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -305,7 +305,7 @@ export default function PaymentPlansPage() {
             return (
               <Card
                 key={plan.id}
-                className={`relative flex flex-col !overflow-visible rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${
+                className={`relative flex flex-col w-full sm:w-[340px] md:w-[360px] shrink-0 !overflow-visible rounded-xl shadow-linear transition-transform duration-300 hover:-translate-y-1 ${
                   isFeatured
                     ? "border-primary/50 bg-surface-2 shadow-[0_8px_30px_rgb(94,106,210,0.12)]"
                     : "border-hairline bg-surface-1"

@@ -412,9 +412,9 @@ export default function WorkspacePlansPage() {
           in the middle of an empty screen, directly above a full-width "Need more credits?"
           panel. Two blocks, two different pages. The columns are fixed now and a short row is
           simply a short row. */}
-      <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mx-auto flex flex-wrap justify-center gap-6 w-full max-w-5xl">
         {loadingPlans ? (
-          <div className="col-span-1 md:col-span-3 flex w-full items-center justify-center p-12">
+          <div className="flex w-full items-center justify-center p-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : (
@@ -446,7 +446,7 @@ export default function WorkspacePlansPage() {
                  that appears nowhere else in the app. */
               <Card
                 key={plan.id}
-                className={`relative flex h-full flex-col overflow-hidden rounded-[14px] border bg-surface-1 p-5 shadow-linear transition-colors ${
+                className={`relative flex h-full w-full sm:w-[340px] md:w-[360px] shrink-0 flex-col overflow-hidden rounded-[14px] border bg-surface-1 p-5 shadow-linear transition-colors ${
                   isCurrent
                     ? "border-primary"
                     : isFeatured
