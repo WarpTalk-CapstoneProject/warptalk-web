@@ -10,11 +10,18 @@ export interface WorkspaceDto {
   defaultLanguage?: string;
 }
 
+export interface InitialWorkspaceInvitation {
+  email: string;
+  roleName: string;
+  membershipType: string;
+}
+
 export interface CreateWorkspaceRequest {
   name: string;
   logoUrl?: string | null;
   verifiedDomains?: string[];
   requireVerifiedDomainForInternal?: boolean;
+  initialInvitations?: InitialWorkspaceInvitation[];
 }
 
 export interface VerifiedDomainDto {

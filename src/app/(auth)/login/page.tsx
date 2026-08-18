@@ -73,6 +73,16 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
 
         toast.success("Google login successful!");
 
+        const token = new URLSearchParams(window.location.search).get("token");
+        if (token) {
+          try {
+            await apiClient.post(API.workspaces.acceptInvitation, { token });
+            toast.success("Joined workspace successfully!");
+          } catch {
+            // Proceed to redirect
+          }
+        }
+
         const isAdmin = user.roles?.some(
           (r: string) => r.toLowerCase() === "admin",
         );
@@ -182,6 +192,16 @@ function LoginForm() {
       setAccessTokenCookie(accessToken, expiresAt);
 
       toast.success("Login successful!");
+
+      const token = searchParams.get("token");
+      if (token) {
+        try {
+          await apiClient.post(API.workspaces.acceptInvitation, { token });
+          toast.success("Joined workspace successfully!");
+        } catch {
+          // Proceed to redirect
+        }
+      }
 
       const isAdmin = user.roles?.some(
         (r: string) => r.toLowerCase() === "admin",
