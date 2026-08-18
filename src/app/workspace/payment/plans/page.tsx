@@ -206,15 +206,15 @@ export default function PaymentPlansPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col items-center pb-12 pt-6">
+    <div className="flex min-h-full flex-col items-center pb-12 pt-4">
       {/* Top Navigation Bar */}
-      <div className="w-full max-w-4xl px-4 mb-6 flex items-center justify-between">
+      <div className="w-full max-w-4xl px-4 mb-4 flex items-center justify-between">
         <button
           type="button"
           onClick={handleBackNav}
-          className="inline-flex items-center gap-2 rounded-lg border border-hairline bg-surface-1 px-3.5 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink cursor-pointer shadow-xs"
+          className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted transition-colors hover:text-ink cursor-pointer"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft size={14} />
           <span>Back to Workspace Creation</span>
         </button>
 
@@ -222,7 +222,7 @@ export default function PaymentPlansPage() {
           <button
             type="button"
             onClick={() => router.push(`/${activeWorkspaceSlug}/dashboard`)}
-            className="text-xs text-ink-muted transition-colors hover:text-ink hover:underline cursor-pointer"
+            className="text-[12px] text-ink-muted transition-colors hover:text-ink cursor-pointer"
           >
             Return to Dashboard
           </button>
