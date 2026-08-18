@@ -85,6 +85,8 @@ export function MeetingControlBar({
   voiceCatalog,
   voiceCloneEnabled,
   voiceCloneHasAudience = false,
+  flashModeEnabled = false,
+  onChangeFlashMode,
   dubVoice,
   ownVoiceProfiles,
   onChangeDubVoice,
@@ -173,6 +175,17 @@ export function MeetingControlBar({
   ownVoiceProfiles?: { id: string; name: string; voiceId: string }[];
   /** Pass null to go back to cloning live from the meeting. Omit to hide the "Your voice" section. */
   onChangeDubVoice?: (voiceId: string | null) => void;
+  /**
+   * WT-B — whether THIS ROOM streams audio to STT while a speaker is still talking ("flash
+   * mode"), rather than waiting for the pause that ends their turn.
+   *
+   * NOT A VOICE, despite sharing this panel with them, and it is given its own section for
+   * exactly that reason. Everything above answers "how do I sound" or "what do I hear"; this
+   * answers "how fast is the room", and it applies to EVERYBODY in it.
+   */
+  flashModeEnabled?: boolean;
+  /** Omit to render the state read-only — the host owns this setting, a guest only sees it. */
+  onChangeFlashMode?: (enabled: boolean) => void;
   /** false = this listener wants transcript only, no AI/original audio played. Omit to hide the toggle. */
   voiceEnabled?: boolean;
   /** Whether THIS participant's hand is currently raised. Omit (or omit onToggleRaiseHand) to hide the control. */
@@ -773,6 +786,37 @@ export function MeetingControlBar({
                   <p className="px-2.5 pb-2 pt-1 text-[11px] leading-snug text-ink-muted">
                     {voiceSelection.detail}
                   </p>
+
+                  {/* FLASH MODE — a room setting, kept visually apart from everything above it.
+                      The list above is two questions about VOICE ("how do I sound", "what do I
+                      hear"). This is a third question about SPEED, and it is the only control in
+                      this panel that changes things for other people. Merging it into the list
+                      would repeat the exact mistake this panel was rebuilt to fix, so it gets a
+                      rule, a heading of its own, and a sentence saying who it affects. */}
+                  <div className="my-1 h-[1px] bg-surface-3" />
+                  <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
+                    Room speed
+                  </p>
+                  <div className="flex w-full items-start justify-between gap-3 px-3 py-2">
+                    <span className="min-w-0 text-left">
+                      <span className="block text-[13px] text-ink">Flash mode</span>
+                      <span className="block text-[11px] leading-snug text-ink-subtle">
+                        {onChangeFlashMode
+                          ? "Start translating while people are still speaking. Faster, and still experimental."
+                          : "Set by the host. Translation starts while people are still speaking."}
+                      </span>
+                    </span>
+                    <Switch
+                      size="sm"
+                      className="mt-0.5 shrink-0"
+                      checked={flashModeEnabled}
+                      // A guest sees the switch in the position the host chose and cannot move
+                      // it. Hiding it instead would leave them unable to tell a fast room from a
+                      // slow one, which is the thing they can actually perceive.
+                      disabled={!onChangeFlashMode}
+                      onCheckedChange={(checked) => onChangeFlashMode?.(Boolean(checked))}
+                    />
+                  </div>
 
                   {/* WT-420. The capture itself, live. Everything below was already known to the
                       TTS worker and written only to a log — which is why an entire test session

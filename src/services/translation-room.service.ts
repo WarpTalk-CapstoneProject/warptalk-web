@@ -360,6 +360,27 @@ export const translationRoomService = {
     return apiClient.post<void>(API.translationRooms.refreshDubVoice(id));
   },
 
+  /**
+   * WT-B "flash mode" — whether this ROOM streams audio to STT while a speaker is still talking.
+   *
+   * Readable by any participant, so a guest can render the switch where the host left it rather
+   * than guessing. Writing is host-only and answers 403 to anybody else, which the caller must
+   * surface rather than swallow: a switch that silently springs back is worse than one that says
+   * it is not yours to move.
+   */
+  async getFlashMode(id: string) {
+    const { data } = await apiClient.get<{ enabled: boolean }>(API.translationRooms.flashMode(id));
+    return Boolean(data?.enabled);
+  },
+
+  async setFlashMode(id: string, enabled: boolean) {
+    const { data } = await apiClient.put<{ enabled: boolean }>(
+      API.translationRooms.flashMode(id),
+      { enabled },
+    );
+    return Boolean(data?.enabled);
+  },
+
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };

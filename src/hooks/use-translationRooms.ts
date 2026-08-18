@@ -295,6 +295,38 @@ export function useRefreshDubVoice(roomId: string) {
   });
 }
 
+/**
+ * WT-B "flash mode" for THIS room — read by anyone in it, written by the host.
+ *
+ * Read on an interval as well as on mount, because the host can move it from another client and
+ * a guest looking at a stale switch has no way to tell. Cheap: one small GET, and only while the
+ * meeting UI is mounted.
+ */
+export function useFlashMode(roomId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["translation-room", roomId, "flash-mode"],
+    queryFn: () => translationRoomService.getFlashMode(roomId),
+    enabled: enabled && Boolean(roomId),
+    refetchInterval: 30_000,
+    // A room that cannot answer is not an error worth showing anybody: the AI side falls back to
+    // the deployment default, and "off" is the honest thing to render.
+    retry: false,
+    initialData: false,
+  });
+}
+
+export function useSetFlashMode(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => translationRoomService.setFlashMode(roomId, enabled),
+    onSuccess: (enabled) => {
+      // Seeded from what the SERVER returned, not from what was asked for. A 403 never reaches
+      // here, so the switch cannot show a state the room does not actually have.
+      queryClient.setQueryData(["translation-room", roomId, "flash-mode"], enabled);
+    },
+  });
+}
+
 /** End translationRoom mutation */
 export function useEndTranslationRoom() {
   const queryClient = useQueryClient();
