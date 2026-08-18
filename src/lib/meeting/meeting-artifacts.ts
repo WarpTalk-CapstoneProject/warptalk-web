@@ -38,6 +38,27 @@ export function canDownloadArtifact(artifact: RoomHistoryArtifact): boolean {
 }
 
 /**
+ * The recording to play above the transcript, or null when there is nothing to watch. WT-492.
+ *
+ * "Nothing to watch" is the ordinary case — most meetings are never recorded — so it is a null
+ * rather than an error, and the player renders nothing at all rather than an empty frame promising
+ * a video that does not exist.
+ *
+ * Gated on the same `canDownloadArtifact` the download button uses, because a recording that is
+ * still processing has no bytes behind it either: a player pointed at one would show a broken
+ * element instead of saying it is not ready.
+ */
+export function findPlayableRecording(
+  artifacts: RoomHistoryArtifact[] | undefined | null,
+): RoomHistoryArtifact | null {
+  return (
+    artifacts?.find(
+      (artifact) => artifact.type === "recording" && canDownloadArtifact(artifact),
+    ) ?? null
+  );
+}
+
+/**
  * The format the reader will actually receive — not the one the row is stored as.
  *
  * `artifact.format` is `TranslationRoomArtifact.FileFormat`, which describes the STORED bytes:

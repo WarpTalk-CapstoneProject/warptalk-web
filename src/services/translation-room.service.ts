@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
   CancelSeriesResult,
   CreateRecurringRoomResponse,
@@ -288,10 +289,29 @@ export const translationRoomService = {
    * code, and empty means unrestricted, so a caller may poll this as the user types without
    * painting an error over an incomplete code or momentarily emptying a picker.
    */
+  /**
+   * WT-480: share this meeting's record with everyone who took part, or take it back.
+   *
+   * One call covers the transcript, the AI summary and the recording — they are governed by a
+   * single room setting, which is why the button that calls this names all three.
+   *
+   * Its own route rather than the settings PUT: that endpoint refuses any room past WAITING, and
+   * a record can only be shared once the meeting has ended and the artifacts exist.
+   */
+  async setArtifactAccess(roomId: string, level: ArtifactAccessLevel) {
+    await apiClient.put<void>(API.translationRooms.artifactAccess(roomId), { level });
+  },
+
   async getJoinLanguagePolicy(code: string) {
-    const response = await apiClient.get<{ allowedTargetLanguages: string[] }>(
-      API.translationRooms.joinLanguagePolicy(code),
-    );
+    // WT-490: `roomLanguages` is the set the ROOM declares (source + targets). Both lists arrive
+    // separately and are intersected client-side by meetingLanguagesForRoom, because an empty list
+    // means "unrestricted from this source" and pre-intersecting would make either empty read as
+    // "offer nothing". Optional in the type so a web build in front of an older backend degrades to
+    // the previous behaviour instead of offering an empty picker.
+    const response = await apiClient.get<{
+      allowedTargetLanguages: string[];
+      roomLanguages?: string[];
+    }>(API.translationRooms.joinLanguagePolicy(code));
     return response.data;
   },
 

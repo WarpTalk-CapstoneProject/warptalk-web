@@ -43,6 +43,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
+import { checkoutTotal, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
 
 // We fetch plans dynamically now.
 
@@ -126,9 +127,7 @@ export default function WorkspacePlansPage() {
     queryFn: () => billingService.getPlans(),
   });
 
-  const activePlans = plansData
-    .filter((p) => p.isActive !== false)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const activePlans = selectablePlans(plansData);
 
   useEffect(() => {
     if (!isAuthenticated || !user) router.push("/login");
@@ -424,22 +423,12 @@ export default function WorkspacePlansPage() {
             const isCurrent = action.variant === "current";
             const isFeatured = index === 0; // Highlight the first plan or based on some custom logic
 
-            const monthlyPrice = plan.price;
-            let yearlyPrice = plan.price;
-            if (plan.billingCycle?.toLowerCase() === "yearly") {
-              // Assuming the plan's price is already the yearly price, but we display monthly equivalent
-              yearlyPrice = plan.price;
-            } else {
-              // Calculate yearly discount equivalent
-              yearlyPrice = Math.round(plan.price * 0.79); // 21% off
-            }
-
-            const displayPrice =
-              billingInterval === "yearly" ? yearlyPrice : monthlyPrice;
-            const displayTotal =
-              billingInterval === "yearly"
-                ? monthlyPrice * 12 * 0.79
-                : monthlyPrice;
+            // The 21% yearly discount used to be a bare 0.79 written twice, right here. It now
+            // lives in lib/billing/plan-pricing because /workspace/plans quotes the same prices
+            // before a workspace exists and the create form sends the charged amount to Stripe —
+            // three copies of one rule is three chances for the quote and the charge to disagree.
+            const displayPrice = monthlyDisplayPrice(plan, billingInterval);
+            const displayTotal = checkoutTotal(plan, billingInterval);
 
             let parsedFeatures: string[] = [];
             try {

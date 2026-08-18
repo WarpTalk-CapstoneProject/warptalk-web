@@ -50,6 +50,14 @@ export const API = {
      */
     joinLanguagePolicy: (code: string) =>
       `/translation-rooms/join-language-policy/${encodeURIComponent(code)}`,
+    /**
+     * WT-480 — who a finished meeting's record is shared with: its transcript, AI summary and
+     * recording together.
+     *
+     * Its own route rather than a field on the settings PUT, because that endpoint refuses any
+     * room past WAITING and this act only makes sense once the meeting has ended.
+     */
+    artifactAccess: (id: string) => `/translation-rooms/${id}/artifact-access`,
     get: (id: string) => `/translation-rooms/${id}`,
     participants: (id: string) => `/translation-rooms/${id}/participants`,
     invitations: (id: string) => `/translation-rooms/${id}/invitations`,
