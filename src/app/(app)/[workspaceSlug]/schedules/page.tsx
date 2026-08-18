@@ -520,7 +520,6 @@ function MonthGrid({
                       )}
                     >
                       <div className="flex items-center gap-1">
-                        <span className={cn("h-2.5 w-0.5 shrink-0 rounded-full", spineClass(meeting))} />
                         <span className={cn("truncate font-medium", meeting.status === "cancelled" && "line-through text-ink-muted")}>
                           {meeting.title}
                         </span>
@@ -692,7 +691,6 @@ function WeekCard({
       )}
     >
       <div className="flex items-center gap-1.5">
-        <span className={cn("h-3 w-0.5 shrink-0 rounded-full", spineClass(meeting))} />
         <span className="text-[10px] font-medium tabular-nums text-ink-muted">
           {formatTime(meeting.occursAt)}
         </span>
@@ -1147,22 +1145,22 @@ function meetingAudienceLabel(meeting: MyMeetingItem, viewerUserId: string | nul
 
 function spineClass(meeting: MyMeetingItem) {
   if (meeting.timeState === "live") return "bg-rose-500 motion-safe:animate-pulse";
-  if (meeting.timeState === "upcoming") return "bg-sky-500/70";
-  if (meeting.status === "cancelled") return "bg-ink-subtle/30";
+  if (meeting.timeState === "upcoming") return "bg-sky-500";
+  if (meeting.status === "cancelled") return "bg-slate-400";
   return "bg-emerald-500";
 }
 
 function rowToneClass(meeting: MyMeetingItem) {
+  if (meeting.status === "cancelled") {
+    return "border-l-4 border-l-slate-400 border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
+  }
   if (meeting.timeState === "live") {
-    return "border-rose-500/20 bg-rose-500/[0.06] hover:border-rose-500/35 hover:bg-rose-500/[0.1]";
+    return "border-l-4 border-l-rose-500 border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100 hover:bg-rose-500/20";
   }
   if (meeting.timeState === "upcoming") {
-    // The state is already carried by the accent bar and the badge. Tinting the whole row as
-    // well turned the content area into a green-and-blue wash, which is what stopped this page
-    // reading as white — the one thing every other workspace page does.
-    return "border-border bg-surface-1 hover:border-sky-500/30 hover:bg-sky-500/[0.04]";
+    return "border-l-4 border-l-sky-500 border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
   }
-  return "border-border bg-surface-1 hover:border-emerald-500/30 hover:bg-emerald-500/[0.04]";
+  return "border-l-4 border-l-emerald-500 border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
 }
 
 function stateBadgeClass(meeting: MyMeetingItem) {
