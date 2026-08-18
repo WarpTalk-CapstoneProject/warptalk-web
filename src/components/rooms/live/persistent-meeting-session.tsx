@@ -864,6 +864,29 @@ export function PersistentMeetingSession({
     import("@microsoft/signalr").HubConnection | null
   >(null);
 
+  /**
+   * Bumped every time the translation hub becomes usable — the initial start AND every
+   * reconnect. WT-528.
+   *
+   * The three value-sync effects below each wait up to 2.6s for the hub
+   * (HUB_RETRY_DELAYS_MS) and then give up. `startAndJoin` retries for up to 5s, and an
+   * initial connect is not a RECONNECT, so `onreconnected` never fires for it. That leaves a
+   * window in which a pick is dropped with nothing to resend it — and because the effects
+   * wrote their "applied" ref BEFORE awaiting, every later run bailed on the equality guard
+   * and the value never reached the server at all.
+   *
+   * Production, 18 Aug: a participant's control bar read "Japanese" while their row still
+   * said `en`, last written seven minutes earlier. They are not the same failure as a lost
+   * network call — the client believes it succeeded, so nothing retries and nothing warns.
+   * Their speech kept being routed as English, which is what "I set jp but they hear my real
+   * voice, and occasionally a dubbed one" actually was.
+   *
+   * Depending on this counter re-runs those effects once the hub is genuinely up. Together
+   * with only writing the applied ref AFTER a successful invoke, a dropped pick is always
+   * retried instead of silently kept.
+   */
+  const [hubGeneration, setHubGeneration] = useState(0);
+
   // Publish the REAL mic state to the roster, whenever it changes and however it changed.
   //
   // Keyed on `microphoneEnabled` on purpose: LocalMediaController mirrors that state from the
@@ -879,14 +902,17 @@ export function PersistentMeetingSession({
     });
   }, [microphoneEnabled, roomId]);
 
-  // Last listen language actually sent to the hub — skips a redundant SetListenLanguage
-  // call when this effect re-runs without the value having changed.
+  // Last listen language the hub CONFIRMED — skips a redundant SetListenLanguage call when
+  // this effect re-runs without the value having changed.
+  //
+  // WT-528: written after the invoke resolves, never before. Writing it up front made the
+  // ref a record of intent rather than of what the server holds, so a call that never went
+  // out still marked the value as applied and the equality guard above swallowed every retry.
   const appliedListenLanguageRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!listenLanguage || appliedListenLanguageRef.current === listenLanguage)
       return;
-    appliedListenLanguageRef.current = listenLanguage;
 
     let cancelled = false;
     (async () => {
@@ -902,18 +928,29 @@ export function PersistentMeetingSession({
         isReady: (hub) => hub.state === HubConnectionState.Connected,
         isCancelled: () => cancelled,
       });
-      if (!connection || cancelled) return;
+      // Superseded — the newer value owns the send, and its own run will confirm it.
+      if (cancelled) return;
+      // Ran out of retries with no usable hub. Leave the ref alone so the next hubGeneration
+      // re-runs this and sends it for real; saying nothing here is what let a language sit
+      // unapplied for minutes behind a control that claimed otherwise.
+      if (!connection) {
+        toast.error("Could not update the language you hear.", {
+          description: "Still reconnecting — retrying automatically.",
+        });
+        return;
+      }
       try {
         await connection.invoke("SetListenLanguage", roomId, listenLanguage);
+        if (!cancelled) appliedListenLanguageRef.current = listenLanguage;
       } catch {
-        toast.error("Could not update listen language.");
+        toast.error("Could not update the language you hear.");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [listenLanguage, roomId]);
+  }, [listenLanguage, roomId, hubGeneration]);
 
   // Read inside joinCurrentRoom/the reconnect handler below instead of closing over
   // sourceLanguage directly — same reasoning as targetLanguageRef above: a live
@@ -923,7 +960,12 @@ export function PersistentMeetingSession({
   useEffect(() => {
     sourceLanguageRef.current = sourceLanguage;
   }, [sourceLanguage]);
-  // Last speak language actually sent to the hub — mirrors appliedListenLanguageRef.
+  // Last speak language the hub CONFIRMED — mirrors appliedListenLanguageRef, including
+  // WT-528's rule that it is written only after the invoke resolves.
+  //
+  // This is the side that decides how a person is TRANSCRIBED and whether a route out of
+  // them exists at all, so a value that never lands is not a cosmetic loss: STT gets the
+  // wrong hint, and a pair that should be translated reads as already sharing a language.
   const appliedSpeakLanguageRef = useRef<string | null>(null);
 
   // Also the reconcile path for a join that had to go out before the participant record or
@@ -936,7 +978,6 @@ export function PersistentMeetingSession({
       appliedSpeakLanguageRef.current === sourceLanguage
     )
       return;
-    appliedSpeakLanguageRef.current = sourceLanguage;
 
     let cancelled = false;
     (async () => {
@@ -947,18 +988,25 @@ export function PersistentMeetingSession({
         isReady: (hub) => hub.state === HubConnectionState.Connected,
         isCancelled: () => cancelled,
       });
-      if (!connection || cancelled) return;
+      if (cancelled) return;
+      if (!connection) {
+        toast.error("Could not update the language you speak.", {
+          description: "Still reconnecting — retrying automatically.",
+        });
+        return;
+      }
       try {
         await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
+        if (!cancelled) appliedSpeakLanguageRef.current = sourceLanguage;
       } catch {
-        toast.error("Could not update speak language.");
+        toast.error("Could not update the language you speak.");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [sourceLanguage, roomId]);
+  }, [sourceLanguage, roomId, hubGeneration]);
 
   // Which TTS voice this listener wants to hear the AI interpreter speak in — like
   // listenLanguage, a live, in-meeting-changeable choice (media bar voice dropdown +
@@ -1037,7 +1085,6 @@ export function PersistentMeetingSession({
 
   useEffect(() => {
     if (appliedVoicePreferenceRef.current === voicePreference) return;
-    appliedVoicePreferenceRef.current = voicePreference;
 
     let cancelled = false;
     (async () => {
@@ -1048,13 +1095,18 @@ export function PersistentMeetingSession({
         isReady: (hub) => hub.state === HubConnectionState.Connected,
         isCancelled: () => cancelled,
       });
-      if (!connection || cancelled) return;
+      if (cancelled) return;
+      // WT-528: no toast here. Unlike the two languages, a voice preference that has not
+      // landed yet costs a stock voice for a few seconds, not a missing translation — and
+      // the retry on the next hubGeneration is silent and sufficient.
+      if (!connection) return;
       try {
         await connection.invoke(
           "SetVoicePreference",
           roomId,
           voicePreference || "",
         );
+        if (!cancelled) appliedVoicePreferenceRef.current = voicePreference;
       } catch {
         toast.error("Could not update voice preference.");
       }
@@ -1063,7 +1115,7 @@ export function PersistentMeetingSession({
     return () => {
       cancelled = true;
     };
-  }, [voicePreference, roomId]);
+  }, [voicePreference, roomId, hubGeneration]);
 
   // Choices for the media bar's language dropdown: the room's spoken language plus every
   // configured target — always includes whatever is currently selected so a value coming
@@ -1928,6 +1980,11 @@ export function PersistentMeetingSession({
         try {
           await connection.start();
           if (!cancelled) await joinCurrentRoom();
+          // WT-528: the hub is usable NOW. This retry loop runs for up to 5s while the
+          // language/voice sync effects give up after 2.6s, and an initial start fires no
+          // `onreconnected`, so without this signal anything they dropped in that window was
+          // dropped for the rest of the meeting. Bumping re-runs them against a live hub.
+          if (!cancelled) setHubGeneration((generation) => generation + 1);
           return;
         } catch {
           // Token refresh can race the initial SignalR negotiate; retry quietly.
@@ -1988,6 +2045,13 @@ export function PersistentMeetingSession({
             // Best-effort — the client's own local sourceLanguage state is unaffected.
           }
         }
+
+        // WT-528: the three blocks above can only replay what the hub already CONFIRMED —
+        // each ref is null until an invoke succeeded. A value picked while the socket was
+        // down has no ref to replay, so it needs the sync effects to run again; that is what
+        // this bump does. The replays stay because they cover the opposite case: a value the
+        // server has, on a connection that no longer remembers this client.
+        setHubGeneration((generation) => generation + 1);
       })();
     });
 
