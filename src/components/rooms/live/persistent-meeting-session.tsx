@@ -38,6 +38,8 @@ import {
   useEndTranslationRoom,
   useLeaveTranslationRoom,
   useRefreshDubVoice,
+  useFlashMode,
+  useSetFlashMode,
   useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
@@ -221,6 +223,10 @@ export function PersistentMeetingSession({
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
   const refreshDubVoice = useRefreshDubVoice(roomId);
+  // WT-B. Read by everyone in the room so a guest's switch sits where the host left it; written
+  // only by the room host, which is what the server enforces too.
+  const { data: flashModeEnabled = false } = useFlashMode(roomId);
+  const setFlashMode = useSetFlashMode(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } =
     useJoinMeeting();
   const { mutateAsync: registerParticipantAsync } = useJoinTranslationRoomByCode();
@@ -2682,7 +2688,14 @@ export function PersistentMeetingSession({
                     ownVoiceProfiles={ownVoiceProfiles}
                     onChangeDubVoice={handleChangeDubVoice}
                     cloneCapture={cloneCaptureState}
-          voiceCloneHasAudience={voiceCloneHasAudience}
+                    voiceCloneHasAudience={voiceCloneHasAudience}
+                    flashModeEnabled={flashModeEnabled}
+                    // isRoomHost, not isHost, for the same reason /pause and /resume use it: the
+                    // endpoint gates on the room's EFFECTIVE host, and a workspace admin — host-
+                    // like everywhere else — would be handed a switch that answers 403.
+                    onChangeFlashMode={
+                      isRoomHost ? (enabled) => setFlashMode.mutate(enabled) : undefined
+                    }
                     voiceEnabled={voiceEnabled}
                     handRaised={handRaised}
                     onCopyText={copyText}

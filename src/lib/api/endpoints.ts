@@ -93,6 +93,10 @@ export const API = {
     // there; this only tells the room to go and re-read it, so the change reaches the AI
     // pipeline without waiting for the next join or restart to trigger a publish.
     refreshDubVoice: (id: string) => `/translation-rooms/${id}/audio-routes/dub-voice/refresh`,
+    // WT-B "flash mode": stream audio to STT while a speaker is still talking. A ROOM setting —
+    // GET is open to any participant so a guest renders the switch in the host's position, PUT
+    // is host-only and answers 403 to anyone else.
+    flashMode: (id: string) => `/translation-rooms/${id}/audio-routes/flash-mode`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
