@@ -18,6 +18,7 @@
 import {
   ArrowFatDown,
   ArrowFatUp,
+  ArrowLeft,
   CheckCircle,
   Crown,
   Warning,
@@ -194,8 +195,40 @@ export default function PaymentPlansPage() {
     ? format(new Date(activeSub.currentPeriodEnd), "MMMM dd, yyyy")
     : null;
 
+  const handleBackNav = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else if (activeWorkspaceSlug) {
+      router.push(`/${activeWorkspaceSlug}/dashboard`);
+    } else {
+      router.push("/workspace/create");
+    }
+  };
+
   return (
-    <div className="flex min-h-full flex-col items-center pb-12 pt-8">
+    <div className="flex min-h-full flex-col items-center pb-12 pt-4">
+      {/* Top Navigation Bar */}
+      <div className="w-full max-w-4xl px-4 mb-4 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleBackNav}
+          className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted transition-colors hover:text-ink cursor-pointer"
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Workspace Creation</span>
+        </button>
+
+        {activeWorkspaceSlug && (
+          <button
+            type="button"
+            onClick={() => router.push(`/${activeWorkspaceSlug}/dashboard`)}
+            className="text-[12px] text-ink-muted transition-colors hover:text-ink cursor-pointer"
+          >
+            Return to Dashboard
+          </button>
+        )}
+      </div>
+
       {/* Header */}
       <div className="text-center max-w-2xl mb-12">
         <Badge
