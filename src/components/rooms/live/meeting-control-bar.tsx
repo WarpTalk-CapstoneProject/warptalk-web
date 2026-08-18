@@ -30,6 +30,21 @@ export { ALLOWED_REACTION_EMOJIS };
 
 export type MeetingLayoutMode = "auto" | "grid" | "spotlight" | "sidebar";
 
+function layoutModeLabel(mode: MeetingLayoutMode): string {
+  switch (mode) {
+    case "auto":
+      return "Auto";
+    case "grid":
+      return "Grid";
+    case "spotlight":
+      return "Spotlight";
+    case "sidebar":
+      return "Sidebar";
+    default:
+      return "Auto";
+  }
+}
+
 import { motion, AnimatePresence } from "motion/react";
 
 /**
