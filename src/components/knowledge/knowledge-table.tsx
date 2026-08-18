@@ -34,6 +34,7 @@ import {
   shouldShowPager,
   sourceLabel,
   SOURCE_TABS,
+  SOURCE_FALLBACK_LABELS,
 } from "@/lib/knowledge/knowledge-view";
 import { FACT_CATEGORIES } from "@/types/workspace-knowledge";
 import type {
