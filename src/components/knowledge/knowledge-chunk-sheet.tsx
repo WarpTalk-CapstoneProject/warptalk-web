@@ -188,24 +188,34 @@ function ChunkEditor({
 
         <Field label="Category">
           {canEdit ? (
-            <div className="flex flex-wrap gap-1.5">
-              <CategoryChip
-                label="None"
-                selected={category === null}
-                disabled={false}
-                onClick={() => setCategory(null)}
-              />
-              {FACT_CATEGORIES.map((value) => (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
                 <CategoryChip
-                  key={value}
-                  label={value}
-                  selected={category === value}
-                  // A category with nothing to categorise puts a blank row under a filter
-                  // chip. The server refuses it too; this is why the buttons go quiet.
-                  disabled={!nextFact}
-                  onClick={() => setCategory(value)}
+                  label="None"
+                  selected={category === null}
+                  disabled={false}
+                  onClick={() => setCategory(null)}
                 />
-              ))}
+                {FACT_CATEGORIES.map((value) => (
+                  <CategoryChip
+                    key={value}
+                    label={value}
+                    selected={category === value}
+                    disabled={!nextFact}
+                    onClick={() => setCategory(value)}
+                  />
+                ))}
+              </div>
+              <div className="pt-1">
+                <input
+                  type="text"
+                  value={category && !FACT_CATEGORIES.includes(category as any) ? category : ""}
+                  onChange={(e) => setCategory(e.target.value ? e.target.value : null)}
+                  placeholder="Or enter custom category name..."
+                  disabled={!nextFact}
+                  className="h-8 px-2.5 py-1 text-[11px] rounded-md border border-hairline bg-surface-1 text-ink focus:outline-none focus:ring-1 focus:ring-[var(--primary)] w-full max-w-[260px] disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
             </div>
           ) : (
             <p className="text-[12px] capitalize text-ink">
