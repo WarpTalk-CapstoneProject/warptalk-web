@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
@@ -13,6 +13,12 @@ import {
 } from "@/lib/meeting/language-choice";
 import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
+import {
+  NOISE_REDUCTION_MODES,
+  noiseReductionDescription,
+  noiseReductionLabel,
+  type NoiseReductionMode,
+} from "@/lib/meeting/noise-reduction";
 import { Switch } from "@/components/ui/switch";
 // Button, Dialog* and the Fingerprint icon were imported and never used — dead since whatever
 // removed their last call site, and invisible because unused imports are a warning here rather
@@ -86,6 +92,7 @@ export function MeetingControlBar({
   voiceCloneEnabled,
   voiceCloneHasAudience = false,
   flashModeEnabled = false,
+  noiseReductionMode = "off",
   onChangeFlashMode,
   dubVoice,
   ownVoiceProfiles,
@@ -101,6 +108,7 @@ export function MeetingControlBar({
   onToggleCamera,
   onToggleMicrophone,
   onToggleNoiseSuppression,
+  onChangeNoiseReductionMode,
   onToggleBackgroundBlur,
   onToggleScreenShare,
   onLayoutChange,
@@ -184,6 +192,7 @@ export function MeetingControlBar({
    * answers "how fast is the room", and it applies to EVERYBODY in it.
    */
   flashModeEnabled?: boolean;
+  noiseReductionMode?: NoiseReductionMode;
   /** Omit to render the state read-only — the host owns this setting, a guest only sees it. */
   onChangeFlashMode?: (enabled: boolean) => void;
   /** false = this listener wants transcript only, no AI/original audio played. Omit to hide the toggle. */
@@ -202,6 +211,8 @@ export function MeetingControlBar({
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
   onToggleNoiseSuppression: () => void;
+  /** Absent while the room is still loading; the row renders read-only until it arrives. */
+  onChangeNoiseReductionMode?: (mode: NoiseReductionMode) => void;
   onToggleBackgroundBlur: () => void;
   onToggleScreenShare: () => void;
   onLayoutChange: (layout: MeetingLayoutMode) => void;
@@ -241,7 +252,9 @@ export function MeetingControlBar({
   onToggleRecording?: () => void;
 }) {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<"root" | "layout" | "voice">("root");
+  const [settingsSection, setSettingsSection] = useState<
+    "root" | "layout" | "voice" | "microphone"
+  >("root");
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
   const [isHostControlsMenuOpen, setIsHostControlsMenuOpen] = useState(false);
   // WT-272 wrote this hook and then attached it to one flyout of three. The reaction picker
@@ -557,6 +570,19 @@ export function MeetingControlBar({
                     value={noiseSuppressionEnabled ? "On" : "Off"}
                     onClick={onToggleNoiseSuppression}
                   />
+                  {/* Deliberately the NEXT row, and deliberately worded differently. The row
+                      above filters the microphone other people hear (Krisp, client-side). This one
+                      filters what the transcriber hears, which is a different layer with a
+                      different audience — and the reason WT-427 could never be reached from a UI
+                      at all was that it had no row anywhere. Adjacent so the two can be compared;
+                      named so they cannot be mistaken for each other. */}
+                  <SettingsRow
+                    label="Mic noise filter"
+                    icon={<Microphone className="h-4 w-4" />}
+                    value={noiseReductionLabel(noiseReductionMode)}
+                    onClick={() => setSettingsSection("microphone")}
+                    hasSubmenu
+                  />
                   <SettingsRow
                     label="Background blur"
                     icon={<UserFocus className="h-4 w-4" />}
@@ -602,6 +628,53 @@ export function MeetingControlBar({
                     icon={<Hash className="h-4 w-4" />}
                     onClick={() => onCopyText(roomCode, "Room code")}
                   />
+                </>
+              ) : null}
+
+              {settingsSection === "microphone" ? (
+                <>
+                  <SettingsPanelHeader
+                    title="Mic noise filter"
+                    onBack={() => setSettingsSection("root")}
+                  />
+                  {/* Says which layer this is, because the menu it came from has a row called
+                      "Noise suppression" two lines above and somebody will otherwise reasonably
+                      assume this is the same setting twice. */}
+                  <p className="px-2.5 pb-1 pt-0.5 text-[11px] leading-snug text-ink-muted">
+                    Filters your microphone before it is transcribed. Changes how accurately your
+                    words are recognised — not what other people hear.
+                  </p>
+                  {NOISE_REDUCTION_MODES.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      // Read-only rather than hidden while the handler is missing: a person whose
+                      // transcript is failing needs to see that this control exists even in the
+                      // second before the room has loaded.
+                      disabled={!onChangeNoiseReductionMode}
+                      onClick={() => {
+                        onChangeNoiseReductionMode?.(mode);
+                        closeSettingsMenu();
+                      }}
+                      className={`flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors disabled:opacity-60 ${
+                        noiseReductionMode === mode
+                          ? "bg-primary/10 text-primary"
+                          : "text-ink hover:bg-canvas"
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-medium">
+                          {noiseReductionLabel(mode)}
+                        </span>
+                        <span className="block text-[11px] leading-snug text-ink-subtle">
+                          {noiseReductionDescription(mode)}
+                        </span>
+                      </span>
+                      {noiseReductionMode === mode ? (
+                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      ) : null}
+                    </button>
+                  ))}
                 </>
               ) : null}
 
