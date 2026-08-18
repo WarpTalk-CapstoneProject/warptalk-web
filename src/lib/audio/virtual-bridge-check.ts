@@ -62,6 +62,35 @@ function findDeviceId(devices: MediaDeviceInfo[], label: string, kind: MediaDevi
 }
 
 /**
+ * The two device ids the bridge legs need, or null for whichever is not installed.
+ *
+ * Separate from `checkVirtualBridge` because the two answer different questions and cost very
+ * different amounts. This one only reads the device list — cheap enough to run on entering a
+ * room. The check plays a tone through each device and listens for it, which takes about a
+ * second per leg and holds the devices open, so it belongs to the setup wizard.
+ *
+ * A caller that only needs to ROUTE audio wants this one: routing to a device that is present but
+ * silently not carrying is a wizard problem to diagnose, not a reason to refuse to route.
+ *
+ * Note the kinds are crossed on purpose. The device Meet uses as its MICROPHONE is something
+ * WarpTalk plays INTO, so it is looked up as an output; the device Meet uses as its SPEAKER is
+ * something WarpTalk records FROM, so it is looked up as an input.
+ */
+export async function findBridgeDeviceIds(): Promise<{
+  outboundDeviceId: string | null;
+  inboundDeviceId: string | null;
+}> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
+    return { outboundDeviceId: null, inboundDeviceId: null };
+  }
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return {
+    outboundDeviceId: findDeviceId(devices, OUTBOUND_DEVICE_LABEL, "audiooutput"),
+    inboundDeviceId: findDeviceId(devices, INBOUND_DEVICE_LABEL, "audioinput"),
+  };
+}
+
+/**
  * Plays a tone into `deviceId`'s output and listens on its input, returning whether the tone came
  * back. Everything it opens is closed on every path, including the failures — a leaked
  * AudioContext keeps the virtual device busy and the next attempt then fails for the wrong reason.
