@@ -248,7 +248,7 @@ export default function MyMeetingsPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[285px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3.5 py-5 lg:flex">
+        <aside className="hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5 lg:flex">
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
               <button
@@ -280,7 +280,7 @@ export default function MyMeetingsPage() {
                 month={monthAnchor}
                 onMonthChange={setMonthAnchor}
                 onSelect={(date) => date && goToDay(date)}
-                className="w-full p-0.5"
+                className="w-full p-0.5 [--cell-size:1.8rem]"
                 classNames={{
                   month_caption: "hidden",
                   nav: "hidden",
