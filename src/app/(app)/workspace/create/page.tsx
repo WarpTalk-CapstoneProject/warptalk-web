@@ -16,6 +16,7 @@ import {
 } from "@/lib/billing/checkout-intent";
 import {
   checkoutTotal,
+  checkoutCurrency,
   readBillingInterval,
   selectablePlans,
 } from "@/lib/billing/plan-pricing";
@@ -308,7 +309,8 @@ export default function CreateWorkspaceDemoPage() {
        * gap where that used to happen.
        *
        * The amount comes from the shared pricing rule, so it is the same figure quoted on the
-       * plan grid one screen ago. `currency: "vnd"` matches every other checkout in this app.
+       * plan grid one screen ago, and its currency comes from the same plan (WT-518) rather
+       * than a literal beside it — a USD plan quoted in USD must not be charged in VND.
        */
       if (!chosenPlan) {
         // The plan list has not resolved, or the slug names a plan that is no longer sold. The
@@ -324,7 +326,7 @@ export default function CreateWorkspaceDemoPage() {
           userId: user!.id,
           workspaceId: workspace.id,
           amount: checkoutTotal(chosenPlan, billingInterval),
-          currency: "vnd",
+          currency: checkoutCurrency(chosenPlan),
           paymentType: "Subscription",
           planSlug: chosenPlan.slug,
           billingCycle: billingInterval,
