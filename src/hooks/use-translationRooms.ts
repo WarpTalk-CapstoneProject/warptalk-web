@@ -279,6 +279,22 @@ export function useSetVoiceCloneConsent(roomId: string) {
   });
 }
 
+/**
+ * Make a dub-voice change taken in AuthService reach THIS meeting now.
+ *
+ * Called after VoiceProfileService.setDubVoice, never instead of it: the setting lives in
+ * AuthService, which knows nothing about rooms, and the AI pipeline learns it only from a route
+ * payload TranslationRoomService builds. Without this the change is correct everywhere except
+ * the meeting the person is standing in.
+ */
+export function useRefreshDubVoice(roomId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      await translationRoomService.refreshDubVoice(roomId);
+    },
+  });
+}
+
 /** End translationRoom mutation */
 export function useEndTranslationRoom() {
   const queryClient = useQueryClient();

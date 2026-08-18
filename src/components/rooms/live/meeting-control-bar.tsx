@@ -85,6 +85,9 @@ export function MeetingControlBar({
   voiceCatalog,
   voiceCloneEnabled,
   voiceCloneHasAudience = false,
+  dubVoice,
+  ownVoiceProfiles,
+  onChangeDubVoice,
   cloneCapture,
   voiceEnabled,
   handRaised,
@@ -157,6 +160,19 @@ export function MeetingControlBar({
   voiceCloneHasAudience?: boolean;
   /** WT-420: what the clone pipeline is doing to THIS participant's microphone, or null. */
   cloneCapture?: VoiceCloneStateDto | null;
+  /**
+   * The voice THIS participant is dubbed in, or null for "clone me live in this meeting".
+   *
+   * The opposite direction from voicePreference above, and keeping them apart is the point:
+   * that one is which voice you HEAR other people in, this one is how YOU sound to them. They
+   * were one merged list, so choosing a library voice to listen in silently turned off your own
+   * cloned voice for everybody else.
+   */
+  dubVoice?: string | null;
+  /** This participant's own uploaded voice profiles that have a usable provider voice behind them. */
+  ownVoiceProfiles?: { id: string; name: string; voiceId: string }[];
+  /** Pass null to go back to cloning live from the meeting. Omit to hide the "Your voice" section. */
+  onChangeDubVoice?: (voiceId: string | null) => void;
   /** false = this listener wants transcript only, no AI/original audio played. Omit to hide the toggle. */
   voiceEnabled?: boolean;
   /** Whether THIS participant's hand is currently raised. Omit (or omit onToggleRaiseHand) to hide the control. */
@@ -237,8 +253,12 @@ export function MeetingControlBar({
   const voiceSelection = describeVoiceSelection({
     voiceEnabled,
     voiceCloneEnabled,
-    voicePreference,
+    // The DUB voice, not voicePreference. This row answers "how do I sound", and voicePreference
+    // answers the opposite question — which is why it used to claim listeners heard a speaker in
+    // a voice that speaker had only ever chosen for their own listening.
+    dubVoice,
     voiceCatalog,
+    ownVoiceProfiles,
     hasAudience: voiceCloneHasAudience,
   });
 
@@ -634,19 +654,82 @@ export function MeetingControlBar({
                           The detail line carries the two facts that were previously unknowable
                           from inside a meeting: whether this is even reaching anyone, and that
                           consent is what turns it on. */}
-                      {onChangeVoiceCloneConsent ? (
-                        <VoiceOption
-                          label="My voice"
-                          detail={
-                            voiceCloneHasAudience
-                              ? "Cloned from how you sound in this meeting"
-                              : "Nobody is listening in another language yet"
-                          }
-                          value={MY_VOICE_OPTION}
-                          active={Boolean(voiceCloneEnabled)}
-                          onSelect={() => onChangeVoiceCloneConsent(true)}
-                          close={closeSettingsMenu}
-                        />
+                      {/* YOUR VOICE — one direction only.
+                          Whose voice a dub is spoken in is the speaker's decision; the listener
+                          chooses the LANGUAGE, and the same voice is rendered once per language.
+                          These options used to be mixed into the list below, which points the
+                          other way, so picking a library voice to LISTEN in silently turned off
+                          your own cloned voice for everybody else in the room. */}
+                      {onChangeDubVoice || onChangeVoiceCloneConsent ? (
+                        <>
+                          <p className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
+                            Your voice
+                          </p>
+                          {onChangeVoiceCloneConsent ? (
+                            <VoiceOption
+                              label="My voice"
+                              detail={
+                                voiceCloneHasAudience
+                                  ? "Cloned from how you sound in this meeting"
+                                  : "Nobody is listening in another language yet"
+                              }
+                              value={MY_VOICE_OPTION}
+                              active={Boolean(voiceCloneEnabled) && !dubVoice}
+                              onSelect={() => {
+                                // Both halves, because they are two different settings that
+                                // together mean "clone me": consent is the per-room permission,
+                                // and a dub voice left set would win over the clone entirely.
+                                onChangeDubVoice?.(null);
+                                onChangeVoiceCloneConsent(true);
+                              }}
+                              close={closeSettingsMenu}
+                            />
+                          ) : null}
+                          {onChangeDubVoice
+                            ? (ownVoiceProfiles ?? []).map((profile) => (
+                                <VoiceOption
+                                  key={profile.id}
+                                  label={profile.name}
+                                  detail="A recording you uploaded"
+                                  value={profile.voiceId}
+                                  active={dubVoice === profile.voiceId}
+                                  onSelect={(voiceId) => onChangeDubVoice(voiceId)}
+                                  close={closeSettingsMenu}
+                                />
+                              ))
+                            : null}
+                          {onChangeDubVoice
+                            ? [...(voiceCatalog ?? [])]
+                                .sort(
+                                  (a, b) =>
+                                    (a.gender || "").localeCompare(b.gender || "") ||
+                                    a.name.localeCompare(b.name),
+                                )
+                                .map((voice) => (
+                                  <VoiceOption
+                                    key={`dub-${voice.id}`}
+                                    label={voice.name}
+                                    detail={`A library voice${voice.gender ? ` · ${voice.gender}` : ""}`}
+                                    value={voice.id}
+                                    active={dubVoice === voice.id}
+                                    onSelect={(voiceId) => onChangeDubVoice(voiceId)}
+                                    close={closeSettingsMenu}
+                                  />
+                                ))
+                            : null}
+                          <div className="my-1 h-[1px] bg-surface-3" />
+                          <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
+                            Voices you hear
+                          </p>
+                          {/* Said out loud because it is not guessable, and because getting it
+                              wrong is invisible: a voice picked here replaces the stand-in for
+                              people who have NOT chosen how they sound. Anyone who cloned their
+                              voice or picked their own is heard as themselves regardless — see
+                              TTSWorker._resolve_voice_variants. */}
+                          <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">
+                            Only applies to people who have not chosen a voice of their own.
+                          </p>
+                        </>
                       ) : null}
 
                       {/* "Assigned, not matched" is the honest description of the default: the

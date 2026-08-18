@@ -37,6 +37,7 @@ import {
   sessionsKey,
   useEndTranslationRoom,
   useLeaveTranslationRoom,
+  useRefreshDubVoice,
   useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
@@ -63,7 +64,7 @@ import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
-import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import { useDubVoice, useSetDubVoice, useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { buildMeetingEndedPath } from "@/lib/meeting/meeting-navigation";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
@@ -219,6 +220,7 @@ export function PersistentMeetingSession({
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
+  const refreshDubVoice = useRefreshDubVoice(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } =
     useJoinMeeting();
   const { mutateAsync: registerParticipantAsync } = useJoinTranslationRoomByCode();
@@ -1168,6 +1170,64 @@ export function PersistentMeetingSession({
   // cloning itself keeps working correctly either way; only the toggle's initial
   // display can be stale until the participant touches it again).
   const [voiceCloneEnabled, setVoiceCloneEnabled] = useState(false);
+
+  // HOW THIS PARTICIPANT SOUNDS — the opposite direction from voicePreference above.
+  //
+  // Server-backed, unlike voiceCloneEnabled beside it: this one is a user setting in AuthService
+  // rather than a per-room flag, so it survives a refresh and is worth reading back.
+  const { data: dubVoice } = useDubVoice();
+  const setDubVoice = useSetDubVoice();
+
+  // Only profiles with a provider voice behind them. An uploaded recording has none until it has
+  // been cloned, and offering it would let somebody pick a voice that cannot be used — the same
+  // silent nothing WT-396 exists to remove.
+  const ownVoiceProfiles = useMemo(
+    () =>
+      (savedVoiceProfiles ?? [])
+        .filter((profile) => profile.providerVoiceId && profile.isActive)
+        .map((profile) => ({
+          id: profile.id,
+          name: profile.displayName || "My voice",
+          voiceId: profile.providerVoiceId!,
+        })),
+    [savedVoiceProfiles],
+  );
+
+  /**
+   * Pick the voice this participant is dubbed in, or null to be cloned live in the meeting.
+   *
+   * TWO CALLS, AND THE SECOND ONE IS THE POINT. The setting is written to AuthService, which
+   * knows nothing about rooms; the AI pipeline learns it only from an AUDIO_ROUTES_UPDATED
+   * payload that TranslationRoomService builds. Without the refresh the change is correct
+   * everywhere except the meeting the person is standing in, until somebody joins or translation
+   * is restarted and a publish happens for some unrelated reason.
+   */
+  function handleChangeDubVoice(voiceId: string | null) {
+    setDubVoice.mutate(
+      // A voice of your own is accepted without a language; a catalogue pick is validated
+      // against one — see VoiceProfileService.IsVoiceChoosableByAsync.
+      {
+        voiceId,
+        language: ownVoiceProfiles.some((profile) => profile.voiceId === voiceId)
+          ? null
+          : sourceLanguage,
+      },
+      {
+        onSuccess: async () => {
+          try {
+            await refreshDubVoice.mutateAsync();
+          } catch {
+            // The choice IS saved; only its arrival in this meeting is late. Saying so beats
+            // both silence and an error that implies the setting did not stick.
+            toast.error("Saved, but this meeting may keep the old voice until you rejoin.");
+            return;
+          }
+          toast.success(voiceId ? "Saved. You will be dubbed in this voice." : "Back to cloning your voice live.");
+        },
+        onError: () => toast.error("Could not change the voice you are dubbed in."),
+      },
+    );
+  }
 
   function handleChangeVoiceCloneConsent(enabled: boolean) {
     const previous = voiceCloneEnabled;
@@ -2618,6 +2678,9 @@ export function PersistentMeetingSession({
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
+                    dubVoice={dubVoice ?? null}
+                    ownVoiceProfiles={ownVoiceProfiles}
+                    onChangeDubVoice={handleChangeDubVoice}
                     cloneCapture={cloneCaptureState}
           voiceCloneHasAudience={voiceCloneHasAudience}
                     voiceEnabled={voiceEnabled}

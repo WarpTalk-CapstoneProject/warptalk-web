@@ -26,10 +26,21 @@ export type VoiceSelectionInput = {
   voiceEnabled?: boolean;
   /** Whether this participant has consented to have their own voice cloned. */
   voiceCloneEnabled?: boolean;
-  /** A provider voice id this participant explicitly chose, or null for the automatic default. */
-  voicePreference?: string | null;
+  /**
+   * The voice this participant is DUBBED IN, or null to be cloned live in the meeting.
+   *
+   * This used to read `voicePreference` — the voice you HEAR OTHER PEOPLE in — and describe it
+   * as "listeners hear your translated speech in X". That was the wrong direction, so the
+   * collapsed row told a speaker how they sounded based on a setting that has never affected
+   * how they sound. The two are now separate controls in the meeting panel, and this is the one
+   * that answers the question this module asks.
+   */
+  dubVoice?: string | null;
   /** Voices offered for the current language. */
   voiceCatalog?: VoiceOptionDto[];
+  /** This participant's own uploaded profiles, so a voice of theirs can be named rather than
+   *  reported as "Unavailable" merely because it is not in the public catalogue. */
+  ownVoiceProfiles?: { name: string; voiceId: string }[];
   /**
    * Whether anybody is listening in a language other than this participant's own.
    *
@@ -55,8 +66,9 @@ export function describeVoiceSelection(input: VoiceSelectionInput): VoiceSelecti
   const {
     voiceEnabled,
     voiceCloneEnabled,
-    voicePreference,
+    dubVoice,
     voiceCatalog,
+    ownVoiceProfiles,
     hasAudience = true,
   } = input;
 
@@ -78,26 +90,32 @@ export function describeVoiceSelection(input: VoiceSelectionInput): VoiceSelecti
     ? " Nobody is listening in another language right now, so nothing is being dubbed."
     : "";
 
+  // Checked BEFORE the clone, because that is the order the worker resolves them in: a voice
+  // this person deliberately picked wins over one cloned live, and reporting the clone while the
+  // pipeline uses the pick would be the same lie this module exists to stop telling.
+  // See TTSWorker._resolve_voice_variants.
+  if (dubVoice) {
+    const mine = ownVoiceProfiles?.find((profile) => profile.voiceId === dubVoice);
+    const fromCatalog = voiceCatalog?.find((voice) => voice.id === dubVoice);
+    const named = mine?.name ?? fromCatalog?.name;
+    return {
+      kind: "picked",
+      // A voice no longer offered for this language is not a bug worth hiding — the language
+      // changed under it. Say so rather than reading as "Automatic", which is what the row did
+      // before.
+      label: named ?? "Unavailable voice",
+      detail: named
+        ? `Listeners hear your translated speech in ${named}.${audienceNote}`
+        : "That voice is not offered for this language. Pick another one.",
+      inert,
+    };
+  }
+
   if (voiceCloneEnabled) {
     return {
       kind: "cloned",
       label: "My voice",
       detail: `Listeners hear your translated speech in your own voice.${audienceNote}`,
-      inert,
-    };
-  }
-
-  if (voicePreference) {
-    const chosen = voiceCatalog?.find((voice) => voice.id === voicePreference);
-    return {
-      kind: "picked",
-      // A preference that names a voice no longer in this language's catalog is not a bug worth
-      // hiding — the language changed under it. Say the id is unavailable rather than silently
-      // reading as "Automatic", which is what the row did before.
-      label: chosen?.name ?? "Unavailable voice",
-      detail: chosen
-        ? `Listeners hear your translated speech in ${chosen.name}.${audienceNote}`
-        : "That voice is not offered for this language. Pick another one.",
       inert,
     };
   }

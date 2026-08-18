@@ -61,6 +61,18 @@ export interface SetDubVoiceRequest {
 }
 
 /**
+ * Ask to hear one voice speaking one sentence.
+ *
+ * Both fields are required, unlike SetDubVoiceRequest above where the language is only needed
+ * to validate a catalogue pick. Here the language decides what the voice SAYS, so there is no
+ * sensible default to fall back to.
+ */
+export interface PreviewVoiceRequest {
+  voiceId: string;
+  language: string;
+}
+
+/**
  * What this person has decided about having their voice cloned.
  *
  * `hasDecided` is separate from `isGranted` deliberately: "never been asked" and "asked and said
