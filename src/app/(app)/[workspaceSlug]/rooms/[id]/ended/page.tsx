@@ -34,12 +34,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Archive,
   ArrowClockwise,
-  ChatCircleText,
   DownloadSimple,
-  FileText,
-  Sparkle,
   Spinner,
   Star,
   WarningCircle,
@@ -47,9 +43,6 @@ import {
 
 import { FeedbackDialog } from "@/components/rooms/feedback-dialog";
 import {
-  ArtifactsPanel,
-  MeetingRecordTabButton,
-  SummaryPanel,
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
@@ -57,16 +50,20 @@ import { useTranslationRoomFeedbackState } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/api/errors";
 import { formatMeetingDuration, resolveMeetingDurationSeconds } from "@/lib/meeting/room-history-mapping";
 import { translationRoomService } from "@/services/translation-room.service";
+import { toast } from "sonner";
+
+import {
+  MeetingRecordSection,
+  MeetingTranscriptArtifact,
+  useMeetingTranscript,
+} from "@/components/rooms/meeting-record-section";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
-
-type RecordTab = "summary" | "transcript" | "files";
 
 export default function RoomEndedPage() {
   const { id: roomId, workspaceSlug } = useParams<{ id: string; workspaceSlug: string }>();
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-
-  const [tab, setTab] = useState<RecordTab>("summary");
 
   // WT-449: ask for the rating rather than waiting to be asked for it.
   //
@@ -117,6 +114,28 @@ export default function RoomEndedPage() {
   const room = roomQuery.data;
   const artifacts = useMemo<RoomHistoryArtifact[]>(() => record?.artifacts ?? [], [record]);
   const transcriptArtifact = artifacts.find((artifact) => artifact.type === "transcript_export");
+
+  // Derived exactly as the room page derives it, including room.isHost — a host transfer leaves
+  // hostId behind, and this page is where a host is sent the moment they end a meeting, so getting
+  // it wrong here hides the publish control from the one person entitled to use it.
+  const user = useAuthStore((state) => state.user);
+  const isHost = room ? room.hostId === user?.id || Boolean(room.isHost) : false;
+
+  // The saved segments, not the export file's text — which is what makes a summary citation
+  // clickable here. See useMeetingTranscript for why this is one implementation and not two.
+  const {
+    transcript: savedTranscript,
+    segments: transcriptSegments,
+    highlightedSegmentId,
+    jumpToTranscriptMoment,
+    refetchSegments,
+  } = useMeetingTranscript(roomId);
+
+  async function copyText(value: string, label: string) {
+    if (!value) return;
+    await navigator.clipboard?.writeText(value);
+    toast.success(`${label} copied.`);
+  }
 
   const durationSeconds = record
     ? resolveMeetingDurationSeconds({
@@ -186,32 +205,24 @@ export default function RoomEndedPage() {
         >
           View history
         </Link>
+        {/* The record below is the same component the room page renders, but the room page also
+            carries the invitees, the notes and the recurrence — so the way back is worth keeping
+            rather than leaving this page as a cul-de-sac. */}
+        <Link
+          href={`/${workspaceSlug}/rooms/${roomId}`}
+          className="inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium text-ink-muted transition-colors hover:text-ink"
+        >
+          Open room
+        </Link>
       </div>
 
-      <div className="mt-7 border-b border-border">
-        <div className="flex items-center gap-1" role="tablist">
-          <MeetingRecordTabButton
-            active={tab === "summary"}
-            onClick={() => setTab("summary")}
-            icon={Sparkle}
-            label="Summary"
-          />
-          <MeetingRecordTabButton
-            active={tab === "transcript"}
-            onClick={() => setTab("transcript")}
-            icon={ChatCircleText}
-            label="Transcript"
-          />
-          <MeetingRecordTabButton
-            active={tab === "files"}
-            onClick={() => setTab("files")}
-            icon={Archive}
-            label="Files"
-            count={artifacts.length}
-          />
-        </div>
-      </div>
-
+      {/* The room's own Meeting record, not a third of it.
+          This page used to render its own three tabs, and its transcript tab read the export
+          file's plain text — so a summary point had nothing to scroll to, and the publish and
+          regenerate controls were not here at all. A host who has just ended a meeting is the
+          person most likely to want both, and was the one person who could not reach them.
+          Same component as rooms/[id], so a fix to either lands on both — which is what this
+          page's own docstring always claimed. */}
       <div className="mt-5">
         {isLoading ? (
           <Placeholder icon={<Spinner className="h-5 w-5 animate-spin" />} title="Loading this meeting" />
@@ -241,20 +252,42 @@ export default function RoomEndedPage() {
             title="Still writing this up"
             description="The transcript and the AI summary are produced after a meeting ends — usually within a minute. This page updates on its own."
           />
-        ) : tab === "summary" ? (
-          <SummaryPanel
-            room={record}
-            busyArtifactId={busyArtifactId}
-            onDownload={downloadArtifact}
-          />
-        ) : tab === "transcript" ? (
-          <TranscriptReader artifact={transcriptArtifact} />
         ) : (
-          <ArtifactsPanel
-            artifacts={artifacts}
-            busyArtifactId={busyArtifactId}
-            onDownload={downloadArtifact}
-          />
+          <>
+            {/* Said plainly, because the alternative is a host regenerating a summary of nothing
+                and concluding the feature is broken. A meeting where translation was never
+                started has no transcript, and no transcript is no summary. */}
+            {transcriptSegments.length === 0 ? (
+              <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[12.5px] leading-snug text-amber-700 dark:text-amber-400">
+                Nothing was transcribed in this meeting, so there is nothing to summarise.
+                A transcript is only produced once translation has been started.
+              </p>
+            ) : null}
+            <MeetingRecordSection
+              roomId={roomId}
+              isHost={isHost}
+              artifactAccess={room?.settings?.artifactAccess}
+              endedRecord={record}
+              onRecordChanged={() => void recordQuery.refetch()}
+              onJumpToMoment={jumpToTranscriptMoment}
+              transcript={
+                <MeetingTranscriptArtifact
+                  segments={transcriptSegments}
+                  baseTime={savedTranscript?.createdAt || record.startedAt || undefined}
+                  roomId={roomId}
+                  currentUserId={user?.id}
+                  isEnded
+                  onCopy={copyText}
+                  transcriptId={savedTranscript?.id}
+                  transcriptStatus={savedTranscript?.status}
+                  canEdit={isHost}
+                  onSegmentsChanged={refetchSegments}
+                  highlightedSegmentId={highlightedSegmentId}
+                />
+              }
+              transcriptCount={transcriptSegments.length}
+            />
+          </>
         )}
       </div>
 
@@ -268,88 +301,7 @@ export default function RoomEndedPage() {
   );
 }
 
-/**
- * The transcript, laid out as a conversation.
- *
- * Read through the download endpoint rather than from the list payload, for two reasons: the list
- * does not always carry an artifact's content, and the download path is where the server renders
- * the stored markdown down to plain text. So this receives `[Nam (VI)]: xin chào` — a shape worth
- * parsing — instead of `**[Nam (VI)]**: xin chào`, which is a shape worth apologising for.
- *
- * Cached forever once fetched: a finished meeting's transcript cannot change under the reader.
- */
-function TranscriptReader({ artifact }: { artifact: RoomHistoryArtifact | undefined }) {
-  const { data, status } = useQuery({
-    queryKey: ["translationRooms", "artifact", artifact?.id, "content"],
-    queryFn: async () => (await translationRoomService.artifactDownload(artifact!.id)).data,
-    enabled: Boolean(artifact?.id),
-    staleTime: Infinity,
-  });
 
-  if (!artifact) {
-    return (
-      <Placeholder
-        icon={<FileText className="h-5 w-5" />}
-        title="No transcript"
-        description="Nothing was transcribed for this meeting."
-      />
-    );
-  }
-
-  if (status === "pending") {
-    return <Placeholder icon={<Spinner className="h-5 w-5 animate-spin" />} title="Loading transcript" />;
-  }
-
-  if (status === "error" || !data?.content?.trim()) {
-    return (
-      <Placeholder
-        icon={<WarningCircle className="h-5 w-5" />}
-        title="Transcript unavailable"
-        description="This meeting's transcript could not be read."
-      />
-    );
-  }
-
-  const lines = parseTranscript(data.content);
-
-  return (
-    <div className="space-y-3 pb-4">
-      {lines.map((line, index) =>
-        line.speaker ? (
-          <p key={index} className="text-[13px] leading-6 text-ink">
-            <span className="mr-2 font-medium text-ink-muted">{line.speaker}</span>
-            {line.text}
-          </p>
-        ) : (
-          // The header block and any status sentence. Quieter than speech, and never given a
-          // speaker column it does not have.
-          <p key={index} className="text-[12px] leading-6 text-ink-subtle">
-            {line.text}
-          </p>
-        ),
-      )}
-    </div>
-  );
-}
-
-/**
- * `[Nam (VI)]: xin chào` → a speaker and what they said.
- *
- * Deliberately conservative: only a line that BEGINS with a bracketed tag and a colon is treated
- * as speech. Everything else — the generated header, the "no speech recorded" sentence — is passed
- * through as prose rather than guessed at.
- */
-function parseTranscript(content: string): { speaker?: string; text: string }[] {
-  return content
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const match = /^\[([^\]]+)\]:\s*(.*)$/.exec(line);
-      return match ? { speaker: match[1], text: match[2] } : { text: line };
-    });
-}
 
 function Placeholder({
   icon,

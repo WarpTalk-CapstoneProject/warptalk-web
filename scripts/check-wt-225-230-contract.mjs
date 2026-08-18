@@ -12,6 +12,7 @@ const [
   chatPanel,
   voiceProfiles,
   packageJson,
+  recordSection,
 ] = await Promise.all([
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
   read("src/components/rooms/live/persistent-meeting-session.tsx"),
@@ -19,6 +20,11 @@ const [
   read("src/components/rooms/live/chat-panel.tsx"),
   read("src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx"),
   read("package.json"),
+  // The Meeting record moved out of the room page so the room's /ended page could render the SAME
+  // one instead of a hand-rolled third of it. The capabilities below did not change; only the file
+  // holding them did, so these checks follow it rather than being relaxed. See
+  // check-meeting-record-is-shared.mjs, which pins the move itself.
+  read("src/components/rooms/meeting-record-section.tsx"),
 ]);
 
 const startedHandler = meetingSession.slice(
@@ -29,7 +35,7 @@ const startedHandler = meetingSession.slice(
 const checks = [
   [
     "WT-225 keeps the intentional same-speaker utterance grouping",
-    roomDetailPage.includes("groupSavedTranscriptSegments("),
+    recordSection.includes("groupSavedTranscriptSegments("),
   ],
   [
     // Was: a canonical /{slug}/transcript route. That route, and the workspace-wide
@@ -38,8 +44,8 @@ const checks = [
     // actually needs is that the saved record is reachable, and it is reachable there.
     "WT-225/228 the saved meeting record is reachable from the meeting",
     roomDetailPage.includes("<MeetingRecordSection") &&
-      roomDetailPage.includes("<SummaryPanel") &&
-      roomDetailPage.includes("<ArtifactsPanel"),
+      recordSection.includes("<SummaryPanel") &&
+      recordSection.includes("<ArtifactsPanel"),
   ],
   [
     // The gate this opens is now named for what it actually governs: the room being LIVE,
@@ -80,8 +86,8 @@ const checks = [
   ],
   [
     "WT-228 transcript review exposes editing and finalization actions",
-    roomDetailPage.includes("finalizeTranscript()") &&
-      roomDetailPage.includes("Save correction"),
+    recordSection.includes("finalizeTranscript()") &&
+      recordSection.includes("Save correction"),
   ],
   [
     "WT-229 voice profiles expose only EN VI and JA",
