@@ -315,16 +315,26 @@ function UsersDirectory() {
             </div>
           </div>
         ) : (
-          <ul>
-            {items.map((user) => (
-              <li key={user.id}>
-                <UserRow
-                  user={user}
-                  onAction={(target, action) => setPending({ user: target, action })}
-                />
-              </li>
-            ))}
-          </ul>
+          <div>
+            <div className="hidden border-b border-hairline/80 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle md:flex md:items-center">
+              <div className="flex-1">User</div>
+              <div className="w-[110px] shrink-0">Status</div>
+              <div className="w-[160px] shrink-0">Roles</div>
+              <div className="w-[90px] shrink-0 text-right">Sessions</div>
+              <div className="w-[130px] shrink-0 text-right">Last Login</div>
+              <div className="w-[230px] shrink-0 text-right">Actions</div>
+            </div>
+            <ul>
+              {items.map((user) => (
+                <li key={user.id}>
+                  <UserRow
+                    user={user}
+                    onAction={(target, action) => setPending({ user: target, action })}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </AdminPanel>
 
@@ -386,11 +396,11 @@ function UserRow({
         </div>
       </div>
 
-      <div className="w-[120px] shrink-0">
+      <div className="w-[110px] shrink-0">
         <UserStatusBadge status={user.status} />
       </div>
 
-      <div className="w-[180px] shrink-0">
+      <div className="w-[160px] shrink-0">
         <RolesCell roles={user.roles} />
       </div>
 
@@ -404,14 +414,14 @@ function UserRow({
         )}
       </div>
 
-      <div className="w-[150px] shrink-0 md:text-right">
+      <div className="w-[130px] shrink-0 md:text-right">
         <LastLoginCell value={user.lastLoginAt} />
       </div>
 
       {/* A deleted account offers nothing: every action here would be acting on somebody who is
           already gone, and the endpoints refuse it. Unlock appears only while there is a lockout
           to clear, so the row never offers a no-op. */}
-      <div className="flex shrink-0 items-center justify-end gap-1.5 md:ml-3">
+      <div className="w-[230px] shrink-0 flex items-center justify-end gap-1.5">
         {user.status === "deleted" ? (
           <span className="text-[11px] text-ink-subtle">—</span>
         ) : (
