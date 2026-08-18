@@ -6,6 +6,7 @@ import {
   formatMeetingDuration,
   parsePageParam,
   resolveArtifactStatus,
+  resolveAttendedCount,
   resolveHistoryStatus,
   resolveMeetingDurationSeconds,
   resolveRetention,
@@ -318,4 +319,33 @@ test("parsePageParam tolerates junk in the URL", () => {
   assert.equal(parsePageParam("0"), 1);
   assert.equal(parsePageParam("-2"), 1);
   assert.equal(parsePageParam("7"), 7);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Attendance — WT-513. The whole bug is that the server sends a PRESENT zero.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("a finished meeting counts who attended, not who is in the room now", () => {
+  // Exactly the shape the history page saw: live occupancy 0, four people on the roster.
+  assert.equal(
+    resolveAttendedCount({ attendedCount: 0, rosterSize: 4, liveParticipantCount: 0 }),
+    4,
+  );
+});
+
+test("the server's own attended count wins over the roster we can see", () => {
+  // The roster is what this client was handed; attendedCount is every distinct person who was
+  // ever in the room, including anyone the page's page-size did not return.
+  assert.equal(
+    resolveAttendedCount({ attendedCount: 9, rosterSize: 4, liveParticipantCount: 0 }),
+    9,
+  );
+});
+
+test("live occupancy is only reached when there is nothing better", () => {
+  assert.equal(
+    resolveAttendedCount({ attendedCount: 0, rosterSize: 0, liveParticipantCount: 3 }),
+    3,
+  );
+  assert.equal(resolveAttendedCount({ rosterSize: 0 }), 0);
 });

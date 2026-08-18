@@ -3,6 +3,7 @@ import { calculateMeetingDurationSeconds } from "@/lib/meeting/meeting-duration"
 import type { EndedRoomHistoryItem, RoomArtifactStatus, RoomHistoryResponse, TranslationRoomSummaryArtifact } from "@/types/roomHistory";
 import {
   resolveArtifactStatus,
+  resolveAttendedCount,
   resolveHistoryStatus,
   resolveMeetingDurationSeconds,
   resolveRetention,
@@ -124,7 +125,15 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
       listenLanguage: participant.listenLanguage,
       joinedAt: participant.joinedAt,
     })),
-    participantCount: room.participantCount ?? item.participants.length,
+    // NOT `room.participantCount ?? …`: the server sends a present 0 for every ended room
+    // (that field is live occupancy), so the nullish fallback beside it could never fire.
+    participantCount: resolveAttendedCount({
+      attendedCount: room.attendedCount,
+      rosterSize: item.participants.length,
+      liveParticipantCount: room.participantCount,
+    }),
+    artifactAccess: room.settings?.artifactAccess ?? null,
+    isHost: room.isHost ?? false,
     summary,
     artifacts,
     // Nothing in warptalk-backend writes an artifact retention date and there is no purge

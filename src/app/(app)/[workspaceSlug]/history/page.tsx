@@ -27,6 +27,7 @@ import {
   artifactDownloadFormat,
   artifactLabel,
   artifactStatusLabel,
+  findPlayableRecording,
 } from "@/lib/meeting/meeting-artifacts";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
@@ -40,6 +41,9 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import { getErrorMessage } from "@/lib/api/errors";
 import { ARTIFACT_WITHHELD_FALLBACK, isArtifactWithheld } from "@/lib/meeting/artifact-denial";
+import { MeetingRecordingPlayer } from "@/components/rooms/meeting-record-panels";
+import { describeRecordSharing, nextArtifactAccess } from "@/lib/meeting/record-sharing";
+import { useSetArtifactAccess } from "@/hooks/use-translationRooms";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
 
@@ -232,7 +236,7 @@ export default function HistoryPage() {
                   {rooms.map((room) => <HistoryRow key={room.id} room={room} selected={selected?.id === room.id} onSelect={() => { setSelectedId(room.id); closePreview(); }} />)}
                 </div>
               </div>
-              {selected ? <MeetingDetail room={selected} busyArtifactId={busyArtifactId} onDownload={downloadArtifact} onOpen={openArtifact} openArtifactId={openArtifactId} preview={preview} onClosePreview={closePreview} /> : null}
+              {selected ? <MeetingDetail room={selected} busyArtifactId={busyArtifactId} onDownload={downloadArtifact} onOpen={openArtifact} openArtifactId={openArtifactId} preview={preview} onClosePreview={closePreview} onRefresh={() => void history.refetch()} /> : null}
             </div>
           )}
         </section>
@@ -265,10 +269,34 @@ type ArtifactPreviewState =
   | { kind: "withheld"; title: string; message: string }
   | { kind: "error"; title: string; message: string };
 
-function MeetingDetail({ room, busyArtifactId, onDownload, onOpen, openArtifactId, preview, onClosePreview }: { room: EndedRoomHistoryItem; busyArtifactId: string | null; onDownload: (artifact: RoomHistoryArtifact) => void; onOpen: (artifact: RoomHistoryArtifact) => void; openArtifactId: string | null; preview: ArtifactPreviewState | null; onClosePreview: () => void }) {
+function MeetingDetail({ room, busyArtifactId, onDownload, onOpen, openArtifactId, preview, onClosePreview, onRefresh }: { room: EndedRoomHistoryItem; busyArtifactId: string | null; onDownload: (artifact: RoomHistoryArtifact) => void; onOpen: (artifact: RoomHistoryArtifact) => void; openArtifactId: string | null; preview: ArtifactPreviewState | null; onClosePreview: () => void; onRefresh: () => void }) {
+  // WT-513 — the three things this panel could not say about a finished meeting: who attended,
+  // whether the record is published, and what the meeting looked like. The first is now resolved
+  // in the mapping; the other two are below, reusing the room page's own controls rather than a
+  // second implementation of the same two questions.
+  const setArtifactAccess = useSetArtifactAccess(room.id);
+  const sharing = describeRecordSharing({ artifactAccess: room.artifactAccess, isHost: room.isHost });
+  const recording = findPlayableRecording(room.artifacts);
+
+  async function togglePublished() {
+    try {
+      await setArtifactAccess.mutateAsync(nextArtifactAccess(room.artifactAccess));
+      // The mutation invalidates the MEETING keys; this list is its own query, so it would keep
+      // showing the old badge next to a button that had already taken effect.
+      onRefresh();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not change who can read this record."));
+    }
+  }
+
   return (
     <aside className="border-t border-border bg-surface-1 p-5 lg:border-l lg:border-t-0">
-      <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle"><span className={cn("size-1.5 rounded-full", room.status === "ended" ? "bg-emerald-500" : "bg-ink-subtle")} />{room.status}</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle"><span className={cn("size-1.5 rounded-full", room.status === "ended" ? "bg-emerald-500" : "bg-ink-subtle")} />{room.status}</div>
+        {/* The publish state, in the same words the room page uses. A meeting that is still a
+            draft looked identical here to one everybody could read. */}
+        <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium", sharing.tone === "shared" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "border-border bg-surface-2 text-ink-muted")}>{sharing.badge}</span>
+      </div>
       <h2 className="mt-3 text-[18px] font-semibold leading-6">{room.title}</h2>
       {room.description ? <p className="mt-2 text-[12px] leading-5 text-ink-muted">{room.description}</p> : null}
 
@@ -278,6 +306,30 @@ function MeetingDetail({ room, busyArtifactId, onDownload, onOpen, openArtifactI
         <Detail icon={Users} label="Participants" value={String(room.participantCount)} />
         <Detail icon={Translate} label="Route" value={formatLanguageRoute(room)} />
       </dl>
+
+      {/* Watch it back here rather than downloading a file to find out what the meeting was.
+          Renders nothing at all when the meeting was not recorded — see the component. */}
+      {recording ? (
+        <div className="mt-5">
+          <MeetingRecordingPlayer artifact={recording} onConsentGranted={onRefresh} />
+        </div>
+      ) : null}
+
+      {/* The host's control, and only the host's: describeRecordSharing returns a null action for
+          everyone else, which is also what hides this whole block from a participant. */}
+      {sharing.action ? (
+        <div className="mt-5 rounded-[10px] border border-border bg-surface-2/40 p-3">
+          {sharing.message ? <p className="text-[11px] leading-4 text-ink-muted">{sharing.message}</p> : null}
+          <Button
+            variant={sharing.tone === "shared" ? "outline" : "default"}
+            className="mt-2.5 h-8 w-full text-[11px] shadow-none"
+            disabled={setArtifactAccess.isPending}
+            onClick={() => void togglePublished()}
+          >
+            {setArtifactAccess.isPending ? "Saving…" : sharing.action}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="mt-5 flex items-center justify-between"><h3 className="text-[11px] font-semibold">Retained outputs</h3><span className="text-[10px] text-ink-subtle">{room.artifacts.length}</span></div>
       <div className="mt-2 divide-y divide-border border-y border-border">

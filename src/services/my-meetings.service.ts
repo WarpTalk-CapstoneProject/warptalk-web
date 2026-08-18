@@ -1,6 +1,6 @@
 import { translationRoomService } from "@/services/translation-room.service";
 import { mapArtifact } from "@/services/room-history.service";
-import { resolveMeetingDurationSeconds } from "@/lib/meeting/room-history-mapping";
+import { resolveAttendedCount, resolveMeetingDurationSeconds } from "@/lib/meeting/room-history-mapping";
 import type { MeetingTimeState, MyMeetingItem, MyMeetingsResponse } from "@/types/myMeetings";
 import type { TranslationRoomDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
 
@@ -78,7 +78,13 @@ function mapMeeting(item: TranslationRoomHistoryItemDto): MyMeetingItem {
       listenLanguage: participant.listenLanguage,
       joinedAt: participant.joinedAt,
     })),
-    participantCount: room.participantCount ?? item.participants.length,
+    // Same defect the history mapping carried: `participantCount` is live occupancy and the
+    // server sends a present 0 for a finished room, so `??` never reached the roster. WT-513.
+    participantCount: resolveAttendedCount({
+      attendedCount: room.attendedCount,
+      rosterSize: item.participants.length,
+      liveParticipantCount: room.participantCount,
+    }),
     artifacts: item.artifacts.map(mapArtifact),
     isHost: room.isHost === true,
   };

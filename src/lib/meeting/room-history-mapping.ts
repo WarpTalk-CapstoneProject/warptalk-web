@@ -121,6 +121,36 @@ export function formatMeetingDuration(seconds: number): string {
  * when an artifact genuinely carries one, and otherwise says so. It starts telling the
  * truth automatically if the finalizer ever begins stamping `retentionUntil`.
  */
+/**
+ * How many people took part in a meeting that has ended. WT-513.
+ *
+ * WHY THE OBVIOUS FIELD IS THE WRONG ONE
+ *   `participantCount` on the room is LIVE OCCUPANCY — how many people are in the room right
+ *   now. Every finished meeting therefore reports 0, which is correct for what that field means
+ *   and useless on a history page, where "right now" is always after everybody left.
+ *
+ *   The mapping already carried a fallback to the roster length. It could never fire: it was
+ *   written `room.participantCount ?? item.participants.length`, and `??` only steps aside for
+ *   null and undefined. The server sends a real, present `0`, so the fallback sat there looking
+ *   like it handled exactly this case while the page printed 0 for every meeting ever held.
+ *
+ * The order below is by how well each source answers "who attended", not by preference:
+ * `attendedCount` is the server's own count of distinct people who were ever in the room; the
+ * roster is what we can count for ourselves; live occupancy is last and only means anything for
+ * a room that has not ended yet.
+ */
+export function resolveAttendedCount(input: {
+  attendedCount?: number | null;
+  rosterSize: number;
+  liveParticipantCount?: number | null;
+}): number {
+  if (typeof input.attendedCount === "number" && input.attendedCount > 0) {
+    return input.attendedCount;
+  }
+  if (input.rosterSize > 0) return input.rosterSize;
+  return input.liveParticipantCount ?? 0;
+}
+
 export type RetentionState =
   | { kind: "scheduled"; expiresAt: string }
   | { kind: "not_configured" };

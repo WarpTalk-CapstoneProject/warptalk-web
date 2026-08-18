@@ -121,7 +121,19 @@ export interface EndedRoomHistoryItem {
   sourceLanguage: string;
   targetLanguages: string[];
   participants: RoomHistoryParticipant[];
+  /**
+   * How many people took part. NOT the room's live occupancy — see `resolveAttendedCount`,
+   * which is where the difference is explained and where this value comes from.
+   */
   participantCount: number;
+  /**
+   * WT-513: the record's visibility, so this page can say whether it is a draft or published
+   * and let the host change it — the same `artifactAccess` setting the room detail page owns.
+   * Absent reads as host-only; see `lib/meeting/record-sharing`.
+   */
+  artifactAccess?: string | null;
+  /** Whether the viewer is this meeting's host, which is who may publish it. */
+  isHost: boolean;
   transcript?: TranscriptDto;
   summary?: TranslationRoomSummaryArtifact;
   artifacts: RoomHistoryArtifact[];
