@@ -213,7 +213,27 @@ export default function MyMeetingsPage() {
           sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
           same word three times with documentation living in the furniture. Meetings and Members
           open straight onto their content and this now does too. */}
-      <header className="flex flex-col gap-4 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-end lg:px-8">
+      <header className="flex flex-col gap-3 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar" role="tablist" aria-label="Timeline filters">
+          {timeFilters.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              role="tab"
+              aria-selected={filter === item.value}
+              onClick={() => setFilter(item.value)}
+              className={cn(
+                "h-8 rounded-full px-3.5 text-[12px] font-medium transition-colors shrink-0",
+                filter === item.value
+                  ? "bg-ink text-surface-1 font-semibold shadow-xs"
+                  : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex w-full items-center gap-2 lg:w-auto">
           {/* See history/page.tsx: one search affordance across the list pages. */}
           <ExpandingSearchDock
@@ -312,26 +332,6 @@ export default function MyMeetingsPage() {
               <dd className="mt-0.5 text-[16px] font-semibold tabular-nums">{counts.past}</dd>
             </div>
           </dl>
-
-          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Timeline filters">
-            {timeFilters.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                role="tab"
-                aria-selected={filter === item.value}
-                onClick={() => setFilter(item.value)}
-                className={cn(
-                  "h-7 rounded-md px-3 text-[11px] font-medium transition-colors",
-                  filter === item.value
-                    ? "bg-ink text-surface-1"
-                    : "text-ink-muted hover:bg-surface-2 hover:text-ink",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
 
           {meetings.isPartial ? (
             <p className="text-[10px] leading-4 text-amber-700">
