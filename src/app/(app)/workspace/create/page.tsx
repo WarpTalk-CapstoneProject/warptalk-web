@@ -8,10 +8,18 @@ import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { useQuery } from "@tanstack/react-query";
+
 import {
   checkoutContinuationPath,
   readCheckoutIntent,
 } from "@/lib/billing/checkout-intent";
+import {
+  checkoutTotal,
+  readBillingInterval,
+  selectablePlans,
+} from "@/lib/billing/plan-pricing";
+import { billingService } from "@/services/billing.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -75,9 +83,11 @@ interface ApiErrorShape {
 
 export default function CreateWorkspaceDemoPage() {
   const router = useRouter();
-  // WT-491: the plan a guest picked on the landing page, carried here through login.
+  // WT-491: the plan a guest picked on the landing page, carried here through login — and now
+  // also the plan chosen at /workspace/plans, which is the only route into this form.
   const searchParams = useSearchParams();
   const checkoutPlanSlug = readCheckoutIntent(searchParams);
+  const billingInterval = readBillingInterval(searchParams);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const setActiveWorkspace = useWorkspaceStore(
@@ -146,6 +156,39 @@ export default function CreateWorkspaceDemoPage() {
     if (mounted && !isAuthenticated) router.replace("/login");
   }, [mounted, isAuthenticated, router]);
 
+  /**
+   * No plan, no form. This is what makes the gate real rather than decorative.
+   *
+   * /workspace disables its Create card and the sidebar's Create entry now points at the plan
+   * grid, so nothing in the UI reaches this page without a plan. Someone who types the URL, or
+   * follows an old bookmark, would otherwise walk straight past the gate and found a workspace
+   * with nothing to run it on — the exact state this whole change exists to stop.
+   *
+   * A redirect rather than a disabled form: they are not being refused, they are one screen
+   * early, and the screen they need is the one they get sent to.
+   */
+  useEffect(() => {
+    if (mounted && isAuthenticated && !checkoutPlanSlug) {
+      router.replace("/workspace/plans");
+    }
+  }, [mounted, isAuthenticated, checkoutPlanSlug, router]);
+
+  /**
+   * The plan being bought, resolved here so the amount charged is the amount quoted.
+   *
+   * Same `["plans"]` query key the grid uses, so the buyer arriving from it pays out of a warm
+   * cache rather than waiting on a second fetch.
+   */
+  const { data: plansData = [] } = useQuery({
+    queryKey: ["plans"],
+    queryFn: () => billingService.getPlans(),
+    enabled: Boolean(checkoutPlanSlug),
+  });
+  const chosenPlan = useMemo(
+    () => selectablePlans(plansData).find((plan) => plan.slug === checkoutPlanSlug) ?? null,
+    [plansData, checkoutPlanSlug],
+  );
+
   function handleAddExtraDomain() {
     const trimmed = newDomainInput.trim().toLowerCase();
     if (!trimmed) return;
@@ -197,17 +240,61 @@ export default function CreateWorkspaceDemoPage() {
 
       const selection = await selectWorkspace.mutateAsync(workspace.id);
       applySelectedWorkspace(selection, setActiveWorkspace);
-      toast.success(`Workspace "${workspace.name}" created successfully.`);
-      // WT-479/WT-491: a visitor who came here to BUY goes to the plan grid, not to Home. Landing
-      // them on an empty dashboard is what produced the report — a workspace created, "No active
-      // subscription" on its Billing page, and nothing connecting the two. Somebody who arrived
-      // without a plan in hand still goes to Home, because for them there is nothing to pay for
-      // yet and a pricing page would be an interruption.
-      router.push(
-        checkoutPlanSlug
-          ? checkoutContinuationPath(selection.slug, checkoutPlanSlug)
-          : `/${selection.slug}/home`,
-      );
+
+      if (!checkoutPlanSlug) {
+        // Only reachable in the frame before the plan gate above redirects. Home is the safe
+        // destination; nothing has been bought, so a pricing page would be an interruption.
+        toast.success(`Workspace "${workspace.name}" created successfully.`);
+        router.push(`/${selection.slug}/home`);
+        return;
+      }
+
+      /**
+       * Straight to Stripe — this is the step that makes the order plan → pay → workspace.
+       *
+       * The workspace row genuinely has to exist first: `createCheckoutSession` stamps a
+       * workspace id into the Stripe session AND subscription metadata, and `Subscription`
+       * cannot be written without one. What was wrong before was never that the row existed —
+       * it was that the buyer was handed a finished, unpaid workspace and left to discover the
+       * plan grid on their own. Creating and charging in one uninterrupted action removes the
+       * gap where that used to happen.
+       *
+       * The amount comes from the shared pricing rule, so it is the same figure quoted on the
+       * plan grid one screen ago. `currency: "vnd"` matches every other checkout in this app.
+       */
+      if (!chosenPlan) {
+        // The plan list has not resolved, or the slug names a plan that is no longer sold. The
+        // workspace exists either way, so the buyer is sent to the grid to choose again rather
+        // than being left on a form that has already succeeded.
+        toast.success(`Workspace "${workspace.name}" created. Choose your plan to finish.`);
+        router.push(checkoutContinuationPath(selection.slug, checkoutPlanSlug));
+        return;
+      }
+
+      try {
+        const checkoutUrl = await billingService.createCheckoutSession({
+          userId: user!.id,
+          workspaceId: workspace.id,
+          amount: checkoutTotal(chosenPlan, billingInterval),
+          currency: "vnd",
+          paymentType: "Subscription",
+          planSlug: chosenPlan.slug,
+          billingCycle: billingInterval,
+        });
+
+        if (checkoutUrl) {
+          window.location.assign(checkoutUrl);
+          return;
+        }
+
+        throw new Error("Checkout session returned no URL.");
+      } catch {
+        // Stripe refused, or the network did. The workspace is already created and selected, so
+        // the one thing that must not happen is stranding the buyer on this form. The plan grid
+        // inside their new workspace can retry the same purchase.
+        toast.error("Could not open checkout. Your workspace is ready — try paying again.");
+        router.push(checkoutContinuationPath(selection.slug, checkoutPlanSlug));
+      }
     } catch (error) {
       const nextError = classifyCreateError(error);
       setServerError(nextError);

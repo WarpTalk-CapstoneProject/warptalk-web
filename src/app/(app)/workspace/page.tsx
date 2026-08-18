@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
   SignIn,
@@ -25,10 +25,13 @@ import {
   useMyJoinRequests,
 } from "@/hooks/use-workspace";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
+import { CHECKOUT_PLAN_PARAM, readCheckoutIntent } from "@/lib/billing/checkout-intent";
 import type { WorkspaceInvitationDto } from "@/types/workspace";
 
 export default function WorkspaceOnboardingGatePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const checkoutPlanSlug = readCheckoutIntent(searchParams);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -100,6 +103,39 @@ export default function WorkspaceOnboardingGatePage() {
   useEffect(() => {
     if (isAuthenticated && isSystemAdmin) router.replace("/admin");
   }, [isAuthenticated, isSystemAdmin, router]);
+
+  /**
+   * Somebody who clicked a plan on the landing page does not stop here. WT-491.
+   *
+   * The landing page sends a guest to `/login?callbackUrl=/workspace?planSlug=...`, so a buyer
+   * with no workspace yet arrives on this screen carrying their choice. Since creating now
+   * begins at the plan grid, leaving them here would show them a DISABLED Create card and a
+   * button asking them to choose a plan they had already chosen — the same intent dropped that
+   * WT-491 existed to stop, one screen further along.
+   *
+   * The grid rather than the create form, because the landing page names a plan but no billing
+   * cycle, and nobody should be charged for a year they never picked. Their plan arrives
+   * marked, so the trip through the grid is a confirmation and not a re-decision.
+   *
+   * Only when there is no workspace to open: an account that already has one is on its way
+   * somewhere, and the effect below owns that.
+   */
+  useEffect(() => {
+    if (!isAuthenticated || workspacesLoading || pendingInvitationsLoading) return;
+    if (!checkoutPlanSlug) return;
+    if (pendingInvitations.length > 0) return;
+    if ((workspacesData?.items?.length ?? 0) > 0) return;
+
+    router.replace(`/workspace/plans?${CHECKOUT_PLAN_PARAM}=${encodeURIComponent(checkoutPlanSlug)}`);
+  }, [
+    isAuthenticated,
+    workspacesLoading,
+    pendingInvitationsLoading,
+    checkoutPlanSlug,
+    pendingInvitations,
+    workspacesData,
+    router,
+  ]);
 
   useEffect(() => {
     if (selectWorkspace.isPending) {
@@ -322,39 +358,55 @@ export default function WorkspaceOnboardingGatePage() {
             </button>
 
             {/*
-              Create Workspace — unavailable on a public email domain.
+              Create Workspace — not a door of its own any more.
 
-              The server refuses this unconditionally (WorkspaceService.CreateWorkspaceAsync):
-              founding a workspace claims a domain, and a public domain cannot be claimed by
-              anyone. Presenting the two cards as equals meant a Gmail user picked Create,
-              filled in a form, and only then learned it was never going to work — while the
-              path that IS open to them sat beside it looking no more relevant.
+              A workspace runs on a plan, and until today the product could not say so: the
+              create form ran first and the plan grid was offered afterwards, from INSIDE the
+              workspace that had already been founded without one. Somebody could therefore
+              have a workspace and never buy anything, which is the state production is in.
 
-              Stated here rather than enforced here: this is the reason shown to the user, not
-              the check. The server remains the authority.
+              The card stays visible and stays disabled. Removing it would leave the screen
+              with one option and no explanation of where creating went; disabled with the
+              reason on it says the thing that is actually true — you may create a workspace,
+              once it has a plan to run on — and the button below is the way to do that.
+
+              Stated here rather than enforced here. The server still owns every rule about
+              who may found a workspace (WorkspaceService.CreateWorkspaceAsync refuses a
+              public email domain outright); this is the reason shown to the reader.
             */}
-            <button
-              type="button"
-              onClick={() => router.push("/workspace/create")}
-              className="group flex flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left transition-all shadow-sm h-[160px] enabled:hover:bg-surface-2 enabled:hover:border-hairline-strong enabled:hover:shadow-md enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+            <div
+              aria-disabled="true"
+              className="flex h-[160px] cursor-not-allowed flex-col justify-between rounded-lg border border-border bg-surface-1 p-5 text-left opacity-60 shadow-sm"
             >
-              <div
-                className="flex size-9 items-center justify-center rounded-[6px] bg-primary text-white"
-              >
+              <div className="flex size-9 items-center justify-center rounded-[6px] bg-primary text-white">
                 <Plus weight="bold" size={18} />
               </div>
               <div>
                 <span className="block text-[15px] font-semibold text-foreground">
                   Create workspace
                 </span>
-                <span
-                  className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty"
-                >
-                  Create a new workspace for your organization.
+                <span className="mt-1 block text-[12px] leading-relaxed text-ink-muted text-pretty">
+                  Choose a plan first — a workspace opens once its plan is paid for.
                 </span>
               </div>
-            </button>
+            </div>
           </div>
+
+          {/*
+            The way creating a workspace actually happens now.
+
+            Deliberately BELOW the two cards and deliberately the only primary action on the
+            screen: joining is unchanged and needs no plan, so it keeps its card, while
+            creating has one route and it starts at the price.
+          */}
+          <button
+            type="button"
+            onClick={() => router.push("/workspace/plans")}
+            className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-[13px] font-semibold text-white transition hover:bg-primary-hover cursor-pointer"
+          >
+            <Plus weight="bold" size={16} />
+            Choose a plan and create a workspace
+          </button>
         </div>
       </div>
     </main>
