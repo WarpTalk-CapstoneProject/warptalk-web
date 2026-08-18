@@ -21,10 +21,21 @@
  * The preview exists so the mapping is visible before anything is written. A header row that was
  * read as data, or a file whose columns are in another language, shows up here rather than as 200
  * junk terms in the dictionary.
+ *
+ * WT-505 — TWO THINGS THIS DIALOG USED TO GET WRONG
+ *   The `.xlsx` reader was ExcelJS, which cannot open a workbook whose OOXML parts bind the
+ *   SpreadsheetML namespace to a prefix. It threw, and the catch below reported "That file could
+ *   not be read. Save it as .xlsx or .csv and try again." — advice that cannot work on a file that
+ *   already is a valid .xlsx. `lib/glossary/xlsx-sheet` replaces it; see that file for why
+ *   repairing ExcelJS was not the answer.
+ *
+ *   And there was no way to find out what shape a file should be, so the dialog now hands out a
+ *   template. The parsing rules live in lib/glossary/import-rows, where a test pins the template
+ *   against them — a sample the product refuses to read would be worse than none.
  */
 
-import { FileArrowUp, Spinner, Warning } from "@phosphor-icons/react";
-import ExcelJS from "exceljs";
+import { DownloadSimple, FileArrowUp, Spinner, Warning } from "@phosphor-icons/react";
+import { saveAs } from "file-saver";
 import { useRef, useState } from "react";
 
 import {
@@ -37,154 +48,16 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  TEMPLATE_BASE_NAME,
+  TEMPLATE_COLUMNS,
+  TEMPLATE_ROWS,
+  templateCsv,
+} from "@/lib/glossary/import-template";
+import { parseCsv, toRows, type ParsedGlossaryRow } from "@/lib/glossary/import-rows";
+import { readFirstSheetMatrix } from "@/lib/glossary/xlsx-sheet";
 
-/** One parsed row, in the shape the bulk endpoint takes. */
-export interface ParsedGlossaryRow {
-  sourceTerm: string;
-  targetTerm: string;
-  domain?: string | null;
-  definition?: string | null;
-  usageNote?: string | null;
-  partOfSpeech?: string | null;
-  priority?: number;
-}
-
-/**
- * Header aliases, lowercased. A vocabulary owner's spreadsheet is not going to use our column
- * names, and "Term"/"Translation" are the two that matter — the rest are optional enrichment.
- */
-const HEADER_ALIASES: Record<string, keyof ParsedGlossaryRow> = {
-  term: "sourceTerm",
-  "source term": "sourceTerm",
-  sourceterm: "sourceTerm",
-  source: "sourceTerm",
-  translation: "targetTerm",
-  "target term": "targetTerm",
-  targetterm: "targetTerm",
-  target: "targetTerm",
-  "translate as": "targetTerm",
-  domain: "domain",
-  field: "domain",
-  "business domain": "domain",
-  definition: "definition",
-  meaning: "definition",
-  note: "usageNote",
-  "usage note": "usageNote",
-  usagenote: "usageNote",
-  "part of speech": "partOfSpeech",
-  partofspeech: "partOfSpeech",
-  priority: "priority",
-};
-
-function cellText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "object") {
-    // ExcelJS hands back a rich-text object or a formula result rather than a string for styled
-    // and computed cells. Reading `.text`/`.result` keeps a bolded term from arriving as
-    // "[object Object]".
-    const rich = value as { text?: string; result?: unknown; richText?: { text: string }[] };
-    if (Array.isArray(rich.richText)) return rich.richText.map((part) => part.text).join("");
-    if (typeof rich.text === "string") return rich.text;
-    if (rich.result !== undefined) return String(rich.result);
-    return "";
-  }
-  return String(value);
-}
-
-function toRows(matrix: string[][]): { rows: ParsedGlossaryRow[]; error?: string } {
-  const header = matrix[0]?.map((cell) => cell.trim().toLowerCase()) ?? [];
-  const columns = header.map((name) => HEADER_ALIASES[name]);
-
-  const termIndex = columns.indexOf("sourceTerm");
-  const translationIndex = columns.indexOf("targetTerm");
-
-  // A wrong FILE, not a wrong row. Importing nothing from a file the user believes is correct,
-  // without saying why, is the worst available outcome.
-  if (termIndex === -1 || translationIndex === -1) {
-    return {
-      rows: [],
-      error:
-        "The first row must name the columns, and must include a Term column and a Translation column.",
-    };
-  }
-
-  const rows: ParsedGlossaryRow[] = [];
-  for (const raw of matrix.slice(1)) {
-    const sourceTerm = (raw[termIndex] ?? "").trim();
-    const targetTerm = (raw[translationIndex] ?? "").trim();
-    // A blank line in the middle of a spreadsheet is punctuation, not data.
-    if (!sourceTerm && !targetTerm) continue;
-
-    const row: ParsedGlossaryRow = { sourceTerm, targetTerm };
-    columns.forEach((field, index) => {
-      if (!field || field === "sourceTerm" || field === "targetTerm") return;
-      const value = (raw[index] ?? "").trim();
-      if (!value) return;
-      if (field === "priority") {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) row.priority = parsed;
-        return;
-      }
-      row[field] = value as never;
-    });
-    rows.push(row);
-  }
-
-  return { rows };
-}
-
-/**
- * A deliberately small CSV reader: quoted fields with embedded commas and doubled quotes, which is
- * what Excel emits. Not a general RFC-4180 parser — a `.csv` with embedded newlines inside quotes
- * should be imported as `.xlsx`, and saying so is better than half-parsing it.
- */
-function parseCsv(text: string): string[][] {
-  return text
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .map((line) => {
-      const cells: string[] = [];
-      let current = "";
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i += 1) {
-        const char = line[i];
-        if (char === '"') {
-          if (inQuotes && line[i + 1] === '"') {
-            current += '"';
-            i += 1;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (char === "," && !inQuotes) {
-          cells.push(current);
-          current = "";
-        } else {
-          current += char;
-        }
-      }
-      cells.push(current);
-      return cells;
-    });
-}
-
-async function parseWorkbook(file: File): Promise<string[][]> {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(await file.arrayBuffer());
-  const sheet = workbook.worksheets[0];
-  if (!sheet) return [];
-
-  const matrix: string[][] = [];
-  sheet.eachRow((row) => {
-    const cells: string[] = [];
-    // `row.eachCell` skips empty cells, which would shift every column after a gap. The indexed
-    // loop keeps column positions honest.
-    for (let column = 1; column <= sheet.columnCount; column += 1) {
-      cells.push(cellText(row.getCell(column).value));
-    }
-    matrix.push(cells);
-  });
-  return matrix;
-}
+export type { ParsedGlossaryRow };
 
 export function GlossaryImportDialog({
   open,
@@ -204,6 +77,7 @@ export function GlossaryImportDialog({
   const [rows, setRows] = useState<ParsedGlossaryRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
 
   const reset = () => {
     setFileName(null);
@@ -219,7 +93,7 @@ export function GlossaryImportDialog({
     try {
       const matrix = file.name.toLowerCase().endsWith(".csv")
         ? parseCsv(await file.text())
-        : await parseWorkbook(file);
+        : await readFirstSheetMatrix(await file.arrayBuffer());
 
       if (matrix.length === 0) {
         setError("That file has no rows.");
@@ -238,11 +112,67 @@ export function GlossaryImportDialog({
         return;
       }
       setRows(parsed.rows);
-    } catch {
+    } catch (cause) {
       setFileName(file.name);
-      setError("That file could not be read. Save it as .xlsx or .csv and try again.");
+      // The old sentence here was "Save it as .xlsx or .csv and try again", which was advice that
+      // could not work: the file already WAS a valid .xlsx, and re-saving it in the tool that
+      // wrote it produced the same bytes. The reader's own message says what it actually found;
+      // the template is offered because "what shape should this be" was the real question
+      // underneath the report. See WT-505.
+      setError(
+        cause instanceof Error && cause.message
+          ? cause.message
+          : "That file could not be read. Download the template below to see the expected columns.",
+      );
     } finally {
       setIsParsing(false);
+    }
+  };
+
+  /**
+   * The template, as the file the user asked for.
+   *
+   * `.xlsx` is written with ExcelJS — only its READER is the problem (WT-505), and writing is what
+   * every other export in this app already uses it for. Imported lazily so a library nobody needs
+   * until they click this stays out of the page's bundle.
+   */
+  const downloadTemplate = async (format: "xlsx" | "csv") => {
+    setIsDownloadingTemplate(true);
+    try {
+      if (format === "csv") {
+        saveAs(
+          // The BOM is not decoration: without it Excel opens a UTF-8 CSV as Windows-1252 and the
+          // Vietnamese in the sample rows arrives as mojibake — in the one file whose whole job is
+          // to demonstrate the correct format.
+          new Blob([`\uFEFF${templateCsv()}`], { type: "text/csv;charset=utf-8" }),
+          `${TEMPLATE_BASE_NAME}.csv`,
+        );
+        return;
+      }
+
+      const ExcelJS = (await import("exceljs")).default;
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Glossary");
+      sheet.addRow([...TEMPLATE_COLUMNS]);
+      sheet.getRow(1).font = { bold: true };
+      TEMPLATE_ROWS.forEach((row) => sheet.addRow([...row]));
+      // Term and Translation are the columns somebody actually reads; the default 10 characters
+      // makes a template look like it wants one-word answers.
+      sheet.columns.forEach((column, index) => {
+        column.width = index < 2 ? 24 : 40;
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      saveAs(
+        new Blob([buffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }),
+        `${TEMPLATE_BASE_NAME}.xlsx`,
+      );
+    } catch {
+      setError("Could not build the template file. The columns are listed above.");
+    } finally {
+      setIsDownloadingTemplate(false);
     }
   };
 
@@ -271,6 +201,32 @@ export function GlossaryImportDialog({
             <span className="font-medium">Translation</span> are required. Field, Definition, Note,
             Part of speech and Priority are used when present.
           </DialogDescription>
+
+          {/* Beside the rules rather than at the bottom, because it IS the rules — the sentence
+              above describes the format and this is that format as a file you can open. Both
+              formats are offered: the same people who export .csv from their tooling cannot open
+              .xlsx conveniently, and vice versa. */}
+          <div className="flex items-center gap-1.5 pt-1">
+            <span className="text-[11px] text-ink-subtle">Not sure of the format?</span>
+            <button
+              type="button"
+              disabled={isDownloadingTemplate}
+              onClick={() => void downloadTemplate("xlsx")}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-ink underline-offset-2 hover:underline disabled:opacity-60"
+            >
+              <DownloadSimple className="h-3 w-3" />
+              Sample .xlsx
+            </button>
+            <button
+              type="button"
+              disabled={isDownloadingTemplate}
+              onClick={() => void downloadTemplate("csv")}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-ink underline-offset-2 hover:underline disabled:opacity-60"
+            >
+              <DownloadSimple className="h-3 w-3" />
+              Sample .csv
+            </button>
+          </div>
         </DialogHeader>
 
         <div>
