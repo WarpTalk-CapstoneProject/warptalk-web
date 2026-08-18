@@ -22,37 +22,58 @@ test("transcript-only wins over every voice question", () => {
   const selection = describeVoiceSelection({
     voiceEnabled: false,
     voiceCloneEnabled: true,
-    voicePreference: "voice-a",
+    dubVoice: "voice-a",
     voiceCatalog: CATALOG,
   });
 
   assert.equal(selection.kind, "transcript-only");
 });
 
-test("consent to clone outranks a picked voice", () => {
-  // They are one decision expressed twice, and the clone is what the worker uses.
+test("a deliberately picked dub voice outranks a live clone", () => {
+  // The order the worker resolves them in — see TTSWorker._resolve_voice_variants. Reporting the
+  // clone while the pipeline uses the pick would be the same lie this module exists to stop.
   const selection = describeVoiceSelection({
     voiceCloneEnabled: true,
-    voicePreference: "voice-a",
+    dubVoice: "voice-a",
     voiceCatalog: CATALOG,
   });
+
+  assert.equal(selection.kind, "picked");
+  assert.equal(selection.label, "Linh");
+});
+
+test("consent to clone, with no voice picked, is the clone", () => {
+  const selection = describeVoiceSelection({ voiceCloneEnabled: true, voiceCatalog: CATALOG });
 
   assert.equal(selection.kind, "cloned");
   assert.equal(selection.label, "My voice");
 });
 
 test("a picked voice is named, not just confirmed", () => {
-  const selection = describeVoiceSelection({ voicePreference: "voice-b", voiceCatalog: CATALOG });
+  const selection = describeVoiceSelection({ dubVoice: "voice-b", voiceCatalog: CATALOG });
 
   assert.equal(selection.kind, "picked");
   assert.equal(selection.label, "Minh");
   assert.match(selection.detail, /Minh/);
 });
 
-test("a preference the catalog no longer offers says so", () => {
+test("one of your own uploaded voices is named too", () => {
+  // It is not in the public catalogue, so looking there alone would report a voice somebody
+  // recorded of themselves as "Unavailable".
+  const selection = describeVoiceSelection({
+    dubVoice: "own-1",
+    voiceCatalog: CATALOG,
+    ownVoiceProfiles: [{ name: "My reading voice", voiceId: "own-1" }],
+  });
+
+  assert.equal(selection.kind, "picked");
+  assert.equal(selection.label, "My reading voice");
+});
+
+test("a dub voice the catalog no longer offers says so", () => {
   // Changing language changes the catalog. Reading this as "Automatic" — which the old row did —
   // hides that the choice was dropped.
-  const selection = describeVoiceSelection({ voicePreference: "voice-gone", voiceCatalog: CATALOG });
+  const selection = describeVoiceSelection({ dubVoice: "voice-gone", voiceCatalog: CATALOG });
 
   assert.equal(selection.kind, "picked");
   assert.equal(selection.label, "Unavailable voice");

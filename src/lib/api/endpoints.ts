@@ -24,6 +24,10 @@ export const API = {
     // fixed: preferredVoice is the voice you HEAR other people in, this is the voice YOU are
     // dubbed in. They shared a concept, so an uploaded recording of yourself changed neither.
     dubVoice: "/auth/voice-profiles/dub-voice",
+    // Hear a voice before a meeting instead of during one. POST because the first call for a
+    // voice does real work on the AI side; later calls for the same (voice, language) are
+    // served from that render.
+    preview: "/auth/voice-profiles/preview",
   },
   // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
   // profile: it is given once for the product, outlives any single profile or meeting, and is
@@ -85,6 +89,10 @@ export const API = {
     preflight: (roomCode: string) => `/translation-rooms/preflight/${roomCode}`,
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
     voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
+    // Carries no voice id. The dub voice is a user setting owned by AuthService and is written
+    // there; this only tells the room to go and re-read it, so the change reaches the AI
+    // pipeline without waiting for the next join or restart to trigger a publish.
+    refreshDubVoice: (id: string) => `/translation-rooms/${id}/audio-routes/dub-voice/refresh`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },

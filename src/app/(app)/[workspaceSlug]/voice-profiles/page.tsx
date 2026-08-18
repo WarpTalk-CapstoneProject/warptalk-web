@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
 import { MyDubVoicePicker } from "@/components/voice/my-dub-voice-picker";
+import { VoicePreviewButton } from "@/components/voice/voice-preview-button";
 import { VoiceConsentCard } from "@/components/voice/voice-consent-card";
 import {
   WorkspaceEmptyState,
@@ -569,6 +570,18 @@ function VoiceProfileRow({
         <Badge variant="outline" className="w-fit rounded-full bg-white capitalize text-ink-muted">
           {profile.status}
         </Badge>
+        {/*
+          Only once there is a voice behind the profile. An uploaded recording has none until it
+          has been cloned, and offering a play button that cannot play is the same silent nothing
+          this page keeps having to remove — the profile is listed, so it looks ready.
+        */}
+        {profile.providerVoiceId && profile.language && (
+          <VoicePreviewButton
+            voiceId={profile.providerVoiceId}
+            language={profile.language}
+            label={profile.displayName || "this voice profile"}
+          />
+        )}
         <Button
           variant="ghost"
           size="icon"

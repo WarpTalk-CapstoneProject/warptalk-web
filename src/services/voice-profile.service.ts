@@ -6,6 +6,7 @@ import type {
   VoiceCatalogItemDto,
   SetDubVoiceRequest,
   SetPreferredVoiceRequest,
+  PreviewVoiceRequest,
   VoiceConsentStatusDto,
 } from "@/types/voice-profile";
 
@@ -81,6 +82,23 @@ export const VoiceProfileService = {
       request,
     );
     return data.voiceId ?? null;
+  },
+
+  /**
+   * WAV audio of `voiceId` speaking one sentence in `language`.
+   *
+   * The language is required and is not cosmetic — the sample is SPOKEN in it, and the same
+   * voice is a different judgement in Vietnamese than in English.
+   *
+   * Rendered with the same speed the meeting uses, so what you hear here is what the dub will
+   * sound like. The first call for a voice waits on a real synthesis; every call after it is
+   * served from the AI side's cache.
+   */
+  async preview(request: PreviewVoiceRequest): Promise<Blob> {
+    const { data } = await apiClient.post<Blob>(API.voiceProfiles.preview, request, {
+      responseType: "blob",
+    });
+    return data;
   },
 
 };

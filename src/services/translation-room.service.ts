@@ -347,6 +347,19 @@ export const translationRoomService = {
     return apiClient.post<void>(API.translationRooms.voiceCloneConsent(id), { enabled });
   },
 
+  /**
+   * Tell this room to re-read every speaker's chosen dub voice from AuthService and republish
+   * its routes.
+   *
+   * Called AFTER VoiceProfileService.setDubVoice, never instead of it. The setting itself lives
+   * in AuthService, which knows nothing about rooms — so without this the change is correct
+   * everywhere except the meeting the person is currently in, until somebody joins or
+   * translation is restarted and a publish happens for some other reason.
+   */
+  async refreshDubVoice(id: string) {
+    return apiClient.post<void>(API.translationRooms.refreshDubVoice(id));
+  },
+
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };
