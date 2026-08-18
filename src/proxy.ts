@@ -23,6 +23,12 @@ const PUBLIC_ROUTES = [
   // would bounce a guest who clicks them straight back to /login.
   "/terms",
   "/privacy",
+  // The desktop download page. Public on purpose and not merely as a convenience:
+  // installing the app is something people do BEFORE they have an account, and the
+  // desktop app's own first screen is /desktop-login, which is already public for the
+  // same reason. Gating this behind the session would also make the page unreachable
+  // from the marketing site, which is where most visitors arrive from.
+  "/download",
   "/payment-cancelled",
   "/workspace/payment/plans",
   "/workspace/payment/success",
