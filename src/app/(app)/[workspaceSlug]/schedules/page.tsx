@@ -250,7 +250,7 @@ export default function MyMeetingsPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[268px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-4 py-5 lg:flex">
+        <aside className="hidden w-[285px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3.5 py-5 lg:flex">
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
               <button
@@ -276,13 +276,13 @@ export default function MyMeetingsPage() {
               </button>
             </div>
 
-            <div className="rounded-xl border border-border bg-surface-1 p-1">
+            <div className="overflow-hidden rounded-xl border border-border bg-surface-1 p-1">
               <Calendar
                 mode="single"
                 month={monthAnchor}
                 onMonthChange={setMonthAnchor}
                 onSelect={(date) => date && goToDay(date)}
-                className="w-full"
+                className="w-full p-0.5"
                 classNames={{
                   month_caption: "hidden",
                   nav: "hidden",
