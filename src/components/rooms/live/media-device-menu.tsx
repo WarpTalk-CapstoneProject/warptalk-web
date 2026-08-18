@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useId, useRef, useState } from "react";
+import { FlyoutSurface } from "@/components/rooms/live/flyout";
 import { CaretDown, Check } from "@phosphor-icons/react/dist/ssr";
 import { useMediaDeviceSelect } from "@livekit/components-react";
 
@@ -107,12 +108,17 @@ export function MediaDeviceMenuButton({
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
 
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      // Portaled out of this container (see flyout.tsx), so it needs asking separately or every
+      // click inside the menu reads as outside and closes it.
+      if (surfaceRef.current?.contains(target)) return;
+      if (!containerRef.current?.contains(target)) setOpen(false);
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
@@ -143,20 +149,24 @@ export function MediaDeviceMenuButton({
       </button>
 
       {open ? (
-        <div
+        <FlyoutSurface
           id={menuId}
           role="menu"
           aria-label={label}
+          anchorRef={containerRef}
+          surfaceRef={surfaceRef}
+          align="center"
           // Upwards: the meeting bar is pinned to the bottom of the viewport, so a menu that
-          // opened downwards would render off-screen.
-          className="absolute bottom-[calc(100%+0.5rem)] left-1/2 z-50 w-64 -translate-x-1/2 divide-y divide-hairline rounded-lg border border-hairline bg-surface-1 py-1 shadow-lg"
+          // opened downwards would render off-screen. Portaled as well, because the bar's own
+          // wrapper is a scroll container and clipped this menu away entirely.
+          className="z-50 w-64 divide-y divide-hairline overflow-y-auto rounded-lg border border-hairline bg-surface-1 py-1 shadow-lg"
         >
           {/* Mounted only while open, so the device enumeration happens when the user asks for
               it rather than on every meeting-bar render. */}
           {kinds.map((kind) => (
             <DeviceSection key={kind} kind={kind} onPicked={() => setOpen(false)} />
           ))}
-        </div>
+        </FlyoutSurface>
       ) : null}
     </div>
   );
