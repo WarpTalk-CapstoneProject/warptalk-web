@@ -229,6 +229,19 @@ export const WorkspaceService = {
     await apiClient.post(API.workspaces.rejectJoinRequest(workspaceId, inviteId));
   },
 
+  async createLeaveRequest(workspaceId: string): Promise<WorkspaceInvitationDto> {
+    const { data } = await apiClient.post<WorkspaceInvitationDto>(API.workspaces.leaveRequests(workspaceId));
+    return data;
+  },
+
+  async approveLeaveRequest(workspaceId: string, leaveRequestId: string): Promise<void> {
+    await apiClient.post(API.workspaces.approveLeaveRequest(workspaceId, leaveRequestId));
+  },
+
+  async rejectLeaveRequest(workspaceId: string, leaveRequestId: string): Promise<void> {
+    await apiClient.post(API.workspaces.rejectLeaveRequest(workspaceId, leaveRequestId));
+  },
+
   async previewInvitation(token: string): Promise<PreviewInvitationResponse> {
     const { data } = await apiClient.get<PreviewInvitationResponse>(API.workspaces.previewInvitation(token));
     return data;

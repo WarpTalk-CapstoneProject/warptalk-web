@@ -29,6 +29,9 @@ import {
   useRevokeWorkspaceInvitation,
   useApproveJoinRequest,
   useRejectJoinRequest,
+  useCreateLeaveRequest,
+  useApproveLeaveRequest,
+  useRejectLeaveRequest,
 } from "@/hooks/use-workspace";
 import {
   buildMemberDirectory,
@@ -112,6 +115,9 @@ export default function WorkspaceMembersPage() {
   const revokeMutation = useRevokeWorkspaceInvitation(activeWorkspaceId || "");
   const approveJoinRequest = useApproveJoinRequest(activeWorkspaceId || "");
   const rejectJoinRequest = useRejectJoinRequest(activeWorkspaceId || "");
+  const createLeaveRequest = useCreateLeaveRequest(activeWorkspaceId || "");
+  const approveLeaveRequest = useApproveLeaveRequest(activeWorkspaceId || "");
+  const rejectLeaveRequest = useRejectLeaveRequest(activeWorkspaceId || "");
 
 
   const membersList = membersQuery.data?.items || [];
@@ -277,7 +283,7 @@ export default function WorkspaceMembersPage() {
     if (!currentUser || !activeWorkspaceId) return;
     try {
       setIsSubmittingLeave(true);
-      await removeMemberMutation.mutateAsync(currentUser.id);
+      await createLeaveRequest.mutateAsync();
       toast.success("Leave request submitted. Awaiting Admin/Owner approval.");
       setIsLeaveModalOpen(false);
     } catch (err) {
@@ -304,7 +310,20 @@ export default function WorkspaceMembersPage() {
     }
   };
 
-  const handleApprove = async (inviteId: string, provisionalType: string) => {
+  const handleApprove = async (inviteId: string, provisionalType: string, status?: string) => {
+    if (status?.toUpperCase() === "LEAVE_REQUESTED") {
+      try {
+        await approveLeaveRequest.mutateAsync(inviteId);
+        toast.success("Leave request approved.");
+      } catch (err) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(
+          error?.response?.data?.error || "Failed to approve leave request",
+        );
+      }
+      return;
+    }
+
     const membershipType =
       approvalType[inviteId] ||
       (provisionalType.toLowerCase() === "internal" ? "Internal" : "External");
@@ -326,7 +345,20 @@ export default function WorkspaceMembersPage() {
     }
   };
 
-  const handleReject = async (invitationId: string) => {
+  const handleReject = async (invitationId: string, status?: string) => {
+    if (status?.toUpperCase() === "LEAVE_REQUESTED") {
+      try {
+        await rejectLeaveRequest.mutateAsync(invitationId);
+        toast.success("Leave request rejected.");
+      } catch (err) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(
+          error?.response?.data?.error || "Failed to reject leave request",
+        );
+      }
+      return;
+    }
+
     try {
       await rejectJoinRequest.mutateAsync(invitationId);
       toast.success("Join request rejected.");
@@ -684,21 +716,43 @@ export default function WorkspaceMembersPage() {
                         <>
                           <button
                             onClick={() =>
-                              handleApprove(invite.id, invite.membershipType)
+                              handleApprove(
+                                invite.id,
+                                invite.membershipType,
+                                invite.status,
+                              )
                             }
                             disabled={reviewBusy}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors disabled:opacity-40 cursor-pointer"
-                            title="Approve join request"
-                            aria-label={`Approve the join request from ${row.email}`}
+                            title={
+                              invite.status?.toUpperCase() === "LEAVE_REQUESTED"
+                                ? "Approve leave request"
+                                : "Approve join request"
+                            }
+                            aria-label={`${
+                              invite.status?.toUpperCase() === "LEAVE_REQUESTED"
+                                ? "Approve leave request"
+                                : "Approve join request"
+                            } from ${row.email}`}
                           >
                             <CheckCircle className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleReject(invite.id)}
+                            onClick={() =>
+                              handleReject(invite.id, invite.status)
+                            }
                             disabled={reviewBusy}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 cursor-pointer"
-                            title="Reject join request"
-                            aria-label={`Reject the join request from ${row.email}`}
+                            title={
+                              invite.status?.toUpperCase() === "LEAVE_REQUESTED"
+                                ? "Reject leave request"
+                                : "Reject join request"
+                            }
+                            aria-label={`${
+                              invite.status?.toUpperCase() === "LEAVE_REQUESTED"
+                                ? "Reject leave request"
+                                : "Reject join request"
+                            } from ${row.email}`}
                           >
                             <XCircle className="h-4 w-4" />
                           </button>

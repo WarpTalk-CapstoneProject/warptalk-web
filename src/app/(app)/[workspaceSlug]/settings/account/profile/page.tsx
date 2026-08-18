@@ -28,7 +28,6 @@ export default function SettingsPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const updateUser = useAuthStore((s) => s.updateUser);
   const {
-    activeWorkspaceId,
     activeWorkspaceName,
     role,
     membershipType,
@@ -39,7 +38,6 @@ export default function SettingsPage() {
   const displayMembershipType = membershipType
     ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
     : "Internal";
-  const isOwner = role?.toLowerCase() === "owner";
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -70,7 +68,8 @@ export default function SettingsPage() {
   }, [timezone]);
 
   useEffect(() => {
-    setMounted(true);
+    const handle = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(handle);
   }, []);
 
   useEffect(() => {

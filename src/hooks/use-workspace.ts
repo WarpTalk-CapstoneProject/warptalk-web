@@ -382,6 +382,38 @@ export function useRejectWorkspaceJoinRequest(workspaceId: string) {
 export const useApproveJoinRequest = useApproveWorkspaceJoinRequest;
 export const useRejectJoinRequest = useRejectWorkspaceJoinRequest;
 
+export function useCreateLeaveRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => WorkspaceService.createLeaveRequest(workspaceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
+    },
+  });
+}
+
+export function useApproveLeaveRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (leaveRequestId: string) => WorkspaceService.approveLeaveRequest(workspaceId, leaveRequestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "members", workspaceId] });
+    },
+  });
+}
+
+export function useRejectLeaveRequest(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (leaveRequestId: string) => WorkspaceService.rejectLeaveRequest(workspaceId, leaveRequestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "invitations", workspaceId] });
+    },
+  });
+}
+
 export function useMyJoinRequests() {
   return useQuery({
     queryKey: WORKSPACE_KEYS.myJoinRequests(),
