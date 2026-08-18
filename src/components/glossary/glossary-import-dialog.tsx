@@ -36,6 +36,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { languagesInScope } from "@/lib/language/languages";
 import { cn } from "@/lib/utils";
 
 /** One parsed row, in the shape the bulk endpoint takes. */
@@ -192,12 +201,19 @@ export function GlossaryImportDialog({
   glossaryName,
   isImporting,
   onImport,
+  needsGlossaryCreation,
+  onCreateAndImport,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  glossaryName: string;
+  glossaryName?: string;
   isImporting: boolean;
   onImport: (rows: ParsedGlossaryRow[]) => Promise<void>;
+  needsGlossaryCreation?: boolean;
+  onCreateAndImport?: (
+    glossary: { name: string; sourceLanguage: string; targetLanguage: string },
+    rows: ParsedGlossaryRow[]
+  ) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -205,10 +221,20 @@ export function GlossaryImportDialog({
   const [error, setError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
 
+  // Inline glossary creation state when no glossary exists yet
+  const [name, setName] = useState("Main Glossary");
+  const [sourceLanguage, setSourceLanguage] = useState("");
+  const [targetLanguage, setTargetLanguage] = useState("");
+
+  const languageOptions = languagesInScope("meeting");
+
   const reset = () => {
     setFileName(null);
     setRows([]);
     setError(null);
+    setName("Main Glossary");
+    setSourceLanguage("");
+    setTargetLanguage("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -248,9 +274,23 @@ export function GlossaryImportDialog({
 
   const submit = async () => {
     if (rows.length === 0) return;
-    await onImport(rows);
+    if (needsGlossaryCreation && onCreateAndImport) {
+      if (!name.trim() || !sourceLanguage || !targetLanguage) return;
+      await onCreateAndImport(
+        { name: name.trim(), sourceLanguage, targetLanguage },
+        rows
+      );
+    } else {
+      await onImport(rows);
+    }
     reset();
   };
+
+  const canSubmit =
+    rows.length > 0 &&
+    !isImporting &&
+    !isParsing &&
+    (!needsGlossaryCreation || (Boolean(name.trim()) && Boolean(sourceLanguage) && Boolean(targetLanguage)));
 
   return (
     <Dialog
@@ -263,17 +303,66 @@ export function GlossaryImportDialog({
       <DialogContent className="max-w-[560px] rounded-[14px] border-border bg-surface-1 shadow-none">
         <DialogHeader>
           <DialogTitle className="text-[16px] font-semibold text-ink">
-            Import terms
+            {needsGlossaryCreation ? "Import terms into new glossary" : "Import terms"}
           </DialogTitle>
           <DialogDescription className="text-[12px] text-ink-muted">
-            Into <span className="font-medium text-ink">{glossaryName}</span>. The first row must
-            name the columns; <span className="font-medium">Term</span> and{" "}
-            <span className="font-medium">Translation</span> are required. Field, Definition, Note,
-            Part of speech and Priority are used when present.
+            {needsGlossaryCreation ? (
+              <>
+                Create a glossary for this workspace and import a spreadsheet (.xlsx or .csv). Header row must include <span className="font-medium">Term</span> and <span className="font-medium">Translation</span>.
+              </>
+            ) : (
+              <>
+                Into <span className="font-medium text-ink">{glossaryName}</span>. The first row must name the columns; <span className="font-medium">Term</span> and <span className="font-medium">Translation</span> are required. Field, Definition, Note, Part of speech and Priority are used when present.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        <div>
+        <div className="space-y-3">
+          {needsGlossaryCreation ? (
+            <div className="space-y-2 rounded-[10px] border border-border bg-surface-2 p-3">
+              <span className="text-[12px] font-medium text-ink">Glossary setup</span>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Glossary name (e.g. Main Glossary)"
+                className="h-8 text-[12px]"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  value={sourceLanguage}
+                  onValueChange={(val: string | null) => setSourceLanguage(val ?? "")}
+                >
+                  <SelectTrigger className="h-8 text-[12px]">
+                    <SelectValue placeholder="Spoken language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languageOptions.map((language) => (
+                      <SelectItem key={language.code} value={language.code}>
+                        {language.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={targetLanguage}
+                  onValueChange={(val: string | null) => setTargetLanguage(val ?? "")}
+                >
+                  <SelectTrigger className="h-8 text-[12px]">
+                    <SelectValue placeholder="Translated into" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languageOptions.map((language) => (
+                      <SelectItem key={language.code} value={language.code}>
+                        {language.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : null}
+
           <input
             ref={inputRef}
             type="file"
@@ -357,7 +446,7 @@ export function GlossaryImportDialog({
           </Button>
           <Button
             onClick={() => void submit()}
-            disabled={rows.length === 0 || isImporting || isParsing}
+            disabled={!canSubmit}
             className="shadow-none"
           >
             {isImporting ? (
@@ -365,6 +454,8 @@ export function GlossaryImportDialog({
                 <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                 Importing…
               </>
+            ) : needsGlossaryCreation ? (
+              `Create & Import ${rows.length || ""} term${rows.length === 1 ? "" : "s"}`.trim()
             ) : (
               `Import ${rows.length || ""} term${rows.length === 1 ? "" : "s"}`.trim()
             )}

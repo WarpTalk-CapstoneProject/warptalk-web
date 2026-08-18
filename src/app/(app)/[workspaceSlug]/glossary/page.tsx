@@ -65,6 +65,7 @@ import { getErrorMessage } from "@/lib/api/errors";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { WorkspaceService } from "@/services/workspace.service";
 import {
   useAddGlossaryTerm,
   useBulkImportGlossaryTerms,
@@ -118,9 +119,6 @@ export default function WorkspaceGlossaryPage() {
   const [glossaryDialogOpen, setGlossaryDialogOpen] = useState(false);
   const [termDialogOpen, setTermDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  // Set when the reader chose "Import terms" with no glossary yet, so the create dialog they are
-  // sent through first knows to hand them back to the import rather than to an empty page.
-  const [importAfterCreate, setImportAfterCreate] = useState(false);
 
   const termsQuery = useGlossaryTerms(selected?.id ?? "");
   const createGlossary = useCreateGlossary(workspaceId ?? "");
@@ -211,6 +209,40 @@ export default function WorkspaceGlossaryPage() {
     }
   }
 
+  /**
+   * WT-504: Create glossary and import terms in a single seamless flow when no glossary exists yet.
+   */
+  async function handleCreateAndImport(
+    glossaryInfo: { name: string; sourceLanguage: string; targetLanguage: string },
+    rows: ParsedGlossaryRow[],
+  ) {
+    try {
+      await createGlossary.mutateAsync({
+        name: glossaryInfo.name,
+        sourceLanguage: glossaryInfo.sourceLanguage,
+        targetLanguage: glossaryInfo.targetLanguage,
+      });
+      const { data } = await glossariesQuery.refetch();
+      const created = data?.[0];
+      if (created) {
+        setSelectedId(created.id);
+        const result = await WorkspaceService.bulkImportGlossaryTerms(created.id, { terms: rows });
+        if (result.skipped > 0) {
+          toast.success(
+            `Glossary created & imported ${result.imported} term${result.imported === 1 ? "" : "s"}, skipped ${result.skipped} already present.`,
+          );
+        } else {
+          toast.success(
+            `Glossary created & imported ${result.imported} term${result.imported === 1 ? "" : "s"}.`,
+          );
+        }
+      }
+      setImportDialogOpen(false);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not create glossary and import terms."));
+    }
+  }
+
   async function submitGlossary(values: GlossaryForm) {
     try {
       await createGlossary.mutateAsync({
@@ -222,28 +254,6 @@ export default function WorkspaceGlossaryPage() {
       toast.success("Glossary created.");
       setGlossaryDialogOpen(false);
       glossaryForm.reset();
-
-      /**
-       * Carry on into the import the reader actually asked for.
-       *
-       * Terms cannot be imported into nothing — a glossary is a source/target language PAIR, and
-       * the pair is what tells the importer which column is which. So "Import terms" from the
-       * empty state has to create the glossary first. Dropping the reader back on a bare page at
-       * that point loses what they came to do, which is how the import ended up looking absent:
-       * it was reachable only from inside a glossary nobody had yet.
-       *
-       * `refetch` rather than the mutation's result, which is typed `void`; and `data[0]` is
-       * unambiguous because this path is only offered when there were no glossaries at all.
-       */
-      if (importAfterCreate) {
-        setImportAfterCreate(false);
-        const { data } = await glossariesQuery.refetch();
-        const created = data?.[0];
-        if (created) {
-          setSelectedId(created.id);
-          setImportDialogOpen(true);
-        }
-      }
     } catch (error) {
       toast.error(getErrorMessage(error, "Could not create the glossary."));
     }
@@ -380,19 +390,7 @@ export default function WorkspaceGlossaryPage() {
                     <Plus className="h-3.5 w-3.5" />
                     New glossary
                   </WorkspacePrimaryButton>
-                  {/*
-                    Import is offered from the empty state as well as from inside a glossary.
-                    It only ever lived inside one, so with no glossary yet — the state every
-                    workspace starts in — the product looked like it could not import at all.
-                    This route creates the glossary first and then opens the importer, because
-                    terms need a language pair to land in.
-                  */}
-                  <WorkspacePrimaryButton
-                    onClick={() => {
-                      setImportAfterCreate(true);
-                      setGlossaryDialogOpen(true);
-                    }}
-                  >
+                  <WorkspacePrimaryButton onClick={() => setImportDialogOpen(true)}>
                     <FileArrowUp className="h-3.5 w-3.5" />
                     Import terms
                   </WorkspacePrimaryButton>
@@ -537,15 +535,7 @@ export default function WorkspaceGlossaryPage() {
         ) : null}
       </WorkspaceBody>
 
-      <Dialog
-        open={glossaryDialogOpen}
-        onOpenChange={(open) => {
-          setGlossaryDialogOpen(open);
-          // Abandoning the create step abandons the import it was standing in for. Left set, the
-          // flag would fire the importer open after some unrelated glossary created later.
-          if (!open) setImportAfterCreate(false);
-        }}
-      >
+      <Dialog open={glossaryDialogOpen} onOpenChange={setGlossaryDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New glossary</DialogTitle>
@@ -665,15 +655,15 @@ export default function WorkspaceGlossaryPage() {
         </DialogContent>
       </Dialog>
 
-      {selected ? (
-        <GlossaryImportDialog
-          open={importDialogOpen}
-          onOpenChange={setImportDialogOpen}
-          glossaryName={selected.name}
-          isImporting={bulkImport.isPending}
-          onImport={importTerms}
-        />
-      ) : null}
+      <GlossaryImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        glossaryName={selected?.name}
+        isImporting={bulkImport.isPending || createGlossary.isPending}
+        onImport={importTerms}
+        needsGlossaryCreation={!selected}
+        onCreateAndImport={handleCreateAndImport}
+      />
     </WorkspacePage>
   );
 }
