@@ -73,6 +73,24 @@ export function useEndedRoomRecord(
   return useQuery({
     ...roomHistoryQuery(workspaceId),
     enabled: Boolean(workspaceId && roomId),
+    /**
+     * WT-509 — the same rule as `useRoomHistory` above, and its absence here was the bug.
+     *
+     * The comment on that hook says it exactly: "Without this the page sat on 'generating' until
+     * somebody reloaded, which reads as broken rather than as pending." The fix went onto the
+     * LIST hook. The room page — the page in the screenshot on the ticket, the one somebody opens
+     * because a notification told them the summary was ready — reads through THIS hook, which
+     * never polled. A summary that landed forty seconds after the meeting ended was invisible on
+     * the one screen built to show it.
+     *
+     * Narrowed to this room rather than reusing shouldPollRoomHistory over the whole page: the
+     * record view is open on ONE meeting, and polling because some other meeting in the workspace
+     * is still finalising would keep an idle tab requesting indefinitely.
+     */
+    refetchInterval: (query) => {
+      const room = query.state.data?.rooms.find((candidate) => candidate.id === roomId);
+      return room && shouldPollRoomHistory([room]) ? POLL_INTERVAL_MS : false;
+    },
     select: (data) => data.rooms.find((room) => room.id === roomId) ?? null,
   });
 }

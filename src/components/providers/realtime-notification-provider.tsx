@@ -150,6 +150,24 @@ export function RealtimeNotificationProvider({
       (notif: NotificationEventPayload) => {
         queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
 
+        /**
+         * WT-509 — the notification IS the signal, so stop making the page find out on its own.
+         *
+         * The reported state was a Notification Center saying "Summary ready for X" sitting
+         * directly above a Summary tab still spinning on "Generating summary…". Both were reading
+         * the truth of their own cache: this one had just been told, the other had not asked
+         * again. The record hook polls now, but polling is a fallback — the moment the message
+         * arrives is the moment the answer changed, and waiting out an interval afterwards is a
+         * delay we are choosing.
+         *
+         * Invalidated across every filter and page of the archive rather than one entry, because
+         * the same meeting appears under several of them and the room id alone does not identify
+         * a cache key.
+         */
+        if (notif.type === "MEETING_SUMMARY_READY") {
+          queryClient.invalidateQueries({ queryKey: ["room-history"] });
+        }
+
         const title = notif.title || "New Notification";
         const message =
           notif.content || notif.message || "You have a new update.";
