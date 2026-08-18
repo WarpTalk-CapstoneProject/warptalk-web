@@ -178,6 +178,8 @@ export function KnowledgeTable({
     return allItems;
   }, [allItems, filters.retrievalTab]);
 
+  const { factCategory, cursorStack } = filters;
+
   const availableCategories = useMemo(() => {
     const catSet = new Set<string>(FACT_CATEGORIES);
     if (filters.factCategory) {
