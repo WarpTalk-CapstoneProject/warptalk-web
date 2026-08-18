@@ -2,6 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
   CreateTranslationRoomRequest,
@@ -323,6 +324,39 @@ export function useSetFlashMode(roomId: string) {
       // Seeded from what the SERVER returned, not from what was asked for. A 403 never reaches
       // here, so the switch cannot show a state the room does not actually have.
       queryClient.setQueryData(["translation-room", roomId, "flash-mode"], enabled);
+    },
+  });
+}
+
+/**
+ * How much the STT provider denoises THIS user's own microphone in this meeting.
+ *
+ * No polling interval, unlike useFlashMode above, and the difference is not an oversight: flash
+ * mode is a ROOM setting somebody else can change under you, so a guest's switch has to keep
+ * catching up. This is the caller's own microphone and nobody else can move it, so the only writer
+ * is the mutation below — which seeds the cache itself.
+ */
+export function useNoiseReduction(roomId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["translation-room", roomId, "noise-reduction"],
+    queryFn: () => translationRoomService.getNoiseReduction(roomId),
+    enabled: enabled && Boolean(roomId),
+    // A room that cannot answer is not an error worth showing anybody: the STT worker falls back
+    // when it cannot read the key, and "off" is the honest thing to render.
+    retry: false,
+    initialData: "off" as NoiseReductionMode,
+  });
+}
+
+export function useSetNoiseReduction(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mode: NoiseReductionMode) =>
+      translationRoomService.setNoiseReduction(roomId, mode),
+    onSuccess: (mode) => {
+      // Seeded from what the SERVER returned, not from what was asked for — the endpoint refuses
+      // an unusable mode, and the menu must never show a mode the pipeline did not accept.
+      queryClient.setQueryData(["translation-room", roomId, "noise-reduction"], mode);
     },
   });
 }
