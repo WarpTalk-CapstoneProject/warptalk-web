@@ -46,7 +46,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MyMeetingItem } from "@/types/myMeetings";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
-type TimeFilter = "all" | "upcoming" | "past" | "with_outputs";
+type TimeFilter = "all" | "upcoming" | "past";
 
 /**
  * Month or week.
@@ -62,7 +62,6 @@ const timeFilters: Array<{ value: TimeFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "upcoming", label: "Upcoming" },
   { value: "past", label: "Attended" },
-  { value: "with_outputs", label: "With outputs" },
 ];
 const EMPTY_MEETINGS: MyMeetingItem[] = [];
 
@@ -121,7 +120,6 @@ export default function MyMeetingsPage() {
     return allMeetings.filter((meeting) => {
       if (filter === "upcoming") return meeting.timeState !== "past";
       if (filter === "past") return meeting.timeState === "past";
-      if (filter === "with_outputs") return meeting.artifacts.length > 0;
       return true;
     });
   }, [allMeetings, filter]);
@@ -213,7 +211,7 @@ export default function MyMeetingsPage() {
           sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
           same word three times with documentation living in the furniture. Meetings and Members
           open straight onto their content and this now does too. */}
-      <header className="flex flex-col gap-4 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-end lg:px-8">
+      <header className="flex border-b border-border px-5 py-3 lg:items-center lg:justify-end lg:px-8">
         <div className="flex w-full items-center gap-2 lg:w-auto">
           {/* See history/page.tsx: one search affordance across the list pages. */}
           <ExpandingSearchDock
@@ -250,7 +248,7 @@ export default function MyMeetingsPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[268px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-4 py-5 lg:flex">
+        <aside className="hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5 lg:flex">
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
               <button
@@ -276,15 +274,16 @@ export default function MyMeetingsPage() {
               </button>
             </div>
 
-            <div className="rounded-xl border border-border bg-surface-1 p-1">
+            <div className="overflow-hidden rounded-xl border border-border bg-surface-1 p-1">
               <Calendar
                 mode="single"
                 month={monthAnchor}
                 onMonthChange={setMonthAnchor}
                 onSelect={(date) => date && goToDay(date)}
-                className="w-full"
+                className="w-full p-0.5 [--cell-size:1.8rem]"
                 classNames={{
                   month_caption: "hidden",
+                  nav: "hidden",
                 }}
                 modifiers={{
                   hasMeeting: daysWithMeetings,
@@ -301,6 +300,27 @@ export default function MyMeetingsPage() {
             </div>
           </div>
 
+          {/* 3 Filter Tabs positioned above Statistics Count Cards */}
+          <div className="flex items-center justify-around gap-1 rounded-lg border border-border bg-surface-2/50 p-1" role="tablist" aria-label="Timeline filters">
+            {timeFilters.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={filter === item.value}
+                onClick={() => setFilter(item.value)}
+                className={cn(
+                  "flex-1 rounded-md py-1.5 text-center text-[11px] font-medium transition-colors",
+                  filter === item.value
+                    ? "bg-surface-1 text-ink font-semibold shadow-xs"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
           <dl className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border border-sky-500/15 bg-sky-500/[0.05] px-3 py-2">
               <dt className="text-[10px] text-ink-subtle">Upcoming</dt>
@@ -311,26 +331,6 @@ export default function MyMeetingsPage() {
               <dd className="mt-0.5 text-[16px] font-semibold tabular-nums">{counts.past}</dd>
             </div>
           </dl>
-
-          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Timeline filters">
-            {timeFilters.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                role="tab"
-                aria-selected={filter === item.value}
-                onClick={() => setFilter(item.value)}
-                className={cn(
-                  "h-7 rounded-md px-3 text-[11px] font-medium transition-colors",
-                  filter === item.value
-                    ? "bg-ink text-surface-1"
-                    : "text-ink-muted hover:bg-surface-2 hover:text-ink",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
 
           {meetings.isPartial ? (
             <p className="text-[10px] leading-4 text-amber-700">
@@ -512,16 +512,25 @@ function MonthGrid({
                           ? onOpenPast(meeting.id)
                           : onNavigate(meeting.id)
                       }
+                      title={meeting.title}
                       className={cn(
                         "group cursor-pointer rounded border px-1.5 py-1 text-[10px] transition-colors",
                         rowToneClass(meeting),
                       )}
                     >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="truncate font-medium">{meeting.title}</span>
-                        <span className="shrink-0 text-[9px] tabular-nums text-ink-subtle">
+                      <div className="flex items-center gap-1">
+                        <span className={cn("truncate font-medium", meeting.status === "cancelled" && "line-through text-ink-muted")}>
+                          {meeting.title}
+                        </span>
+                        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
                           {formatTime(meeting.occursAt)}
                         </span>
+                        {meeting.timeState === "live" ? (
+                          <span className="relative flex size-1.5 shrink-0">
+                            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
+                            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -681,12 +690,23 @@ function WeekCard({
       )}
     >
       <div className="flex items-center gap-1.5">
-        <span className={cn("h-3 w-0.5 shrink-0 rounded-full", spineClass(meeting))} />
         <span className="text-[10px] font-medium tabular-nums text-ink-muted">
           {formatTime(meeting.occursAt)}
         </span>
+        <span
+          className={cn(
+            "ml-auto rounded px-1 py-0.5 text-[9px] font-medium capitalize",
+            stateBadgeClass(meeting),
+          )}
+        >
+          {meeting.timeState === "live"
+            ? "Live"
+            : meeting.timeState === "upcoming"
+            ? "Upcoming"
+            : "Attended"}
+        </span>
         {meeting.timeState === "live" ? (
-          <span className="relative ml-auto flex size-1.5 shrink-0">
+          <span className="relative flex size-1.5 shrink-0">
             <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
             <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
           </span>
@@ -1124,22 +1144,22 @@ function meetingAudienceLabel(meeting: MyMeetingItem, viewerUserId: string | nul
 
 function spineClass(meeting: MyMeetingItem) {
   if (meeting.timeState === "live") return "bg-rose-500 motion-safe:animate-pulse";
-  if (meeting.timeState === "upcoming") return "bg-sky-500/70";
-  if (meeting.status === "cancelled") return "bg-ink-subtle/30";
+  if (meeting.timeState === "upcoming") return "bg-sky-500";
+  if (meeting.status === "cancelled") return "bg-slate-400";
   return "bg-emerald-500";
 }
 
 function rowToneClass(meeting: MyMeetingItem) {
+  if (meeting.status === "cancelled") {
+    return "border-l-4 border-l-slate-400 border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
+  }
   if (meeting.timeState === "live") {
-    return "border-rose-500/20 bg-rose-500/[0.06] hover:border-rose-500/35 hover:bg-rose-500/[0.1]";
+    return "border-l-4 border-l-rose-500 border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100 hover:bg-rose-500/20";
   }
   if (meeting.timeState === "upcoming") {
-    // The state is already carried by the accent bar and the badge. Tinting the whole row as
-    // well turned the content area into a green-and-blue wash, which is what stopped this page
-    // reading as white — the one thing every other workspace page does.
-    return "border-border bg-surface-1 hover:border-sky-500/30 hover:bg-sky-500/[0.04]";
+    return "border-l-4 border-l-sky-500 border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
   }
-  return "border-border bg-surface-1 hover:border-emerald-500/30 hover:bg-emerald-500/[0.04]";
+  return "border-l-4 border-l-emerald-500 border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
 }
 
 function stateBadgeClass(meeting: MyMeetingItem) {
