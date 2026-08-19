@@ -137,6 +137,10 @@ export const API = {
   },
   meetings: {
     join: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/join`,
+
+    /** WT-525: publish-only token for the EXTERNAL_BRIDGE stand-in seat. Host-only, bridge-rooms-only. */
+
+    bridgeToken: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/bridge-token`,
     triggerAi: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/trigger-ai`,
     chatList: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSend: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
