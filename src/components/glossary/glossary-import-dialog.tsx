@@ -91,9 +91,38 @@ function cellText(value: unknown): string {
   return String(value);
 }
 
+/**
+ * WT-505: the header row is FOUND, not assumed to be row 1.
+ *
+ * Real vocabulary spreadsheets routinely open with a title, an export timestamp, or a blank
+ * spacer before the column names — none of which the person exporting them thinks of as data.
+ * Reading row 1 unconditionally turned every one of those into "this file has no Term column",
+ * which is a true statement about row 1 and a false one about the file.
+ *
+ * Bounded to the first few rows: beyond that, a file with no recognisable header really does not
+ * have one, and scanning further would start matching a stray cell in the body.
+ */
+const MAX_HEADER_SCAN_ROWS = 10;
+
+function findHeaderRow(matrix: string[][]): {
+  index: number;
+  columns: (keyof ParsedGlossaryRow | undefined)[];
+} | null {
+  const limit = Math.min(matrix.length, MAX_HEADER_SCAN_ROWS);
+  for (let index = 0; index < limit; index += 1) {
+    const columns = (matrix[index] ?? [])
+      .map((cell) => cell.trim().toLowerCase())
+      .map((name) => HEADER_ALIASES[name]);
+    if (columns.includes("sourceTerm") && columns.includes("targetTerm")) {
+      return { index, columns };
+    }
+  }
+  return null;
+}
+
 function toRows(matrix: string[][]): { rows: ParsedGlossaryRow[]; error?: string } {
-  const header = matrix[0]?.map((cell) => cell.trim().toLowerCase()) ?? [];
-  const columns = header.map((name) => HEADER_ALIASES[name]);
+  const found = findHeaderRow(matrix);
+  const columns = found?.columns ?? [];
 
   const termIndex = columns.indexOf("sourceTerm");
   const translationIndex = columns.indexOf("targetTerm");
@@ -109,7 +138,7 @@ function toRows(matrix: string[][]): { rows: ParsedGlossaryRow[]; error?: string
   }
 
   const rows: ParsedGlossaryRow[] = [];
-  for (const raw of matrix.slice(1)) {
+  for (const raw of matrix.slice((found?.index ?? 0) + 1)) {
     const sourceTerm = (raw[termIndex] ?? "").trim();
     const targetTerm = (raw[translationIndex] ?? "").trim();
     // A blank line in the middle of a spreadsheet is punctuation, not data.
@@ -186,6 +215,38 @@ async function parseWorkbook(file: File): Promise<string[][]> {
   return matrix;
 }
 
+/**
+ * WT-505: a file the importer is guaranteed to accept, so "what shape should this be?" stops
+ * being answered by trial and error against an error message.
+ *
+ * Built in the browser from the same column names the parser recognises, rather than shipped as
+ * a static asset, so it cannot drift from HEADER_ALIASES the way a checked-in file would. CSV
+ * rather than XLSX because it opens in every spreadsheet app and there is nothing to encode.
+ */
+function downloadSampleTemplate() {
+  const rows = [
+    ["Term", "Translation", "Field", "Definition", "Note", "Part of speech", "Priority"],
+    ["offside", "việt vị", "Football", "Attacker ahead of the last defender", "Common in match commentary", "noun", "1"],
+    ["headshot", "bắn trúng đầu", "Gaming", "A shot that hits the head", "", "noun", "2"],
+  ];
+  const csv = rows
+    // Quote everything and double any embedded quote: a term legitimately containing a comma
+    // would otherwise produce a sample file the importer itself misreads.
+    .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(","))
+    .join("\r\n");
+
+  // BOM, deliberately. Excel opens a UTF-8 CSV without one as Windows-1252 and renders "việt vị"
+  // as mojibake — for a glossary tool whose whole subject is non-ASCII vocabulary, a sample that
+  // demonstrates broken encoding is worse than none.
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "warptalk-glossary-template.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function GlossaryImportDialog({
   open,
   onOpenChange,
@@ -238,9 +299,16 @@ export function GlossaryImportDialog({
         return;
       }
       setRows(parsed.rows);
-    } catch {
+    } catch (cause) {
       setFileName(file.name);
-      setError("That file could not be read. Save it as .xlsx or .csv and try again.");
+      // WT-505: say WHAT failed. This used to swallow the exception and print one generic
+      // sentence, so a corrupt zip, an unsupported .xls, and a file the browser could not read
+      // at all were indistinguishable — to the user AND to anyone trying to reproduce it from a
+      // bug report. The advice stays; the reason is added to it.
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setError(
+        `That file could not be read (${detail}). Save it as .xlsx or .csv and try again, or start from the sample below.`,
+      );
     } finally {
       setIsParsing(false);
     }
@@ -266,11 +334,18 @@ export function GlossaryImportDialog({
             Import terms
           </DialogTitle>
           <DialogDescription className="text-[12px] text-ink-muted">
-            Into <span className="font-medium text-ink">{glossaryName}</span>. The first row must
+            Into <span className="font-medium text-ink">{glossaryName}</span>. A row near the top must
             name the columns; <span className="font-medium">Term</span> and{" "}
             <span className="font-medium">Translation</span> are required. Field, Definition, Note,
             Part of speech and Priority are used when present.
           </DialogDescription>
+          <button
+            type="button"
+            onClick={downloadSampleTemplate}
+            className="self-start text-[12px] font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Download a sample file
+          </button>
         </DialogHeader>
 
         <div>
