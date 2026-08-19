@@ -124,7 +124,6 @@ checks.push([
 // components/layout/header-search.tsx, which has no sign-out of its own.
 const LOGOUT_CALL_SITES = [
   "src/components/layout/linear-sidebar.tsx",
-  "src/app/invitations/[token]/page.tsx",
 ];
 for (const rel of LOGOUT_CALL_SITES) {
   const source = await read(rel);

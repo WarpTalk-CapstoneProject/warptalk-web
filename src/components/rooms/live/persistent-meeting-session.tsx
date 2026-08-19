@@ -37,6 +37,11 @@ import {
   sessionsKey,
   useEndTranslationRoom,
   useLeaveTranslationRoom,
+  useRefreshDubVoice,
+  useFlashMode,
+  useSetFlashMode,
+  useNoiseReduction,
+  useSetNoiseReduction,
   useSetVoiceCloneConsent,
   useTranslationRoom,
   useTranslationRoomParticipants,
@@ -63,7 +68,7 @@ import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
-import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import { useDubVoice, useSetDubVoice, useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { buildMeetingEndedPath } from "@/lib/meeting/meeting-navigation";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
@@ -75,6 +80,7 @@ import type {
   VoiceOptionDto,
   VoiceCloneStateDto,
 } from "@/types/realtime";
+import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
@@ -89,6 +95,9 @@ import {
 } from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
+import { isExternalBridge } from "@/lib/meeting/meeting-types";
+import { findBridgeDeviceIds, OUTBOUND_DEVICE_LABEL, INBOUND_DEVICE_LABEL } from "@/lib/audio/virtual-bridge-check";
+import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
@@ -138,6 +147,8 @@ import {
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
+import { meetingService } from "@/services/meeting.service";
+import { getErrorMessage } from "@/lib/api/errors";
 import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
@@ -201,6 +212,56 @@ export function PersistentMeetingSession({
   const [wasConnectable, setWasConnectable] = useState(false);
 
   const roomQuery = useTranslationRoom(roomId);
+
+  // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
+  // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
+  const { data: workspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
+
+  // WT-525. An external-bridge meeting runs on Google Meet with WarpTalk beside it, so the dub
+  // meant for the far side has to leave through the virtual microphone Meet is listening to
+  // rather than through the host's headphones. Resolving the device is a device-list read, not
+  // the wizard's tone probe: a device that is present but not carrying is something the wizard
+  // diagnoses, and refusing to route because of it would turn a fixable setup problem into no
+  // audio path at all.
+  const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
+  const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
+  const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
+
+  // A bridge that is not carrying is indistinguishable from a bridge that is, from inside
+  // WarpTalk: the transcript still scrolls and the meeting still looks healthy while the far
+  // side hears nothing. So this is a toast, not a state nobody renders.
+  const handleBridgeOutboundError = useCallback((message: string) => {
+    toast.error("The far side is not hearing the translation.", { description: message });
+  }, []);
+
+  useEffect(() => {
+    // Not cleared on the way out: the value is only ever READ through `isBridgeRoom` below, so
+    // clearing it here would be a synchronous setState in an effect body for no observable
+    // difference — a cascading render to reach a state nothing can see.
+    if (!isBridgeRoom) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { outboundDeviceId, inboundDeviceId } = await findBridgeDeviceIds();
+        if (cancelled) return;
+        setBridgeOutboundDeviceId(outboundDeviceId);
+        setBridgeInboundDeviceId(inboundDeviceId);
+        if (!outboundDeviceId) {
+          toast.error("This meeting cannot reach Google Meet yet.", {
+            description: `${OUTBOUND_DEVICE_LABEL} is not installed, so the far side will not hear the translation.`,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setBridgeOutboundDeviceId(null);
+          setBridgeInboundDeviceId(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isBridgeRoom]);
   // The LiveKit disconnect is only half of what an abandoned tab costs. This query polls every
   // 3s — 20 requests a minute against a gateway that rate-limits an IP at 100/min and answers
   // rejections with a bodyless 503 that reads exactly like an outage. An idle-reaped session
@@ -219,6 +280,16 @@ export function PersistentMeetingSession({
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
+  const refreshDubVoice = useRefreshDubVoice(roomId);
+  // WT-B. Read by everyone in the room so a guest's switch sits where the host left it; written
+  // only by the room host, which is what the server enforces too.
+  const { data: flashModeEnabled = false } = useFlashMode(roomId);
+  const setFlashMode = useSetFlashMode(roomId);
+  // The caller's OWN microphone, not the room's. No host check anywhere on this one, deliberately:
+  // it changes how this person is transcribed and nobody else's audio, and the server agrees — see
+  // IMicrophoneNoiseReductionService for why gating it would be the bug.
+  const { data: noiseReductionMode = "off" } = useNoiseReduction(roomId);
+  const setNoiseReduction = useSetNoiseReduction(roomId);
   const { mutateAsync: joinMeetingAsync, isPending: isMeetingJoining } =
     useJoinMeeting();
   const { mutateAsync: registerParticipantAsync } = useJoinTranslationRoomByCode();
@@ -457,6 +528,88 @@ export function PersistentMeetingSession({
   useEffect(() => {
     isHostRef.current = isHost;
   }, [isHost]);
+
+  // WT-525 — the inbound leg. The far side of the Google Meet call is captured from the virtual
+  // speaker Meet plays into, and published on a SECOND LiveKit connection under the stand-in
+  // identity, so the pipeline attributes their speech to them rather than to the host.
+  //
+  // Gated on `translationStarted`, not merely on being in the room. Before Start Translation
+  // there is no STT/MT/TTS pipeline to consume the track, so connecting early would publish into
+  // a room nothing is listening to and burn LiveKit connection minutes — the quota this project
+  // has already exhausted once (WT-269).
+  //
+  // Host-only because the token is host-only: a participant calling this would take a 403 on
+  // every render, and a 403 here is a settled answer rather than a transient one.
+  const bridgeInboundRef = useRef<{ stop: () => Promise<void> } | null>(null);
+
+  useEffect(() => {
+    const wanted = isBridgeRoom && isHost && translationStarted && Boolean(bridgeInboundDeviceId);
+    if (!wanted) {
+      // Covers Stop Translation and leaving the room. Not awaited: teardown is fire-and-forget by
+      // nature and an effect cleanup cannot await anyway.
+      void bridgeInboundRef.current?.stop();
+      bridgeInboundRef.current = null;
+      return;
+    }
+    if (bridgeInboundRef.current) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await meetingService.bridgeToken(roomId);
+        const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace(
+          "localhost",
+          typeof window !== "undefined" ? window.location.hostname : "localhost",
+        );
+        if (!serverUrl) throw new Error("No LiveKit server is configured for this deployment.");
+
+        const handles = await openBridgeInbound({
+          serverUrl,
+          token: data.token,
+          inboundDeviceId: bridgeInboundDeviceId!,
+          onDisconnected: () => {
+            bridgeInboundRef.current = null;
+            toast.error("The external call was disconnected.", {
+              description: "WarpTalk has stopped hearing the other side of the meeting.",
+            });
+          },
+        });
+
+        // The effect can be torn down while connect() is in flight. Without this the handles
+        // would be unreachable and the second connection would stay in the room, publishing a
+        // device nobody is releasing.
+        if (cancelled) {
+          void handles.stop();
+          return;
+        }
+        bridgeInboundRef.current = handles;
+      } catch (error) {
+        if (cancelled) return;
+        // Said out loud rather than logged: with the outbound leg working, the far side can hear
+        // the user perfectly while the user hears nothing back — which reads as the other person
+        // having gone quiet, not as a broken bridge.
+        toast.error("WarpTalk cannot hear the external call.", {
+          description: getErrorMessage(
+            error,
+            `${INBOUND_DEVICE_LABEL} could not be opened, so the other side will not be translated.`,
+          ),
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isBridgeRoom, isHost, translationStarted, bridgeInboundDeviceId, roomId]);
+
+  // Leaving the page entirely must not strand the second connection: it holds a LiveKit seat and
+  // the capture device, neither of which the room teardown above knows about.
+  useEffect(() => {
+    return () => {
+      void bridgeInboundRef.current?.stop();
+      bridgeInboundRef.current = null;
+    };
+  }, []);
   // Only the actual host may START the room. Workspace admins/owners get host-like
   // UI privileges (isHost) but the backend rejects a start from anyone whose id != room.hostId
   // with 403, so the auto-start below must gate on true host identity — not workspace role.
@@ -849,6 +1002,29 @@ export function PersistentMeetingSession({
     import("@microsoft/signalr").HubConnection | null
   >(null);
 
+  /**
+   * Bumped every time the translation hub becomes usable — the initial start AND every
+   * reconnect. WT-528.
+   *
+   * The three value-sync effects below each wait up to 2.6s for the hub
+   * (HUB_RETRY_DELAYS_MS) and then give up. `startAndJoin` retries for up to 5s, and an
+   * initial connect is not a RECONNECT, so `onreconnected` never fires for it. That leaves a
+   * window in which a pick is dropped with nothing to resend it — and because the effects
+   * wrote their "applied" ref BEFORE awaiting, every later run bailed on the equality guard
+   * and the value never reached the server at all.
+   *
+   * Production, 18 Aug: a participant's control bar read "Japanese" while their row still
+   * said `en`, last written seven minutes earlier. They are not the same failure as a lost
+   * network call — the client believes it succeeded, so nothing retries and nothing warns.
+   * Their speech kept being routed as English, which is what "I set jp but they hear my real
+   * voice, and occasionally a dubbed one" actually was.
+   *
+   * Depending on this counter re-runs those effects once the hub is genuinely up. Together
+   * with only writing the applied ref AFTER a successful invoke, a dropped pick is always
+   * retried instead of silently kept.
+   */
+  const [hubGeneration, setHubGeneration] = useState(0);
+
   // Publish the REAL mic state to the roster, whenever it changes and however it changed.
   //
   // Keyed on `microphoneEnabled` on purpose: LocalMediaController mirrors that state from the
@@ -864,14 +1040,17 @@ export function PersistentMeetingSession({
     });
   }, [microphoneEnabled, roomId]);
 
-  // Last listen language actually sent to the hub — skips a redundant SetListenLanguage
-  // call when this effect re-runs without the value having changed.
+  // Last listen language the hub CONFIRMED — skips a redundant SetListenLanguage call when
+  // this effect re-runs without the value having changed.
+  //
+  // WT-528: written after the invoke resolves, never before. Writing it up front made the
+  // ref a record of intent rather than of what the server holds, so a call that never went
+  // out still marked the value as applied and the equality guard above swallowed every retry.
   const appliedListenLanguageRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!listenLanguage || appliedListenLanguageRef.current === listenLanguage)
       return;
-    appliedListenLanguageRef.current = listenLanguage;
 
     let cancelled = false;
     (async () => {
@@ -887,18 +1066,29 @@ export function PersistentMeetingSession({
         isReady: (hub) => hub.state === HubConnectionState.Connected,
         isCancelled: () => cancelled,
       });
-      if (!connection || cancelled) return;
+      // Superseded — the newer value owns the send, and its own run will confirm it.
+      if (cancelled) return;
+      // Ran out of retries with no usable hub. Leave the ref alone so the next hubGeneration
+      // re-runs this and sends it for real; saying nothing here is what let a language sit
+      // unapplied for minutes behind a control that claimed otherwise.
+      if (!connection) {
+        toast.error("Could not update the language you hear.", {
+          description: "Still reconnecting — retrying automatically.",
+        });
+        return;
+      }
       try {
         await connection.invoke("SetListenLanguage", roomId, listenLanguage);
+        if (!cancelled) appliedListenLanguageRef.current = listenLanguage;
       } catch {
-        toast.error("Could not update listen language.");
+        toast.error("Could not update the language you hear.");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [listenLanguage, roomId]);
+  }, [listenLanguage, roomId, hubGeneration]);
 
   // Read inside joinCurrentRoom/the reconnect handler below instead of closing over
   // sourceLanguage directly — same reasoning as targetLanguageRef above: a live
@@ -908,7 +1098,12 @@ export function PersistentMeetingSession({
   useEffect(() => {
     sourceLanguageRef.current = sourceLanguage;
   }, [sourceLanguage]);
-  // Last speak language actually sent to the hub — mirrors appliedListenLanguageRef.
+  // Last speak language the hub CONFIRMED — mirrors appliedListenLanguageRef, including
+  // WT-528's rule that it is written only after the invoke resolves.
+  //
+  // This is the side that decides how a person is TRANSCRIBED and whether a route out of
+  // them exists at all, so a value that never lands is not a cosmetic loss: STT gets the
+  // wrong hint, and a pair that should be translated reads as already sharing a language.
   const appliedSpeakLanguageRef = useRef<string | null>(null);
 
   // Also the reconcile path for a join that had to go out before the participant record or
@@ -921,7 +1116,6 @@ export function PersistentMeetingSession({
       appliedSpeakLanguageRef.current === sourceLanguage
     )
       return;
-    appliedSpeakLanguageRef.current = sourceLanguage;
 
     let cancelled = false;
     (async () => {
@@ -932,18 +1126,25 @@ export function PersistentMeetingSession({
         isReady: (hub) => hub.state === HubConnectionState.Connected,
         isCancelled: () => cancelled,
       });
-      if (!connection || cancelled) return;
+      if (cancelled) return;
+      if (!connection) {
+        toast.error("Could not update the language you speak.", {
+          description: "Still reconnecting — retrying automatically.",
+        });
+        return;
+      }
       try {
         await connection.invoke("SetSpeakLanguage", roomId, sourceLanguage);
+        if (!cancelled) appliedSpeakLanguageRef.current = sourceLanguage;
       } catch {
-        toast.error("Could not update speak language.");
+        toast.error("Could not update the language you speak.");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [sourceLanguage, roomId]);
+  }, [sourceLanguage, roomId, hubGeneration]);
 
   // Which TTS voice this listener wants to hear the AI interpreter speak in — like
   // listenLanguage, a live, in-meeting-changeable choice (media bar voice dropdown +
@@ -1022,7 +1223,6 @@ export function PersistentMeetingSession({
 
   useEffect(() => {
     if (appliedVoicePreferenceRef.current === voicePreference) return;
-    appliedVoicePreferenceRef.current = voicePreference;
 
     let cancelled = false;
     (async () => {
@@ -1033,13 +1233,18 @@ export function PersistentMeetingSession({
         isReady: (hub) => hub.state === HubConnectionState.Connected,
         isCancelled: () => cancelled,
       });
-      if (!connection || cancelled) return;
+      if (cancelled) return;
+      // WT-528: no toast here. Unlike the two languages, a voice preference that has not
+      // landed yet costs a stock voice for a few seconds, not a missing translation — and
+      // the retry on the next hubGeneration is silent and sufficient.
+      if (!connection) return;
       try {
         await connection.invoke(
           "SetVoicePreference",
           roomId,
           voicePreference || "",
         );
+        if (!cancelled) appliedVoicePreferenceRef.current = voicePreference;
       } catch {
         toast.error("Could not update voice preference.");
       }
@@ -1048,7 +1253,7 @@ export function PersistentMeetingSession({
     return () => {
       cancelled = true;
     };
-  }, [voicePreference, roomId]);
+  }, [voicePreference, roomId, hubGeneration]);
 
   // Choices for the media bar's language dropdown: the room's spoken language plus every
   // configured target — always includes whatever is currently selected so a value coming
@@ -1072,8 +1277,28 @@ export function PersistentMeetingSession({
     );
     addedLanguages.forEach((language) => codes.add(language));
     codes.add(normalizeLanguageCode(targetLanguage));
-    return Array.from(codes);
-  }, [room, targetLanguage, addedLanguages]);
+
+    // WT-497: the workspace's language policy applies to the menu, not only to room creation.
+    //
+    // These codes come from the room, and a room's languages were checked against the policy
+    // ON THE DAY IT WAS CREATED (WT-271). Tighten the policy afterwards and every existing room
+    // keeps offering what it was created with — the menu was faithfully reflecting the room and
+    // quietly contradicting the workspace. A recurring series makes it worse: the rule outlives
+    // any single policy change.
+    //
+    // Empty means unrestricted, matching the server's own whitelist check — so an absent or
+    // still-loading settings response must NOT be read as "nothing is allowed", or the picker
+    // would empty itself while the query is in flight.
+    const allowed = workspaceSettings?.allowedTargetLanguages;
+    if (!allowed || allowed.length === 0) return Array.from(codes);
+
+    const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
+    // The language this participant is CURRENTLY on stays, even if the policy now forbids it.
+    // Removing the selected option from its own menu makes the control render blank and gives
+    // them no way to move off it — the policy is enforced by what they can move TO.
+    const current = normalizeLanguageCode(targetLanguage);
+    return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
+  }, [room, targetLanguage, addedLanguages, workspaceSettings]);
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(
@@ -1168,6 +1393,64 @@ export function PersistentMeetingSession({
   // cloning itself keeps working correctly either way; only the toggle's initial
   // display can be stale until the participant touches it again).
   const [voiceCloneEnabled, setVoiceCloneEnabled] = useState(false);
+
+  // HOW THIS PARTICIPANT SOUNDS — the opposite direction from voicePreference above.
+  //
+  // Server-backed, unlike voiceCloneEnabled beside it: this one is a user setting in AuthService
+  // rather than a per-room flag, so it survives a refresh and is worth reading back.
+  const { data: dubVoice } = useDubVoice();
+  const setDubVoice = useSetDubVoice();
+
+  // Only profiles with a provider voice behind them. An uploaded recording has none until it has
+  // been cloned, and offering it would let somebody pick a voice that cannot be used — the same
+  // silent nothing WT-396 exists to remove.
+  const ownVoiceProfiles = useMemo(
+    () =>
+      (savedVoiceProfiles ?? [])
+        .filter((profile) => profile.providerVoiceId && profile.isActive)
+        .map((profile) => ({
+          id: profile.id,
+          name: profile.displayName || "My voice",
+          voiceId: profile.providerVoiceId!,
+        })),
+    [savedVoiceProfiles],
+  );
+
+  /**
+   * Pick the voice this participant is dubbed in, or null to be cloned live in the meeting.
+   *
+   * TWO CALLS, AND THE SECOND ONE IS THE POINT. The setting is written to AuthService, which
+   * knows nothing about rooms; the AI pipeline learns it only from an AUDIO_ROUTES_UPDATED
+   * payload that TranslationRoomService builds. Without the refresh the change is correct
+   * everywhere except the meeting the person is standing in, until somebody joins or translation
+   * is restarted and a publish happens for some unrelated reason.
+   */
+  function handleChangeDubVoice(voiceId: string | null) {
+    setDubVoice.mutate(
+      // A voice of your own is accepted without a language; a catalogue pick is validated
+      // against one — see VoiceProfileService.IsVoiceChoosableByAsync.
+      {
+        voiceId,
+        language: ownVoiceProfiles.some((profile) => profile.voiceId === voiceId)
+          ? null
+          : sourceLanguage,
+      },
+      {
+        onSuccess: async () => {
+          try {
+            await refreshDubVoice.mutateAsync();
+          } catch {
+            // The choice IS saved; only its arrival in this meeting is late. Saying so beats
+            // both silence and an error that implies the setting did not stick.
+            toast.error("Saved, but this meeting may keep the old voice until you rejoin.");
+            return;
+          }
+          toast.success(voiceId ? "Saved. You will be dubbed in this voice." : "Back to cloning your voice live.");
+        },
+        onError: () => toast.error("Could not change the voice you are dubbed in."),
+      },
+    );
+  }
 
   function handleChangeVoiceCloneConsent(enabled: boolean) {
     const previous = voiceCloneEnabled;
@@ -1855,6 +2138,11 @@ export function PersistentMeetingSession({
         try {
           await connection.start();
           if (!cancelled) await joinCurrentRoom();
+          // WT-528: the hub is usable NOW. This retry loop runs for up to 5s while the
+          // language/voice sync effects give up after 2.6s, and an initial start fires no
+          // `onreconnected`, so without this signal anything they dropped in that window was
+          // dropped for the rest of the meeting. Bumping re-runs them against a live hub.
+          if (!cancelled) setHubGeneration((generation) => generation + 1);
           return;
         } catch {
           // Token refresh can race the initial SignalR negotiate; retry quietly.
@@ -1915,6 +2203,13 @@ export function PersistentMeetingSession({
             // Best-effort — the client's own local sourceLanguage state is unaffected.
           }
         }
+
+        // WT-528: the three blocks above can only replay what the hub already CONFIRMED —
+        // each ref is null until an invoke succeeded. A value picked while the socket was
+        // down has no ref to replay, so it needs the sync effects to run again; that is what
+        // this bump does. The replays stay because they cover the opposite case: a value the
+        // server has, on a connection that no longer remembers this client.
+        setHubGeneration((generation) => generation + 1);
       })();
     });
 
@@ -2359,6 +2654,8 @@ export function PersistentMeetingSession({
           // against — it muted mismatched speakers for a pipeline that had not been started.
           translationActive={translationStarted}
           localUserId={user?.id}
+          bridgeOutboundDeviceId={isBridgeRoom ? bridgeOutboundDeviceId : null}
+          onBridgeOutboundError={handleBridgeOutboundError}
         />
         <TrackProcessorsController
           noiseSuppressionEnabled={noiseSuppressionEnabled}
@@ -2594,9 +2891,9 @@ export function PersistentMeetingSession({
 
             <div
               data-meeting-bottom-dock
-              className="relative z-40 flex min-h-12 shrink-0 items-center overflow-visible"
+              className="relative z-40 flex min-h-12 min-w-0 shrink-0 items-center justify-center overflow-visible"
             >
-              <div className="mx-auto flex w-max items-center gap-2 px-1">
+              <div className="mx-auto flex max-w-full min-w-0 items-center gap-2 px-1 overflow-x-auto no-scrollbar">
                 <div data-meeting-control-bar className="shrink-0">
                   <MeetingControlBar
                     meetingEnabled={Boolean(meetingSession?.token)}
@@ -2618,8 +2915,23 @@ export function PersistentMeetingSession({
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
+                    dubVoice={dubVoice ?? null}
+                    ownVoiceProfiles={ownVoiceProfiles}
+                    onChangeDubVoice={handleChangeDubVoice}
                     cloneCapture={cloneCaptureState}
-          voiceCloneHasAudience={voiceCloneHasAudience}
+                    voiceCloneHasAudience={voiceCloneHasAudience}
+                    flashModeEnabled={flashModeEnabled}
+                    // isRoomHost, not isHost, for the same reason /pause and /resume use it: the
+                    // endpoint gates on the room's EFFECTIVE host, and a workspace admin — host-
+                    // like everywhere else — would be handed a switch that answers 403.
+                    onChangeFlashMode={
+                      isRoomHost ? (enabled) => setFlashMode.mutate(enabled) : undefined
+                    }
+                    noiseReductionMode={noiseReductionMode}
+                    // No isRoomHost gate, unlike flash mode directly above. This one is the
+                    // caller's own microphone; the endpoint requires membership and writes only
+                    // under the caller's own id, so every participant gets a working control.
+                    onChangeNoiseReductionMode={(mode) => setNoiseReduction.mutate(mode)}
                     voiceEnabled={voiceEnabled}
                     handRaised={handRaised}
                     onCopyText={copyText}

@@ -24,6 +24,10 @@ export const API = {
     // fixed: preferredVoice is the voice you HEAR other people in, this is the voice YOU are
     // dubbed in. They shared a concept, so an uploaded recording of yourself changed neither.
     dubVoice: "/auth/voice-profiles/dub-voice",
+    // Hear a voice before a meeting instead of during one. POST because the first call for a
+    // voice does real work on the AI side; later calls for the same (voice, language) are
+    // served from that render.
+    preview: "/auth/voice-profiles/preview",
   },
   // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
   // profile: it is given once for the product, outlives any single profile or meeting, and is
@@ -85,6 +89,16 @@ export const API = {
     preflight: (roomCode: string) => `/translation-rooms/preflight/${roomCode}`,
     generateAudioRoutes: (id: string) => `/translation-rooms/${id}/audio-routes/generate`,
     voiceCloneConsent: (id: string) => `/translation-rooms/${id}/audio-routes/voice-clone-consent`,
+    // Carries no voice id. The dub voice is a user setting owned by AuthService and is written
+    // there; this only tells the room to go and re-read it, so the change reaches the AI
+    // pipeline without waiting for the next join or restart to trigger a publish.
+    refreshDubVoice: (id: string) => `/translation-rooms/${id}/audio-routes/dub-voice/refresh`,
+    // WT-B "flash mode": stream audio to STT while a speaker is still talking. A ROOM setting —
+    // GET is open to any participant so a guest renders the switch in the host's position, PUT
+    // is host-only and answers 403 to anyone else.
+    flashMode: (id: string) => `/translation-rooms/${id}/audio-routes/flash-mode`,
+    noiseReduction: (id: string) =>
+      `/translation-rooms/${id}/audio-routes/noise-reduction`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
@@ -123,6 +137,10 @@ export const API = {
   },
   meetings: {
     join: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/join`,
+
+    /** WT-525: publish-only token for the EXTERNAL_BRIDGE stand-in seat. Host-only, bridge-rooms-only. */
+
+    bridgeToken: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/bridge-token`,
     triggerAi: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/trigger-ai`,
     chatList: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSend: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
@@ -178,6 +196,9 @@ export const API = {
     joinRequests: "/workspaces/join-requests",
     approveJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/approve`,
     rejectJoinRequest: (workspaceId: string, inviteId: string) => `/workspaces/${workspaceId}/join-requests/${inviteId}/reject`,
+    leaveRequests: (workspaceId: string) => `/workspaces/${workspaceId}/leave-requests`,
+    approveLeaveRequest: (workspaceId: string, leaveRequestId: string) => `/workspaces/${workspaceId}/leave-requests/${leaveRequestId}/approve`,
+    rejectLeaveRequest: (workspaceId: string, leaveRequestId: string) => `/workspaces/${workspaceId}/leave-requests/${leaveRequestId}/reject`,
     documents: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
     knowledge: (workspaceId: string) => `/workspaces/${workspaceId}/knowledge`,
     knowledgeChunk: (workspaceId: string, chunkId: string) =>

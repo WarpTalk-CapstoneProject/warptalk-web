@@ -7,6 +7,7 @@ import {
   getMeetingSummarySeedRoom,
   isMeetingSummarySeedRoomId,
 } from "@/lib/meeting/meeting-summary-seed";
+import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
   CreateTranslationRoomRequest,
@@ -283,6 +284,87 @@ export function useSetVoiceCloneConsent(roomId: string) {
   return useMutation({
     mutationFn: async (enabled: boolean) => {
       await translationRoomService.setVoiceCloneConsent(roomId, enabled);
+    },
+  });
+}
+
+/**
+ * Make a dub-voice change taken in AuthService reach THIS meeting now.
+ *
+ * Called after VoiceProfileService.setDubVoice, never instead of it: the setting lives in
+ * AuthService, which knows nothing about rooms, and the AI pipeline learns it only from a route
+ * payload TranslationRoomService builds. Without this the change is correct everywhere except
+ * the meeting the person is standing in.
+ */
+export function useRefreshDubVoice(roomId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      await translationRoomService.refreshDubVoice(roomId);
+    },
+  });
+}
+
+/**
+ * WT-B "flash mode" for THIS room — read by anyone in it, written by the host.
+ *
+ * Read on an interval as well as on mount, because the host can move it from another client and
+ * a guest looking at a stale switch has no way to tell. Cheap: one small GET, and only while the
+ * meeting UI is mounted.
+ */
+export function useFlashMode(roomId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["translation-room", roomId, "flash-mode"],
+    queryFn: () => translationRoomService.getFlashMode(roomId),
+    enabled: enabled && Boolean(roomId),
+    refetchInterval: 30_000,
+    // A room that cannot answer is not an error worth showing anybody: the AI side falls back to
+    // the deployment default, and "off" is the honest thing to render.
+    retry: false,
+    initialData: false,
+  });
+}
+
+export function useSetFlashMode(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => translationRoomService.setFlashMode(roomId, enabled),
+    onSuccess: (enabled) => {
+      // Seeded from what the SERVER returned, not from what was asked for. A 403 never reaches
+      // here, so the switch cannot show a state the room does not actually have.
+      queryClient.setQueryData(["translation-room", roomId, "flash-mode"], enabled);
+    },
+  });
+}
+
+/**
+ * How much the STT provider denoises THIS user's own microphone in this meeting.
+ *
+ * No polling interval, unlike useFlashMode above, and the difference is not an oversight: flash
+ * mode is a ROOM setting somebody else can change under you, so a guest's switch has to keep
+ * catching up. This is the caller's own microphone and nobody else can move it, so the only writer
+ * is the mutation below — which seeds the cache itself.
+ */
+export function useNoiseReduction(roomId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["translation-room", roomId, "noise-reduction"],
+    queryFn: () => translationRoomService.getNoiseReduction(roomId),
+    enabled: enabled && Boolean(roomId),
+    // A room that cannot answer is not an error worth showing anybody: the STT worker falls back
+    // when it cannot read the key, and "off" is the honest thing to render.
+    retry: false,
+    initialData: "off" as NoiseReductionMode,
+  });
+}
+
+export function useSetNoiseReduction(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (mode: NoiseReductionMode) =>
+      translationRoomService.setNoiseReduction(roomId, mode),
+    onSuccess: (mode) => {
+      // Seeded from what the SERVER returned, not from what was asked for — the endpoint refuses
+      // an unusable mode, and the menu must never show a mode the pipeline did not accept.
+      queryClient.setQueryData(["translation-room", roomId, "noise-reduction"], mode);
     },
   });
 }

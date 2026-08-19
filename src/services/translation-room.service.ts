@@ -8,6 +8,10 @@ import {
   isMeetingSummarySeedRoomId,
 } from "@/lib/meeting/meeting-summary-seed";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
+import {
+  normalizeNoiseReductionMode,
+  type NoiseReductionMode,
+} from "@/lib/meeting/noise-reduction";
 import type {
   CancelSeriesResult,
   CreateRecurringRoomResponse,
@@ -360,6 +364,66 @@ export const translationRoomService = {
    * SetVoiceCloneConsent. Biometric data: only ever called from an explicit user action. */
   async setVoiceCloneConsent(id: string, enabled: boolean) {
     return apiClient.post<void>(API.translationRooms.voiceCloneConsent(id), { enabled });
+  },
+
+  /**
+   * Tell this room to re-read every speaker's chosen dub voice from AuthService and republish
+   * its routes.
+   *
+   * Called AFTER VoiceProfileService.setDubVoice, never instead of it. The setting itself lives
+   * in AuthService, which knows nothing about rooms — so without this the change is correct
+   * everywhere except the meeting the person is currently in, until somebody joins or
+   * translation is restarted and a publish happens for some other reason.
+   */
+  async refreshDubVoice(id: string) {
+    return apiClient.post<void>(API.translationRooms.refreshDubVoice(id));
+  },
+
+  /**
+   * WT-B "flash mode" — whether this ROOM streams audio to STT while a speaker is still talking.
+   *
+   * Readable by any participant, so a guest can render the switch where the host left it rather
+   * than guessing. Writing is host-only and answers 403 to anybody else, which the caller must
+   * surface rather than swallow: a switch that silently springs back is worse than one that says
+   * it is not yours to move.
+   */
+  async getFlashMode(id: string) {
+    const { data } = await apiClient.get<{ enabled: boolean }>(API.translationRooms.flashMode(id));
+    return Boolean(data?.enabled);
+  },
+
+  async setFlashMode(id: string, enabled: boolean) {
+    const { data } = await apiClient.put<{ enabled: boolean }>(
+      API.translationRooms.flashMode(id),
+      { enabled },
+    );
+    return Boolean(data?.enabled);
+  },
+
+  /**
+   * How much the STT provider denoises THIS caller's own microphone in this meeting.
+   *
+   * NOT the noise-suppression toggle in the same menu. That one is Krisp/the browser filtering the
+   * raw microphone, which changes what other people HEAR. This one changes how accurately what you
+   * say is RECOGNISED, and touches nobody else's audio — which is also why, unlike flash mode
+   * above, any participant may set it for themselves without the host.
+   *
+   * Self-service, so there is no 403 branch to think about: the only failure worth surfacing is a
+   * write that did not happen.
+   */
+  async getNoiseReduction(id: string) {
+    const { data } = await apiClient.get<{ mode: NoiseReductionMode }>(
+      API.translationRooms.noiseReduction(id),
+    );
+    return normalizeNoiseReductionMode(data?.mode);
+  },
+
+  async setNoiseReduction(id: string, mode: NoiseReductionMode) {
+    const { data } = await apiClient.put<{ mode: NoiseReductionMode }>(
+      API.translationRooms.noiseReduction(id),
+      { mode },
+    );
+    return normalizeNoiseReductionMode(data?.mode);
   },
 
   async start(id: string) {

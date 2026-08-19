@@ -87,6 +87,56 @@ export function PeoplePanel({
   // One request for the whole roster instead of one per row.
   usePresence(visibleParticipants.map((participant) => participant.userId));
 
+  // WT-537 — admit the whole lobby at once.
+  //
+  // Admitting one at a time is fine for a stray latecomer and unusable for the case this exists
+  // for: a scheduled meeting where everyone arrives in the same minute and the host is left
+  // clicking through a queue while the room waits on them.
+  //
+  // Deliberately N calls to the existing per-participant endpoint rather than a new bulk one.
+  // Admission is not a set operation server-side — each admit writes a participant row, seats
+  // them against the room's capacity, and publishes its own realtime event — so a bulk endpoint
+  // would have to reproduce all of that and decide what "half of them fit" means. Looping here
+  // keeps one definition of admitting somebody, and a capacity refusal lands on the person it
+  // refused rather than failing the whole batch.
+  const waitingParticipants = visibleParticipants.filter(
+    (participant) => participant.status === "waiting",
+  );
+  const admitAll = useAdmitParticipant(roomId);
+  const [admittingAll, setAdmittingAll] = useState(false);
+
+  async function handleAdmitAll() {
+    setAdmittingAll(true);
+    // Snapshotted before the first await: the roster polls every 3 seconds, so the array this
+    // closes over would otherwise be replaced mid-loop and somebody could be admitted twice or
+    // skipped entirely.
+    const queue = waitingParticipants;
+    let admitted = 0;
+    const failures: string[] = [];
+
+    for (const participant of queue) {
+      try {
+        await admitAll.mutateAsync(participant.id);
+        admitted += 1;
+      } catch (error) {
+        // Kept going rather than aborting. One person failing capacity or having already left
+        // is not a reason to leave the rest of the lobby waiting.
+        failures.push(getErrorMessage(error, participant.displayName));
+      }
+    }
+
+    setAdmittingAll(false);
+    if (admitted > 0) {
+      toast.success(`Admitted ${admitted} ${admitted === 1 ? "person" : "people"}.`);
+    }
+    if (failures.length > 0) {
+      toast.error(
+        `${failures.length} could not be admitted.`,
+        { description: failures[0] },
+      );
+    }
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-canvas p-3">
@@ -103,6 +153,18 @@ export function PeoplePanel({
           </button>
         </div>
       </div>
+
+      {isHost && waitingParticipants.length > 1 ? (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2/60 px-3 py-2">
+          <p className="text-[12px] text-ink-muted">
+            <span className="font-medium text-ink">{waitingParticipants.length} people</span> are
+            waiting to join.
+          </p>
+          <Button size="sm" onClick={handleAdmitAll} disabled={admittingAll}>
+            {admittingAll ? "Admitting…" : "Admit all"}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="space-y-1">
         {participantsLoading ? (

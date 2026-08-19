@@ -90,6 +90,7 @@ import {
 import type { EndedRoomHistoryItem } from "@/types/roomHistory";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import { isFinishedStatus } from "@/lib/meeting/room-occupancy";
+import { looksLikeRoomId } from "@/lib/meeting/room-code-guess";
 import {
   useTranscriptByRoom,
   useTranscriptSegments,
@@ -277,6 +278,33 @@ export default function RoomInformationPage() {
       return (
         <div className="flex h-full items-center justify-center">
           <p className="text-[13px] text-muted-foreground">Loading room…</p>
+        </div>
+      );
+    }
+
+    // WT-528: an OLD LINK is not a refusal, and must not be reported as one.
+    //
+    // `/room/{x}` and `/rooms/{x}` forward their segment here verbatim, and server-built
+    // invitation and reminder links used to carry the room CODE. A code can never resolve on
+    // this page, so the room read failed and this branch blamed the viewer's access — the room
+    // was fine and only the identifier was of the wrong kind. It then offered "Ask to join",
+    // which POSTs the code to an endpoint whose Guid binding answers 400 in a shape the client
+    // cannot parse, so the toast fell back to "This room is not available to join." — the
+    // sentence in the report.
+    //
+    // The links are fixed at the source, but ones already sent still carry codes.
+    if (!looksLikeRoomId(roomId)) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+            <p className="text-[13px] text-muted-foreground">
+              This meeting link is out of date, so we can&rsquo;t open the room from it. Open the
+              meeting from your Meetings list, or ask whoever invited you to share it again.
+            </p>
+            <Button size="sm" onClick={() => router.push(`/${workspaceSlug}/rooms`)}>
+              Go to Meetings
+            </Button>
+          </div>
         </div>
       );
     }

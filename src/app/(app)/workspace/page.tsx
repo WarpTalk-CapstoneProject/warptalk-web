@@ -287,7 +287,7 @@ export default function WorkspaceOnboardingGatePage() {
 
             <button
               type="button"
-              onClick={() => router.push("/workspace/create")}
+              onClick={() => router.push("/workspace/plans")}
               disabled={isCreateWorkspaceLocked}
               aria-describedby={isCreateWorkspaceLocked ? "create-workspace-reason" : undefined}
               className="group flex min-h-[116px] items-center gap-4 rounded-lg border border-border bg-surface-1 p-4 text-left shadow-sm transition-colors enabled:hover:border-hairline-strong enabled:hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"

@@ -17,6 +17,7 @@ import {
 import { getErrorMessage } from "@/lib/api/errors";
 import { useDubVoice, useSetDubVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
 import { languagesInScope } from "@/lib/language/languages";
+import { VoicePreviewButton } from "@/components/voice/voice-preview-button";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
 /** Sentinel for the empty choice. Radix Select cannot hold "" as an item value. */
@@ -68,6 +69,15 @@ export function MyDubVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }) 
     [profiles],
   );
 
+  const selectedVoiceName = useMemo(() => {
+    if (!chosen || chosen === LIVE_CLONE) return "Clone my voice during the meeting (default)";
+    const ownMatch = profiles.find((p) => p.providerVoiceId === chosen);
+    if (ownMatch) return ownMatch.displayName || "My voice";
+    const catalogMatch = catalog.find((v) => v.id === chosen);
+    if (catalogMatch) return catalogMatch.name;
+    return chosen;
+  }, [chosen, profiles, catalog]);
+
   function choose(value: string) {
     const voiceId = value === LIVE_CLONE ? null : value;
     // The catalogue needs a language to validate against; a voice of your own does not.
@@ -117,7 +127,7 @@ export function MyDubVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }) 
           disabled={isLoading || setDubVoice.isPending}
         >
           <SelectTrigger className="flex-1" aria-label="The voice you are dubbed in">
-            <SelectValue />
+            <SelectValue>{selectedVoiceName}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={LIVE_CLONE}>
@@ -147,6 +157,20 @@ export function MyDubVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }) 
             )}
           </SelectContent>
         </Select>
+
+        {/*
+          Beside the choice rather than inside the list: this is where somebody decides how they
+          will sound, so it is where they should be able to check. Live cloning has nothing to
+          play — the voice does not exist until the meeting builds it.
+        */}
+        {chosen && (
+          <VoicePreviewButton
+            voiceId={chosen}
+            language={bareLanguage(language)}
+            label="the voice you are dubbed in"
+            className="h-9 w-9 shrink-0 self-start text-ink-muted hover:text-ink"
+          />
+        )}
       </div>
 
       {pendingProfiles.length > 0 && (

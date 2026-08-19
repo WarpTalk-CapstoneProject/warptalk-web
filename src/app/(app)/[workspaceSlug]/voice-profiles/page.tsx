@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/select";
 import { LibraryVoicePicker } from "@/components/voice/library-voice-picker";
 import { MyDubVoicePicker } from "@/components/voice/my-dub-voice-picker";
+import { VoicePreviewButton } from "@/components/voice/voice-preview-button";
 import { VoiceConsentCard } from "@/components/voice/voice-consent-card";
 import {
   useCreateVoiceProfile,
@@ -1204,22 +1205,31 @@ function VoiceProfileRow({
         </div>
       )}
       {visibleProperties.includes("status") && (
-        <div>
-          <Badge
-            variant="outline"
-            className={`rounded-full px-1.5 py-0 text-[9px] capitalize ${
-              profile.isActive
-                ? "bg-emerald-500/10 text-emerald-600"
-                : "bg-surface-1/70 text-ink-muted"
-            }`}
-          >
-            {profile.isActive ? "Active" : profile.status}
-          </Badge>
-          {profile.hasSample ? (
-            <span className="mt-0.5 block truncate text-[10px] text-ink-muted">
-              {voiceConsentLabel(profile)}
-            </span>
-          ) : null}
+        <div className="flex items-center gap-1.5">
+          <div>
+            <Badge
+              variant="outline"
+              className={`rounded-full px-1.5 py-0 text-[9px] capitalize ${
+                profile.isActive
+                  ? "bg-emerald-500/10 text-emerald-600"
+                  : "bg-surface-1/70 text-ink-muted"
+              }`}
+            >
+              {profile.isActive ? "Active" : profile.status}
+            </Badge>
+            {profile.hasSample ? (
+              <span className="mt-0.5 block truncate text-[10px] text-ink-muted">
+                {voiceConsentLabel(profile)}
+              </span>
+            ) : null}
+          </div>
+          {profile.providerVoiceId && profile.language && (
+            <VoicePreviewButton
+              voiceId={profile.providerVoiceId}
+              language={profile.language}
+              label={profile.displayName || "this voice profile"}
+            />
+          )}
         </div>
       )}
     </div>

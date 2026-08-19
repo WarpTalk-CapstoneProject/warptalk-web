@@ -62,6 +62,9 @@ interface DocumentEventPayload {
   ingestionStatus?: string;
   status?: string;
   newStatus?: string;
+  eventType?: string;
+  event_type?: string;
+  aiEligible?: boolean;
 }
 
 interface MeetingEventPayload {
@@ -370,14 +373,12 @@ export function RealtimeNotificationProvider({
         invalidateDocumentQueries(payload);
 
         const title = payload?.title || payload?.documentTitle || "Document";
-        const status = (
-          payload?.ingestionStatus ||
-          payload?.status ||
-          payload?.newStatus ||
-          ""
-        ).toLowerCase();
+        const ingestionStatus = (payload?.ingestionStatus || "").toLowerCase();
+        const eventType = (payload?.eventType || payload?.event_type || "").toLowerCase();
+        const aiEligible = Boolean(payload?.aiEligible);
 
-        if (status === "ready" || status === "completed") {
+        // Only show Document Ready toast when vector ingestion is genuinely completed in Qdrant VectorDB
+        if (ingestionStatus === "completed" || eventType === "completed" || aiEligible) {
           toast.success("Document Ready", {
             description: `"${title}" has finished processing and is ready to view.`,
             icon: <FileText className="h-4 w-4 text-emerald-500" />,

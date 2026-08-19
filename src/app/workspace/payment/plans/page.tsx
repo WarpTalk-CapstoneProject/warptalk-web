@@ -18,6 +18,7 @@
 import {
   ArrowFatDown,
   ArrowFatUp,
+  ArrowLeft,
   CheckCircle,
   Crown,
   Warning,
@@ -47,6 +48,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildFeatureList, getPlanDescription } from "@/lib/utils";
+import { checkoutCurrency } from "@/lib/billing/plan-pricing";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -175,7 +177,10 @@ export default function PaymentPlansPage() {
         userId: user.id,
         workspaceId,
         amount,
-        currency: "vnd",
+        // WT-518: the plan decides its own denomination, here too. This page is a separate
+        // copy that Stripe return URLs still land on, so a fix applied only to the slugged
+        // one would leave a buyer arriving through Stripe charged in the wrong currency.
+        currency: checkoutCurrency(backendPlans.find((p) => p.slug === planSlug)),
         paymentType,
         planSlug: planSlug || undefined,
         billingCycle: billingCycle || undefined,
@@ -194,8 +199,40 @@ export default function PaymentPlansPage() {
     ? format(new Date(activeSub.currentPeriodEnd), "MMMM dd, yyyy")
     : null;
 
+  const handleBackNav = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else if (activeWorkspaceSlug) {
+      router.push(`/${activeWorkspaceSlug}/dashboard`);
+    } else {
+      router.push("/workspace/create");
+    }
+  };
+
   return (
-    <div className="flex min-h-full flex-col items-center pb-12 pt-8">
+    <div className="flex min-h-full flex-col items-center pb-12 pt-4">
+      {/* Top Navigation Bar */}
+      <div className="w-full max-w-4xl px-4 mb-4 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleBackNav}
+          className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted transition-colors hover:text-ink cursor-pointer"
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Workspace Creation</span>
+        </button>
+
+        {activeWorkspaceSlug && (
+          <button
+            type="button"
+            onClick={() => router.push(`/${activeWorkspaceSlug}/dashboard`)}
+            className="text-[12px] text-ink-muted transition-colors hover:text-ink cursor-pointer"
+          >
+            Return to Dashboard
+          </button>
+        )}
+      </div>
+
       {/* Header */}
       <div className="text-center max-w-2xl mb-12">
         <Badge

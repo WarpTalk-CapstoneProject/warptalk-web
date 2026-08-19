@@ -224,7 +224,7 @@ function TranscriptBubble({
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
     >
-      <div className={`flex max-w-[85%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
+      <div className={`flex max-w-[92%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
         <div className={`flex min-w-0 items-center gap-1.5 px-1 text-[10px] text-ink-subtle ${isSelf ? "flex-row-reverse" : ""}`}>
           <span className="min-w-0 truncate font-semibold text-ink-muted">
             {isSelf ? "You" : speakerName}

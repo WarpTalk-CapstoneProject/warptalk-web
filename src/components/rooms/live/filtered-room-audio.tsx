@@ -4,7 +4,13 @@ import { useEffect } from "react";
 import { RemoteTrackPublication, Track } from "livekit-client";
 import { AudioTrack, isTrackReference, useTracks } from "@livekit/components-react";
 
-const AI_INTERPRETER_PREFIX = "ai-interpreter-";
+import {
+  AI_INTERPRETER_PREFIX,
+  resolveInterpreterTracks,
+} from "@/lib/meeting/interpreter-track";
+import { BridgeOutboundAudio } from "./bridge-outbound-audio";
+import { HalfDuplexMic } from "./half-duplex-mic";
+
 
 /**
  * Replaces the default <RoomAudioRenderer />, which plays every subscribed audio
@@ -70,6 +76,8 @@ export function FilteredRoomAudio({
   voiceEnabled = true,
   translationActive,
   localUserId,
+  bridgeOutboundDeviceId,
+  onBridgeOutboundError,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
   targetLanguageNormalized: string;
@@ -83,7 +91,17 @@ export function FilteredRoomAudio({
   translationActive: boolean;
   /** This listener's own user id, so their own dub is never played back at them. */
   localUserId?: string | null;
+  /**
+   * WT-525 — set ONLY in an external-bridge meeting: the virtual device Google Meet is using as
+   * its microphone. Its presence flips the "never your own dub" rule below, because in a bridge
+   * meeting that track is not a redundant echo of yourself — it is the translated voice the far
+   * side is meant to hear, and this is the device that carries it to them.
+   */
+  bridgeOutboundDeviceId?: string | null;
+  /** Surfaces a failed hand-off to the virtual device; silence here is indistinguishable from a working bridge. */
+  onBridgeOutboundError?: (message: string) => void;
 }) {
+  const bridgeActive = Boolean(bridgeOutboundDeviceId);
   const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }], {
     onlySubscribed: false,
   });
@@ -97,20 +115,18 @@ export function FilteredRoomAudio({
   // subscription logic runs, so nothing below ever has to special-case "is this me".
   const trackRefs = tracks.filter(isTrackReference).filter((trackRef) => !trackRef.publication.isLocal);
 
-  // Language token sits between the prefix and the speaker GUID, so match on the
-  // "ai-interpreter-{lang}-" prefix rather than a full-identity equality.
-  const languagePrefix = `${AI_INTERPRETER_PREFIX}${targetLanguageNormalized}-`;
-  const voiceSegmentPrefix = voicePreference ? `voice-${voicePreference.slice(0, 8)}-` : "";
+  // The whole rule lives in lib/meeting/interpreter-track.ts, where it can be tested: it is a
+  // WHOLE-ROOM decision (a speaker's default track is declined only if a track in this
+  // listener's voice exists for that same speaker), so it cannot be expressed as a predicate
+  // over one identity — which is exactly the mistake that discarded every cloned voice.
+  const interpreterTracks = resolveInterpreterTracks({
+    identities: trackRefs.map((trackRef) => trackRef.participant.identity),
+    targetLanguageNormalized,
+    voicePreference,
+  });
 
   /** An interpreter identity this listener would accept → the speaker it dubs, else null. */
-  const dubbedSpeakerId = (identity: string) => {
-    if (!identity.startsWith(languagePrefix)) return null;
-    const rest = identity.slice(languagePrefix.length); // "{speakerId}" or "voice-{id8}-{speakerId}"
-    if (voicePreference) {
-      return rest.startsWith(voiceSegmentPrefix) ? rest.slice(voiceSegmentPrefix.length) : null;
-    }
-    return rest.startsWith("voice-") ? null : rest;
-  };
+  const dubbedSpeakerId = (identity: string) => interpreterTracks.get(identity) ?? null;
 
   // Speakers whose dub is ACTUALLY on the wire right now. tts_worker creates an
   // interpreter bot lazily, on the first synthesized chunk for a (speaker, language,
@@ -146,7 +162,12 @@ export function FilteredRoomAudio({
       // copy of what they just said, a second behind themselves. Nobody needs a translation
       // of their own sentence into the language they said it in.
       const dubbed = dubbedSpeakerId(identity);
-      if (localUserId && dubbed === localUserId) return false;
+      // ...unless this is a bridge meeting, where your own dub is the outbound leg. It still
+      // never reaches your headphones — BridgeOutboundAudio below renders it to the virtual
+      // device instead of <AudioTrack> — but it does have to stay SUBSCRIBED, and this predicate
+      // is what drives setSubscribed(). Returning false here would unsubscribe the one track the
+      // far side is listening to.
+      if (localUserId && dubbed === localUserId && !bridgeActive) return false;
       // A lingering bot must not be played once translation has stopped: tts_worker only
       // sweeps idle bots from inside _get_or_create_bot, so when synthesis stops there is
       // no next creation to trigger the sweep and the bot stays in the room indefinitely.
@@ -189,10 +210,38 @@ export function FilteredRoomAudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, translationActive, trackIdentityFingerprint]);
 
-  const audibleTracks = trackRefs.filter((trackRef) => isWanted(trackRef.participant.identity));
+  const wantedTracks = trackRefs.filter((trackRef) => isWanted(trackRef.participant.identity));
+
+  // In a bridge meeting exactly one of the wanted tracks goes somewhere else. Split it out rather
+  // than letting it fall through to <AudioTrack>: rendering both would play the far side's
+  // translation into the user's headphones as well as into Meet — the user would hear a delayed
+  // copy of themselves in another language, which is the single most confusing thing this feature
+  // can do while otherwise appearing to work.
+  const outboundTrack = bridgeActive
+    ? wantedTracks.find((trackRef) => dubbedSpeakerId(trackRef.participant.identity) === localUserId)
+    : undefined;
+  const audibleTracks = wantedTracks.filter((trackRef) => trackRef !== outboundTrack);
+
+  // Exactly the dubs going to this listener's own speakers — the outbound bridge leg is excluded
+  // because it plays into a virtual device Meet listens to, not into the room the user is sitting
+  // in, so it cannot come back through their microphone.
+  const localDubIdentities = audibleTracks
+    .filter((trackRef) => trackRef.participant.identity.startsWith(AI_INTERPRETER_PREFIX))
+    .map((trackRef) => trackRef.participant.identity);
 
   return (
     <>
+      {/* Keeps the room's own translation from being picked up by this microphone and
+          transcribed as the listener — see half-duplex-mic.tsx. */}
+      <HalfDuplexMic dubIdentities={localDubIdentities} enabled={translationActive} />
+      {outboundTrack && bridgeOutboundDeviceId && (
+        <BridgeOutboundAudio
+          key={`bridge-out-${outboundTrack.participant.identity}`}
+          trackRef={outboundTrack}
+          outputDeviceId={bridgeOutboundDeviceId}
+          onError={onBridgeOutboundError}
+        />
+      )}
       {audibleTracks.map((trackRef) => (
         <AudioTrack key={`${trackRef.participant.identity}-${trackRef.source}`} trackRef={trackRef} />
       ))}

@@ -31,6 +31,8 @@ export interface WorkspaceKnowledgeChunkDto {
    * indexer began stamping it — the listing sorts those last rather than guessing a time.
    */
   indexedAtMs: number | null;
+  /** Why AI ingestion failed or was disabled, if available. */
+  ingestionFailureReason?: string | null;
 }
 
 /**

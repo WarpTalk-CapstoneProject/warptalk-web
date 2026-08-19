@@ -46,6 +46,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface MessageTranslationState {
   text?: string;
+  targetLanguage?: string;
   loading: boolean;
   visible: boolean;
   error?: string;
@@ -140,6 +141,7 @@ export function ChatPanel({
             ...prev,
             [messageId]: {
               text: dto.translatedText,
+              targetLanguage: dto.targetLanguage || suggestedTargetLanguage,
               loading: false,
               visible: true,
             },
@@ -579,7 +581,7 @@ export function ChatPanel({
                     >
                       {translations[message.id]!.text}
                       <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
-                        {getLanguageName(suggestedTargetLanguage)}
+                        {getLanguageName(translations[message.id]?.targetLanguage || suggestedTargetLanguage)}
                       </span>
                     </p>
                   ) : null}
