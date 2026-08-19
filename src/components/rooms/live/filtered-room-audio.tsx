@@ -9,6 +9,7 @@ import {
   resolveInterpreterTracks,
 } from "@/lib/meeting/interpreter-track";
 import { BridgeOutboundAudio } from "./bridge-outbound-audio";
+import { HalfDuplexMic } from "./half-duplex-mic";
 
 
 /**
@@ -221,8 +222,18 @@ export function FilteredRoomAudio({
     : undefined;
   const audibleTracks = wantedTracks.filter((trackRef) => trackRef !== outboundTrack);
 
+  // Exactly the dubs going to this listener's own speakers — the outbound bridge leg is excluded
+  // because it plays into a virtual device Meet listens to, not into the room the user is sitting
+  // in, so it cannot come back through their microphone.
+  const localDubIdentities = audibleTracks
+    .filter((trackRef) => trackRef.participant.identity.startsWith(AI_INTERPRETER_PREFIX))
+    .map((trackRef) => trackRef.participant.identity);
+
   return (
     <>
+      {/* Keeps the room's own translation from being picked up by this microphone and
+          transcribed as the listener — see half-duplex-mic.tsx. */}
+      <HalfDuplexMic dubIdentities={localDubIdentities} enabled={translationActive} />
       {outboundTrack && bridgeOutboundDeviceId && (
         <BridgeOutboundAudio
           key={`bridge-out-${outboundTrack.participant.identity}`}
