@@ -7,7 +7,6 @@ import {
   groupTranscriptSegments,
   isTranscriptControlMarker,
 } from "@/lib/transcript/transcript-display";
-import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 
 const HIDE_AFTER_MS = 6000;
@@ -56,22 +55,38 @@ export function LiveSubtitleOverlay({ enabled = true }: { enabled?: boolean }) {
     <div className="pointer-events-none flex h-full w-full items-center justify-center px-4">
       <AnimatePresence>
         {visible && latest && original ? (
+          // WT-533: keyed on a CONSTANT, not on segmentId.
+          //
+          // Keying on the segment made every streamed chunk a different element, so
+          // AnimatePresence unmounted the caption and mounted a replacement — a full exit-then-
+          // enter, several times a second, while somebody was still speaking. That is the
+          // flicker and the vertical jump in the report; it was the caption being destroyed and
+          // rebuilt rather than updated. One long-lived box whose text changes has neither.
+          //
+          // Opacity only, no `y`. A caption that slides is a caption that moves under the reader
+          // mid-sentence, and there is nothing to communicate by moving it.
+          //
+          // No `backdrop-blur`: it forces the compositor to re-rasterise the region behind the
+          // box on every frame of live video, which is the "mờ chữ" — text sampled through a
+          // blur that never settles. A solid panel is more readable and costs nothing.
           <motion.div
-            key={latest.segmentId}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.18 }}
-            className="max-w-3xl rounded-xl bg-black/70 px-4 py-2.5 text-center shadow-lg backdrop-blur"
+            key="live-caption"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="max-w-3xl rounded-xl bg-black/80 px-4 py-2.5 text-center shadow-lg"
           >
             {latest.speakerName ? (
               <span className="mb-0.5 block text-[11px] font-semibold uppercase tracking-wide text-white/60">
                 {latest.speakerName}
               </span>
             ) : null}
-            <p className="text-[18px] font-semibold leading-snug text-white">
-              <AnimatedWords text={original} maxCharacters={96} />
-            </p>
+            {/* Plain text, not <AnimatedWords>. Animating each word in as it arrives reads well
+                for a transcript being reviewed and badly for a caption being read live: the
+                words the eye is on are still fading in. AnimatedWords stays in use in the
+                transcript panel, where the reader sets the pace. */}
+            <p className="text-[18px] font-semibold leading-snug text-white">{original}</p>
           </motion.div>
         ) : null}
       </AnimatePresence>
